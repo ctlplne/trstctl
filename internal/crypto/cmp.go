@@ -174,6 +174,39 @@ func ParseCMPRequestWithVerifier(der []byte, verifyCSR func([]byte) error) (*CMP
 	return ParseCMPRequestWithTrust(der, verifyCSR, nil)
 }
 
+// CMPTrustAnchors is the pre-parsed, immutable trust-anchor set a CMP mount
+// verifies protection identities against. Anchors are loaded once at startup
+// and never mutate, yet the verifier used to re-parse every anchor and rebuild
+// an x509.CertPool per message (AUD-201 follow-up E3/V33). The type is opaque
+// so protocol packages carry it without importing crypto/x509 (AN-3; precedent:
+// OpaqueCSR).
+type CMPTrustAnchors struct {
+	roots *x509.CertPool
+	count int
+}
+
+// NewCMPTrustAnchors parses the anchor set once. Nil/empty input yields a nil
+// handle, which Empty() reports — the fail-closed served endpoint refuses to
+// enrol in that state, while differential harnesses that authenticate another
+// way pass none deliberately.
+func NewCMPTrustAnchors(anchorsDER [][]byte) (*CMPTrustAnchors, error) {
+	if len(anchorsDER) == 0 {
+		return nil, nil
+	}
+	roots := x509.NewCertPool()
+	for i, der := range anchorsDER {
+		anchor, err := x509.ParseCertificate(der)
+		if err != nil {
+			return nil, fmt.Errorf("cmp: parse CMP trust anchor %d: %w", i, err)
+		}
+		roots.AddCert(anchor)
+	}
+	return &CMPTrustAnchors{roots: roots, count: len(anchorsDER)}, nil
+}
+
+// Empty reports whether the handle carries no anchors.
+func (a *CMPTrustAnchors) Empty() bool { return a == nil || a.count == 0 }
+
 // ParseCMPRequestWithTrust is ParseCMPRequestWithVerifier with the trust anchors
 // the PKIMessage's protection identity must chain to.
 //
@@ -184,10 +217,10 @@ func ParseCMPRequestWithVerifier(der []byte, verifyCSR func([]byte) error) (*CMP
 // Chaining extraCerts[0] to an operator-configured anchor is what turns
 // "internally consistent" into "issued by someone we trust".
 //
-// trustAnchorsDER may be empty ONLY for a caller that authenticates the client
-// some other way (the differential harnesses do; the served endpoint does not).
-// Passing none is therefore explicit at every call site rather than the default.
-func ParseCMPRequestWithTrust(der []byte, verifyCSR func([]byte) error, trustAnchorsDER [][]byte) (*CMPRequest, error) {
+// anchors may be nil ONLY for a caller that authenticates the client some other
+// way (the differential harnesses do; the served endpoint does not). Passing
+// none is therefore explicit at every call site rather than the default.
+func ParseCMPRequestWithTrust(der []byte, verifyCSR func([]byte) error, anchors *CMPTrustAnchors) (*CMPRequest, error) {
 	if verifyCSR == nil {
 		verifyCSR = VerifyCertificateRequest
 	}
@@ -210,8 +243,8 @@ func ParseCMPRequestWithTrust(der []byte, verifyCSR func([]byte) error, trustAnc
 	if err := verifyProtection(msg.Header, msg.Body, msg.Protection, signerCert); err != nil {
 		return nil, fmt.Errorf("cmp: verify protection: %w", err)
 	}
-	if len(trustAnchorsDER) > 0 {
-		if err := verifyCMPProtectionIdentity(signerCert, msg.ExtraCerts[1:], trustAnchorsDER); err != nil {
+	if !anchors.Empty() {
+		if err := verifyCMPProtectionIdentity(signerCert, msg.ExtraCerts[1:], anchors); err != nil {
 			return nil, err
 		}
 	}
@@ -408,17 +441,11 @@ func verifyProtection(header cmpHeader, body asn1.RawValue, prot asn1.BitString,
 }
 
 // verifyCMPProtectionIdentity chains the certificate that protected a PKIMessage
-// to one of the configured anchors. Intermediates may accompany it in extraCerts;
-// anchors may not come from the message.
-func verifyCMPProtectionIdentity(signerCert *x509.Certificate, extra []asn1.RawValue, trustAnchorsDER [][]byte) error {
-	roots := x509.NewCertPool()
-	for i, der := range trustAnchorsDER {
-		anchor, err := x509.ParseCertificate(der)
-		if err != nil {
-			return fmt.Errorf("cmp: parse CMP trust anchor %d: %w", i, err)
-		}
-		roots.AddCert(anchor)
-	}
+// to one of the pre-parsed anchors. Intermediates may accompany it in extraCerts
+// and are inherently per-message; anchors may not come from the message and are
+// parsed once at construction (E3/V33).
+func verifyCMPProtectionIdentity(signerCert *x509.Certificate, extra []asn1.RawValue, anchors *CMPTrustAnchors) error {
+	roots := anchors.roots
 	intermediates := x509.NewCertPool()
 	for _, raw := range extra {
 		if cert, err := x509.ParseCertificate(raw.FullBytes); err == nil {

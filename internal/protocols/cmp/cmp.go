@@ -38,9 +38,13 @@ type Server struct {
 	verifyCSR  func([]byte) error
 	mux        *http.ServeMux
 
-	// clientAnchors are the trust anchors a PKIMessage's protection identity must
-	// chain to; allowAnonymous is the deliberate escape hatch for harnesses.
-	clientAnchors  [][]byte
+	// clientAnchors is the PRE-PARSED trust-anchor set a PKIMessage's
+	// protection identity must chain to — parsed once at New, opaque so this
+	// package never imports crypto/x509 (AN-3, E3/V33). anchorsErr records a
+	// construction-time parse failure; requests then fail closed as
+	// unavailable. allowAnonymous is the deliberate escape hatch for harnesses.
+	clientAnchors  *crypto.CMPTrustAnchors
+	anchorsErr     error
 	allowAnonymous bool
 }
 
@@ -72,13 +76,18 @@ type Config struct {
 	AllowUnauthenticatedClients bool
 }
 
-// New builds the CMP server.
+// New builds the CMP server. The trust anchors are parsed ONCE here rather
+// than per message (AUD-201 follow-up E3/V33); a malformed anchor is recorded
+// and every request then fails closed as unavailable, because a mount whose
+// trust configuration cannot be loaded must not guess.
 func New(cfg Config) *Server {
+	anchors, anchorsErr := crypto.NewCMPTrustAnchors(cfg.ClientTrustAnchorsDER)
 	s := &Server{
 		enroller: cfg.Enroller, caCertDER: cfg.CACertDER, caKeyPKCS8: cfg.CAKeyPKCS8,
 		profile: cfg.ProfileName, pool: cfg.Pool, log: cfg.Log,
 		verifyCSR:      cfg.CSRVerifier,
-		clientAnchors:  cfg.ClientTrustAnchorsDER,
+		clientAnchors:  anchors,
+		anchorsErr:     anchorsErr,
 		allowAnonymous: cfg.AllowUnauthenticatedClients,
 	}
 	mux := http.NewServeMux()
@@ -111,7 +120,14 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "cmp: empty PKIMessage", http.StatusBadRequest)
 		return
 	}
-	if len(s.clientAnchors) == 0 && !s.allowAnonymous {
+	if s.anchorsErr != nil {
+		// The configured anchors did not parse at construction; guessing per
+		// message would be worse than refusing.
+		s.audit(r.Context(), "deny", "invalid client trust anchors", "")
+		http.Error(w, "cmp: enrollment unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	if s.clientAnchors.Empty() && !s.allowAnonymous {
 		// Fail closed rather than enrol anyone who can compose a PKIMessage.
 		s.audit(r.Context(), "deny", "no client trust anchors configured", "")
 		http.Error(w, "cmp: enrollment unavailable", http.StatusServiceUnavailable)
