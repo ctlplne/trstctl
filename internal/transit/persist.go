@@ -108,12 +108,26 @@ func (s *Store) Save(svc *Service) error {
 		ring := rings[i]
 		exported, err := ring.export()
 		if err != nil {
+			wipePersistedSignKeys(state)
 			return fmt.Errorf("transit: export keyring for tenant %s: %w", tenantID, err)
 		}
 		if len(exported) > 0 {
 			state.Rings[tenantID] = exported
 		}
 	}
+	return s.sealAndCommit(state)
+}
+
+// sealAndCommit marshals, seals, and atomically writes an exported state, then
+// wipes the private signing material the export copied out of locked memory.
+// signer.PKCS8()'s contract says the caller MUST wipe the copy promptly (AN-8);
+// before this existed every checkpoint abandoned each signing key's DER on the
+// GC heap, recoverable from a heap dump or core file (AUD-201 follow-up B2/V6).
+func (s *Store) sealAndCommit(state persistedState) error {
+	// Only the SignPKCS8 copies are independently wipeable. The AEAD and HMAC
+	// entries ALIAS the live ring keys (export copies the slice headers, not the
+	// key bytes), so wiping them here would destroy the in-memory keyring.
+	defer wipePersistedSignKeys(state)
 
 	plaintext, err := json.Marshal(state)
 	if err != nil {
@@ -150,6 +164,19 @@ func (s *Store) Save(svc *Service) error {
 		return fmt.Errorf("transit: commit sealed keyring: %w", err)
 	}
 	return nil
+}
+
+// wipePersistedSignKeys zeroes every exported PKCS#8 signing-key copy in state.
+// It deliberately leaves AEAD/HMAC untouched — those slices alias the live ring
+// keys and belong to the keyring, not to this snapshot.
+func wipePersistedSignKeys(state persistedState) {
+	for _, keys := range state.Rings {
+		for _, p := range keys {
+			for _, der := range p.SignPKCS8 {
+				secret.Wipe(der)
+			}
+		}
+	}
 }
 
 // Load restores the sealed keyring into svc. A missing file is not an error —
@@ -224,6 +251,11 @@ func (k *Keyring) restore(keys map[string]persistedKey) error {
 	}
 	for name, p := range keys {
 		nk := &namedKey{kind: p.Kind, latest: p.Latest}
+		// The AEAD/HMAC buffers BECOME the live ring keys (the slice headers are
+		// copied, the key bytes are shared), so they must not be wiped here.
+		// Only the PKCS#8 DER is a transient copy: LockedKeyFromPKCS8 moves it
+		// into locked memory, after which the decoded heap buffer would linger
+		// unzeroed for the GC to collect whenever (AUD-201 follow-up B2/V6).
 		nk.aead = append(nk.aead, p.AEAD...)
 		nk.hmac = append(nk.hmac, p.HMAC...)
 		for i, der := range p.SignPKCS8 {
@@ -232,6 +264,7 @@ func (k *Keyring) restore(keys map[string]persistedKey) error {
 				continue
 			}
 			ls, err := crypto.LockedKeyFromPKCS8(der)
+			secret.Wipe(der)
 			if err != nil {
 				return fmt.Errorf("restore signing key %q version %d: %w", name, i+1, err)
 			}
