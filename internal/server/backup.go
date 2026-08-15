@@ -104,20 +104,24 @@ func backupIntegrityKey(cfg *config.Config) ([]byte, error) {
 // integrity key, which a disaster-recovery target never does — it has a different
 // KEK by construction. A signature checked against a trust anchor is the only
 // form of authenticity that survives the move to a fresh deployment.
-func configureBackupManifestIdentity(cfg *config.Config) error {
+func configureBackupManifestIdentity(cfg *config.Config) (backup.PostgresStateIdentity, error) {
+	var id backup.PostgresStateIdentity
 	if path := strings.TrimSpace(cfg.Backup.ManifestSigningKeyFile); path != "" {
 		pem, err := secretfile.Load(path)
 		if err != nil {
-			return fmt.Errorf("read backup manifest signing key: %w", err)
+			return backup.PostgresStateIdentity{}, fmt.Errorf("read backup manifest signing key: %w", err)
 		}
 		defer secret.Wipe(pem)
 		ls, err := crypto.LockedKeyFromPKCS8PEM(pem)
 		if err != nil {
-			return fmt.Errorf("parse backup manifest signing key: %w", err)
+			return backup.PostgresStateIdentity{}, fmt.Errorf("parse backup manifest signing key: %w", err)
 		}
 		// The key stays in locked, zeroable memory (AN-8); only the message-signing
-		// adapter is handed to the backup writer.
-		backup.SetPostgresStateSigner(crypto.SignerFromDigestSigner(ls))
+		// adapter is handed to the backup writer. The identity travels as an
+		// EXPLICIT value (K1/V32): a signer-less configuration yields a
+		// signer-less identity, never an inherited stale one, and the nightly
+		// drill re-deriving it cannot mutate shared process state.
+		id.Signer = crypto.SignerFromDigestSigner(ls)
 	}
 	anchors := make([][]byte, 0, len(cfg.Backup.TrustedManifestKeyFiles))
 	for _, path := range cfg.Backup.TrustedManifestKeyFiles {
@@ -127,16 +131,16 @@ func configureBackupManifestIdentity(cfg *config.Config) error {
 		}
 		pemBytes, err := os.ReadFile(path) // #nosec G304 -- operator-configured public trust anchor path (CWE-22)
 		if err != nil {
-			return fmt.Errorf("read trusted backup manifest key %q: %w", path, err)
+			return backup.PostgresStateIdentity{}, fmt.Errorf("read trusted backup manifest key %q: %w", path, err)
 		}
 		pub, err := crypto.ParsePublicKeyPEM(pemBytes)
 		if err != nil {
-			return fmt.Errorf("parse trusted backup manifest key %q: %w", path, err)
+			return backup.PostgresStateIdentity{}, fmt.Errorf("parse trusted backup manifest key %q: %w", path, err)
 		}
 		anchors = append(anchors, pub.DER)
 	}
-	backup.SetPostgresStateTrustAnchors(anchors)
-	return nil
+	id.TrustAnchors = anchors
+	return id, nil
 }
 
 // RunBackup writes a portable backup of the event log (the AN-2 source of truth)
@@ -168,7 +172,9 @@ func RunBackup(ctx context.Context, cfg *config.Config, path string) (int, error
 	}
 	defer func() { _ = log.Close() }()
 
-	if err := configureBackupManifestIdentity(cfg); err != nil {
+	// Event-only backup writes no postgres artifact, so the identity itself is
+	// unused here; deriving it still fail-fasts on a broken manifest-key config.
+	if _, err := configureBackupManifestIdentity(cfg); err != nil {
 		return 0, err
 	}
 	key, err := backupIntegrityKey(cfg)
@@ -320,7 +326,8 @@ func RunFullBackup(ctx context.Context, cfg *config.Config, dir string) (backup.
 		eventCut      uint64
 		eventArtifact backup.Artifact
 	)
-	if err := configureBackupManifestIdentity(cfg); err != nil {
+	manifestIdentity, err := configureBackupManifestIdentity(cfg)
+	if err != nil {
 		return backup.FullManifest{}, err
 	}
 	key, err := backupIntegrityKey(cfg)
@@ -386,7 +393,7 @@ func RunFullBackup(ctx context.Context, cfg *config.Config, dir string) (backup.
 	}
 	// Key the artifact's integrity trailer so a forged postgres-state file
 	// cannot verify on restore (it was an unkeyed SHA-256 anyone could recompute).
-	if _, err := backup.WritePostgresStateTxWithKey(ctx, tx, pgFile, eventCut, key); err != nil {
+	if _, err := backup.WritePostgresStateTxWithKey(ctx, tx, pgFile, eventCut, key, manifestIdentity); err != nil {
 		_ = pgFile.Close()
 		return backup.FullManifest{}, err
 	}
@@ -472,9 +479,6 @@ func restoreEventLog(
 		return 0, fmt.Errorf("open backup file: %w", err)
 	}
 	defer func() { _ = f.Close() }()
-	if err := configureBackupManifestIdentity(cfg); err != nil {
-		return 0, err
-	}
 	key, err := backupIntegrityKey(cfg)
 	if err != nil {
 		return 0, err
@@ -658,6 +662,13 @@ func runFullRestore(
 	factories ...EditionProjectionOptionsFactory,
 ) (fullRestoreResult, error) {
 	result := fullRestoreResult{}
+	// The signed-manifest identity is derived HERE and passed explicitly
+	// (K1/V32): the anchors that used to reach this path transitively through
+	// process globals installed by restoreEventLog now travel as a value.
+	manifestIdentity, err := configureBackupManifestIdentity(cfg)
+	if err != nil {
+		return result, err
+	}
 	manifest, err := backup.ReadFullManifest(filepath.Join(dir, backup.FullManifestName))
 	if err != nil {
 		return result, err
@@ -690,7 +701,7 @@ func runFullRestore(
 	// the backup rather than derived from the destination; see the H5 follow-up.
 	// The write side now emits an HMAC (postgresStateTrailer.HMACSHA256) so that
 	// key has something to verify against once it exists.
-	if err := verifyFullRestoreArtifactFiles(dir, nil); err != nil {
+	if err := verifyFullRestoreArtifactFiles(dir, manifestIdentity); err != nil {
 		return result, err
 	}
 	// Version-1 backups created before AUD-63 carried a separate plaintext audit
@@ -732,7 +743,7 @@ func runFullRestore(
 		return result, fmt.Errorf("open postgres state backup: %w", err)
 	}
 	defer func() { _ = f.Close() }()
-	summary, err := backup.RestorePostgresStateWithKey(ctx, st, f, nil)
+	summary, err := backup.RestorePostgresStateWithKey(ctx, st, f, nil, manifestIdentity)
 	if err != nil {
 		result.Postgres = summary
 		return result, err
@@ -789,7 +800,7 @@ func runFullRestore(
 // verifyFullRestoreArtifactFiles proves the event and PostgreSQL artifacts name
 // the same backup cut, then observes both close errors before restoration starts.
 // Keeping this preflight separate makes its no-mutation boundary explicit.
-func verifyFullRestoreArtifactFiles(dir string, key []byte) error {
+func verifyFullRestoreArtifactFiles(dir string, id backup.PostgresStateIdentity) error {
 	eventFile, err := os.Open(filepath.Join(dir, "events.jsonl")) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
 	if err != nil {
 		return fmt.Errorf("open event log for full-restore preflight: %w", err)
@@ -799,7 +810,7 @@ func verifyFullRestoreArtifactFiles(dir string, key []byte) error {
 		_ = eventFile.Close()
 		return fmt.Errorf("open postgres state for full-restore preflight: %w", err)
 	}
-	preflightErr := verifyFullRestoreArtifactPair(eventFile, postgresFile, key)
+	preflightErr := verifyFullRestoreArtifactPair(eventFile, postgresFile, id)
 	eventCloseErr := eventFile.Close()
 	postgresCloseErr := postgresFile.Close()
 	if preflightErr != nil {
@@ -894,9 +905,9 @@ func proveFullRestoreRuntime(
 func verifyFullRestoreArtifactPair(
 	eventArtifact io.Reader,
 	postgresArtifact io.Reader,
-	key []byte,
+	id backup.PostgresStateIdentity,
 ) error {
-	postgresSummary, err := backup.VerifyPostgresStateWithKey(postgresArtifact, key)
+	postgresSummary, err := backup.VerifyPostgresStateWithKey(postgresArtifact, nil, id)
 	if err != nil {
 		return fmt.Errorf("full restore postgres-state preflight: %w", err)
 	}

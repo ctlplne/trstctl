@@ -191,18 +191,18 @@ func guardPostgresStateSnapshotTx(ctx context.Context, tx pgx.Tx) error {
 // WritePostgresStateAtCut writes PostgreSQL state and records the event-log cut
 // this artifact is paired with.
 func WritePostgresStateAtCut(ctx context.Context, st *store.Store, w io.Writer, eventCut uint64) (PostgresStateSummary, error) {
-	return WritePostgresStateAtCutWithKey(ctx, st, w, eventCut, nil)
+	return WritePostgresStateAtCutWithKey(ctx, st, w, eventCut, nil, PostgresStateIdentity{})
 }
 
 // WritePostgresStateAtCutWithKey writes the artifact with a keyed integrity trailer.
-func WritePostgresStateAtCutWithKey(ctx context.Context, st *store.Store, w io.Writer, eventCut uint64, key []byte) (PostgresStateSummary, error) {
+func WritePostgresStateAtCutWithKey(ctx context.Context, st *store.Store, w io.Writer, eventCut uint64, key []byte, id PostgresStateIdentity) (PostgresStateSummary, error) {
 	tx, err := BeginPostgresStateSnapshot(ctx, st)
 	if err != nil {
 		return PostgresStateSummary{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	summary, err := WritePostgresStateTxWithKey(ctx, tx, w, eventCut, key)
+	summary, err := WritePostgresStateTxWithKey(ctx, tx, w, eventCut, key, id)
 	if err != nil {
 		return summary, err
 	}
@@ -216,21 +216,30 @@ func WritePostgresStateAtCutWithKey(ctx context.Context, st *store.Store, w io.W
 // repeatable-read snapshot. Full backup uses a snapshot pinned under the backup
 // write fence, paired with the event-log cut in the artifact header.
 func WritePostgresStateTx(ctx context.Context, snapshot *PostgresStateSnapshot, w io.Writer, eventCut uint64) (PostgresStateSummary, error) {
-	return WritePostgresStateTxWithKey(ctx, snapshot, w, eventCut, nil)
+	return WritePostgresStateTxWithKey(ctx, snapshot, w, eventCut, nil, PostgresStateIdentity{})
 }
 
 // WritePostgresStateTxWithKey writes the artifact with a keyed integrity trailer.
-// postgresStateSigner, when set, signs each artifact's trailer so a restorer that
-// shares no secret with this deployment can still establish where the artifact
-// came from. SetPostgresStateSigner installs it at assembly time.
-var postgresStateSigner crypto.Signer
+// PostgresStateIdentity carries the signed-manifest identity for ONE
+// backup/restore operation: the deployment key that signs each artifact's
+// trailer, and the public keys whose signed artifacts a restorer accepts. It
+// travels as an explicit parameter on the *WithKey family (AUD-201 follow-up
+// K1/V32) — the same feature used to thread its HMAC key explicitly while
+// smuggling signer and anchors through unsynchronized package globals, where
+// the nightly drill re-ran configuration against them and a later signer-less
+// call silently INHERITED a previously installed signer. A zero identity signs
+// nothing and requires nothing, the pre-existing behaviour.
+type PostgresStateIdentity struct {
+	// Signer, when set, signs each artifact's trailer so a restorer sharing
+	// no secret with this deployment can still establish where it came from.
+	Signer crypto.Signer
+	// TrustAnchors are the public keys a restorer accepts signed manifests
+	// from. Empty means signatures are recorded but not required — what an
+	// in-place restore of this deployment's own artifact needs.
+	TrustAnchors [][]byte
+}
 
-// SetPostgresStateSigner installs the deployment key that signs backup manifests.
-// Passing nil disables signing, which leaves an artifact verifiable only by
-// something holding the same integrity key — i.e. not by a fresh deployment.
-func SetPostgresStateSigner(s crypto.Signer) { postgresStateSigner = s }
-
-func WritePostgresStateTxWithKey(ctx context.Context, snapshot *PostgresStateSnapshot, w io.Writer, eventCut uint64, key []byte) (PostgresStateSummary, error) {
+func WritePostgresStateTxWithKey(ctx context.Context, snapshot *PostgresStateSnapshot, w io.Writer, eventCut uint64, key []byte, id PostgresStateIdentity) (PostgresStateSummary, error) {
 	// WritePostgresStateTx is exported for the full-backup coordinator, so defend
 	// it with an attested snapshot that external callers cannot construct around
 	// a transaction pinned before the fence. Reassert the transaction-scoped
@@ -301,7 +310,7 @@ func WritePostgresStateTxWithKey(ctx context.Context, snapshot *PostgresStateSna
 	if len(key) > 0 {
 		tr.HMACSHA256 = dig.macHex()
 	}
-	if signer := postgresStateSigner; signer != nil {
+	if signer := id.Signer; signer != nil {
 		sig, err := signer.Sign(signedTrailerBytes(tr), crypto.SignOptions{Hash: crypto.SHA256})
 		if err != nil {
 			return summary, fmt.Errorf("backup: sign postgres-state manifest: %w", err)
@@ -325,18 +334,18 @@ func WritePostgresStateTxWithKey(ctx context.Context, snapshot *PostgresStateSna
 // callers that have no key material; prefer VerifyPostgresStateWithKey, which is
 // what makes the trailer unforgeable.
 func VerifyPostgresState(r io.Reader) (PostgresStateSummary, error) {
-	return VerifyPostgresStateWithKey(r, nil)
+	return VerifyPostgresStateWithKey(r, nil, PostgresStateIdentity{})
 }
 
 // VerifyPostgresStateWithKey verifies the artifact's trailer under the
 // deployment's backup integrity key.
-func VerifyPostgresStateWithKey(r io.Reader, key []byte) (PostgresStateSummary, error) {
-	_, summary, err := readVerifiedPostgresState(r, key)
+func VerifyPostgresStateWithKey(r io.Reader, key []byte, id PostgresStateIdentity) (PostgresStateSummary, error) {
+	_, summary, err := readVerifiedPostgresState(r, key, id)
 	return summary, err
 }
 
-func readVerifiedPostgresState(r io.Reader, key []byte) (map[string][]json.RawMessage, PostgresStateSummary, error) {
-	h, rowsByTable, tr, err := readAndVerifyPostgresState(r, key)
+func readVerifiedPostgresState(r io.Reader, key []byte, id PostgresStateIdentity) (map[string][]json.RawMessage, PostgresStateSummary, error) {
+	h, rowsByTable, tr, err := readAndVerifyPostgresState(r, key, id)
 	if err != nil {
 		return nil, PostgresStateSummary{}, err
 	}
@@ -423,14 +432,14 @@ func latestAuditCheckpointBoundaries(rows []json.RawMessage) ([]AuditCheckpointB
 // RestorePostgresState restores with NO integrity key; prefer
 // RestorePostgresStateWithKey.
 func RestorePostgresState(ctx context.Context, st *store.Store, r io.Reader) (PostgresStateSummary, error) {
-	return RestorePostgresStateWithKey(ctx, st, r, nil)
+	return RestorePostgresStateWithKey(ctx, st, r, nil, PostgresStateIdentity{})
 }
 
 // RestorePostgresStateWithKey restores only an artifact whose integrity trailer
 // verifies under key. This is the check standing between an operator-supplied
 // file and attacker-chosen api_tokens rows in the restored database.
-func RestorePostgresStateWithKey(ctx context.Context, st *store.Store, r io.Reader, key []byte) (PostgresStateSummary, error) {
-	rowsByTable, summary, err := readVerifiedPostgresState(r, key)
+func RestorePostgresStateWithKey(ctx context.Context, st *store.Store, r io.Reader, key []byte, id PostgresStateIdentity) (PostgresStateSummary, error) {
+	rowsByTable, summary, err := readVerifiedPostgresState(r, key, id)
 	if err != nil {
 		return PostgresStateSummary{}, err
 	}
@@ -964,7 +973,7 @@ func reattachSecretSyncJobsAfterOutboxRestore(
 // recompute — so a forged artifact verifies and RestorePostgresState will import
 // attacker-chosen rows, including api_tokens. The event-log artifact was already
 // keyed with backupIntegrityKey; this path was not.
-func readAndVerifyPostgresState(r io.Reader, key []byte) (postgresStateHeader, map[string][]json.RawMessage, postgresStateTrailer, error) {
+func readAndVerifyPostgresState(r io.Reader, key []byte, id PostgresStateIdentity) (postgresStateHeader, map[string][]json.RawMessage, postgresStateTrailer, error) {
 	var (
 		h       postgresStateHeader
 		tr      postgresStateTrailer
@@ -1040,8 +1049,8 @@ func readAndVerifyPostgresState(r io.Reader, key []byte) (postgresStateHeader, m
 	// The signed manifest is what makes a FOREIGN artifact checkable. The HMAC
 	// above only helps a restorer holding the same integrity key, which a fresh
 	// disaster-recovery deployment never does.
-	if len(postgresStateTrustAnchors) > 0 {
-		if err := verifyPostgresStateSignature(tr); err != nil {
+	if len(id.TrustAnchors) > 0 {
+		if err := verifyPostgresStateSignature(tr, id.TrustAnchors); err != nil {
 			return h, nil, tr, err
 		}
 	}
@@ -1051,32 +1060,19 @@ func readAndVerifyPostgresState(r io.Reader, key []byte) (postgresStateHeader, m
 	return h, rowsByTable, tr, nil
 }
 
-// postgresStateTrustAnchors holds the public keys a restorer accepts backup
-// manifests from. Empty means no anchor is configured and signatures are not
-// required — the pre-existing behaviour, kept so an in-place restore of this
-// deployment's own artifact is unaffected.
-var postgresStateTrustAnchors [][]byte
-
-// SetPostgresStateTrustAnchors installs the deployment keys whose signed backup
-// manifests this deployment will restore. With at least one anchor set, an
-// artifact must carry a signature from one of them.
-func SetPostgresStateTrustAnchors(anchors [][]byte) {
-	postgresStateTrustAnchors = append([][]byte(nil), anchors...)
-}
-
 // verifyPostgresStateSignature refuses an artifact that is not signed by a
 // trusted deployment key.
 //
 // It fails closed on an absent signature rather than skipping the check: an
 // unsigned artifact is exactly what an attacker would supply, so "no signature"
 // must not read as "nothing to verify".
-func verifyPostgresStateSignature(tr postgresStateTrailer) error {
+func verifyPostgresStateSignature(tr postgresStateTrailer, anchors [][]byte) error {
 	if len(tr.Signature) == 0 || len(tr.SignerPublicDER) == 0 {
 		return errors.New("backup: postgres-state integrity: trust anchors are configured but the " +
 			"artifact carries no signed manifest; refusing to restore an unauthenticated backup")
 	}
 	trusted := false
-	for _, anchor := range postgresStateTrustAnchors {
+	for _, anchor := range anchors {
 		if crypto.ConstantTimeEqual(anchor, tr.SignerPublicDER) {
 			trusted = true
 			break

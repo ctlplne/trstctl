@@ -51,17 +51,16 @@ func TestForeignArtifactNeedsASignatureFromATrustedDeployment(t *testing.T) {
 	source := signedManifestKey(t)
 	stranger := signedManifestKey(t)
 
-	t.Cleanup(func() { SetPostgresStateTrustAnchors(nil) })
-	SetPostgresStateTrustAnchors([][]byte{source.Public().DER})
+	anchors := [][]byte{source.Public().DER}
 
 	t.Run("signed by the trusted deployment", func(t *testing.T) {
-		if err := verifyPostgresStateSignature(signTrailer(t, source, sampleTrailer())); err != nil {
+		if err := verifyPostgresStateSignature(signTrailer(t, source, sampleTrailer()), anchors); err != nil {
 			t.Fatalf("an artifact from the trusted deployment was refused: %v", err)
 		}
 	})
 
 	t.Run("unsigned is refused, not skipped", func(t *testing.T) {
-		err := verifyPostgresStateSignature(sampleTrailer())
+		err := verifyPostgresStateSignature(sampleTrailer(), anchors)
 		if err == nil {
 			t.Fatal("an UNSIGNED artifact was accepted while trust anchors were configured; " +
 				"an attacker simply omits the signature")
@@ -72,7 +71,7 @@ func TestForeignArtifactNeedsASignatureFromATrustedDeployment(t *testing.T) {
 	})
 
 	t.Run("signed by an unknown deployment is refused", func(t *testing.T) {
-		err := verifyPostgresStateSignature(signTrailer(t, stranger, sampleTrailer()))
+		err := verifyPostgresStateSignature(signTrailer(t, stranger, sampleTrailer()), anchors)
 		if err == nil {
 			t.Fatal("an artifact signed by an untrusted key was accepted; any deployment could " +
 				"hand this one a backup to restore")
@@ -87,34 +86,33 @@ func TestForeignArtifactNeedsASignatureFromATrustedDeployment(t *testing.T) {
 		// the stream digest and the counts, so this must not verify.
 		tr := signTrailer(t, source, sampleTrailer())
 		tr.SHA256 = "deadbeef"
-		if err := verifyPostgresStateSignature(tr); err == nil {
+		if err := verifyPostgresStateSignature(tr, anchors); err == nil {
 			t.Fatal("the content digest was changed after signing and the manifest still verified")
 		}
 
 		counts := signTrailer(t, source, sampleTrailer())
 		counts.Records = 1
-		if err := verifyPostgresStateSignature(counts); err == nil {
+		if err := verifyPostgresStateSignature(counts, anchors); err == nil {
 			t.Fatal("the record count was changed after signing and the manifest still verified")
 		}
 
 		tables := signTrailer(t, source, sampleTrailer())
 		tables.Tables = map[string]int{"identities": 1, "issuers": 2}
-		if err := verifyPostgresStateSignature(tables); err == nil {
+		if err := verifyPostgresStateSignature(tables, anchors); err == nil {
 			t.Fatal("a per-table count was changed after signing and the manifest still verified")
 		}
 	})
 }
 
 // TestNoTrustAnchorsLeavesRestoreUnchanged pins the compatibility edge: an
-// in-place restore of this deployment's own artifact, with no anchors set, must
-// behave exactly as before.
+// in-place restore of this deployment's own artifact — a ZERO identity — must
+// behave exactly as before. The identity travels as a value now (K1/V32), so
+// there is no process-global anchor state to leak between tests or between the
+// nightly drill and a later restore; a zero value IS the no-anchors state.
 func TestNoTrustAnchorsLeavesRestoreUnchanged(t *testing.T) {
-	t.Cleanup(func() { SetPostgresStateTrustAnchors(nil) })
-	SetPostgresStateTrustAnchors(nil)
-	// verifyPostgresStateSignature is only consulted when anchors exist; assert
-	// the gate itself rather than the helper.
-	if len(postgresStateTrustAnchors) != 0 {
-		t.Fatal("anchors leaked between tests")
+	var id PostgresStateIdentity
+	if len(id.TrustAnchors) != 0 || id.Signer != nil {
+		t.Fatal("the zero identity must sign nothing and require nothing")
 	}
 }
 

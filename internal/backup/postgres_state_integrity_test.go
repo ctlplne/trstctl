@@ -67,7 +67,7 @@ func TestPostgresStateVerifyRejectsWrongKey(t *testing.T) {
 		"attacker key":  []byte("attacker-guessed-key"),
 		"empty non-nil": {},
 	} {
-		if _, err := VerifyPostgresStateWithKey(bytes.NewReader(forged), key); err == nil {
+		if _, err := VerifyPostgresStateWithKey(bytes.NewReader(forged), key, PostgresStateIdentity{}); err == nil {
 			t.Errorf("%s: a hand-forged artifact verified", name)
 		}
 	}

@@ -401,12 +401,12 @@ func TestFullRestoreDecryptsEncryptedArtifact(t *testing.T) {
 func TestFullRestoreArtifactPairPreflightRequiresMatchingCuts(t *testing.T) {
 	eventArtifact := fullRestoreEmptyEventArtifact(t)
 	matchedPostgres := fullRestoreEmptyPostgresArtifact(t, 0)
-	// nil key: this test covers cut PAIRING, not artifact authentication (that is
-	// TestBackupDigestIsKeyed / TestPostgresStateVerifyRejectsWrongKey).
+	// Zero identity: this test covers cut PAIRING, not artifact authentication
+	// (that is TestBackupDigestIsKeyed / TestPostgresStateVerifyRejectsWrongKey).
 	if err := verifyFullRestoreArtifactPair(
 		bytes.NewReader(eventArtifact),
 		bytes.NewReader(matchedPostgres),
-		nil,
+		backup.PostgresStateIdentity{},
 	); err != nil {
 		t.Fatalf("matching full-restore artifacts rejected: %v", err)
 	}
@@ -415,7 +415,7 @@ func TestFullRestoreArtifactPairPreflightRequiresMatchingCuts(t *testing.T) {
 	err := verifyFullRestoreArtifactPair(
 		bytes.NewReader(eventArtifact),
 		bytes.NewReader(mismatchedPostgres),
-		nil,
+		backup.PostgresStateIdentity{},
 	)
 	if err == nil {
 		t.Fatal("full-restore preflight accepted event cut 0 paired with postgres cut 1")
