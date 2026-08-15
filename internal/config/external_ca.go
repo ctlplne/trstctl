@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 // ExternalCATypes is the closed set of upstream certificate-authority drivers
@@ -162,7 +164,7 @@ func (n ExternalCANetworkConfig) TimeoutDuration() (time.Duration, error) {
 func (n ExternalCANetworkConfig) PrivatePrefixes() ([]netip.Prefix, error) {
 	out := make([]netip.Prefix, 0, len(n.PrivateEgressCIDRs))
 	for _, raw := range normalizedExternalCAStrings(n.PrivateEgressCIDRs) {
-		prefix, err := netip.ParsePrefix(raw)
+		prefix, err := netsec.ParseEgressAllowPrefix(raw)
 		if err != nil {
 			return nil, fmt.Errorf("private_egress_cidrs contains invalid CIDR %q", raw)
 		}

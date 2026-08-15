@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/netip"
 	"net/url"
 	"strconv"
 	"strings"
@@ -1034,7 +1033,7 @@ func validatePrivateEgressCIDRs(cidrs []string) error {
 		return errStatus(http.StatusBadRequest, "private_egress_cidrs is required when allow_private_endpoint is true")
 	}
 	for _, cidr := range cidrs {
-		prefix, err := netip.ParsePrefix(strings.TrimSpace(cidr))
+		prefix, err := netsec.ParseEgressAllowPrefix(cidr)
 		if err != nil {
 			return errStatus(http.StatusBadRequest, "private_egress_cidrs contains invalid CIDR")
 		}

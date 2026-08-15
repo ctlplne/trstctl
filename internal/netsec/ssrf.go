@@ -17,11 +17,13 @@ package netsec
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -231,8 +233,13 @@ func allowedPrivateIP(ip net.IP, opts SafeClientOptions) bool {
 	addr = addr.Unmap()
 	for _, prefix := range opts.AllowPrivateCIDRs {
 		// Enforced here, at the point the prefix actually grants access, rather
-		// than trusting the ~18 places that parse this field to have validated it.
-		if ValidateEgressAllowPrefix(prefix) != nil {
+		// than trusting the ~18 places that parse this field to have validated
+		// it — but LOUDLY: every config surface now rejects such entries at
+		// load (ParseEgressAllowPrefix), so a skip here means an unvalidated
+		// path fed the dialer, and silence is how J1/V23 stayed hidden.
+		if err := ValidateEgressAllowPrefix(prefix); err != nil {
+			egressAllowSkips.Add(1)
+			slog.Warn("egress allowlist entry ignored at dial time", "prefix", prefix.String(), "error", err)
 			continue
 		}
 		if prefix.Contains(addr) {
@@ -270,6 +277,34 @@ func ValidateEgressAllowPrefix(prefix netip.Prefix) error {
 	}
 	return nil
 }
+
+// ParseEgressAllowPrefix parses ONE operator-supplied private-egress allowlist
+// entry and validates that it means what it says (no zero-bit wildcard, no
+// host bits). Every configuration surface that accepts an
+// allow_private_cidrs-style entry routes through this ONE helper, so a
+// previously-working entry like 10.1.2.3/8 becomes a loud config-load error
+// naming the value — instead of passing validation everywhere except one API
+// boundary and then being silently ignored at dial time (AUD-201 follow-up
+// J1/V23).
+func ParseEgressAllowPrefix(raw string) (netip.Prefix, error) {
+	prefix, err := netip.ParsePrefix(strings.TrimSpace(raw))
+	if err != nil {
+		return netip.Prefix{}, fmt.Errorf("egress allowlist entry %q is not a valid CIDR", raw)
+	}
+	if err := ValidateEgressAllowPrefix(prefix); err != nil {
+		return netip.Prefix{}, err
+	}
+	return prefix, nil
+}
+
+// egressAllowSkips counts allowlist entries ignored at dial time because they
+// failed validation — defence in depth that is OBSERVABLE: after J1 the config
+// surfaces reject such entries at load, so a non-zero count means an
+// unvalidated path fed the dialer.
+var egressAllowSkips atomic.Int64
+
+// EgressAllowSkips reports how many allowlist entries were ignored at dial time.
+func EgressAllowSkips() int64 { return egressAllowSkips.Load() }
 
 func hardBlockedIP(ip net.IP) bool {
 	if ip == nil {

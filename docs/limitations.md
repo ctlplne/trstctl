@@ -3064,6 +3064,20 @@ the encrypt still fails. Sharing the keyring across replicas — and event-sourc
 the create/rotate lifecycle facts alongside the sealed material — is tracked as
 follow-up work.
 
+**Private-egress allowlist entries must be exact network prefixes.** Every
+`allow_private_cidrs` / `private_egress_cidrs` surface (connectors, Rekor
+code-signing, incident notifications, managed keys, secret integrations,
+external CAs, ServiceNow bindings) now refuses an entry whose host bits are
+set (for example `10.1.2.3/8`) or that covers every address (`0.0.0.0/0`,
+`::/0`) at configuration load, naming the offending value. Such entries used
+to pass validation on most surfaces and were then silently ignored at dial
+time, so private egress failed as SSRF-blocked with nothing explaining why.
+**Migration:** operators whose entries currently carry host bits should write
+the network address the entry already effectively meant (for `10.1.2.3/8`,
+write `10.0.0.0/8` — or, if a single host was intended, `10.1.2.3/32`). The
+dial-time guard remains as defence in depth and now logs and counts any entry
+it skips.
+
 **CMP binds every CSR to the authenticated protection identity by default.**
 A PKIMessage's protection identity must chain to the operator-configured
 anchors (`protocols.cmp_client_trust_anchor_file`), and — new — the CSR's

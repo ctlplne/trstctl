@@ -22,6 +22,7 @@ import (
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 // Datastore mode values.
@@ -3393,7 +3394,7 @@ func validateITSM(c *Config) []error {
 			errs = append(errs, fmt.Errorf("%s.private_egress_cidrs is required when allow_private_endpoint is true", prefix))
 		}
 		for _, raw := range b.PrivateEgressCIDRs {
-			if _, err := netip.ParsePrefix(strings.TrimSpace(raw)); err != nil {
+			if _, err := netsec.ParseEgressAllowPrefix(raw); err != nil {
 				errs = append(errs, fmt.Errorf("%s.private_egress_cidrs contains invalid CIDR %q: %w", prefix, raw, err))
 			}
 		}

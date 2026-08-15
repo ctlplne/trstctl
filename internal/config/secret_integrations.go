@@ -5,7 +5,6 @@ package config
 import (
 	"errors"
 	"fmt"
-	"net/netip"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -459,7 +458,7 @@ func validatePrivateEgress(where string, allow bool, cidrs []string) []error {
 		errs = append(errs, fmt.Errorf("%s allow_private_endpoint requires private_egress_cidrs", where))
 	}
 	for _, raw := range normalizedStrings(cidrs) {
-		if _, err := netip.ParsePrefix(raw); err != nil {
+		if _, err := netsec.ParseEgressAllowPrefix(raw); err != nil {
 			errs = append(errs, fmt.Errorf("%s private_egress_cidrs contains invalid CIDR %q", where, raw))
 		}
 	}

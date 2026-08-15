@@ -4,7 +4,6 @@ package config
 
 import (
 	"fmt"
-	"net/netip"
 	"net/url"
 	"path/filepath"
 	"regexp"
@@ -12,6 +11,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 // NativeConnectorNames is the closed set compiled into the shipped control
@@ -112,7 +113,7 @@ func validateConnectors(c Connectors) []error {
 		errs = append(errs, err)
 	}
 	for _, raw := range c.AllowPrivateCIDRs {
-		if _, err := netip.ParsePrefix(strings.TrimSpace(raw)); err != nil {
+		if _, err := netsec.ParseEgressAllowPrefix(raw); err != nil {
 			errs = append(errs, fmt.Errorf("connectors.allow_private_cidrs %q: %w", raw, err))
 		}
 	}

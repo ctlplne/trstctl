@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/netip"
 	"net/url"
 	"os"
 	"sort"
@@ -1114,7 +1113,7 @@ func privateEgressSafeClientOptions(cidrs []string) (netsec.SafeClientOptions, e
 		if raw == "" {
 			continue
 		}
-		prefix, err := netip.ParsePrefix(raw)
+		prefix, err := netsec.ParseEgressAllowPrefix(raw)
 		if err != nil {
 			return opts, fmt.Errorf("private_egress_cidrs contains invalid CIDR %q: %w", raw, err)
 		}

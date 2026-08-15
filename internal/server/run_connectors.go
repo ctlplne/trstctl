@@ -187,7 +187,7 @@ func connectorHTTPClientFromConfig(cfg config.Connectors, guard *egress.Guard) (
 	}
 	prefixes := make([]netip.Prefix, 0, len(cfg.AllowPrivateCIDRs))
 	for _, raw := range cfg.AllowPrivateCIDRs {
-		prefix, err := netip.ParsePrefix(strings.TrimSpace(raw))
+		prefix, err := netsec.ParseEgressAllowPrefix(raw)
 		if err != nil {
 			return nil, fmt.Errorf("connectors private CIDR %q: %w", raw, err)
 		}
@@ -520,7 +520,7 @@ func validateConnectorEndpoint(raw string, cfg config.Connectors) error {
 	}
 	prefixes := make([]netip.Prefix, 0, len(cfg.AllowPrivateCIDRs))
 	for _, value := range cfg.AllowPrivateCIDRs {
-		prefix, err := netip.ParsePrefix(value)
+		prefix, err := netsec.ParseEgressAllowPrefix(value)
 		if err != nil {
 			return err
 		}

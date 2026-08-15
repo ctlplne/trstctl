@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"strings"
 	"testing"
 	"time"
 
@@ -123,5 +124,37 @@ func TestSafeClientRejectsCredentialBearingCrossOriginRedirects(t *testing.T) {
 		if err := client.CheckRedirect(redirect, []*http.Request{origin}); !errors.Is(err, netsec.ErrSSRFBlocked) {
 			t.Fatalf("redirect to %s error = %v, want ErrSSRFBlocked", target, err)
 		}
+	}
+}
+
+// TestParseEgressAllowPrefixIsTheOneGate pins the shared J1/V23 helper: every
+// config surface routes allowlist entries through it, so a host-bits or
+// wildcard entry is a loud config-load error naming the value instead of a
+// silent dial-time skip.
+func TestParseEgressAllowPrefixIsTheOneGate(t *testing.T) {
+	if _, err := netsec.ParseEgressAllowPrefix(" 10.0.0.0/8 "); err != nil {
+		t.Fatalf("a valid (trimmed) network prefix was refused: %v", err)
+	}
+	for _, bad := range []string{"10.1.2.3/8", "0.0.0.0/0", "::/0", "not-a-cidr", "2001:db8::1/32"} {
+		if _, err := netsec.ParseEgressAllowPrefix(bad); err == nil {
+			t.Fatalf("%q was accepted; it would grant something other than what it reads as", bad)
+		} else if bad != "not-a-cidr" && !strings.Contains(err.Error(), bad) {
+			t.Fatalf("refusal of %q does not name the value: %v", bad, err)
+		}
+	}
+}
+
+// TestDialTimeSkipIsObservable pins the defence-in-depth half: an invalid
+// prefix that still reaches the dialer (only possible from an unvalidated
+// path) is skipped AND counted, never silently ignored.
+func TestDialTimeSkipIsObservable(t *testing.T) {
+	before := netsec.EgressAllowSkips()
+	hostBits := netip.PrefixFrom(netip.MustParseAddr("10.1.2.3"), 8) // 10.1.2.3/8, host bits set
+	opts := netsec.SafeClientOptions{AllowPrivateCIDRs: []netip.Prefix{hostBits}}
+	if err := netsec.ValidatePublicHTTPSURLWithOptions("https://10.9.9.9/hook", opts); err == nil {
+		t.Fatal("an invalid host-bits grant admitted a private target")
+	}
+	if got := netsec.EgressAllowSkips() - before; got < 1 {
+		t.Fatalf("the dial-time skip was silent (counter moved by %d); J1/V23 stayed hidden precisely because nothing recorded it", got)
 	}
 }

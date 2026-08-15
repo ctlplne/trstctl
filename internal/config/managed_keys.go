@@ -5,7 +5,6 @@ package config
 import (
 	"errors"
 	"fmt"
-	"net/netip"
 	"strings"
 
 	"trstctl.com/trstctl/internal/netsec"
@@ -231,7 +230,7 @@ func validateManagedKeys(m ManagedKeys) []error {
 func validateManagedKeyPrivateCIDRs(label string, values []string) []error {
 	var errs []error
 	for _, raw := range values {
-		if _, err := netip.ParsePrefix(strings.TrimSpace(raw)); err != nil {
+		if _, err := netsec.ParseEgressAllowPrefix(raw); err != nil {
 			errs = append(errs, fmt.Errorf("%s contains invalid CIDR %q: %w", label, raw, err))
 		}
 	}

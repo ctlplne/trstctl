@@ -6,10 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"net/netip"
 	"net/url"
 	"strings"
 	"time"
+
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 const defaultCodeSigningHTTPTimeout = 10 * time.Second
@@ -156,7 +157,7 @@ func validateCodeSigningRekor(c CodeSigningRekor) []error {
 		errs = append(errs, errors.New("code_signing.rekor.timeout must be positive"))
 	}
 	for _, raw := range c.AllowPrivateCIDRs {
-		if _, err := netip.ParsePrefix(strings.TrimSpace(raw)); err != nil {
+		if _, err := netsec.ParseEgressAllowPrefix(raw); err != nil {
 			errs = append(errs, fmt.Errorf("code_signing.rekor.allow_private_cidrs entry %q is invalid: %w", raw, err))
 		}
 	}

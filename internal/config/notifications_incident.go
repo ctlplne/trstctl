@@ -5,10 +5,11 @@ package config
 import (
 	"fmt"
 	"net"
-	"net/netip"
 	"net/url"
 	"strings"
 	"time"
+
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 const defaultIncidentNotificationTimeout = 10 * time.Second
@@ -118,7 +119,7 @@ func validateIncidentNotification(name, endpoint, timeout string, privateCIDRs [
 		errs = append(errs, fmt.Errorf("%s.timeout must be positive", name))
 	}
 	for _, raw := range privateCIDRs {
-		if _, err := netip.ParsePrefix(strings.TrimSpace(raw)); err != nil {
+		if _, err := netsec.ParseEgressAllowPrefix(raw); err != nil {
 			errs = append(errs, fmt.Errorf("%s.allow_private_cidrs entry %q is invalid: %w", name, raw, err))
 		}
 	}

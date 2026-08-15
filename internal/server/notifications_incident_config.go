@@ -119,7 +119,7 @@ func incidentNotificationHTTPClient(endpoint string, timeoutValue notificationTi
 	}
 	prefixes := make([]netip.Prefix, 0, len(rawCIDRs))
 	for _, raw := range rawCIDRs {
-		prefix, err := netip.ParsePrefix(strings.TrimSpace(raw))
+		prefix, err := netsec.ParseEgressAllowPrefix(raw)
 		if err != nil {
 			return nil, fmt.Errorf("invalid allow_private_cidrs entry %q: %w", raw, err)
 		}
