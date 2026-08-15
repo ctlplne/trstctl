@@ -204,28 +204,12 @@ func (s *Server) GenerateKey(ctx context.Context, req *signerpb.GenerateKeyReque
 	}
 
 	held := &heldKey{signer: ls, constraints: constraints}
-
-	s.mu.Lock()
-	if _, exists := s.keys[id]; exists {
-		s.mu.Unlock()
+	if err := s.mintHeldKey(id, held); err != nil {
 		ls.Destroy()
-		return nil, status.Error(codes.AlreadyExists, "key handle already exists")
-	}
-	s.keys[id] = held
-	s.mu.Unlock()
-
-	// Persist the new key sealed at rest (R3.2) so it survives a signer restart.
-	// The usage constraints are sealed with the key (and bound to the handle as
-	// AAD), so a CA-class key stays purpose-bound across a restart. On failure,
-	// roll back the in-memory insert so state stays consistent.
-	if s.store != nil {
-		if err := s.store.Save(id, ls, constraints); err != nil {
-			s.mu.Lock()
-			delete(s.keys, id)
-			s.mu.Unlock()
-			ls.Destroy()
-			return nil, status.Errorf(codes.Internal, "persist key: %v", err)
+		if errors.Is(err, errKeyHandleExists) {
+			return nil, status.Error(codes.AlreadyExists, "key handle already exists")
 		}
+		return nil, status.Errorf(codes.Internal, "persist key: %v", err)
 	}
 
 	return &signerpb.GenerateKeyResponse{
@@ -233,6 +217,38 @@ func (s *Server) GenerateKey(ctx context.Context, req *signerpb.GenerateKeyReque
 		Algorithm: s.keyspec.ProtoFromAlgorithm(ls.Algorithm()),
 		PublicKey: ls.Public().DER,
 	}, nil
+}
+
+// errKeyHandleExists distinguishes the duplicate-handle refusal from a persist
+// failure inside mintHeldKey, so each caller keeps its own message and status.
+var errKeyHandleExists = errors.New("signing: key handle already exists")
+
+// mintHeldKey is the ONE mint path: persist the new key sealed at rest
+// (R3.2), then publish its handle, holding s.mu across both.
+//
+// The primary GenerateKey RPC used to insert into s.keys, unlock, and only
+// then save — with a compensating delete on failure. That left a window where
+// the handle resolved to a key no restart would recover, and a concurrent Sign
+// could produce a signature the delete cannot undo (AUD-201 follow-up C1/V19;
+// GenerateSuccessorKey was fixed in the same commit that condemned the old
+// ordering while the RPC kept it). Holding s.mu across the save serialises
+// minting behind a file write, which is acceptable: minting is rare, and the
+// alternative is a handle that is visible but not durable. KeyStore.Save
+// touches only the filesystem and the seal wrapper — it never re-enters the
+// server — so this cannot deadlock.
+func (s *Server) mintHeldKey(id string, held *heldKey) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.keys[id]; exists {
+		return errKeyHandleExists
+	}
+	if s.store != nil {
+		if err := s.store.Save(id, held.signer, held.constraints); err != nil {
+			return err
+		}
+	}
+	s.keys[id] = held
+	return nil
 }
 
 // GetPublicKey returns the public key for a handle.
