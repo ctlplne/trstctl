@@ -681,12 +681,13 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 			privacyRule("/held_until", opaque),
 		),
 	}
-	for _, eventType := range []string{EventIdentityDeployed, EventIdentityRenewed} {
+	for _, eventType := range []string{EventIdentityDeployed, EventIdentityRenewed, EventIdentityRenewalRecovered} {
 		policies[privacyEventPolicyKey{EventType: eventType, Version: LifecycleOwnershipReadinessEventSchemaVersion}] = identityTransitionV6
 	}
 	for _, eventType := range []string{
 		EventIdentityIssued, EventIdentityDeployed, EventIdentityRevoked,
 		EventIdentityRenewing, EventIdentityRenewed, EventIdentityRetired,
+		EventIdentityRenewalFailed, EventIdentityRenewalRecovered,
 	} {
 		policies[privacyEventPolicyKey{EventType: eventType, Version: 1}] = identityTransitionV1
 		policies[privacyEventPolicyKey{EventType: eventType, Version: LifecycleEventSchemaVersion}] = identityTransitionV2
@@ -1214,6 +1215,7 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 	for _, eventType := range []string{
 		EventIdentityIssued, EventIdentityDeployed, EventIdentityRevoked,
 		EventIdentityRenewing, EventIdentityRenewed, EventIdentityRetired,
+		EventIdentityRenewalFailed, EventIdentityRenewalRecovered,
 	} {
 		shapes[privacyEventPolicyKey{EventType: eventType, Version: 1}] = privacyPayloadShape[privacyIdentityTransitionV1]()
 		shapes[privacyEventPolicyKey{EventType: eventType, Version: LifecycleEventSchemaVersion}] = privacyPayloadShape[privacyIdentityTransitionV2]()
@@ -1221,7 +1223,7 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		shapes[privacyEventPolicyKey{EventType: eventType, Version: LifecycleApprovalEventSchemaVersion}] = privacyPayloadShape[privacyIdentityTransitionV4]()
 	}
 	shapes[privacyEventPolicyKey{EventType: EventIdentityIssued, Version: LifecycleIssuanceEventSchemaVersion}] = privacyPayloadShape[privacyIdentityTransitionV5]()
-	for _, eventType := range []string{EventIdentityDeployed, EventIdentityRenewed} {
+	for _, eventType := range []string{EventIdentityDeployed, EventIdentityRenewed, EventIdentityRenewalRecovered} {
 		shapes[privacyEventPolicyKey{EventType: eventType, Version: LifecycleOwnershipReadinessEventSchemaVersion}] = privacyPayloadShape[privacyIdentityTransitionV6]()
 	}
 	return shapes

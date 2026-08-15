@@ -3222,6 +3222,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventIdentityRevoked:                          {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true},
 	EventIdentityRenewing:                         {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true},
 	EventIdentityRenewed:                          {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true, LifecycleOwnershipReadinessEventSchemaVersion: true},
+	EventIdentityRenewalFailed:                    {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true},
+	EventIdentityRenewalRecovered:                 {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true, LifecycleOwnershipReadinessEventSchemaVersion: true},
 	EventIdentityRetired:                          {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true},
 	EventCertificateRecorded:                      {1: true, CertificateApprovalEventSchemaVersion: true},
 	EventCertificateCustodyAttested:               {1: true},
@@ -3350,8 +3352,25 @@ var lifecycleEventTypes = map[string]bool{
 	EventIdentityRevoked:  true,
 	EventIdentityRenewing: true,
 	EventIdentityRenewed:  true,
-	EventIdentityRetired:  true,
+	// renewal_failed / renewal_recovered were emitted by the orchestrator's
+	// state machine but never registered here (AUD-201 follow-up D1/V1), so
+	// ApplyTx fell through to nil: a served renewing -> renewal_failed
+	// transition reported success while the read model stayed 'renewing',
+	// retry edges could never fire, and accepting the standing certificate
+	// computed as renewing -> deployed — re-pushing a certificate that was
+	// never renewed. TestProjectorDecodesEveryLifecycleEvent (in the
+	// orchestrator package, beside the table that emits) now cross-checks the
+	// two registries so a new transition cannot repeat this.
+	EventIdentityRenewalFailed:    true,
+	EventIdentityRenewalRecovered: true,
+	EventIdentityRetired:          true,
 }
+
+// LifecycleEventRegistered reports whether the projector decodes eventType as
+// an identity lifecycle transition. The orchestrator's completeness guard uses
+// it to prove every event type its transition table can emit is projected —
+// the mechanism that failed in D1/V1 was exactly this registration.
+func LifecycleEventRegistered(eventType string) bool { return lifecycleEventTypes[eventType] }
 
 // ErrUnknownSchemaVersion is returned by ApplyTx when a known event type carries
 // a schema version the projector does not understand (SCHEMA-001). Failing here —
