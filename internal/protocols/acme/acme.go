@@ -1202,7 +1202,21 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 	base := baseURL(r)
 	s.mu.Lock()
 	o := s.orders[r.PathValue("id")]
-	replayValid := o != nil && o.status == statusValid && o.certID != ""
+	// RFC 8555 objects belong to the account that created them, and the check
+	// runs INSIDE the locked block BEFORE any state changes (AUD-201 follow-up
+	// G1/V15): the claim used to flip statusReady -> statusProcessing first and
+	// verify ownership only after unlocking, so a non-owner — order IDs are
+	// sequential and guessable, and acct can even be nil for jwk-signed posts —
+	// could repeatedly flip a victim's ready order into processing and starve
+	// the owner's own finalize with 403 orderNotReady. The denial is
+	// deliberately indistinguishable from "no such order" so the endpoint is
+	// not an existence oracle.
+	if o == nil || !s.accountOwns(o.accountURL, acct) {
+		s.mu.Unlock()
+		s.problem(w, r, http.StatusNotFound, "malformed", "no such order")
+		return
+	}
+	replayValid := o.status == statusValid && o.certID != ""
 	var replayAuthzURLs []string
 	if replayValid {
 		replayAuthzURLs = s.orderAuthzURLs(base, o)
@@ -1212,10 +1226,13 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 	// "ready" and both went on to mint — one order, two certificates. Flipping
 	// the status here makes the claim atomic: the loser sees "processing".
 	claimed := false
-	if o != nil && !replayValid && o.status == statusReady {
+	if !replayValid && o.status == statusReady {
 		o.status = statusProcessing
 		claimed = true
 	}
+	// Capture the status for the not-ready branch while the lock is held — the
+	// old code re-read o.status after unlocking, a data race.
+	statusAtClaim := o.status
 	s.mu.Unlock()
 	// Release the claim if this request does not go on to issue, so a transient
 	// failure does not wedge the order in "processing" forever.
@@ -1229,25 +1246,12 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 			s.mu.Unlock()
 		}
 	}()
-	if o == nil {
-		s.problem(w, r, http.StatusNotFound, "malformed", "no such order")
-		return
-	}
-	// RFC 8555 objects belong to the account that created them. Without this,
-	// any account could finalize another account's validated order and collect
-	// the certificate — and order IDs are sequential, so finding one is trivial.
-	// The denial is deliberately indistinguishable from "no such order" so the
-	// endpoint is not an existence oracle.
-	if !s.accountOwns(o.accountURL, acct) {
-		s.problem(w, r, http.StatusNotFound, "malformed", "no such order")
-		return
-	}
 	if replayValid {
 		writeJSON(w, http.StatusOK, s.orderJSON(base, o, replayAuthzURLs))
 		return
 	}
 	if !claimed {
-		if o.status == statusProcessing {
+		if statusAtClaim == statusProcessing {
 			s.problem(w, r, http.StatusForbidden, "orderNotReady", "order finalization is already in progress")
 			return
 		}
