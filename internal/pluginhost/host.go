@@ -62,13 +62,20 @@ type Snapshot struct {
 	Denied int64
 }
 
-// Plugin is a loaded, sandboxed WASM module bound to a grant.
+// Plugin is a loaded, sandboxed WASM plugin bound to a grant. The module is
+// COMPILED once and instantiated freshly for every invocation (AUD-201
+// follow-up J2/V8): an interrupted call closes only ITS OWN instance, so a
+// deploy that exceeds its deadline can no longer brick the connector for the
+// process lifetime — and one call's teardown shares no module state with the
+// next call. Each invocation also starts from pristine guest memory, which is
+// strictly stronger isolation than the old shared instance.
 type Plugin struct {
-	runtime wazero.Runtime
-	mod     api.Module
-	grant   Grant
-	stats   *Stats
-	sb      *sandbox
+	runtime  wazero.Runtime
+	compiled wazero.CompiledModule
+	grant    Grant
+	stats    *Stats
+	sb       *sandbox
+	nameSeq  atomic.Uint64
 }
 
 // Stats returns a snapshot of the plugin's gated host-call activity.
@@ -84,7 +91,10 @@ func (p *Plugin) Stats() Snapshot {
 // HasExport reports whether the plugin exports a function named fn. The served
 // connector path uses it to pick the plugin's entrypoint (a connector plugin may
 // export "deploy"; every conformant plugin exports "run").
-func (p *Plugin) HasExport(fn string) bool { return p.mod.ExportedFunction(fn) != nil }
+func (p *Plugin) HasExport(fn string) bool {
+	_, ok := p.compiled.ExportedFunctions()[fn]
+	return ok
+}
 
 // Close releases the plugin's runtime and the sandbox's open directory handles.
 func (p *Plugin) Close(ctx context.Context) error {
@@ -118,13 +128,23 @@ func (h *Host) Load(ctx context.Context, wasm []byte, grant Grant) (*Plugin, err
 		_ = rt.Close(ctx)
 		return nil, err
 	}
-	mod, err := rt.InstantiateWithConfig(ctx, wasm, wazero.NewModuleConfig())
+	compiled, err := rt.CompileModule(ctx, wasm)
 	if err != nil {
 		sb.close()
 		_ = rt.Close(ctx)
 		return nil, fmt.Errorf("pluginhost: instantiate: %w", err)
 	}
-	return &Plugin{runtime: rt, mod: mod, grant: grant, stats: stats, sb: sb}, nil
+	// Instantiate once so a guest whose start section or imports are broken
+	// fails at LOAD, exactly as before, and to prove the env module satisfies
+	// the guest's imports under this grant.
+	probe, err := rt.InstantiateModule(ctx, compiled, wazero.NewModuleConfig().WithName("load-probe"))
+	if err != nil {
+		sb.close()
+		_ = rt.Close(ctx)
+		return nil, fmt.Errorf("pluginhost: instantiate: %w", err)
+	}
+	_ = probe.Close(ctx)
+	return &Plugin{runtime: rt, compiled: compiled, grant: grant, stats: stats, sb: sb}, nil
 }
 
 // registerEnv installs the host ("env") module, exporting one function per
@@ -242,15 +262,24 @@ const maxPluginCallDuration = 30 * time.Second
 // the plugin. A guest that does not return within maxPluginCallDuration (or the
 // caller's deadline, whichever is sooner) is interrupted and its worker released.
 func (h *Host) Invoke(ctx context.Context, p *Plugin, fn string) (uint64, error) {
+	// Fast-drop dead work before it is enqueued: a caller that has already
+	// given up must not occupy a worker (J2/V8).
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
 	type result struct {
 		v   uint64
 		err error
 	}
 	ch := make(chan result, 1)
 	if err := h.pool.Submit(func() {
-		f := p.mod.ExportedFunction(fn)
-		if f == nil {
-			ch <- result{err: fmt.Errorf("pluginhost: plugin has no exported function %q", fn)}
+		// The caller may have abandoned this task while it sat in the bulkhead
+		// queue (Invoke returned on ctx.Done). Calling into wazero with an
+		// already-dead context CLOSES the module without the guest ever
+		// executing — an abandoned queue entry must not kill a healthy module
+		// as a side effect (J2/V8).
+		if err := ctx.Err(); err != nil {
+			ch <- result{err: err}
 			return
 		}
 		// Bound the guest's runtime even when the caller supplied no deadline.
@@ -261,6 +290,22 @@ func (h *Host) Invoke(ctx context.Context, p *Plugin, fn string) (uint64, error)
 			var cancel context.CancelFunc
 			callCtx, cancel = context.WithTimeout(ctx, maxPluginCallDuration)
 			defer cancel()
+		}
+		// A fresh instance per call (J2/V8): the interrupt that stops a
+		// runaway guest closes only THIS instance, so a timeout cannot brick
+		// the connector for later calls, and one call's teardown shares no
+		// module state with a concurrent call's execution.
+		name := fmt.Sprintf("call-%d", p.nameSeq.Add(1))
+		mod, err := p.runtime.InstantiateModule(callCtx, p.compiled, wazero.NewModuleConfig().WithName(name))
+		if err != nil {
+			ch <- result{err: fmt.Errorf("pluginhost: instantiate call module: %w", err)}
+			return
+		}
+		defer func() { _ = mod.Close(context.WithoutCancel(callCtx)) }()
+		f := mod.ExportedFunction(fn)
+		if f == nil {
+			ch <- result{err: fmt.Errorf("pluginhost: plugin has no exported function %q", fn)}
+			return
 		}
 		out, err := f.Call(callCtx)
 		if err != nil {

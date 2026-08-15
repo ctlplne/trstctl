@@ -64,7 +64,7 @@ func (h *Host) ConformanceUnderGrant(ctx context.Context, wasm []byte, grant Gra
 	defer func() { _ = p.Close(ctx) }()
 	r.add("instantiates under sandbox", true, "")
 
-	if p.mod.ExportedFunction("run") == nil {
+	if !p.HasExport("run") {
 		r.add("exports run()", false, "no exported function named run")
 		return r
 	}
