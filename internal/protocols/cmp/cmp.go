@@ -42,7 +42,9 @@ type Server struct {
 	// protection identity must chain to — parsed once at New, opaque so this
 	// package never imports crypto/x509 (AN-3, E3/V33). anchorsErr records a
 	// construction-time parse failure; requests then fail closed as
-	// unavailable. allowAnonymous is the deliberate escape hatch for harnesses.
+	// unavailable. allowAnonymous is settable ONLY from the export_test seam
+	// (AUD-201 follow-up H2/V18): the accept-everything escape hatch cannot be
+	// linked into a production build, matching the acme dvmethod precedent.
 	clientAnchors  *crypto.CMPTrustAnchors
 	anchorsErr     error
 	bindPolicy     crypto.CMPBindPolicy
@@ -78,10 +80,6 @@ type Config struct {
 	// client may request certificates for third parties — a deployment
 	// decision (protocols.cmp_allow_ra_enrollment), never an accident.
 	AllowRAEnrollment bool
-	// AllowUnauthenticatedClients must be set deliberately to run without
-	// anchors. It exists for differential harnesses that drive the parser
-	// directly; production wiring never sets it.
-	AllowUnauthenticatedClients bool
 }
 
 // New builds the CMP server. The trust anchors are parsed ONCE here rather
@@ -93,11 +91,10 @@ func New(cfg Config) *Server {
 	s := &Server{
 		enroller: cfg.Enroller, caCertDER: cfg.CACertDER, caKeyPKCS8: cfg.CAKeyPKCS8,
 		profile: cfg.ProfileName, pool: cfg.Pool, log: cfg.Log,
-		verifyCSR:      cfg.CSRVerifier,
-		clientAnchors:  anchors,
-		anchorsErr:     anchorsErr,
-		bindPolicy:     crypto.CMPBindCSRToProtectionIdentity,
-		allowAnonymous: cfg.AllowUnauthenticatedClients,
+		verifyCSR:     cfg.CSRVerifier,
+		clientAnchors: anchors,
+		anchorsErr:    anchorsErr,
+		bindPolicy:    crypto.CMPBindCSRToProtectionIdentity,
 	}
 	if cfg.AllowRAEnrollment {
 		s.bindPolicy = crypto.CMPAllowRAEnrollment

@@ -41,7 +41,7 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1292 annotated sites across 26 rules. Each row is
+1290 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -357,7 +357,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:329` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:17` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (203 sites)
+### G115 — CWE-190 Integer overflow or wraparound (201 sites)
 
 | Location | Reason |
 |---|---|
@@ -367,8 +367,6 @@ not this file.
 | `internal/agent/relay/adcsscan_wire_test.go:217` | this fixed fixture is 40 bytes, below MaxUint16 (CWE-190). |
 | `internal/agent/relay/adcsscan_wire_test.go:229` | this fixed fixture is below MaxUint16 (CWE-190). |
 | `internal/api/application_secret_approval.go:410` | ApplicationSecretApprovalBinding just proved the version is positive (CWE-190). |
-| `internal/api/auth.go:231` | four hex digits parse to at most 0xFFFF, within rune range (CWE-190) |
-| `internal/api/auth.go:242` | four hex digits parse to at most 0xFFFF, within rune range (CWE-190) |
 | `internal/api/machine_sessions_served_test.go:61` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/api/notifications_helpers_test.go:187` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/api/secretjson.go:167` | rune already range-checked below 0x20 before hex packing (CWE-190) |
@@ -617,10 +615,10 @@ not this file.
 | `ee/provider/saml_authenticator.go:249` | this non-credential double-submit cookie must remain JavaScript-readable; strict and served-mode Secure still apply (CWE-614). |
 | `ee/provider/saml_authenticator.go:345` | short-lived HttpOnly state/request correlation; None is paired with Secure for the required cross-site SAML POST. |
 | `ee/provider/saml_authenticator.go:352` | expiry retains HttpOnly/Lax and uses insecure transport only in explicit loopback development mode (CWE-614). |
-| `internal/api/auth.go:780` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
-| `internal/api/auth.go:791` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
-| `internal/api/auth.go:803` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
-| `internal/api/auth.go:810` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
+| `internal/api/auth.go:726` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
+| `internal/api/auth.go:737` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
+| `internal/api/auth.go:749` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
+| `internal/api/auth.go:756` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
 | `internal/api/auth_hardening_test.go:21` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/auth_test.go:145` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/auth_test.go:146` | test cookie against the test's own local server (CWE-1004) |

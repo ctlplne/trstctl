@@ -28,9 +28,9 @@ func TestCMPOpenSSLClientP10CREnrollment(t *testing.T) {
 	srv := cmpsrv.New(cmpsrv.Config{
 		// Parser/protection harness: client AUTHORIZATION is covered separately by
 		// the trust-anchor test; these drive the wire format itself.
-		AllowUnauthenticatedClients: true,
-		Enroller:                    realEnroller{ca: ca}, CACertDER: ca.certDER, CAKeyPKCS8: ca.keyPKCS8, ProfileName: "device",
+		Enroller: realEnroller{ca: ca}, CACertDER: ca.certDER, CAKeyPKCS8: ca.keyPKCS8, ProfileName: "device",
 	})
+	srv.AllowUnauthenticatedClientsForTest()
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 
