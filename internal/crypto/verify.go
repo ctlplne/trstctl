@@ -68,6 +68,27 @@ func ParsePublicKeyPEM(pemBytes []byte) (PublicKey, error) {
 // pubDER (PKIX). It supports ECDSA (ASN.1 signatures) and RSA PKCS#1 v1.5 — the
 // shapes a TPM attestation key or a signed cloud identity document use. It is a
 // boundary helper so attesters never import crypto/ecdsa or crypto/rsa (AN-3).
+// ValidatePublicKeyDER reports whether der is a usable PKIX/SubjectPublicKeyInfo
+// public key of a supported algorithm. It exists so callers that PERSIST a public
+// key as a trust anchor can reject unusable bytes at the point of record, rather
+// than discovering them later when a verification fails against a stored value
+// that already looks authoritative. It performs no signature check.
+func ValidatePublicKeyDER(der []byte) error {
+	if len(der) == 0 {
+		return fmt.Errorf("crypto: empty public key")
+	}
+	pub, err := x509.ParsePKIXPublicKey(der)
+	if err != nil {
+		return fmt.Errorf("crypto: parse public key: %w", err)
+	}
+	switch pub.(type) {
+	case *rsa.PublicKey, *ecdsa.PublicKey, ed25519.PublicKey:
+		return nil
+	default:
+		return fmt.Errorf("crypto: unsupported public key type %T", pub)
+	}
+}
+
 func VerifyMessage(pubDER, msg, sig []byte) error {
 	pub, err := x509.ParsePKIXPublicKey(pubDER)
 	if err != nil {

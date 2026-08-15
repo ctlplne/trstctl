@@ -73,7 +73,14 @@ func (a *API) licenseManager() *license.Manager {
 	return license.Community()
 }
 
-func (a *API) getEditions(w http.ResponseWriter, _ *http.Request) {
+func (a *API) getEditions(w http.ResponseWriter, r *http.Request) {
+	// Public route, and an unusually expensive one: it runs a cryptographic
+	// power-on self-test per request. Unauthenticated callers must not be able to
+	// drive that at line rate, so the abuse check runs before the self-test rather
+	// than after it.
+	if !a.allowSpecialRouteRequest(w, r, specialRouteAbuseRequest{}) {
+		return
+	}
 	fips, err := crypto.PowerOnSelfTest(false)
 	if err != nil {
 		a.writeError(w, errStatus(http.StatusServiceUnavailable, "crypto power-on self-test failed"))

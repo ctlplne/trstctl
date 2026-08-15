@@ -63,7 +63,7 @@ beforeEach(() => {
 
 describe("U8-4 self-service approvals inbox", () => {
   it("approves a pending action as a distinct principal through the served endpoint", async () => {
-    apiMock.me.mockResolvedValue({ subject: "ra-1", tenant_id: "t1", email: "ra@example.test" });
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "ra-1", tenant_id: "t1", email: "ra@example.test" });
     apiMock.approvalRequests.mockResolvedValue([pending]);
     const user = userEvent.setup();
     renderAt("/approvals");
@@ -74,7 +74,7 @@ describe("U8-4 self-service approvals inbox", () => {
   });
 
   it("blocks self-approval of one's own request", async () => {
-    apiMock.me.mockResolvedValue({ subject: "dev-1", tenant_id: "t1", email: "dev@example.test" });
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "dev-1", tenant_id: "t1", email: "dev@example.test" });
     apiMock.approvalRequests.mockResolvedValue([{ ...pending, resource_name: "own-request" }]);
     renderAt("/approvals");
 

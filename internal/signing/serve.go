@@ -145,8 +145,8 @@ func listenUDS(socketPath string, opts ServeOptions) (net.Listener, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("create socket dir: %w", err)
 	}
-	if err := os.Chmod(dir, 0o700); err != nil { // #nosec G302 -- 0700 on a directory: the execute bit is required to traverse it (CWE-276)
-		return nil, fmt.Errorf("chmod socket dir: %w", err)
+	if err := enforceExactSocketDirMode(dir, 0o700); err != nil {
+		return nil, err
 	}
 	if err := os.Remove(socketPath); err != nil && !os.IsNotExist(err) {
 		return nil, fmt.Errorf("remove stale socket: %w", err)
@@ -170,6 +170,46 @@ type socketChmodFunc func(string, os.FileMode) error
 // bind time. A filesystem that did not honor the creation mask gets one strict
 // chmod attempt, followed by an exact type/mode recheck; it never gets a
 // permissions-only fallback.
+// enforceExactSocketDirMode gives the socket's directory the same scrutiny the
+// socket itself gets below, which it previously did not have.
+//
+// The old code called os.MkdirAll and then os.Chmod and trusted both. MkdirAll is
+// a no-op when the path already exists, and os.Chmod FOLLOWS SYMLINKS — so a
+// pre-existing symlink at the socket directory path meant this chmod'd the
+// attacker's target directory to 0700 and then created the signer's socket
+// inside it. That is the AN-4 isolated signer, the one process holding CA private
+// keys; its socket directory is precisely what must not be attacker-controlled.
+// Lstat is what makes the check symlink-safe, exactly as enforceExactSocketMode
+// already did for the socket.
+func enforceExactSocketDirMode(dir string, want os.FileMode) error {
+	info, err := os.Lstat(dir)
+	if err != nil {
+		return fmt.Errorf("inspect socket dir: %w", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("inspect socket dir: %s is a symlink; refusing to place the signer socket "+
+			"behind a link whose target this process does not control", dir)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("inspect socket dir: %s is not a directory", dir)
+	}
+	if info.Mode().Perm() == want.Perm() {
+		return nil
+	}
+	// #nosec G302 -- 0700 on a directory: the execute bit is required to traverse it (CWE-276)
+	if err := os.Chmod(dir, want.Perm()); err != nil {
+		return fmt.Errorf("chmod socket dir: %w", err)
+	}
+	info, err = os.Lstat(dir)
+	if err != nil {
+		return fmt.Errorf("reinspect socket dir: %w", err)
+	}
+	if !info.IsDir() || info.Mode().Perm() != want.Perm() {
+		return fmt.Errorf("socket dir mode = %s, want exact %04o directory", info.Mode(), want.Perm())
+	}
+	return nil
+}
+
 func enforceExactSocketMode(socketPath string, want os.FileMode, chmod socketChmodFunc) error {
 	info, err := os.Lstat(socketPath)
 	if err != nil {

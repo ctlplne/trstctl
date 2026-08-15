@@ -191,11 +191,33 @@ func mongoCreateUserCommand(user string, password []byte, roles []MongoRole) []b
 	}
 	rolesArray = finishBSONDocument(rolesArray, rolesStart)
 
-	cmd, start := beginBSONDocument(nil)
+	// Preallocate the whole command before the password goes in. CreateUser wipes
+	// the buffer this returns, but append() reallocates as it grows: writing the
+	// password and THEN appending the roles document copies the password into a
+	// fresh array and abandons the old one, which the wipe can never reach. That
+	// abandoned copy is exactly the AN-8 failure the wipe was added to prevent.
+	// With capacity reserved up front there is one backing array from start to
+	// finish, so wiping the returned slice really does erase the password.
+	//
+	// The reserve is generous rather than exact — BSON field overhead is a handful
+	// of bytes per key — because over-reserving costs nothing and under-reserving
+	// silently reintroduces the bug.
+	cmd, start := beginBSONDocument(make([]byte, 0, mongoCommandCapacity(user, password, rolesArray)))
 	cmd = appendBSONString(cmd, "createUser", []byte(user))
 	cmd = appendBSONString(cmd, "pwd", password)
 	cmd = appendBSONDocument(cmd, 0x04, "roles", rolesArray)
 	return finishBSONDocument(cmd, start)
+}
+
+// mongoCommandCapacity reserves enough room that appending never reallocates
+// after the password has been written.
+func mongoCommandCapacity(user string, password, rolesArray []byte) int {
+	const perFieldOverhead = 32 // type byte + key + NUL + length prefix, rounded up
+	return 4 +                  // document length prefix
+		perFieldOverhead + len("createUser") + len(user) +
+		perFieldOverhead + len("pwd") + len(password) +
+		perFieldOverhead + len("roles") + len(rolesArray) +
+		1 // terminating NUL
 }
 
 func beginBSONDocument(dst []byte) ([]byte, int) {

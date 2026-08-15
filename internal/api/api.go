@@ -46,11 +46,15 @@ const (
 // (AN-5), and the lifecycle orchestrator, resolves the tenant and principal per
 // request, and enforces RBAC (F8) on every guarded route.
 type API struct {
-	store    *store.Store
-	log      *events.Log
-	idem     *orchestrator.Idempotency
-	orch     *orchestrator.Orchestrator
-	tenantFn func(*http.Request) (string, error)
+	store *store.Store
+	log   *events.Log
+	// policyVersionCache memoizes the policy-version projection against the
+	// event-log head so GET /api/v1/policy/versions stops replaying the whole
+	// log per request.
+	policyVersionCache policyVersionCache
+	idem               *orchestrator.Idempotency
+	orch               *orchestrator.Orchestrator
+	tenantFn           func(*http.Request) (string, error)
 	// drVerify re-hashes the configured backup directory (J2). Nil means no
 	// backup directory is configured, which the surface reports as such rather
 	// than as a failure — plenty of deployments back up through infrastructure

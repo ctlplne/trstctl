@@ -437,14 +437,20 @@ func TestServedSCEPSSCEPClientEnrollment(t *testing.T) {
 func TestServedCMPOpenSSLClientP10CREnrollment(t *testing.T) {
 	ossl := openssltest.RequireCMP(t)
 
+	// Served CMP now requires the PKIMessage protection identity to chain to a
+	// configured anchor, so build the client FIRST and hand the deployment its
+	// certificate as the anchor. The fixture is self-signed, so it is its own
+	// anchor — which is what a deployment enrolling this device would configure.
+	clientCert, clientKey, csrDER := newSCEPClient(t, "openssl-cmp-served-device")
+
 	h := newServedHarness(t, config.Protocols{
-		CMP: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
+		CMP:                      config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
+		CMPClientTrustAnchorFile: writeCMPAnchorPEM(t, clientCert),
 	})
 	if !protoContains(h.srv.ServedProtocols(), "cmp") {
 		t.Fatal("CMP is not reported as served")
 	}
 
-	clientCert, clientKey, csrDER := newSCEPClient(t, "openssl-cmp-served-device")
 	dir := t.TempDir()
 	caFile := filepath.Join(dir, "served-cmp-ca.pem")
 	if err := os.WriteFile(caFile, h.caPEM, 0o600); err != nil {

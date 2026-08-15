@@ -56,6 +56,9 @@ func chainReferencingEnvelope(t *testing.T, reg *ToolRegistry, tenantID, authRef
 	root := Record{
 		TenantID: tenantID, DelegatorID: "root", DelegatorKey: KeyRef{ID: "root-key", Algorithm: "ECDSA-P256"},
 		DelegateID: "mid", Authority: wideAuthority(), DepthRemaining: 3, Validity: openWindow(), RootAnchor: true,
+		// The root commits to mid's key, so the second hop's carried key is checked
+		// against something the root SIGNED rather than a name mid chose itself.
+		DelegateKeyThumbprint: DelegateKeyThumbprintOf(midDER),
 	}
 	rootSigned, err := root.Sign(rootSigner, reg)
 	if err != nil {

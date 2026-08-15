@@ -34,7 +34,7 @@ function renderShell() {
 
 describe("UX-02 shell metadata declutter", () => {
   beforeEach(() => {
-    apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1", email: "u@example.test" });
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "user-1", tenant_id: "t1", email: "u@example.test" });
   });
 
   it("hides internal nav metadata and removes the disabled tenant switcher", async () => {

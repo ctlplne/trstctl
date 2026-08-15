@@ -20,7 +20,15 @@ command -v cosign >/dev/null 2>&1 || {
 
 # The identity is the release workflow itself, asserted by GitHub's OIDC issuer —
 # so only an image built by .github/workflows/release.yml verifies.
-identity_re='^https://github.com/.*/trstctl/.github/workflows/release.yml@.*'
+#
+# Both anchors matter. The org segment used to be `.*`, which matched ANY GitHub
+# account: a fork at github.com/attacker/trstctl running its own copy of
+# release.yml produced a signature this check accepted. And the ref used to be
+# `@.*`, which matched any branch — so a signature made from an attacker's
+# branch of the real repo verified too. Pin the org, and pin the ref to a
+# release tag.
+org='ctlplne'
+identity_re="^https://github\.com/${org}/trstctl/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+.*$"
 issuer='https://token.actions.githubusercontent.com'
 
 echo ">> verifying cosign signature for ${image}"

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -457,11 +458,33 @@ func (s *IssuanceService) enforceProfile(ctx context.Context, req IssueRequest) 
 	return s.auditDecision(ctx, req, rec.Version, "allow", "")
 }
 
+// profileDNSNames returns every DNS name the profile must vet: the CSR's own
+// SANs UNION the request's DNSNames.
+//
+// Preferring one over the other was a policy bypass. In-process CAs take the
+// issued certificate's names from the CSR, but several external-CA adapters
+// (see internal/ca/{digicert,venafi,awspca,...}) build the UPSTREAM order's
+// CN/SANs from req.DNSNames instead — so whenever the CSR carried any SAN, the
+// req.DNSNames set went to the upstream CA having never been checked against the
+// tenant's profile suffix policy. Validating the union means every name that
+// could reach a certificate, by either route, has to satisfy the profile.
 func profileDNSNames(info crypto.CSRInfo, fallback []string) []string {
-	if len(info.DNSNames) > 0 {
-		return append([]string(nil), info.DNSNames...)
+	seen := make(map[string]struct{}, len(info.DNSNames)+len(fallback))
+	out := make([]string, 0, len(info.DNSNames)+len(fallback))
+	for _, group := range [][]string{info.DNSNames, fallback} {
+		for _, name := range group {
+			key := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(name), "."))
+			if key == "" {
+				continue
+			}
+			if _, dup := seen[key]; dup {
+				continue
+			}
+			seen[key] = struct{}{}
+			out = append(out, name)
+		}
 	}
-	return append([]string(nil), fallback...)
+	return out
 }
 
 // recordIntent durably records the external CA call before any provider request

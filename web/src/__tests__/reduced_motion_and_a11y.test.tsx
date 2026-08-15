@@ -60,7 +60,7 @@ function renderShell() {
 describe("reduced motion and a11y evidence (PRODUCT-005 / COVER-010)", () => {
   beforeEach(() => {
     apiMock.me.mockReset();
-    apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1", email: "u@example.test" });
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "user-1", tenant_id: "t1", email: "u@example.test" });
     apiMock.certificates.mockResolvedValue([]);
     apiMock.identities.mockResolvedValue([]);
     apiMock.risk.mockResolvedValue([]);

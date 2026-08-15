@@ -68,7 +68,9 @@ type azureTokenResponse struct {
 
 func parseAzureTokenResponse(raw []byte, now time.Time) (Material, error) {
 	var decoded azureTokenResponse
-	defer secret.Wipe(decoded.AccessToken)
+	// Closure: the field is nil until the JSON below is decoded, so a bare defer
+	// would capture that nil and wipe nothing (AN-8).
+	defer func() { secret.Wipe(decoded.AccessToken) }()
 	if err := json.Unmarshal(raw, &decoded); err != nil {
 		return Material{}, errors.New("cloudauth: Azure token endpoint returned malformed JSON")
 	}

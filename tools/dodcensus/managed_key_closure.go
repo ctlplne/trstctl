@@ -16,6 +16,7 @@ import (
 const managedKeyRuntimePlatform = "linux/amd64"
 
 var managedKeyIdentityClosure = []string{
+	".github/base-image-digests.env",
 	".github/workflows/release.yml",
 	"deploy/docker/Dockerfile.signer-hsm",
 	"go.mod",
@@ -24,6 +25,11 @@ var managedKeyIdentityClosure = []string{
 	"tools/dodcensus/Dockerfile.managed-key-runtime",
 	"tools/dodcensus/substrates/managed_key_signer_entrypoint.sh",
 	"tools/dodcensus/substrates/managed_keys.py",
+	// release.yml resolves the signer's bases THROUGH this script and against this
+	// pin file, so both are part of the runtime closure. Leaving them out would let
+	// the pinning logic — or the pinned base digest itself — change without moving
+	// the managed-key identity, which is precisely what the identity is for.
+	"scripts/ci/resolve-pinned-base.sh",
 }
 
 // inspectManagedKeyRuntimeClosure makes the dynamic image bytes part of the
@@ -80,18 +86,45 @@ func inspectManagedKeyRuntimeClosure(repo string, substrate Substrate) error {
 	if err != nil {
 		return err
 	}
+	// The HSM signer's bases must be immutable digests, and — since SUPPLY-001 —
+	// digests that match a value committed in the repository. Resolving a floating
+	// tag at build time and checking only that the answer looked like a digest
+	// validated its shape, not its identity: a repointed upstream tag was inherited
+	// silently between releases while every attestation faithfully attested the
+	// wrong image. The imagetools calls this used to require by literal now live in
+	// scripts/ci/resolve-pinned-base.sh, which additionally enforces the pin, so
+	// the closure requires that script and the enforcement it performs.
 	for _, required := range []string{
 		"id: hsm_basedigest",
-		`docker buildx imagetools inspect "${build_base}" --format '{{.Manifest.Digest}}'`,
-		`docker buildx imagetools inspect "${runtime_base}" --format '{{.Manifest.Digest}}'`,
-		`echo "build_ref=golang@${build_digest}"`,
-		`echo "runtime_ref=debian@${runtime_digest}"`,
+		`build_ref="$(scripts/ci/resolve-pinned-base.sh "golang:${go_version}-bookworm" "${go_key}" golang)"`,
+		`runtime_ref="$(scripts/ci/resolve-pinned-base.sh debian:bookworm-slim DEBIAN_BOOKWORM_SLIM debian)"`,
+		`echo "build_ref=${build_ref}"`,
+		`echo "runtime_ref=${runtime_ref}"`,
 		"BUILD_IMAGE=${{ steps.hsm_basedigest.outputs.build_ref }}",
 		"BASE_IMAGE=${{ steps.hsm_basedigest.outputs.runtime_ref }}",
 	} {
 		if !strings.Contains(workflow, required) {
 			return fmt.Errorf("HSM release workflow omits immutable base-image dataflow %q", required)
 		}
+	}
+
+	pinScript, err := read("scripts/ci/resolve-pinned-base.sh")
+	if err != nil {
+		return err
+	}
+	for _, required := range []string{
+		`docker buildx imagetools inspect "${image_ref}" --format '{{.Manifest.Digest}}'`,
+		"^sha256:[0-9a-f]{64}$",
+		".github/base-image-digests.env",
+		"HAS MOVED",
+		"exit 1",
+	} {
+		if !strings.Contains(pinScript, required) {
+			return fmt.Errorf("base-image pinning script omits immutable-digest enforcement %q", required)
+		}
+	}
+	if _, err := read(".github/base-image-digests.env"); err != nil {
+		return fmt.Errorf("managed-key closure requires the committed base-image pin file: %w", err)
 	}
 
 	runtimeSource, err := read("internal/server/dod_managed_key_runtime_test.go")

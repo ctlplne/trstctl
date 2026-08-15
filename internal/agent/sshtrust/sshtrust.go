@@ -49,8 +49,14 @@ func New(tenantID string, cfg Config, audit auditsink.Auditor) (*Applier, error)
 // and health-checks — rolling back automatically on any failure. Existing trust
 // is preserved.
 func (a *Applier) AddCATrust(ctx context.Context, caPublicKey []byte) (changed bool, err error) {
-	trustBak, trustExisted := a.read(a.cfg.TrustedUserCAKeysPath)
-	cfgBak, cfgExisted := a.read(a.cfg.SSHDConfigPath)
+	trustBak, trustExisted, err := a.read(a.cfg.TrustedUserCAKeysPath)
+	if err != nil {
+		return false, err
+	}
+	cfgBak, cfgExisted, err := a.read(a.cfg.SSHDConfigPath)
+	if err != nil {
+		return false, err
+	}
 
 	caLine := strings.TrimRight(string(caPublicKey), "\n")
 	if caLine == "" {
@@ -98,8 +104,14 @@ func (a *Applier) RemoveCATrust(ctx context.Context, caPublicKey []byte, confirm
 	if !a.cfg.AllowUnconfirmedRemoval && !confirm {
 		return fmt.Errorf("sshtrust: refusing to remove trust without explicit confirmation")
 	}
-	trustBak, trustExisted := a.read(a.cfg.TrustedUserCAKeysPath)
-	cfgBak, cfgExisted := a.read(a.cfg.SSHDConfigPath)
+	trustBak, trustExisted, err := a.read(a.cfg.TrustedUserCAKeysPath)
+	if err != nil {
+		return err
+	}
+	cfgBak, cfgExisted, err := a.read(a.cfg.SSHDConfigPath)
+	if err != nil {
+		return err
+	}
 	caLine := strings.TrimRight(string(caPublicKey), "\n")
 	if !containsLine(string(trustBak), caLine) {
 		return nil // not present — nothing to remove
@@ -165,15 +177,28 @@ func (a *Applier) rollbackFiles(ctx context.Context, stage string, cause error, 
 	return fmt.Errorf("sshtrust: %s failed, rolled back to last-known-good: %w", stage, cause)
 }
 
-func (a *Applier) read(path string) (data []byte, existed bool) {
+// read loads a file's current contents so it can be restored on rollback.
+//
+// The two branches this used to have were identical: ErrNotExist and every other
+// error both returned (nil, false). That is not a cosmetic dead branch. `existed`
+// is what restore() switches on, and its false branch calls FS.Remove — so a file
+// that exists but could not be read (EACCES, EIO, a race with another writer) was
+// recorded as absent, and the rollback meant to put the host back deleted
+// /etc/ssh/sshd_config and the trusted CA keys file instead. Losing SSH access to
+// the host is the exact outcome the rollback path exists to prevent.
+//
+// Only "not found" may be reported as absent. Anything else is returned, and the
+// callers refuse to touch SSH trust when they cannot read what they would need to
+// restore.
+func (a *Applier) read(path string) (data []byte, existed bool, err error) {
 	b, err := a.cfg.FS.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, false
+			return nil, false, nil
 		}
-		return nil, false
+		return nil, false, fmt.Errorf("sshtrust: read %s to back it up: %w", path, err)
 	}
-	return b, true
+	return b, true, nil
 }
 
 func (a *Applier) restore(path string, backup []byte, existed bool) error {

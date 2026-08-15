@@ -16,6 +16,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"sync"
@@ -156,9 +157,20 @@ func (ca *CA) issue(ctx context.Context, profile Profile, req IssueRequest, cert
 		if certType == crypto.SSHHostCert {
 			kind = "host"
 		}
-		_ = auditsink.Emit(ctx, ca.cfg.Audit, nil, "ssh.cert.issued", ca.cfg.TenantID,
-			[]byte(fmt.Sprintf(`{"type":%q,"key_id":%q,"serial":%d,"principals":%d,"profile":%q}`,
-				kind, req.KeyID, serial, len(req.Principals), profile.Name)))
+		// json.Marshal, not Sprintf: KeyID is client-supplied. Go's %q emits Go
+		// string syntax, not JSON — a KeyID carrying a control byte or invalid
+		// UTF-8 renders as \x1b or \xff, which no JSON parser accepts, so the
+		// audit record for that issuance becomes unreadable.
+		payload, marshalErr := json.Marshal(struct {
+			Type       string `json:"type"`
+			KeyID      string `json:"key_id"`
+			Serial     uint64 `json:"serial"`
+			Principals int    `json:"principals"`
+			Profile    string `json:"profile"`
+		}{Type: kind, KeyID: req.KeyID, Serial: serial, Principals: len(req.Principals), Profile: profile.Name})
+		if marshalErr == nil {
+			_ = auditsink.Emit(ctx, ca.cfg.Audit, nil, "ssh.cert.issued", ca.cfg.TenantID, payload)
+		}
 		return nil
 	})
 	if err != nil {

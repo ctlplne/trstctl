@@ -91,7 +91,7 @@ func (s *Store) ListACMEARIPosturePage(ctx context.Context, tenantID, afterID st
 			               )
 			         ORDER BY
 			           CASE WHEN ident.id = COALESCE(ari_rr.identity_id, rr.identity_id) THEN 0 ELSE 1 END,
-			           CASE ident.status WHEN 'deployed' THEN 0 WHEN 'renewing' THEN 1 ELSE 2 END,
+			           CASE ident.status WHEN 'deployed' THEN 0 WHEN 'renewing' THEN 1 WHEN 'renewal_failed' THEN 2 ELSE 3 END,
 			           ident.created_at DESC,
 			           ident.id
 			         LIMIT 1

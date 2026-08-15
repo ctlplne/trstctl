@@ -47,7 +47,10 @@ func TestCMPCSRVerifierSeamConsulted(t *testing.T) {
 
 	// Without the seam the strict core parser refuses the carried CSR.
 	strict := cmpsrv.New(cmpsrv.Config{
-		Enroller: &stubEnroller{}, CACertDER: ca.certDER, CAKeyPKCS8: ca.keyPKCS8, ProfileName: "device",
+		// Parser/protection harness: client AUTHORIZATION is covered separately by
+		// the trust-anchor test; these drive the wire format itself.
+		AllowUnauthenticatedClients: true,
+		Enroller:                    &stubEnroller{}, CACertDER: ca.certDER, CAKeyPKCS8: ca.keyPKCS8, ProfileName: "device",
 	})
 	strictTS := httptest.NewServer(strict)
 	defer strictTS.Close()
@@ -69,7 +72,10 @@ func TestCMPCSRVerifierSeamConsulted(t *testing.T) {
 	enroller := &stubEnroller{leafDER: goodLeaf}
 	var verified [][]byte
 	seam := cmpsrv.New(cmpsrv.Config{
-		Enroller: enroller, CACertDER: ca.certDER, CAKeyPKCS8: ca.keyPKCS8, ProfileName: "device",
+		// Parser/protection harness: client AUTHORIZATION is covered separately by
+		// the trust-anchor test; these drive the wire format itself.
+		AllowUnauthenticatedClients: true,
+		Enroller:                    enroller, CACertDER: ca.certDER, CAKeyPKCS8: ca.keyPKCS8, ProfileName: "device",
 		CSRVerifier: func(der []byte) error {
 			verified = append(verified, append([]byte(nil), der...))
 			return nil
@@ -98,7 +104,10 @@ func TestCMPCSRVerifierSeamConsulted(t *testing.T) {
 
 	// A refusing verifier fails closed.
 	refuse := cmpsrv.New(cmpsrv.Config{
-		Enroller: &stubEnroller{}, CACertDER: ca.certDER, CAKeyPKCS8: ca.keyPKCS8, ProfileName: "device",
+		// Parser/protection harness: client AUTHORIZATION is covered separately by
+		// the trust-anchor test; these drive the wire format itself.
+		AllowUnauthenticatedClients: true,
+		Enroller:                    &stubEnroller{}, CACertDER: ca.certDER, CAKeyPKCS8: ca.keyPKCS8, ProfileName: "device",
 		CSRVerifier: func([]byte) error { return errors.New("refused") },
 	})
 	refuseTS := httptest.NewServer(refuse)
@@ -132,7 +141,10 @@ func TestCMPSeamNeverBypassesProtection(t *testing.T) {
 	tampered[idx+10] ^= 0x01
 
 	srv := cmpsrv.New(cmpsrv.Config{
-		Enroller: &stubEnroller{}, CACertDER: ca.certDER, CAKeyPKCS8: ca.keyPKCS8, ProfileName: "device",
+		// Parser/protection harness: client AUTHORIZATION is covered separately by
+		// the trust-anchor test; these drive the wire format itself.
+		AllowUnauthenticatedClients: true,
+		Enroller:                    &stubEnroller{}, CACertDER: ca.certDER, CAKeyPKCS8: ca.keyPKCS8, ProfileName: "device",
 		CSRVerifier: func([]byte) error { return nil },
 	})
 	ts := httptest.NewServer(srv)

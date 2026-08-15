@@ -70,7 +70,7 @@ const otherOwner = {
 describe("self-service credential requests", () => {
   beforeEach(() => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
-    apiMock.me.mockResolvedValue({ subject: "dev-1", tenant_id: "t1", email: "dev@example.test" });
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "dev-1", tenant_id: "t1", email: "dev@example.test" });
     apiMock.profiles.mockResolvedValue([activeProfile]);
     apiMock.owners.mockResolvedValue([otherOwner, selectedOwner]);
     apiMock.issuanceRequests.mockResolvedValue({ items: [], open: 0, guidance: "" });

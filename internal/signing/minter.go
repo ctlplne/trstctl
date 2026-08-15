@@ -168,23 +168,32 @@ func (s *Server) GenerateSuccessorKey(handle string, alg crypto.Algorithm) (cryp
 		return nil, fmt.Errorf("signing: generate successor key: %w", err)
 	}
 	held := &heldKey{signer: ls}
+	// Persist BEFORE publishing, with the lock held across both.
+	//
+	// The key used to be inserted into s.keys, the lock released, and only then
+	// saved. That left a window where the handle resolved to a key no restart
+	// would recover, and a concurrent caller could sign with it before the save
+	// even returned. The compensating delete-and-destroy on failure could not undo
+	// a signature already produced with it.
+	//
+	// Holding s.mu across the save serialises minting behind a file write, which
+	// is acceptable: minting a successor key is rare, and the alternative is a
+	// handle that is visible but not durable. KeyStore.Save touches only the
+	// filesystem and the seal wrapper — it never re-enters the server — so this
+	// cannot deadlock.
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	if _, exists := s.keys[handle]; exists {
-		s.mu.Unlock()
 		ls.Destroy()
 		return nil, fmt.Errorf("signing: successor handle %q already exists", handle)
 	}
-	s.keys[handle] = held
-	s.mu.Unlock()
 	if s.store != nil {
 		if err := s.store.Save(handle, ls, keyConstraints{}); err != nil {
-			s.mu.Lock()
-			delete(s.keys, handle)
-			s.mu.Unlock()
 			ls.Destroy()
 			return nil, fmt.Errorf("signing: persist successor key: %w", err)
 		}
 	}
+	s.keys[handle] = held
 	return crypto.SignerFromDigestSigner(ls), nil
 }
 

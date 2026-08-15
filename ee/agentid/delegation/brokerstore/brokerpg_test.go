@@ -44,6 +44,7 @@ var (
 	pgDSN  string
 	pgErr  error
 	pgInst *embeddedpostgres.EmbeddedPostgres
+	pgDir  string
 
 	storeOnce  sync.Once
 	sharedCS   *corestore.Store
@@ -76,7 +77,31 @@ func startPG() {
 		return
 	}
 	pgInst = inst
+	pgDir = dir
 	pgDSN = fmt.Sprintf("postgres://postgres:postgres@localhost:%d/postgres", port)
+}
+
+// TestMain stops the embedded server this package starts.
+//
+// Without it, inst.Start() ran and nothing ever called Stop: every invocation of
+// this package left a PostgreSQL server running for the life of the machine,
+// each holding a SysV shared-memory segment. macOS allows 32
+// (kern.sysv.shmmni), so after roughly thirty runs NO Postgres-backed test in
+// the repository can start — initdb fails with "could not create shared memory
+// segment", and the failure surfaces in whatever package happens to run next
+// rather than in the one that leaked. That misdirection is what makes this worth
+// a teardown rather than a cleanup script.
+func TestMain(m *testing.M) {
+	code := m.Run()
+	if pgInst != nil {
+		if err := pgInst.Stop(); err != nil {
+			fmt.Fprintf(os.Stderr, "brokerstore: stop embedded postgres: %v\n", err)
+		}
+	}
+	if pgDir != "" {
+		_ = os.RemoveAll(pgDir)
+	}
+	os.Exit(code)
 }
 
 func ensurePG(t *testing.T) string {

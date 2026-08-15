@@ -71,13 +71,21 @@ func ProtocolAuthzManifest() []ProtocolAuthzEntry {
 			DefaultDenyTest:     "internal/server/protocols_served_enroll_test.go",
 		},
 		{
-			Protocol:            "ssh",
-			FeatureIDs:          []string{"F43", "F45"},
-			RoutePatterns:       protocolAuthzRoutePatterns("ssh"),
-			PublicRationale:     "The current served SSH CA protocol is a tenant-fixed machine endpoint: the subject public key/principals are constrained by the served SSH profile and the signer-held CA key; no request header can choose tenant or signer.",
-			TenantMapping:       "tenant is fixed by protocols.ssh.tenant_id or the server default tenant when the signer-backed SSH CA is built.",
-			PrincipalMapping:    "principal is the SSH subject public key, requested key id, and principals recorded in the certificate/KRL operation.",
-			EnablementAuthority: "operator/admin configuration enables the mount; any future runtime issuance toggle must require " + string(authz.CertsIssue) + ".",
+			Protocol:      "ssh",
+			FeatureIDs:    []string{"F43", "F45"},
+			RoutePatterns: protocolAuthzRoutePatterns("ssh"),
+			// GET /ssh/ca and GET /ssh/krl remain public: they are the trust
+			// material a host must fetch before it can authenticate anything,
+			// exactly like a CRL distribution point. The three MUTATING routes
+			// require certs:issue. They were previously public on the rationale
+			// that "principals are constrained by the served SSH profile" — that
+			// was not true (ssh.Profile carries no principal allowlist and
+			// issue() checks only non-empty + TTL), so an anonymous caller could
+			// mint a `root` user certificate.
+			Permission:          authz.CertsIssue,
+			TenantMapping:       "tenant is fixed by protocols.ssh.tenant_id or the server default tenant when the signer-backed SSH CA is built; the bearer token must belong to that same tenant.",
+			PrincipalMapping:    "principal is the trstctl API token subject, which must grant " + string(authz.CertsIssue) + "; the SSH subject public key, key id and principals are recorded in the certificate/KRL operation.",
+			EnablementAuthority: "operator/admin configuration enables the mount; issuance and revocation require " + string(authz.CertsIssue) + ".",
 			DefaultDenyTest:     "internal/server/protocols_served_spiffe_ssh_test.go",
 		},
 		{

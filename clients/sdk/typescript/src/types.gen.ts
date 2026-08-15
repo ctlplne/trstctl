@@ -6480,7 +6480,7 @@ export interface components {
             /** @enum {string} */
             reason: "unspecified" | "keyCompromise" | "caCompromise" | "affiliationChanged" | "superseded" | "cessationOfOperation" | "certificateHold" | "removeFromCRL" | "privilegeWithdrawn" | "aaCompromise";
             /** @enum {string} */
-            status?: "requested" | "issued" | "deployed" | "renewing" | "revoked" | "retired";
+            status?: "requested" | "issued" | "deployed" | "renewing" | "renewal_failed" | "revoked" | "retired";
         };
         BulkRevokeResult: {
             items: components["schemas"]["BulkRevokeItem"][];
@@ -11879,7 +11879,7 @@ export interface components {
             reason?: string;
             subject_csr_pem?: string;
             /** @enum {string} */
-            to: "issued" | "deployed" | "renewing" | "revoked" | "retired";
+            to: "issued" | "deployed" | "renewing" | "renewal_failed" | "revoked" | "retired";
         };
         UnownedIdentity: {
             detail?: string;

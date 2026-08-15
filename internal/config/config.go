@@ -703,10 +703,16 @@ type Protocols struct {
 	// request decryption and response protection. It is not the issuing CA key, but
 	// it must survive restarts and be shared by replicas so clients that cached
 	// GetCACert material can keep enrolling during rolling deploys.
-	RAKeyFile   string         `json:"ra_key_file,omitempty"`
-	TSACertFile string         `json:"tsa_cert_file,omitempty"`
-	SPIFFE      SPIFFEProtocol `json:"spiffe"`
-	SSH         ProtocolToggle `json:"ssh"`
+	RAKeyFile string `json:"ra_key_file,omitempty"`
+	// CMPClientTrustAnchorFile is the PEM bundle a CMP client's PKIMessage
+	// protection identity must chain to. CMP carries that identity in the
+	// message's own extraCerts, so without anchors the protection check proves
+	// only that the sender signed their own message and a self-signed key pair
+	// is enough to enrol. Served CMP refuses to enrol while this is unset.
+	CMPClientTrustAnchorFile string         `json:"cmp_client_trust_anchor_file,omitempty"`
+	TSACertFile              string         `json:"tsa_cert_file,omitempty"`
+	SPIFFE                   SPIFFEProtocol `json:"spiffe"`
+	SSH                      ProtocolToggle `json:"ssh"`
 	// SCEPIntuneChallenge pins Microsoft Intune Connector challenge-signing
 	// certificates. Served SCEP always wires this validator; without anchors the
 	// validator fails closed rather than accepting unauthenticated CSRs.
@@ -1464,7 +1470,19 @@ func (r PrivacyRetention) IntervalDuration() (time.Duration, error) {
 // used.
 type Backup struct {
 	EncryptionKeyFile string `json:"encryption_key_file,omitempty"`
-	AllowUnencrypted  bool   `json:"allow_unencrypted,omitempty"`
+	// ManifestSigningKeyFile is the deployment key that signs each artifact's
+	// manifest. It is deliberately NOT derived from the KEK: the whole point is
+	// that a restorer sharing no secret with this deployment can still establish
+	// where an artifact came from, and a KEK-derived key can only ever be checked
+	// by something already holding the KEK.
+	ManifestSigningKeyFile string `json:"manifest_signing_key_file,omitempty"`
+	// TrustedManifestKeyFiles lists the deployment public keys whose signed
+	// artifacts this deployment will restore. Empty keeps the previous behaviour
+	// (signatures recorded but not required), which is what an in-place restore of
+	// this deployment's own backup needs. Set it on a disaster-recovery target and
+	// an artifact from an unknown deployment is refused.
+	TrustedManifestKeyFiles []string `json:"trusted_manifest_key_files,omitempty"`
+	AllowUnencrypted        bool     `json:"allow_unencrypted,omitempty"`
 	// Directory is the full-backup directory the served DR posture reports on
 	// (epic J2). Empty means the control plane reports "not configured" rather
 	// than guessing a path — a guessed default would report a directory that
@@ -2633,6 +2651,7 @@ func applyProtocolsEnv(getenv func(string) string, p *Protocols) {
 	setString(getenv, "TRSTCTL_PROTOCOLS_KMIP_KEY_FILE", &p.KMIP.KeyFile)
 	setString(getenv, "TRSTCTL_PROTOCOLS_KMIP_CLIENT_CA_FILE", &p.KMIP.ClientCAFile)
 	setString(getenv, "TRSTCTL_PROTOCOLS_RA_KEY_FILE", &p.RAKeyFile)
+	setString(getenv, "TRSTCTL_PROTOCOLS_CMP_CLIENT_TRUST_ANCHOR_FILE", &p.CMPClientTrustAnchorFile)
 	setString(getenv, "TRSTCTL_PROTOCOLS_TSA_CERT_FILE", &p.TSACertFile)
 	setBool(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_ENABLED", &p.SPIFFE.Enabled)
 	setString(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_TENANT_ID", &p.SPIFFE.TenantID)

@@ -45,6 +45,10 @@ const (
 	statusPending = "pending"
 	statusReady   = "ready"
 	statusValid   = "valid"
+	// statusProcessing is RFC 8555's state for an order whose finalize is in
+	// flight. It exists here to CLAIM an order atomically, so two concurrent
+	// finalize requests cannot both observe "ready" and both mint.
+	statusProcessing = "processing"
 
 	// ariRetryAfterSeconds is how long an ARI client should wait before polling
 	// renewalInfo again (RFC 9773 Retry-After), here 6 hours.
@@ -1014,12 +1018,22 @@ func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 	writeJSON(w, http.StatusCreated, s.orderJSON(base, o, authzURLs))
 }
 
-func (s *Server) getAuthz(w http.ResponseWriter, r *http.Request, _ *jose.ACMEMessage, _ *account) {
+func (s *Server) getAuthz(w http.ResponseWriter, r *http.Request, _ *jose.ACMEMessage, acct *account) {
 	base := baseURL(r)
 	s.mu.Lock()
 	az := s.authzs[r.PathValue("id")]
+	var owner string
+	if az != nil {
+		if o := s.orders[az.orderID]; o != nil {
+			owner = o.accountURL
+		}
+	}
 	s.mu.Unlock()
 	if az == nil {
+		s.problem(w, r, http.StatusNotFound, "malformed", "no such authorization")
+		return
+	}
+	if !s.accountOwns(owner, acct) {
 		s.problem(w, r, http.StatusNotFound, "malformed", "no such authorization")
 		return
 	}
@@ -1045,6 +1059,18 @@ func (s *Server) acceptChallenge(w http.ResponseWriter, r *http.Request, msg *jo
 	if o == nil {
 		s.mu.Unlock()
 		s.problem(w, r, http.StatusNotFound, "malformed", "no such order")
+		return
+	}
+	// Responding to a challenge is scoped to the account that owns it (RFC 8555
+	// §7.5.1), same as fetching the order, authorization or certificate. Those
+	// three check ownership and this one did not, so any registered account could
+	// drive validation state on another account's authorization by challenge ID —
+	// and for device-attest-01, bind its own key attestation to that
+	// authorization. Checked under the lock, before anything is acted on. 404
+	// rather than 403: a non-owner should not learn the challenge exists.
+	if !s.accountOwns(o.accountURL, acct) {
+		s.mu.Unlock()
+		s.problem(w, r, http.StatusNotFound, "malformed", "no such challenge")
 		return
 	}
 	s.mu.Unlock()
@@ -1150,7 +1176,7 @@ func (s *Server) acceptChallenge(w http.ResponseWriter, r *http.Request, msg *jo
 	})
 }
 
-func (s *Server) getOrder(w http.ResponseWriter, r *http.Request, _ *jose.ACMEMessage, _ *account) {
+func (s *Server) getOrder(w http.ResponseWriter, r *http.Request, _ *jose.ACMEMessage, acct *account) {
 	base := baseURL(r)
 	s.mu.Lock()
 	o := s.orders[r.PathValue("id")]
@@ -1162,6 +1188,10 @@ func (s *Server) getOrder(w http.ResponseWriter, r *http.Request, _ *jose.ACMEMe
 	}
 	s.mu.Unlock()
 	if o == nil {
+		s.problem(w, r, http.StatusNotFound, "malformed", "no such order")
+		return
+	}
+	if !s.accountOwns(o.accountURL, acct) {
 		s.problem(w, r, http.StatusNotFound, "malformed", "no such order")
 		return
 	}
@@ -1177,8 +1207,38 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 	if replayValid {
 		replayAuthzURLs = s.orderAuthzURLs(base, o)
 	}
+	// Claim the order while still holding the lock. The readiness check used to
+	// happen AFTER this unlock, so two concurrent finalize requests both saw
+	// "ready" and both went on to mint — one order, two certificates. Flipping
+	// the status here makes the claim atomic: the loser sees "processing".
+	claimed := false
+	if o != nil && !replayValid && o.status == statusReady {
+		o.status = statusProcessing
+		claimed = true
+	}
 	s.mu.Unlock()
+	// Release the claim if this request does not go on to issue, so a transient
+	// failure does not wedge the order in "processing" forever.
+	issued := false
+	defer func() {
+		if claimed && !issued {
+			s.mu.Lock()
+			if o.status == statusProcessing {
+				o.status = statusReady
+			}
+			s.mu.Unlock()
+		}
+	}()
 	if o == nil {
+		s.problem(w, r, http.StatusNotFound, "malformed", "no such order")
+		return
+	}
+	// RFC 8555 objects belong to the account that created them. Without this,
+	// any account could finalize another account's validated order and collect
+	// the certificate — and order IDs are sequential, so finding one is trivial.
+	// The denial is deliberately indistinguishable from "no such order" so the
+	// endpoint is not an existence oracle.
+	if !s.accountOwns(o.accountURL, acct) {
 		s.problem(w, r, http.StatusNotFound, "malformed", "no such order")
 		return
 	}
@@ -1186,7 +1246,11 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 		writeJSON(w, http.StatusOK, s.orderJSON(base, o, replayAuthzURLs))
 		return
 	}
-	if o.status != statusReady {
+	if !claimed {
+		if o.status == statusProcessing {
+			s.problem(w, r, http.StatusForbidden, "orderNotReady", "order finalization is already in progress")
+			return
+		}
 		s.problem(w, r, http.StatusForbidden, "orderNotReady", "order is not ready to finalize")
 		return
 	}
@@ -1205,6 +1269,22 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 			s.problem(w, r, http.StatusBadRequest, "badCSR", "finalize CSR does not contain the attested key")
 			return
 		}
+	}
+
+	// RFC 8555 §7.4: the finalize CSR MUST indicate the exact same set of
+	// identifiers as the order. Without this the order's validated identifiers
+	// are advisory — DNSNames below is passed to the CA but every in-process CA
+	// takes its names from the CSR (internal/ca/ca.go documents exactly that),
+	// so an account that validated one domain it controls could finalize with a
+	// CSR for any other name and receive a certificate for it.
+	//
+	// This reads the CSR's names but does NOT verify its signature, so the
+	// opaque-bytes seam is intact: proof-of-possession remains the licensed
+	// issuer's job, and a CSR whose subject algorithm the core parser cannot
+	// verify still reaches the CA unchanged.
+	if err := csrIdentifiersMatchOrder(csr, o.domains); err != nil {
+		s.problem(w, r, http.StatusBadRequest, "badCSR", err.Error())
+		return
 	}
 
 	cert, err := s.ca.Issue(r.Context(), ca.IssueRequest{CSR: csr, DNSNames: o.domains, TTL: 90 * 24 * time.Hour})
@@ -1227,6 +1307,10 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 		return
 	}
 	authzURLs := s.orderAuthzURLs(base, o)
+	// The claim taken at entry is now consumed: applyCertificateIssuedEventLocked
+	// has moved the order to its issued state, so the deferred release must not
+	// put it back to "ready".
+	issued = true
 	s.mu.Unlock()
 
 	w.Header().Set("Location", base+"/acme/order/"+o.id)
@@ -1241,11 +1325,25 @@ func (s *Server) orderAuthzURLs(base string, o *order) []string {
 	return authzURLs
 }
 
-func (s *Server) getCert(w http.ResponseWriter, r *http.Request, _ *jose.ACMEMessage, _ *account) {
+func (s *Server) getCert(w http.ResponseWriter, r *http.Request, _ *jose.ACMEMessage, acct *account) {
+	certID := r.PathValue("id")
 	s.mu.Lock()
-	pem := s.certs[r.PathValue("id")]
+	pem := s.certs[certID]
+	owner, known := "", false
+	for _, rec := range s.issued {
+		if rec != nil && rec.certID == certID {
+			owner, known = rec.accountURL, true
+			break
+		}
+	}
 	s.mu.Unlock()
 	if pem == nil {
+		s.problem(w, r, http.StatusNotFound, "malformed", "no such certificate")
+		return
+	}
+	// A certificate with no recorded issuing account cannot be shown to be the
+	// caller's, so it is not served rather than served to everyone.
+	if !known || !s.accountOwns(owner, acct) {
 		s.problem(w, r, http.StatusNotFound, "malformed", "no such certificate")
 		return
 	}
@@ -1754,4 +1852,66 @@ func acmeStepForPath(r *http.Request) enrollmentdiag.Step {
 	default:
 		return ""
 	}
+}
+
+// csrIdentifiersMatchOrder enforces RFC 8555 §7.4: the finalize CSR must request
+// exactly the identifier set the order validated — no more (which would be
+// unauthorized issuance) and no fewer (which would certify less than the client
+// asked for while the order reports fulfilled).
+//
+// Comparison is over the CSR's dNSName SANs plus its subject CN when the CN is
+// not already a SAN, because a CA that copies the subject would otherwise certify
+// a name the order never covered. DNS names are compared case-insensitively and
+// with a single trailing dot ignored, both of which denote the same name.
+func csrIdentifiersMatchOrder(csrDER []byte, authorized []string) error {
+	ids, err := crypto.CSRRequestedIdentifiers(csrDER)
+	if err != nil {
+		return fmt.Errorf("acme: finalize CSR is unreadable: %w", err)
+	}
+	requested := map[string]bool{}
+	for _, name := range ids.DNSNames {
+		requested[normalizeACMEIdentifier(name)] = true
+	}
+	if cn := strings.TrimSpace(ids.CommonName); cn != "" {
+		requested[normalizeACMEIdentifier(cn)] = true
+	}
+	// Any non-DNS SAN is outside what an ACME dns identifier can authorize.
+	if len(ids.IPAddresses) > 0 || len(ids.EmailAddresses) > 0 || len(ids.URIs) > 0 {
+		return errors.New("acme: finalize CSR requests identifiers the order did not authorize")
+	}
+	allowed := map[string]bool{}
+	for _, name := range authorized {
+		allowed[normalizeACMEIdentifier(name)] = true
+	}
+	for name := range requested {
+		if !allowed[name] {
+			return errors.New("acme: finalize CSR requests an identifier the order did not authorize")
+		}
+	}
+	for name := range allowed {
+		if !requested[name] {
+			return errors.New("acme: finalize CSR omits an identifier the order authorized")
+		}
+	}
+	if len(requested) == 0 {
+		return errors.New("acme: finalize CSR requests no identifiers")
+	}
+	return nil
+}
+
+// normalizeACMEIdentifier folds a DNS name to its comparable form: DNS labels are
+// case-insensitive, and a single trailing dot denotes the same (fully qualified)
+// name.
+func normalizeACMEIdentifier(name string) string {
+	return strings.ToLower(strings.TrimSuffix(strings.TrimSpace(name), "."))
+}
+
+// accountOwns reports whether the authenticated account owns an object recorded
+// with ownerURL. It fails closed: an unauthenticated request, or an object with
+// no recorded owner, is never treated as owned.
+func (s *Server) accountOwns(ownerURL string, acct *account) bool {
+	if acct == nil || ownerURL == "" {
+		return false
+	}
+	return ownerURL == acct.url
 }

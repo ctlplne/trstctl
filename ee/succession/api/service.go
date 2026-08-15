@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	pcasissuer "trstctl.com/trstctl/ee/succession/issuer"
 	pcasstaple "trstctl.com/trstctl/ee/succession/staple"
 	pcasstore "trstctl.com/trstctl/ee/succession/store"
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/editionseam"
 	"trstctl.com/trstctl/internal/events"
@@ -203,6 +205,17 @@ func (s *service) RequestRecovery(ctx context.Context, tenantID string, req Reco
 }
 
 func (s *service) RequestFederationImport(ctx context.Context, tenantID string, req FederationImportRequest) (AsyncRequestResponse, error) {
+	// Validate the foreign trust root BEFORE persisting it. The HTTP handler
+	// checks that the field is non-empty; nothing checked that the bytes are a
+	// certificate. This value is a TRUST ANCHOR — a bridge row records what a
+	// foreign deployment's succession chain will later be verified against — so
+	// persisting arbitrary bytes under that name means the failure surfaces in a
+	// worker, long after the request that caused it, against a row that already
+	// looks authoritative. Checked here rather than in the handler so no caller
+	// path can reach the persist without it.
+	if err := validateForeignTrustRoot(req.ForeignTrustRootDER); err != nil {
+		return AsyncRequestResponse{}, err
+	}
 	if s.repo != nil {
 		if err := s.repo.UpsertFederationBridge(ctx, tenantID, pcasstore.FederationBridge{
 			ForeignDeploymentID: req.ForeignDeploymentID,
@@ -214,6 +227,27 @@ func (s *service) RequestFederationImport(ctx context.Context, tenantID string, 
 		}
 	}
 	return s.enqueue(ctx, tenantID, topicOr(s.federationTopic, FederationImportDestination), req.ForeignDeploymentID, req)
+}
+
+// validateForeignTrustRoot rejects bytes that cannot serve as a federation trust
+// anchor.
+//
+// Despite the "DER" in its name this is a PKIX SubjectPublicKeyInfo, not a
+// certificate — VerifyGenesis hands it straight to crypto.VerifyMessage. Checking
+// it here means an unusable anchor is refused at the request that supplies it,
+// rather than surfacing much later in a worker as a verification failure against
+// a stored bridge row that already looks authoritative.
+func validateForeignTrustRoot(der []byte) error {
+	if len(der) == 0 {
+		return api.ErrStatus(http.StatusBadRequest, "succession: federation import requires a foreign trust root")
+	}
+	if err := crypto.ValidatePublicKeyDER(der); err != nil {
+		// 400, not 500: the caller supplied these bytes, so this is a bad request,
+		// not a server fault.
+		return api.ErrWithStatus(http.StatusBadRequest,
+			fmt.Errorf("succession: foreign trust root is not a usable public key: %w", err))
+	}
+	return nil
 }
 
 func (s *service) RequestKEMRewrap(ctx context.Context, tenantID string, req KEMRewrapRequest) (AsyncRequestResponse, error) {

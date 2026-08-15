@@ -1727,7 +1727,7 @@ func TestResilienceStrengthGuardsStayRequired(t *testing.T) {
 	for _, want := range []string{
 		"func WritePostgresState(",
 		"func RestorePostgresState(",
-		"readAndVerifyPostgresState(r)",
+		"readAndVerifyPostgresState(r, key)",
 		"validatePostgresStateTables",
 		"backup: postgres-state integrity check FAILED",
 		"truncateList, err := joinQuotedTables(postgresStateTables())",
@@ -4352,7 +4352,12 @@ func TestWireStrengthGuardsStayRequired(t *testing.T) {
 		"mtls.SignerServerCredentials(tlsCfg)",
 		"grpc.Creds(creds)",
 		"os.MkdirAll(dir, 0o700)",
-		"os.Chmod(dir, 0o700)",
+		// The bare os.Chmod(dir, 0o700) this used to anchor followed symlinks, so
+		// a symlink planted at the socket directory path had the signer chmod the
+		// attacker's target and then create its socket inside it. The directory
+		// now gets the same Lstat-based scrutiny the socket itself always had.
+		"enforceExactSocketDirMode(dir, 0o700)",
+		"os.ModeSymlink",
 		"listenPrivateUnixSocket(socketPath)",
 		"enforceExactSocketMode(socketPath, 0o600, os.Chmod)",
 		"newPeerAuthListener(ln, os.Geteuid(), opts.AllowInsecureDevNonLinux)",

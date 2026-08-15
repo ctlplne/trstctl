@@ -491,13 +491,16 @@ pcas-e2e-gate: ## PCAS full-stack e2e gate (INT-20): real PG + JetStream + signe
 
 pcas-release-gate: pcas-caller-gate pcas-no-skip-gate pcas-e2e-gate ## PCAS release gate (INT-23)
 
-.PHONY: agid-caller-gate agid-caller-gate-strong
+.PHONY: agid-caller-gate agid-caller-gate-strong agid-wire-gate
 agid-caller-gate: ## AGID-INT-CALL production-caller FLOOR: every ee/agentid mechanism has a non-test caller; the ee/agentid/verify RP SDK is the DEFERRED exception
 	@echo ">> agid-caller-gate (AGID-INT-CALL floor + seam: every ee/agentid constructor has a non-test caller rooted at the ee_attach seam)"
 	@$(GO) test ./ee/agentid/intgate/... -count=1
 agid-caller-gate-strong: ## AGID-INT-CALL STRONG check (CI): RTA call graph from cmd/* main.main (no -tags trstctl_core) proves every ee/agentid constructor is reachable
 	@echo ">> agid-caller-gate-strong (AGID-INT-CALL RTA reachability; whole-program load, CI-only)"
 	@$(GO) test -tags agidrta ./ee/agentid/intgate/... -count=1
+agid-wire-gate: ## AGID-INT-WIRE real-infra gate: PostgreSQL/RLS + embedded NATS + real signer (the agentid twin of vdec-wire-gate/xrec-wire-gate)
+	@echo ">> agid-wire-gate (AGID-INT-WIRE real PG/RLS + embedded NATS + real signer)"
+	@$(GO) test -tags integration ./ee/agentid/intwire/... ./ee/agentid/delegation/... -count=1 -timeout=12m
 
 .PHONY: xrec-caller-gate xrec-caller-gate-strong xrec-wire-gate xrec-release-gate
 xrec-caller-gate: ## XREC-INT-CALL production-caller FLOOR: every ee/reconcile constructor has a seam-rooted non-test caller

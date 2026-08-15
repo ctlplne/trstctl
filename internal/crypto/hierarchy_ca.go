@@ -10,6 +10,7 @@ import (
 	"encoding/asn1"
 	"encoding/pem"
 	"fmt"
+	"net"
 	"slices"
 	"sort"
 	"strings"
@@ -76,7 +77,7 @@ func SignIntermediateHierarchyCA(parentCertDER []byte, parentSigner DigestSigner
 		profile.PermittedDNSDomains = append([]string(nil), parent.PermittedDNSDomains...)
 	}
 	if len(profile.EKUs) == 0 {
-		profile.EKUs = extKeyUsageStrings(parent.ExtKeyUsage)
+		profile.EKUs = extKeyUsageStringsForCertificate(parent)
 	}
 	if parentHasPathLen {
 		childPathLen := parent.MaxPathLen - 1
@@ -337,9 +338,22 @@ func CrossSignHierarchyCA(issuerCertDER []byte, issuerSigner DigestSigner, targe
 		KeyUsage:              target.KeyUsage,
 		BasicConstraintsValid: true, IsCA: true,
 		PermittedDNSDomains: permitted, PermittedDNSDomainsCritical: len(permitted) > 0,
-		ExtKeyUsage:    ekus,
-		SubjectKeyId:   append([]byte(nil), target.SubjectKeyId...),
-		AuthorityKeyId: append([]byte(nil), issuer.SubjectKeyId...),
+		// Carry the target's COMPLETE name-constraint set, not just permittedDNS.
+		// Excluded subtrees are the half that matters most: an excluded
+		// "secret.corp.example" carves a hole out of a permitted "corp.example",
+		// so dropping it re-permits exactly the names the operator had carved
+		// out. The IP/email/URI constraints were likewise discarded, silently
+		// widening a cross-signed CA beyond the authority it was given.
+		ExcludedDNSDomains:      append([]string(nil), target.ExcludedDNSDomains...),
+		PermittedIPRanges:       append([]*net.IPNet(nil), target.PermittedIPRanges...),
+		ExcludedIPRanges:        append([]*net.IPNet(nil), target.ExcludedIPRanges...),
+		PermittedEmailAddresses: append([]string(nil), target.PermittedEmailAddresses...),
+		ExcludedEmailAddresses:  append([]string(nil), target.ExcludedEmailAddresses...),
+		PermittedURIDomains:     append([]string(nil), target.PermittedURIDomains...),
+		ExcludedURIDomains:      append([]string(nil), target.ExcludedURIDomains...),
+		ExtKeyUsage:             ekus,
+		SubjectKeyId:            append([]byte(nil), target.SubjectKeyId...),
+		AuthorityKeyId:          append([]byte(nil), issuer.SubjectKeyId...),
 	}
 	if hasPathLen {
 		tmpl.MaxPathLen = pathLen
@@ -681,7 +695,7 @@ func verifyImportedProfile(cert *x509.Certificate, profile HierarchyCAProfile) e
 	if len(profile.PermittedDNSDomains) > 0 && !sameStringSet(profile.PermittedDNSDomains, cert.PermittedDNSDomains) {
 		return fmt.Errorf("crypto: imported CA permitted DNS domains do not match ceremony profile")
 	}
-	if len(profile.EKUs) > 0 && !sameStringSet(profile.EKUs, extKeyUsageStrings(cert.ExtKeyUsage)) {
+	if len(profile.EKUs) > 0 && !sameStringSet(profile.EKUs, extKeyUsageStringsForCertificate(cert)) {
 		return fmt.Errorf("crypto: imported CA extended key usages do not match ceremony profile")
 	}
 	return nil
@@ -731,6 +745,20 @@ func parsePKIXPublicKey(pub PublicKey) (any, error) {
 	return parsed, nil
 }
 
+// extKeyUsageStrings renders a certificate's extended key usages for comparison
+// against a ceremony profile.
+//
+// It is deliberately TOTAL: every input produces an output token. The previous
+// version listed five usages and silently dropped everything else, which turned
+// a set comparison into a false match — a CA carrying [serverAuth, ocspSigning]
+// rendered as ["serverAuth"] and so "matched" a reviewed profile of
+// ["serverAuth"], accepting a more capable authority than the ceremony
+// approved. Anything unrecognised now renders as a distinguishable token that
+// cannot equal a profile name, so an unknown usage fails the comparison instead
+// of disappearing from it.
+//
+// Callers that compare against a certificate must also account for
+// UnknownExtKeyUsage (custom OIDs); see extKeyUsageStringsForCertificate.
 func extKeyUsageStrings(usages []x509.ExtKeyUsage) []string {
 	out := make([]string, 0, len(usages))
 	for _, u := range usages {
@@ -743,9 +771,34 @@ func extKeyUsageStrings(usages []x509.ExtKeyUsage) []string {
 			out = append(out, "codeSigning")
 		case x509.ExtKeyUsageEmailProtection:
 			out = append(out, "emailProtection")
+		case x509.ExtKeyUsageTimeStamping:
+			out = append(out, "timeStamping")
+		case x509.ExtKeyUsageOCSPSigning:
+			out = append(out, "ocspSigning")
+		case x509.ExtKeyUsageIPSECEndSystem:
+			out = append(out, "ipsecEndSystem")
+		case x509.ExtKeyUsageIPSECTunnel:
+			out = append(out, "ipsecTunnel")
+		case x509.ExtKeyUsageIPSECUser:
+			out = append(out, "ipsecUser")
 		case x509.ExtKeyUsageAny:
 			out = append(out, "any")
+		default:
+			// Never silently drop: an unrecognised usage must break the match.
+			out = append(out, fmt.Sprintf("unrecognized-eku-%d", int(u)))
 		}
+	}
+	return out
+}
+
+// extKeyUsageStringsForCertificate is extKeyUsageStrings over everything a
+// certificate actually asserts, including custom-OID usages Go parks in
+// UnknownExtKeyUsage. Comparing a profile against only cert.ExtKeyUsage would
+// ignore, say, 1.3.6.1.4.1.311.20.2.2 entirely.
+func extKeyUsageStringsForCertificate(cert *x509.Certificate) []string {
+	out := extKeyUsageStrings(cert.ExtKeyUsage)
+	for _, oid := range cert.UnknownExtKeyUsage {
+		out = append(out, oid.String())
 	}
 	return out
 }

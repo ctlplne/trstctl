@@ -91,7 +91,7 @@ function resizeViewport(width: number) {
 
 describe("app shell accessibility and theme", () => {
   beforeEach(() => {
-    apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1", email: "u@example.test" });
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "user-1", tenant_id: "t1", email: "u@example.test" });
     apiMock.certificatePage.mockResolvedValue({
       items: [
         {

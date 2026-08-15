@@ -96,6 +96,49 @@ func backupIntegrityKey(cfg *config.Config) ([]byte, error) {
 	return crypto.HMACSHA256(raw, []byte(backupIntegrityLabel)), nil
 }
 
+// configureBackupManifestIdentity installs the deployment key that signs backup
+// manifests and the anchors whose artifacts this deployment will restore.
+//
+// Both are operator-supplied rather than derived from the KEK. That is the whole
+// point of H5b: the HMAC already binds an artifact to whoever holds the same
+// integrity key, which a disaster-recovery target never does — it has a different
+// KEK by construction. A signature checked against a trust anchor is the only
+// form of authenticity that survives the move to a fresh deployment.
+func configureBackupManifestIdentity(cfg *config.Config) error {
+	if path := strings.TrimSpace(cfg.Backup.ManifestSigningKeyFile); path != "" {
+		pem, err := secretfile.Load(path)
+		if err != nil {
+			return fmt.Errorf("read backup manifest signing key: %w", err)
+		}
+		defer secret.Wipe(pem)
+		ls, err := crypto.LockedKeyFromPKCS8PEM(pem)
+		if err != nil {
+			return fmt.Errorf("parse backup manifest signing key: %w", err)
+		}
+		// The key stays in locked, zeroable memory (AN-8); only the message-signing
+		// adapter is handed to the backup writer.
+		backup.SetPostgresStateSigner(crypto.SignerFromDigestSigner(ls))
+	}
+	anchors := make([][]byte, 0, len(cfg.Backup.TrustedManifestKeyFiles))
+	for _, path := range cfg.Backup.TrustedManifestKeyFiles {
+		path = strings.TrimSpace(path)
+		if path == "" {
+			continue
+		}
+		pemBytes, err := os.ReadFile(path) // #nosec G304 -- operator-configured public trust anchor path (CWE-22)
+		if err != nil {
+			return fmt.Errorf("read trusted backup manifest key %q: %w", path, err)
+		}
+		pub, err := crypto.ParsePublicKeyPEM(pemBytes)
+		if err != nil {
+			return fmt.Errorf("parse trusted backup manifest key %q: %w", path, err)
+		}
+		anchors = append(anchors, pub.DER)
+	}
+	backup.SetPostgresStateTrustAnchors(anchors)
+	return nil
+}
+
 // RunBackup writes a portable backup of the event log (the AN-2 source of truth)
 // to path and returns the number of events backed up. It requires an external
 // event store — the datastore an operator actually backs up — and fails fast
@@ -125,6 +168,9 @@ func RunBackup(ctx context.Context, cfg *config.Config, path string) (int, error
 	}
 	defer func() { _ = log.Close() }()
 
+	if err := configureBackupManifestIdentity(cfg); err != nil {
+		return 0, err
+	}
 	key, err := backupIntegrityKey(cfg)
 	if err != nil {
 		return 0, err
@@ -274,6 +320,9 @@ func RunFullBackup(ctx context.Context, cfg *config.Config, dir string) (backup.
 		eventCut      uint64
 		eventArtifact backup.Artifact
 	)
+	if err := configureBackupManifestIdentity(cfg); err != nil {
+		return backup.FullManifest{}, err
+	}
 	key, err := backupIntegrityKey(cfg)
 	if err != nil {
 		return backup.FullManifest{}, err
@@ -335,7 +384,9 @@ func RunFullBackup(ctx context.Context, cfg *config.Config, dir string) (backup.
 	if err != nil {
 		return backup.FullManifest{}, fmt.Errorf("create postgres state backup: %w", err)
 	}
-	if _, err := backup.WritePostgresStateTx(ctx, tx, pgFile, eventCut); err != nil {
+	// Key the artifact's integrity trailer so a forged postgres-state file
+	// cannot verify on restore (it was an unkeyed SHA-256 anyone could recompute).
+	if _, err := backup.WritePostgresStateTxWithKey(ctx, tx, pgFile, eventCut, key); err != nil {
 		_ = pgFile.Close()
 		return backup.FullManifest{}, err
 	}
@@ -421,6 +472,9 @@ func restoreEventLog(
 		return 0, fmt.Errorf("open backup file: %w", err)
 	}
 	defer func() { _ = f.Close() }()
+	if err := configureBackupManifestIdentity(cfg); err != nil {
+		return 0, err
+	}
 	key, err := backupIntegrityKey(cfg)
 	if err != nil {
 		return 0, err
@@ -625,7 +679,18 @@ func runFullRestore(
 	if err := verifyFileArtifact(manifest, "postgres-state", filepath.Join(dir, "postgres-state.jsonl")); err != nil {
 		return result, err
 	}
-	if err := verifyFullRestoreArtifactFiles(dir); err != nil {
+	// A full restore targets a FRESH deployment, whose KEK — and therefore whose
+	// backupIntegrityKey — is by definition not the one that sealed the artifact.
+	// So no destination-derived key is passed here, exactly as the event-log
+	// restore in this same path does not pass one. The artifacts remain
+	// tamper-EVIDENT (SHA-256 trailer plus the signed manifest) but are not
+	// authenticated against a secret on this path.
+	//
+	// Closing that properly needs an OPERATOR-SUPPLIED restore key carried with
+	// the backup rather than derived from the destination; see the H5 follow-up.
+	// The write side now emits an HMAC (postgresStateTrailer.HMACSHA256) so that
+	// key has something to verify against once it exists.
+	if err := verifyFullRestoreArtifactFiles(dir, nil); err != nil {
 		return result, err
 	}
 	// Version-1 backups created before AUD-63 carried a separate plaintext audit
@@ -667,7 +732,7 @@ func runFullRestore(
 		return result, fmt.Errorf("open postgres state backup: %w", err)
 	}
 	defer func() { _ = f.Close() }()
-	summary, err := backup.RestorePostgresState(ctx, st, f)
+	summary, err := backup.RestorePostgresStateWithKey(ctx, st, f, nil)
 	if err != nil {
 		result.Postgres = summary
 		return result, err
@@ -724,7 +789,7 @@ func runFullRestore(
 // verifyFullRestoreArtifactFiles proves the event and PostgreSQL artifacts name
 // the same backup cut, then observes both close errors before restoration starts.
 // Keeping this preflight separate makes its no-mutation boundary explicit.
-func verifyFullRestoreArtifactFiles(dir string) error {
+func verifyFullRestoreArtifactFiles(dir string, key []byte) error {
 	eventFile, err := os.Open(filepath.Join(dir, "events.jsonl")) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
 	if err != nil {
 		return fmt.Errorf("open event log for full-restore preflight: %w", err)
@@ -734,7 +799,7 @@ func verifyFullRestoreArtifactFiles(dir string) error {
 		_ = eventFile.Close()
 		return fmt.Errorf("open postgres state for full-restore preflight: %w", err)
 	}
-	preflightErr := verifyFullRestoreArtifactPair(eventFile, postgresFile)
+	preflightErr := verifyFullRestoreArtifactPair(eventFile, postgresFile, key)
 	eventCloseErr := eventFile.Close()
 	postgresCloseErr := postgresFile.Close()
 	if preflightErr != nil {
@@ -829,8 +894,9 @@ func proveFullRestoreRuntime(
 func verifyFullRestoreArtifactPair(
 	eventArtifact io.Reader,
 	postgresArtifact io.Reader,
+	key []byte,
 ) error {
-	postgresSummary, err := backup.VerifyPostgresState(postgresArtifact)
+	postgresSummary, err := backup.VerifyPostgresStateWithKey(postgresArtifact, key)
 	if err != nil {
 		return fmt.Errorf("full restore postgres-state preflight: %w", err)
 	}

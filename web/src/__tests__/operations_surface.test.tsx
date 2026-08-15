@@ -57,7 +57,7 @@ function renderAt(path: string) {
 describe("operational console surface", () => {
   beforeEach(() => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
-    apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1", email: "u@example.test" });
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "user-1", tenant_id: "t1", email: "u@example.test" });
     apiMock.rotationRuns.mockResolvedValue({ items: [] });
     apiMock.connectorDeliveries.mockResolvedValue({ items: [] });
     apiMock.identities.mockResolvedValue([]);

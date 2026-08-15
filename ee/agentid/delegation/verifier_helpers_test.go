@@ -161,13 +161,17 @@ func buildChain(t *testing.T, reg *ToolRegistry, tenantID string, hops []hop, de
 	var parentDigest []byte
 	for i, h := range hops {
 		rec := Record{
-			TenantID:       tenantID,
-			DelegatorID:    h.delegatorID,
-			DelegatorKey:   KeyRef{ID: h.delegatorKeyID, Algorithm: "ECDSA-P256"},
-			DelegateID:     h.delegateID,
-			Authority:      h.authority,
-			DepthRemaining: h.depthRemaining,
-			Validity:       h.validity,
+			TenantID:     tenantID,
+			DelegatorID:  h.delegatorID,
+			DelegatorKey: KeyRef{ID: h.delegatorKeyID, Algorithm: "ECDSA-P256"},
+			DelegateID:   h.delegateID,
+			// Commit to the key the NEXT hop will sign with, which is what binds the
+			// chain by key and not merely by principal name. The last hop delegates
+			// onward to nobody, so it commits to nothing.
+			DelegateKeyThumbprint: nextHopKeyThumbprint(delegatorDERs, i),
+			Authority:             h.authority,
+			DepthRemaining:        h.depthRemaining,
+			Validity:              h.validity,
 		}
 		if i == 0 {
 			rec.RootAnchor = true
@@ -298,3 +302,12 @@ func hexOf(b []byte) string { return hex.EncodeToString(b) }
 
 // jsonUnmarshalImpl unmarshals JSON for the decode-side test helper.
 func jsonUnmarshalImpl(b []byte, v any) error { return json.Unmarshal(b, v) }
+
+// nextHopKeyThumbprint returns the thumbprint of the key that will sign hop i+1,
+// or nil for the final hop, which confers no onward delegation.
+func nextHopKeyThumbprint(delegatorDERs [][]byte, i int) []byte {
+	if i+1 >= len(delegatorDERs) {
+		return nil
+	}
+	return DelegateKeyThumbprintOf(delegatorDERs[i+1])
+}

@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -31,6 +32,11 @@ type Middleware struct {
 	tracer *Tracer
 	reqs   *CounterVec
 	dur    *HistogramVec
+
+	// routeMu guards knownRoutes, the bounded set of route label values this
+	// process has already emitted (see boundedRoute).
+	routeMu     sync.Mutex
+	knownRoutes map[string]struct{}
 }
 
 // NewMiddleware builds the middleware from opts.
@@ -59,7 +65,7 @@ func (m *Middleware) Handler(next http.Handler) http.Handler {
 		// Continue an inbound trace if present, else start a fresh one.
 		parent, _ := ParseTraceparent(r.Header.Get("traceparent"))
 		ctx, span := m.tracer.StartFrom(r.Context(), parent, "http.request")
-		route := normalizeRoute(r.URL.Path)
+		route := m.boundedRoute(r.URL.Path)
 		span.SetAttr("http.method", r.Method)
 		span.SetAttr("http.route", route)
 
@@ -118,6 +124,37 @@ func (s *statusRecorder) Write(b []byte) (int, error) {
 	n, err := s.ResponseWriter.Write(b)
 	s.bytes += n
 	return n, err
+}
+
+// maxDistinctRouteLabels caps how many distinct route label values this process
+// will ever emit. normalizeRoute collapses IDENTIFIER-shaped segments, but an
+// unauthenticated client can simply request paths that look nothing like an id
+// ("/aaa", "/bbb", ...) and mint a fresh label value per request — the metrics
+// registry then grows without bound and /metrics grows with it, which is both a
+// memory-exhaustion and a scrape-amplification vector. Past the cap every new
+// route collapses to "other": cardinality is bounded by construction rather than
+// by hoping the input looks like an id.
+const maxDistinctRouteLabels = 512
+
+// otherRouteLabel is the single bucket every route beyond the cap folds into.
+const otherRouteLabel = "other"
+
+// boundedRoute is normalizeRoute with a hard ceiling on distinct label values.
+func (m *Middleware) boundedRoute(path string) string {
+	route := normalizeRoute(path)
+	m.routeMu.Lock()
+	defer m.routeMu.Unlock()
+	if m.knownRoutes == nil {
+		m.knownRoutes = make(map[string]struct{}, maxDistinctRouteLabels)
+	}
+	if _, ok := m.knownRoutes[route]; ok {
+		return route
+	}
+	if len(m.knownRoutes) >= maxDistinctRouteLabels {
+		return otherRouteLabel
+	}
+	m.knownRoutes[route] = struct{}{}
+	return route
 }
 
 var (

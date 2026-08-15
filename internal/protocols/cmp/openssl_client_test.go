@@ -26,7 +26,10 @@ func TestCMPOpenSSLClientP10CREnrollment(t *testing.T) {
 
 	ca := newRSACA(t)
 	srv := cmpsrv.New(cmpsrv.Config{
-		Enroller: realEnroller{ca: ca}, CACertDER: ca.certDER, CAKeyPKCS8: ca.keyPKCS8, ProfileName: "device",
+		// Parser/protection harness: client AUTHORIZATION is covered separately by
+		// the trust-anchor test; these drive the wire format itself.
+		AllowUnauthenticatedClients: true,
+		Enroller:                    realEnroller{ca: ca}, CACertDER: ca.certDER, CAKeyPKCS8: ca.keyPKCS8, ProfileName: "device",
 	})
 	ts := httptest.NewServer(srv)
 	defer ts.Close()

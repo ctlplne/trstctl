@@ -152,12 +152,14 @@ func TestDODEvalProtocolProfileProductionAssembly(t *testing.T) {
 	caPEM := first.Server().CACertPEM()
 	caDER := dodEvalCACertDER(t, caPEM)
 	estToken := dodSeedAPIToken(t, ctx, st, dodEvalProtocolTenant, "eval-est-device", []string{"certs:request"})
+	// SSH issuance names its own principals, so it requires certs:issue.
+	sshToken := dodSeedAPIToken(t, ctx, st, dodEvalProtocolTenant, "eval-ssh-operator", []string{"certs:issue"})
 	artifacts := map[string]any{}
 	artifacts["acme"] = dodEvalEnrollACME(t, first.Client(), first.BaseURL(), challengeAddress, caDER)
 	artifacts["est"] = dodEvalEnrollEST(t, first.Client(), first.BaseURL(), estToken, caDER)
 	artifacts["scep"] = dodEvalEnrollSCEP(t, first.Client(), first.BaseURL(), scepChallenge, caDER)
 	artifacts["cmp"] = dodEvalEnrollCMP(t, first.Client(), first.BaseURL(), "eval-cmp-device-1", []byte("eval-profile-cmp-1"), caDER)
-	sshArtifact, sshCA := dodEvalIssueSSH(t, first.Client(), first.BaseURL())
+	sshArtifact, sshCA := dodEvalIssueSSH(t, first.Client(), first.BaseURL(), sshToken)
 	artifacts["ssh"] = sshArtifact
 	tsaArtifact, _ := dodEvalTimestamp(t, first.Client(), first.BaseURL(), "first-eval-timestamp")
 	artifacts["tsa"] = tsaArtifact
@@ -832,7 +834,7 @@ func dodEvalEnrollCMP(t *testing.T, client *http.Client, baseURL, commonName str
 	return map[string]any{"request_der": requestDER, "response_der": responseDER, "certificate_der": issuedDER}
 }
 
-func dodEvalIssueSSH(t *testing.T, client *http.Client, baseURL string) (map[string]any, []byte) {
+func dodEvalIssueSSH(t *testing.T, client *http.Client, baseURL, bearer string) (map[string]any, []byte) {
 	t.Helper()
 	subject, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	if err != nil {
@@ -849,7 +851,13 @@ func dodEvalIssueSSH(t *testing.T, client *http.Client, baseURL string) (map[str
 	if err != nil {
 		t.Fatal(err)
 	}
-	response, err := client.Post(baseURL+"/ssh/issue/user", "application/json", bytes.NewReader(requestBody))
+	issueRequest, err := http.NewRequest(http.MethodPost, baseURL+"/ssh/issue/user", bytes.NewReader(requestBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	issueRequest.Header.Set("Content-Type", "application/json")
+	issueRequest.Header.Set("Authorization", "Bearer "+bearer)
+	response, err := client.Do(issueRequest)
 	if err != nil {
 		t.Fatalf("issue SSH user certificate: %v", err)
 	}

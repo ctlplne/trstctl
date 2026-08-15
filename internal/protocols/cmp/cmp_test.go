@@ -85,7 +85,10 @@ func buildRequest(t *testing.T, clientCert, clientKey, csrDER []byte) []byte {
 func TestCMPEnrollRoundTrip(t *testing.T) {
 	ca := newRSACA(t)
 	srv := cmpsrv.New(cmpsrv.Config{
-		Enroller: realEnroller{ca: ca}, CACertDER: ca.certDER, CAKeyPKCS8: ca.keyPKCS8, ProfileName: "device",
+		// Parser/protection harness: client AUTHORIZATION is covered separately by
+		// the trust-anchor test; these drive the wire format itself.
+		AllowUnauthenticatedClients: true,
+		Enroller:                    realEnroller{ca: ca}, CACertDER: ca.certDER, CAKeyPKCS8: ca.keyPKCS8, ProfileName: "device",
 	})
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
@@ -135,7 +138,7 @@ func TestCMPResponseEchoesRequestPvno(t *testing.T) {
 
 func TestCMPMalformedFailsClosed(t *testing.T) {
 	ca := newRSACA(t)
-	srv := cmpsrv.New(cmpsrv.Config{Enroller: realEnroller{ca: ca}, CACertDER: ca.certDER, CAKeyPKCS8: ca.keyPKCS8, ProfileName: "device"})
+	srv := cmpsrv.New(cmpsrv.Config{Enroller: realEnroller{ca: ca}, CACertDER: ca.certDER, CAKeyPKCS8: ca.keyPKCS8, ProfileName: "device", AllowUnauthenticatedClients: true})
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 	resp, err := http.Post(ts.URL+"/cmp", "application/pkixcmp", bytes.NewReader([]byte("not a PKIMessage")))
@@ -150,7 +153,7 @@ func TestCMPMalformedFailsClosed(t *testing.T) {
 
 func TestCMPServedRejectsTrailingRequestBytes(t *testing.T) {
 	ca := newRSACA(t)
-	srv := cmpsrv.New(cmpsrv.Config{Enroller: realEnroller{ca: ca}, CACertDER: ca.certDER, CAKeyPKCS8: ca.keyPKCS8, ProfileName: "device"})
+	srv := cmpsrv.New(cmpsrv.Config{Enroller: realEnroller{ca: ca}, CACertDER: ca.certDER, CAKeyPKCS8: ca.keyPKCS8, ProfileName: "device", AllowUnauthenticatedClients: true})
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 
@@ -181,7 +184,7 @@ func cmpMessagePvno(t *testing.T, der []byte) int {
 }
 
 func TestCMPRejectsOverLimitBody(t *testing.T) {
-	srv := cmpsrv.New(cmpsrv.Config{})
+	srv := cmpsrv.New(cmpsrv.Config{AllowUnauthenticatedClients: true})
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/cmp", bytes.NewReader(bytes.Repeat([]byte("x"), (1<<18)+1)))
@@ -197,7 +200,7 @@ func TestCMPRejectsOverLimitBody(t *testing.T) {
 // either the DER no longer parses or the protection signature no longer verifies.
 func TestCMPTamperedProtectionRejected(t *testing.T) {
 	ca := newRSACA(t)
-	srv := cmpsrv.New(cmpsrv.Config{Enroller: realEnroller{ca: ca}, CACertDER: ca.certDER, CAKeyPKCS8: ca.keyPKCS8, ProfileName: "device"})
+	srv := cmpsrv.New(cmpsrv.Config{Enroller: realEnroller{ca: ca}, CACertDER: ca.certDER, CAKeyPKCS8: ca.keyPKCS8, ProfileName: "device", AllowUnauthenticatedClients: true})
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 

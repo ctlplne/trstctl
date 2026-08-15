@@ -18,6 +18,10 @@ var (
 	ErrIntuneChallengeTenant = errors.New("mdm: Intune challenge tenant mismatch")
 	ErrIntuneChallengeReplay = errors.New("mdm: Intune challenge replay")
 	ErrIntuneChallengeTrust  = errors.New("mdm: Intune challenge trust anchors unavailable")
+	// ErrIntuneChallengeNoNonce is returned for a signed challenge that carries no
+	// nonce. Replay protection is keyed on the nonce, so a challenge without one
+	// cannot be consumed once — it would be reusable forever.
+	ErrIntuneChallengeNoNonce = errors.New("mdm: Intune challenge carries no nonce, so it cannot be single-use")
 )
 
 // IntuneChallengeRequest is the tenant-bound SCEP challenge decision input. The
@@ -158,8 +162,15 @@ func (v *IntuneChallengeValidator) now() time.Time {
 }
 
 func (v *IntuneChallengeValidator) consumeOnce(tenantID, nonce string, expiresAt, now time.Time) error {
+	// An absent nonce used to return nil — success — which quietly turned this
+	// function into a no-op. The payload field is `nonce,omitempty` and nothing
+	// upstream requires it, so a properly signed challenge with no nonce was
+	// never recorded and could be presented an unlimited number of times. For a
+	// SCEP enrollment challenge that means one captured challenge mints
+	// certificates indefinitely. Replay protection is keyed on the nonce, so a
+	// challenge without one cannot be made single-use and must not validate.
 	if nonce == "" {
-		return nil
+		return ErrIntuneChallengeNoNonce
 	}
 	key := tenantID + "\x00" + nonce
 	if expiresAt.IsZero() {

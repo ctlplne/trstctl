@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
@@ -81,7 +82,23 @@ type revocationService struct {
 	ocspCache   *ocspResponseCache
 	ocspMetrics *observ.OCSPMetrics
 	now         func() time.Time
+
+	// catchUpMu/lastCatchUp debounce the projection catch-up on the OCSP serving
+	// path. See catchUp.
+	catchUpMu   sync.Mutex
+	lastCatchUp time.Time
 }
+
+// ocspCatchUpInterval is the shortest gap between two projection catch-ups
+// driven by the OCSP serving path.
+//
+// /ocsp is unauthenticated, and activeOCSPResponder ran a FULL ProjectCatchUp on
+// every cache miss — so a client that varied the requested serial (which is part
+// of the cache key) could drive one whole-event-log replay per request, each
+// under the global projection lock, starving every other projection consumer.
+// The tail worker is what actually keeps the read model current; this catch-up
+// is a freshness backstop, and a backstop does not need to run per request.
+const ocspCatchUpInterval = 5 * time.Second
 
 type revocationStore interface {
 	LookupIssuedCert(ctx context.Context, tenantID, caID, serial string) (store.IssuedCert, bool, error)
@@ -304,6 +321,19 @@ func (s *revocationService) generateCRLFromCurrentProjection(ctx context.Context
 		TenantID: tenantID, CAID: s.caID, Number: number, DER: der,
 		ThisUpdate: now, NextUpdate: nextUpdate, Kind: store.CRLKindFull,
 		ShardCount: fullShardCount, RevokedCount: len(entries),
+	}
+	// A full CRL must never shrink. Revocation is monotonic — a serial, once
+	// revoked, stays revoked until it expires — so a regenerated CRL that omits
+	// a serial the previous one carried does not merely lose information, it
+	// UN-REVOKES that certificate for every relying party that fetches it. That
+	// can happen from a racing regeneration, a partial read, or a projection
+	// that has not caught up. Refusing to publish keeps the last good CRL
+	// served (stale but correct) instead of actively restoring trust in a
+	// revoked certificate.
+	if previousFound {
+		if err := assertCRLDoesNotUnrevoke(previous.DER, der, s.caCertDER); err != nil {
+			return nil, err
+		}
 	}
 	if err := s.publishCRL(ctx, full); err != nil {
 		return nil, err
@@ -581,7 +611,22 @@ func (s *revocationService) regenerateDue(ctx context.Context) (int, error) {
 	return count, nil
 }
 
+// catchUp advances the projection, at most once per ocspCatchUpInterval. The
+// rate limit is the security-relevant part: without it an unauthenticated caller
+// chooses how often the control plane replays its entire event log.
 func (s *revocationService) catchUp(ctx context.Context) error {
+	s.catchUpMu.Lock()
+	if now := s.now(); now.Sub(s.lastCatchUp) < ocspCatchUpInterval {
+		s.catchUpMu.Unlock()
+		return nil
+	} else {
+		s.lastCatchUp = now
+	}
+	s.catchUpMu.Unlock()
+	return s.catchUpNow(ctx)
+}
+
+func (s *revocationService) catchUpNow(ctx context.Context) error {
 	st, ok := s.store.(*store.Store)
 	if !ok || s.log == nil {
 		return nil
@@ -871,4 +916,34 @@ func (s *revocationService) runScheduler(ctx context.Context, logf func(msg stri
 			sweep()
 		}
 	}
+}
+
+// assertCRLDoesNotUnrevoke fails when nextDER omits a serial that previousDER
+// carried. See the call site for why publishing such a CRL is worse than
+// publishing nothing.
+func assertCRLDoesNotUnrevoke(previousDER, nextDER, issuerDER []byte) error {
+	if len(previousDER) == 0 || len(nextDER) == 0 {
+		return nil
+	}
+	prev, err := crypto.ParseCRL(previousDER, issuerDER)
+	if err != nil {
+		// An unparseable predecessor is not evidence that the new CRL is wrong.
+		return nil
+	}
+	next, err := crypto.ParseCRL(nextDER, issuerDER)
+	if err != nil {
+		return fmt.Errorf("server: refusing to publish an unparseable CRL: %w", err)
+	}
+	have := make(map[string]struct{}, len(next.RevokedSerials))
+	for _, serial := range next.RevokedSerials {
+		have[strings.ToLower(serial)] = struct{}{}
+	}
+	for _, serial := range prev.RevokedSerials {
+		if _, ok := have[strings.ToLower(serial)]; !ok {
+			return fmt.Errorf(
+				"server: refusing to publish a CRL that drops already-revoked serial %s; publishing it would un-revoke that certificate",
+				serial)
+		}
+	}
+	return nil
 }

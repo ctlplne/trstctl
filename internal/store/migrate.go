@@ -8,11 +8,13 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"trstctl.com/trstctl/internal/crypto"
@@ -419,6 +421,9 @@ func applyMigrationSet(ctx context.Context, conn *pgxpool.Conn, led *migrationLe
 					return fmt.Errorf("store: apply no-transaction migration %s: %w", name, err)
 				}
 			}
+			if err := assertConcurrentIndexesValid(ctx, conn, name, body); err != nil {
+				return err
+			}
 			if _, err := conn.Exec(ctx, "INSERT INTO schema_migrations (version, name, checksum) VALUES ($1, $2, $3)", version, name, checksum); err != nil {
 				return fmt.Errorf("store: record no-transaction migration %s: %w", name, err)
 			}
@@ -481,6 +486,76 @@ func acquireMigrationLock(ctx context.Context, conn *pgxpool.Conn, key int64) er
 		}
 		timer.Reset(interval)
 	}
+}
+
+// createIndexConcurrentlyNames extracts the index names a migration builds with
+// CREATE [UNIQUE] INDEX CONCURRENTLY.
+var createIndexConcurrentlyNames = regexp.MustCompile(
+	`(?i)\bcreate\s+(?:unique\s+)?index\s+concurrently\s+(?:if\s+not\s+exists\s+)?"?([a-z0-9_]+)"?`)
+
+// assertConcurrentIndexesValid refuses to record a no-transaction migration as
+// applied when one of its CONCURRENTLY-built indexes came out invalid.
+//
+// A concurrent build that fails partway — a deadlock, a unique violation in live
+// data, an operator cancelling it — does not raise here. PostgreSQL leaves the
+// index in place with indisvalid = false: it enforces nothing and the planner
+// ignores it. The trap is IF NOT EXISTS, which every one of these migrations
+// uses: the next run finds the name already present and skips it, so the broken
+// index is never rebuilt. Without this check the ledger would then record the
+// migration as applied and the failure would be permanent and silent.
+//
+// That matters most for the UNIQUE ones. An invalid unique index on, say,
+// provider_operator_delegations (tenant_id, operator_id, customer_tenant_id,
+// operation) means duplicate delegation rows stop being rejected — an
+// authorization fact quietly stops being enforced, with nothing in the logs.
+// indexValidityQuery reads pg_index/pg_class to confirm a CONCURRENTLY-built
+// index came out valid.
+//
+//trstctl:system-query — cross-tenant system migration check reads only PostgreSQL catalog rows (pg_index/pg_class) for one index name; catalog rows carry no tenant_id and no tenant data, and only two booleans leave PostgreSQL (AN-1 exemption).
+const indexValidityQuery = `SELECT i.indisvalid, i.indisready
+   FROM pg_index i
+   JOIN pg_class c ON c.oid = i.indexrelid
+  WHERE c.relname = $1`
+
+func assertConcurrentIndexesValid(ctx context.Context, conn *pgxpool.Conn, name string, body []byte) error {
+	// Match against SQL only. These migrations explain themselves in comments,
+	// and one of them says "CREATE INDEX CONCURRENTLY cannot run inside a
+	// transaction" — prose that reads as a statement to a regex and would have
+	// this hunting for an index named "cannot".
+	matches := createIndexConcurrentlyNames.FindAllStringSubmatch(stripSQLLineComments(string(body)), -1)
+	for _, m := range matches {
+		index := m[1]
+		var valid, ready bool
+		err := conn.QueryRow(ctx,
+			indexValidityQuery, index).Scan(&valid, &ready)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("store: no-transaction migration %s claims to build index %q but it does not exist",
+				name, index)
+		}
+		if err != nil {
+			return fmt.Errorf("store: verify index %q from migration %s: %w", index, name, err)
+		}
+		if !valid || !ready {
+			return fmt.Errorf("store: migration %s left index %q invalid (indisvalid=%t indisready=%t); "+
+				"the concurrent build failed partway and IF NOT EXISTS would skip rebuilding it forever. "+
+				"DROP INDEX CONCURRENTLY %s and re-run", name, index, valid, ready, index)
+		}
+	}
+	return nil
+}
+
+// stripSQLLineComments removes -- line comments so statement matching does not
+// read the migration's own prose as SQL.
+func stripSQLLineComments(body string) string {
+	var b strings.Builder
+	for _, line := range strings.Split(body, "\n") {
+		if idx := strings.Index(line, "--"); idx >= 0 {
+			line = line[:idx]
+		}
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
+	return b.String()
 }
 
 func migrationNoTransaction(body []byte) bool {

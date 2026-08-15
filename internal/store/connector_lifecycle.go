@@ -568,6 +568,11 @@ func (s *Store) GetRotationRun(ctx context.Context, tenantID, id string) (Rotati
 // ListRenewableIdentities returns deployed X.509 identities whose active served
 // certificates expire before cutoff. The scheduler uses this to queue the normal
 // deployed->renewing transition, so renewal still travels through the outbox.
+// Renewal candidates include renewal_failed as well as deployed. That state
+// exists so a failed renewal can be RECORDED without re-deploying a certificate
+// that was never renewed or revoking a valid one; if the scheduler then ignored
+// it, the identity would simply be stuck somewhere new instead of stuck in
+// renewing, which would defeat the point of adding the state.
 func (s *Store) ListRenewableIdentities(ctx context.Context, tenantID string, cutoff time.Time) ([]Identity, error) {
 	var out []Identity
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
@@ -581,7 +586,7 @@ func (s *Store) ListRenewableIdentities(ctx context.Context, tenantID string, cu
 			    AND i.name = ANY(c.sans)
 			  WHERE i.tenant_id = $1
 			    AND i.kind = 'x509_certificate'
-			    AND i.status = 'deployed'
+			    AND i.status IN ('deployed', 'renewal_failed')
 			    AND c.source = 'issued'
 			    AND c.status = 'active'
 			    AND c.not_after IS NOT NULL
@@ -644,7 +649,7 @@ func (s *Store) ListRenewalIdentityCandidates(ctx context.Context, tenantID stri
 			    AND i.name = ANY(c.sans)
 			  WHERE i.tenant_id = $1
 			    AND i.kind = 'x509_certificate'
-			    AND i.status = 'deployed'
+			    AND i.status IN ('deployed', 'renewal_failed')
 			    AND c.source = 'issued'
 			    AND c.status = 'active'
 			    AND c.not_after IS NOT NULL
@@ -707,7 +712,7 @@ func (s *Store) TenantsWithRenewalIdentityCandidates(ctx context.Context, fixedC
 		    AND c.owner_id = i.owner_id
 		    AND i.name = ANY(c.sans)
 		  WHERE i.kind = 'x509_certificate'
-		    AND i.status = 'deployed'
+		    AND i.status IN ('deployed', 'renewal_failed')
 		    AND c.source = 'issued'
 		    AND c.status = 'active'
 		    AND c.not_after IS NOT NULL

@@ -37,17 +37,32 @@ type KeyRef struct {
 // record's own contents with the delegator's key. The in-signer verification that
 // consumes a chain of these records before a key operation is AGID-04 (INV-A1).
 type Record struct {
-	TenantID       string    `json:"tenant_id"` // AN-1
-	DelegatorID    string    `json:"delegator_id"`
-	DelegatorKey   KeyRef    `json:"delegator_key"`
-	DelegateID     string    `json:"delegate_id"`
-	Authority      Authority `json:"authority"`
-	DepthRemaining uint32    `json:"depth_remaining"`
-	Validity       Window    `json:"validity"`
-	RootAnchor     bool      `json:"root_anchor,omitempty"`   // true iff this record anchors a chain root
-	ParentDigest   []byte    `json:"parent_digest,omitempty"` // digest of the parent record; empty iff RootAnchor
-	TaskDigest     []byte    `json:"task_digest,omitempty"`   // optional task-envelope digest binding
-	Signature      []byte    `json:"signature,omitempty"`     // delegator signature over CanonicalBytes
+	TenantID     string `json:"tenant_id"` // AN-1
+	DelegatorID  string `json:"delegator_id"`
+	DelegatorKey KeyRef `json:"delegator_key"`
+	DelegateID   string `json:"delegate_id"`
+	// DelegateKeyThumbprint is SHA-256 over the delegate's SubjectPublicKeyInfo:
+	// the key the delegate must sign its own onward hop with. It is covered by
+	// CanonicalBytes, so the delegator COMMITS to it.
+	//
+	// Without it the chain bound hops as PRINCIPALS (DelegatorID ==
+	// parent.DelegateID) but not as KEYS, and an attacker who set DelegatorID to
+	// the parent's DelegateID could still sign with a key of their own choosing.
+	// A thumbprint rather than the full DER because the next hop already carries
+	// its public key in the envelope; what was missing was something the PARENT
+	// signed to check it against.
+	//
+	// Empty on a terminal hop that confers no onward delegation, and on records
+	// issued before this field existed — see DelegateKeyThumbprintOf and the
+	// verifier, which refuses an unbound non-terminal hop rather than skipping it.
+	DelegateKeyThumbprint []byte    `json:"delegate_key_thumbprint,omitempty"`
+	Authority             Authority `json:"authority"`
+	DepthRemaining        uint32    `json:"depth_remaining"`
+	Validity              Window    `json:"validity"`
+	RootAnchor            bool      `json:"root_anchor,omitempty"`   // true iff this record anchors a chain root
+	ParentDigest          []byte    `json:"parent_digest,omitempty"` // digest of the parent record; empty iff RootAnchor
+	TaskDigest            []byte    `json:"task_digest,omitempty"`   // optional task-envelope digest binding
+	Signature             []byte    `json:"signature,omitempty"`     // delegator signature over CanonicalBytes
 }
 
 // ErrLinkage is returned when a record's root-anchor marker and parent-digest linkage
@@ -88,6 +103,11 @@ func (r Record) CanonicalBytes(reg *ToolRegistry) ([]byte, error) {
 	writeStr(&b, r.DelegatorKey.ID)
 	writeStr(&b, r.DelegatorKey.Algorithm)
 	writeStr(&b, r.DelegateID)
+	// The delegate's key is signed, which is what lets the next hop's carried
+	// public key be checked against something the PARENT committed to rather than
+	// against a name the child chose for itself.
+	writeField(&b, "delegate_key_thumbprint")
+	writeBytes(&b, r.DelegateKeyThumbprint)
 	// authority (already canonical)
 	writeField(&b, "authority")
 	writeU64(&b, uint64(len(authBytes)))
@@ -159,4 +179,15 @@ func (r Record) Verify(pub crypto.PublicKey, reg *ToolRegistry) error {
 		return ErrSignature
 	}
 	return nil
+}
+
+// DelegateKeyThumbprintOf is the canonical thumbprint a delegator commits to when
+// naming its delegate's key: SHA-256 over the SubjectPublicKeyInfo DER. Issuers
+// and verifiers must agree on exactly this, so it lives here rather than being
+// recomputed at each call site.
+func DelegateKeyThumbprintOf(publicDER []byte) []byte {
+	if len(publicDER) == 0 {
+		return nil
+	}
+	return crypto.SHA256Sum(publicDER)
 }

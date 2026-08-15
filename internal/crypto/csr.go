@@ -122,6 +122,49 @@ type CSRInfo struct {
 	RequestedEKUs  []string // EKUs requested in the CSR's extensionRequest, if any
 }
 
+// CSRIdentifiers are the names a PKCS#10 asks to have certified. It is a
+// deliberately narrow type: it carries no key material and no proof that the
+// requester holds the private key.
+type CSRIdentifiers struct {
+	DNSNames       []string
+	IPAddresses    []string
+	EmailAddresses []string
+	URIs           []string
+	CommonName     string
+}
+
+// CSRRequestedIdentifiers returns the identifiers a CSR requests WITHOUT
+// verifying its proof-of-possession.
+//
+// That omission is the point, not an oversight. Two independent questions hang
+// off a finalize CSR:
+//
+//  1. "does the requester hold this key?" — proof-of-possession, which the
+//     licensed issuer owns because it must handle subject algorithms the core
+//     toolchain cannot parse; and
+//  2. "is the requester allowed to be certified for THESE names?" —
+//     authorization, which is a set comparison against what the caller already
+//     proved control of.
+//
+// Conflating them is how RFC 8555 §7.4's identifier cross-check went missing:
+// InspectCSR verifies the signature, so a caller that only needed the names had
+// to either skip the check or reject CSRs the licensed seam exists to accept.
+// This function answers question 2 alone. Never use it as evidence of
+// possession.
+func CSRRequestedIdentifiers(der []byte) (CSRIdentifiers, error) {
+	csr, err := x509.ParseCertificateRequest(der)
+	if err != nil {
+		return CSRIdentifiers{}, err
+	}
+	return CSRIdentifiers{
+		DNSNames:       append([]string(nil), csr.DNSNames...),
+		IPAddresses:    ipStrings(csr.IPAddresses),
+		EmailAddresses: append([]string(nil), csr.EmailAddresses...),
+		URIs:           uriStrings(csr.URIs),
+		CommonName:     csr.Subject.CommonName,
+	}, nil
+}
+
 // InspectCSR parses a CSR (verifying its self-signature) and returns the
 // profile-relevant attributes of its public key and subject. It is the single
 // inspection seam used by profile validation.

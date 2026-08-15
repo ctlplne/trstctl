@@ -5,11 +5,13 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sync/atomic"
 	"time"
 
 	"trstctl.com/trstctl/internal/protocols/bodylimit"
+	"trstctl.com/trstctl/internal/protocols/est"
 	"trstctl.com/trstctl/internal/protocols/spiffe"
 	"trstctl.com/trstctl/internal/protocols/ssh"
 )
@@ -26,23 +28,69 @@ type sshProtocol struct {
 	tenantID string
 	mux      *http.ServeMux
 
+	// auth gates the three MUTATING routes. Issuance and revocation are not
+	// public: an SSH user certificate names its own principals, so an anonymous
+	// caller could otherwise mint `root` for any host that trusts this CA, and an
+	// anonymous revoker could poison the KRL. The two GET routes stay public
+	// because they serve trust material a host must fetch before it can
+	// authenticate anything (the CA public key and the binary KRL), exactly like
+	// a CRL distribution point.
+	auth sshAuthenticator
+
 	// krlVersion is the monotonic OpenSSH KRL version a host uses to reject an older
 	// KRL; it increments each time the served KRL is regenerated.
 	krlVersion atomic.Uint64
 }
 
+// sshAuthenticator decides whether a request may mint or revoke an SSH
+// certificate. It is deliberately the same credential path the served EST
+// endpoint uses, so there is one audited token implementation rather than a
+// second, SSH-shaped one.
+type sshAuthenticator interface {
+	Authenticate(r *http.Request) est.AuthenticationResult
+}
+
 // newSSHProtocol wires the served SSH CA surface over a built ssh.CA. A fresh KRL is
 // attached so revocations published through it render as a binary KRL sshd consumes.
-func newSSHProtocol(ca *ssh.CA, tenantID string) (*sshProtocol, error) {
-	p := &sshProtocol{ca: ca, krl: ssh.NewKRL(), tenantID: tenantID}
+//
+// auth must be non-nil: a nil authenticator would restore the anonymous-issuance
+// defect, so construction fails closed rather than serving an open CA.
+func newSSHProtocol(ca *ssh.CA, tenantID string, auth sshAuthenticator) (*sshProtocol, error) {
+	if auth == nil {
+		return nil, fmt.Errorf("server: served SSH CA requires an authenticator")
+	}
+	p := &sshProtocol{ca: ca, krl: ssh.NewKRL(), tenantID: tenantID, auth: auth}
 	mux := http.NewServeMux()
+	// Public trust material — a host must read these before it can trust anything.
 	mux.HandleFunc("GET /ssh/ca", p.authorityKey)
-	mux.HandleFunc("POST /ssh/issue/user", p.issue(true))
-	mux.HandleFunc("POST /ssh/issue/host", p.issue(false))
 	mux.HandleFunc("GET /ssh/krl", p.serveKRL)
-	mux.HandleFunc("POST /ssh/revoke", p.revoke)
+	// Mutating routes: authenticated and authorized for certs:issue.
+	mux.HandleFunc("POST /ssh/issue/user", p.authenticated(p.issue(true)))
+	mux.HandleFunc("POST /ssh/issue/host", p.authenticated(p.issue(false)))
+	mux.HandleFunc("POST /ssh/revoke", p.authenticated(p.revoke))
 	p.mux = mux
 	return p, nil
+}
+
+// authenticated wraps a mutating handler with the credential check. Denials
+// carry the authenticator's fixed RFC 6750 challenge and never reflect a token,
+// a store error, or whether the credential merely lacked authority.
+func (p *sshProtocol) authenticated(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		result := p.auth.Authenticate(r)
+		if !result.Allowed {
+			status := result.StatusCode
+			if status == 0 {
+				status = http.StatusUnauthorized
+			}
+			if result.Challenge != "" {
+				w.Header().Set("WWW-Authenticate", result.Challenge)
+			}
+			http.Error(w, "ssh: unauthorized", status)
+			return
+		}
+		next(w, r)
+	}
 }
 
 // ServeHTTP implements http.Handler.

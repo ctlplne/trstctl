@@ -122,7 +122,8 @@ func run(pass *analysis.Pass) (interface{}, error) {
 			if referencesSystemTable(clean) || isSessionControl(clean) {
 				return false
 			}
-			if exempt[pass.Fset.Position(expr.Pos()).Line] {
+			exprPos := pass.Fset.Position(expr.Pos())
+			if exempt[systemQuerySite{file: exprPos.Filename, line: exprPos.Line}] {
 				return false // explicit //trstctl:system-query exemption
 			}
 			if !filtersOnTenant(clean) {
@@ -255,8 +256,21 @@ func isRepositoryPackage(pass *analysis.Pass) bool {
 // //trstctl:system-query marker, so a deliberate cross-tenant statement on (or
 // just below) such a line is exempt. The marker is matched on a whole comment
 // line, never as a substring, so incidental prose cannot exempt a query.
-func systemQueryLines(pass *analysis.Pass) map[int]bool {
-	lines := map[int]bool{}
+// systemQuerySite identifies an exemption by FILE and line, not line alone.
+//
+// Keyed on the line number by itself, a marker in one file exempted that line
+// number in every other file of the package — so an unrelated query silently
+// inherited an exemption written for something else, and lost it again the
+// moment either file's line numbers shifted. An AN-1 escape hatch that moves
+// when you add a comment somewhere else is worse than no escape hatch: it makes
+// the analyzer's verdict depend on unrelated edits.
+type systemQuerySite struct {
+	file string
+	line int
+}
+
+func systemQueryLines(pass *analysis.Pass) map[systemQuerySite]bool {
+	sites := map[systemQuerySite]bool{}
 	for _, file := range pass.Files {
 		for _, group := range file.Comments {
 			for _, c := range group.List {
@@ -265,13 +279,13 @@ func systemQueryLines(pass *analysis.Pass) map[int]bool {
 				}
 				// Exempt the comment's own line and the immediately following
 				// line, so the marker may sit on or just above the statement.
-				ln := pass.Fset.Position(c.Pos()).Line
-				lines[ln] = true
-				lines[ln+1] = true
+				pos := pass.Fset.Position(c.Pos())
+				sites[systemQuerySite{file: pos.Filename, line: pos.Line}] = true
+				sites[systemQuerySite{file: pos.Filename, line: pos.Line + 1}] = true
 			}
 		}
 	}
-	return lines
+	return sites
 }
 
 // isSystemQueryComment reports whether a comment is the system-query marker. The

@@ -45,7 +45,7 @@ describe("WIRE-12 Platform served admin surface", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     for (const mock of Object.values(apiMock)) mock.mockReset();
-    apiMock.me.mockResolvedValue({ subject: "platform-admin", tenant_id: "tenant-platform", email: "admin@example.test" });
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "platform-admin", tenant_id: "tenant-platform", email: "admin@example.test" });
     apiMock.accessRoles.mockResolvedValue({
       items: [{ name: "platform-owner", permissions: ["access:read", "access:write"] }],
     });

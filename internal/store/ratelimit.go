@@ -19,15 +19,25 @@ import (
 // the tenant's RLS context (AN-1).
 func (s *Store) RateLimitTake(ctx context.Context, tenantID, bucket string, capacity, refillPerSec float64) (allowed bool, retryAfter time.Duration, err error) {
 	err = s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		var tokens float64
-		var updated time.Time
+		var tokens, elapsedSeconds float64
+		// Elapsed time is measured by the DATABASE, not this process. updated_at is
+		// written with the database's now(), so comparing it against the app clock
+		// mixed two clocks that are never guaranteed to agree — and control-plane
+		// replicas each bring their own. Skew ahead of the database inflated the
+		// refill and let callers exceed their limit; skew behind it made
+		// time.Since negative, so every take SUBTRACTED from the bucket and drove a
+		// tenant into a throttle that waiting could not clear. Both clocks here are
+		// now the transaction's now(), which is also what the write below stores,
+		// so the interval is exactly previous-take to this-take with no drift and
+		// no double counting.
 		scanErr := tx.QueryRow(ctx,
-			`SELECT tokens, updated_at FROM rate_limits WHERE tenant_id = $1 AND bucket = $2 FOR UPDATE`,
-			tenantID, bucket).Scan(&tokens, &updated)
+			`SELECT tokens, GREATEST(0, EXTRACT(EPOCH FROM (now() - updated_at)))
+			   FROM rate_limits WHERE tenant_id = $1 AND bucket = $2 FOR UPDATE`,
+			tenantID, bucket).Scan(&tokens, &elapsedSeconds)
 		switch {
 		case scanErr == nil:
 			// Refill by the time elapsed since the last take, capped at capacity.
-			tokens = math.Min(capacity, tokens+time.Since(updated).Seconds()*refillPerSec)
+			tokens = math.Min(capacity, tokens+elapsedSeconds*refillPerSec)
 		case errors.Is(scanErr, pgx.ErrNoRows):
 			tokens = capacity // a fresh bucket starts full
 		default:

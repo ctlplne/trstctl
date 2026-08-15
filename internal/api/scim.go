@@ -633,11 +633,28 @@ func decodeSCIMRaw(w http.ResponseWriter, raw []byte, dst any) bool {
 	return true
 }
 
+// scimRetryWindow bounds how long an AUTO-DERIVED SCIM idempotency key dedupes.
+//
+// A provider that sends no Idempotency-Key gets one derived from its request. If
+// that derivation is over method+path+body alone, it is stable FOREVER — so two
+// genuinely separate operations that happen to look identical collapse into one.
+// The realistic sequence is deprovision -> reprovision -> deprovision: the second
+// deprovision has a byte-identical body, so it was treated as a replay of the
+// first, returned its recorded result, and never ran. The user stayed
+// provisioned while SCIM reported success.
+//
+// Bucketing by time keeps the property that actually matters — an immediate
+// retry (which is why providers need idempotency at all) lands in the same
+// bucket and dedupes — while letting a deliberate repeat minutes later be its
+// own operation.
+const scimRetryWindow = 5 * time.Minute
+
 func scimIdempotencyKey(r *http.Request, body []byte) string {
 	if key := strings.TrimSpace(r.Header.Get("Idempotency-Key")); key != "" {
 		return key
 	}
-	material := []byte(r.Method + "\x00" + r.URL.Path + "\x00")
+	bucket := time.Now().UTC().Truncate(scimRetryWindow).Format(time.RFC3339)
+	material := []byte(r.Method + "\x00" + r.URL.Path + "\x00" + bucket + "\x00")
 	material = append(material, body...)
 	defer secret.Wipe(material)
 	return "scim:" + crypto.SHA256Hex(material)

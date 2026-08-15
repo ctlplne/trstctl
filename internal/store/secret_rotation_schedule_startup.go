@@ -699,7 +699,17 @@ func validateSecretRotationScheduleStartupPrivacyTick(tick SecretRotationSchedul
 	return nil
 }
 
-const secretRotationScheduleStartupCommandSelect = `SELECT tenant_id::text, identity_version,
+func listSecretRotationScheduleStartupCommandsTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	tenantID, afterRunID string,
+) ([]SecretRotationScheduleCommand, error) {
+	// One statement rather than a column-list const concatenated with its
+	// predicate. Split that way the SELECT prefix reads — to a reader and to the
+	// AN-1 tenant-filter analyzer alike — as a repository query with no tenant
+	// filter, because the filter lives somewhere else. It had a single call site,
+	// so there was nothing to reuse by hoisting it.
+	rows, err := tx.Query(ctx, `SELECT tenant_id::text, identity_version,
        tenant_registration_event_id, tenant_registration_event_sequence,
        schedule_id::text, run_id::text, due_at,
        provider, secret_key, old_ref, interval_seconds, config_event_sequence,
@@ -709,14 +719,7 @@ const secretRotationScheduleStartupCommandSelect = `SELECT tenant_id::text, iden
        terminal_event_sequence, terminal_event_digest, terminal_event_from_event,
        privacy_rewrite_version, privacy_subject_ref, privacy_operation_id, privacy_event_id,
        status, new_ref, error, lease_token, lease_until, created_at, updated_at, terminal_at
-  FROM secret_rotation_schedule_commands`
-
-func listSecretRotationScheduleStartupCommandsTx(
-	ctx context.Context,
-	tx pgx.Tx,
-	tenantID, afterRunID string,
-) ([]SecretRotationScheduleCommand, error) {
-	rows, err := tx.Query(ctx, secretRotationScheduleStartupCommandSelect+`
+  FROM secret_rotation_schedule_commands
 		 WHERE tenant_id = $1 AND identity_version = 3 AND run_id::text > $2
 		 ORDER BY run_id::text
 		 LIMIT $3`, tenantID, afterRunID, secretRotationScheduleStartupPageSize)

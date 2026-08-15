@@ -1217,6 +1217,7 @@ func (o *Outbox) reserveHalfOpenProbes(now time.Time, scope DestinationScope) ([
 	var transitions []CircuitTransition
 
 	o.circuitMu.Lock()
+	o.pruneIdleCircuitsLocked(now)
 	blocked := make([]string, 0, len(o.circuits))
 	reserved := make(map[circuitKey]bool)
 	for key, circuit := range o.circuits {
@@ -1403,4 +1404,33 @@ func (o *Outbox) Get(ctx context.Context, tenantID string, id int64) (Record, er
 				&r.IdempotencyKey, &r.Status, &r.Attempts, &r.LastError)
 	})
 	return r, err
+}
+
+// circuitIdleRetention is how long a CLOSED circuit is kept after its last
+// update before it is forgotten.
+const circuitIdleRetention = time.Hour
+
+// pruneIdleCircuitsLocked drops closed circuits that have been idle.
+//
+// The map is keyed by (tenant, destination) and nothing ever deleted from it, so
+// it grew with every tenant-destination pair the deployment ever used and was
+// then iterated IN FULL on every claim — the sweep got slower the longer the
+// process ran. Forgetting a closed circuit is information-free: the claim path
+// creates one on demand, and a missing key already means "closed". Open and
+// half-open circuits are never pruned, because those DO carry state.
+//
+// Callers hold o.circuitMu.
+func (o *Outbox) pruneIdleCircuitsLocked(now time.Time) {
+	for key, circuit := range o.circuits {
+		if circuit == nil {
+			delete(o.circuits, key)
+			continue
+		}
+		if circuit.state != CircuitClosed || circuit.failures != 0 {
+			continue
+		}
+		if !circuit.updatedAt.IsZero() && now.Sub(circuit.updatedAt) >= circuitIdleRetention {
+			delete(o.circuits, key)
+		}
+	}
 }

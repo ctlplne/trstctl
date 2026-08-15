@@ -615,7 +615,11 @@ func (h *caHierarchyService) IssueLeaf(ctx context.Context, tenantID, caID strin
 	}
 	profile := h.leafProfile
 	profile = applyAuthorityLane(profile, ca)
-	leafDER, err := crypto.SignLeafFromCSRWithProfile(caDER, signer, req.CSRDER, time.Duration(req.TTLSeconds)*time.Second, profile)
+	ttl, err := clampLeafTTLToIssuer(time.Duration(req.TTLSeconds)*time.Second, caDER)
+	if err != nil {
+		return api.CAIssuedLeaf{}, fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
+	}
+	leafDER, err := crypto.SignLeafFromCSRWithProfile(caDER, signer, req.CSRDER, ttl, profile)
 	if err != nil {
 		if crypto.IsLeafProfileViolation(err) {
 			return api.CAIssuedLeaf{}, fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
@@ -1618,4 +1622,29 @@ func (h *caHierarchyService) appendVersionedEvent(ctx context.Context, tenantID,
 		return events.Event{}, err
 	}
 	return h.log.Append(ctx, events.Event{Type: eventType, TenantID: tenantID, SchemaVersion: schemaVersion, Data: payload})
+}
+
+// clampLeafTTLToIssuer bounds a caller-supplied leaf TTL by the issuing CA's own
+// remaining validity.
+//
+// The TTL arrived straight from the request with no ceiling, so a caller could
+// ask for a leaf that OUTLIVES the CA that signed it. Such a certificate stops
+// verifying the moment the issuer expires — the relying party sees an expired
+// chain, not an expired leaf — and it keeps asserting an identity past the point
+// at which the issuing key is meant to be retired. Clamping is the honest
+// behaviour: issue for as long as the issuer can vouch, and no longer.
+func clampLeafTTLToIssuer(requested time.Duration, caCertDER []byte) (time.Duration, error) {
+	info, err := certinfo.Inspect(caCertDER)
+	if err != nil {
+		return 0, fmt.Errorf("inspect issuing CA: %w", err)
+	}
+	remaining := time.Until(info.NotAfter)
+	if remaining <= 0 {
+		return 0, fmt.Errorf("issuing CA expired at %s; it cannot vouch for a new leaf",
+			info.NotAfter.UTC().Format(time.RFC3339))
+	}
+	if requested <= 0 || requested > remaining {
+		return remaining, nil
+	}
+	return requested, nil
 }

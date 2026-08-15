@@ -442,7 +442,17 @@ func TestServedSSHEndToEnd(t *testing.T) {
 		Principals: []string{"alice"},
 		TTLSeconds: 3600,
 	})
-	resp, err := h.ts.Client().Post(h.ts.URL+"/ssh/issue/user", "application/json", bytes.NewReader(body))
+	// Issuance requires certs:issue: an SSH user certificate names its own
+	// principals, so minting one is an issuance decision and the served route is
+	// authenticated (it was anonymous, which let any caller mint `root`).
+	sshToken := seedServedAPIToken(t, t.Context(), h.store, h.tenant, "ssh-operator", []string{"certs:issue"})
+	issueReq, err := http.NewRequest(http.MethodPost, h.ts.URL+"/ssh/issue/user", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	issueReq.Header.Set("Content-Type", "application/json")
+	issueReq.Header.Set("Authorization", "Bearer "+sshToken)
+	resp, err := h.ts.Client().Do(issueReq)
 	if err != nil {
 		t.Fatalf("POST /ssh/issue/user: %v", err)
 	}
@@ -498,9 +508,18 @@ func TestServedSSHEndToEnd(t *testing.T) {
 	// BINARY KRL (magic "SSHKRL"), the artifact sshd's RevokedKeys consumes — not the
 	// JSON snapshot sshd cannot load.
 	rev, _ := json.Marshal(sshRevokeRequest{Serial: issued.Serial})
-	rresp, err := h.ts.Client().Post(h.ts.URL+"/ssh/revoke", "application/json", bytes.NewReader(rev))
+	revokeReq, err := http.NewRequest(http.MethodPost, h.ts.URL+"/ssh/revoke", bytes.NewReader(rev))
+	if err != nil {
+		t.Fatal(err)
+	}
+	revokeReq.Header.Set("Content-Type", "application/json")
+	revokeReq.Header.Set("Authorization", "Bearer "+sshToken)
+	rresp, err := h.ts.Client().Do(revokeReq)
 	if err != nil {
 		t.Fatalf("POST /ssh/revoke: %v", err)
+	}
+	if rresp.StatusCode != http.StatusOK && rresp.StatusCode != http.StatusNoContent {
+		t.Fatalf("POST /ssh/revoke = %d, want success", rresp.StatusCode)
 	}
 	_ = rresp.Body.Close()
 

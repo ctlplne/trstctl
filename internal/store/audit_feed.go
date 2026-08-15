@@ -333,8 +333,19 @@ func (s *Store) AuditFeedsDue(ctx context.Context, tenantID string, now time.Tim
 	var out []AuditFeed
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, auditFeedSelectSQL+
+			// 'queued' is excluded because a batch is in flight and re-queueing
+			// would duplicate it. 'failed' used to be excluded alongside it, which
+			// is a different thing entirely: a failed batch is not in flight, and
+			// nothing anywhere clears the status or offers an operator a resume.
+			// One transient delivery error therefore stopped a SIEM feed
+			// permanently and silently — the worst way for compliance evidence to
+			// stop. Retrying is safe: the failure path deliberately leaves
+			// last_delivered_sequence where it was, so the retry replays the same
+			// records rather than skipping them, and next_run_at was already
+			// advanced by one interval when the batch was queued, so this resumes
+			// at the feed's configured cadence instead of spinning.
 			` WHERE f.tenant_id = $1 AND f.enabled AND f.next_run_at <= $2
-			    AND f.last_status NOT IN ('queued','failed')
+			    AND f.last_status <> 'queued'
 			  ORDER BY f.next_run_at, f.id LIMIT $3`, tenantID, now, limit)
 		if err != nil {
 			return err

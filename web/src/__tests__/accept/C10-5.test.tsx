@@ -38,7 +38,7 @@ describe("C10-5 dashboard trend charts", () => {
     vi.restoreAllMocks();
     document.documentElement.classList.remove("dark");
     for (const mock of Object.values(apiMock)) mock.mockReset();
-    apiMock.me.mockResolvedValue({ subject: "operator", tenant_id: "t1", email: "ops@example.test" });
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "operator", tenant_id: "t1", email: "ops@example.test" });
     apiMock.certificates.mockResolvedValue([
       {
         id: "c1",

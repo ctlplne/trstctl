@@ -25,6 +25,7 @@ import (
 	"trstctl.com/trstctl/internal/discovery/oauthgrant"
 	"trstctl.com/trstctl/internal/discovery/segmentscan"
 	"trstctl.com/trstctl/internal/discovery/serviceaccount"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -1033,8 +1034,16 @@ func validatePrivateEgressCIDRs(cidrs []string) error {
 		return errStatus(http.StatusBadRequest, "private_egress_cidrs is required when allow_private_endpoint is true")
 	}
 	for _, cidr := range cidrs {
-		if _, err := netip.ParsePrefix(strings.TrimSpace(cidr)); err != nil {
+		prefix, err := netip.ParsePrefix(strings.TrimSpace(cidr))
+		if err != nil {
 			return errStatus(http.StatusBadRequest, "private_egress_cidrs contains invalid CIDR")
+		}
+		// Parsing is not validation here. 0.0.0.0/0 parses, and it turns this
+		// allowlist into "reach anything", so the caller has to be told rather
+		// than have the entry quietly ignored at dial time.
+		if err := netsec.ValidateEgressAllowPrefix(prefix); err != nil {
+			return errStatus(http.StatusBadRequest, "private_egress_cidrs entry is unusable: "+
+				strings.TrimPrefix(err.Error(), "netsec: "))
 		}
 	}
 	return nil

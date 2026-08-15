@@ -706,14 +706,17 @@ func signedChain(t *testing.T, tenant, agentID string, widened bool) []delegatio
 		childAuth.Tools = []string{"search", "shell.exec"}
 	}
 	rootRec, err := (delegation.Record{
-		TenantID:       tenant,
-		DelegatorID:    "root",
-		DelegatorKey:   delegation.KeyRef{ID: "root-key", Algorithm: string(root.Algorithm())},
-		DelegateID:     "manager",
-		Authority:      parentAuth,
-		DepthRemaining: 2,
-		Validity:       delegation.Window{NotBefore: now, NotAfter: later},
-		RootAnchor:     true,
+		TenantID:     tenant,
+		DelegatorID:  "root",
+		DelegatorKey: delegation.KeyRef{ID: "root-key", Algorithm: string(root.Algorithm())},
+		DelegateID:   "manager",
+		// The root must commit to the manager's KEY, not just its name: the
+		// verifier binds each hop's signing key to what its parent delegated to.
+		DelegateKeyThumbprint: delegation.DelegateKeyThumbprintOf(manager.Public().DER),
+		Authority:             parentAuth,
+		DepthRemaining:        2,
+		Validity:              delegation.Window{NotBefore: now, NotAfter: later},
+		RootAnchor:            true,
 	}).Sign(root, nil)
 	if err != nil {
 		t.Fatalf("sign root record: %v", err)

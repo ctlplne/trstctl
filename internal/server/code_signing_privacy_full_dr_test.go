@@ -607,6 +607,7 @@ func TestLegacyApprovedCodeSigningPrivacyFullBackupRestoreConverges(t *testing.T
 	if err := verifyFullRestoreArtifactPair(
 		bytes.NewReader(eventArtifact.Bytes()),
 		bytes.NewReader(postgresArtifact.Bytes()),
+		nil,
 	); err != nil {
 		t.Fatalf("full-restore pair preflight rejected matching privacy-safe artifacts: %v", err)
 	}

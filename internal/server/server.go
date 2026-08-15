@@ -461,6 +461,10 @@ type Deps struct {
 	// endpoints are enabled. These served surfaces need it retained for the process
 	// lifetime. The plaintext secret never touches the store — only sealed blobs do.
 	KEK sealKeyWrapper
+	// TransitKeyringDir is where the transit keyring is sealed at rest. Empty
+	// keeps the keyring in memory only, which means keys do not survive a
+	// restart — see buildTransitService.
+	TransitKeyringDir string
 	// TenantCrypto routes every tenant-owned secret-bearing value through the
 	// RLS-scoped tenant key-domain fence. Production Run always supplies it;
 	// narrow embed tests may retain the legacy KEK-only composition.
@@ -580,17 +584,18 @@ type Deps struct {
 
 // Server is the assembled control plane.
 type Server struct {
-	store      *store.Store
-	log        *events.Log
-	audit      *audit.Service
-	outbox     *orchestrator.Outbox
-	outboxWake chan struct{}
-	idemGC     *idemgc.Sweeper   // bounds idempotency_keys via the background retention sweep (SPINE-002)
-	outboxGC   *outboxgc.Sweeper // bounds the outbox via the background delivered-row purge (SPINE-003)
-	obHandler  orchestrator.Handler
-	handler    http.Handler
-	acmeDNS01  *servedACMEDNS01Automation
-	transit    *transitpkg.Service
+	store        *store.Store
+	log          *events.Log
+	audit        *audit.Service
+	outbox       *orchestrator.Outbox
+	outboxWake   chan struct{}
+	idemGC       *idemgc.Sweeper   // bounds idempotency_keys via the background retention sweep (SPINE-002)
+	outboxGC     *outboxgc.Sweeper // bounds the outbox via the background delivered-row purge (SPINE-003)
+	obHandler    orchestrator.Handler
+	handler      http.Handler
+	acmeDNS01    *servedACMEDNS01Automation
+	transit      *transitpkg.Service
+	transitStore *transitpkg.Store
 	// codeSignGate is the production adapter over the live OPA evaluator and
 	// distinct-approver store assembled by configurePolicyGate.
 	codeSignGate codesign.Gate
@@ -1196,7 +1201,11 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 		}
 		defaults = append(defaults, api.WithSecrets(s.buildSecretsBackend(d)))
 	}
-	if transitSvc := s.buildTransitService(d); transitSvc != nil {
+	transitSvc, err := s.buildTransitService(d)
+	if err != nil {
+		return nil, nil, err
+	}
+	if transitSvc != nil {
 		defaults = append(defaults, api.WithTransit(transitSvc))
 	}
 	codeSigningConfig := d.CodeSigning
@@ -1381,12 +1390,47 @@ func notificationChannelNames(channels []notify.Notifier) []string {
 	return names
 }
 
-func (s *Server) buildTransitService(d Deps) *transitpkg.Service {
+func (s *Server) buildTransitService(d Deps) (*transitpkg.Service, error) {
 	if d.Log == nil {
-		return nil
+		return nil, nil
 	}
 	s.transit = transitpkg.NewService(audit.NewAuditor(d.Log))
-	return s.transit
+	// Durability for the transit keyring. Without it every key vanished on
+	// restart and anything encrypted with it became permanently undecryptable —
+	// a data-loss bug wearing the costume of a cache.
+	//
+	// Persistence needs the deployment KEK: key material is sealed at rest or it
+	// is not written at all. NewStore returns nil when either the directory or
+	// the wrapper is missing, so an unconfigured deployment keeps the old
+	// in-memory behaviour rather than silently writing keys in the clear.
+	s.transitStore = transitpkg.NewStore(d.TransitKeyringDir, d.KEK)
+	if s.transitStore != nil {
+		if err := s.transitStore.Load(s.transit); err != nil {
+			// A keyring that EXISTS but cannot be opened must not be replaced by an
+			// empty one and started anyway: the service would come up healthy,
+			// mint fresh keys, and every existing ciphertext would silently become
+			// undecryptable. Refusing to start is the recoverable failure — the
+			// operator still has the sealed file and can fix the KEK.
+			return nil, fmt.Errorf("server: open sealed transit keyring: %w", err)
+		}
+	}
+	if s.transitStore != nil {
+		// Checkpoint after every create/rotate rather than relying on a periodic
+		// flush: a key that works until the next restart and then silently does
+		// not is exactly the failure this persistence exists to prevent.
+		s.transit.SetPersist(func() error { return s.transitStore.Save(s.transit) })
+	}
+	return s.transit, nil
+}
+
+// SaveTransitKeyring seals the current keyring. Callers invoke it after a key is
+// created or rotated, so a restart between the mutation and the next checkpoint
+// cannot lose the key that was just minted.
+func (s *Server) SaveTransitKeyring() error {
+	if s == nil || s.transitStore == nil {
+		return nil
+	}
+	return s.transitStore.Save(s.transit)
 }
 
 func (s *Server) configurePolicyGate(d Deps, orch *orchestrator.Orchestrator, defaults *[]api.Option) error {
@@ -3397,13 +3441,24 @@ func (s *Server) Drain(ctx context.Context) error {
 // without loss (R2.3 / AN-7).
 func (s *Server) Shutdown(ctx context.Context) error {
 	var errs []error
-	// Stop accepting new pool work and drain everything already in flight (AN-7
-	// graceful drain) before the final outbox sweep.
-	if s.bulk != nil {
-		s.bulk.Close()
-	}
+	// Drain the outbox BEFORE closing the pools, not after.
+	//
+	// Pool.Close does more than stop accepting work: it closes the queue and waits
+	// for workers, after which every Submit returns ReasonClosed. Every signer call
+	// goes through the signing pool's admission hook, so closing first meant the
+	// final sweep could not sign — a queued certificate, a CRL, an OCSP response
+	// would fail during the graceful shutdown that exists to complete them.
+	//
+	// Nothing new can arrive in the meantime: serveRuntime shuts the HTTP server
+	// down and waits for in-flight handlers before calling this, so the drain has
+	// the pools to itself. Closing them after the sweep still satisfies the AN-7
+	// graceful drain — it just does the draining first, which is the order the
+	// comment here always claimed.
 	if err := s.Drain(ctx); err != nil {
 		errs = append(errs, fmt.Errorf("drain outbox: %w", err))
+	}
+	if s.bulk != nil {
+		s.bulk.Close()
 	}
 	if s.notifications != nil {
 		s.notifications.Close()

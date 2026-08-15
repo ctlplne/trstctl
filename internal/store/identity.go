@@ -218,7 +218,9 @@ func (s *Store) ListRevocableIdentitiesByIssuer(ctx context.Context, tenantID, i
 			    AND issuer_id::text = $2
 			    AND status = ANY($3)
 			  ORDER BY created_at, id`,
-			tenantID, issuerID, []string{"issued", "deployed", "renewing"})
+			// renewal_failed is ACTIVE: the renewal did not produce a new certificate, so
+			// the previous one is still deployed and still counts against the issuer.
+			tenantID, issuerID, []string{"issued", "deployed", "renewing", "renewal_failed"})
 		if err != nil {
 			return err
 		}

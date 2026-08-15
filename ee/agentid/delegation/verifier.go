@@ -459,10 +459,43 @@ func (g *Gate) verifyChain(tenantID string, chain []RecordEnvelope, now time.Tim
 			if !bytesEqual(rec.ParentDigest, parentDigest) {
 				return refusal(CheckChainLinkage, i, "parent digest does not match the previous hop")
 			}
+			// The delegator of this hop must be the DELEGATE the previous hop
+			// conferred authority on. Without this, the parent digest binds the
+			// hops as bytes but nothing binds them as PRINCIPALS: a holder of any
+			// valid chain could append a hop naming themselves as delegator, with
+			// the correct parent digest, and inherit the root's authority.
+			prev := chain[i-1].Record
+			if rec.DelegatorID != prev.DelegateID {
+				return refusal(CheckChainLinkage, i, "hop delegator is not the previous hop's delegate")
+			}
+			// ...and must sign with the KEY that hop committed to. The ID check
+			// above constrains who a hop may CLAIM to be; without this, an
+			// attacker who set DelegatorID to the parent's DelegateID could still
+			// sign with a key of their own choosing and the chain would verify.
+			//
+			// Refused rather than skipped when the parent named no key: a
+			// non-terminal hop with no committed delegate key cannot be checked,
+			// and "cannot be checked" must not read as "passed". Records issued
+			// before this field existed therefore fail here and must be re-issued,
+			// which is the intended consequence of closing the gap.
+			if len(prev.DelegateKeyThumbprint) == 0 {
+				return refusal(CheckChainLinkage, i,
+					"previous hop commits to no delegate key, so this hop's signing key cannot be bound")
+			}
+			if !bytesEqual(DelegateKeyThumbprintOf(env.DelegatorPublicDER), prev.DelegateKeyThumbprint) {
+				return refusal(CheckChainLinkage, i,
+					"hop signing key is not the key the previous hop delegated to")
+			}
 		}
 
 		// Signature: verify this hop against its CARRIED delegator public key. A forged
 		// or replayed record (any tampered signed field) fails here (record.go Verify).
+		//
+		// Both ends of the chain are now pinned. Hop 0's carried key is pinned to
+		// a held root anchor below; every later hop's carried key is pinned to the
+		// thumbprint its PARENT signed (checked above). That closes the former
+		// INCOMPLETE BINDING, where DelegatorID == parent.DelegateID constrained
+		// who a hop claimed to be but nothing constrained which key it signed with.
 		if len(env.DelegatorPublicDER) == 0 {
 			return refusal(CheckHopSignature, i, "hop carries no delegator public key")
 		}

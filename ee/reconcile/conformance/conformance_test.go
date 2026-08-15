@@ -177,9 +177,17 @@ func TestEdition_AllXRECPackagesAreEE(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The invariant this walk protects is AN-9's one-way valve: CORE must not
+	// reach XREC except through a tagged attach seam. ee/ -> ee/ is not a
+	// boundary crossing at all — the fence is the top-level ee/ directory — so
+	// the ee-side privacy catalog, which must name the event types of every
+	// licensed producer (including XREC's quarantine/rounds/witness families) to
+	// declare their erasure policy, is inside the fence rather than through it.
 	allowed := map[string]bool{
-		"cmd/trstctl/ee_attach.go":        true,
-		"cmd/trstctl-signer/ee_attach.go": true,
+		"cmd/trstctl/ee_attach.go":          true,
+		"cmd/trstctl-signer/ee_attach.go":   true,
+		"ee/privacy_event_policies.go":      true,
+		"ee/privacy_event_policies_test.go": true,
 	}
 	err = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".go") {

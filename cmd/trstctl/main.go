@@ -546,13 +546,64 @@ func isTruthy(v string) bool {
 	}
 }
 
-// redact returns a connection string with any embedded password masked, keeping
-// the host visible so an operator can confirm what the process points at without
-// exposing the secret.
+// redact returns a connection string with any embedded credential masked,
+// keeping the host visible so an operator can confirm what the process points at
+// without exposing the secret.
+//
+// url.Redacted() alone was not enough, and this string is printed to stderr on
+// every start:
+//
+//   - PostgreSQL also accepts KEYWORD/VALUE DSNs ("host=db user=u
+//     password=SECRET dbname=d"). url.Parse does not fail on those, so
+//     Redacted() handed the whole string back with the password intact.
+//   - NATS carries a token in the USERINFO USERNAME ("nats://TOKEN@host:4222").
+//     Redacted() masks only the password component, so a token-style credential
+//     survived verbatim.
 func redact(conn string) string {
+	if conn == "" {
+		return ""
+	}
+	// Keyword/value DSN form: mask the value of any credential-bearing keyword.
+	if redacted, ok := redactKeywordValueDSN(conn); ok {
+		return redacted
+	}
 	u, err := url.Parse(conn)
 	if err != nil {
 		return "[unparseable connection string; redacted]"
 	}
+	// A userinfo with no password is a bare credential (NATS tokens look like
+	// this), so the username itself is the secret.
+	if u.User != nil {
+		if _, hasPassword := u.User.Password(); !hasPassword && u.User.Username() != "" {
+			u.User = url.User("xxxxx")
+		}
+	}
 	return u.Redacted()
+}
+
+// dsnSecretKeywords are the libpq keywords whose VALUE is a credential.
+var dsnSecretKeywords = map[string]bool{
+	"password":    true,
+	"passfile":    true,
+	"sslpassword": true,
+}
+
+// redactKeywordValueDSN masks credential values in a libpq keyword/value DSN. It
+// reports false when conn is not that form, so the caller can fall back to URL
+// handling.
+func redactKeywordValueDSN(conn string) (string, bool) {
+	fields := strings.Fields(conn)
+	if len(fields) == 0 || !strings.Contains(fields[0], "=") || strings.Contains(fields[0], "://") {
+		return "", false
+	}
+	for i, field := range fields {
+		key, _, found := strings.Cut(field, "=")
+		if !found {
+			continue
+		}
+		if dsnSecretKeywords[strings.ToLower(strings.TrimSpace(key))] {
+			fields[i] = key + "=xxxxx"
+		}
+	}
+	return strings.Join(fields, " "), true
 }

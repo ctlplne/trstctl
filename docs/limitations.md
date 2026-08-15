@@ -3033,6 +3033,31 @@ denial, injection-inert + secret-redacted, MCP list+invoke).
 
 ### Secrets and identity frameworks
 
+**Transit keys are sealed at rest; multi-replica sharing is still open.** The
+transit (encryption-as-a-service) keyring is persisted KEK-sealed under
+`transit.keyring_dir`: AEAD, HMAC, and signing key material is sealed with the
+deployment KEK, written atomically, and re-locked into protected memory on load
+(AN-8). A checkpoint runs after every create and rotate, so a restart between
+minting a key and the next flush cannot lose it, and a failed checkpoint fails
+the mutation rather than handing back a key that disappears later.
+
+Two properties bound what this gives you:
+
+- **Persistence requires a KEK.** With no deployment KEK (or no configured
+  directory) the keyring stays in memory only and keys do not survive a restart,
+  exactly as before. Key material is sealed at rest or it is not written at all —
+  there is no plaintext fallback.
+- **A keyring that cannot be opened refuses to start.** If the sealed file exists
+  but the KEK cannot open it, the control plane fails to start rather than coming
+  up with an empty keyring: starting anyway would mint fresh keys and silently
+  turn every existing ciphertext into garbage.
+
+Still open: **a multi-replica deployment does not share the keyring.** Each
+replica seals its own file, so a decrypt routed to a replica that did not serve
+the encrypt still fails. Sharing the keyring across replicas — and event-sourcing
+the create/rotate lifecycle facts alongside the sealed material — is tracked as
+follow-up work.
+
 Six of six secrets/identity frameworks are mounted on the running binary
 under `/api/v1/secrets/*` (off by default — `secrets.enable_api` — fail-closed
 when off, requiring a KEK when on):

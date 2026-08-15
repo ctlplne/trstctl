@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/dynsecret"
 )
@@ -207,7 +208,17 @@ func (p *PKIProvider) signAndRecord(ctx context.Context, cn string, csrDER []byt
 	if err != nil {
 		return dynsecret.Credential{}, fmt.Errorf("pkisecret: sign cert: %w", err)
 	}
-	serial := crypto.SHA256Hex(certDER)[:16]
+	// The revocation pipeline (OCSP responder, CRL generation) keys on the
+	// certificate's X.509 SERIAL NUMBER. Recording a digest of the DER instead
+	// meant RecordIssued and any later Revoke wrote a value nothing else could
+	// match, so revoking a leased PKI secret never made the certificate answer
+	// "revoked" to a relying party — the lease went away and the credential
+	// stayed usable until it expired.
+	issuedInfo, err := certinfo.Inspect(certDER)
+	if err != nil {
+		return dynsecret.Credential{}, fmt.Errorf("pkisecret: inspect issued cert: %w", err)
+	}
+	serial := issuedInfo.SerialNumber
 	p.mu.Lock()
 	p.live[serial] = true
 	p.mu.Unlock()

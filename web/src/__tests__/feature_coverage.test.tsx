@@ -38,7 +38,7 @@ function renderAt(pathname: string) {
 
 describe("feature coverage ledger removal", () => {
   beforeEach(() => {
-    apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1", email: "u@example.test" });
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "user-1", tenant_id: "t1", email: "u@example.test" });
     apiMock.certificates.mockResolvedValue([]);
     apiMock.identities.mockResolvedValue([]);
     apiMock.risk.mockResolvedValue([]);

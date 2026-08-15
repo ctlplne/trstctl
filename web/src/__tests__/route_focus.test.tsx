@@ -41,7 +41,7 @@ function renderShell(initialEntries = ["/"]) {
 
 describe("SPA route focus management (PRODUCT-006)", () => {
   beforeEach(() => {
-    apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1", email: "u@example.test" });
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "user-1", tenant_id: "t1", email: "u@example.test" });
     apiMock.logout.mockResolvedValue(undefined);
     document.title = "";
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024, writable: true });

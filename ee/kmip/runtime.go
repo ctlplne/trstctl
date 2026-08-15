@@ -35,12 +35,24 @@ func NewFactory() server.KMIPFactory {
 		if bulk == nil {
 			bulk = bulkhead.Default()
 		}
-		pool := bulk.Pool(bulkhead.SubsystemProtocols)
+		// KMIP takes its OWN pool. A worker here is held for a whole client
+		// connection — TLS handshake included — not for one request, so drawing
+		// from the shared protocols pool let a handful of TCP connects that never
+		// send a frame occupy every protocol worker until their deadline,
+		// starving ACME, EST, SCEP, CMP, SSH and SPIFFE. That is the
+		// cross-subsystem starvation AN-7 exists to prevent, so the fix is a
+		// separate bulkhead rather than a bigger shared one.
+		pool := bulk.Pool(bulkhead.SubsystemKMIP)
+		if pool == nil {
+			// A custom bulkhead set without a KMIP lane: fall back, but never to
+			// a lane other protocols depend on.
+			pool = bulk.Pool(bulkhead.SubsystemProtocols)
+		}
 		if pool == nil {
 			pool = bulk.Pool(bulkhead.SubsystemAPI)
 		}
 		if pool == nil {
-			return nil, errors.New("KMIP requires a protocols or API bulkhead pool")
+			return nil, errors.New("KMIP requires a KMIP, protocols, or API bulkhead pool")
 		}
 		addr := strings.TrimSpace(cfg.Addr)
 		if addr == "" {

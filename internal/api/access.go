@@ -308,6 +308,9 @@ func (a *API) createAPIToken(w http.ResponseWriter, r *http.Request) {
 		if err := a.validatePermissionScopes(req.Scopes); err != nil {
 			return 0, nil, err
 		}
+		if err := a.authorizeTokenScopeGrant(ctx, tenantID, req.Scopes); err != nil {
+			return 0, nil, err
+		}
 		rec, raw, err := a.orch.CreateAPIToken(ctx, tenantID, req.Subject, req.Scopes, req.ExpiresAt)
 		if err != nil {
 			return 0, nil, err
@@ -341,6 +344,30 @@ func (a *API) validateRoleNames(roles []string) error {
 		}
 		if _, ok := a.roles.Role(name); !ok {
 			return errStatus(http.StatusUnprocessableEntity, "unknown role "+name)
+		}
+	}
+	return nil
+}
+
+// authorizeTokenScopeGrant enforces privilege ATTENUATION: a caller may only
+// put scopes into a token that the caller itself holds.
+//
+// Without it, minting a token was an escalation primitive. validatePermissionScopes
+// accepts authz.Wildcard, so any holder of access:write could mint a "*" token
+// and then act with authority the platform deliberately withheld from them —
+// access:role.assign and agents:relay.grant are separated precisely so one
+// principal cannot both assign roles and grant relay capability, and a wildcard
+// token collapses that separation in a single call.
+func (a *API) authorizeTokenScopeGrant(ctx context.Context, tenantID string, scopes []string) error {
+	principal, ok := ctx.Value(principalCtxKey).(authz.Principal)
+	if !ok || principal.Subject == "" {
+		return errStatus(http.StatusUnauthorized, "missing authenticated principal for token creation")
+	}
+	target := authz.Scope{TenantID: tenantID}
+	for _, scope := range scopes {
+		if !principal.Can(authz.Permission(scope), target) {
+			return errStatus(http.StatusForbidden,
+				"cannot grant a token the scope "+scope+" that you do not hold")
 		}
 	}
 	return nil

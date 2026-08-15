@@ -171,6 +171,23 @@ func ParseCMPRequest(der []byte) (*CMPRequest, error) {
 // verified here, unconditionally, against the classical extraCerts identity; only the
 // inner CSR's verification is delegated. A nil verifier keeps the strict core parser.
 func ParseCMPRequestWithVerifier(der []byte, verifyCSR func([]byte) error) (*CMPRequest, error) {
+	return ParseCMPRequestWithTrust(der, verifyCSR, nil)
+}
+
+// ParseCMPRequestWithTrust is ParseCMPRequestWithVerifier with the trust anchors
+// the PKIMessage's protection identity must chain to.
+//
+// This parameter is what makes the protection check mean anything. The signer
+// identity arrives in the message's own extraCerts field, so verifying the
+// protection against it proves only that whoever composed the message also held
+// the key they shipped with it — a self-signed pair satisfies that trivially.
+// Chaining extraCerts[0] to an operator-configured anchor is what turns
+// "internally consistent" into "issued by someone we trust".
+//
+// trustAnchorsDER may be empty ONLY for a caller that authenticates the client
+// some other way (the differential harnesses do; the served endpoint does not).
+// Passing none is therefore explicit at every call site rather than the default.
+func ParseCMPRequestWithTrust(der []byte, verifyCSR func([]byte) error, trustAnchorsDER [][]byte) (*CMPRequest, error) {
 	if verifyCSR == nil {
 		verifyCSR = VerifyCertificateRequest
 	}
@@ -192,6 +209,11 @@ func ParseCMPRequestWithVerifier(der []byte, verifyCSR func([]byte) error) (*CMP
 	}
 	if err := verifyProtection(msg.Header, msg.Body, msg.Protection, signerCert); err != nil {
 		return nil, fmt.Errorf("cmp: verify protection: %w", err)
+	}
+	if len(trustAnchorsDER) > 0 {
+		if err := verifyCMPProtectionIdentity(signerCert, msg.ExtraCerts[1:], trustAnchorsDER); err != nil {
+			return nil, err
+		}
 	}
 	csrDER := msg.Body.Bytes
 	if err := verifyCSR(csrDER); err != nil {
@@ -383,4 +405,32 @@ func verifyProtection(header cmpHeader, body asn1.RawValue, prot asn1.BitString,
 	default:
 		return errors.New("cmp: unsupported protection public key")
 	}
+}
+
+// verifyCMPProtectionIdentity chains the certificate that protected a PKIMessage
+// to one of the configured anchors. Intermediates may accompany it in extraCerts;
+// anchors may not come from the message.
+func verifyCMPProtectionIdentity(signerCert *x509.Certificate, extra []asn1.RawValue, trustAnchorsDER [][]byte) error {
+	roots := x509.NewCertPool()
+	for i, der := range trustAnchorsDER {
+		anchor, err := x509.ParseCertificate(der)
+		if err != nil {
+			return fmt.Errorf("cmp: parse CMP trust anchor %d: %w", i, err)
+		}
+		roots.AddCert(anchor)
+	}
+	intermediates := x509.NewCertPool()
+	for _, raw := range extra {
+		if cert, err := x509.ParseCertificate(raw.FullBytes); err == nil {
+			intermediates.AddCert(cert)
+		}
+	}
+	if _, err := signerCert.Verify(x509.VerifyOptions{
+		Roots:         roots,
+		Intermediates: intermediates,
+		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
+	}); err != nil {
+		return fmt.Errorf("cmp: PKIMessage protection identity does not chain to a configured trust anchor: %w", err)
+	}
+	return nil
 }

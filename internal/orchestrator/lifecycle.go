@@ -18,8 +18,15 @@ const (
 	StateIssued    State = "issued"
 	StateDeployed  State = "deployed"
 	StateRenewing  State = "renewing"
-	StateRevoked   State = "revoked"
-	StateRetired   State = "retired"
+	// StateRenewalFailed records a renewal attempt that did not produce a new
+	// certificate. It exists because BOTH exits from renewing used to fire an
+	// external side effect — connector.deploy or revocation.publish — so a failed
+	// renewal had to either re-deploy a certificate that was never renewed, be
+	// revoked, or sit in renewing forever. The identity is still operationally
+	// deployed here: its previous certificate is untouched and still valid.
+	StateRenewalFailed State = "renewal_failed"
+	StateRevoked       State = "revoked"
+	StateRetired       State = "retired"
 )
 
 // edge is an allowed (from -> to) transition.
@@ -29,11 +36,12 @@ type edge struct{ from, to State }
 // is the single source of truth for the lifecycle state machine: a pair absent
 // from this map is an invalid transition.
 //
-//	requested -> issued
-//	issued    -> deployed | revoked
-//	deployed  -> renewing | revoked
-//	renewing  -> deployed | revoked
-//	revoked   -> retired        (retired is terminal)
+//	requested      -> issued
+//	issued         -> deployed | revoked
+//	deployed       -> renewing | revoked
+//	renewing       -> deployed | renewal_failed | revoked
+//	renewal_failed -> renewing | deployed | revoked
+//	revoked        -> retired        (retired is terminal)
 var transitionEvents = map[edge]string{
 	{StateRequested, StateIssued}:  "identity.issued",
 	{StateIssued, StateDeployed}:   "identity.deployed",
@@ -42,7 +50,16 @@ var transitionEvents = map[edge]string{
 	{StateDeployed, StateRevoked}:  "identity.revoked",
 	{StateRenewing, StateDeployed}: "identity.renewed",
 	{StateRenewing, StateRevoked}:  "identity.revoked",
-	{StateRevoked, StateRetired}:   "identity.retired",
+	// A failed renewal is recorded, not papered over. No side effect: the previous
+	// certificate is still deployed and must not be re-pushed.
+	{StateRenewing, StateRenewalFailed}: "identity.renewal_failed",
+	// Retry, or accept the current certificate and clear the flag, or give up.
+	// renewal_failed -> deployed carries no side effect for the same reason:
+	// nothing new was issued, so there is nothing to deploy.
+	{StateRenewalFailed, StateRenewing}: "identity.renewing",
+	{StateRenewalFailed, StateDeployed}: "identity.renewal_recovered",
+	{StateRenewalFailed, StateRevoked}:  "identity.revoked",
+	{StateRevoked, StateRetired}:        "identity.retired",
 }
 
 // sideEffects maps transitions that require an external call to the outbox
@@ -56,6 +73,10 @@ var sideEffects = map[edge]string{
 	{StateIssued, StateRevoked}:    "revocation.publish",
 	{StateDeployed, StateRevoked}:  "revocation.publish",
 	{StateRenewing, StateRevoked}:  "revocation.publish",
+	// Retrying a renewal re-runs the CA call; the other two exits from
+	// renewal_failed deliberately have none.
+	{StateRenewalFailed, StateRenewing}: "ca.renew",
+	{StateRenewalFailed, StateRevoked}:  "revocation.publish",
 }
 
 // CanTransition reports whether from -> to is a valid lifecycle transition.

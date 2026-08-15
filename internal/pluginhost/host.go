@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"sync/atomic"
+	"time"
 
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
@@ -103,7 +104,13 @@ func (p *Plugin) Close(ctx context.Context) error {
 // That is a stronger property than a runtime deny, because the plugin's reach is
 // closed before its first instruction executes.
 func (h *Host) Load(ctx context.Context, wasm []byte, grant Grant) (*Plugin, error) {
-	rt := wazero.NewRuntime(ctx)
+	// WithCloseOnContextDone is what makes a guest INTERRUPTIBLE. wazero's default
+	// runtime runs guest code to completion regardless of the context, so a plugin
+	// containing `loop { }` — a bug or a hostile plugin — occupied its bounded-pool
+	// worker forever and could not be cancelled, shed, or drained at shutdown.
+	// Capability grants close the plugin's reach; they do nothing about its
+	// runtime, which is what this bounds (AN-7).
+	rt := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig().WithCloseOnContextDone(true))
 	stats := &Stats{}
 	sb := newSandbox(grant, stats)
 	if err := h.registerEnv(ctx, rt, sb); err != nil {
@@ -225,9 +232,15 @@ func (s *sandbox) hostDial(ctx context.Context, m api.Module, addrPtr, addrLen u
 	return s.dial(ctx, string(a))
 }
 
+// maxPluginCallDuration caps a single guest invocation when the caller supplied
+// no deadline of its own. A plugin is foreign code on a shared bounded pool, so
+// "runs forever" must not be one of its options.
+const maxPluginCallDuration = 30 * time.Second
+
 // Invoke calls an exported function of the plugin, on the host's bounded pool. If
 // the pool is saturated it returns a *bulkhead.Rejected (AN-7) without running
-// the plugin.
+// the plugin. A guest that does not return within maxPluginCallDuration (or the
+// caller's deadline, whichever is sooner) is interrupted and its worker released.
 func (h *Host) Invoke(ctx context.Context, p *Plugin, fn string) (uint64, error) {
 	type result struct {
 		v   uint64
@@ -240,7 +253,16 @@ func (h *Host) Invoke(ctx context.Context, p *Plugin, fn string) (uint64, error)
 			ch <- result{err: fmt.Errorf("pluginhost: plugin has no exported function %q", fn)}
 			return
 		}
-		out, err := f.Call(ctx)
+		// Bound the guest's runtime even when the caller supplied no deadline.
+		// Paired with WithCloseOnContextDone above, this is what actually stops a
+		// looping guest rather than merely asking it to stop.
+		callCtx := ctx
+		if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+			var cancel context.CancelFunc
+			callCtx, cancel = context.WithTimeout(ctx, maxPluginCallDuration)
+			defer cancel()
+		}
+		out, err := f.Call(callCtx)
 		if err != nil {
 			ch <- result{err: fmt.Errorf("pluginhost: call %q: %w", fn, err)}
 			return

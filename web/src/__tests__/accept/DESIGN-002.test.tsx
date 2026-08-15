@@ -116,7 +116,7 @@ function renderRoute() {
 
 describe("DESIGN-002 runnable API explorer", () => {
   beforeEach(() => {
-    apiMock.me.mockResolvedValue({ subject: "docs-operator", tenant_id: "tenant-1", email: "docs@example.test" });
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "docs-operator", tenant_id: "tenant-1", email: "docs@example.test" });
     apiMock.createAPIToken.mockImplementation(async (input: { scopes: string[]; expires_at: string }) => ({
       id: "00000000-0000-4000-8000-000000000099",
       tenant_id: "tenant-1",

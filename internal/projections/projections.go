@@ -135,6 +135,8 @@ const (
 	EventIdentityRevoked              = "identity.revoked"
 	EventIdentityRenewing             = "identity.renewing"
 	EventIdentityRenewed              = "identity.renewed"
+	EventIdentityRenewalFailed        = "identity.renewal_failed"
+	EventIdentityRenewalRecovered     = "identity.renewal_recovered"
 	EventIdentityRetired              = "identity.retired"
 	EventCertificateRecorded          = "certificate.recorded"
 	EventCertificateCustodyAttested   = "certificate.custody.attested"
@@ -6113,6 +6115,8 @@ func lifecycleApprovalEdge(from, to string) (eventType, action, destination stri
 	case from == "deployed" && to == "revoked":
 		return EventIdentityRevoked, "revoke", "revocation.publish", true
 	case from == "renewing" && to == "revoked":
+		return EventIdentityRevoked, "revoke", "revocation.publish", true
+	case from == "renewal_failed" && to == "revoked":
 		return EventIdentityRevoked, "revoke", "revocation.publish", true
 	default:
 		return "", "", "", false

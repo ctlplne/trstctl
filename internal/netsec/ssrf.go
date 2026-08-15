@@ -230,11 +230,45 @@ func allowedPrivateIP(ip net.IP, opts SafeClientOptions) bool {
 	}
 	addr = addr.Unmap()
 	for _, prefix := range opts.AllowPrivateCIDRs {
+		// Enforced here, at the point the prefix actually grants access, rather
+		// than trusting the ~18 places that parse this field to have validated it.
+		if ValidateEgressAllowPrefix(prefix) != nil {
+			continue
+		}
 		if prefix.Contains(addr) {
 			return true
 		}
 	}
 	return false
+}
+
+// ValidateEgressAllowPrefix rejects an egress-allowlist prefix that does not mean
+// what it appears to mean.
+//
+// A zero-bit prefix (0.0.0.0/0, ::/0) contains every address, so a single entry
+// turns this allowlist from "reach my private CA" into "reach anything not hard-
+// blocked" — the SSRF guard is off while the config still reads as a narrow
+// allowlist. That is the failure worth catching: it is silent, and it looks
+// correct in review.
+//
+// A prefix with host bits set is the quieter version of the same problem.
+// netip.ParsePrefix accepts 10.1.2.3/8 and Contains matches against the masked
+// form, so an operator who writes one host address gets the entire /8 and no
+// error. Requiring the prefix to equal its own masked form makes that a config
+// error instead of a surprise.
+func ValidateEgressAllowPrefix(prefix netip.Prefix) error {
+	if !prefix.IsValid() {
+		return fmt.Errorf("%w: egress allowlist entry is not a valid CIDR", ErrSSRFBlocked)
+	}
+	if prefix.Bits() == 0 {
+		return fmt.Errorf("%w: egress allowlist entry %q covers every address, which disables the "+
+			"SSRF guard entirely; list the specific ranges the endpoint lives in", ErrSSRFBlocked, prefix)
+	}
+	if prefix.Masked() != prefix {
+		return fmt.Errorf("%w: egress allowlist entry %q has host bits set, so it silently means %q; "+
+			"write the network address", ErrSSRFBlocked, prefix, prefix.Masked())
+	}
+	return nil
 }
 
 func hardBlockedIP(ip net.IP) bool {

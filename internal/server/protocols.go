@@ -439,9 +439,22 @@ func (e enrollerAdapter) Enroll(ctx context.Context, csrDER []byte, profileName,
 // (the same token mechanism the REST API uses), so EST enrollment is auth-gated and
 // not anonymous. The CSR is still profile-gated and signed through the signer; this
 // is the transport-level credential check on top of TLS.
+// perm is the authority the bearer must hold. A zero value means
+// authz.CertsRequest, the EST enrollment authority this type was written for;
+// the served SSH CA reuses the same audited token path with authz.CertsIssue.
 type servedEnrollAuth struct {
 	store    *store.Store
 	tenantID string
+	perm     authz.Permission
+}
+
+// requiredPermission returns the authority this endpoint demands, defaulting to
+// the EST enrollment authority so existing construction sites are unchanged.
+func (a servedEnrollAuth) requiredPermission() authz.Permission {
+	if a.perm == "" {
+		return authz.CertsRequest
+	}
+	return a.perm
 }
 
 // Authenticate implements est.Authenticator. It allows only a Bearer
@@ -489,7 +502,7 @@ func (a servedEnrollAuth) Authenticate(r *http.Request) est.AuthenticationResult
 		tenantID = rec.TenantID
 	}
 	principal := auth.APIToken{TenantID: rec.TenantID, Subject: rec.Subject, Scopes: rec.Scopes}.Principal()
-	if !principal.Can(authz.CertsRequest, authz.Scope{TenantID: tenantID}) {
+	if !principal.Can(a.requiredPermission(), authz.Scope{TenantID: tenantID}) {
 		return servedESTBearerDenial(http.StatusForbidden, "insufficient_scope")
 	}
 	return est.AuthenticationResult{Allowed: true}

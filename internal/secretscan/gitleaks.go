@@ -166,6 +166,19 @@ func (r *GitleaksRunner) ScanWithOptions(ctx context.Context, target string, opt
 	}
 	relativizeFindings(findings, targetRoot)
 	rules := GitleaksDefaultRulesActive
+	if configPath != "" {
+		// A custom config replaces or extends the default rule set, so the default
+		// count stops describing what ran. Reporting 213 alongside custom_rules:true
+		// asserts a measurement that was never taken: an operator scanning with a
+		// five-rule config gets evidence claiming 213 active rules, and rules_active
+		// is documented as "an auditable floor for the real default scanner is
+		// active". Count what the config actually declares instead.
+		counted, err := countGitleaksRules(configPath)
+		if err != nil {
+			return Report{}, err
+		}
+		rules = counted
+	}
 	if r.rulesActiveOverride > 0 {
 		rules = r.rulesActiveOverride
 	}
@@ -349,4 +362,40 @@ func (b *limitedBuffer) suffix() string {
 		return ""
 	}
 	return ": " + msg
+}
+
+// countGitleaksRules reports how many rules a gitleaks config actually activates.
+//
+// It counts [[rules]] tables and adds the pinned default count when the config
+// extends the defaults ([extend] useDefault = true), which is how a gitleaks
+// config layers on top of the built-in set.
+//
+// This scans lines rather than parsing TOML. That is a deliberate trade: the
+// package has no TOML dependency, and the two constructs it needs — a [[rules]]
+// table header and a useDefault key — are unambiguous at the start of a line.
+// Getting the count slightly wrong for an exotic config is a much smaller problem
+// than reporting a number that describes a rule set which never ran.
+func countGitleaksRules(configPath string) (int, error) {
+	body, err := os.ReadFile(configPath) // #nosec G304 -- the operator's own scanner config, already validated as a path this process was told to use (CWE-22)
+	if err != nil {
+		return 0, fmt.Errorf("secretscan: read gitleaks config to count active rules: %w", err)
+	}
+	rules, extendsDefault := 0, false
+	for _, line := range strings.Split(string(body), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "[[rules]]") {
+			rules++
+			continue
+		}
+		if strings.HasPrefix(trimmed, "useDefault") && strings.Contains(trimmed, "true") {
+			extendsDefault = true
+		}
+	}
+	if extendsDefault {
+		rules += GitleaksDefaultRulesActive
+	}
+	return rules, nil
 }

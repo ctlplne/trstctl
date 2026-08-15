@@ -45,7 +45,7 @@ describe("SIMP-01 Platform served-data reduction", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     for (const mock of Object.values(apiMock)) mock.mockReset();
-    apiMock.me.mockResolvedValue({ subject: "access-admin", tenant_id: "tenant-admin", email: "access-admin@example.test" });
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "access-admin", tenant_id: "tenant-admin", email: "access-admin@example.test" });
     apiMock.accessRoles.mockResolvedValue({
       items: [{ name: "access-admin", permissions: ["access:read", "access:write"] }],
     });

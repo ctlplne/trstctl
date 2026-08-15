@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
@@ -25,6 +25,34 @@ const runtimeCatalogs = {
   "de-DE": (await import("@/i18n/catalog.de-DE.runtime.gen")).default,
 } as const;
 import { contextualRouteItems, navGroups, taskNavItems } from "@/lib/navigation";
+
+// These tests render shell chrome without an AuthProvider, so useAuth falls back
+// to the null-user default context. They previously depended on hasPermission
+// failing open to render the permission-gated navigation they inspect; that
+// fail-open is fixed, so the fully-permitted operator these tests always meant to
+// exercise is now stated explicitly. ("*" is how unrestricted is expressed.)
+vi.mock("@/auth/AuthProvider", async (orig) => {
+  const actual = await orig<typeof import("@/auth/AuthProvider")>();
+  return {
+    ...actual,
+    useAuth: () => ({
+      user: {
+        subject: "test-operator",
+        tenant_id: "t1",
+        email: "operator@example.test",
+        roles: ["admin"],
+        permissions: ["*"],
+      },
+      loading: false,
+      error: null,
+      preview: false,
+      previewAvailable: false,
+      startPreview: () => {},
+      logout: async () => {},
+    }),
+  };
+});
+
 
 function DemoFormats() {
   const { formatDate: localizedDate, formatNumber: localizedNumber, formatPlural: localizedPlural, t } = useTranslation();

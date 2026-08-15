@@ -46,6 +46,29 @@ type Service struct {
 	mu    sync.Mutex
 	audit auditsink.Auditor
 	rings map[string]*Keyring
+	// persist is called after any mutation that creates key material, so a
+	// restart between minting a key and the next checkpoint cannot lose it. It is
+	// a field on the service rather than a duty of each caller: a handler that
+	// forgets to save produces a key that works until the next restart and then
+	// silently does not, which is the failure this whole mechanism exists to stop.
+	persist func() error
+}
+
+// SetPersist installs the checkpoint invoked after a key is created or rotated.
+func (s *Service) SetPersist(fn func() error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.persist = fn
+}
+
+func (s *Service) checkpoint() error {
+	s.mu.Lock()
+	fn := s.persist
+	s.mu.Unlock()
+	if fn == nil {
+		return nil
+	}
+	return fn()
 }
 
 // KeyInfo is the key metadata returned by lifecycle operations. It never contains
@@ -100,6 +123,9 @@ func (s *Service) CreateKey(ctx context.Context, tenantID, name string, kind Kin
 	if err := k.CreateKey(ctx, name, kind); err != nil {
 		return KeyInfo{}, err
 	}
+	if err := s.checkpoint(); err != nil {
+		return KeyInfo{}, fmt.Errorf("transit: persist keyring after create: %w", err)
+	}
 	return KeyInfo{Name: name, Kind: kind, Version: 1}, nil
 }
 
@@ -113,6 +139,9 @@ func (s *Service) Rotate(ctx context.Context, tenantID, name string) (KeyInfo, e
 	kind, err := k.Kind(name)
 	if err != nil {
 		return KeyInfo{}, err
+	}
+	if err := s.checkpoint(); err != nil {
+		return KeyInfo{}, fmt.Errorf("transit: persist keyring after rotate: %w", err)
 	}
 	return KeyInfo{Name: name, Kind: kind, Version: version}, nil
 }

@@ -602,7 +602,9 @@ func (b *KubernetesBackend) CreateCredential(ctx context.Context, req GenerateRe
 			Token secret.JSONBytes `json:"token"`
 		} `json:"status"`
 	}
-	defer secret.Wipe(out.Status.Token)
+	// Closure: the field is nil until the response is decoded below, so a bare
+	// defer would capture that nil and wipe nothing (AN-8).
+	defer func() { secret.Wipe(out.Status.Token) }()
 	ttl := req.TTL
 	if ttl <= 0 {
 		ttl = time.Hour
@@ -761,7 +763,10 @@ func (b *AWSIAMBackend) CreateCredential(ctx context.Context, req GenerateReques
 			} `xml:"AccessKey"`
 		} `xml:"CreateAccessKeyResult"`
 	}
-	defer secret.Wipe(out.Result.AccessKey.SecretAccessKey)
+	// The closure matters: evaluating the field in the defer statement itself
+	// captures the nil slice that exists BEFORE decoding, so the wipe zeroes
+	// nothing and the minted secret access key is left in the heap (AN-8).
+	defer func() { secret.Wipe(out.Result.AccessKey.SecretAccessKey) }()
 	defer secret.Wipe(raw)
 	if err := xml.Unmarshal(raw, &out); err != nil {
 		_ = b.Revoke(ctx, user)
@@ -936,7 +941,9 @@ func (b *GCPIAMBackend) Create(ctx context.Context, role string) (string, []byte
 		Name           string           `json:"name"`
 		PrivateKeyData secret.JSONBytes `json:"privateKeyData"`
 	}
-	defer secret.Wipe(out.PrivateKeyData)
+	// Closure: the field is nil until the response is decoded below, so a bare
+	// defer would capture that nil and wipe nothing (AN-8).
+	defer func() { secret.Wipe(out.PrivateKeyData) }()
 	body := map[string]string{
 		"privateKeyType": "TYPE_GOOGLE_CREDENTIALS_FILE",
 		"keyAlgorithm":   "KEY_ALG_RSA_2048",
@@ -1143,7 +1150,9 @@ func (b *AzureEntraBackend) CreateCredential(ctx context.Context, req GenerateRe
 		KeyID      string           `json:"keyId"`
 		SecretText secret.JSONBytes `json:"secretText"`
 	}
-	defer secret.Wipe(out.SecretText)
+	// Closure: the field is nil until the response is decoded below, so a bare
+	// defer would capture that nil and wipe nothing (AN-8).
+	defer func() { secret.Wipe(out.SecretText) }()
 	if err := azureJSON(ctx, b.doer, b.endpoint, b.tokenBytes(), http.MethodPost, path, body, &out); err != nil {
 		return "", nil, fmt.Errorf("dynsecret azure-entra: add password: %w", err)
 	}

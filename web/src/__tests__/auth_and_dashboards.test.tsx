@@ -254,7 +254,7 @@ describe("auth + dashboards", () => {
   });
 
   it("shows the dashboard once authenticated", async () => {
-    apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1", email: "u@example.test" });
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "user-1", tenant_id: "t1", email: "u@example.test" });
     apiMock.certificates.mockResolvedValue([{ id: "c1", tenant_id: "t1", subject: "CN=svc", status: "active", fingerprint: "fp1" }]);
     apiMock.identities.mockResolvedValue([
       { id: "req-1", name: "svc-approval", kind: "x509_certificate", status: "requested" },
@@ -285,7 +285,7 @@ describe("auth + dashboards", () => {
   });
 
   it("signs out through the served logout endpoint and returns to login", async () => {
-    apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1", email: "u@example.test" });
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "user-1", tenant_id: "t1", email: "u@example.test" });
     const user = userEvent.setup();
 
     renderAt("/");
@@ -300,7 +300,7 @@ describe("auth + dashboards", () => {
   });
 
   it("keeps the authenticated shell mounted and reports a failed served logout", async () => {
-    apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1", email: "u@example.test" });
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "user-1", tenant_id: "t1", email: "u@example.test" });
     apiMock.logout.mockRejectedValue(new Error("logout offline"));
     const user = userEvent.setup();
 
@@ -314,7 +314,7 @@ describe("auth + dashboards", () => {
   });
 
   it("sends a fresh, empty tenant to first-run setup instead of demo data", async () => {
-    apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1", email: "u@example.test" });
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "user-1", tenant_id: "t1", email: "u@example.test" });
     // certificates/identities/risk default to [] in beforeEach -> empty REAL tenant.
     // A brand-new authenticated tenant is routed to onboarding, not shown demo numbers.
 
@@ -331,7 +331,7 @@ describe("auth + dashboards", () => {
   });
 
   it("renders the certificate inventory in a table", async () => {
-    apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1" });
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "user-1", tenant_id: "t1" });
     apiMock.certificatePage.mockResolvedValue({
       items: [
         { id: "c1", subject: "CN=payments.example.com", issuer: "CN=CA", status: "active", fingerprint: "fp1" },
@@ -421,7 +421,7 @@ describe("auth + dashboards", () => {
   }
 
   function seededTenant() {
-    apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1", email: "u@example.test" });
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "user-1", tenant_id: "t1", email: "u@example.test" });
     apiMock.certificates.mockResolvedValue([
       { id: "c1", tenant_id: "t1", subject: "CN=soon", status: "active", fingerprint: "f1", key_algorithm: "RSA-2048", not_after: dayFromNow(3) },
       { id: "c2", tenant_id: "t1", subject: "CN=later", status: "active", fingerprint: "f2", key_algorithm: "ECDSA P-256", not_after: dayFromNow(20) },
@@ -596,7 +596,7 @@ describe("auth + dashboards", () => {
   // (02-findings DA-05, upgraded to Blocker in the 2026-07-13 live pass).
 
   it("offers Renew on managed certificate rows and starts the identity renewal (S-N1)", async () => {
-    apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1" });
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "user-1", tenant_id: "t1" });
     apiMock.certificatePage.mockResolvedValue({
       items: [
         { id: "c1", tenant_id: "t1", subject: "CN=payments-api.example.test", issuer: "CN=CA", status: "active", fingerprint: "f1" },
@@ -625,7 +625,7 @@ describe("auth + dashboards", () => {
   });
 
   it("lands the certificate inventory on an expiry-filtered worklist from the URL", async () => {
-    apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1" });
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "user-1", tenant_id: "t1" });
     apiMock.certificatePage.mockResolvedValue({
       items: [{ id: "c1", tenant_id: "t1", subject: "CN=soon.example.com", issuer: "CN=CA", status: "active", fingerprint: "fp1" }],
     });
@@ -644,7 +644,7 @@ describe("auth + dashboards", () => {
   // is exactly the estate most likely to have a listener quietly serving last
   // year's certificate.
   it("hides the verified tile until endpoints have actually been observed", async () => {
-    apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1" });
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "user-1", tenant_id: "t1" });
     apiMock.certificates.mockResolvedValue([
       { id: "c1", tenant_id: "t1", subject: "CN=api.example.test", issuer: "CN=CA", status: "active", fingerprint: "fp1" },
     ]);
@@ -655,7 +655,7 @@ describe("auth + dashboards", () => {
   });
 
   it("shows the verified percentage and leads with divergence once endpoints are observed", async () => {
-    apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1" });
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "user-1", tenant_id: "t1" });
     // A non-empty tenant, so the dashboard renders its KPI row rather than the
     // first-run wizard.
     apiMock.certificates.mockResolvedValue([

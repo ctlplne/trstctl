@@ -351,6 +351,16 @@ func (c *CA) SignClientCSRWithTenant(
 	if err := csr.CheckSignature(); err != nil {
 		return nil, fmt.Errorf("mtls: csr signature: %w", err)
 	}
+	// The CN becomes a PATH SEGMENT of the SPIFFE ID below, and capability roles
+	// are encoded as further segments of that same path. A CN of
+	// "agent1/role/network" therefore produced
+	// spiffe://…/agent/agent1/role/network, which AgentRolesFromClientCert reads
+	// back as a `network` grant — an agent could self-grant relay capability by
+	// choosing its own CSR subject. Roles come from the caller's grant, never
+	// the CSR (see below); this is what makes that true.
+	if err := validateAgentCommonName(csr.Subject.CommonName); err != nil {
+		return nil, err
+	}
 	spiffeURI, err := url.Parse(AgentSPIFFEID(tenantID, csr.Subject.CommonName))
 	if err != nil {
 		return nil, fmt.Errorf("mtls: build tenant SPIFFE ID: %w", err)
@@ -862,4 +872,32 @@ func AgentRolesFromClientCert(der []byte) ([]string, error) {
 		return []string{AgentRoleHost}, nil
 	}
 	return NormalizeAgentRoles(roles), nil
+}
+
+// validateAgentCommonName rejects a CSR subject that would change the STRUCTURE
+// of the SPIFFE ID built from it, rather than merely naming the agent.
+//
+// The identity path is /tenant/<id>/agent/<cn>, and capabilities are additional
+// segments under it, so any separator inside cn lets the subject forge segments
+// the CA never granted. Percent, backslash and control characters are refused
+// for the same reason: they can survive URL parsing into a different path than
+// the one that was reviewed.
+func validateAgentCommonName(cn string) error {
+	trimmed := strings.TrimSpace(cn)
+	if trimmed == "" {
+		return errors.New("mtls: agent CSR has no common name")
+	}
+	if trimmed != cn {
+		return fmt.Errorf("mtls: agent common name %q has leading or trailing space", cn)
+	}
+	if strings.ContainsAny(cn, "/\\%?#") {
+		return fmt.Errorf("mtls: agent common name %q contains a path separator; "+
+			"it would forge SPIFFE path segments such as /role/<capability>", cn)
+	}
+	for _, r := range cn {
+		if r < 0x20 || r == 0x7f {
+			return fmt.Errorf("mtls: agent common name %q contains a control character", cn)
+		}
+	}
+	return nil
 }

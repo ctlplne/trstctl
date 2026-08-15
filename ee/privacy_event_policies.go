@@ -239,7 +239,17 @@ var licensedProductionPrivacyEventCatalog = func() []licensedPrivacyEventPolicy 
 			licensedPrivacyRule("/brand/EmailFromName", events.PrivacyFieldSubjectToken),
 			licensedPrivacyRule("/brand/EmailFooter", events.PrivacyFieldFreeTextClear),
 			licensedPrivacyRule("/brand/CustomDomain", events.PrivacyFieldSubjectToken),
-			licensedPrivacyRule("/brand_token_overrides", events.PrivacyFieldJSONIdentityValues),
+			// Brand token overrides are free-form display strings a tenant
+			// substitutes into emails and UI chrome, exactly like the sibling
+			// /brand/LoginMessage and /brand/EmailFooter fields. They are not
+			// cataloged schemaless identity maps, so JSONIdentityValues (which
+			// rewrites only a value that is EXACTLY the subject, and hard-errors
+			// on any other occurrence) was the wrong contract: an override such
+			// as "Contact ops@acme.test" made the whole erasure fail closed
+			// rather than erase. FreeTextClear clears any override containing
+			// the subject, which removes the identity and lets the token fall
+			// back to its default.
+			licensedPrivacyRule("/brand_token_overrides", events.PrivacyFieldFreeTextClear),
 		)),
 		entry(provider.AuditBreakGlassRequested, 1, breakGlassPolicy),
 		entry(provider.AuditBreakGlassConsented, 1, breakGlassPolicy),

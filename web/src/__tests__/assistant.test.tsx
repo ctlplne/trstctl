@@ -37,7 +37,7 @@ function renderAssistant() {
 describe("assistant console workflow", () => {
   beforeEach(() => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
-    apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1", email: "u@example.test" });
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "user-1", tenant_id: "t1", email: "u@example.test" });
     apiMock.aiStatus.mockResolvedValue({
       enabled: true,
       model_configured: false,

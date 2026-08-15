@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -226,11 +227,27 @@ func TestAGID_Wire_VerifyChainInRealSignerBeforeKeygen(t *testing.T) {
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
 	socket := filepath.Join(dir, "s.sock")
-	go func() { _ = signing.ServeServerWithOptions(ctx, socket, srv, signing.ServeOptions{}) }()
+	// AllowInsecureDevNonLinux mirrors internal/signing's own test idiom: UDS peer
+	// credentials only exist on Linux, so without it listenUDS refuses to start and
+	// the only symptom is DialReady timing out with "signer not ready" — which is
+	// what this test did, undiagnosed, for as long as nothing ran it.
+	serveErr := make(chan error, 1)
+	go func() {
+		serveErr <- signing.ServeServerWithOptions(ctx, socket, srv, signing.ServeOptions{
+			AllowInsecureDevNonLinux: runtime.GOOS != "linux",
+		})
+	}()
 
 	client, err := signing.DialReady(ctx, socket, 10*time.Second)
 	if err != nil {
-		t.Fatalf("DialReady: %v", err)
+		// Surface why the signer never came up instead of reporting only that it
+		// did not; the serve error is the actual diagnosis.
+		select {
+		case serr := <-serveErr:
+			t.Fatalf("DialReady: %v (signer refused to serve: %v)", err, serr)
+		default:
+			t.Fatalf("DialReady: %v", err)
+		}
 	}
 	defer func() { _ = client.Close() }()
 

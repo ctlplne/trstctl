@@ -64,7 +64,16 @@ func TestFederationBridge_ImportThenListRoundTrip(t *testing.T) {
 		api.WithPrincipalResolver(func(*http.Request) (authz.Principal, error) { return principal, nil }),
 	}, licensed...)...)
 
-	trustRoot := []byte("foreign-root-der-bytes")
+	// A real PKIX public key, not a placeholder string. The old fixture was
+	// literally []byte("foreign-root-der-bytes") and round-tripped fine, which is
+	// the defect restating itself: nothing validated what was persisted as a
+	// federation trust anchor.
+	trustRootKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(trustRootKey.Destroy)
+	trustRoot := trustRootKey.Public().DER
 	body, err := json.Marshal(map[string]any{
 		"foreign_deployment_id":  "deploy-west",
 		"local_deployment_id":    "deploy-east",

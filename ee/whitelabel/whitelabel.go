@@ -95,6 +95,15 @@ func (r *Resolver) TenantForHost(ctx context.Context, host string) string {
 	return record.TenantID
 }
 
+// maxBrandCacheEntries bounds the resolver cache.
+//
+// The cache key is derived from the request's Host header, which is
+// unauthenticated and attacker-chosen. Unbounded, a client could mint a cache
+// entry per request; worse, a MISS previously fell through to a database fetch
+// every time, so a stream of distinct hosts became a stream of queries. Bounding
+// the map caps the memory, and caching the not-found answer caps the queries.
+const maxBrandCacheEntries = 4096
+
 func (r *Resolver) lookup(ctx context.Context, key string, fetch func(context.Context) (*Record, error)) *Record {
 	r.mu.Lock()
 	if cached, ok := r.cache[key]; ok && r.now().Sub(cached.fetched) < r.ttl {
@@ -104,12 +113,45 @@ func (r *Resolver) lookup(ctx context.Context, key string, fetch func(context.Co
 	r.mu.Unlock()
 	record, err := fetch(ctx)
 	if err != nil {
+		// A transient failure is deliberately NOT cached: caching it would turn a
+		// blip into a TTL-long outage for a legitimate host.
 		return nil
 	}
 	r.mu.Lock()
+	// A negative answer is cached too. Without it every request bearing an
+	// unknown Host re-queries, which is the amplification an unauthenticated
+	// caller can drive.
+	r.evictLocked()
 	r.cache[key] = cachedRecord{record: cloneRecord(record), fetched: r.now()}
 	r.mu.Unlock()
 	return cloneRecord(record)
+}
+
+// evictLocked makes room for one new entry: expired entries first (free), then
+// the least recently fetched. Callers hold r.mu.
+func (r *Resolver) evictLocked() {
+	if len(r.cache) < maxBrandCacheEntries {
+		return
+	}
+	now := r.now()
+	for k, entry := range r.cache {
+		if now.Sub(entry.fetched) >= r.ttl {
+			delete(r.cache, k)
+		}
+	}
+	for len(r.cache) >= maxBrandCacheEntries {
+		var oldestKey string
+		var oldest time.Time
+		for k, entry := range r.cache {
+			if oldestKey == "" || entry.fetched.Before(oldest) {
+				oldestKey, oldest = k, entry.fetched
+			}
+		}
+		if oldestKey == "" {
+			return
+		}
+		delete(r.cache, oldestKey)
+	}
 }
 
 func merge(tenant, master *Record) branding.Brand {

@@ -162,7 +162,14 @@ func (a *API) recordIncidentDelivery(ctx context.Context, tenantID, replacementI
 }
 
 func incidentRevocable(s orchestrator.State) bool {
-	return s == orchestrator.StateIssued || s == orchestrator.StateDeployed || s == orchestrator.StateRenewing
+	// renewal_failed belongs here for the same reason the other three do: the
+	// identity still holds a live certificate. A renewal that failed changes
+	// nothing about the credential already in the field, so excluding this state
+	// would mean a compromised certificate whose renewal happened to fail could
+	// not be revoked during an incident — the new state would silently remove a
+	// capability rather than add one.
+	return s == orchestrator.StateIssued || s == orchestrator.StateDeployed ||
+		s == orchestrator.StateRenewing || s == orchestrator.StateRenewalFailed
 }
 
 func incidentReplacementAttributes(replaces string, existing json.RawMessage) json.RawMessage {

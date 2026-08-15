@@ -37,6 +37,11 @@ type Server struct {
 	log        *events.Log
 	verifyCSR  func([]byte) error
 	mux        *http.ServeMux
+
+	// clientAnchors are the trust anchors a PKIMessage's protection identity must
+	// chain to; allowAnonymous is the deliberate escape hatch for harnesses.
+	clientAnchors  [][]byte
+	allowAnonymous bool
 }
 
 // Config wires a Server. CACertDER/CAKeyPKCS8 sign the CMP response protection. In
@@ -54,6 +59,17 @@ type Config struct {
 	// the carried PKCS#10; PKIMessage protection is always verified by the core
 	// parser. Nil uses the strict internal/crypto classical parser.
 	CSRVerifier func([]byte) error
+	// ClientTrustAnchorsDER are the anchors a PKIMessage's protection identity
+	// must chain to. CMP carries that identity in the message's own extraCerts,
+	// so without anchors the protection check proves only that the sender signed
+	// their own message — a self-signed pair is sufficient to enroll. Empty means
+	// the caller has NO credential check and every request is trusted; the served
+	// endpoint refuses to start in that state (see New).
+	ClientTrustAnchorsDER [][]byte
+	// AllowUnauthenticatedClients must be set deliberately to run without
+	// anchors. It exists for differential harnesses that drive the parser
+	// directly; production wiring never sets it.
+	AllowUnauthenticatedClients bool
 }
 
 // New builds the CMP server.
@@ -61,7 +77,9 @@ func New(cfg Config) *Server {
 	s := &Server{
 		enroller: cfg.Enroller, caCertDER: cfg.CACertDER, caKeyPKCS8: cfg.CAKeyPKCS8,
 		profile: cfg.ProfileName, pool: cfg.Pool, log: cfg.Log,
-		verifyCSR: cfg.CSRVerifier,
+		verifyCSR:      cfg.CSRVerifier,
+		clientAnchors:  cfg.ClientTrustAnchorsDER,
+		allowAnonymous: cfg.AllowUnauthenticatedClients,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/cmp", s.handle)
@@ -93,7 +111,13 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "cmp: empty PKIMessage", http.StatusBadRequest)
 		return
 	}
-	req, err := crypto.ParseCMPRequestWithVerifier(body, s.verifyCSR)
+	if len(s.clientAnchors) == 0 && !s.allowAnonymous {
+		// Fail closed rather than enrol anyone who can compose a PKIMessage.
+		s.audit(r.Context(), "deny", "no client trust anchors configured", "")
+		http.Error(w, "cmp: enrollment unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	req, err := crypto.ParseCMPRequestWithTrust(body, s.verifyCSR, s.clientAnchors)
 	if err != nil {
 		s.audit(r.Context(), "deny", "malformed pkiMessage", "")
 		http.Error(w, "cmp: bad request", http.StatusBadRequest)

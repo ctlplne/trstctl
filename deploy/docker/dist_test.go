@@ -1006,9 +1006,18 @@ func TestReleasePinsContainerBasesByDigest(t *testing.T) {
 	}
 
 	rel := repoFile(t, ".github", "workflows", "release.yml")
-	// The pipeline resolves all three bases to digests...
+	// The pipeline resolves all three bases to digests, and now does more than
+	// that: it requires each resolved digest to match one committed in
+	// .github/base-image-digests.env. Resolving a floating tag and checking only
+	// that the answer LOOKS like a digest validated its shape, not its identity,
+	// so a repointed upstream tag was inherited silently between releases. The
+	// imagetools/Manifest.Digest calls this used to anchor now live inside
+	// scripts/ci/resolve-pinned-base.sh, which does the comparison.
 	mustContainAll(t, "release resolves the web builder, Go builder, and runtime base digests", rel,
-		"node:", "golang:", "gcr.io/distroless/static-debian12", "imagetools inspect", "Manifest.Digest")
+		"node:", "golang:", "gcr.io/distroless/static-debian12", "resolve-pinned-base.sh")
+	pinScript := repoFile(t, "scripts", "ci", "resolve-pinned-base.sh")
+	mustContainAll(t, "the pinning script resolves a digest and enforces the committed pin", pinScript,
+		"imagetools inspect", "Manifest.Digest", "base-image-digests.env", "HAS MOVED")
 	// ...builds with them...
 	mustContainAll(t, "release builds FROM the resolved bases", rel, "WEB_BUILD_IMAGE=", "BUILD_IMAGE=", "BASE_IMAGE=")
 	// ...and records it.

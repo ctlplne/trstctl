@@ -45,7 +45,7 @@ function renderAt(path: string) {
 describe("POL-03 polish fixes", () => {
   beforeEach(() => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
-    apiMock.me.mockResolvedValue({ subject: "dev-1", tenant_id: "t1", email: "dev@example.test" });
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "dev-1", tenant_id: "t1", email: "dev@example.test" });
     apiMock.nhiPolicyCompliance.mockResolvedValue({
       capability: "CAP-GOV-03",
       generated_at: "2026-06-29T00:00:00Z",

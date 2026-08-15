@@ -645,7 +645,7 @@ func componentSchemas() map[string]*Schema {
 	// Omitting it keeps the deprecated server-side-keygen path, which records an
 	// issuance.server_side_keygen event every time it runs.
 	transitionReq := object(map[string]*Schema{
-		"to":              {Type: "string", Enum: []string{"issued", "deployed", "renewing", "revoked", "retired"}},
+		"to":              {Type: "string", Enum: []string{"issued", "deployed", "renewing", "renewal_failed", "revoked", "retired"}},
 		"reason":          str(),
 		"subject_csr_pem": str(),
 	}, "to")
@@ -657,7 +657,7 @@ func componentSchemas() map[string]*Schema {
 		"owner_id":        uuid(),
 		"issuer_id":       uuid(),
 		"kind":            {Type: "string", Enum: identityKinds},
-		"status":          {Type: "string", Enum: []string{"requested", "issued", "deployed", "renewing", "revoked", "retired"}},
+		"status":          {Type: "string", Enum: []string{"requested", "issued", "deployed", "renewing", "renewal_failed", "revoked", "retired"}},
 		"reason":          {Type: "string", Enum: revocationReasons},
 	}, "reason")
 	bulkRevokeItem := object(map[string]*Schema{

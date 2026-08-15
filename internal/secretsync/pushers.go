@@ -361,7 +361,9 @@ func (p *GCPSecretManagerPusher) latestMatches(ctx context.Context, key string, 
 	if err != nil {
 		return false, err
 	}
-	defer secret.Wipe(out.Payload.Data)
+	// Closure: the field is nil until the response is decoded below, so a bare
+	// defer would capture that nil and wipe nothing (AN-8).
+	defer func() { secret.Wipe(out.Payload.Data) }()
 	decoded, err := decodeBase64Secret(out.Payload.Data)
 	if err != nil {
 		return false, fmt.Errorf("secretsync: decode GCP latest secret: %w", err)
@@ -466,7 +468,9 @@ func (p *AzureKeyVaultPusher) latestMatches(ctx context.Context, key string, val
 	if err != nil {
 		return false, err
 	}
-	defer secret.Wipe(out.Value)
+	// Closure: the field is nil until the response is decoded below, so a bare
+	// defer would capture that nil and wipe nothing (AN-8).
+	defer func() { secret.Wipe(out.Value) }()
 	decoded, err := decodeBase64Secret(out.Value)
 	if err != nil {
 		return false, fmt.Errorf("secretsync: decode Azure latest secret: %w", err)

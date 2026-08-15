@@ -73,5 +73,15 @@ func (d *issuanceDispatcher) handleIncidentMigrationRevoke(ctx context.Context, 
 	if err != nil {
 		return err
 	}
+	// Republish the CRL. Recording certificate.revoked updates the read model,
+	// but a relying party only learns about it from a freshly published CRL (or
+	// an OCSP answer derived from the same projection). Without this the
+	// scheduled sweep is the only thing that eventually republishes, so a
+	// KEY-COMPROMISE revocation — the most urgent kind there is, and the reason
+	// this path exists — stayed invisible to verifiers for up to a full CRL
+	// period. Every other revocation path already publishes here.
+	if err := d.publishTenantCRL(ctx, m.TenantID); err != nil {
+		return err
+	}
 	return syncIncidentMigrationState(ctx, d.store, d.orch, d.audit, m.TenantID, updated)
 }

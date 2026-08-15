@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 
 	"trstctl.com/trstctl/internal/events"
 )
@@ -44,13 +45,65 @@ type vaultCompatSnapshot struct {
 // truth: every read deterministically replays tenant-filtered events (AN-1/AN-2).
 type vaultCompatState struct {
 	log *events.Log
+
+	// mu/cache memoize the projection per tenant against the log head it was
+	// built from. The projection itself is still a deterministic replay — this
+	// only avoids REDOING it when nothing has been appended.
+	mu    sync.Mutex
+	cache map[string]cachedVaultSnapshot
+}
+
+// cachedVaultSnapshot is a projection plus the log sequence it reflects.
+type cachedVaultSnapshot struct {
+	snapshot vaultCompatSnapshot
+	atSeq    uint64
 }
 
 func newVaultCompatState(log *events.Log) *vaultCompatState {
-	return &vaultCompatState{log: log}
+	return &vaultCompatState{log: log, cache: map[string]cachedVaultSnapshot{}}
 }
 
+// snapshot returns the tenant's compatibility projection.
+//
+// It is memoized against the event log's head sequence because it sits INSIDE
+// the authorization path of every Vault-compatible request, and it was replaying
+// the entire event log from sequence 0 each time. On a deployment with any real
+// history that turns every request into an O(all events) scan, and the cost
+// grows forever — an availability cliff that arrives silently with age rather
+// than with load.
+//
+// Correctness is unchanged: the cache is keyed on the log head, so any appended
+// event invalidates it. Reusing a projection while the log has not moved cannot
+// observe a different state than replaying would.
 func (s *vaultCompatState) snapshot(ctx context.Context, tenantID string) (vaultCompatSnapshot, error) {
+	if s != nil && s.log != nil {
+		head, err := s.log.LastSequence(ctx)
+		if err == nil {
+			s.mu.Lock()
+			cached, ok := s.cache[tenantID]
+			s.mu.Unlock()
+			if ok && cached.atSeq == head {
+				return cached.snapshot, nil
+			}
+			built, err := s.replaySnapshot(ctx, tenantID)
+			if err != nil {
+				return built, err
+			}
+			s.mu.Lock()
+			if s.cache == nil {
+				s.cache = map[string]cachedVaultSnapshot{}
+			}
+			s.cache[tenantID] = cachedVaultSnapshot{snapshot: built, atSeq: head}
+			s.mu.Unlock()
+			return built, nil
+		}
+		// LastSequence failed: fall through to an uncached replay rather than
+		// failing the request, so a head-read blip cannot deny authorization.
+	}
+	return s.replaySnapshot(ctx, tenantID)
+}
+
+func (s *vaultCompatState) replaySnapshot(ctx context.Context, tenantID string) (vaultCompatSnapshot, error) {
 	state := vaultCompatSnapshot{
 		mounts:   map[string]vaultCompatMount{},
 		policies: map[string]vaultCompatPolicy{},

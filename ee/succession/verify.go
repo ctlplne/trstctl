@@ -131,7 +131,18 @@ func VerifyChain(genesis GenesisRecord, chain []SuccessionRecord, lastAccepted u
 		prevPub = rec.Fields.SuccessorPub
 		prevAlg = rec.Fields.SuccessorAlg
 	}
-	if len(chain) > 0 && prevEpoch <= lastAccepted {
+	// The downgrade check must NOT be skipped for an empty chain. That exemption
+	// was the whole attack: a relying party that has durably accepted epoch 5
+	// resolves a chainless presentation to the GENESIS key at epoch 0
+	// (rpverify.Verify seeds its Result from the genesis record and only advances
+	// it when len(chain) > 0), so omitting the chain rolls the identity back to a
+	// key that may have been rotated away precisely because it was compromised.
+	// Presenting nothing was strictly stronger than presenting a stale chain.
+	//
+	// lastAccepted == 0 means "never accepted anything", which is legitimate first
+	// contact — federation and issuer both call with 0 by design — so the check
+	// engages only once the verifier has something to be rolled back from.
+	if lastAccepted > 0 && prevEpoch <= lastAccepted {
 		return ErrDowngrade
 	}
 	return nil

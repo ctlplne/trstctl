@@ -117,7 +117,14 @@ func Sweep(ctx context.Context, intent DiscoveryScanIntent) (DiscoveryReport, er
 			netscan.WithAllowRFC1918Targets(intent.AllowRFC1918 || intent.AllowReservedRanges),
 			netscan.WithAllowLoopbackTargets(intent.AllowLoopback || intent.AllowReservedRanges),
 		)
-		rep := netscan.New(sink, opts...).Scan(ctx, targets)
+		// Close the scanner: it owns a worker pool, and dropping the reference
+		// without closing leaks those goroutines for every discovery job the
+		// relay runs. The SSH branch below already does this — the TLS branch
+		// chained .Scan() straight off the constructor, so there was no handle
+		// left to close.
+		scanner := netscan.New(sink, opts...)
+		defer scanner.Close()
+		rep := scanner.Scan(ctx, targets)
 		return DiscoveryReport{
 			Mode: DiscoveryModeTLS, Findings: sortFindings(sink.findings),
 			Targets: rep.Targets, Discovered: rep.Discovered,

@@ -547,6 +547,16 @@ func (s *Service) ConsentBreakGlass(ctx context.Context, tenantID, grantID, subj
 		return BreakGlassGrant{}, ErrBreakGlassAlreadyResolved
 	}
 
+	// Every decision must be attributable, denial included. The approve path
+	// below already refused an empty subject; the denial path did not, so a
+	// caller with no identity could kill a break-glass grant and leave
+	// DeniedBy blank. Denial is the cheap direction — one refusal is enough to
+	// stop emergency access — which makes an anonymous veto during an incident
+	// the more dangerous of the two, not the less.
+	if subject == "" {
+		return BreakGlassGrant{}, ErrForbidden
+	}
+
 	// A denial by ANY approver, at either stage, kills the grant. One person
 	// refusing is enough to stop emergency access even if another already
 	// consented — two-person control protects access, not denial.
@@ -581,11 +591,8 @@ func (s *Service) ConsentBreakGlass(ctx context.Context, tenantID, grantID, subj
 		return grant, nil
 	}
 
-	// Two-person control on approval: a real approver identity, never the
-	// requester, and the two approvers must be distinct operators.
-	if subject == "" {
-		return BreakGlassGrant{}, ErrForbidden
-	}
+	// Two-person control on approval: never the requester, and the two approvers
+	// must be distinct operators. A non-empty identity was required above.
 	if subject == grant.OperatorID {
 		return BreakGlassGrant{}, ErrBreakGlassConsentByRequester
 	}

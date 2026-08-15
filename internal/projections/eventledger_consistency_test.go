@@ -123,6 +123,8 @@ var projectionEventConstants = map[string]string{
 	projections.EventApprovalRequested:                        "EventApprovalRequested",
 	projections.EventApprovalDecisionRecorded:                 "EventApprovalDecisionRecorded",
 	projections.EventApprovalStatusChanged:                    "EventApprovalStatusChanged",
+	projections.EventIdentityRenewalFailed:                    "EventIdentityRenewalFailed",
+	projections.EventIdentityRenewalRecovered:                 "EventIdentityRenewalRecovered",
 }
 
 // TestEventLedgerConstantsMatchProjector asserts every event type the ledger
@@ -177,9 +179,28 @@ func TestEventTypesForFeatureActionResolves(t *testing.T) {
 	if types, ok := projections.EventTypesForFeatureAction("F6", "revoke"); !ok || len(types) != 1 || types[0] != projections.EventIdentityRevoked {
 		t.Fatalf("F6/revoke = %v ok=%v, want [%s]", types, ok, projections.EventIdentityRevoked)
 	}
-	// A renewal action emits two phases.
-	if types, ok := projections.EventTypesForFeatureAction("F6", "renew"); !ok || len(types) != 2 {
-		t.Fatalf("F6/renew = %v ok=%v, want two event types", types, ok)
+	// A renewal emits four phases now, not two: start, success, failure, and the
+	// operator accepting that the existing certificate stands. The last two exist
+	// because every other exit from renewing fires an external side effect, so
+	// without them a failed renewal had to re-deploy a certificate that was never
+	// renewed, be revoked, or sit in renewing forever.
+	//
+	// Asserted as a set rather than a count, so adding a phase has to be a
+	// deliberate edit here rather than bumping a number.
+	wantRenew := map[string]bool{
+		projections.EventIdentityRenewing:         true,
+		projections.EventIdentityRenewed:          true,
+		projections.EventIdentityRenewalFailed:    true,
+		projections.EventIdentityRenewalRecovered: true,
+	}
+	types, ok := projections.EventTypesForFeatureAction("F6", "renew")
+	if !ok || len(types) != len(wantRenew) {
+		t.Fatalf("F6/renew = %v ok=%v, want exactly %d event types", types, ok, len(wantRenew))
+	}
+	for _, got := range types {
+		if !wantRenew[got] {
+			t.Errorf("F6/renew includes unexpected event %q", got)
+		}
 	}
 	// Feature alone widens to all that feature's event types (more than one action).
 	if types, ok := projections.EventTypesForFeatureAction("F8", ""); !ok || len(types) < 2 {

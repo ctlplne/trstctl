@@ -12,6 +12,7 @@ import (
 	"path"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -196,10 +197,28 @@ func (s *sandbox) readFile(p string, limit int) ([]byte, uint32) {
 	return buf[:n], statusOK
 }
 
-// dial performs a granted outbound connection. The grant's authority constraints
-// ARE the allowlist here: the plugin may reach exactly the hosts it was granted
-// and nothing else, which is a stronger guarantee than an SSRF heuristic because
-// it is a positive list rather than a set of refused destinations.
+// dial performs a granted outbound connection.
+//
+// The grant's authority constraints are a positive allowlist of NAMES, and that
+// is not the same thing as an allowlist of destinations. Allows() matches the
+// string the plugin passed; DialContext then resolves that name at connect time.
+// A plugin author who controls the DNS for a granted hostname simply points it at
+// 169.254.169.254 and the grant that reads "may reach my vendor API" delivers the
+// cloud metadata service. No rebinding race is even needed — one A record does
+// it. The comment here used to claim this was stronger than an SSRF check for
+// being a positive list, which had it backwards.
+//
+// pluginDialControl closes that: it runs after resolution and immediately before
+// connect, on the actual IP the socket will use, for every attempt. Both checks
+// apply — the grant decides which names a plugin may name, and this decides which
+// addresses those names are allowed to resolve to.
+//
+// It refuses the reserved ranges no legitimate grant targets — cloud metadata at
+// 169.254.169.254 above all, plus link-local, CGNAT, multicast and unspecified —
+// while still permitting loopback and RFC1918/ULA. That asymmetry is deliberate:
+// granting a plugin 10.0.0.5:8200 to reach an internal Vault is an explicit
+// operator decision this must not override, whereas nothing an operator writes in
+// a grant is a decision to hand a third-party plugin the instance credentials.
 func (s *sandbox) dial(ctx context.Context, addr string) uint32 {
 	if !s.grant.Allows(CapNetDial, addr) {
 		return s.refuse(errDenied)
@@ -207,7 +226,7 @@ func (s *sandbox) dial(ctx context.Context, addr string) uint32 {
 	if _, _, err := net.SplitHostPort(addr); err != nil {
 		return s.refuse(fmt.Errorf("pluginhost: dial %q: address must be host:port: %w", addr, err))
 	}
-	d := net.Dialer{Timeout: dialTimeout}
+	d := net.Dialer{Timeout: dialTimeout, Control: pluginDialControl}
 	conn, err := d.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return s.refuse(err)
@@ -215,6 +234,54 @@ func (s *sandbox) dial(ctx context.Context, addr string) uint32 {
 	_ = conn.Close()
 	atomic.AddInt64(&s.stats.dials, 1)
 	return statusOK
+}
+
+// errDialAddressBlocked is returned for a resolved address a plugin may not reach
+// regardless of what its grant names.
+var errDialAddressBlocked = errors.New("pluginhost: refusing to connect to a reserved address")
+
+// pluginDialControl validates the resolved address of a granted dial.
+//
+// This deliberately reimplements the small predicate rather than calling
+// internal/netsec, which owns the same logic. internal/connector must stay
+// host-neutral — crypto boundary, pluginhost and stdlib only, enforced by
+// TestConnectorCoreStaysHostNeutral — and connector reaches pluginhost, so an
+// import of netsec here drags host networking policy into the agent's portable
+// core. Fifteen lines of net.IP predicates is the cheaper price.
+// TestPluginDialControlAgreesWithNetsec pins the two against each other so they
+// cannot drift.
+//
+// Loopback and RFC1918/ULA are permitted: granting a plugin 10.0.0.5:8200 to
+// reach an internal Vault is an explicit operator decision this must not
+// override. The reserved ranges below are refused unconditionally, because
+// nothing an operator writes in a grant is a decision to hand third-party code
+// the instance credentials.
+func pluginDialControl(_ string, address string, _ syscall.RawConn) error {
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return fmt.Errorf("%w: %v", errDialAddressBlocked, err)
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return fmt.Errorf("%w: %q is not an IP address", errDialAddressBlocked, host)
+	}
+	if v4 := ip.To4(); v4 != nil {
+		ip = v4
+	}
+	// Link-local covers cloud metadata at 169.254.169.254 and 169.254.170.2.
+	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() ||
+		ip.IsMulticast() || ip.IsInterfaceLocalMulticast() {
+		return fmt.Errorf("%w: %s", errDialAddressBlocked, host)
+	}
+	// Carrier-grade NAT (RFC 6598), which IsPrivate does not cover.
+	if v4 := ip.To4(); v4 != nil && v4[0] == 100 && v4[1]&0xc0 == 64 {
+		return fmt.Errorf("%w: %s", errDialAddressBlocked, host)
+	}
+	// EC2's IPv6 metadata address sits inside ULA, so it needs naming explicitly.
+	if ip.Equal(net.ParseIP("fd00:ec2::254")) {
+		return fmt.Errorf("%w: %s", errDialAddressBlocked, host)
+	}
+	return nil
 }
 
 // refuse records a refusal and maps it to the ABI status the guest sees. A grant

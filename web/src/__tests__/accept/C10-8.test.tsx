@@ -4,6 +4,22 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { CommandPalette } from "@/components/CommandPalette";
 
+// CommandPalette filters its commands by the caller's permissions, and this test
+// exercises a permission-gated quick action. It used to pass no user at all and
+// relied on hasPermission failing open; auth_and_dashboards.test.tsx asserts the
+// opposite direction (an unpermitted operator must NOT see this action), so the
+// gating is deliberate and the operator here is stated explicitly.
+const fullyPermittedOperator = {
+  subject: "test-operator",
+  tenant_id: "t1",
+  email: "operator@example.test",
+  roles: ["admin"],
+  permissions: ["*"],
+};
+
+
+
+
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     agents: vi.fn(),
@@ -25,7 +41,7 @@ function renderPalette(onClose = vi.fn()) {
   return render(
     <MemoryRouter initialEntries={["/"]}>
       <Routes>
-        <Route path="/" element={<CommandPalette open onClose={onClose} />} />
+        <Route path="/" element={<CommandPalette open onClose={onClose} user={fullyPermittedOperator} />} />
         <Route path="/discovery" element={<h1>Discovery destination</h1>} />
         <Route path="/request" element={<h1>Request destination</h1>} />
       </Routes>

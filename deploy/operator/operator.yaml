@@ -42,6 +42,25 @@ rules:
   - apiGroups: ["trstctl.com"]
     resources: ["trstctlcontrolplanes/status", "trstctlsecretsyncs/status", "trstctlsecretinjections/status"]
     verbs: ["get", "update", "patch"]
+---
+# Workload and Secret access is NAMESPACED, not cluster-wide.
+#
+# These rules used to live in the ClusterRole above. Cluster-wide
+# `deployments: create` together with cluster-wide `secrets: get` is a
+# cluster-admin-equivalent escalation: create a pod bound to any service
+# account, then read the token it mounts. The operator never needed it —
+# internal/operator/controller.go states it reconciles only "the namespace it
+# runs in (the in-cluster service-account namespace)", and client.go derives
+# that namespace from its own service-account mount.
+#
+# Deployments that reconcile additional namespaces should copy this Role and
+# RoleBinding into each of them rather than promoting them back to cluster scope.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: trstctl-operator
+  namespace: trstctl-system
+rules:
   - apiGroups: ["apps"]
     resources: ["deployments"]
     verbs: ["get", "list", "watch", "create", "update", "patch"]
@@ -54,6 +73,20 @@ rules:
   - apiGroups: ["coordination.k8s.io"]
     resources: ["leases"]
     verbs: ["get", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: trstctl-operator
+  namespace: trstctl-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: trstctl-operator
+subjects:
+  - kind: ServiceAccount
+    name: trstctl-operator
+    namespace: trstctl-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

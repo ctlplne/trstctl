@@ -55,7 +55,7 @@ const owner = {
 describe("AUD-44 ownership readiness console", () => {
   beforeEach(() => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
-    apiMock.me.mockResolvedValue({ subject: "operator-44", tenant_id: "t1", email: "operator@example.test" });
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "operator-44", tenant_id: "t1", email: "operator@example.test" });
     apiMock.owners.mockResolvedValue([owner]);
     apiMock.ownershipAttribution.mockResolvedValue({
       generated_at: "2026-08-12T10:00:00Z",

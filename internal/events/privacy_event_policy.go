@@ -1831,6 +1831,21 @@ func subjectTokenBoundaryAfter(value string, index int) bool {
 	return !isSubjectTokenRune(r)
 }
 
+// isSubjectTokenRune reports whether r can sit INSIDE a subject token, i.e. does
+// not terminate it. Separators are excluded so a subject joined to a prefix or
+// suffix by one is still a complete token.
+//
+// '-' is a separator, not an identifier-internal rune. Slugs are built as
+// "<label>-<identity>" (provider tenant slugs are literally "customer-" + the
+// operator email), and treating '-' as token-internal meant such a value had no
+// left-hand boundary, so a data-subject erasure silently left the identity in
+// place while reporting success — permanent, because AN-2 makes the event log
+// append-only. ':' was already a boundary, which is what made the documented
+// "delegate:<subject>" form work; '-' now behaves the same way.
+//
+// '.', '@' and '_' stay token-internal: they are structural inside the identity
+// itself (local parts, domains, SPIFFE paths), so treating them as separators
+// would let a SHORT subject match a fragment of an unrelated value.
 func isSubjectTokenRune(r rune) bool {
-	return unicode.IsLetter(r) || unicode.IsNumber(r) || r == '_' || r == '-' || r == '.' || r == '@'
+	return unicode.IsLetter(r) || unicode.IsNumber(r) || r == '_' || r == '.' || r == '@'
 }

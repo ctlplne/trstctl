@@ -20,6 +20,7 @@ type memFS struct {
 	writeErr      map[string]error
 	writeErrAfter map[string]int
 	removeErr     map[string]error
+	readErr       map[string]error
 }
 
 func newMemFS() *memFS {
@@ -29,10 +30,14 @@ func newMemFS() *memFS {
 		writeErr:      map[string]error{},
 		writeErrAfter: map[string]int{},
 		removeErr:     map[string]error{},
+		readErr:       map[string]error{},
 	}
 }
 
 func (m *memFS) ReadFile(p string) ([]byte, error) {
+	if err, ok := m.readErr[p]; ok {
+		return nil, err
+	}
 	b, ok := m.files[p]
 	if !ok {
 		return nil, os.ErrNotExist
@@ -77,6 +82,13 @@ func (m *memFS) failWritesAfter(path string, successfulWrites int, err error) {
 
 func (m *memFS) failRemove(path string, err error) {
 	m.removeErr[path] = err
+}
+
+// failRead makes a file that EXISTS unreadable — permission denied, an I/O
+// error, a race with another writer. Distinct from absence, which is what the
+// applier used to conflate it with.
+func (m *memFS) failRead(path string, err error) {
+	m.readErr[path] = err
 }
 
 type fakeReloader struct {

@@ -52,19 +52,30 @@ func buildChain(t *testing.T, tenantID string, hops []testHop) ([]delegation.Rec
 	var envs []delegation.RecordEnvelope
 	var parentDigest []byte
 	var rootDER []byte
+	// Every hop's key is generated UP FRONT, because a record must now commit to
+	// the key its delegate will sign with — which means hop i needs hop i+1's key
+	// before it can be signed.
+	signers := make([]crypto.Signer, len(hops))
+	delegatorDERs := make([][]byte, len(hops))
+	for i := range hops {
+		signers[i], delegatorDERs[i] = signerDER(t)
+	}
 	for i, h := range hops {
-		s, der := signerDER(t)
+		s, der := signers[i], delegatorDERs[i]
 		if i == 0 {
 			rootDER = der
 		}
 		rec := delegation.Record{
-			TenantID:       tenantID,
-			DelegatorID:    h.delegatorID,
-			DelegatorKey:   delegation.KeyRef{ID: h.delegatorKeyID, Algorithm: "ECDSA-P256"},
-			DelegateID:     h.delegateID,
-			Authority:      h.authority,
-			DepthRemaining: h.depthRemaining,
-			Validity:       h.validity,
+			TenantID:     tenantID,
+			DelegatorID:  h.delegatorID,
+			DelegatorKey: delegation.KeyRef{ID: h.delegatorKeyID, Algorithm: "ECDSA-P256"},
+			DelegateID:   h.delegateID,
+			// Commit to the key the NEXT hop signs with; the last hop delegates to
+			// nobody and so commits to nothing.
+			DelegateKeyThumbprint: nextHopKeyThumbprint(delegatorDERs, i),
+			Authority:             h.authority,
+			DepthRemaining:        h.depthRemaining,
+			Validity:              h.validity,
 		}
 		if i == 0 {
 			rec.RootAnchor = true
@@ -312,4 +323,11 @@ func (r *auditRecorder) find(eventType string) (auditEvent, bool) {
 		}
 	}
 	return auditEvent{}, false
+}
+
+func nextHopKeyThumbprint(delegatorDERs [][]byte, i int) []byte {
+	if i+1 >= len(delegatorDERs) {
+		return nil
+	}
+	return delegation.DelegateKeyThumbprintOf(delegatorDERs[i+1])
 }

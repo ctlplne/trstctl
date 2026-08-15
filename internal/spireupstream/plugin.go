@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -210,7 +211,16 @@ func (c *Config) validate() error {
 		return status.Errorf(codes.InvalidArgument, "endpoint must be an absolute http(s) URL")
 	}
 	switch u.Scheme {
-	case "http", "https":
+	case "https":
+	case "http":
+		// This endpoint is the trust domain's UPSTREAM AUTHORITY: whatever answers
+		// it decides what the whole SPIFFE trust domain considers a valid root. Over
+		// plaintext, anyone on the path becomes that authority. Loopback is allowed
+		// because there is no network to be on-path of.
+		if !isLoopbackHost(u.Hostname()) {
+			return status.Errorf(codes.InvalidArgument,
+				"endpoint %q uses plaintext http to a non-loopback host; the upstream authority decides the trust domain's roots, so an on-path attacker could become it — use https", u.Host)
+		}
 	default:
 		return status.Errorf(codes.InvalidArgument, "endpoint scheme %q is not supported", u.Scheme)
 	}
@@ -275,4 +285,17 @@ func zero(b []byte) {
 	for i := range b {
 		b[i] = 0
 	}
+}
+
+// isLoopbackHost reports whether host addresses only this machine, where a
+// plaintext upstream-authority endpoint has no network path to attack.
+func isLoopbackHost(host string) bool {
+	host = strings.TrimSpace(host)
+	if host == "localhost" {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback()
+	}
+	return false
 }

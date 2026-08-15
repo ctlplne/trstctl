@@ -61,7 +61,7 @@ function approvalRequest(overrides: Partial<PendingApprovalRequest> = {}): Pendi
 describe("dedicated approvals inbox", () => {
   beforeEach(() => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
-    apiMock.me.mockResolvedValue({ subject: "ra-1", tenant_id: "t1", email: "ra@example.test" });
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "ra-1", tenant_id: "t1", email: "ra@example.test" });
     apiMock.approvalRequests.mockResolvedValue([]);
     apiMock.approveApprovalRequest.mockResolvedValue({
       id: "approval-request-1",
@@ -236,7 +236,7 @@ describe("dedicated approvals inbox", () => {
   });
 
   it("disables self-approval with an accessible explanation", async () => {
-    apiMock.me.mockResolvedValue({ subject: "dev-1", tenant_id: "t1", email: "dev@example.test" });
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "dev-1", tenant_id: "t1", email: "dev@example.test" });
     apiMock.approvalRequests.mockResolvedValue([approvalRequest({ resource_name: "own-request", requester: "dev@example.test", approval_count: 0 })]);
     renderAt("/approvals");
 

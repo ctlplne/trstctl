@@ -408,6 +408,18 @@ type machineLoginResponse struct {
 // tenant-scoped method; token credentials MAC-bind the tenant and this handler
 // rejects any header/credential mismatch (WIRE-002, AN-1).
 func (a *API) machineLogin(w http.ResponseWriter, r *http.Request) {
+	// This is an unauthenticated credential-verification endpoint, which makes it
+	// a brute-force surface: a caller can guess workload credentials as fast as
+	// the network allows. Every other public/special route in the API runs this
+	// check first — the six in auth.go do — and this one did not, which is the
+	// kind of gap that only shows up when someone lists the public routes.
+	//
+	// It runs before the credential is looked at, so a refusal costs nothing and
+	// is attributed to the source and tenant hint rather than disappearing into a
+	// generic rejection.
+	if !a.allowSpecialRouteRequest(w, r, specialRouteAbuseRequest{}) {
+		return
+	}
 	if a.secrets == nil {
 		a.writeProblem(w, secretsDisabledProblem())
 		return

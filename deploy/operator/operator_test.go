@@ -188,11 +188,37 @@ func TestOperatorManifestHasRBACAndIsolatedDeployment(t *testing.T) {
 			if !clusterRoleCoversGroup(byKind["ClusterRole"][0], "trstctl.com") {
 				t.Error("operator.yaml ClusterRole does not grant rules on the trstctl.com API group (its CRD)")
 			}
-			if !clusterRoleCoversGroup(byKind["ClusterRole"][0], "coordination.k8s.io") {
-				t.Error("operator.yaml ClusterRole does not grant rules on coordination.k8s.io Leases for leader election")
+		}
+		// Leases, Secrets and workload resources are NAMESPACED, not cluster-wide,
+		// and this asserts that positively rather than merely tolerating it.
+		//
+		// The operator reconciles exactly one namespace: cmd/trstctl-operator
+		// resolves --namespace or its own pod namespace into Options.Namespace, and
+		// every path internal/operator builds is
+		// "/api[s]/.../namespaces/<that one>/...". There is no cluster-wide list
+		// anywhere in the package. Granting cluster-wide Secret access to a
+		// controller that only ever addresses one namespace hands an attacker who
+		// compromises it every Secret in the cluster for nothing in return.
+		if len(byKind["Role"]) == 0 || len(byKind["RoleBinding"]) == 0 {
+			t.Error("operator.yaml has no namespaced Role/RoleBinding; Leases, Secrets and workload " +
+				"restarts must not be granted cluster-wide to a single-namespace controller")
+		}
+		for _, group := range []string{"coordination.k8s.io", "", "apps"} {
+			granted := false
+			for _, role := range byKind["Role"] {
+				if clusterRoleCoversGroup(role, group) {
+					granted = true
+				}
 			}
-			if !clusterRoleCoversGroup(byKind["ClusterRole"][0], "") {
-				t.Error("operator.yaml ClusterRole does not grant rules on core/v1 Secrets for TrstctlSecretSync projection")
+			if !granted {
+				t.Errorf("operator.yaml namespaced Role does not grant rules on API group %q; "+
+					"the operator needs it for leader election, Secret projection and workload restarts", group)
+			}
+			for _, cr := range byKind["ClusterRole"] {
+				if clusterRoleCoversGroup(cr, group) {
+					t.Errorf("operator.yaml ClusterRole grants API group %q cluster-wide; "+
+						"the operator only ever addresses Options.Namespace, so this belongs in the Role", group)
+				}
 			}
 		}
 	}

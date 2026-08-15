@@ -6,11 +6,65 @@ metadata:
   labels:
     app.kubernetes.io/name: trstctl-agent
 ---
-# The agent writes TLS Secrets, acts as a cert-manager external issuer, fulfils
-# trstctl-native Certificate resources, signs approved native Kubernetes
+# Secret access is NAMESPACED (this Role), not cluster-wide.
+#
+# It used to sit in the ClusterRole below, which gave a DaemonSet on every node
+# get/list/watch over EVERY Secret in the cluster — including TLS private keys
+# belonging to workloads that have nothing to do with trstctl, while the comment
+# there claimed "no private key reads".
+#
+# Namespaced is sufficient because the agent's Secret writes are all scoped to
+# the single namespace Reconcile is called with: issuer_controller.go takes one
+# `namespace` argument and native_certificate.go passes that same value straight
+# to NewSecretDestination. Nothing walks a list of namespaces.
+#
+# ConfigMaps are NOT in this Role, and that distinction is load-bearing —
+# see the ClusterRole below.
+#
+# Deployments that fulfil certificates in additional namespaces should copy this
+# Role + RoleBinding into each of those namespaces rather than promoting it back
+# to cluster scope.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: trstctl-agent
+  namespace: trstctl
+  labels:
+    app.kubernetes.io/name: trstctl-agent
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: trstctl-agent
+  namespace: trstctl
+  labels:
+    app.kubernetes.io/name: trstctl-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: trstctl-agent
+subjects:
+  - kind: ServiceAccount
+    name: trstctl-agent
+    namespace: trstctl
+---
+# The agent acts as a cert-manager external issuer, fulfils trstctl-native
+# Certificate resources, signs approved native Kubernetes
 # CertificateSigningRequests, and distributes public CA trust bundles into
-# ConfigMaps. It reads requests and updates only their status. Least privilege —
-# no delete, no private key reads, no unrelated resources.
+# ConfigMaps. It reads requests and updates only their status. No delete, no
+# unrelated resources.
+#
+# ConfigMaps stay cluster-wide on purpose, unlike Secrets. Trust-bundle
+# distribution (CAP-K8S-07) is a genuine fan-out: distributeTrustBundle reads
+# spec.target.namespaces off each TrustBundle CR and writes a ConfigMap into
+# every namespace listed, which is not the single namespace Reconcile was called
+# with. Narrowing this to a namespaced Role silently stops trust bundles reaching
+# every namespace but the agent's own — the resources here carry no private key
+# material, which is what made the Secret grant the dangerous one.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -19,15 +73,11 @@ metadata:
     app.kubernetes.io/name: trstctl-agent
 rules:
   - apiGroups: [""]
-    resources: ["secrets"]
-    verbs: ["get", "list", "watch", "create", "update", "patch"]
-  - apiGroups: [""]
     resources: ["configmaps"]
     verbs: ["get", "list", "watch", "create", "update", "patch"]
   # Leader election for the cluster-scoped issuer controller: the agent is a
   # DaemonSet, so one Lease elects a single reconciler instead of every node
-  # reconciling the same cluster-scoped objects. Namespaced to the agent's own
-  # namespace, and deliberately without delete.
+  # reconciling the same cluster-scoped objects. Deliberately without delete.
   - apiGroups: ["coordination.k8s.io"]
     resources: ["leases"]
     verbs: ["get", "create", "update"]

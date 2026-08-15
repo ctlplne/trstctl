@@ -17,8 +17,17 @@ import (
 // directory layout inside a tracked file. Vendor the input under testdata/ or
 // derive it from tracked source instead.
 var (
-	hermeticRootEscape  = regexp.MustCompile(`filepath\.(Join|Abs)\(\s*(root|moduleRoot\(t\))\s*,\s*"\.\."`)
-	hermeticMachinePath = regexp.MustCompile(`"/(Users|home)/`)
+	hermeticRootEscape = regexp.MustCompile(`filepath\.(Join|Abs)\(\s*(root|moduleRoot\(t\))\s*,\s*"\.\."`)
+	// A developer's local layout is /Users/NAME/... or /home/NAME/... : the
+	// marker is followed by a NON-EMPTY segment and then another separator.
+	// (This comment deliberately omits the leading quote the pattern needs, so
+	// the guard does not flag its own source.)
+	// The trailing `[^"/]+/` is what makes this a filesystem path rather than a
+	// URL path segment — RFC 7644 puts the SCIM resource collection at "/Users/",
+	// and ee/provider/scim.go legitimately carries that exact literal in
+	// strings.HasPrefix/TrimPrefix and Location headers. Matching the bare prefix
+	// flagged the SCIM protocol endpoint as a machine path.
+	hermeticMachinePath = regexp.MustCompile(`"/(Users|home)/[^"/]+/`)
 )
 
 func TestHermetic_EESourcesResolveInputsInsideModule(t *testing.T) {

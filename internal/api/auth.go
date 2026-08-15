@@ -6,12 +6,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf16"
+	"unicode/utf8"
 
 	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/auth"
@@ -151,13 +154,95 @@ type ldapLoginRequest struct {
 
 type ldapPassword []byte
 
+// UnmarshalJSON decodes the JSON string into bytes WITHOUT going through a Go
+// string.
+//
+// The obvious implementation — unmarshal into a string, then copy to []byte —
+// silently defeats wipe() below. A Go string is immutable, so that copy of the
+// password stays on the heap until the GC happens to collect it, and nothing can
+// zero it in the meantime. The whole reason this type exists is AN-8's
+// byte-backed, zeroable key material; an intermediate string is exactly the
+// thing it is meant to avoid.
+//
+// One residual worth naming: raw itself is the decoder's buffer over the request
+// body and still holds the password. Wiping that is the HTTP layer's problem,
+// not this type's, and it is a mutable []byte, so it remains addressable.
 func (p *ldapPassword) UnmarshalJSON(raw []byte) error {
-	var s string
-	if err := json.Unmarshal(raw, &s); err != nil {
-		return err
+	if len(raw) == 4 && string(raw) == "null" {
+		*p = (*p)[:0]
+		return nil
 	}
-	*p = append((*p)[:0], []byte(s)...)
+	if len(raw) < 2 || raw[0] != '"' || raw[len(raw)-1] != '"' {
+		return fmt.Errorf("api: password must be a JSON string")
+	}
+	body := raw[1 : len(raw)-1]
+	out := (*p)[:0]
+	for i := 0; i < len(body); {
+		c := body[i]
+		if c != '\\' {
+			out = append(out, c)
+			i++
+			continue
+		}
+		i++
+		if i >= len(body) {
+			return fmt.Errorf("api: password has a trailing escape")
+		}
+		switch body[i] {
+		case '"', '\\', '/':
+			out = append(out, body[i])
+			i++
+		case 'b':
+			out, i = append(out, '\b'), i+1
+		case 'f':
+			out, i = append(out, '\f'), i+1
+		case 'n':
+			out, i = append(out, '\n'), i+1
+		case 'r':
+			out, i = append(out, '\r'), i+1
+		case 't':
+			out, i = append(out, '\t'), i+1
+		case 'u':
+			r, width, err := decodeJSONUnicodeEscape(body[i:])
+			if err != nil {
+				return err
+			}
+			out = utf8.AppendRune(out, r)
+			i += width
+		default:
+			return fmt.Errorf("api: password has an invalid escape %q", body[i])
+		}
+	}
+	*p = out
 	return nil
+}
+
+// decodeJSONUnicodeEscape reads a \uXXXX escape (and its low surrogate, when the
+// first is a high surrogate) from the start of s, returning the rune and how many
+// bytes were consumed including the leading "u".
+func decodeJSONUnicodeEscape(s []byte) (rune, int, error) {
+	if len(s) < 5 {
+		return 0, 0, fmt.Errorf("api: password has a truncated unicode escape")
+	}
+	first, err := strconv.ParseUint(string(s[1:5]), 16, 32)
+	if err != nil {
+		return 0, 0, fmt.Errorf("api: password has an invalid unicode escape")
+	}
+	r := rune(first)
+	if !utf16.IsSurrogate(r) {
+		return r, 5, nil
+	}
+	if len(s) < 11 || s[5] != '\\' || s[6] != 'u' {
+		return utf8.RuneError, 5, nil
+	}
+	second, err := strconv.ParseUint(string(s[7:11]), 16, 32)
+	if err != nil {
+		return 0, 0, fmt.Errorf("api: password has an invalid unicode escape")
+	}
+	if combined := utf16.DecodeRune(r, rune(second)); combined != utf8.RuneError {
+		return combined, 11, nil
+	}
+	return utf8.RuneError, 5, nil
 }
 
 func (p ldapPassword) wipe() {

@@ -22,6 +22,7 @@ import (
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
@@ -172,12 +173,21 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 		}
 		if cfg.CMP.Enabled {
 			sp.cmpTenant = firstNonEmpty(cfg.CMP.TenantID, tenantFallback)
+			// CMP's protection identity travels in the message's own extraCerts,
+			// so it authenticates nothing until it is chained to an
+			// operator-configured anchor. Unset anchors leave the mount refusing
+			// to enrol rather than enrolling anyone who can compose a message.
+			cmpAnchors, anchorErr := loadCMPClientTrustAnchors(cfg.CMPClientTrustAnchorFile)
+			if anchorErr != nil {
+				return nil, anchorErr
+			}
 			sp.cmp = cmp.New(cmp.Config{
-				Enroller:   enrollerAdapter{tenantID: sp.cmpTenant, issuer: issuer},
-				CACertDER:  raCertDER,
-				CAKeyPKCS8: raKeyPKCS8,
-				Pool:       pool,
-				Log:        s.log,
+				Enroller:              enrollerAdapter{tenantID: sp.cmpTenant, issuer: issuer},
+				CACertDER:             raCertDER,
+				CAKeyPKCS8:            raKeyPKCS8,
+				Pool:                  pool,
+				Log:                   s.log,
+				ClientTrustAnchorsDER: cmpAnchors,
 				// The licensed-aware verifier: subject algorithms the core
 				// parser cannot check verify through the licensed seam, the
 				// same binding EST carries (protection stays core-verified).
@@ -933,7 +943,16 @@ func (s *Server) buildSSHCA(ctx context.Context, tenantID string, pool *bulkhead
 	if err != nil {
 		return nil, err
 	}
-	return newSSHProtocol(ca, tenantID)
+	// The mutating SSH routes require certs:issue, the authority the protocol
+	// authz manifest already names for this surface. It is deliberately the
+	// ISSUE authority rather than EST's REQUEST authority: an SSH user
+	// certificate names its own principals, so minting one is an issuance
+	// decision, not a request for someone else to approve.
+	return newSSHProtocol(ca, tenantID, servedEnrollAuth{
+		store:    s.store,
+		tenantID: tenantID,
+		perm:     authz.CertsIssue,
+	})
 }
 
 // sshCASigner returns a signer-backed DigestSigner for the SSH CA key, generated in
@@ -1086,4 +1105,34 @@ func (a auditTimestamper) Timestamp(ctx context.Context, hashedMessage []byte) (
 				"enable protocols.tsa to countersign audit chain heads")
 	}
 	return a.srv.protocols.tsa.Timestamp(ctx, hashedMessage)
+}
+
+// loadCMPClientTrustAnchors reads the PEM bundle whose certificates a CMP
+// client's PKIMessage protection identity must chain to. An unset path yields no
+// anchors, which leaves the served CMP mount refusing to enrol (fail closed)
+// rather than accepting a self-signed protection identity.
+func loadCMPClientTrustAnchors(path string) ([][]byte, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return nil, nil
+	}
+	pemBytes, err := os.ReadFile(path) // #nosec G304 -- operator-configured trust bundle path (CWE-22)
+	if err != nil {
+		return nil, fmt.Errorf("server: read CMP client trust anchors: %w", err)
+	}
+	var anchors [][]byte
+	for rest := pemBytes; len(rest) > 0; {
+		var block *pem.Block
+		block, rest = pem.Decode(rest)
+		if block == nil {
+			break
+		}
+		if block.Type == "CERTIFICATE" {
+			anchors = append(anchors, append([]byte(nil), block.Bytes...))
+		}
+	}
+	if len(anchors) == 0 {
+		return nil, fmt.Errorf("server: CMP client trust anchor file %q contains no certificates", path)
+	}
+	return anchors, nil
 }

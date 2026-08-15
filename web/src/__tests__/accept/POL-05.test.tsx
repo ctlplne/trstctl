@@ -34,7 +34,7 @@ function renderAt(path: string) {
 describe("POL-05 Owners route polish", () => {
   beforeEach(() => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
-    apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1", email: "u@example.test" });
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "user-1", tenant_id: "t1", email: "u@example.test" });
     apiMock.owners.mockResolvedValue([
       { id: "owner-payments", name: "Payments team", kind: "team", email: "payments@example.test" },
       { id: "owner-platform", name: "Platform service", kind: "workload", email: "platform@example.test" },

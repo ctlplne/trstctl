@@ -9,6 +9,8 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"net/http"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -405,14 +407,21 @@ func TestServedMDMSCEPPolicyTrustAnchorLifecycleTRACE010(t *testing.T) {
 // signer, and returns a protected response carrying the leaf. It MUST fail pre-wiring
 // (no /cmp route) and PASS after.
 func TestServedCMPEndToEnd(t *testing.T) {
+	// The served CMP mount now requires the PKIMessage protection identity to
+	// chain to a configured anchor; without one it refuses to enrol rather than
+	// accepting any self-signed key pair. This client is self-signed, so it is
+	// its own anchor — which is what the deployment would configure for it.
+	clientCertDER, clientKeyPKCS8, csrDER := newSCEPClient(t, "device-cmp-1")
+	anchorFile := writeCMPAnchorPEM(t, clientCertDER)
+
 	h := newServedHarness(t, config.Protocols{
-		CMP: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
+		CMP:                      config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
+		CMPClientTrustAnchorFile: anchorFile,
 	})
 	if !protoContains(h.srv.ServedProtocols(), "cmp") {
 		t.Fatal("CMP is not reported as served — wire-in failed")
 	}
 
-	clientCertDER, clientKeyPKCS8, csrDER := newSCEPClient(t, "device-cmp-1")
 	reqDER, err := crypto.BuildCMPRequest(csrDER, clientCertDER, clientKeyPKCS8, []byte("served-cmp-txn"), []byte("nonce-1234567890"))
 	if err != nil {
 		t.Fatalf("build CMP request: %v", err)
@@ -585,4 +594,17 @@ func signedServedIntuneChallenge(t *testing.T, signer crypto.DigestSigner, paylo
 		t.Fatal(err)
 	}
 	return signingInput + "." + enc(sig)
+}
+
+// writeCMPAnchorPEM writes a DER certificate out as a PEM trust bundle and
+// returns its path, for tests that must configure the served CMP mount's client
+// trust anchors.
+func writeCMPAnchorPEM(t *testing.T, certDER []byte) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "cmp-client-anchors.pem")
+	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	if err := os.WriteFile(path, pemBytes, 0o600); err != nil {
+		t.Fatalf("write CMP anchor bundle: %v", err)
+	}
+	return path
 }

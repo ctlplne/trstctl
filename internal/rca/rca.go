@@ -12,6 +12,7 @@ package rca
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 
 	"trstctl.com/trstctl/internal/aimodel"
@@ -73,7 +74,17 @@ func (p *Pipeline) Gather(ctx context.Context, tenantID, subject, question strin
 			})
 		}
 	}
-	_ = auditsink.Emit(ctx, p.audit, nil, "rca.evidence.gathered", tenantID, []byte(`{"subject":"`+subject+`","items":`+itoa(len(ev.Items))+`}`))
+	// Marshal the payload rather than concatenating it. subject is caller-supplied,
+	// so a value containing a quote broke the JSON, and one shaped like
+	// `x","items":0}` let the caller rewrite the audit record of their own
+	// evidence gather — including suppressing the item count.
+	auditPayload, marshalErr := json.Marshal(struct {
+		Subject string `json:"subject"`
+		Items   int    `json:"items"`
+	}{Subject: subject, Items: len(ev.Items)})
+	if marshalErr == nil {
+		_ = auditsink.Emit(ctx, p.audit, nil, "rca.evidence.gathered", tenantID, auditPayload)
+	}
 	return ev, nil
 }
 

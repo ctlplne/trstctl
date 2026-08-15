@@ -36,7 +36,7 @@ function renderAt(path: string) {
 
 describe("UX-01 coverage route removal", () => {
   beforeEach(() => {
-    apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1", email: "u@example.test" });
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "user-1", tenant_id: "t1", email: "u@example.test" });
     apiMock.certificates.mockResolvedValue([]);
     apiMock.certificatePage.mockResolvedValue({ items: [] });
     apiMock.identities.mockResolvedValue([]);

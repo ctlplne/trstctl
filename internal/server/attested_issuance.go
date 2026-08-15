@@ -179,7 +179,17 @@ func (s *attestedIssuerService) IssueAttestedSVID(ctx context.Context, tenantID,
 	}
 
 	ttl := s.ttl(req.TTLSeconds)
-	idemKey := "attested-issue:" + idempotencyKey
+	// The attested subject is folded into the recovery key, not just the caller's
+	// Idempotency-Key. Today the only caller is the API handler, which runs this
+	// behind mutateDurableBound — that rejects an empty key and binds it to
+	// (principal, method, payload, public key, TTL), so a mismatched replay never
+	// reaches here. This lookup is the second line for the case where the durable
+	// record is gone but certificates remain, and on its own it trusted the raw
+	// key alone: any future caller reaching the service without that outer
+	// binding could recover a certificate minted for a DIFFERENT workload in the
+	// same tenant. Binding the subject costs nothing — a genuine retry presents
+	// the same attestation and so derives the same key.
+	idemKey := "attested-issue:" + att.Subject + ":" + idempotencyKey
 	recovered, err := recoverCertificatesByIssuanceKey(ctx, s.store, s.log, tenantID, idemKey)
 	if err != nil {
 		return api.AttestedSVID{}, err

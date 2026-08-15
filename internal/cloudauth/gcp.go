@@ -97,7 +97,11 @@ type gcpSTSResponse struct {
 
 func parseGCPSTSResponse(raw []byte, now time.Time) (Material, error) {
 	var decoded gcpSTSResponse
-	defer secret.Wipe(decoded.AccessToken)
+	// The closure matters: `defer secret.Wipe(decoded.AccessToken)` would
+	// evaluate the field NOW, while it is still nil, and wipe nothing — the
+	// decoder then allocates a fresh backing array that is never zeroed, so the
+	// access token survives in the heap for the process lifetime (AN-8).
+	defer func() { secret.Wipe(decoded.AccessToken) }()
 	if err := json.Unmarshal(raw, &decoded); err != nil {
 		return Material{}, errors.New("cloudauth: GCP STS returned malformed JSON")
 	}
@@ -139,7 +143,9 @@ func exchangeGCPServiceAccount(ctx context.Context, doer cloudhttp.Doer, endpoin
 		AccessToken secretjson.StringBytes `json:"accessToken"`
 		ExpireTime  string                 `json:"expireTime"`
 	}
-	defer secret.Wipe(decoded.AccessToken)
+	// Closure: the field is nil until the JSON below is decoded, so a bare defer
+	// would capture that nil and wipe nothing (AN-8).
+	defer func() { secret.Wipe(decoded.AccessToken) }()
 	if err := json.Unmarshal(raw, &decoded); err != nil {
 		return Material{}, errors.New("cloudauth: GCP impersonation returned malformed JSON")
 	}
