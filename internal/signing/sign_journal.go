@@ -12,6 +12,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/fsatomic"
 	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
 
@@ -200,12 +201,8 @@ func (ks *KeyStore) readSignOperation(operationID string) (signJournalRecord, er
 
 // syncDirectory makes the create/rename directory entry durable, not merely the
 // file contents. Without it, a power loss can forget the executing marker or the
-// completed replacement even though file.Sync succeeded.
-func syncDirectory(path string) error {
-	dir, err := os.Open(path) // #nosec G304 -- the signer's own keystore/journal directory from its config (CWE-22)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = dir.Close() }()
-	return dir.Sync()
-}
+// completed replacement even though file.Sync succeeded. The implementation
+// lives in the shared stdlib-only fsatomic package so the keystore, the sign
+// journal, and the transit keyring run ONE copy of the pattern (AUD-201
+// follow-up B4/V5).
+func syncDirectory(path string) error { return fsatomic.SyncDirectory(path) }

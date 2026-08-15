@@ -15,6 +15,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/fsatomic"
 )
 
 // The transit keyring used to live only in memory, so every key vanished on
@@ -155,6 +156,16 @@ func (s *Store) sealAndCommit(state persistedState) error {
 		_ = os.Remove(tmpName)
 		return fmt.Errorf("transit: write sealed keyring: %w", err)
 	}
+	// fsync the DATA before the rename and the DIRECTORY after it (B4/V5,
+	// matching the signer keystore's discipline): without the first, a power
+	// loss can make the rename durable before the bytes and commit a torn
+	// sealed file that Load fails closed on — blocking startup until an
+	// operator deletes the file, at which point the keys are gone anyway.
+	if err := syncKeyringFile(tmp); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return fmt.Errorf("transit: sync sealed keyring: %w", err)
+	}
 	if err := tmp.Close(); err != nil {
 		_ = os.Remove(tmpName)
 		return fmt.Errorf("transit: close sealed keyring: %w", err)
@@ -163,8 +174,19 @@ func (s *Store) sealAndCommit(state persistedState) error {
 		_ = os.Remove(tmpName)
 		return fmt.Errorf("transit: commit sealed keyring: %w", err)
 	}
+	if err := syncKeyringDir(s.dir); err != nil {
+		return fmt.Errorf("transit: sync keyring directory: %w", err)
+	}
 	return nil
 }
+
+// The sync steps are package-level seams because a real power loss cannot be
+// unit-tested: the tests swap these to prove the write path issues both syncs
+// in order, which is the property the crash-safety argument rests on.
+var (
+	syncKeyringFile = func(f *os.File) error { return f.Sync() }
+	syncKeyringDir  = fsatomic.SyncDirectory
+)
 
 // wipePersistedSignKeys zeroes every exported PKCS#8 signing-key copy in state.
 // It deliberately leaves AEAD/HMAC untouched — those slices alias the live ring
