@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/seal"
@@ -58,6 +59,16 @@ type persistedState struct {
 type Store struct {
 	dir     string
 	wrapper seal.KeyWrapper
+	// mu serialises Save end to end — export through rename. Checkpoints run
+	// outside Service.mu (Save re-acquires it), so two concurrent mutations
+	// used to race their WriteFile/Rename pairs on one fixed temp path: the
+	// staler snapshot could rename last and persist a keyring MISSING a key
+	// whose creation had already returned success, or a truncating write could
+	// land mid-rename and commit a torn sealed blob that Load refuses. Holding
+	// mu across the whole Save means whichever checkpoint runs second re-exports
+	// the current ring state, so the file that wins is never older than the last
+	// acknowledged mutation (AUD-201 follow-up B1/V3).
+	mu sync.Mutex
 }
 
 // NewStore returns a keyring store rooted at dir. A nil wrapper disables
@@ -77,6 +88,8 @@ func (s *Store) Save(svc *Service) error {
 	if s == nil || svc == nil {
 		return nil
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	state := persistedState{Format: transitStateFormat, Rings: map[string]map[string]persistedKey{}}
 
 	svc.mu.Lock()
@@ -115,12 +128,25 @@ func (s *Store) Save(svc *Service) error {
 	if err := os.MkdirAll(s.dir, 0o700); err != nil {
 		return fmt.Errorf("transit: create keyring dir: %w", err)
 	}
-	tmp := s.path() + ".tmp"
-	if err := os.WriteFile(tmp, sealed, 0o600); err != nil {
+	// A unique temp file per write (in the destination directory, so the rename
+	// stays same-filesystem atomic). A fixed ".tmp" name let two writers truncate
+	// each other mid-rename.
+	tmp, err := os.CreateTemp(s.dir, transitStateFile+".tmp-*")
+	if err != nil {
+		return fmt.Errorf("transit: create temp keyring file: %w", err)
+	}
+	tmpName := tmp.Name()
+	if _, err := tmp.Write(sealed); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
 		return fmt.Errorf("transit: write sealed keyring: %w", err)
 	}
-	if err := os.Rename(tmp, s.path()); err != nil {
-		_ = os.Remove(tmp)
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpName)
+		return fmt.Errorf("transit: close sealed keyring: %w", err)
+	}
+	if err := os.Rename(tmpName, s.path()); err != nil {
+		_ = os.Remove(tmpName)
 		return fmt.Errorf("transit: commit sealed keyring: %w", err)
 	}
 	return nil
