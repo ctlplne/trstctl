@@ -4,6 +4,7 @@ package api
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -94,5 +95,54 @@ func TestLdapPasswordRejectsNonStrings(t *testing.T) {
 	}
 	if len(p) != 0 {
 		t.Errorf("null decoded to %q, want empty", string(p))
+	}
+}
+
+// TestLdapPasswordDecodeDoesNotReallocate is the AN-8 realloc guard for
+// AUD-201 follow-up I2/V14, mirroring
+// TestMongoCommandDoesNotReallocateAfterThePassword. The previous hand-rolled
+// decoder grew its output from a cap-0 slice, so a 100-byte password left
+// abandoned 8/16/32/64-byte prefix arrays on the heap that wipe() can never
+// reach. The shared secretjson decoder preallocates once: the decoded buffer's
+// capacity equals the source length minus the quotes, which is only possible
+// with a single backing array from start to finish.
+func TestLdapPasswordDecodeDoesNotReallocate(t *testing.T) {
+	password := strings.Repeat("p", 100)
+	raw := []byte(`"` + password + `"`)
+	var p ldapPassword
+	if err := json.Unmarshal(raw, &p); err != nil {
+		t.Fatal(err)
+	}
+	if string(p) != password {
+		t.Fatalf("decoded %q, want the fixture password", string(p))
+	}
+	if cap(p) != len(raw)-2 {
+		t.Fatalf("decoded buffer cap = %d, want %d (a single preallocated array); "+
+			"growth reallocations abandon unwipeable prefix copies of the password on the heap",
+			cap(p), len(raw)-2)
+	}
+}
+
+// TestLdapPasswordRejectsControlBytesAndMalformedSurrogates pins the strict
+// behaviour AUD-201 follow-up I2/V24 adopted with the shared decoder. The
+// bespoke copy had diverged: it accepted unescaped control bytes and folded
+// lone or invalid surrogates to U+FFFD — lossy for a bind credential, since
+// two malformed inputs decoded to the same password bytes.
+func TestLdapPasswordRejectsControlBytesAndMalformedSurrogates(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		raw  []byte
+	}{
+		{"unescaped control byte", []byte("\"pass\x01word\"")},
+		{"lone high surrogate", []byte(`"\ud800"`)},
+		{"lone low surrogate", []byte(`"\ude00"`)},
+		{"invalid surrogate pair", []byte(`"\ud800\ud800"`)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var p ldapPassword
+			if err := json.Unmarshal(tc.raw, &p); err == nil {
+				t.Fatalf("%s was accepted and decoded to %q; two malformed inputs must not alias one password", tc.name, string(p))
+			}
+		})
 	}
 }
