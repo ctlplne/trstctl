@@ -374,12 +374,39 @@ func toMDMSCEPPolicyResponse(rec store.MDMSCEPPolicy) mdmSCEPPolicyResponse {
 	return out
 }
 
+// mdmSCEPTelemetry folds the tenant's challenge decisions into counters. It
+// runs on the GET policy read path and used to replay the ENTIRE log from
+// sequence zero per request — the third such endpoint, left unmemoized when
+// its two siblings were fixed (AUD-201 follow-up F5/V21). Its cost grew with
+// mdm.intune_scep_challenge volume, the very traffic it reports on. It now
+// rides the shared headMemo with incremental catch-up.
 func (a *API) mdmSCEPTelemetry(ctx context.Context, tenantID string) (mdmSCEPTelemetryResponse, error) {
-	var out mdmSCEPTelemetryResponse
 	if a.log == nil {
-		return out, nil
+		return mdmSCEPTelemetryResponse{}, nil
 	}
-	err := a.log.Replay(ctx, 0, func(ev events.Event) error {
+	return a.mdmTelemetryMemo.get(ctx, a.log, tenantID,
+		func(ctx context.Context) (mdmSCEPTelemetryResponse, error) {
+			var out mdmSCEPTelemetryResponse
+			err := a.log.Replay(ctx, 0, func(ev events.Event) error {
+				a.mdmTelemetryMemo.scannedEvents.Add(1)
+				return foldMDMSCEPTelemetryEvent(&out, tenantID, ev)
+			})
+			return out, err
+		},
+		&headMemoHooks[mdmSCEPTelemetryResponse]{
+			// The value is a plain struct of counters and strings; assignment
+			// copies it, so previously returned responses stay immutable.
+			Copy: func(in mdmSCEPTelemetryResponse) mdmSCEPTelemetryResponse { return in },
+			Fold: func(state *mdmSCEPTelemetryResponse, ev events.Event) error {
+				return foldMDMSCEPTelemetryEvent(state, tenantID, ev)
+			},
+		})
+}
+
+// foldMDMSCEPTelemetryEvent applies one event to the counters; full rebuilds
+// and incremental catch-ups share it.
+func foldMDMSCEPTelemetryEvent(out *mdmSCEPTelemetryResponse, tenantID string, ev events.Event) error {
+	{
 		if ev.TenantID != tenantID {
 			return nil
 		}
@@ -412,8 +439,7 @@ func (a *API) mdmSCEPTelemetry(ctx context.Context, tenantID string) (mdmSCEPTel
 			out.LastEventTimestamp = ev.Time.UTC().Format("2006-01-02T15:04:05Z07:00")
 		}
 		return nil
-	})
-	return out, err
+	}
 }
 
 func (a *API) writeMDMSCEPError(w http.ResponseWriter, err error) {
