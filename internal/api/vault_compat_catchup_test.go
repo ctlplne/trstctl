@@ -53,12 +53,12 @@ func TestSnapshotCatchesUpIncrementallyAfterUnrelatedAppends(t *testing.T) {
 		}
 	}
 
-	before := s.scannedEvents.Load()
+	before := s.memo.scannedEvents.Load()
 	again, err := s.snapshot(ctx, "tenant-a")
 	if err != nil {
 		t.Fatal(err)
 	}
-	scanned := s.scannedEvents.Load() - before
+	scanned := s.memo.scannedEvents.Load() - before
 	if scanned > unrelated {
 		t.Fatalf("the catch-up scanned %d events after %d unrelated appends; it replayed from zero instead of from the cached sequence", scanned, unrelated)
 	}

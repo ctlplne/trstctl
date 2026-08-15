@@ -48,13 +48,16 @@ const (
 type API struct {
 	store *store.Store
 	log   *events.Log
-	// policyVersionCache memoizes the policy-version projection against the
+	// policyVersionMemo memoizes the policy-version projection against the
 	// event-log head so GET /api/v1/policy/versions stops replaying the whole
 	// log per request.
-	policyVersionCache policyVersionCache
-	idem               *orchestrator.Idempotency
-	orch               *orchestrator.Orchestrator
-	tenantFn           func(*http.Request) (string, error)
+	policyVersionMemo headMemo[*policyVersionState]
+	// mdmTelemetryMemo memoizes the MDM SCEP challenge telemetry fold the same
+	// way (F5/V21) — its cost grew with the very traffic it reports on.
+	mdmTelemetryMemo headMemo[mdmSCEPTelemetryResponse]
+	idem             *orchestrator.Idempotency
+	orch             *orchestrator.Orchestrator
+	tenantFn         func(*http.Request) (string, error)
 	// drVerify re-hashes the configured backup directory (J2). Nil means no
 	// backup directory is configured, which the surface reports as such rather
 	// than as a failure — plenty of deployments back up through infrastructure

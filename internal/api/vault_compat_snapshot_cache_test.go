@@ -21,9 +21,6 @@ func TestVaultCompatSnapshotIsMemoizedAgainstTheLogHead(t *testing.T) {
 	// A state with no log short-circuits before any replay; what is asserted
 	// here is the cache plumbing itself, which is what stops the repeat scans.
 	s := newVaultCompatState(nil)
-	if s.cache == nil {
-		t.Fatal("no snapshot cache: every request would replay the whole event log inside the authorization path")
-	}
 
 	ctx := context.Background()
 	first, err := s.snapshot(ctx, "tenant-a")
@@ -48,13 +45,10 @@ func TestVaultCompatSnapshotIsMemoizedAgainstTheLogHead(t *testing.T) {
 // memoized projection must never be served to another (AN-1).
 func TestVaultCompatCacheIsPerTenant(t *testing.T) {
 	s := newVaultCompatState(nil)
-	s.cache["tenant-a"] = cachedVaultSnapshot{
-		snapshot: vaultCompatSnapshot{
-			mounts:   map[string]vaultCompatMount{"secret/": {Path: "secret/", Type: "kv"}},
-			policies: map[string]vaultCompatPolicy{},
-		},
-		atSeq: 7,
-	}
+	s.memo.prime("tenant-a", vaultCompatSnapshot{
+		mounts:   map[string]vaultCompatMount{"secret/": {Path: "secret/", Type: "kv"}},
+		policies: map[string]vaultCompatPolicy{},
+	}, 7)
 	got, err := s.snapshot(context.Background(), "tenant-b")
 	if err != nil {
 		t.Fatalf("snapshot: %v", err)

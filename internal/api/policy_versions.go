@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	guuid "github.com/google/uuid"
@@ -380,52 +379,26 @@ func (a *API) appendPolicyVersionEvent(ctx context.Context, tenantID, eventType 
 	return a.log.Append(ctx, events.Event{Type: eventType, TenantID: tenantID, Data: payload})
 }
 
-// policyVersionCache memoizes the policy-version projection per tenant against
-// the event-log head it was built from.
-type policyVersionCache struct {
-	mu    sync.Mutex
-	byTen map[string]policyVersionCacheEntry
-}
-
-type policyVersionCacheEntry struct {
-	state *policyVersionState
-	atSeq uint64
-}
-
 // policyVersions returns the tenant's policy-version projection.
 //
 // GET /api/v1/policy/versions rebuilt this by replaying the ENTIRE event log
 // from sequence 0 on every request. On a deployment with real history that is an
 // O(all events) scan per call whose cost only grows, so the endpoint degrades
 // with age rather than with load. The projection is memoized against the log
-// head: any appended event invalidates it, so a cached answer can never differ
-// from what a fresh replay would produce.
+// head via the shared headMemo (F4/V27b): any appended event invalidates it, so
+// a cached answer can never differ from what a fresh replay would produce.
+// Rebuild-only (nil hooks): this fold mutates shared *policyVersionResponse
+// records in place — the cached pointers are shared READ-ONLY with callers
+// (every mutation path copies via policyVersionPublic), so an incremental
+// catch-up would need a deep record copy to stay safe. The from-zero rebuild
+// preserves that contract exactly.
 func (a *API) policyVersions(ctx context.Context, tenantID string) (*policyVersionState, error) {
 	if a.log == nil {
 		return nil, errStatus(http.StatusServiceUnavailable, "policy version event log is not configured")
 	}
-	if head, err := a.log.LastSequence(ctx); err == nil {
-		a.policyVersionCache.mu.Lock()
-		cached, ok := a.policyVersionCache.byTen[tenantID]
-		a.policyVersionCache.mu.Unlock()
-		if ok && cached.atSeq == head {
-			return cached.state, nil
-		}
-		built, buildErr := a.replayPolicyVersions(ctx, tenantID)
-		if buildErr != nil {
-			return nil, buildErr
-		}
-		a.policyVersionCache.mu.Lock()
-		if a.policyVersionCache.byTen == nil {
-			a.policyVersionCache.byTen = map[string]policyVersionCacheEntry{}
-		}
-		a.policyVersionCache.byTen[tenantID] = policyVersionCacheEntry{state: built, atSeq: head}
-		a.policyVersionCache.mu.Unlock()
-		return built, nil
-	}
-	// A head read that failed is not a reason to deny the request; fall back to
-	// an uncached replay.
-	return a.replayPolicyVersions(ctx, tenantID)
+	return a.policyVersionMemo.get(ctx, a.log, tenantID,
+		func(ctx context.Context) (*policyVersionState, error) { return a.replayPolicyVersions(ctx, tenantID) },
+		nil)
 }
 
 func (a *API) replayPolicyVersions(ctx context.Context, tenantID string) (*policyVersionState, error) {

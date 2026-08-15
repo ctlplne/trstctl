@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"sync"
-	"sync/atomic"
 
 	"trstctl.com/trstctl/internal/events"
 )
@@ -47,27 +45,14 @@ type vaultCompatSnapshot struct {
 type vaultCompatState struct {
 	log *events.Log
 
-	// mu/cache memoize the projection per tenant against the log head it was
-	// built from. The projection itself is still a deterministic replay — this
-	// only avoids REDOING it when nothing has been appended.
-	mu    sync.Mutex
-	cache map[string]cachedVaultSnapshot
-
-	// scannedEvents counts every event the fold observes, across full rebuilds
-	// and incremental catch-ups. Test instrumentation for the F3/V27a property:
-	// an append by an UNRELATED tenant must cost a bounded catch-up, not a
-	// from-zero replay of the whole log.
-	scannedEvents atomic.Int64
-}
-
-// cachedVaultSnapshot is a projection plus the log sequence it reflects.
-type cachedVaultSnapshot struct {
-	snapshot vaultCompatSnapshot
-	atSeq    uint64
+	// memo is the shared head-keyed projection cache (F4/V27b) carrying F3's
+	// incremental catch-up. The projection itself is still a deterministic
+	// replay — the memo only avoids redoing work already reflected at the head.
+	memo headMemo[vaultCompatSnapshot]
 }
 
 func newVaultCompatState(log *events.Log) *vaultCompatState {
-	return &vaultCompatState{log: log, cache: map[string]cachedVaultSnapshot{}}
+	return &vaultCompatState{log: log}
 }
 
 // snapshot returns the tenant's compatibility projection.
@@ -83,52 +68,22 @@ func newVaultCompatState(log *events.Log) *vaultCompatState {
 // event invalidates it. Reusing a projection while the log has not moved cannot
 // observe a different state than replaying would.
 func (s *vaultCompatState) snapshot(ctx context.Context, tenantID string) (vaultCompatSnapshot, error) {
-	if s != nil && s.log != nil {
-		head, err := s.log.LastSequence(ctx)
-		if err == nil {
-			s.mu.Lock()
-			cached, ok := s.cache[tenantID]
-			s.mu.Unlock()
-			if ok && cached.atSeq == head {
-				return cached.snapshot, nil
-			}
-			// The head is GLOBAL (one stream), so any tenant's append moves it.
-			// Replaying from zero on every miss made the hit rate tend to zero
-			// on a busy deployment (AUD-201 follow-up F3/V27a): catch up
-			// incrementally instead, folding only the events after the cached
-			// sequence ONTO A COPY — the cached maps are shared with snapshots
-			// already returned to callers. Any catch-up failure (generation
-			// switch, gap, head regression) falls back to a from-zero rebuild.
-			if ok && cached.atSeq < head {
-				built := copyVaultSnapshot(cached.snapshot)
-				if err := s.log.ReplayThrough(ctx, cached.atSeq+1, head, func(ev events.Event) error {
-					s.scannedEvents.Add(1)
-					return foldVaultCompatEvent(&built, tenantID, ev)
-				}); err == nil {
-					s.storeSnapshot(tenantID, built, head)
-					return built, nil
-				}
-			}
-			built, err := s.replaySnapshot(ctx, tenantID)
-			if err != nil {
-				return built, err
-			}
-			s.storeSnapshot(tenantID, built, head)
-			return built, nil
-		}
-		// LastSequence failed: fall through to an uncached replay rather than
-		// failing the request, so a head-read blip cannot deny authorization.
+	if s == nil {
+		return (&vaultCompatState{}).replaySnapshot(ctx, tenantID)
 	}
-	return s.replaySnapshot(ctx, tenantID)
-}
-
-func (s *vaultCompatState) storeSnapshot(tenantID string, built vaultCompatSnapshot, head uint64) {
-	s.mu.Lock()
-	if s.cache == nil {
-		s.cache = map[string]cachedVaultSnapshot{}
-	}
-	s.cache[tenantID] = cachedVaultSnapshot{snapshot: built, atSeq: head}
-	s.mu.Unlock()
+	// The head is GLOBAL (one stream), so any tenant's append moves it. The
+	// shared memo catches up incrementally from the cached sequence onto a
+	// COPY (F3/V27a) — the cached maps are aliased by snapshots already
+	// returned to callers — and falls back to a from-zero rebuild on any
+	// catch-up failure or head regression.
+	return s.memo.get(ctx, s.log, tenantID,
+		func(ctx context.Context) (vaultCompatSnapshot, error) { return s.replaySnapshot(ctx, tenantID) },
+		&headMemoHooks[vaultCompatSnapshot]{
+			Copy: copyVaultSnapshot,
+			Fold: func(state *vaultCompatSnapshot, ev events.Event) error {
+				return foldVaultCompatEvent(state, tenantID, ev)
+			},
+		})
 }
 
 // copyVaultSnapshot deep-copies the map structure. The values are plain structs,
@@ -156,7 +111,7 @@ func (s *vaultCompatState) replaySnapshot(ctx context.Context, tenantID string) 
 		return state, nil
 	}
 	err := s.log.Replay(ctx, 0, func(ev events.Event) error {
-		s.scannedEvents.Add(1)
+		s.memo.scannedEvents.Add(1)
 		return foldVaultCompatEvent(&state, tenantID, ev)
 	})
 	return state, err
