@@ -87,6 +87,15 @@ type LeafProfile struct {
 	PermittedIPCIDRs      []string      // IP SAN CIDR ranges; set to permit IP SANs under a SAN policy
 	PermittedEmailDomains []string      // email SAN domains; set to permit rfc822Name SANs under a SAN policy
 	PermittedURIPrefixes  []string      // URI SAN prefixes; set to permit URI SANs under a SAN policy
+
+	// ClampTTLToIssuer bounds the leaf's TTL by the issuing CA's own remaining
+	// lifetime, using the CA certificate this signer already parses — one parse
+	// per issuance instead of a separate pre-flight Inspect (AUD-201 follow-up
+	// E2/V34). A requested TTL of zero (or one beyond the issuer's expiry)
+	// becomes the issuer's remaining window; an EXPIRED issuer is a profile
+	// violation, because a leaf it signs could never verify. Off by default so
+	// callers that manage validity themselves keep their exact semantics.
+	ClampTTLToIssuer bool
 }
 
 // KeyUsages is the backend-agnostic set of X.509 key-usage bits a leaf may carry,
@@ -141,6 +150,20 @@ func SignLeafFromCSRWithProfile(caCertDER []byte, caSigner DigestSigner, csrDER 
 	caCert, err := x509.ParseCertificate(caCertDER)
 	if err != nil {
 		return nil, fmt.Errorf("crypto: parse CA cert: %w", err)
+	}
+	if prof.ClampTTLToIssuer {
+		// Clamp BEFORE profile enforcement, matching the order the served
+		// hierarchy always used (clamp first, then constraints see the
+		// effective TTL). The issuer certificate is already in hand here, so
+		// the clamp costs nothing extra.
+		remaining := time.Until(caCert.NotAfter)
+		if remaining <= 0 {
+			return nil, &leafProfileError{fmt.Sprintf("issuing CA expired at %s; it cannot vouch for a new leaf",
+				caCert.NotAfter.UTC().Format(time.RFC3339))}
+		}
+		if ttl <= 0 || ttl > remaining {
+			ttl = remaining
+		}
 	}
 	csr, err := x509.ParseCertificateRequest(csrDER)
 	if err != nil {

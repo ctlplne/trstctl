@@ -1870,7 +1870,10 @@ func TestResilienceStrengthGuardsStayRequired(t *testing.T) {
 	for _, want := range []string{
 		"func NewPersistentServer(",
 		"store.Load()",
-		"s.store.Save(id, ls, constraints)",
+		// The persist call moved into the shared persist-then-publish mint
+		// path (mintHeldKey, AUD-201 follow-up C1/V19); the sealed save is the
+		// same, spelled through the held key.
+		"s.store.Save(id, held.signer, held.constraints)",
 		"s.store.LoadHandle(h.GetId())",
 		"reload key handle",
 	} {
