@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"trstctl.com/trstctl/internal/events"
 )
@@ -51,6 +52,12 @@ type vaultCompatState struct {
 	// only avoids REDOING it when nothing has been appended.
 	mu    sync.Mutex
 	cache map[string]cachedVaultSnapshot
+
+	// scannedEvents counts every event the fold observes, across full rebuilds
+	// and incremental catch-ups. Test instrumentation for the F3/V27a property:
+	// an append by an UNRELATED tenant must cost a bounded catch-up, not a
+	// from-zero replay of the whole log.
+	scannedEvents atomic.Int64
 }
 
 // cachedVaultSnapshot is a projection plus the log sequence it reflects.
@@ -85,22 +92,59 @@ func (s *vaultCompatState) snapshot(ctx context.Context, tenantID string) (vault
 			if ok && cached.atSeq == head {
 				return cached.snapshot, nil
 			}
+			// The head is GLOBAL (one stream), so any tenant's append moves it.
+			// Replaying from zero on every miss made the hit rate tend to zero
+			// on a busy deployment (AUD-201 follow-up F3/V27a): catch up
+			// incrementally instead, folding only the events after the cached
+			// sequence ONTO A COPY — the cached maps are shared with snapshots
+			// already returned to callers. Any catch-up failure (generation
+			// switch, gap, head regression) falls back to a from-zero rebuild.
+			if ok && cached.atSeq < head {
+				built := copyVaultSnapshot(cached.snapshot)
+				if err := s.log.ReplayThrough(ctx, cached.atSeq+1, head, func(ev events.Event) error {
+					s.scannedEvents.Add(1)
+					return foldVaultCompatEvent(&built, tenantID, ev)
+				}); err == nil {
+					s.storeSnapshot(tenantID, built, head)
+					return built, nil
+				}
+			}
 			built, err := s.replaySnapshot(ctx, tenantID)
 			if err != nil {
 				return built, err
 			}
-			s.mu.Lock()
-			if s.cache == nil {
-				s.cache = map[string]cachedVaultSnapshot{}
-			}
-			s.cache[tenantID] = cachedVaultSnapshot{snapshot: built, atSeq: head}
-			s.mu.Unlock()
+			s.storeSnapshot(tenantID, built, head)
 			return built, nil
 		}
 		// LastSequence failed: fall through to an uncached replay rather than
 		// failing the request, so a head-read blip cannot deny authorization.
 	}
 	return s.replaySnapshot(ctx, tenantID)
+}
+
+func (s *vaultCompatState) storeSnapshot(tenantID string, built vaultCompatSnapshot, head uint64) {
+	s.mu.Lock()
+	if s.cache == nil {
+		s.cache = map[string]cachedVaultSnapshot{}
+	}
+	s.cache[tenantID] = cachedVaultSnapshot{snapshot: built, atSeq: head}
+	s.mu.Unlock()
+}
+
+// copyVaultSnapshot deep-copies the map structure. The values are plain structs,
+// so copying the maps is enough to keep previously returned snapshots immutable.
+func copyVaultSnapshot(in vaultCompatSnapshot) vaultCompatSnapshot {
+	out := vaultCompatSnapshot{
+		mounts:   make(map[string]vaultCompatMount, len(in.mounts)),
+		policies: make(map[string]vaultCompatPolicy, len(in.policies)),
+	}
+	for k, v := range in.mounts {
+		out.mounts[k] = v
+	}
+	for k, v := range in.policies {
+		out.policies[k] = v
+	}
+	return out
 }
 
 func (s *vaultCompatState) replaySnapshot(ctx context.Context, tenantID string) (vaultCompatSnapshot, error) {
@@ -112,50 +156,58 @@ func (s *vaultCompatState) replaySnapshot(ctx context.Context, tenantID string) 
 		return state, nil
 	}
 	err := s.log.Replay(ctx, 0, func(ev events.Event) error {
-		if ev.TenantID != tenantID {
-			return nil
-		}
-		switch ev.Type {
-		case vaultMountEnabledEventType:
-			var mount vaultCompatMount
-			if err := json.Unmarshal(ev.Data, &mount); err != nil {
-				return fmt.Errorf("vault mount-enabled event: %w", err)
-			}
-			if mount.Path == "" || mount.Type == "" {
-				return errors.New("vault mount-enabled event is missing path or type")
-			}
-			state.mounts[mount.Path] = mount
-		case vaultMountDisabledEventType:
-			var mount vaultCompatMount
-			if err := json.Unmarshal(ev.Data, &mount); err != nil {
-				return fmt.Errorf("vault mount-disabled event: %w", err)
-			}
-			if mount.Path == "" {
-				return errors.New("vault mount-disabled event is missing path")
-			}
-			delete(state.mounts, mount.Path)
-		case vaultPolicyPutEventType:
-			var policy vaultCompatPolicy
-			if err := json.Unmarshal(ev.Data, &policy); err != nil {
-				return fmt.Errorf("vault policy-put event: %w", err)
-			}
-			if policy.Name == "" || policy.Policy == "" {
-				return errors.New("vault policy-put event is missing name or policy")
-			}
-			state.policies[policy.Name] = policy
-		case vaultPolicyDeletedEventType:
-			var policy vaultCompatPolicy
-			if err := json.Unmarshal(ev.Data, &policy); err != nil {
-				return fmt.Errorf("vault policy-deleted event: %w", err)
-			}
-			if policy.Name == "" {
-				return errors.New("vault policy-deleted event is missing name")
-			}
-			delete(state.policies, policy.Name)
-		}
-		return nil
+		s.scannedEvents.Add(1)
+		return foldVaultCompatEvent(&state, tenantID, ev)
 	})
 	return state, err
+}
+
+// foldVaultCompatEvent applies one event to the projection. Full rebuilds and
+// incremental catch-ups fold through this single function, so the two paths
+// cannot disagree about an event's meaning.
+func foldVaultCompatEvent(state *vaultCompatSnapshot, tenantID string, ev events.Event) error {
+	if ev.TenantID != tenantID {
+		return nil
+	}
+	switch ev.Type {
+	case vaultMountEnabledEventType:
+		var mount vaultCompatMount
+		if err := json.Unmarshal(ev.Data, &mount); err != nil {
+			return fmt.Errorf("vault mount-enabled event: %w", err)
+		}
+		if mount.Path == "" || mount.Type == "" {
+			return errors.New("vault mount-enabled event is missing path or type")
+		}
+		state.mounts[mount.Path] = mount
+	case vaultMountDisabledEventType:
+		var mount vaultCompatMount
+		if err := json.Unmarshal(ev.Data, &mount); err != nil {
+			return fmt.Errorf("vault mount-disabled event: %w", err)
+		}
+		if mount.Path == "" {
+			return errors.New("vault mount-disabled event is missing path")
+		}
+		delete(state.mounts, mount.Path)
+	case vaultPolicyPutEventType:
+		var policy vaultCompatPolicy
+		if err := json.Unmarshal(ev.Data, &policy); err != nil {
+			return fmt.Errorf("vault policy-put event: %w", err)
+		}
+		if policy.Name == "" || policy.Policy == "" {
+			return errors.New("vault policy-put event is missing name or policy")
+		}
+		state.policies[policy.Name] = policy
+	case vaultPolicyDeletedEventType:
+		var policy vaultCompatPolicy
+		if err := json.Unmarshal(ev.Data, &policy); err != nil {
+			return fmt.Errorf("vault policy-deleted event: %w", err)
+		}
+		if policy.Name == "" {
+			return errors.New("vault policy-deleted event is missing name")
+		}
+		delete(state.policies, policy.Name)
+	}
+	return nil
 }
 
 func (s *vaultCompatState) append(ctx context.Context, tenantID, eventType string, payload any) (events.Event, error) {
