@@ -3039,7 +3039,10 @@ transit (encryption-as-a-service) keyring is persisted KEK-sealed under
 deployment KEK, written atomically, and re-locked into protected memory on load
 (AN-8). A checkpoint runs after every create and rotate, so a restart between
 minting a key and the next flush cannot lose it, and a failed checkpoint fails
-the mutation rather than handing back a key that disappears later.
+the mutation rather than handing back a key that disappears later: the
+unpersisted key (or the unpersisted new version) is rolled back out of the
+in-memory ring and its material wiped, so nothing can encrypt under it and a
+retry succeeds instead of reporting that the key already exists.
 
 Two properties bound what this gives you:
 

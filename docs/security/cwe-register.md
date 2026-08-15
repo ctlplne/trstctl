@@ -1174,7 +1174,7 @@ not this file.
 | `internal/supportbundle/supportbundle_test.go:101` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/supportbundle/supportbundle_test.go:147` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/telemetry/instanceid.go:21` | fixed instance-id file under the configured data dir (CWE-22) |
-| `internal/transit/persist.go:135` | the store's own sealed state file (CWE-22) |
+| `internal/transit/persist.go:188` | the store's own sealed state file (CWE-22) |
 | `internal/transit/persist_test.go:118` | reads the test's own sealed keyring file (CWE-22) |
 | `internal/tsa/http_test.go:52` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/tsa/http_test.go:107` | test reads its own fixture/tempdir path (CWE-22) |

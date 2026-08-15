@@ -124,6 +124,12 @@ func (s *Service) CreateKey(ctx context.Context, tenantID, name string, kind Kin
 		return KeyInfo{}, err
 	}
 	if err := s.checkpoint(); err != nil {
+		// Roll the key back out of the ring (AUD-201 follow-up B3/V4). The
+		// caller got an error, so the key must not stay silently usable: it
+		// would encrypt until the next restart drops it, leaving ciphertext
+		// nothing can ever decrypt — and a retry would report "key exists"
+		// instead of succeeding.
+		k.discardUnpersistedKey(name)
 		return KeyInfo{}, fmt.Errorf("transit: persist keyring after create: %w", err)
 	}
 	return KeyInfo{Name: name, Kind: kind, Version: 1}, nil
@@ -141,6 +147,9 @@ func (s *Service) Rotate(ctx context.Context, tenantID, name string) (KeyInfo, e
 		return KeyInfo{}, err
 	}
 	if err := s.checkpoint(); err != nil {
+		// Same rollback contract as CreateKey: the new version would produce
+		// ciphertext that does not survive a restart.
+		k.discardUnpersistedVersion(name, version)
 		return KeyInfo{}, fmt.Errorf("transit: persist keyring after rotate: %w", err)
 	}
 	return KeyInfo{Name: name, Kind: kind, Version: version}, nil
@@ -213,6 +222,64 @@ func (k *Keyring) CreateKey(ctx context.Context, name string, kind Kind) error {
 	k.keys[name] = nk
 	k.event(ctx, "transit.key.created", name)
 	return nil
+}
+
+// discardUnpersistedKey rolls a freshly created key back out of the ring after
+// a failed checkpoint, wiping its material (AN-8). It only removes a key that
+// is still at version 1: if a concurrent Rotate advanced it, that rotation's
+// own checkpoint verdict governs the newer state, and a successful one has
+// already persisted the key.
+func (k *Keyring) discardUnpersistedKey(name string) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	nk, ok := k.keys[name]
+	if !ok || nk.latest != 1 {
+		return
+	}
+	for _, b := range nk.aead {
+		secret.Wipe(b)
+	}
+	for _, b := range nk.hmac {
+		secret.Wipe(b)
+	}
+	for _, s := range nk.sign {
+		if s != nil {
+			s.Destroy()
+		}
+	}
+	delete(k.keys, name)
+}
+
+// discardUnpersistedVersion rolls one failed-checkpoint rotation back, wiping
+// the dropped version's material. It only acts when the named version is still
+// the latest — a concurrent later rotation owns the newer state.
+func (k *Keyring) discardUnpersistedVersion(name string, version int) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	nk, ok := k.keys[name]
+	if !ok || nk.latest != version || version <= 1 {
+		return
+	}
+	switch nk.kind {
+	case KindAEAD:
+		if len(nk.aead) == version+1 {
+			secret.Wipe(nk.aead[version])
+			nk.aead = nk.aead[:version]
+		}
+	case KindHMAC:
+		if len(nk.hmac) == version+1 {
+			secret.Wipe(nk.hmac[version])
+			nk.hmac = nk.hmac[:version]
+		}
+	case KindSign:
+		if len(nk.sign) == version+1 {
+			if s := nk.sign[version]; s != nil {
+				s.Destroy()
+			}
+			nk.sign = nk.sign[:version]
+		}
+	}
+	nk.latest--
 }
 
 // Kind reports a key's kind.
