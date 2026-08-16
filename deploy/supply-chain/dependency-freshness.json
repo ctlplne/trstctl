@@ -58,7 +58,7 @@
     {
       "ecosystem": "gomod",
       "name": "github.com/nats-io/nats-server/v2",
-      "current_version": "v2.11.15",
+      "current_version": "v2.12.15",
       "latest_observed_version": "v2.14.3",
       "update_type": "minor",
       "freshness_slo_class": "critical-go-runtime",
@@ -67,7 +67,7 @@
       "behind_since": "2026-06-21",
       "next_review_by": "2026-09-12",
       "deferral_until": "2026-09-19",
-      "rationale": "AUD-15 dated deferral. Embedded JetStream is the AN-2 event source of truth, so the upgrade has to run replay, projection, chaos and outbox recovery together — a bad landing corrupts the log every read model is rebuilt from. govulncheck reports zero called vulnerabilities on the current pin."
+      "rationale": "AUD-15 dated deferral for the remaining v2.14 upgrade. QA moved the embedded server to the maintained v2.12.15 patch after the race detector proved that v2.11 read a stream name without the configuration lock during concurrent stream listing and reconfiguration. Embedded JetStream is the AN-2 event source of truth, so the later v2.14 landing still has to run replay, projection, chaos, outbox recovery, and storage-compatibility tests together."
     },
     {
       "ecosystem": "gomod",

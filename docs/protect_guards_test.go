@@ -459,23 +459,20 @@ func TestCryptoBoundaryAndKeymaterialLintGuardsStayRequired(t *testing.T) {
 		}
 	}
 
-	agilityADR := read(t, "../docs-internal/crypto-agility-guardrail.md")
+	// Keep this ratchet self-contained in a clean clone. docs-internal is an
+	// intentionally untracked working area, so release tests must prove the
+	// committed architecture contract instead of depending on a local note.
+	agilityGuide := read(t, "../tools/trstctllint/README.md")
 	for _, want := range []string{
+		"`cryptoagility` | **PQC-00**",
 		"compile-time Go interfaces plus dependency injection",
-		"Go's standard `crypto.Signer` interface",
-		"Java JCA provider interfaces",
-		"OpenSSL ENGINE/provider",
-		"PKCS#11",
-		"US 12,340,262",
-		"InfoSec Global",
-		"not legal advice",
-		"not a freedom-to-operate opinion",
-		"runtime crypto engine",
-		"runtime step that registers a new crypto suite",
-		"separate control entity that feeds runtime policy into crypto providers",
+		"no Go `plugin` imports",
+		"no `internal/policy` imports",
+		"no runtime-mutable provider/engine/backend registries",
+		"`RegisterCryptoSuite`-style functions",
 	} {
-		if !strings.Contains(agilityADR, want) {
-			t.Errorf("PQC-00: crypto-agility ADR no longer contains %q; design decision record weakened", want)
+		if !strings.Contains(agilityGuide, want) {
+			t.Errorf("PQC-00: committed crypto-agility guide no longer contains %q; design contract weakened", want)
 		}
 	}
 }
@@ -1864,7 +1861,9 @@ func TestResilienceStrengthGuardsStayRequired(t *testing.T) {
 		// mint lock and gained crash-atomicity (AUD-201 follow-up, mint-lock
 		// contention). Same sealed custody, spelled through the staged commit.
 		"tmp.Write(sealed)",
-		"os.Rename(st.tmpPath, st.finalPath)",
+		"confinedKeystorePath(st.ks.dir, st.tmpPath)",
+		"confinedKeystorePath(st.ks.dir, st.finalPath)",
+		"os.Rename(tmpPath, finalPath)",
 		"func (ks *KeyStore) LoadHandle(",
 	} {
 		if !strings.Contains(keystore, want) {
@@ -2904,7 +2903,9 @@ func TestSignerIsolationAndCustodyStrengthGuardsStayRequired(t *testing.T) {
 		// into place (AUD-201 follow-up, mint-lock contention) — same sealed
 		// persistent custody, now crash-atomic and off the mint lock.
 		"tmp.Write(sealed)",
-		"os.Rename(st.tmpPath, st.finalPath)",
+		"confinedKeystorePath(st.ks.dir, st.tmpPath)",
+		"confinedKeystorePath(st.ks.dir, st.finalPath)",
+		"os.Rename(tmpPath, finalPath)",
 		"func (ks *KeyStore) Load()",
 		"seal.Open(ks.wrapper, sealed, []byte(stem))",
 		"ks.keyFactory.SigningKeyFromSealedBytes(alg, privateKey)",
