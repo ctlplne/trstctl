@@ -949,6 +949,7 @@ func TestDockerignoreKeepsContextSmall(t *testing.T) {
 	)
 	script := repoFile(t, "scripts", "ci", "docker-context-audit.sh")
 	mustContainAll(t, "Docker context canary gate", script,
+		`install -d -m 0700 "$root/.sandbox-build"`,
 		".sandbox-build/docker-context-audit", "operator-secret.tmp",
 		"--target context-audit", "64 * 1024", "planted secret excluded",
 	)

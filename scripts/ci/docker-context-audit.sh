@@ -13,6 +13,7 @@ command -v rg >/dev/null 2>&1 || {
 }
 
 scratch="$(mktemp -d "${TMPDIR:-/tmp}/trstctl-docker-context.XXXXXX")"
+install -d -m 0700 "$root/.sandbox-build"
 canary_dir="$(mktemp -d "$root/.sandbox-build/docker-context-audit.XXXXXX")"
 canary="TRSTCTL_DOCKER_CONTEXT_SECRET_CANARY_${RANDOM}_${RANDOM}_$$"
 cleanup() {
