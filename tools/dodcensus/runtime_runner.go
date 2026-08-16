@@ -15,7 +15,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 
 	dodproof "trstctl.com/trstctl/tools/dodcensus/proof"
 )
@@ -705,8 +704,8 @@ func validateRuntimeRunnerWritableDir(path string, owner uint32) error {
 	if info.Mode().Perm()&0o077 != 0 {
 		return fmt.Errorf("%q mode %04o exposes the runner write boundary", path, info.Mode().Perm())
 	}
-	stat, ok := info.Sys().(*syscall.Stat_t)
-	if !ok || stat.Uid != owner {
+	uid, _, _, ok := fileOwnership(info)
+	if !ok || uid != owner {
 		return fmt.Errorf("%q is not owned by runner UID %d", path, owner)
 	}
 	return nil
@@ -805,11 +804,11 @@ func runtimeDockerSocket(ctx context.Context, repo string) (string, uint32, erro
 	if err != nil || info.Mode()&os.ModeSocket == 0 {
 		return "", 0, fmt.Errorf("docker endpoint %q is not an accessible Unix socket: %w", path, err)
 	}
-	stat, ok := info.Sys().(*syscall.Stat_t)
+	_, gid, _, ok := fileOwnership(info)
 	if !ok {
 		return "", 0, fmt.Errorf("cannot read Docker socket group for %q", path)
 	}
-	return path, stat.Gid, nil
+	return path, gid, nil
 }
 
 func runHostCommand(ctx context.Context, dir, name string, args ...string) commandResult {
