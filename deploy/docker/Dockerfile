@@ -63,8 +63,11 @@ COPY --from=web-build /src/internal/webui/dist ./internal/webui/dist
 ARG VERSION=dev
 ARG COMMIT=none
 ARG DATE=1970-01-01T00:00:00Z
-ARG TARGETOS=linux
-ARG TARGETARCH=amd64
+# BuildKit defines these automatic platform arguments for each build target.
+# Redeclare them without defaults so a native arm64 image cannot accidentally
+# contain amd64 Go binaries (and vice versa).
+ARG TARGETOS
+ARG TARGETARCH
 
 ENV CGO_ENABLED=0 \
     GOOS=${TARGETOS} \

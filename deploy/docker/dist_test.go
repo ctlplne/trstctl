@@ -136,6 +136,30 @@ func TestDockerfileIsMinimalAndReproducible(t *testing.T) {
 	})
 }
 
+// TestDockerfileBuildsForBuildKitTargetPlatform prevents a multi-architecture
+// image from carrying a binary for a different CPU. BuildKit supplies TARGETOS
+// and TARGETARCH for each requested platform. Redeclaring either argument with
+// a default such as amd64 masks that automatic value during an ordinary native
+// build: the image manifest can then say arm64 while the Go binary is amd64.
+func TestDockerfileBuildsForBuildKitTargetPlatform(t *testing.T) {
+	df := readArtifact(t, "Dockerfile")
+
+	for _, name := range []string{"TARGETOS", "TARGETARCH"} {
+		re := regexp.MustCompile(`(?m)^\s*ARG\s+` + name + `(?:\s*=\s*\S+)?\s*$`)
+		matches := re.FindAllString(df, -1)
+		if len(matches) != 1 {
+			t.Fatalf("Dockerfile %s declarations = %v, want exactly one build-stage redeclaration", name, matches)
+		}
+		if strings.Contains(matches[0], "=") {
+			t.Errorf("Dockerfile %s declaration %q has a default; it must inherit BuildKit's automatic target-platform value", name, strings.TrimSpace(matches[0]))
+		}
+	}
+
+	mustContainAll(t, "Dockerfile target-platform Go environment", df,
+		"GOOS=${TARGETOS}",
+		"GOARCH=${TARGETARCH}")
+}
+
 // TestProductionImageEntrypointsSelectCleanReleaseTarget prevents the demo-only
 // Provider entitlement and trust anchor from becoming the implicit production
 // image merely because Docker builds the last stage by default. The Dockerfile
