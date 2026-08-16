@@ -123,7 +123,7 @@ func TestManagedKeyClosureRejectsRehashedMutableBuildInputs(t *testing.T) {
 		{"postgres image becomes mutable", "internal/server/dod_managed_key_runtime_test.go", `postgres:16-alpine@sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229`, `postgres:16-alpine`},
 		{"postgres publishes on every interface", "internal/server/dod_managed_key_runtime_test.go", `fmt.Sprintf("127.0.0.1:%d:5432", port)`, `fmt.Sprintf("0.0.0.0:%d:5432", port)`},
 		{"postgres runs as root", "internal/server/dod_managed_key_runtime_test.go", `postgresUser := strconv.Itoa(uid) + ":" + strconv.Itoa(gid)`, `postgresUser := "0:0"`},
-		{"postgres shares host PID namespace", "internal/server/dod_managed_key_runtime_test.go", `"--network", "bridge", "--pids-limit", "256", "--memory", "512m"`, `"--network", "bridge", "--pid", "host", "--pids-limit", "256", "--memory", "512m"`},
+		{"postgres shares host PID namespace", "internal/server/dod_managed_key_runtime_test.go", `"--network", route.network, "--pids-limit", "256", "--memory", "512m"`, `"--network", route.network, "--pid", "host", "--pids-limit", "256", "--memory", "512m"`},
 		{"inner emulator run drops platform", "tools/dodcensus/substrates/managed_keys.py", `"docker", "run", "--rm", "--platform", "linux/amd64", "--name"`, `"docker", "run", "--rm", "--name"`},
 		{"receipt omits runtime image id", "tools/dodcensus/substrates/managed_keys.py", `"runtime_identity": image`, `"runtime_identity": "mutable"`},
 		{"signer drops nonroot uid", "internal/server/dod_managed_key_runtime_test.go", `"--user", strconv.Itoa(uid) + ":" + strconv.Itoa(gid)`, `"--user", "0:0"`},

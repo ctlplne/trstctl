@@ -287,8 +287,8 @@ func dodBuildManagedKeyArtifacts(t *testing.T) dodManagedKeyArtifacts {
 }
 
 type dodManagedKeyPostgresInspect struct {
-	Image  string
-	Config struct {
+	ID, Image string
+	Config    struct {
 		Image, User string
 		Env         []string
 	}
@@ -314,18 +314,45 @@ type dodManagedKeyPostgresInspect struct {
 	State struct{ Running bool }
 }
 
+type dodManagedKeyPostgresRoute struct {
+	network, dsnHost, publish, runnerContainer string
+	dsnPort                                    int
+}
+
 // dodManagedKeyPostgresDSN keeps the proof database outside the runtime
 // runner's PID namespace. The former embedded helper launched a non-dumpable
 // same-UID postgres sibling beside the shipped process; the global socket-owner
 // census correctly refused to guess whether that unreadable sibling shared a
-// socket. This digest-pinned container is published only on host loopback and
-// reached through the one already-validated cross-host routing seam.
+// socket. Native runs publish this digest-pinned container only on host
+// loopback. The cross-host runner instead joins one run-owned internal bridge
+// with PostgreSQL, so repeated signer port changes cannot disturb the database
+// route and the database never publishes a Docker Desktop host port.
 func dodManagedKeyPostgresDSN(t *testing.T) string {
 	t.Helper()
 	port := dodFreePort(t)
 	containerName := "trstctl-dod-hsm-postgres-" + strconv.FormatInt(time.Now().UnixNano(), 36)
+	host, err := dodRuntimeDockerHost()
+	if err != nil {
+		t.Fatal(err)
+	}
+	runnerContainer := ""
+	if host == "host.docker.internal" {
+		runnerContainer = dodManagedKeyRuntimeContainer(t)
+	}
+	route, err := dodManagedKeyPostgresRouteForHost(host, containerName, runnerContainer, port)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if route.runnerContainer != "" {
+		dodRunCommand(t, "create private managed-key PostgreSQL network", "docker", "network", "create", "--driver", "bridge", "--internal", route.network)
+		t.Cleanup(func() { _ = exec.Command("docker", "network", "rm", route.network).Run() })
+		dodRunCommand(t, "attach proof runner to private managed-key PostgreSQL network", "docker", "network", "connect", route.network, route.runnerContainer)
+		t.Cleanup(func() {
+			_ = exec.Command("docker", "network", "disconnect", "-f", route.network, route.runnerContainer).Run()
+		})
+	}
 	passwordFile := filepath.Join(t.TempDir(), "postgres-password")
-	if err := os.WriteFile(passwordFile, []byte(dodManagedKeyPostgresPassword), 0o600); err != nil {
+	if err = os.WriteFile(passwordFile, []byte(dodManagedKeyPostgresPassword), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	uid, gid := os.Getuid(), os.Getgid()
@@ -343,38 +370,40 @@ func dodManagedKeyPostgresDSN(t *testing.T) string {
 		"run", "-d", "--name", containerName, "--pull", "never",
 		"--user", postgresUser,
 		"--read-only", "--security-opt", "no-new-privileges", "--cap-drop", "ALL",
-		"--network", "bridge", "--pids-limit", "256", "--memory", "512m",
+		"--network", route.network, "--pids-limit", "256", "--memory", "512m",
 		"--tmpfs", fmt.Sprintf("/var/lib/postgresql/data:rw,nosuid,nodev,noexec,size=256m,uid=%d,gid=%d,mode=0700", uid, gid),
 		"--tmpfs", fmt.Sprintf("/var/run/postgresql:rw,nosuid,nodev,noexec,size=1m,uid=%d,gid=%d,mode=0750", uid, gid),
 		"--tmpfs", fmt.Sprintf("/tmp:rw,nosuid,nodev,noexec,size=16m,uid=%d,gid=%d,mode=1777", uid, gid),
 		"--mount", "type=bind,src=" + passwordMountSource + ",dst=/run/secrets/postgres-password,readonly",
 		"--mount", "type=bind,src=" + passwdMountSource + ",dst=/etc/passwd,readonly",
 		"--mount", "type=bind,src=" + groupMountSource + ",dst=/etc/group,readonly",
-		"-p", fmt.Sprintf("127.0.0.1:%d:5432", port),
-		"-e", "POSTGRES_USER=" + dodManagedKeyPostgresUser,
-		"-e", "POSTGRES_DB=" + dodManagedKeyPostgresDatabase,
+	}
+	if route.publish != "" {
+		args = append(args, "-p", route.publish)
+	}
+	args = append(args,
+		"-e", "POSTGRES_USER="+dodManagedKeyPostgresUser,
+		"-e", "POSTGRES_DB="+dodManagedKeyPostgresDatabase,
 		"-e", "POSTGRES_PASSWORD_FILE=/run/secrets/postgres-password",
 		"-e", "PGDATA=/var/lib/postgresql/data/pgdata",
 		dodManagedKeyPostgresImage,
-	}
+	)
 	dodRunCommand(t, "start isolated managed-key PostgreSQL", "docker", args...)
 	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", containerName).Run() })
-	dodInspectManagedKeyPostgres(t, containerName, imageID, postgresUser,
+	postgresContainer := dodInspectManagedKeyPostgres(t, containerName, imageID, postgresUser,
 		map[string]string{
 			"/run/secrets/postgres-password": passwordMountSource,
 			"/etc/passwd":                    passwdMountSource,
 			"/etc/group":                     groupMountSource,
 		},
-		uid, gid, port)
-
-	host, err := dodRuntimeDockerHost()
-	if err != nil {
-		t.Fatal(err)
+		uid, gid, route)
+	if route.runnerContainer != "" {
+		dodInspectManagedKeyPostgresNetwork(t, route, postgresContainer)
 	}
 	dsnURL := &url.URL{
 		Scheme: "postgres",
 		User:   url.UserPassword(dodManagedKeyPostgresUser, dodManagedKeyPostgresPassword),
-		Host:   net.JoinHostPort(host, strconv.Itoa(port)),
+		Host:   net.JoinHostPort(route.dsnHost, strconv.Itoa(route.dsnPort)),
 		Path:   "/" + dodManagedKeyPostgresDatabase,
 	}
 	query := dsnURL.Query()
@@ -406,6 +435,81 @@ func dodManagedKeyPostgresDSN(t *testing.T) string {
 	return ""
 }
 
+func dodManagedKeyPostgresRouteForHost(host, postgresContainer, runnerContainer string, port int) (dodManagedKeyPostgresRoute, error) {
+	if port < 1 || port > 65535 || !dodManagedKeyDockerName(postgresContainer) {
+		return dodManagedKeyPostgresRoute{}, fmt.Errorf("invalid managed-key PostgreSQL route input")
+	}
+	switch host {
+	case "127.0.0.1":
+		return dodManagedKeyPostgresRoute{
+			network: "bridge", dsnHost: host, dsnPort: port,
+			publish: fmt.Sprintf("127.0.0.1:%d:5432", port),
+		}, nil
+	case "host.docker.internal":
+		if !dodManagedKeyContainerID(runnerContainer) {
+			return dodManagedKeyPostgresRoute{}, fmt.Errorf("invalid managed-key proof runner identity")
+		}
+		return dodManagedKeyPostgresRoute{
+			network: postgresContainer + "-network", dsnHost: postgresContainer, dsnPort: 5432,
+			runnerContainer: runnerContainer,
+		}, nil
+	default:
+		return dodManagedKeyPostgresRoute{}, fmt.Errorf("invalid managed-key PostgreSQL route host")
+	}
+}
+
+func dodManagedKeyDockerName(value string) bool {
+	if value == "" || len(value) > 63 {
+		return false
+	}
+	for index, character := range value {
+		if (character >= 'a' && character <= 'z') || (character >= '0' && character <= '9') ||
+			(index > 0 && (character == '-' || character == '_' || character == '.')) {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func dodManagedKeyContainerID(value string) bool {
+	if len(value) != 12 && len(value) != 64 {
+		return false
+	}
+	for _, character := range value {
+		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+func dodManagedKeyRuntimeContainer(t *testing.T) string {
+	t.Helper()
+	hostname, err := os.Hostname()
+	if err != nil || !dodManagedKeyContainerID(hostname) {
+		t.Fatalf("managed-key proof runner hostname is not a Docker container ID: %q err=%v", hostname, err)
+	}
+	command := exec.Command("docker", "inspect", hostname)
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("inspect managed-key proof runner: %v output=%s", err, output)
+	}
+	var rows []struct {
+		ID     string
+		Config struct{ Hostname string }
+		State  struct{ Running bool }
+	}
+	if err := json.Unmarshal(output, &rows); err != nil || len(rows) != 1 {
+		t.Fatalf("decode managed-key proof runner inspect: rows=%d err=%v", len(rows), err)
+	}
+	if !dodManagedKeyContainerID(rows[0].ID) || !strings.HasPrefix(rows[0].ID, hostname) ||
+		rows[0].Config.Hostname != hostname || !rows[0].State.Running {
+		t.Fatalf("managed-key proof runner identity/state changed: id=%q hostname=%q running=%v", rows[0].ID, rows[0].Config.Hostname, rows[0].State.Running)
+	}
+	return rows[0].ID
+}
+
 func dodManagedKeyPostgresImageID(t *testing.T) string {
 	t.Helper()
 	command := exec.Command("docker", "image", "inspect", "--format={{.Id}} {{.Os}}/{{.Architecture}}", dodManagedKeyPostgresImage)
@@ -424,7 +528,7 @@ func dodManagedKeyPostgresImageID(t *testing.T) string {
 	return id
 }
 
-func dodInspectManagedKeyPostgres(t *testing.T, containerName, imageID, postgresUser string, mountSources map[string]string, uid, gid, port int) {
+func dodInspectManagedKeyPostgres(t *testing.T, containerName, imageID, postgresUser string, mountSources map[string]string, uid, gid int, route dodManagedKeyPostgresRoute) string {
 	t.Helper()
 	command := exec.Command("docker", "inspect", containerName)
 	output, err := command.CombinedOutput()
@@ -436,12 +540,12 @@ func dodInspectManagedKeyPostgres(t *testing.T, containerName, imageID, postgres
 		t.Fatalf("decode isolated managed-key PostgreSQL inspect: rows=%d err=%v", len(rows), err)
 	}
 	row := rows[0]
-	if row.Image != imageID || row.Config.Image != dodManagedKeyPostgresImage || row.Config.User != postgresUser || !row.State.Running {
+	if !dodManagedKeyContainerID(row.ID) || row.Image != imageID || row.Config.Image != dodManagedKeyPostgresImage || row.Config.User != postgresUser || !row.State.Running {
 		t.Fatalf("isolated PostgreSQL image/user/state changed: image=%q config_image=%q user=%q running=%v", row.Image, row.Config.Image, row.Config.User, row.State.Running)
 	}
 	if !row.HostConfig.ReadonlyRootfs || row.HostConfig.Privileged || len(row.HostConfig.CapAdd) != 0 ||
 		strings.Join(row.HostConfig.CapDrop, ",") != "ALL" || row.HostConfig.PidMode != "" ||
-		strings.Join(row.HostConfig.SecurityOpt, ",") != "no-new-privileges" || row.HostConfig.NetworkMode != "bridge" ||
+		strings.Join(row.HostConfig.SecurityOpt, ",") != "no-new-privileges" || row.HostConfig.NetworkMode != route.network ||
 		row.HostConfig.PidsLimit != 256 || row.HostConfig.Memory != 512*1024*1024 {
 		t.Fatalf("isolated PostgreSQL confinement changed: %+v", row.HostConfig)
 	}
@@ -483,8 +587,12 @@ func dodInspectManagedKeyPostgres(t *testing.T, containerName, imageID, postgres
 		}
 	}
 	bindings := row.HostConfig.PortBindings["5432/tcp"]
-	if len(bindings) != 1 || bindings[0].HostIP != "127.0.0.1" || bindings[0].HostPort != strconv.Itoa(port) {
-		t.Fatalf("isolated PostgreSQL is not bound only to exact host loopback: %+v", bindings)
+	if route.publish == "" {
+		if len(bindings) != 0 {
+			t.Fatalf("private-network PostgreSQL unexpectedly publishes a host port: %+v", bindings)
+		}
+	} else if len(bindings) != 1 || bindings[0].HostIP != "127.0.0.1" || bindings[0].HostPort != strconv.Itoa(route.dsnPort) {
+		t.Fatalf("native PostgreSQL is not bound only to exact host loopback: %+v", bindings)
 	}
 	if len(row.Mounts) != len(mountSources) {
 		t.Fatalf("isolated PostgreSQL mount set changed: %+v", row.Mounts)
@@ -507,6 +615,33 @@ func dodInspectManagedKeyPostgres(t *testing.T, containerName, imageID, postgres
 	for _, value := range row.Config.Env {
 		if strings.HasPrefix(value, "POSTGRES_PASSWORD=") {
 			t.Fatal("isolated PostgreSQL retained its password in container environment metadata")
+		}
+	}
+	return row.ID
+}
+
+func dodInspectManagedKeyPostgresNetwork(t *testing.T, route dodManagedKeyPostgresRoute, postgresContainer string) {
+	t.Helper()
+	command := exec.Command("docker", "network", "inspect", route.network)
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("inspect private managed-key PostgreSQL network: %v output=%s", err, output)
+	}
+	var rows []struct {
+		Name, Driver      string
+		Internal, Ingress bool
+		Containers        map[string]struct{ Name string }
+	}
+	if err := json.Unmarshal(output, &rows); err != nil || len(rows) != 1 {
+		t.Fatalf("decode private managed-key PostgreSQL network: rows=%d err=%v", len(rows), err)
+	}
+	row := rows[0]
+	if row.Name != route.network || row.Driver != "bridge" || !row.Internal || row.Ingress || len(row.Containers) != 2 {
+		t.Fatalf("private managed-key PostgreSQL network confinement changed: name=%q driver=%q internal=%v ingress=%v containers=%d", row.Name, row.Driver, row.Internal, row.Ingress, len(row.Containers))
+	}
+	for _, container := range []string{route.runnerContainer, postgresContainer} {
+		if _, ok := row.Containers[container]; !ok {
+			t.Fatalf("private managed-key PostgreSQL network omits expected container %q", container)
 		}
 	}
 }
@@ -1032,6 +1167,41 @@ func TestDODManagedKeyRuntimeDockerHostIsClosed(t *testing.T) {
 		t.Setenv(dodRuntimeDockerHostEnv, invalid)
 		if got, err := dodRuntimeDockerHost(); err == nil {
 			t.Errorf("accepted runtime Docker host %q as %q", invalid, got)
+		}
+	}
+}
+
+func TestDODManagedKeyPostgresRoutesAvoidPublicDockerDesktopBridge(t *testing.T) {
+	loopback, err := dodManagedKeyPostgresRouteForHost("127.0.0.1", "postgres-proof", "runner-proof", 15432)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loopback.network != "bridge" || loopback.dsnHost != "127.0.0.1" || loopback.dsnPort != 15432 ||
+		loopback.publish != "127.0.0.1:15432:5432" || loopback.runnerContainer != "" {
+		t.Fatalf("native PostgreSQL route = %+v", loopback)
+	}
+
+	crossHost, err := dodManagedKeyPostgresRouteForHost("host.docker.internal", "postgres-proof", "abcdef012345", 15432)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if crossHost.network == "" || crossHost.network == "bridge" || crossHost.dsnHost != "postgres-proof" ||
+		crossHost.dsnPort != 5432 || crossHost.publish != "" || crossHost.runnerContainer != "abcdef012345" {
+		t.Fatalf("cross-host PostgreSQL route = %+v", crossHost)
+	}
+	if crossHost.network != "postgres-proof-network" {
+		t.Fatalf("cross-host PostgreSQL network = %q", crossHost.network)
+	}
+
+	for _, test := range []struct {
+		host, postgres, runner string
+	}{
+		{host: "localhost", postgres: "postgres-proof", runner: "abcdef012345"},
+		{host: "host.docker.internal", postgres: "postgres-proof;touch", runner: "abcdef012345"},
+		{host: "host.docker.internal", postgres: "postgres-proof", runner: "not-a-container"},
+	} {
+		if route, err := dodManagedKeyPostgresRouteForHost(test.host, test.postgres, test.runner, 15432); err == nil {
+			t.Fatalf("invalid PostgreSQL route accepted as %+v", route)
 		}
 	}
 }
