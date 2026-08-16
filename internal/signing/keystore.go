@@ -272,6 +272,15 @@ func (ks *KeyStore) stageSave(handle string, ls signerKey, constraints keyConstr
 // caller's critical section: either the tombstone is seen here and the key is
 // refused, or a concurrent destroy's own remove runs after the caller publishes.
 func (st *stagedSave) commit() error {
+	tmpPath, err := confinedKeystorePath(st.ks.dir, st.tmpPath)
+	if err != nil {
+		return fmt.Errorf("signing: staged key path: %w", err)
+	}
+	finalPath, err := confinedKeystorePath(st.ks.dir, st.finalPath)
+	if err != nil {
+		st.discard()
+		return fmt.Errorf("signing: final key path: %w", err)
+	}
 	destroyed, err := st.ks.IsDestroyed(st.handle)
 	if err != nil {
 		st.discard()
@@ -281,7 +290,7 @@ func (st *stagedSave) commit() error {
 		st.discard()
 		return errors.New("signing: destroyed key handle cannot be recreated")
 	}
-	if err := os.Rename(st.tmpPath, st.finalPath); err != nil {
+	if err := os.Rename(tmpPath, finalPath); err != nil { // #nosec G703 -- both absolute paths passed the explicit signer-keystore confinement check above (CWE-22)
 		st.discard()
 		return err
 	}
@@ -289,7 +298,12 @@ func (st *stagedSave) commit() error {
 }
 
 // discard removes the staged temp file for a key that will not be committed.
-func (st *stagedSave) discard() { _ = os.Remove(st.tmpPath) }
+func (st *stagedSave) discard() {
+	tmpPath, err := confinedKeystorePath(st.ks.dir, st.tmpPath)
+	if err == nil {
+		_ = os.Remove(tmpPath) // #nosec G703 -- tmpPath passed the explicit signer-keystore confinement check above (CWE-22)
+	}
+}
 
 // Load reads and unseals every persisted key into a handle->heldKey map (key
 // material plus restored usage constraints). A missing directory is an empty
@@ -420,7 +434,11 @@ func (ks *KeyStore) MarkDestroyed(handle string) error {
 }
 
 func (ks *KeyStore) IsDestroyed(handle string) (bool, error) {
-	_, err := os.Stat(filepath.Join(ks.dir, sanitizeHandle(handle)+destroyedKeyFileExt))
+	path, err := confinedKeystorePath(ks.dir, filepath.Join(ks.dir, sanitizeHandle(handle)+destroyedKeyFileExt))
+	if err != nil {
+		return false, err
+	}
+	_, err = os.Stat(path) // #nosec G703 -- path passed the explicit signer-keystore confinement check above (CWE-22)
 	if err == nil {
 		return true, nil
 	}
@@ -428,6 +446,29 @@ func (ks *KeyStore) IsDestroyed(handle string) (bool, error) {
 		return false, nil
 	}
 	return false, err
+}
+
+// confinedKeystorePath returns candidate as an absolute path only when it is a
+// child of the configured signer keystore. It is a second boundary behind handle
+// sanitization: even a corrupted stagedSave cannot rename or remove a file outside
+// the signer's private directory.
+func confinedKeystorePath(root, candidate string) (string, error) {
+	rootAbs, err := filepath.Abs(root)
+	if err != nil {
+		return "", fmt.Errorf("absolute keystore path: %w", err)
+	}
+	candidateAbs, err := filepath.Abs(candidate)
+	if err != nil {
+		return "", fmt.Errorf("absolute candidate path: %w", err)
+	}
+	rel, err := filepath.Rel(rootAbs, candidateAbs)
+	if err != nil {
+		return "", fmt.Errorf("relative keystore path: %w", err)
+	}
+	if rel == "." || rel == ".." || filepath.IsAbs(rel) || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("path %q escapes keystore", candidate)
+	}
+	return candidateAbs, nil
 }
 
 // sanitizeHandle restricts a handle to a safe filename charset. Real handles are
