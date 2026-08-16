@@ -69,7 +69,8 @@ func newVaultCompatState(log *events.Log) *vaultCompatState {
 // observe a different state than replaying would.
 func (s *vaultCompatState) snapshot(ctx context.Context, tenantID string) (vaultCompatSnapshot, error) {
 	if s == nil {
-		return (&vaultCompatState{}).replaySnapshot(ctx, tenantID)
+		snap, _, err := (&vaultCompatState{}).replaySnapshot(ctx, tenantID)
+		return snap, err
 	}
 	// The head is GLOBAL (one stream), so any tenant's append moves it. The
 	// shared memo catches up incrementally from the cached sequence onto a
@@ -77,7 +78,7 @@ func (s *vaultCompatState) snapshot(ctx context.Context, tenantID string) (vault
 	// returned to callers — and falls back to a from-zero rebuild on any
 	// catch-up failure or head regression.
 	return s.memo.get(ctx, s.log, tenantID,
-		func(ctx context.Context) (vaultCompatSnapshot, error) { return s.replaySnapshot(ctx, tenantID) },
+		func(ctx context.Context) (vaultCompatSnapshot, uint64, error) { return s.replaySnapshot(ctx, tenantID) },
 		&headMemoHooks[vaultCompatSnapshot]{
 			Copy: copyVaultSnapshot,
 			Fold: func(state *vaultCompatSnapshot, ev events.Event) error {
@@ -102,19 +103,21 @@ func copyVaultSnapshot(in vaultCompatSnapshot) vaultCompatSnapshot {
 	return out
 }
 
-func (s *vaultCompatState) replaySnapshot(ctx context.Context, tenantID string) (vaultCompatSnapshot, error) {
+func (s *vaultCompatState) replaySnapshot(ctx context.Context, tenantID string) (vaultCompatSnapshot, uint64, error) {
 	state := vaultCompatSnapshot{
 		mounts:   map[string]vaultCompatMount{},
 		policies: map[string]vaultCompatPolicy{},
 	}
 	if s == nil || s.log == nil {
-		return state, nil
+		return state, 0, nil
 	}
+	var through uint64
 	err := s.log.Replay(ctx, 0, func(ev events.Event) error {
 		s.memo.scannedEvents.Add(1)
+		through = ev.Sequence
 		return foldVaultCompatEvent(&state, tenantID, ev)
 	})
-	return state, err
+	return state, through, err
 }
 
 // foldVaultCompatEvent applies one event to the projection. Full rebuilds and

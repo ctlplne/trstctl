@@ -387,110 +387,157 @@ func (a *API) appendPolicyVersionEvent(ctx context.Context, tenantID, eventType 
 // with age rather than with load. The projection is memoized against the log
 // head via the shared headMemo (F4/V27b): any appended event invalidates it, so
 // a cached answer can never differ from what a fresh replay would produce.
-// Rebuild-only (nil hooks): this fold mutates shared *policyVersionResponse
-// records in place — the cached pointers are shared READ-ONLY with callers
-// (every mutation path copies via policyVersionPublic), so an incremental
-// catch-up would need a deep record copy to stay safe. The from-zero rebuild
-// preserves that contract exactly.
+//
+// Incremental catch-up (F3): the head is one GLOBAL stream, so any tenant's
+// append moved it and forced every tenant back to a full from-zero replay of the
+// entire log. The Copy hook deep-copies the projection — cloning each
+// *policyVersionResponse record, exactly as policyVersionPublic does before
+// handing pointers to callers — so the fold can mutate its private copy in place
+// while previously returned snapshots stay immutable; only the events after the
+// cached sequence are then folded.
 func (a *API) policyVersions(ctx context.Context, tenantID string) (*policyVersionState, error) {
 	if a.log == nil {
 		return nil, errStatus(http.StatusServiceUnavailable, "policy version event log is not configured")
 	}
 	return a.policyVersionMemo.get(ctx, a.log, tenantID,
-		func(ctx context.Context) (*policyVersionState, error) { return a.replayPolicyVersions(ctx, tenantID) },
-		nil)
+		func(ctx context.Context) (*policyVersionState, uint64, error) {
+			return a.replayPolicyVersions(ctx, tenantID)
+		},
+		&headMemoHooks[*policyVersionState]{
+			Copy: copyPolicyVersionState,
+			Fold: func(state **policyVersionState, ev events.Event) error {
+				return foldPolicyVersionEvent(*state, tenantID, ev)
+			},
+		})
 }
 
-func (a *API) replayPolicyVersions(ctx context.Context, tenantID string) (*policyVersionState, error) {
+func (a *API) replayPolicyVersions(ctx context.Context, tenantID string) (*policyVersionState, uint64, error) {
 	state := &policyVersionState{items: map[string]*policyVersionResponse{}, activeByKind: map[string]string{}}
+	var through uint64
 	err := a.log.Replay(ctx, 0, func(ev events.Event) error {
-		if ev.TenantID != tenantID {
-			return nil
-		}
-		switch ev.Type {
-		case policyVersionAuthoredEventType:
-			var pl policyVersionAuthoredEvent
-			if err := json.Unmarshal(ev.Data, &pl); err != nil {
-				return fmt.Errorf("policy version authored event: %w", err)
-			}
-			if pl.ID == "" || pl.Kind == "" || pl.ModuleSHA256 == "" {
-				return fmt.Errorf("policy version authored event is missing id, kind, or module hash")
-			}
-			createdAt := ev.Time
-			rec := &policyVersionResponse{
-				ID: pl.ID, TenantID: ev.TenantID, Kind: pl.Kind, Module: pl.Module,
-				ModuleSHA256: pl.ModuleSHA256, Package: pl.Package, Query: pl.Query,
-				Description: pl.Description, ChangeRef: pl.ChangeRef, EvidenceRefs: cloneStrings(pl.EvidenceRefs),
-				Status: "draft", CreatedBy: pl.Author, CreatedAt: &createdAt, UpdatedAt: &createdAt,
-			}
-			if _, exists := state.items[pl.ID]; !exists {
-				state.order = append(state.order, pl.ID)
-			}
-			state.items[pl.ID] = rec
-		case policyVersionActivatedEventType:
-			var pl policyVersionActivatedEvent
-			if err := json.Unmarshal(ev.Data, &pl); err != nil {
-				return fmt.Errorf("policy version activated event: %w", err)
-			}
-			rec := state.items[pl.ID]
-			if rec == nil {
-				return fmt.Errorf("policy version activation references unknown version %q", pl.ID)
-			}
-			if activeID := state.activeByKind[pl.Kind]; activeID != "" && activeID != rec.ID {
-				if active := state.items[activeID]; active != nil && active.Status == "active" {
-					active.Status = "inactive"
-					active.Active = false
-					active.UpdatedAt = timePtr(ev.Time)
-				}
-			}
-			rec.Status = "active"
-			rec.Active = true
-			rec.ActivatedBy = pl.ActivatedBy
-			rec.ActivatedAt = timePtr(ev.Time)
-			rec.UpdatedAt = timePtr(ev.Time)
-			rec.previousID = pl.PreviousID
-			rec.previousModule = pl.PreviousModule
-			rec.previousInfo = policy.ModuleInfo{Kind: policy.DryRunKind(pl.Kind), ModuleSHA256: pl.PreviousModuleSHA256, Package: pl.PreviousPackage, Query: pl.PreviousQuery}
-			state.activeByKind[pl.Kind] = rec.ID
-		case policyVersionRolledBackEventType:
-			var pl policyVersionRolledBackEvent
-			if err := json.Unmarshal(ev.Data, &pl); err != nil {
-				return fmt.Errorf("policy version rolled-back event: %w", err)
-			}
-			if rec := state.items[pl.ID]; rec != nil {
-				rec.Status = "rolled_back"
-				rec.Active = false
-				rec.RollbackToID = pl.RollbackToID
-				rec.RolledBackAt = timePtr(ev.Time)
-				rec.UpdatedAt = timePtr(ev.Time)
-			}
-			if activeID := state.activeByKind[pl.Kind]; activeID != "" && activeID != pl.ID {
-				if active := state.items[activeID]; active != nil && active.Status == "active" {
-					active.Status = "inactive"
-					active.Active = false
-					active.UpdatedAt = timePtr(ev.Time)
-				}
-			}
-			target := &policyVersionResponse{
-				ID: pl.RollbackToID, TenantID: ev.TenantID, Kind: pl.Kind, Module: pl.RollbackToModule,
-				ModuleSHA256: pl.RollbackToModuleSHA256, Package: pl.RollbackToPackage, Query: pl.RollbackToQuery,
-				Description: "Rollback target for " + pl.ID, EvidenceRefs: cloneStrings(pl.EvidenceRefs),
-				Status: "active", Active: true, CreatedBy: pl.RolledBackBy, ActivatedBy: pl.RolledBackBy,
-				CreatedAt: timePtr(ev.Time), ActivatedAt: timePtr(ev.Time), UpdatedAt: timePtr(ev.Time),
-				RollbackFromID: pl.ID,
-			}
-			if _, exists := state.items[target.ID]; !exists {
-				state.order = append(state.order, target.ID)
-			}
-			state.items[target.ID] = target
-			state.activeByKind[pl.Kind] = target.ID
-		}
-		return nil
+		through = ev.Sequence
+		return foldPolicyVersionEvent(state, tenantID, ev)
 	})
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return state, nil
+	return state, through, nil
+}
+
+// foldPolicyVersionEvent applies one policy-version event to the projection.
+// Full rebuilds and incremental catch-ups fold through this single function, so
+// the two paths cannot disagree about an event's meaning.
+func foldPolicyVersionEvent(state *policyVersionState, tenantID string, ev events.Event) error {
+	if ev.TenantID != tenantID {
+		return nil
+	}
+	switch ev.Type {
+	case policyVersionAuthoredEventType:
+		var pl policyVersionAuthoredEvent
+		if err := json.Unmarshal(ev.Data, &pl); err != nil {
+			return fmt.Errorf("policy version authored event: %w", err)
+		}
+		if pl.ID == "" || pl.Kind == "" || pl.ModuleSHA256 == "" {
+			return fmt.Errorf("policy version authored event is missing id, kind, or module hash")
+		}
+		createdAt := ev.Time
+		rec := &policyVersionResponse{
+			ID: pl.ID, TenantID: ev.TenantID, Kind: pl.Kind, Module: pl.Module,
+			ModuleSHA256: pl.ModuleSHA256, Package: pl.Package, Query: pl.Query,
+			Description: pl.Description, ChangeRef: pl.ChangeRef, EvidenceRefs: cloneStrings(pl.EvidenceRefs),
+			Status: "draft", CreatedBy: pl.Author, CreatedAt: &createdAt, UpdatedAt: &createdAt,
+		}
+		if _, exists := state.items[pl.ID]; !exists {
+			state.order = append(state.order, pl.ID)
+		}
+		state.items[pl.ID] = rec
+	case policyVersionActivatedEventType:
+		var pl policyVersionActivatedEvent
+		if err := json.Unmarshal(ev.Data, &pl); err != nil {
+			return fmt.Errorf("policy version activated event: %w", err)
+		}
+		rec := state.items[pl.ID]
+		if rec == nil {
+			return fmt.Errorf("policy version activation references unknown version %q", pl.ID)
+		}
+		if activeID := state.activeByKind[pl.Kind]; activeID != "" && activeID != rec.ID {
+			if active := state.items[activeID]; active != nil && active.Status == "active" {
+				active.Status = "inactive"
+				active.Active = false
+				active.UpdatedAt = timePtr(ev.Time)
+			}
+		}
+		rec.Status = "active"
+		rec.Active = true
+		rec.ActivatedBy = pl.ActivatedBy
+		rec.ActivatedAt = timePtr(ev.Time)
+		rec.UpdatedAt = timePtr(ev.Time)
+		rec.previousID = pl.PreviousID
+		rec.previousModule = pl.PreviousModule
+		rec.previousInfo = policy.ModuleInfo{Kind: policy.DryRunKind(pl.Kind), ModuleSHA256: pl.PreviousModuleSHA256, Package: pl.PreviousPackage, Query: pl.PreviousQuery}
+		state.activeByKind[pl.Kind] = rec.ID
+	case policyVersionRolledBackEventType:
+		var pl policyVersionRolledBackEvent
+		if err := json.Unmarshal(ev.Data, &pl); err != nil {
+			return fmt.Errorf("policy version rolled-back event: %w", err)
+		}
+		if rec := state.items[pl.ID]; rec != nil {
+			rec.Status = "rolled_back"
+			rec.Active = false
+			rec.RollbackToID = pl.RollbackToID
+			rec.RolledBackAt = timePtr(ev.Time)
+			rec.UpdatedAt = timePtr(ev.Time)
+		}
+		if activeID := state.activeByKind[pl.Kind]; activeID != "" && activeID != pl.ID {
+			if active := state.items[activeID]; active != nil && active.Status == "active" {
+				active.Status = "inactive"
+				active.Active = false
+				active.UpdatedAt = timePtr(ev.Time)
+			}
+		}
+		target := &policyVersionResponse{
+			ID: pl.RollbackToID, TenantID: ev.TenantID, Kind: pl.Kind, Module: pl.RollbackToModule,
+			ModuleSHA256: pl.RollbackToModuleSHA256, Package: pl.RollbackToPackage, Query: pl.RollbackToQuery,
+			Description: "Rollback target for " + pl.ID, EvidenceRefs: cloneStrings(pl.EvidenceRefs),
+			Status: "active", Active: true, CreatedBy: pl.RolledBackBy, ActivatedBy: pl.RolledBackBy,
+			CreatedAt: timePtr(ev.Time), ActivatedAt: timePtr(ev.Time), UpdatedAt: timePtr(ev.Time),
+			RollbackFromID: pl.ID,
+		}
+		if _, exists := state.items[target.ID]; !exists {
+			state.order = append(state.order, target.ID)
+		}
+		state.items[target.ID] = target
+		state.activeByKind[pl.Kind] = target.ID
+	}
+	return nil
+}
+
+// copyPolicyVersionState deep-copies the projection so an incremental catch-up
+// folds onto a private copy: it clones every *policyVersionResponse record (a
+// value copy plus its EvidenceRefs slice), because the fold mutates records in
+// place — including flipping a previously active record to inactive — and the
+// cached pointers are shared READ-ONLY with callers.
+func copyPolicyVersionState(in *policyVersionState) *policyVersionState {
+	out := &policyVersionState{
+		items:        map[string]*policyVersionResponse{},
+		activeByKind: map[string]string{},
+	}
+	if in == nil {
+		return out
+	}
+	out.order = append([]string(nil), in.order...)
+	for id, rec := range in.items {
+		if rec == nil {
+			continue
+		}
+		clone := *rec
+		clone.EvidenceRefs = cloneStrings(rec.EvidenceRefs)
+		out.items[id] = &clone
+	}
+	for k, v := range in.activeByKind {
+		out.activeByKind[k] = v
+	}
+	return out
 }
 
 func policyVersionPublic(in policyVersionResponse) policyVersionResponse {

@@ -1859,7 +1859,12 @@ func TestResilienceStrengthGuardsStayRequired(t *testing.T) {
 		"seal.Open",
 		"secret.Wipe",
 		"os.MkdirAll(ks.dir, 0o700)",
-		"os.WriteFile(ks.path(stem), sealed, 0o600)",
+		// The sealed key is written to a unique temp file, fsync'd, then
+		// atomically renamed into place — the sealed-at-rest write moved off the
+		// mint lock and gained crash-atomicity (AUD-201 follow-up, mint-lock
+		// contention). Same sealed custody, spelled through the staged commit.
+		"tmp.Write(sealed)",
+		"os.Rename(st.tmpPath, st.finalPath)",
 		"func (ks *KeyStore) LoadHandle(",
 	} {
 		if !strings.Contains(keystore, want) {
@@ -1871,9 +1876,11 @@ func TestResilienceStrengthGuardsStayRequired(t *testing.T) {
 		"func NewPersistentServer(",
 		"store.Load()",
 		// The persist call moved into the shared persist-then-publish mint
-		// path (mintHeldKey, AUD-201 follow-up C1/V19); the sealed save is the
-		// same, spelled through the held key.
-		"s.store.Save(id, held.signer, held.constraints)",
+		// path (mintHeldKey, AUD-201 follow-up C1/V19), and the sealed save was
+		// split into a staged write plus a committing rename so the disk I/O no
+		// longer stalls concurrent Sign; the sealed save is the same, staged.
+		"s.store.stageSave(id, held.signer, held.constraints)",
+		"staged.commit()",
 		"s.store.LoadHandle(h.GetId())",
 		"reload key handle",
 	} {
@@ -2893,7 +2900,11 @@ func TestSignerIsolationAndCustodyStrengthGuardsStayRequired(t *testing.T) {
 		"secret.Wipe(plaintext)",
 		"seal.Seal(ks.wrapper, plaintext, []byte(stem))",
 		"os.MkdirAll(ks.dir, 0o700)",
-		"os.WriteFile(ks.path(stem), sealed, 0o600)",
+		// The sealed ciphertext is staged to a temp file and atomically renamed
+		// into place (AUD-201 follow-up, mint-lock contention) — same sealed
+		// persistent custody, now crash-atomic and off the mint lock.
+		"tmp.Write(sealed)",
+		"os.Rename(st.tmpPath, st.finalPath)",
 		"func (ks *KeyStore) Load()",
 		"seal.Open(ks.wrapper, sealed, []byte(stem))",
 		"ks.keyFactory.SigningKeyFromSealedBytes(alg, privateKey)",

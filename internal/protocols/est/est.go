@@ -145,8 +145,8 @@ func New(cfg Config) *Server {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /.well-known/est/cacerts", s.cacerts)
-	mux.HandleFunc("POST /.well-known/est/simpleenroll", s.enroll("est-enroll"))
-	mux.HandleFunc("POST /.well-known/est/simplereenroll", s.enroll("est-reenroll"))
+	mux.HandleFunc("POST /.well-known/est/simpleenroll", s.enroll(estOpEnroll))
+	mux.HandleFunc("POST /.well-known/est/simplereenroll", s.enroll(estOpReenroll))
 	mux.HandleFunc("POST /.well-known/est/serverkeygen", s.serverKeygenHandler)
 	mux.HandleFunc("GET /.well-known/est/csrattrs", s.csrattrs)
 	s.mux = mux
@@ -275,6 +275,13 @@ func trimSpace(b []byte) []byte {
 	return out
 }
 
+// EST operation labels; also the gate for the re-enrollment identity binding, so
+// the binding cannot silently drift away from the /simplereenroll route.
+const (
+	estOpEnroll   = "est-enroll"
+	estOpReenroll = "est-reenroll"
+)
+
 // enroll handles /simpleenroll and /simplereenroll. The opType distinguishes them
 // in the audit trail.
 func (s *Server) enroll(opType string) http.HandlerFunc {
@@ -294,6 +301,21 @@ func (s *Server) enroll(opType string) http.HandlerFunc {
 				r.Method+" "+r.URL.Path, "")
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
+		}
+		// RFC 7030 §4.2.2: a re-enrollment must reproduce the identity of the
+		// certificate being renewed. When the caller authenticated with a client
+		// certificate (mTLS route), bind the CSR's subject/SANs to it — otherwise
+		// any credential chaining to the EST client CA could re-key ANY name the
+		// tenant profile admits, one stolen credential tenant-wide in blast radius
+		// (the hole H1 closed for CMP, generalised here; AUD-201 follow-up).
+		if opType == estOpReenroll && isMTLSRoute(r.Context()) {
+			if err := crypto.CSRBoundToTLSClientIdentity(r.TLS, csrDER); err != nil {
+				s.audit(r.Context(), opType, "deny", err.Error())
+				s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepAuthorize, http.StatusForbidden, err),
+					estOperationRef(r, opType, csrDER), s.diagnosticIdentityRef(csrDER))
+				http.Error(w, "est: CSR identity is not bound to the authenticated certificate", http.StatusForbidden)
+				return
+			}
 		}
 		if err := s.verifyChannelBinding(csrDER); err != nil {
 			s.audit(r.Context(), opType, "deny", err.Error())

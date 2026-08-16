@@ -17,7 +17,12 @@ import (
 type secretJSONBytes []byte
 
 func (b *secretJSONBytes) UnmarshalJSON(data []byte) error {
+	// Wipe any bytes already held before reassigning. encoding/json calls
+	// UnmarshalJSON twice for a duplicated key, and a reused decode target keeps
+	// its prior value; without this the earlier secret slice would be dropped
+	// unzeroed on the GC heap (AUD-201 follow-up, AN-8 wipe-on-reassign).
 	if bytes.Equal(data, []byte("null")) {
+		secret.Wipe(*b)
 		*b = nil
 		return nil
 	}
@@ -25,6 +30,7 @@ func (b *secretJSONBytes) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
+	secret.Wipe(*b)
 	*b = out
 	return nil
 }

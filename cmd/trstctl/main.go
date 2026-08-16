@@ -585,6 +585,22 @@ func redact(conn string) string {
 			u.User = url.User("xxxxx")
 		}
 	}
+	// A libpq URL may also carry the credential as a query parameter, which
+	// url.Redacted() does NOT mask (it only masks the userinfo password). Mask
+	// those so no credential form survives into the startup summary.
+	if u.RawQuery != "" {
+		q := u.Query()
+		masked := false
+		for keyword := range dsnSecretKeywords {
+			if q.Has(keyword) {
+				q.Set(keyword, "xxxxx")
+				masked = true
+			}
+		}
+		if masked {
+			u.RawQuery = q.Encode()
+		}
+	}
 	return u.Redacted()
 }
 
@@ -593,6 +609,31 @@ var dsnSecretKeywords = map[string]bool{
 	"password":    true,
 	"passfile":    true,
 	"sslpassword": true,
+}
+
+// hasURLScheme reports whether conn begins with a URL scheme ("scheme://"), the
+// URL DSN form. Per RFC 3986 a scheme is ALPHA *( ALPHA / DIGIT / "+" / "-" /
+// "." ). A keyword/value DSN never starts with a scheme (its first token is
+// key=value), so this distinguishes the two forms without being fooled by a
+// "://" that appears inside a keyword value.
+func hasURLScheme(conn string) bool {
+	if conn == "" || !isASCIILetter(conn[0]) {
+		return false
+	}
+	for i := 0; i < len(conn); i++ {
+		c := conn[i]
+		if c == ':' {
+			return strings.HasPrefix(conn[i:], "://")
+		}
+		if !(isASCIILetter(c) || (c >= '0' && c <= '9') || c == '+' || c == '-' || c == '.') {
+			return false
+		}
+	}
+	return false
+}
+
+func isASCIILetter(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
 // redactKeywordValueDSN masks credential values in a libpq keyword/value DSN.
@@ -607,7 +648,12 @@ var dsnSecretKeywords = map[string]bool{
 // every process start. Anything this lexer cannot parse is redacted
 // CONSERVATIVELY as a whole: mask more, never emit the raw string.
 func redactKeywordValueDSN(conn string) (string, bool) {
-	if strings.Contains(conn, "://") {
+	// Route to the URL redactor only for an actual leading URL scheme
+	// ("postgres://"). A keyword/value DSN may legally contain "://" INSIDE a
+	// value — a Postgres password can — so a bare Contains check misrouted it to
+	// url.Parse, which then parsed the whole string as a path with no userinfo
+	// and echoed the credential intact (AUD-201 follow-up, kv-DSN "://" leak).
+	if hasURLScheme(conn) {
 		return "", false
 	}
 	const unparseable = "[unparseable connection string; redacted]"

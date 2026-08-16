@@ -85,6 +85,10 @@ func TestRedactMasksSpacedAndQuotedDSNForms(t *testing.T) {
 		{"escaped quote in value", `host=db password='it\'s ` + secret + `' dbname=d`},
 		{"escaped backslash", `host=db password='` + secret + `\\' dbname=d`},
 		{"leading secret pair", "password = " + secret},
+		// A kv-DSN whose value contains "://" must NOT be misrouted to the URL
+		// redactor, which parsed it as a bare path and echoed the credential.
+		{"scheme inside value", "host=db password=a/b://" + secret + " dbname=d"},
+		{"uri query password", "postgres://trstctl@db.internal:5432/trstctl?sslmode=require&password=" + secret},
 		{"uri form", "postgres://trstctl:" + secret + "@db.internal:5432/trstctl"},
 		{"unterminated quote", "host=db password='" + secret},
 		{"dangling key", "host=db password"},

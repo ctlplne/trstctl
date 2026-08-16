@@ -23,7 +23,6 @@ import (
 	"encoding/asn1"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 )
 
@@ -305,64 +304,15 @@ func ParseCMPRequestWithTrust(der []byte, verifyCSR func([]byte) error, anchors 
 // protected the message. CMP authenticated WHO was asking and then ignored the
 // answer — any client chaining to the anchors could enroll for ANY name the
 // profile suffix admitted, so one stolen device credential was tenant-wide in
-// blast radius. The same twin checks exist elsewhere in the codebase: ACME's
-// finalize CSR-to-order match and the mTLS agent's CN validation.
+// blast radius. It shares CSRBoundToCertificateIdentity with EST/agent so the
+// one binding rule cannot drift between mounts, wrapping the shared refusal in
+// the CMP sentinel the handler maps to its RFC 4210 failInfo.
 func csrBoundToProtectionIdentity(csrDER []byte, protection *x509.Certificate) error {
-	csr, err := x509.ParseCertificateRequest(csrDER)
-	if err != nil {
-		return fmt.Errorf("cmp: parse CSR for identity binding: %w", err)
+	err := CSRBoundToCertificateIdentity(csrDER, protection)
+	if errors.Is(err, ErrCSRNotBoundToIdentity) {
+		return fmt.Errorf("%w: %v", ErrCMPCSRNotBound, err)
 	}
-	authorized := map[string]bool{}
-	if cn := strings.TrimSpace(protection.Subject.CommonName); cn != "" {
-		authorized["dns:"+strings.ToLower(cn)] = true
-		authorized["cn:"+strings.ToLower(cn)] = true
-	}
-	for _, dns := range protection.DNSNames {
-		authorized["dns:"+strings.ToLower(dns)] = true
-	}
-	for _, ip := range protection.IPAddresses {
-		authorized["ip:"+ip.String()] = true
-	}
-	for _, email := range protection.EmailAddresses {
-		authorized["email:"+strings.ToLower(email)] = true
-	}
-	for _, uri := range protection.URIs {
-		authorized["uri:"+uri.String()] = true
-	}
-
-	var requested []string
-	if cn := strings.TrimSpace(csr.Subject.CommonName); cn != "" {
-		requested = append(requested, "cn:"+strings.ToLower(cn))
-	}
-	for _, dns := range csr.DNSNames {
-		requested = append(requested, "dns:"+strings.ToLower(dns))
-	}
-	for _, ip := range csr.IPAddresses {
-		requested = append(requested, "ip:"+ip.String())
-	}
-	for _, email := range csr.EmailAddresses {
-		requested = append(requested, "email:"+strings.ToLower(email))
-	}
-	for _, uri := range csr.URIs {
-		requested = append(requested, "uri:"+uri.String())
-	}
-	if len(requested) == 0 {
-		// Nothing to authorize is not authorization: an identifier-free CSR
-		// under the binding policy is refused rather than minted blind.
-		return fmt.Errorf("%w: the CSR requests no identifiers", ErrCMPCSRNotBound)
-	}
-	for _, want := range requested {
-		if authorized[want] {
-			continue
-		}
-		// A CSR CN is also satisfied by a matching protection SAN (cn: falls
-		// back to dns: above); anything else is a cross-identity request.
-		if strings.HasPrefix(want, "cn:") && authorized["dns:"+strings.TrimPrefix(want, "cn:")] {
-			continue
-		}
-		return fmt.Errorf("%w: %q is not asserted by the protection certificate", ErrCMPCSRNotBound, want)
-	}
-	return nil
+	return err
 }
 
 // BuildCMPResponse builds a signature-protected CMP cp PKIMessage carrying the issued

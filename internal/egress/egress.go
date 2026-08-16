@@ -14,7 +14,9 @@ import (
 	"net/url"
 	"strings"
 	"sync/atomic"
+
 	"time"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 // ErrBlocked is returned when the guard refuses outbound egress.
@@ -57,7 +59,11 @@ func NewGuard(cfg Config) (*Guard, error) {
 		if raw == "" {
 			continue
 		}
-		prefix, err := netip.ParsePrefix(raw)
+		// Parse through the shared egress-prefix parser so the dial-time guard
+		// rejects the same host-bits/wildcard entries every config surface now
+		// refuses, instead of silently masking them via prefix.Contains (AUD-201
+		// follow-up: a host-bits entry widens, "0.0.0.0/0" becomes allow-all).
+		prefix, err := netsec.ParseEgressAllowPrefix(raw)
 		if err != nil {
 			return nil, fmt.Errorf("egress allow_cidrs %q: %w", raw, err)
 		}

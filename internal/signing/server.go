@@ -223,27 +223,43 @@ func (s *Server) GenerateKey(ctx context.Context, req *signerpb.GenerateKeyReque
 // failure inside mintHeldKey, so each caller keeps its own message and status.
 var errKeyHandleExists = errors.New("signing: key handle already exists")
 
-// mintHeldKey is the ONE mint path: persist the new key sealed at rest
-// (R3.2), then publish its handle, holding s.mu across both.
+// mintHeldKey is the ONE mint path: persist the new key sealed at rest (R3.2),
+// then publish its handle — never publishing a handle that is not yet durable.
 //
 // The primary GenerateKey RPC used to insert into s.keys, unlock, and only
 // then save — with a compensating delete on failure. That left a window where
 // the handle resolved to a key no restart would recover, and a concurrent Sign
 // could produce a signature the delete cannot undo (AUD-201 follow-up C1/V19;
 // GenerateSuccessorKey was fixed in the same commit that condemned the old
-// ordering while the RPC kept it). Holding s.mu across the save serialises
-// minting behind a file write, which is acceptable: minting is rare, and the
-// alternative is a handle that is visible but not durable. KeyStore.Save
-// touches only the filesystem and the seal wrapper — it never re-enters the
-// server — so this cannot deadlock.
+// ordering while the RPC kept it).
+//
+// The expensive half of the save — sealing and writing the key file — is staged
+// OUTSIDE s.mu, so it no longer stalls every concurrent Sign (which takes s.mu
+// only to resolve a handle). Under s.mu we do just the exists check, the
+// destroyed-tombstone check, the fast atomic rename (commit), and the in-memory
+// publish — keeping the key durable before it is visible, and keeping the
+// tombstone check atomic with the rename so a concurrent destroy cannot be
+// resurrected. staging touches only the filesystem and the seal wrapper — it
+// never re-enters the server — so this cannot deadlock.
 func (s *Server) mintHeldKey(id string, held *heldKey) error {
+	var staged *stagedSave
+	if s.store != nil {
+		st, err := s.store.stageSave(id, held.signer, held.constraints)
+		if err != nil {
+			return err
+		}
+		staged = st
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, exists := s.keys[id]; exists {
+		if staged != nil {
+			staged.discard()
+		}
 		return errKeyHandleExists
 	}
-	if s.store != nil {
-		if err := s.store.Save(id, held.signer, held.constraints); err != nil {
+	if staged != nil {
+		if err := staged.commit(); err != nil {
 			return err
 		}
 	}

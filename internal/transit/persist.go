@@ -109,7 +109,7 @@ func (s *Store) Save(svc *Service) error {
 		ring := rings[i]
 		exported, err := ring.export()
 		if err != nil {
-			wipePersistedSignKeys(state)
+			wipePersistedKeys(state)
 			return fmt.Errorf("transit: export keyring for tenant %s: %w", tenantID, err)
 		}
 		if len(exported) > 0 {
@@ -125,10 +125,10 @@ func (s *Store) Save(svc *Service) error {
 // before this existed every checkpoint abandoned each signing key's DER on the
 // GC heap, recoverable from a heap dump or core file (AUD-201 follow-up B2/V6).
 func (s *Store) sealAndCommit(state persistedState) error {
-	// Only the SignPKCS8 copies are independently wipeable. The AEAD and HMAC
-	// entries ALIAS the live ring keys (export copies the slice headers, not the
-	// key bytes), so wiping them here would destroy the in-memory keyring.
-	defer wipePersistedSignKeys(state)
+	// export() deep-copies AEAD/HMAC/SignPKCS8 out of the live ring, so every
+	// entry here is an independent plaintext copy that must be wiped once the
+	// seal below has consumed it (AN-8). This never touches the live keyring.
+	defer wipePersistedKeys(state)
 
 	plaintext, err := json.Marshal(state)
 	if err != nil {
@@ -174,9 +174,14 @@ func (s *Store) sealAndCommit(state persistedState) error {
 		_ = os.Remove(tmpName)
 		return fmt.Errorf("transit: commit sealed keyring: %w", err)
 	}
-	if err := syncKeyringDir(s.dir); err != nil {
-		return fmt.Errorf("transit: sync keyring directory: %w", err)
-	}
+	// The rename has already made the new keyring the durable file: a clean
+	// restart will Load it. The directory fsync only hardens that entry against
+	// power loss and is best-effort AFTER the rename. Returning its error would
+	// report the checkpoint as failed, and CreateKey/Rotate would then roll the
+	// key out of memory while the file already contains it — a restart would
+	// resurrect a key the caller was told failed, and the retry would hit
+	// "transit: key exists" (AUD-201 follow-up, post-rename divergence guard).
+	_ = syncKeyringDir(s.dir)
 	return nil
 }
 
@@ -188,17 +193,49 @@ var (
 	syncKeyringDir  = fsatomic.SyncDirectory
 )
 
-// wipePersistedSignKeys zeroes every exported PKCS#8 signing-key copy in state.
-// It deliberately leaves AEAD/HMAC untouched — those slices alias the live ring
-// keys and belong to the keyring, not to this snapshot.
-func wipePersistedSignKeys(state persistedState) {
+// wipePersistedKeys zeroes every exported key copy in state — AEAD, HMAC and
+// PKCS#8 signing DER. export() deep-copies all of them out of the live ring, so
+// each is an independent plaintext copy that AN-8 requires be wiped once the
+// seal has consumed it; leaving any on the GC heap is recoverable from a heap
+// dump or core file. It never touches the live keyring, only these copies.
+func wipePersistedKeys(state persistedState) {
 	for _, keys := range state.Rings {
-		for _, p := range keys {
-			for _, der := range p.SignPKCS8 {
-				secret.Wipe(der)
-			}
+		wipePersistedRing(keys)
+	}
+}
+
+func wipePersistedRing(keys map[string]persistedKey) {
+	for _, p := range keys {
+		wipePersistedKey(p)
+	}
+}
+
+func wipePersistedKey(p persistedKey) {
+	for _, b := range p.AEAD {
+		secret.Wipe(b)
+	}
+	for _, b := range p.HMAC {
+		secret.Wipe(b)
+	}
+	for _, der := range p.SignPKCS8 {
+		secret.Wipe(der)
+	}
+}
+
+// cloneKeyBytes deep-copies a version-indexed key slice, preserving the nil
+// version-0 placeholder. The copies are independent of the live ring so a
+// concurrent rollback wipe cannot corrupt an in-flight checkpoint's snapshot.
+func cloneKeyBytes(src [][]byte) [][]byte {
+	if len(src) == 0 {
+		return nil
+	}
+	out := make([][]byte, len(src))
+	for i, b := range src {
+		if b != nil {
+			out[i] = append([]byte(nil), b...)
 		}
 	}
+	return out
 }
 
 // Load restores the sealed keyring into svc. A missing file is not an error —
@@ -245,8 +282,15 @@ func (k *Keyring) export() (map[string]persistedKey, error) {
 	out := make(map[string]persistedKey, len(k.keys))
 	for name, nk := range k.keys {
 		p := persistedKey{Kind: nk.kind, Latest: nk.latest}
-		p.AEAD = append(p.AEAD, nk.aead...)
-		p.HMAC = append(p.HMAC, nk.hmac...)
+		// Deep-copy AEAD/HMAC key bytes rather than aliasing the live ring
+		// slices. Aliasing let a concurrent failed-checkpoint rollback wipe
+		// (discardUnpersistedKey/Version) zero the very bytes another Save was
+		// marshalling under Store.mu alone — an unsynchronised read/write race
+		// that could seal all-zero, attacker-predictable key material into the
+		// keyring (AUD-201 follow-up, T-RACE). The independent copies are wiped
+		// after the seal, exactly like the SignPKCS8 DER.
+		p.AEAD = cloneKeyBytes(nk.aead)
+		p.HMAC = cloneKeyBytes(nk.hmac)
 		for _, signer := range nk.sign {
 			if signer == nil {
 				p.SignPKCS8 = append(p.SignPKCS8, nil)
@@ -254,6 +298,11 @@ func (k *Keyring) export() (map[string]persistedKey, error) {
 			}
 			der, err := signer.PKCS8()
 			if err != nil {
+				// Wipe every plaintext copy already made — this key's AEAD/HMAC
+				// and every earlier key's — so a mid-loop failure never abandons
+				// key material on the GC heap (AUD-201 follow-up B2/V6).
+				wipePersistedKey(p)
+				wipePersistedRing(out)
 				return nil, fmt.Errorf("export signing key %q: %w", name, err)
 			}
 			p.SignPKCS8 = append(p.SignPKCS8, der)

@@ -174,8 +174,12 @@ func RunBackup(ctx context.Context, cfg *config.Config, path string) (int, error
 
 	// Event-only backup writes no postgres artifact, so the identity itself is
 	// unused here; deriving it still fail-fasts on a broken manifest-key config.
-	if _, err := configureBackupManifestIdentity(cfg); err != nil {
+	// Release the locked signer immediately — retaining it would leak mlock'd key
+	// material for a validation-only derive (AUD-201 follow-up).
+	if validateID, err := configureBackupManifestIdentity(cfg); err != nil {
 		return 0, err
+	} else {
+		validateID.Close()
 	}
 	key, err := backupIntegrityKey(cfg)
 	if err != nil {
@@ -330,6 +334,7 @@ func RunFullBackup(ctx context.Context, cfg *config.Config, dir string) (backup.
 	if err != nil {
 		return backup.FullManifest{}, err
 	}
+	defer manifestIdentity.Close()
 	key, err := backupIntegrityKey(cfg)
 	if err != nil {
 		return backup.FullManifest{}, err
@@ -669,6 +674,7 @@ func runFullRestore(
 	if err != nil {
 		return result, err
 	}
+	defer manifestIdentity.Close()
 	manifest, err := backup.ReadFullManifest(filepath.Join(dir, backup.FullManifestName))
 	if err != nil {
 		return result, err

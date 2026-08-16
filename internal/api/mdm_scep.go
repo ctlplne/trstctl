@@ -385,13 +385,15 @@ func (a *API) mdmSCEPTelemetry(ctx context.Context, tenantID string) (mdmSCEPTel
 		return mdmSCEPTelemetryResponse{}, nil
 	}
 	return a.mdmTelemetryMemo.get(ctx, a.log, tenantID,
-		func(ctx context.Context) (mdmSCEPTelemetryResponse, error) {
+		func(ctx context.Context) (mdmSCEPTelemetryResponse, uint64, error) {
 			var out mdmSCEPTelemetryResponse
+			var through uint64
 			err := a.log.Replay(ctx, 0, func(ev events.Event) error {
 				a.mdmTelemetryMemo.scannedEvents.Add(1)
+				through = ev.Sequence
 				return foldMDMSCEPTelemetryEvent(&out, tenantID, ev)
 			})
-			return out, err
+			return out, through, err
 		},
 		&headMemoHooks[mdmSCEPTelemetryResponse]{
 			// The value is a plain struct of counters and strings; assignment

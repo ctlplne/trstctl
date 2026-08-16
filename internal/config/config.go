@@ -12,7 +12,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"net/netip"
 	"net/url"
 	"os"
 	"strconv"
@@ -3343,7 +3342,12 @@ func validateAirGap(c *Config) []error {
 		if raw == "" {
 			continue
 		}
-		if _, err := netip.ParsePrefix(raw); err != nil {
+		// Route through the shared egress-prefix parser like every other egress
+		// allowlist surface (J1): it rejects host-bits ("10.1.2.3/8" silently
+		// widening to 10.0.0.0/8) and wildcards ("0.0.0.0/0" meaning allow-all),
+		// which the air-gap guard — the platform's strictest control — must not
+		// accept while reading as a normal entry (AUD-201 follow-up).
+		if _, err := netsec.ParseEgressAllowPrefix(raw); err != nil {
 			errs = append(errs, fmt.Errorf("air_gap.allow_cidrs entry %q is invalid: %w", raw, err))
 		}
 	}

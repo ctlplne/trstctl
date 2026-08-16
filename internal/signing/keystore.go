@@ -198,17 +198,34 @@ func decodeConstraintMeta(plaintext []byte) (keyConstraints, signerpb.Algorithm,
 // the handle as AAD) and writes it 0600. The unsealed key copy lives only for the
 // moment of sealing, then is wiped (AN-8).
 func (ks *KeyStore) Save(handle string, ls signerKey, constraints keyConstraints) error {
-	stem := sanitizeHandle(handle)
-	destroyed, err := ks.IsDestroyed(handle)
+	staged, err := ks.stageSave(handle, ls, constraints)
 	if err != nil {
 		return err
 	}
-	if destroyed {
-		return errors.New("signing: destroyed key handle cannot be recreated")
-	}
+	return staged.commit()
+}
+
+// stagedSave is a sealed key written to a temp file, ready to be committed into
+// place with a fast atomic rename. commit or discard must be called exactly once.
+type stagedSave struct {
+	ks        *KeyStore
+	handle    string
+	tmpPath   string
+	finalPath string
+}
+
+// stageSave does the EXPENSIVE half of Save — extract, seal, and write the sealed
+// ciphertext to a unique temp file, fsync'd — WITHOUT publishing it. A caller can
+// run this outside a hot lock and hold that lock only for commit (a stat + a fast
+// rename), so minting a key no longer stalls concurrent Sign RPCs behind a file
+// write (AUD-201 follow-up, mint-lock contention). It deliberately does NOT check
+// the destroyed tombstone: that check must be atomic with the rename to keep a
+// concurrent destroy from being resurrected, so commit performs it.
+func (ks *KeyStore) stageSave(handle string, ls signerKey, constraints keyConstraints) (*stagedSave, error) {
+	stem := sanitizeHandle(handle)
 	keyBytes, err := privateKeyBytesForSealing(ls)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer secret.Wipe(keyBytes)
 	// Frame: metadata header || DER. The header is non-secret, but it shares the
@@ -220,13 +237,59 @@ func (ks *KeyStore) Save(handle string, ls signerKey, constraints keyConstraints
 	defer secret.Wipe(plaintext)
 	sealed, err := seal.Seal(ks.wrapper, plaintext, []byte(stem))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := os.MkdirAll(ks.dir, 0o700); err != nil {
+		return nil, err
+	}
+	finalPath := ks.path(stem)
+	// A unique temp in the destination directory keeps the rename same-filesystem
+	// atomic; the ".tmp-*" suffix keeps it out of Load's ".key" scan.
+	tmp, err := os.CreateTemp(ks.dir, filepath.Base(finalPath)+".tmp-*")
+	if err != nil {
+		return nil, err
+	}
+	tmpName := tmp.Name()
+	if _, err := tmp.Write(sealed); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return nil, err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return nil, err
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpName)
+		return nil, err
+	}
+	return &stagedSave{ks: ks, handle: handle, tmpPath: tmpName, finalPath: finalPath}, nil
+}
+
+// commit checks the destroyed tombstone and, if the handle is still alive,
+// atomically renames the staged key into place. The check and rename are the
+// caller's critical section: either the tombstone is seen here and the key is
+// refused, or a concurrent destroy's own remove runs after the caller publishes.
+func (st *stagedSave) commit() error {
+	destroyed, err := st.ks.IsDestroyed(st.handle)
+	if err != nil {
+		st.discard()
 		return err
 	}
-	return os.WriteFile(ks.path(stem), sealed, 0o600)
+	if destroyed {
+		st.discard()
+		return errors.New("signing: destroyed key handle cannot be recreated")
+	}
+	if err := os.Rename(st.tmpPath, st.finalPath); err != nil {
+		st.discard()
+		return err
+	}
+	return nil
 }
+
+// discard removes the staged temp file for a key that will not be committed.
+func (st *stagedSave) discard() { _ = os.Remove(st.tmpPath) }
 
 // Load reads and unseals every persisted key into a handle->heldKey map (key
 // material plus restored usage constraints). A missing directory is an empty

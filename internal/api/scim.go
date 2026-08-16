@@ -667,6 +667,12 @@ func decodeSCIMRaw(w http.ResponseWriter, raw []byte, dst any) bool {
 // operation.
 const scimRetryWindow = 5 * time.Minute
 
+// scimRetryStraddleGrace bounds how far into a bucket the previous-bucket dedupe
+// consult stays active. Only a retry within this grace of the boundary can
+// straddle it; past it a byte-identical request is a deliberate repeat and must
+// execute rather than be deduped against a result up to a full window old.
+const scimRetryStraddleGrace = 10 * time.Second
+
 // scimNow is the derivation clock, injectable so boundary behaviour is
 // testable without wall-time flakiness.
 var scimNow = time.Now
@@ -684,7 +690,17 @@ func scimIdempotencyKey(r *http.Request, body []byte) (key, previous string) {
 		defer secret.Wipe(material)
 		return "scim:" + crypto.SHA256Hex(material)
 	}
-	bucket := scimNow().UTC().Truncate(scimRetryWindow)
+	now := scimNow().UTC()
+	bucket := now.Truncate(scimRetryWindow)
+	// The previous bucket is consulted only for a retry that STRADDLES the
+	// boundary — such a retry arrives moments into the new bucket. Past the grace
+	// period a byte-identical request is a deliberate repeat (e.g. a second
+	// deprovision after an out-of-band re-enable) and must execute, not be
+	// deduped against a result up to a full window old (AUD-201 follow-up,
+	// previous-bucket recency bound).
+	if now.Sub(bucket) > scimRetryStraddleGrace {
+		return derive(bucket), ""
+	}
 	return derive(bucket), derive(bucket.Add(-scimRetryWindow))
 }
 

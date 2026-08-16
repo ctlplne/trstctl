@@ -239,6 +239,23 @@ type PostgresStateIdentity struct {
 	TrustAnchors [][]byte
 }
 
+// Close releases the locked key material the identity holds. The signer is
+// derived fresh per operation (K1/V32) into mlock'd memory (AN-8) and is never
+// shared, so the derive site must Destroy it when done — otherwise the nightly
+// restore drill leaks one locked, never-zeroized key copy per run, accumulating
+// against RLIMIT_MEMLOCK until every locked-key allocation fails (AUD-201
+// follow-up). Safe on a zero identity and idempotent.
+func (id PostgresStateIdentity) Close() {
+	if id.Signer == nil {
+		return
+	}
+	if d, ok := crypto.DigestSignerFrom(id.Signer); ok {
+		if destroyer, ok := d.(interface{ Destroy() }); ok {
+			destroyer.Destroy()
+		}
+	}
+}
+
 func WritePostgresStateTxWithKey(ctx context.Context, snapshot *PostgresStateSnapshot, w io.Writer, eventCut uint64, key []byte, id PostgresStateIdentity) (PostgresStateSummary, error) {
 	// WritePostgresStateTx is exported for the full-backup coordinator, so defend
 	// it with an attested snapshot that external callers cannot construct around

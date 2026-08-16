@@ -864,14 +864,22 @@ func (i *Idempotency) LookupBound(ctx context.Context, tenantID, key, binding st
 	if i.memory != nil {
 		i.memoryMu.Lock()
 		record, exists := i.boundMemory[tenantID+"\x00"+key]
-		var out []byte
-		found := false
-		if exists && record.completed && idempotencyBindingEqual(record.binding, binding) {
-			out = append([]byte(nil), record.result...)
-			found = true
+		if !exists || !record.completed || !idempotencyBindingEqual(record.binding, binding) {
+			i.memoryMu.Unlock()
+			return nil, false, nil
 		}
+		result := append([]byte(nil), record.result...)
+		codec := record.codec
 		i.memoryMu.Unlock()
-		return out, found, nil
+		// Route through openResult exactly like the doBoundMemory replay path so
+		// result_codec is honored: a sealed/unknown-codec row yields the explicit
+		// codec error, never opaque ciphertext handed back as a cached response
+		// (AUD-201 follow-up, LookupBound codec bypass).
+		plaintext, openErr := i.openResult(ctx, tenantID, key, binding, codec, result)
+		if openErr != nil {
+			return nil, false, openErr
+		}
+		return plaintext, true, nil
 	}
 	if i.store == nil {
 		return nil, false, nil
@@ -900,15 +908,16 @@ func (i *Idempotency) LookupBound(ctx context.Context, tenantID, key, binding st
 		secret.Wipe(result)
 		return nil, false, err
 	}
-	if i.resultProtector != nil {
-		plaintext, openErr := i.openResult(ctx, tenantID, key, binding, codec, result)
-		secret.Wipe(result)
-		if openErr != nil {
-			return nil, false, openErr
-		}
-		return plaintext, true, nil
+	// Always route through openResult so result_codec is honored whether or not a
+	// protector is configured: a sealed row on a downgraded/unconfigured fleet
+	// yields the explicit codec error, never opaque ciphertext served as a cached
+	// response (AUD-201 follow-up, LookupBound codec bypass). openResult consumes
+	// and wipes the scanned bytes.
+	plaintext, openErr := i.openResult(ctx, tenantID, key, binding, codec, result)
+	if openErr != nil {
+		return nil, false, openErr
 	}
-	return result, true, nil
+	return plaintext, true, nil
 }
 
 func (i *Idempotency) DoBound(ctx context.Context, tenantID, key, binding string, fn func(context.Context) ([]byte, error)) ([]byte, error) {

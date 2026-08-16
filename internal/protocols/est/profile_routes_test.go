@@ -106,8 +106,14 @@ func TestMTLSSiblingRouteEnrollsWithTrustedClientCert(t *testing.T) {
 		t.Fatalf("TLSStateWithPeerCertificates: %v", err)
 	}
 
+	// Initial enrollment (RFC 7030 §4.2.1) may carry a CSR whose subject differs
+	// from the client certificate.
 	postESTCSR(t, dispatcher, "/.well-known/est-mtls/wifi/simpleenroll", tlsState, http.StatusOK)
-	postESTCSR(t, dispatcher, "/.well-known/est-mtls/wifi/simplereenroll", tlsState, http.StatusOK)
+	// Re-enrollment (§4.2.2) must reproduce the authenticated identity: a CSR for
+	// the client cert's own name succeeds, a cross-identity CSR is refused so a
+	// stolen credential cannot re-key an arbitrary name (AUD-201 follow-up).
+	postESTCSRBody(t, dispatcher, "/.well-known/est-mtls/wifi/simplereenroll", tlsState, clientMatchingCSR(t), http.StatusOK)
+	postESTCSRBody(t, dispatcher, "/.well-known/est-mtls/wifi/simplereenroll", tlsState, deviceCSR(t), http.StatusForbidden)
 	postESTCSR(t, dispatcher, "/.well-known/est-mtls/wifi/simpleenroll", nil, http.StatusUnauthorized)
 }
 
@@ -126,8 +132,13 @@ func newProfileRouteServer(t *testing.T, profileName string, auth est.Authentica
 
 func postESTCSR(t *testing.T, h http.Handler, path string, tlsState any, want int) {
 	t.Helper()
+	postESTCSRBody(t, h, path, tlsState, deviceCSR(t), want)
+}
+
+func postESTCSRBody(t *testing.T, h http.Handler, path string, tlsState any, csrDER []byte, want int) {
+	t.Helper()
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, path, b64Body(deviceCSR(t)))
+	req := httptest.NewRequest(http.MethodPost, path, b64Body(csrDER))
 	if state, ok := tlsState.(*crypto.TLSConnectionState); ok {
 		req.TLS = state.ConnectionState()
 	}
@@ -135,6 +146,22 @@ func postESTCSR(t *testing.T, h http.Handler, path string, tlsState any, want in
 	if rec.Code != want {
 		t.Fatalf("%s status %d (%s), want %d", path, rec.Code, rec.Body.String(), want)
 	}
+}
+
+// clientMatchingCSR builds a CSR whose subject is the identity selfSignedClientCert
+// asserts ("est-client"), so the re-enrollment identity binding accepts it.
+func clientMatchingCSR(t *testing.T) []byte {
+	t.Helper()
+	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(key.Destroy)
+	csr, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{CommonName: "est-client"}, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return csr
 }
 
 func selfSignedClientCert(t *testing.T) []byte {

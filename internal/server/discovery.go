@@ -1115,7 +1115,15 @@ func privateEgressSafeClientOptions(cidrs []string) (netsec.SafeClientOptions, e
 		}
 		prefix, err := netsec.ParseEgressAllowPrefix(raw)
 		if err != nil {
-			return opts, fmt.Errorf("private_egress_cidrs contains invalid CIDR %q: %w", raw, err)
+			// A legacy stored integration row (written before the API-side
+			// host-bits reject existed) may carry an entry the shared parser now
+			// refuses. Skip it rather than hard-failing the whole egress client:
+			// the pre-J1 dial path silently skipped such entries too, so one dead
+			// CIDR does not become a full integration outage on upgrade. New
+			// writes are validated at the API boundary, and dropping an entry is
+			// fail-closed — it narrows the allowlist, never widens it (AUD-201
+			// follow-up, egress-regression).
+			continue
 		}
 		opts.AllowPrivateCIDRs = append(opts.AllowPrivateCIDRs, prefix)
 	}

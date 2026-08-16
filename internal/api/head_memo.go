@@ -48,19 +48,26 @@ type headMemoHooks[T any] struct {
 // cached value. Catch-up failures (generation switch, gap) and head
 // regressions fall back to the from-zero rebuild. A failed head read falls
 // back to an uncached rebuild rather than failing the request.
+// rebuild replays the projection from zero and returns both the value and the
+// highest log sequence it actually folded through. The reached sequence — not
+// the head sampled before the rebuild — is what the value is stored at, because
+// rebuild resolves the LIVE head at replay time and a concurrent append can push
+// the value past the sampled head.
 func (m *headMemo[T]) get(
 	ctx context.Context,
 	log *events.Log,
 	tenantID string,
-	rebuild func(context.Context) (T, error),
+	rebuild func(context.Context) (T, uint64, error),
 	hooks *headMemoHooks[T],
 ) (T, error) {
 	if log == nil {
-		return rebuild(ctx)
+		value, _, buildErr := rebuild(ctx)
+		return value, buildErr
 	}
 	head, err := log.LastSequence(ctx)
 	if err != nil {
-		return rebuild(ctx)
+		value, _, buildErr := rebuild(ctx)
+		return value, buildErr
 	}
 	m.mu.Lock()
 	cached, ok := m.byTenant[tenantID]
@@ -78,21 +85,37 @@ func (m *headMemo[T]) get(
 			return built, nil
 		}
 	}
-	built, err := rebuild(ctx)
+	built, through, err := rebuild(ctx)
 	if err != nil {
 		return built, err
 	}
-	m.store(tenantID, built, head)
+	// Store at the sequence the rebuild actually folded through, not the head
+	// sampled before it. A concurrent append during the rebuild lands in `built`
+	// at a sequence past `head`; recording the stale `head` would let the next
+	// incremental catch-up re-fold that event onto a non-idempotent projection
+	// (AUD-201 follow-up, memo double-fold). `head` is a lower bound the rebuild
+	// always reaches, so never record less than it.
+	if through < head {
+		through = head
+	}
+	m.store(tenantID, built, through)
 	return built, nil
 }
 
 func (m *headMemo[T]) store(tenantID string, value T, head uint64) {
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.byTenant == nil {
 		m.byTenant = map[string]headMemoEntry[T]{}
 	}
+	// Monotonic: never regress a tenant's entry to an older sequence. get runs
+	// its rebuild/catch-up outside m.mu, so two concurrent requests can finish
+	// out of order; the one that sampled the older head must not clobber the
+	// newer cached value (AUD-201 follow-up, non-monotonic store).
+	if existing, ok := m.byTenant[tenantID]; ok && head <= existing.atSeq {
+		return
+	}
 	m.byTenant[tenantID] = headMemoEntry[T]{value: value, atSeq: head}
-	m.mu.Unlock()
 }
 
 // prime stores a value directly; tests use it to seed cache states.
