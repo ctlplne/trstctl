@@ -726,6 +726,7 @@ docker-context-check: ## Prove ignored caches/secrets cannot enter any Docker bu
 .PHONY: image
 image: docker-context-check ## Build the control-plane container image (deploy/docker/Dockerfile)
 	docker build -f deploy/docker/Dockerfile \
+		--target release \
 		--build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg DATE=$(DATE) \
 		-t trstctl:$(VERSION) .
 
@@ -769,6 +770,7 @@ reproducible-check: ## Build shipped binaries and image layers twice; verify byt
 		echo ">> reproducible image layers $$tag"; \
 		DOCKER_BUILDKIT=1 SOURCE_DATE_EPOCH=$$(git show -s --format=%ct HEAD 2>/dev/null || echo 0) \
 		docker buildx build \
+			--target release \
 			--provenance=false \
 			--sbom=false \
 			--output "type=oci,dest=$$oci,rewrite-timestamp=true" \

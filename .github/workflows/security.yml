@@ -82,6 +82,7 @@ jobs:
         run: |
           set -euo pipefail
           docker build \
+            --target release \
             --build-arg BASE_IMAGE='${{ steps.base.outputs.ref }}' \
             -f deploy/docker/Dockerfile \
             -t trstctl:ci-scan .

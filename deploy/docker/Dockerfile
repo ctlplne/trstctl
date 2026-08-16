@@ -158,9 +158,14 @@ USER 65532:65532
 EXPOSE 8443
 ENTRYPOINT ["/usr/local/bin/trstctl"]
 
-# Explicit demo-only image target. Compose selects this target; release builds
-# continue to stop at `runtime`, which contains no demo trust anchor or license.
+# Explicit demo-only image target. Only deploy/demo selects this target; ordinary
+# evaluation and release builds select the clean `release` alias below.
 FROM runtime AS demo
 COPY --from=demo-build /out/trstctl /usr/local/bin/trstctl
 COPY --from=demo-build /out/trstctl-signer /usr/local/bin/trstctl-signer
 COPY --from=demo-build --chown=65532:65532 /out/demo-provider-license.json /etc/trstctl/demo-provider-license.json
+
+# Keep the clean production image as Docker's default final stage. This alias is
+# deliberately after `demo`: a bare Docker build must never inherit the demo trust
+# anchor or its Provider entitlement just because Docker selects the last stage.
+FROM runtime AS release

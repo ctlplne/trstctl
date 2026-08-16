@@ -136,6 +136,36 @@ func TestDockerfileIsMinimalAndReproducible(t *testing.T) {
 	})
 }
 
+// TestProductionImageEntrypointsSelectCleanReleaseTarget prevents the demo-only
+// Provider entitlement and trust anchor from becoming the implicit production
+// image merely because Docker builds the last stage by default. The Dockerfile
+// must end in a clean release alias, and every shipped production build path must
+// select that alias explicitly. Only deploy/demo may opt into the demo target.
+func TestProductionImageEntrypointsSelectCleanReleaseTarget(t *testing.T) {
+	dockerfile := strings.TrimSpace(readArtifact(t, "Dockerfile"))
+	if !strings.HasSuffix(dockerfile, "FROM runtime AS release") {
+		t.Fatal("Dockerfile must end with clean `FROM runtime AS release`; default builds must never resolve to the demo stage")
+	}
+
+	compose := readArtifact(t, "docker-compose.yml")
+	if got := strings.Count(compose, "target: release"); got != 2 {
+		t.Fatalf("evaluation Compose production target selections = %d, want 2 (signer and trstctl)", got)
+	}
+
+	makefile := repoFile(t, "Makefile")
+	if got := strings.Count(makefile, "--target release"); got < 2 {
+		t.Fatalf("Makefile production target selections = %d, want at least 2 (image and reproducibility builds)", got)
+	}
+
+	releaseWorkflow := repoFile(t, ".github", "workflows", "release.yml")
+	if got := strings.Count(releaseWorkflow, "target: release"); got < 2 {
+		t.Fatalf("release workflow production target selections = %d, want at least 2 (size-check and published image builds)", got)
+	}
+
+	securityWorkflow := repoFile(t, ".github", "workflows", "security.yml")
+	mustContainAll(t, "security image scan production target", securityWorkflow, "--target release")
+}
+
 // dockerfileCmdTargets extracts the distinct `<bin>` names from every `./cmd/<bin>`
 // reference in a Dockerfile (the build targets).
 func dockerfileCmdTargets(df string) []string {
