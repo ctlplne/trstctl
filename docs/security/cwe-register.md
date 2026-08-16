@@ -1412,7 +1412,7 @@ not this file.
 | `internal/crypto/ctlog/ctlog_test.go:116` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `internal/projections/graph_api_test.go:246` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `internal/server/issuance_dispatcher_test.go:1393` | fixed-shape test data; the index is in range by construction (CWE-118) |
-| `tools/dodcensus/managed_key_closure.go:703` | fixed-shape data inside a developer tool (CWE-118) |
+| `tools/dodcensus/managed_key_closure.go:709` | fixed-shape data inside a developer tool (CWE-118) |
 
 ### G702 — CWE-78 OS command injection (taint) (7 sites)
 
