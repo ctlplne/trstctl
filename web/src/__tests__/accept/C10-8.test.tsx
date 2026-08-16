@@ -17,9 +17,6 @@ const fullyPermittedOperator = {
   permissions: ["*"],
 };
 
-
-
-
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     agents: vi.fn(),

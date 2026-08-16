@@ -53,7 +53,6 @@ vi.mock("@/auth/AuthProvider", async (orig) => {
   };
 });
 
-
 function DemoFormats() {
   const { formatDate: localizedDate, formatNumber: localizedNumber, formatPlural: localizedPlural, t } = useTranslation();
   return (
