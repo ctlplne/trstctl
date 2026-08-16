@@ -707,28 +707,8 @@ func runFullRestore(
 	if err := verifyFullRestoreArtifactFiles(dir, manifestIdentity); err != nil {
 		return result, err
 	}
-	// Version-1 backups created before AUD-63 carried a separate plaintext audit
-	// PEM. Restore it only when present so the signer can migrate it before serving;
-	// new backups recover the audit key exclusively as part of signer-keystore.
-	if _, ok := manifestArtifact(manifest, "audit-signing-key"); ok {
-		if err := restoreFileArtifact(manifest, "audit-signing-key", dir, filepath.Join(dir, "files", "audit-signing-key.pem"), cfg.Audit.SigningKeyFile, enc.key); err != nil {
-			return result, err
-		}
-	}
-	for _, spec := range []struct {
-		name string
-		src  string
-		dst  string
-	}{
-		{"signer-auth-secret", filepath.Join(dir, "files", "signer-auth-secret.bin"), cfg.Signer.AuthSecretFile},
-		{"ca-certificate", filepath.Join(dir, "files", "issuing-ca.crt"), cfg.CA.CertFile},
-	} {
-		if err := restoreFileArtifact(manifest, spec.name, dir, spec.src, spec.dst, enc.key); err != nil {
-			return result, err
-		}
-	}
-	if err := restoreDirArtifact(manifest, "signer-keystore", dir, filepath.Join(dir, "files", "signer-keystore"), cfg.Signer.KeyStoreDir, enc.key); err != nil {
-		return result, fmt.Errorf("restore signer keystore: %w", err)
+	if err := restoreFullBackupFileArtifacts(manifest, dir, cfg, enc.key); err != nil {
+		return result, err
 	}
 
 	eventsRestored, err := restoreEventLog(ctx, cfg, filepath.Join(dir, "events.jsonl"), true, isolatedEventTarget, factories...)
@@ -798,6 +778,36 @@ func runFullRestore(
 		}
 	}
 	return result, nil
+}
+
+// restoreFullBackupFileArtifacts restores the signer-owned static files before
+// event or PostgreSQL state can be replayed. Keeping this as one named stage makes
+// the key/CA migration boundary reviewable independently from read-model recovery.
+func restoreFullBackupFileArtifacts(manifest backup.FullManifest, dir string, cfg *config.Config, encryptionKey []byte) error {
+	// Version-1 backups created before AUD-63 carried a separate plaintext audit
+	// PEM. Restore it only when present so the signer can migrate it before serving;
+	// new backups recover the audit key exclusively as part of signer-keystore.
+	if _, ok := manifestArtifact(manifest, "audit-signing-key"); ok {
+		if err := restoreFileArtifact(manifest, "audit-signing-key", dir, filepath.Join(dir, "files", "audit-signing-key.pem"), cfg.Audit.SigningKeyFile, encryptionKey); err != nil {
+			return err
+		}
+	}
+	for _, spec := range []struct {
+		name string
+		src  string
+		dst  string
+	}{
+		{"signer-auth-secret", filepath.Join(dir, "files", "signer-auth-secret.bin"), cfg.Signer.AuthSecretFile},
+		{"ca-certificate", filepath.Join(dir, "files", "issuing-ca.crt"), cfg.CA.CertFile},
+	} {
+		if err := restoreFileArtifact(manifest, spec.name, dir, spec.src, spec.dst, encryptionKey); err != nil {
+			return err
+		}
+	}
+	if err := restoreDirArtifact(manifest, "signer-keystore", dir, filepath.Join(dir, "files", "signer-keystore"), cfg.Signer.KeyStoreDir, encryptionKey); err != nil {
+		return fmt.Errorf("restore signer keystore: %w", err)
+	}
+	return nil
 }
 
 // verifyFullRestoreArtifactFiles proves the event and PostgreSQL artifacts name
