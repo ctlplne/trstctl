@@ -31,6 +31,40 @@ func TestPQCPlacementAllowsOnlyNonShippedEvidenceTooling(t *testing.T) {
 	}
 }
 
+func TestRepoSourcePathIgnoresCheckoutParentNames(t *testing.T) {
+	filename := "/Users/example/Desktop/ctlplne-trstctl/qa-worktrees/dev/docs/aud65_test.go"
+	if got, want := repoSourcePath(filename, modulePath+"/docs"), "docs/aud65_test.go"; got != want {
+		t.Fatalf("repoSourcePath() = %q, want %q", got, want)
+	}
+	if got, want := repoSourcePath(filename, modulePath+"/docs_test"), "docs/aud65_test.go"; got != want {
+		t.Fatalf("repoSourcePath() for external test package = %q, want %q", got, want)
+	}
+	attach := "/workspace/qa-worktrees/dev/cmd/trstctl/ee_attach.go"
+	if got, want := repoSourcePath(attach, modulePath+"/cmd/trstctl.test"), "cmd/trstctl/ee_attach.go"; got != want {
+		t.Fatalf("repoSourcePath() for synthetic test package = %q, want %q", got, want)
+	}
+
+	eeFilename := "/tmp/a-path-containing-pqc-and-core/ee/pqc/service.go"
+	if got, want := repoSourcePath(eeFilename, modulePath+"/ee/pqc"), "ee/pqc/service.go"; got != want {
+		t.Fatalf("repoSourcePath() for EE = %q, want %q", got, want)
+	}
+}
+
+func TestTaggedAttachSeamsAcceptRepositoryRelativePaths(t *testing.T) {
+	for _, filename := range []string{
+		"cmd/trstctl/ee_attach.go",
+		"cmd/trstctl-signer/ee_attach.go",
+		"cmd/trstctl-agent/cosign_attach.go",
+	} {
+		if !isTaggedAttachSeam(filename) {
+			t.Fatalf("repository-relative attach seam %q was rejected", filename)
+		}
+	}
+	if isTaggedAttachSeam("internal/api/ee_attach.go") {
+		t.Fatal("unapproved repository-relative attach seam was accepted")
+	}
+}
+
 func TestPQCOperatorLabExemptionContainsNoAlgorithmOrEEImplementation(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join("..", "..", "pqclab", "main.go"))
 	if err != nil {

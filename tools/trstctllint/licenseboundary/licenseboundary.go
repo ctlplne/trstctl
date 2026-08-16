@@ -32,19 +32,45 @@ func run(pass *analysis.Pass) (interface{}, error) {
 		if !isRepoGoFile(filename, pass.Pkg.Path()) {
 			continue
 		}
+		sourcePath := repoSourcePath(filename, pass.Pkg.Path())
 		bodyBytes, err := os.ReadFile(filename) // #nosec G304 -- developer tool reading the repo paths it is pointed at (CWE-22)
 		if err != nil {
 			continue
 		}
 		body := string(bodyBytes)
-		isEE := isEEPath(filename) || strings.HasPrefix(pass.Pkg.Path(), modulePath+"/ee")
+		isEE := isEEPath(sourcePath) || strings.HasPrefix(pass.Pkg.Path(), modulePath+"/ee")
 		checkSPDX(pass, file, isEE, body)
 		if !isEE {
-			checkCoreImports(pass, file, filename)
-			checkCorePQCPlacement(pass, file, filename, body)
+			checkCoreImports(pass, file, sourcePath)
+			checkCorePQCPlacement(pass, file, sourcePath, body)
 		}
 	}
 	return nil, nil
+}
+
+// repoSourcePath derives a stable repository-relative filename from the Go
+// package import path. Analyzer filenames may be absolute and may live under a
+// worktree whose parent directories contain policy keywords. Those host path
+// names are not source and must never influence edition classification.
+func repoSourcePath(filename, pkgPath string) string {
+	relPkg, ok := strings.CutPrefix(pkgPath, modulePath)
+	if !ok {
+		return shortPath(filename)
+	}
+	relPkg = strings.Trim(relPkg, "/")
+	parts := strings.Split(relPkg, "/")
+	if len(parts) > 0 {
+		last := parts[len(parts)-1]
+		last = strings.TrimSuffix(last, ".test")
+		last = strings.TrimSuffix(last, "_test")
+		parts[len(parts)-1] = last
+		relPkg = strings.Join(parts, "/")
+	}
+	base := filepath.Base(filename)
+	if relPkg == "" {
+		return base
+	}
+	return relPkg + "/" + base
 }
 
 func checkSPDX(pass *analysis.Pass, file *ast.File, isEE bool, body string) {
@@ -184,12 +210,13 @@ func isEEPath(filename string) bool {
 }
 
 func isTaggedAttachSeam(filename string) bool {
-	return strings.HasSuffix(filename, "/cmd/trstctl/ee_attach.go") ||
-		strings.HasSuffix(filename, "/cmd/trstctl-signer/ee_attach.go") ||
+	rel := strings.TrimPrefix(shortPath(filename), "/")
+	return rel == "cmd/trstctl/ee_attach.go" ||
+		rel == "cmd/trstctl-signer/ee_attach.go" ||
 		// The workload agent's co-sign seam (INT-16): the enterprise build serves the
 		// ee/succession/agent CoSignerService; the core build stubs it out. Behind the
 		// same !trstctl_core tag as the other attach seams.
-		strings.HasSuffix(filename, "/cmd/trstctl-agent/cosign_attach.go")
+		rel == "cmd/trstctl-agent/cosign_attach.go"
 }
 
 func isPQCAllowedCorePath(filename string) bool {
@@ -231,6 +258,9 @@ func isPQCAllowedCorePath(filename string) bool {
 
 func shortPath(filename string) string {
 	filename = filepath.ToSlash(filename)
+	if !strings.HasPrefix(filename, "/") {
+		return strings.TrimPrefix(filename, "./")
+	}
 	if i := strings.LastIndex(filename, "/trstctl/"); i >= 0 {
 		return filename[i+len("/trstctl/"):]
 	}
