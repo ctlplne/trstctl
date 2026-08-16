@@ -89,13 +89,13 @@ advisories the code can actually call.
 
 The Go standard library is part of the shipped artifact, so the build
 toolchain is also pinned: `go.mod` requires `go 1.26.0` with `toolchain
-go1.26.5`, the Docker build stage defaults to `GO_VERSION=1.26.5`, and
+go1.26.6`, the Docker build stage defaults to `GO_VERSION=1.26.6`, and
 CI/release use `go-version-file: go.mod` — keeping local, CI, release, and
 container builds on the same patched standard library line.
 
 ```
 $ go version
-go version go1.26.5 darwin/arm64
+go version go1.26.6 darwin/arm64
 
 $ govulncheck ./...
 === Symbol Results ===

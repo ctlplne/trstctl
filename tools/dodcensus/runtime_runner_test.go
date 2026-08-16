@@ -189,23 +189,23 @@ func TestHostDockerCommandBoundaryIsClosed(t *testing.T) {
 
 func TestRuntimeRunnerBaseReferenceIsExactAndToolchainBound(t *testing.T) {
 	repo := t.TempDir()
-	writeFile(t, repo, "go.mod", "module fixture.example/runtime\n\ngo 1.26\ntoolchain go1.26.5\n", 0o600)
-	valid := "golang:1.26.5-bookworm@sha256:" + strings.Repeat("a", 64) + "\n"
+	writeFile(t, repo, "go.mod", "module fixture.example/runtime\n\ngo 1.26\ntoolchain go1.26.6\n", 0o600)
+	valid := "golang:1.26.6-bookworm@sha256:" + strings.Repeat("a", 64) + "\n"
 	writeFile(t, repo, runtimeRunnerBaseFile, valid, 0o600)
 	if got, err := runtimeRunnerBaseReference(repo); err != nil || got != strings.TrimSuffix(valid, "\n") {
 		t.Fatalf("valid committed runner base = %q err=%v", got, err)
 	}
 
 	invalid := []string{
-		"golang:1.26.5-bookworm\n",
+		"golang:1.26.6-bookworm\n",
 		"golang@sha256:" + strings.Repeat("a", 64) + "\n",
-		"golang:1.26.4-bookworm@sha256:" + strings.Repeat("a", 64) + "\n",
+		"golang:1.26.5-bookworm@sha256:" + strings.Repeat("a", 64) + "\n",
 		"golang:latest@sha256:" + strings.Repeat("a", 64) + "\n",
-		"golang:1.26.5-alpine@sha256:" + strings.Repeat("a", 64) + "\n",
-		"docker.io/library/golang:1.26.5-bookworm@sha256:" + strings.Repeat("a", 64) + "\n",
-		"golang:1.26.5-bookworm@sha256:" + strings.Repeat("A", 64) + "\n",
-		"golang:1.26.5-bookworm@sha256:" + strings.Repeat("a", 64),
-		"golang:1.26.5-bookworm@sha256:" + strings.Repeat("a", 64) + "\n\n",
+		"golang:1.26.6-alpine@sha256:" + strings.Repeat("a", 64) + "\n",
+		"docker.io/library/golang:1.26.6-bookworm@sha256:" + strings.Repeat("a", 64) + "\n",
+		"golang:1.26.6-bookworm@sha256:" + strings.Repeat("A", 64) + "\n",
+		"golang:1.26.6-bookworm@sha256:" + strings.Repeat("a", 64),
+		"golang:1.26.6-bookworm@sha256:" + strings.Repeat("a", 64) + "\n\n",
 	}
 	for index, value := range invalid {
 		if err := os.WriteFile(filepath.Join(repo, filepath.FromSlash(runtimeRunnerBaseFile)), []byte(value), 0o600); err != nil {
@@ -220,18 +220,18 @@ func TestRuntimeRunnerBaseReferenceIsExactAndToolchainBound(t *testing.T) {
 func TestRuntimeRunnerGoVersionRejectsCommentSpoofAndMalformedToolchain(t *testing.T) {
 	repo := t.TempDir()
 	path := filepath.Join(repo, "go.mod")
-	valid := "module fixture.example/runtime\n\ngo 1.26\ntoolchain go1.26.5\n"
+	valid := "module fixture.example/runtime\n\ngo 1.26\ntoolchain go1.26.6\n"
 	if err := os.WriteFile(path, []byte(valid), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := runtimeRunnerGoVersion(repo); err != nil || got != "1.26.5" {
+	if got, err := runtimeRunnerGoVersion(repo); err != nil || got != "1.26.6" {
 		t.Fatalf("valid toolchain version = %q err=%v", got, err)
 	}
 	for index, value := range []string{
-		"module fixture.example/runtime\n\ngo 1.26\n// toolchain go1.26.5\n",
-		"module fixture.example/runtime\n\ngo 1.26\ntoolchain go1.26.4\ntoolchain go1.26.5\n",
+		"module fixture.example/runtime\n\ngo 1.26\n// toolchain go1.26.6\n",
+		"module fixture.example/runtime\n\ngo 1.26\ntoolchain go1.26.5\ntoolchain go1.26.6\n",
 		"module fixture.example/runtime\n\ngo 1.26\ntoolchain go1.26\n",
-		"module fixture.example/runtime\n\ngo 1.26\ntoolchain go1.26.5rc1\n",
+		"module fixture.example/runtime\n\ngo 1.26\ntoolchain go1.26.6rc1\n",
 		"module fixture.example/runtime\n\ngo 1.26\ntoolchain default\n",
 	} {
 		if err := os.WriteFile(path, []byte(value), 0o600); err != nil {
@@ -248,8 +248,8 @@ func TestRuntimeRunnerClosureRejectsMissingAndRehashedInvalidBasePin(t *testing.
 		name  string
 		value string
 	}{
-		{name: "missing digest", value: "golang:1.26.5-bookworm\n"},
-		{name: "wrong version", value: "golang:1.26.4-bookworm@sha256:" + strings.Repeat("c", 64) + "\n"},
+		{name: "missing digest", value: "golang:1.26.6-bookworm\n"},
+		{name: "wrong version", value: "golang:1.26.5-bookworm@sha256:" + strings.Repeat("c", 64) + "\n"},
 		{name: "moving tag", value: "golang:latest@sha256:" + strings.Repeat("c", 64) + "\n"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -350,7 +350,7 @@ func TestRuntimeRunnerPreflightCoversBothWritesAndAuthenticatedBroker(t *testing
 		`os.open(map_file, os.O_RDONLY)`,
 		`os.read(descriptor, 4) != b"\x7fELF"`,
 		`["/usr/local/go/bin/go", "version"]`,
-		`go version go1.26.5 linux/amd64`,
+		`go version go1.26.6 linux/amd64`,
 		`kind_digest != "eb244cbafcc157dff60cf68693c14c9a75c4e6e6fedaf9cd71c58117cb93e3fa"`,
 		`"kind v0.31.0" not in kind_version`,
 		`openssl_version.startswith("OpenSSL 3.5.7 ")`,

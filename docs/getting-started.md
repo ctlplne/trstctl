@@ -20,7 +20,7 @@ proves a second pass changes neither logical inventory nor event/outbox counts.
 ## Prerequisites
 
 - Docker with the Compose plugin (`docker compose version` works), or a Go
-  1.26.5+ toolchain to run from source.
+  1.26.6+ toolchain to run from source.
 - About 1 GB of free disk for the PostgreSQL and NATS volumes.
 
 ## 1. Bring up the control plane (about 2 minutes)

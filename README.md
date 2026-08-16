@@ -17,7 +17,7 @@ API keys, and SPIFFE workload identities. No per-certificate or ephemeral-identi
 <a href="https://github.com/ctlplne/trstctl/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/ctlplne/trstctl/actions/workflows/ci.yml/badge.svg"></a>
 <a href="https://github.com/ctlplne/trstctl/tags"><img alt="tag" src="https://img.shields.io/github/v/tag/ctlplne/trstctl?label=tag&sort=semver"></a>
 <a href="https://goreportcard.com/report/github.com/ctlplne/trstctl"><img alt="Go Report Card" src="https://goreportcard.com/badge/github.com/ctlplne/trstctl"></a>
-<img alt="Go" src="https://img.shields.io/badge/Go-1.26.5+-00ADD8?logo=go&logoColor=white">
+<img alt="Go" src="https://img.shields.io/badge/Go-1.26.6+-00ADD8?logo=go&logoColor=white">
 <img alt="status" src="https://img.shields.io/badge/status-active%20development-orange">
 <img alt="license" src="https://img.shields.io/badge/license-MPL--2.0%20open%20core-blue">
 </p>
@@ -254,7 +254,7 @@ the architecture linter in CI.
 
 ## Try it
 
-Requires Go 1.26.5+, Node 22+ (for the web UI), and Docker (for the evaluation stack).
+Requires Go 1.26.6+, Node 22+ (for the web UI), and Docker (for the evaluation stack).
 
 ```bash
 git clone https://github.com/ctlplne/trstctl

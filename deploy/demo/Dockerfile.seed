@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-ARG GO_VERSION=1.26.5
+ARG GO_VERSION=1.26.6
 ARG BUILD_IMAGE=golang:${GO_VERSION}-bookworm
 ARG WEB_BUILD_IMAGE=node:22-bookworm-slim
 

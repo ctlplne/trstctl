@@ -208,7 +208,7 @@ file so it is never placed in pod arguments or environment variables. See
 
 Install from a release binary or build from source.
 
-**From source** (requires Go 1.26.5+):
+**From source** (requires Go 1.26.6+):
 
 ```bash
 git clone https://github.com/ctlplne/trstctl

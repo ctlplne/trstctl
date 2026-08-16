@@ -2,7 +2,7 @@ module trstctl.com/trstctl/internal/server/testdata/gospiffe-client
 
 go 1.26.0
 
-toolchain go1.26.5
+toolchain go1.26.6
 
 require github.com/spiffe/go-spiffe/v2 v2.8.1
 

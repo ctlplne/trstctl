@@ -9,7 +9,7 @@
     "npm --prefix web audit --omit=dev --audit-level=high"
   ],
   "security_finding_links": {
-    "SEC-f19bdd00": "Go 1.26.5 and golang.org/x/text v0.39.0 close the two reachable Go advisories; make vuln now reports zero called vulnerabilities.",
+    "SEC-f19bdd00": "Go 1.26.6 closes the eight reachable standard-library advisories reported against Go 1.26.5, and golang.org/x/text v0.39.0 closed the earlier module advisory; make vuln must report zero called vulnerabilities.",
     "SEC-de4eb072": "google.golang.org/grpc v1.82.1 closes reachable GO-2026-6061 transport and authorization paths; the whole-module vulnerability advisory and served gRPC transport tests verify the repair.",
     "SEC-5b43d4b3": "react-router-dom 7.18.1 is the latest published compatible release, but no published release closes every current router advisory; the exception remains needs_human.",
     "S-7268c77e": "The compatible build-chain repairs are Vite 8.1.5, Vitest and coverage-v8 4.1.10, and PostCSS 8.5.23; remaining high advisories require unpublished or peer-incompatible releases and remain needs_human."

@@ -654,7 +654,7 @@ func repoFile(t *testing.T, parts ...string) string {
 // reachable if only local developer machines move forward while Docker, CI, or
 // source-build docs lag behind.
 func TestPatchedGoToolchainPinned(t *testing.T) {
-	const patched = "1.26.5"
+	const patched = "1.26.6"
 
 	gomod := repoFile(t, "go.mod")
 	mustContainAll(t, "go.mod pins patched toolchain", gomod,
