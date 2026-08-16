@@ -1013,7 +1013,7 @@ export interface BulkRevokeRequest {
   kind?: "x509_certificate" | "ssh_certificate" | "ssh_key" | "secret" | "api_key" | "workload_identity";
   owner_id?: string;
   reason: "unspecified" | "keyCompromise" | "caCompromise" | "affiliationChanged" | "superseded" | "cessationOfOperation" | "certificateHold" | "removeFromCRL" | "privilegeWithdrawn" | "aaCompromise";
-  status?: "requested" | "issued" | "deployed" | "renewing" | "revoked" | "retired";
+  status?: "requested" | "issued" | "deployed" | "renewing" | "renewal_failed" | "revoked" | "retired";
 }
 
 export interface BulkRevokeResult {
@@ -6180,7 +6180,7 @@ export interface TransitVerifyRequest {
 export interface TransitionRequest {
   reason?: string;
   subject_csr_pem?: string;
-  to: "issued" | "deployed" | "renewing" | "revoked" | "retired";
+  to: "issued" | "deployed" | "renewing" | "renewal_failed" | "revoked" | "retired";
 }
 
 export interface UnownedIdentity {
