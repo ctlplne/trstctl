@@ -2484,9 +2484,11 @@ func TestFuzzSmokeInventoryIsAutoDiscoveredAndCIWired(t *testing.T) {
 	makefile := read(t, "../Makefile")
 	for _, want := range []string{
 		"FUZZ_SMOKE_TIME ?= 10s",
+		"FUZZ_SMOKE_PARALLEL ?= 1",
 		"fuzz-smoke:",
 		"grep -rEl '^func Fuzz[A-Za-z0-9_]+\\(' --include='*_test.go' internal ee",
 		"$(GO) test \"$$pkg\" -run='^$$' -fuzz=\"^$$fn$$\" -fuzztime=$(FUZZ_SMOKE_TIME)",
+		"-parallel=$(FUZZ_SMOKE_PARALLEL)",
 		">> fuzz-smoke: all targets clean",
 	} {
 		if !strings.Contains(makefile, want) {

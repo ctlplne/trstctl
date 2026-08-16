@@ -261,6 +261,11 @@ journey-census-check: ## Fail when journey served claims drift from a fresh wiri
 # Per-target fuzz budget for the smoke run (FUZZ-003). Short enough for a per-PR
 # CI gate; the nightly job overrides it (e.g. FUZZ_SMOKE_TIME=120s) for depth.
 FUZZ_SMOKE_TIME ?= 10s
+# Run one fuzz worker per target by default. The smoke target already visits every
+# FuzzXxx serially; ten workers made CPU-heavy parsers miss Go's shutdown deadline
+# and produced a red result on a different healthy target each run. Nightly or lab
+# jobs can raise this explicitly when the runner has a measured CPU budget.
+FUZZ_SMOKE_PARALLEL ?= 1
 
 .PHONY: fuzz-smoke
 fuzz-smoke: ## Run every Go fuzz target for a short budget against its committed seed corpus (FUZZ-003)
@@ -269,7 +274,7 @@ fuzz-smoke: ## Run every Go fuzz target for a short budget against its committed
 	fail=0; \
 	while read -r pkg fn; do \
 		echo ">> $$pkg $$fn"; \
-		$(GO) test "$$pkg" -run='^$$' -fuzz="^$$fn$$" -fuzztime=$(FUZZ_SMOKE_TIME) || fail=1; \
+		$(GO) test "$$pkg" -run='^$$' -fuzz="^$$fn$$" -fuzztime=$(FUZZ_SMOKE_TIME) -parallel=$(FUZZ_SMOKE_PARALLEL) || fail=1; \
 	done < <( \
 		grep -rEl '^func Fuzz[A-Za-z0-9_]+\(' --include='*_test.go' internal ee | while read -r f; do \
 			pkg="./$$(dirname "$$f")"; \
