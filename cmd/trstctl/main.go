@@ -625,7 +625,7 @@ func hasURLScheme(conn string) bool {
 		if c == ':' {
 			return strings.HasPrefix(conn[i:], "://")
 		}
-		if !(isASCIILetter(c) || (c >= '0' && c <= '9') || c == '+' || c == '-' || c == '.') {
+		if !isASCIILetter(c) && (c < '0' || c > '9') && c != '+' && c != '-' && c != '.' {
 			return false
 		}
 	}
