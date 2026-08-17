@@ -5,6 +5,7 @@ package api
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -22,6 +23,14 @@ const mutationBindingSecretSentinel = "credential-sentinel-must-never-cross-bind
 func mutationBindingRequest(subject, method, path string) *http.Request {
 	const tenantID = "11111111-1111-1111-1111-111111111111"
 	req := httptest.NewRequest(method, path, nil)
+	principal := authz.Principal{TenantID: tenantID, Subject: subject}
+	return req.WithContext(context.WithValue(req.Context(), principalCtxKey, principal))
+}
+
+func mutationBindingRequestWithBody(subject, method, path, body string) *http.Request {
+	const tenantID = "11111111-1111-1111-1111-111111111111"
+	req := httptest.NewRequest(method, path, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
 	principal := authz.Principal{TenantID: tenantID, Subject: subject}
 	return req.WithContext(context.WithValue(req.Context(), principalCtxKey, principal))
 }
@@ -90,6 +99,86 @@ func TestMutateFallbackBindingPreventsCrossRouteAndPrincipalReplay(t *testing.T)
 				}
 			}
 		})
+	}
+}
+
+func TestMutateFallbackBindingRejectsChangedBodyAndQuery(t *testing.T) {
+	a := New(nil, orchestrator.NewMemoryIdempotency(), nil)
+	const (
+		key          = "same-route-changed-command"
+		originalBody = `{"kind":"workload","name":"payments"}`
+	)
+	calls := 0
+	firstRecorder := httptest.NewRecorder()
+	firstRequest := mutationBindingRequestWithBody("operator-a", http.MethodPost, "/test/mutations/owners?mode=apply", originalBody)
+	a.mutate(firstRecorder, firstRequest, key, func(_ context.Context, _ string) (int, any, error) {
+		calls++
+		raw, err := io.ReadAll(firstRequest.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(raw) != originalBody {
+			t.Fatalf("handler body=%q, want restored %q", raw, originalBody)
+		}
+		return http.StatusCreated, map[string]string{"owner": "payments"}, nil
+	})
+	if firstRecorder.Code != http.StatusCreated {
+		t.Fatalf("first status=%d body=%s", firstRecorder.Code, firstRecorder.Body.String())
+	}
+
+	invoke := func(path, body string, fn func(context.Context, string) (int, any, error)) *httptest.ResponseRecorder {
+		t.Helper()
+		recorder := httptest.NewRecorder()
+		req := mutationBindingRequestWithBody("operator-a", http.MethodPost, path, body)
+		a.mutate(recorder, req, key, fn)
+		return recorder
+	}
+	replay := invoke("/test/mutations/owners?mode=apply", originalBody, func(context.Context, string) (int, any, error) {
+		t.Fatal("exact replay reached callback")
+		return 0, nil, nil
+	})
+	if replay.Code != firstRecorder.Code || replay.Body.String() != firstRecorder.Body.String() || calls != 1 {
+		t.Fatalf("exact replay=%d/%s calls=%d; first=%d/%s", replay.Code, replay.Body.String(), calls, firstRecorder.Code, firstRecorder.Body.String())
+	}
+
+	for label, conflict := range map[string]*httptest.ResponseRecorder{
+		"body": invoke("/test/mutations/owners?mode=apply", `{"kind":"workload","name":"other"}`, func(context.Context, string) (int, any, error) {
+			t.Fatal("changed body reached callback")
+			return 0, nil, nil
+		}),
+		"query": invoke("/test/mutations/owners?mode=preview", originalBody, func(context.Context, string) (int, any, error) {
+			t.Fatal("changed query reached callback")
+			return 0, nil, nil
+		}),
+	} {
+		if conflict.Code != http.StatusConflict || calls != 1 {
+			t.Fatalf("%s conflict=%d/%s calls=%d, want 409 without callback", label, conflict.Code, conflict.Body.String(), calls)
+		}
+	}
+}
+
+func TestMutateFallbackBindingRejectsOversizeBeforeClaim(t *testing.T) {
+	a := New(nil, orchestrator.NewMemoryIdempotency(), nil)
+	const key = "oversize-must-not-claim"
+	oversize := mutationBindingRequestWithBody("operator-a", http.MethodPost, "/test/mutations/owners", strings.Repeat("x", defaultRESTJSONBodyLimit+1))
+	recorder := httptest.NewRecorder()
+	called := false
+	a.mutate(recorder, oversize, key, func(context.Context, string) (int, any, error) {
+		called = true
+		return http.StatusCreated, nil, nil
+	})
+	if recorder.Code != http.StatusRequestEntityTooLarge || called {
+		t.Fatalf("oversize request=%d/%s callback=%v, want 413 before claim", recorder.Code, recorder.Body.String(), called)
+	}
+
+	valid := mutationBindingRequestWithBody("operator-a", http.MethodPost, "/test/mutations/owners", `{"kind":"workload","name":"payments"}`)
+	retry := httptest.NewRecorder()
+	a.mutate(retry, valid, key, func(context.Context, string) (int, any, error) {
+		called = true
+		return http.StatusCreated, map[string]string{"owner": "payments"}, nil
+	})
+	if retry.Code != http.StatusCreated || !called {
+		t.Fatalf("valid retry after oversize=%d/%s callback=%v, want unclaimed 201", retry.Code, retry.Body.String(), called)
 	}
 }
 

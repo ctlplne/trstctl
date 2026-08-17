@@ -3,9 +3,11 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 
 	"github.com/jackc/pgx/v5"
@@ -173,11 +175,9 @@ func (a *API) mutateWithRecorder(w http.ResponseWriter, r *http.Request, idempot
 			a.writeError(w, err)
 			return
 		}
-		escapedPath := ""
-		if r.URL != nil {
-			escapedPath = r.URL.EscapedPath()
-		}
-		binding, err = mutationRouteBinding(principal, r.Method, escapedPath)
+		var body []byte
+		binding, body, err = mutationRequestBinding(r, principal)
+		defer secret.Wipe(body)
 		if err != nil {
 			a.writeError(w, err)
 			return
@@ -246,10 +246,45 @@ func (a *API) mutateWithRecorder(w http.ResponseWriter, r *http.Request, idempot
 	_, _ = w.Write(c.Body)
 }
 
-// mutationRouteBinding scopes a raw Idempotency-Key to the authenticated caller
-// and exact served route when a handler has no command-specific body binding.
-// The domain label prevents this digest from being confused with any other
-// binding scheme, and only the non-secret SHA-256 digest is persisted.
+// mutationRequestBinding scopes a raw Idempotency-Key to the authenticated
+// caller and exact served request when a handler has no command-specific
+// binding. The bounded request body is restored before the callback sees it and
+// wiped when the mutation returns. Only its SHA-256 digest enters the binding.
+func mutationRequestBinding(r *http.Request, principal string) (binding string, body []byte, err error) {
+	if r.Body != nil {
+		body, err = io.ReadAll(io.LimitReader(r.Body, defaultRESTJSONBodyLimit+1))
+		_ = r.Body.Close()
+		if err != nil {
+			secret.Wipe(body)
+			return "", nil, errStatus(http.StatusBadRequest, "failed to read mutation request body")
+		}
+		if len(body) > defaultRESTJSONBodyLimit {
+			secret.Wipe(body)
+			return "", nil, errStatus(http.StatusRequestEntityTooLarge, "mutation request body too large")
+		}
+		r.Body = io.NopCloser(bytes.NewReader(body))
+	}
+	escapedPath, query := "", ""
+	if r.URL != nil {
+		escapedPath = r.URL.EscapedPath()
+		query = r.URL.Query().Encode()
+	}
+	if len(body) == 0 && query == "" {
+		// Preserve the durable v1 binding for truly bodyless/queryless commands:
+		// their complete semantics already fit in principal+method+path.
+		binding, err = mutationRouteBinding(principal, r.Method, escapedPath)
+	} else {
+		binding, err = mutationRequestRouteBinding(principal, r.Method, escapedPath, query, crypto.SHA256Hex(body))
+	}
+	if err != nil {
+		secret.Wipe(body)
+		return "", nil, err
+	}
+	return binding, body, nil
+}
+
+// mutationRouteBinding is the durable v1 binding for a request with no body and
+// no query. Keeping it stable preserves safe replays across upgrades.
 func mutationRouteBinding(principal, method, escapedPath string) (string, error) {
 	material, err := json.Marshal(struct {
 		Domain      string `json:"domain"`
@@ -261,6 +296,32 @@ func mutationRouteBinding(principal, method, escapedPath string) (string, error)
 		Principal:   principal,
 		Method:      method,
 		EscapedPath: escapedPath,
+	})
+	if err != nil {
+		return "", err
+	}
+	defer secret.Wipe(material)
+	return crypto.SHA256Hex(material), nil
+}
+
+// mutationRequestRouteBinding hashes non-secret command coordinates and the
+// bounded body digest. The v2 domain prevents it from being confused with the
+// historical route-only binding or any subsystem-specific binding.
+func mutationRequestRouteBinding(principal, method, escapedPath, query, bodyDigest string) (string, error) {
+	material, err := json.Marshal(struct {
+		Domain      string `json:"domain"`
+		Principal   string `json:"principal"`
+		Method      string `json:"method"`
+		EscapedPath string `json:"escaped_path"`
+		Query       string `json:"query"`
+		BodyDigest  string `json:"body_digest"`
+	}{
+		Domain:      "trstctl.api.mutation-request-binding.v2",
+		Principal:   principal,
+		Method:      method,
+		EscapedPath: escapedPath,
+		Query:       query,
+		BodyDigest:  bodyDigest,
 	})
 	if err != nil {
 		return "", err
