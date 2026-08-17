@@ -389,6 +389,15 @@ func TestServedAgentChannelEndToEnd(t *testing.T) {
 	if string(first.CertChainPEM) != string(second.CertChainPEM) {
 		t.Fatal("a retried renewal (same presented cert + CSR) minted a DIFFERENT certificate — AN-5 idempotency violated")
 	}
+
+	// A raw renewal slot belongs to one exact CSR, not merely to the old
+	// certificate. Reusing that slot with a different key must fail closed rather
+	// than returning the cached certificate for the first key. The latter creates
+	// a permanent key/certificate mismatch on the agent.
+	differentCSR := newAgentCSR(t, "edge-agent-1")
+	if _, err := rawClient.Renew(ctx, &transport.RenewRequest{CSRDER: differentCSR}); status.Code(err) != codes.AlreadyExists {
+		t.Fatalf("same renewal slot with a different CSR error = %v, want AlreadyExists", err)
+	}
 }
 
 func TestAgentCertRevocationIsEventSourced(t *testing.T) {

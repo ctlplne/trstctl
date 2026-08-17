@@ -1583,7 +1583,8 @@ func TestTrustRootControlsStayRequired(t *testing.T) {
 		"mtls.PeerCertInfoFromAuthInfo",
 		"TenantID: info.TenantID",
 		"spiffeURI := mtls.AgentSPIFFEID(info.TenantID, info.CommonName)",
-		"a.idem.Do(ctx, info.TenantID",
+		"a.idem.DoBound(ctx, info.TenantID",
+		"binding := crypto.SHA256Hex(req.CSRDER)",
 		"EventAgentHeartbeat",
 		"EventAgentCertRenewed",
 	} {

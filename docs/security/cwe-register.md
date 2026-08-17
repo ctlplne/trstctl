@@ -457,7 +457,7 @@ not this file.
 | `internal/protocols/ssh/krl_binary_test.go:23` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/protocols/ssh/ssh.go:375` | SSH wire string length, far under the uint32 bound for certificate fields (CWE-190) |
 | `internal/query/adversarial_test.go:51` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/server/agentchannel_served_test.go:761` | fixture sequences are single-digit seconds (CWE-190). |
+| `internal/server/agentchannel_served_test.go:770` | fixture sequences are single-digit seconds (CWE-190). |
 | `internal/server/aud65_test.go:37` | fixture sequences are single-digit seconds (CWE-190). |
 | `internal/server/backup.go:209` | record counts bounded by the event log (CWE-190) |
 | `internal/server/backup.go:369` | record counts bounded by the event log (CWE-190) |
@@ -590,7 +590,7 @@ not this file.
 | `docs/protect_guards_completeness_test.go:260` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:876` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:939` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:4541` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:4542` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `internal/agent/discovery/filesystem.go:57` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
 | `internal/agent/discovery/privatekey.go:69` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
@@ -602,8 +602,8 @@ not this file.
 | `internal/server/protect_correct102_guard_test.go:100` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/design_test.go:136` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/managedkeys_test.go:445` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `internal/store/store_isolation_test.go:271` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `internal/store/store_isolation_test.go:317` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `internal/store/store_isolation_test.go:309` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `internal/store/store_isolation_test.go:355` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 
 ### G124 — CWE-1004 Sensitive cookie without protective attributes (37 sites)
 
@@ -651,7 +651,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:2682` | closed test table list above |
+| `internal/store/migration_content_test.go:2763` | closed test table list above |
 
 ### G203 — CWE-? (unmapped rule) (2 sites)
 
@@ -850,7 +850,7 @@ not this file.
 | `internal/protocols/acme/certbot_client_test.go:291` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/protocols/cmp/openssl_client_test.go:168` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/protocols/scep/sscep_client_test.go:196` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
-| `internal/server/agentchannel_served_test.go:1450` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/agentchannel_served_test.go:1459` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/java_sdk_served_test.go:44` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/pam_served_test.go:209` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/protocols_served_stock_clients_test.go:51` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -918,7 +918,7 @@ not this file.
 | `cmd/trstctl-agent/edgeca_test.go:122` | t.TempDir path (CWE-22) |
 | `cmd/trstctl-agent/edgeca_test.go:242` | t.TempDir path (CWE-22) |
 | `cmd/trstctl-agent/edgeca_test.go:253` | t.TempDir path (CWE-22) |
-| `cmd/trstctl-agent/main.go:809` | operator-supplied PIN file path, read at their instruction (CWE-22) |
+| `cmd/trstctl-agent/main.go:830` | operator-supplied PIN file path, read at their instruction (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:90` | operator-supplied trust key path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:343` | operator-supplied runtime configuration path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:370` | operator-supplied public issuer certificate (CWE-22) |
@@ -972,7 +972,7 @@ not this file.
 | `docs/protect_guards_completeness_test.go:260` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:876` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:939` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:4541` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:4542` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/provenance/authorship_test.go:38` | fixed sibling path inside the package's own directory (CWE-22) |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `ee/billing/evidence_test.go:140` | test reads repo source files it names itself (CWE-22) |
@@ -1166,8 +1166,8 @@ not this file.
 | `internal/spireupstream/plugin.go:249` | operator-configured upstream-authority plugin config path (CWE-22) |
 | `internal/store/dynamic_secret_lock_order_test.go:124` | fixed sibling path inside this package's own directory (CWE-22) |
 | `internal/store/migration_safety_test.go:82` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/store/store_isolation_test.go:271` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `internal/store/store_isolation_test.go:317` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `internal/store/store_isolation_test.go:309` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `internal/store/store_isolation_test.go:355` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/supportbundle/supportbundle.go:438` | operator-invoked support bundle collecting its configured files (CWE-22) |
 | `internal/supportbundle/supportbundle_test.go:97` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/supportbundle/supportbundle_test.go:101` | test reads its own fixture/tempdir path (CWE-22) |
@@ -1376,7 +1376,7 @@ not this file.
 | `cmd/trstctl-agent/bootstrap_token_test.go:401` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:407` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:415` | test jitter/shuffle, not a security decision (CWE-338) |
-| `cmd/trstctl-agent/main.go:558` | reconnect jitter, not a security decision (CWE-338) |
+| `cmd/trstctl-agent/main.go:576` | reconnect jitter, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:28` | jitter spread, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:61` | jitter spread (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:77` | jitter spread (CWE-338) |

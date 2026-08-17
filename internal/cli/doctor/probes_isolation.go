@@ -157,18 +157,28 @@ func runWriteProbes(ctx context.Context, s *store.Store) (out []Probe) {
 			Limits: "proves the policy held for this table and this path, not that no bug exists anywhere"})
 	}
 
-	// ISO-4: an upsert-hijack of A's primary key as B must be refused and A's
-	// row must survive intact.
-	err := s.UpsertAgent(ctx, store.Agent{ID: agentID, TenantID: tenantB, Name: "doctor-hijack", Status: "active"})
-	if err == nil {
+	// ISO-4: tenant B directly targets A's tenant-scoped primary key. FORCE RLS
+	// must hide the row from UPDATE and leave A's marker intact. The same bare UUID
+	// may validly exist in B because agent identity is (tenant_id, id).
+	var affected int64
+	err := s.WithTenant(ctx, tenantB, func(tx pgx.Tx) error {
+		tag, uerr := tx.Exec(ctx,
+			`UPDATE agents SET name = 'doctor-hijack'
+			  WHERE tenant_id = $1 AND id = $2`, tenantA, agentID)
+		if uerr == nil {
+			affected = tag.RowsAffected()
+		}
+		return uerr
+	})
+	if err != nil || affected != 0 {
 		out = append(out, Probe{ID: "ISO-4", Group: groupIsolation, Status: StatusFail,
-			Detail: "a cross-tenant id-collision upsert was ACCEPTED; RLS must reject it fail-closed"})
+			Detail: fmt.Sprintf("cross-tenant targeted update returned err=%v affected=%d, want no error and 0 rows", err, affected)})
 	} else if a, gerr := s.GetAgent(ctx, tenantA, agentID); gerr != nil || a.Name != "doctor-probe" {
 		out = append(out, Probe{ID: "ISO-4", Group: groupIsolation, Status: StatusFail,
-			Detail: fmt.Sprintf("the rejected hijack still disturbed tenant A's row (name=%q err=%v)", a.Name, gerr)})
+			Detail: fmt.Sprintf("the denied targeted update still disturbed tenant A's row (name=%q err=%v)", a.Name, gerr)})
 	} else {
 		out = append(out, Probe{ID: "ISO-4", Group: groupIsolation, Status: StatusPass,
-			Detail: "cross-tenant upsert-hijack refused fail-closed; tenant A's row intact",
+			Detail: "cross-tenant targeted update affected 0 rows; tenant A's row is intact",
 			Limits: "proves FORCE-d RLS write symmetry on this table, not every write path"})
 	}
 

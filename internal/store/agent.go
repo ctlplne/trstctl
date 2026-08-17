@@ -148,6 +148,10 @@ func (s *Store) ApplyAgentHeartbeatTx(ctx context.Context, tx pgx.Tx, a Agent) e
 	if err != nil {
 		return fmt.Errorf("store: encode revocation cache posture: %w", err)
 	}
+	// The synchronous read-after-write projector and the durable event consumer
+	// can insert one event concurrently. The current schema makes (tenant_id, id)
+	// both the primary and foreign-key identity, so every matching unique index is
+	// an arbiter for this tenant-scoped conflict target and the replay converges.
 	_, err = tx.Exec(ctx,
 		`INSERT INTO agents (id, tenant_id, name, status, version, roles, last_seen_at,
 		                     workload_api_served, workload_api_svids, workload_api_reported_at,
@@ -265,7 +269,8 @@ func (s *Store) ApplyAgentHeartbeatTx(ctx context.Context, tx pgx.Tx, a Agent) e
 		        revocation_caches_reported_at = CASE
 		            WHEN EXCLUDED.revocation_caches_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.revocation_caches_reported_at
 		            WHEN agents.revocation_caches_reported_at IS NOT NULL AND EXCLUDED.revocation_caches_reported_at <= agents.revocation_caches_reported_at THEN agents.revocation_caches_reported_at
-		            ELSE EXCLUDED.revocation_caches_reported_at END`,
+		            ELSE EXCLUDED.revocation_caches_reported_at END
+		  WHERE agents.tenant_id = EXCLUDED.tenant_id`,
 		a.ID, a.TenantID, a.Name, a.Status, a.Version, agentRoleArray(a.Roles), a.LastSeenAt,
 		a.WorkloadAPIServed, a.WorkloadAPISVIDs, a.WorkloadAPIReportedAt,
 		a.EnrollmentProxyServing, a.EnrollmentProxySegment, a.EnrollmentProxyPublicURL,
@@ -297,7 +302,8 @@ func (s *Store) ApplyAgentCertRenewedTx(ctx context.Context, tx pgx.Tx, a Agent)
 		 VALUES ($1, $2, $3, $4, $5, $6)
 		 ON CONFLICT (tenant_id, id) DO UPDATE
 		    SET name = CASE WHEN agents.status = 'offboarded' THEN agents.name ELSE EXCLUDED.name END,
-		        last_seen_at = CASE WHEN agents.status = 'offboarded' THEN agents.last_seen_at ELSE EXCLUDED.last_seen_at END`,
+		        last_seen_at = CASE WHEN agents.status = 'offboarded' THEN agents.last_seen_at ELSE EXCLUDED.last_seen_at END
+		  WHERE agents.tenant_id = EXCLUDED.tenant_id`,
 		a.ID, a.TenantID, a.Name, a.Status, a.Version, a.LastSeenAt)
 	return err
 }
@@ -333,7 +339,8 @@ func (s *Store) ApplyAgentOffboardedTx(ctx context.Context, tx pgx.Tx, a Agent) 
 		            ELSE LEAST(agents.offboarded_at, EXCLUDED.offboarded_at)
 		        END,
 		        offboarded_by = CASE WHEN COALESCE(agents.offboarded_by, '') = '' THEN EXCLUDED.offboarded_by ELSE agents.offboarded_by END,
-		        offboard_reason = CASE WHEN COALESCE(agents.offboard_reason, '') = '' THEN EXCLUDED.offboard_reason ELSE agents.offboard_reason END`,
+		        offboard_reason = CASE WHEN COALESCE(agents.offboard_reason, '') = '' THEN EXCLUDED.offboard_reason ELSE agents.offboard_reason END
+		  WHERE agents.tenant_id = EXCLUDED.tenant_id`,
 		a.ID, a.TenantID, name, offboardedAt, a.OffboardedBy, a.OffboardReason)
 	return err
 }

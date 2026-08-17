@@ -76,7 +76,7 @@ and they do so like this:
 | ISO-1 | Every tenant table has RLS `ENABLE`d **and** `FORCE`d, derived live from `pg_class` — never a hard-coded table list | The catalog posture right now, not the absence of RLS-bypassing SQL elsewhere |
 | ISO-2 | No tenant policy is `USING`-only; every one carries `WITH CHECK` | Read symmetry, not that each expression is correct |
 | ISO-3 | A second tenant's read of another tenant's rows returns zero rows | That the policy held for this table on this path, not that no bug exists anywhere |
-| ISO-4 | A cross-tenant upsert-hijack is refused fail-closed and tenant A's row is intact | The one hijack shape attempted |
+| ISO-4 | A second tenant's targeted update of another tenant's composite agent key affects zero rows and leaves tenant A intact | This table and this exact write shape, not every mutation |
 | ISO-5 | A cross-tenant foreign-key parent reference is rejected | This FK, not every FK |
 | ISO-6 | Tenant work runs as the non-owner `trstctl_app` role with a transaction-local `trstctl.tenant_id` GUC, unset outside the transaction | The connection discipline of this client path |
 | ISO-7 | *Skipped by design* | The RLS-bypass call-site inventory is pinned by a compile-time CI guard and is not derivable from a running deployment |

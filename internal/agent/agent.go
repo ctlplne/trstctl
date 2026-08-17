@@ -50,9 +50,12 @@ type Agent struct {
 	cfg      Config
 	enroller Enroller
 
-	mu       sync.Mutex
-	identity *mtls.AgentIdentity
-	source   *mtls.SwappableSource
+	mu             sync.Mutex
+	identity       *mtls.AgentIdentity
+	source         *mtls.SwappableSource
+	renewMu        sync.Mutex
+	pendingRenewal *mtls.AgentIdentity
+	pendingCSR     []byte
 }
 
 // New constructs an agent with the given config and enrollment transport.
@@ -104,11 +107,9 @@ func (a *Agent) Bootstrap(ctx context.Context) error {
 // renewal endpoint and presents it on subsequent handshakes. The new private key
 // is again generated locally; only its CSR is transmitted.
 func (a *Agent) Rotate(ctx context.Context) error {
-	identity, err := mtls.GenerateAgentKey(a.cfg.CommonName)
-	if err != nil {
-		return err
-	}
-	csr, err := identity.CSR()
+	a.renewMu.Lock()
+	defer a.renewMu.Unlock()
+	identity, csr, err := a.pendingRenewalRequest()
 	if err != nil {
 		return err
 	}
@@ -123,6 +124,8 @@ func (a *Agent) Rotate(ctx context.Context) error {
 		return err
 	}
 	a.setIdentity(identity)
+	a.pendingRenewal = nil
+	a.pendingCSR = nil
 	return nil
 }
 
@@ -280,11 +283,9 @@ func (a *Agent) ReportInventory(ctx context.Context, ch ChannelClient, sourceKin
 // submits only its CSR, adopts the issued chain, and persists it. The new private key
 // never leaves the host. It is the steady-state analogue of Rotate.
 func (a *Agent) RenewOverChannel(ctx context.Context, ch ChannelClient) error {
-	identity, err := mtls.GenerateAgentKey(a.cfg.CommonName)
-	if err != nil {
-		return err
-	}
-	csr, err := identity.CSR()
+	a.renewMu.Lock()
+	defer a.renewMu.Unlock()
+	identity, csr, err := a.pendingRenewalRequest()
 	if err != nil {
 		return err
 	}
@@ -299,7 +300,36 @@ func (a *Agent) RenewOverChannel(ctx context.Context, ch ChannelClient) error {
 		return err
 	}
 	a.setIdentity(identity)
+	a.pendingRenewal = nil
+	a.pendingCSR = nil
 	return nil
+}
+
+// pendingRenewalRequest returns one locally generated key and one exact CSR for
+// the whole logical renewal, including retries after an ambiguous transport
+// failure. CSR signatures can contain randomness even when the underlying key
+// and subject are unchanged, so regenerating only the CSR is still a different
+// idempotency-bound request. The server's
+// idempotency cache is allowed to return the first committed certificate on a
+// retry, so changing the CSR between attempts would pair that certificate with
+// the wrong private key. The pending key remains local and is discarded only
+// after its matching certificate has been verified, persisted, and adopted.
+// Caller holds renewMu.
+func (a *Agent) pendingRenewalRequest() (*mtls.AgentIdentity, []byte, error) {
+	if a.pendingRenewal != nil {
+		return a.pendingRenewal, a.pendingCSR, nil
+	}
+	identity, err := mtls.GenerateAgentKey(a.cfg.CommonName)
+	if err != nil {
+		return nil, nil, err
+	}
+	csr, err := identity.CSR()
+	if err != nil {
+		return nil, nil, err
+	}
+	a.pendingRenewal = identity
+	a.pendingCSR = csr
+	return identity, csr, nil
 }
 
 func (a *Agent) setIdentity(identity *mtls.AgentIdentity) {

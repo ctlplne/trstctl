@@ -331,6 +331,87 @@ func TestMigration0179PreservesLegacyDiagnosticsAndPermitsExactOperationsAUD49(t
 	}
 }
 
+// TestMigrations0189And0190MakeAgentIdentityTenantScopedAGENTRACE001 proves the
+// production upgrade, not merely a greenfield schema. It starts at the exact
+// historical shape with PRIMARY KEY (id), preserves populated multi-tenant rows
+// while the online index and catalog attach run, keeps relay foreign keys valid,
+// and finally proves the same UUID may exist independently in two tenants.
+func TestMigrations0189And0190MakeAgentIdentityTenantScopedAGENTRACE001(t *testing.T) {
+	ctx := context.Background()
+	prefix, onlineIndex := splitMigrationsAtVersion(t, 189)
+	if onlineIndex.name != "0189_agents_composite_primary_key_index_no_transaction.sql" || !onlineIndex.noTx {
+		t.Fatalf("migration 0189 classification = name:%q no_tx:%t", onlineIndex.name, onlineIndex.noTx)
+	}
+	var attach migrationFile
+	for _, migration := range orderedMigrationFiles(t) {
+		if migration.version == 190 {
+			attach = migration
+			break
+		}
+	}
+	if attach.name != "0190_agents_composite_primary_key_attach.sql" || attach.noTx {
+		t.Fatalf("migration 0190 classification = name:%q no_tx:%t", attach.name, attach.noTx)
+	}
+
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+	assertPrimaryKeyColumns(t, ctx, pool, "agents", []string{"id"})
+
+	for _, tenant := range []string{tenantA, tenantB} {
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO tenants (tenant_id, name) VALUES ($1, $2)`, tenant, "agent-pk-"+tenant[:8]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, row := range []struct{ id, tenant, name string }{
+		{"18900000-0000-4000-8000-000000000001", tenantA, "relay-a"},
+		{"18900000-0000-4000-8000-000000000002", tenantB, "relay-b"},
+	} {
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO agents (id, tenant_id, name, status, version) VALUES ($1, $2, $3, 'active', 'pre-0190')`,
+			row.id, row.tenant, row.name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const stable = `SELECT tenant_id::text, id::text, name, status, version FROM agents ORDER BY tenant_id, id`
+	beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, stable)
+
+	applyMigrationFiles(t, ctx, pool, []migrationFile{onlineIndex, attach})
+	assertPrimaryKeyColumns(t, ctx, pool, "agents", []string{"tenant_id", "id"})
+	assertIndexReady(t, ctx, pool, "agents_pkey")
+	afterCount, afterChecksum := checksumQuery(t, ctx, pool, stable)
+	if beforeCount != afterCount || beforeChecksum != afterChecksum {
+		t.Fatalf("0189/0190 disturbed agent rows: before=%d/%s after=%d/%s",
+			beforeCount, beforeChecksum, afterCount, afterChecksum)
+	}
+
+	var invalidFKs int
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*)
+		  FROM pg_constraint
+		 WHERE conname IN ('discovery_runs_required_agent_fk', 'discovery_runs_executed_agent_fk')
+		   AND NOT convalidated`).Scan(&invalidFKs); err != nil {
+		t.Fatal(err)
+	}
+	if invalidFKs != 0 {
+		t.Fatalf("0189/0190 invalidated %d relay-to-agent foreign keys", invalidFKs)
+	}
+
+	const shared = "18900000-0000-4000-8000-000000000099"
+	for _, row := range []struct{ tenant, name string }{{tenantA, "shared-a"}, {tenantB, "shared-b"}} {
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO agents (id, tenant_id, name, status, version) VALUES ($1, $2, $3, 'active', 'post-0190')`,
+			shared, row.tenant, row.name); err != nil {
+			t.Fatalf("tenant-scoped shared agent id for %s: %v", row.tenant, err)
+		}
+	}
+}
+
 func TestMigration0178RetiresOnlyUnnamedTicketSyncJobsAUD47(t *testing.T) {
 	ctx := context.Background()
 	prefix, target := splitMigrationsAtVersion(t, 178)

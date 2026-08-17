@@ -462,10 +462,28 @@ func prepareIdentityDir(path string, uid, gid int) error {
 	return nil
 }
 
-// runAgent bootstraps the agent, connects to the control plane over mTLS, and
-// rotates its client certificate on a timer until ctx is cancelled. It is the
-// shared loop for both interactive use and the Windows service.
+var errAgentIdentityRotated = errors.New("agent identity rotated; reconnect the mutual-TLS channel")
+
+// runAgent reconnects the whole steady-state session after each successful
+// identity rotation. TLS authenticates only when a connection is established;
+// swapping the in-memory certificate cannot change the peer identity of an
+// already-open HTTP/2 connection. Re-entering the bounded session closes the old
+// channel and every client derived from it, then dials again with the new key and
+// certificate before another heartbeat, job, or renewal is attempted.
 func runAgent(ctx context.Context, o agentOptions) error {
+	for {
+		err := runAgentUntilRotation(ctx, o)
+		if errors.Is(err, errAgentIdentityRotated) {
+			continue
+		}
+		return err
+	}
+}
+
+// runAgentUntilRotation bootstraps (or reloads) the agent, connects to the
+// control plane over mTLS, and serves one channel lifetime. A successful renewal
+// returns errAgentIdentityRotated so runAgent can build a new TLS connection.
+func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 	caPEM, err := os.ReadFile(o.caBundle)
 	if err != nil {
 		return fmt.Errorf("read CA bundle: %w", err)
@@ -714,7 +732,10 @@ func runAgent(ctx context.Context, o agentOptions) error {
 			// control-plane outage during the refresh window must not be a single missed
 			// attempt that then waits a full rotate-every interval. The existing
 			// certificate stays valid until expiry and the identity survives restart.
-			renewWithBackoff(ctx, a, ch, o.rotateEvery, rng)
+			if renewWithBackoff(ctx, a, ch, o.rotateEvery, rng) {
+				fmt.Println("trstctl-agent: renewed identity adopted; reconnecting the agent channel with the new certificate")
+				return errAgentIdentityRotated
+			}
 			// A5: re-armed from the credential's remaining life, not from the
 			// configured cadence alone, so a renewal that failed through an
 			// outage comes back before expiry rather than one interval later.
@@ -1155,22 +1176,22 @@ func (a channelAdapter) ReportInventory(ctx context.Context, req *agent.Inventor
 // renewWithBackoff attempts a steady-state channel renewal (a.RenewOverChannel), and on
 // failure keeps retrying with full-jitter exponential backoff until it succeeds, the
 // budget elapses (so the next regular tick takes over), or ctx is cancelled (RESIL-006).
-func renewWithBackoff(ctx context.Context, a *agent.Agent, ch agent.ChannelClient, budget time.Duration, rng *rand.Rand) {
+func renewWithBackoff(ctx context.Context, a *agent.Agent, ch agent.ChannelClient, budget time.Duration, rng *rand.Rand) bool {
 	deadline := time.Now().Add(budget)
 	for attempt := 0; ; attempt++ {
 		if err := a.RenewOverChannel(ctx, ch); err == nil {
 			fmt.Printf("trstctl-agent: renewed client certificate over the agent channel (serial %s)\n", a.CertificateSerial())
-			return
+			return true
 		} else {
 			fmt.Fprintln(os.Stderr, "trstctl-agent: channel renewal failed:", err)
 		}
 		delay := rotateBackoff(attempt, rng)
 		if time.Now().Add(delay).After(deadline) {
-			return
+			return false
 		}
 		select {
 		case <-ctx.Done():
-			return
+			return false
 		case <-time.After(delay):
 		}
 	}

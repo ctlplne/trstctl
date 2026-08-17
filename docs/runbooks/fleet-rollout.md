@@ -142,6 +142,11 @@ trstctl-agent.exe --service=install --enroll-url https://cp:8443 ^
   heartbeat intervals.
 - `sum(increase(trstctl_agent_bulkhead_rejections_total[5m]))` stays `0`.
 - Kubernetes pod logs contain `trstctl-agent: heartbeat ok`.
+- Certificate rotation logs contain `renewed identity adopted; reconnecting the
+  agent channel with the new certificate`, followed by a new `connected` line.
+  This short reconnect is expected: TLS binds the client identity when the
+  connection starts, so keeping the old HTTP/2 connection would keep presenting
+  the old certificate even after the new keypair was safely persisted.
 - Hosts using `--inventory-cert-roots` log a successful inventory report, and
   `trstctl-cli discovery findings list` shows only the expected metadata-only
   certificate findings from the canary directories.

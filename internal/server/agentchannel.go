@@ -439,7 +439,7 @@ func agentBulkheadError(ctx context.Context, method string, err error) error {
 // interface so the channel test can drive it without the full orchestrator when it
 // wants, while the served path passes the real *orchestrator.Idempotency.
 type idempotentRunner interface {
-	Do(ctx context.Context, tenantID, key string, fn func(context.Context) ([]byte, error)) ([]byte, error)
+	DoBound(ctx context.Context, tenantID, key, binding string, fn func(context.Context) ([]byte, error)) ([]byte, error)
 }
 
 // peerInfo extracts the agent's verified certificate identity from the gRPC peer in
@@ -719,8 +719,10 @@ func validatedEnrollmentProxyReport(report *transport.EnrollmentProxyReport) (*p
 
 // Renew signs the agent's rotation CSR into a fresh client certificate bound to the
 // SAME tenant the presented certificate carries (AN-1) — through the AGENT CA key in
-// the isolated signer (AN-3/AN-4). It is idempotent on (agent, presented serial): a
-// retried renewal returns the original chain (AN-5). It emits agent.cert.renewed
+// the isolated signer (AN-3/AN-4). It is idempotent on (agent, presented serial,
+// exact CSR): a byte-identical retry returns the original chain, while changing
+// the key inside the same renewal slot fails closed instead of returning a
+// certificate for the wrong key (AN-5). It emits agent.cert.renewed
 // (AN-2). The agent's private key never reaches the control plane; only its CSR does.
 func (a *agentService) Renew(ctx context.Context, req *transport.RenewRequest) (*transport.RenewResponse, error) {
 	info, err := a.peerInfo(ctx)
@@ -746,10 +748,13 @@ func (a *agentService) Renew(ctx context.Context, req *transport.RenewRequest) (
 	for _, role := range mtls.NormalizeAgentRoles(info.Roles) {
 		roleURIs = append(roleURIs, mtls.AgentRoleSPIFFEID(info.TenantID, info.CommonName, role))
 	}
-	// AN-5: dedupe on the agent + the serial it presented. A retried Renew over the
-	// same current cert returns the original new chain rather than minting again.
+	// AN-5: the raw slot is the agent + serial it presented, while the immutable
+	// binding is the exact CSR digest. A byte-identical retry returns the original
+	// chain; a different CSR cannot read those cached public certificate bytes and
+	// cannot mint a second successor under the same old certificate.
 	key := "agent-renew:" + info.CommonName + ":" + info.Serial
-	out, err := a.idem.Do(ctx, info.TenantID, key, func(ctx context.Context) ([]byte, error) {
+	binding := crypto.SHA256Hex(req.CSRDER)
+	out, err := a.idem.DoBound(ctx, info.TenantID, key, binding, func(ctx context.Context) ([]byte, error) {
 		chainPEM, serr := crypto.SignAgentClientCSR(a.caCertDER, a.caSigner, req.CSRDER, spiffeURI, roleURIs, agentClientCertTTL)
 		if serr != nil {
 			return nil, serr
@@ -780,6 +785,9 @@ func (a *agentService) Renew(ctx context.Context, req *transport.RenewRequest) (
 		return chainPEM, nil
 	})
 	if err != nil {
+		if errors.Is(err, orchestrator.ErrIdempotencyConflict) {
+			return nil, status.Error(codes.AlreadyExists, "renewal slot was already used with a different CSR; reconnect with the current certificate before rotating again")
+		}
 		return nil, status.Errorf(codes.Internal, "renew agent certificate: %v", err)
 	}
 	naUnix, _ := mtls.CertNotAfterUnix(out)

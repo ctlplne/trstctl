@@ -86,7 +86,10 @@ func TestCustodyTableNamesEveryControlPlaneKeygenPathAndItsSuccessor(t *testing.
 func TestSPIFFECustodyRowsFollowBothProductionSockets(t *testing.T) {
 	t.Parallel()
 
-	agentRun := goFunction(t, "../cmd/trstctl-agent/main.go", "runAgent")
+	agentSupervisor := goFunction(t, "../cmd/trstctl-agent/main.go", "runAgent")
+	requireCall(t, agentSupervisor, "runAgentUntilRotation",
+		"the production agent must supervise a fresh mTLS session after identity rotation")
+	agentRun := goFunction(t, "../cmd/trstctl-agent/main.go", "runAgentUntilRotation")
 	requireCall(t, agentRun, "startWorkloadAPI",
 		"the production agent must compose the host-local Workload API")
 	agentSocket := goFunction(t, "../cmd/trstctl-agent/workloadchannel.go", "startWorkloadAPI")

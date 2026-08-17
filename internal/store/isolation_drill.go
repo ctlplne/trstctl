@@ -108,23 +108,33 @@ func (s *Store) RunIsolationDrill(ctx context.Context) (report IsolationDrillRep
 			Detail: fmt.Sprintf("a neighbouring tenant's read returned %v, want no rows", gerr)})
 	}
 
-	// Check 2 — cross-tenant write symmetry: an upsert-hijack of A's primary key
-	// as tenant B must be refused fail-closed, and A's row must survive intact.
-	// Without FORCE-d RLS the table owner would bypass the policy and this write
-	// would land.
-	hijackErr := s.UpsertAgent(ctx, Agent{ID: agentID, TenantID: tenantB, Name: "isolation-drill-hijack", Status: "active"})
-	if hijackErr == nil {
+	// Check 2 — cross-tenant write symmetry: tenant B directly targets A's
+	// tenant-scoped primary key. FORCE RLS must make the row invisible to UPDATE,
+	// yielding zero affected rows while A's marker remains intact. Reusing the
+	// same bare UUID in B is deliberately not the oracle: composite identity means
+	// that is a separate, valid B row rather than an attempted mutation of A.
+	var affected int64
+	writeErr := s.WithTenant(ctx, tenantB, func(tx pgx.Tx) error {
+		tag, uerr := tx.Exec(ctx,
+			`UPDATE agents SET name = 'isolation-drill-hijack'
+			  WHERE tenant_id = $1 AND id = $2`, tenantA, agentID)
+		if uerr == nil {
+			affected = tag.RowsAffected()
+		}
+		return uerr
+	})
+	if writeErr != nil || affected != 0 {
 		report.Checks = append(report.Checks, IsolationDrillCheck{
 			Name: "cross_tenant_write_refused", Passed: false,
-			Detail: "a cross-tenant id-collision upsert was ACCEPTED; RLS must reject it fail-closed"})
+			Detail: fmt.Sprintf("a neighbouring tenant's targeted update returned err=%v affected=%d, want no error and 0 rows", writeErr, affected)})
 	} else if a, aerr := s.GetAgent(ctx, tenantA, agentID); aerr != nil || a.Name != "isolation-drill" {
 		report.Checks = append(report.Checks, IsolationDrillCheck{
 			Name: "cross_tenant_write_refused", Passed: false,
-			Detail: fmt.Sprintf("the refused hijack still disturbed the marker (name=%q err=%v)", a.Name, aerr)})
+			Detail: fmt.Sprintf("the denied targeted update still disturbed the marker (name=%q err=%v)", a.Name, aerr)})
 	} else {
 		report.Checks = append(report.Checks, IsolationDrillCheck{
 			Name: "cross_tenant_write_refused", Passed: true,
-			Detail: "cross-tenant upsert-hijack refused fail-closed; the marker row is intact"})
+			Detail: "a neighbouring tenant's targeted update affected 0 rows; the marker row is intact"})
 	}
 
 	return report, nil

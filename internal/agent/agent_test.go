@@ -3,7 +3,9 @@
 package agent_test
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"net"
 	"os"
 	"path/filepath"
@@ -18,6 +20,57 @@ import (
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 )
+
+type flakyRenewChannel struct {
+	ca    *mtls.CA
+	csrs  [][]byte
+	fails int
+}
+
+func (*flakyRenewChannel) Heartbeat(context.Context, *agent.HeartbeatRequest) (*agent.HeartbeatResponse, error) {
+	return nil, errors.New("unexpected heartbeat")
+}
+
+func (c *flakyRenewChannel) Renew(_ context.Context, req *agent.RenewRequest) (*agent.RenewResponse, error) {
+	c.csrs = append(c.csrs, append([]byte(nil), req.CSRDER...))
+	if c.fails > 0 {
+		c.fails--
+		return nil, errors.New("response was lost after the request left the agent")
+	}
+	chain, err := c.ca.SignClientCSR(req.CSRDER, time.Hour)
+	return &agent.RenewResponse{CertChainPEM: chain, NotAfterUnix: time.Now().Add(time.Hour).Unix()}, err
+}
+
+func (*flakyRenewChannel) ReportInventory(context.Context, *agent.InventoryRequest) (*agent.InventoryResponse, error) {
+	return nil, errors.New("unexpected inventory")
+}
+
+// TestChannelRenewalRetryReusesThePendingKey is the live g32 regression guard.
+// A response can disappear after the control plane has already committed the
+// certificate. The retry must therefore submit the SAME CSR. Generating a new
+// private key on every retry lets the server's idempotency cache return a
+// certificate for the previous key, which the agent correctly rejects and can
+// never recover from without a restart.
+func TestChannelRenewalRetryReusesThePendingKey(t *testing.T) {
+	ca, err := mtls.NewCA("agent-renewal-retry")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := agent.New(agent.Config{CommonName: "retrying-agent"}, nil)
+	ch := &flakyRenewChannel{ca: ca, fails: 1}
+	if err := a.RenewOverChannel(context.Background(), ch); err == nil {
+		t.Fatal("first renewal unexpectedly succeeded; the fixture must preserve the ambiguous response failure")
+	}
+	if err := a.RenewOverChannel(context.Background(), ch); err != nil {
+		t.Fatalf("retry renewal: %v", err)
+	}
+	if len(ch.csrs) != 2 || !bytes.Equal(ch.csrs[0], ch.csrs[1]) {
+		t.Fatal("renewal retry generated a different CSR; a cached response can then carry a certificate for the wrong private key")
+	}
+	if a.CertificateSerial() == "" {
+		t.Fatal("successful retry did not adopt the renewed certificate")
+	}
+}
 
 // authorityEnroller adapts a server-side *enroll.Authority to the client-side
 // agent.Enroller interface for these tests. EnrollBootstrap maps straight through.

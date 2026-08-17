@@ -10,12 +10,52 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/store"
 )
+
+// TestAgentProjectionConcurrentReplayMatchesThePrimaryKey is the live g32
+// regression guard. The request path projects an appended heartbeat immediately
+// for read-after-write behavior while the durable projector may consume the same
+// event at the same time. Both inserts must converge on the tenant-scoped agent
+// primary key instead of occasionally surfacing either uniqueness constraint.
+func TestAgentProjectionConcurrentReplayMatchesThePrimaryKey(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	seedTwoTenants(t, s)
+	for i := 0; i < 32; i++ {
+		id := fmt.Sprintf("90000000-0000-0000-0000-%012x", i)
+		row := store.Agent{ID: id, TenantID: tenantA, Name: "concurrent-agent", Status: "active", Version: "g32"}
+		start := make(chan struct{})
+		errs := make(chan error, 2)
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			<-start
+			errs <- s.UpsertAgent(ctx, row)
+		}()
+		go func() {
+			defer wg.Done()
+			<-start
+			errs <- s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+				return s.ApplyAgentCertRenewedTx(ctx, tx, row)
+			})
+		}()
+		close(start)
+		wg.Wait()
+		close(errs)
+		for err := range errs {
+			if err != nil {
+				t.Fatalf("concurrent projection %d: %v", i, err)
+			}
+		}
+	}
+}
 
 // This is part of the TENANT-007 package-level coverage for internal/store: until
 // this sprint the store had no _test.go of its own and per-repo tenant isolation was
@@ -67,14 +107,10 @@ func TestStoreAgentRepoIsolation(t *testing.T) {
 	}
 }
 
-// TestStoreAgentUpsertOnConflictCannotCrossTenant covers the ON CONFLICT (id) path
-// for a PK-on-id table (agents.id is the primary key). A tenant B upsert that reuses
-// tenant A's agent id must NOT silently hijack or mutate tenant A's row: FORCE-d RLS
-// rejects the write (the USING expression hides A's row from B, so the conflicting
-// INSERT/UPDATE fails closed with SQLSTATE 42501) and tenant A's row is left intact.
-// This proves a same-id collision across tenants cannot be used to overwrite another
-// tenant's agent through the upsert path.
-func TestStoreAgentUpsertOnConflictCannotCrossTenant(t *testing.T) {
+// TestStoreAgentIDsAreTenantScoped proves the composite primary key and FORCE RLS
+// agree on identity: two tenants may use the same UUID without colliding, and each
+// tenant reads only its own independent row.
+func TestStoreAgentIDsAreTenantScoped(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
 	seedTwoTenants(t, s)
@@ -84,13 +120,11 @@ func TestStoreAgentUpsertOnConflictCannotCrossTenant(t *testing.T) {
 		t.Fatalf("UpsertAgent(A): %v", err)
 	}
 
-	// Tenant B tries to upsert the same id: RLS must reject it (fail closed), so the
-	// write cannot reach tenant A's row.
-	if err := s.UpsertAgent(ctx, store.Agent{ID: sharedID, TenantID: tenantB, Name: "b-name", Status: "active"}); err == nil {
-		t.Fatal("a cross-tenant id-collision upsert was accepted; RLS must reject it (fail closed)")
+	if err := s.UpsertAgent(ctx, store.Agent{ID: sharedID, TenantID: tenantB, Name: "b-name", Status: "active"}); err != nil {
+		t.Fatalf("UpsertAgent(B, same tenant-scoped id): %v", err)
 	}
 
-	// Tenant A's row is unchanged, and tenant B has no such agent.
+	// Tenant A's row is unchanged and tenant B sees only its own row.
 	aGot, err := s.GetAgent(ctx, tenantA, sharedID)
 	if err != nil {
 		t.Fatalf("GetAgent(A): %v", err)
@@ -98,8 +132,12 @@ func TestStoreAgentUpsertOnConflictCannotCrossTenant(t *testing.T) {
 	if aGot.Name != "a-name" {
 		t.Errorf("tenant A's agent name = %q, want %q (a cross-tenant upsert must not mutate A)", aGot.Name, "a-name")
 	}
-	if _, err := s.GetAgent(ctx, tenantB, sharedID); !errors.Is(err, pgx.ErrNoRows) {
-		t.Errorf("tenant B unexpectedly has agent %s (err=%v); the rejected upsert must leave no B row", sharedID, err)
+	bGot, err := s.GetAgent(ctx, tenantB, sharedID)
+	if err != nil {
+		t.Fatalf("GetAgent(B): %v", err)
+	}
+	if bGot.Name != "b-name" {
+		t.Errorf("tenant B's agent name = %q, want %q", bGot.Name, "b-name")
 	}
 }
 
