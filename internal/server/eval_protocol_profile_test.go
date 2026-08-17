@@ -99,6 +99,31 @@ func TestEvalProfileActivationReplaysAndStaysTenantBound(t *testing.T) {
 	}
 }
 
+func TestEvalProfileActivationPassesProductionPrivacyVocabulary(t *testing.T) {
+	ctx := context.Background()
+	log, err := events.Open(
+		ctx,
+		config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(t.TempDir(), "nats")},
+		events.WithRequiredPrivacyEventPolicies(),
+	)
+	if err != nil {
+		t.Fatalf("events.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+
+	protocols := config.Default().Protocols
+	protocols.Profile = config.ProtocolProfileEval
+	protocols.EvalTenantID = evalProtocolTenant
+	served := &servedProtocols{names: append([]string(nil), evalProtocolNames...)}
+	control, err := newEvalProtocolProfileControl(ctx, protocols, served, log)
+	if err != nil {
+		t.Fatalf("new control: %v", err)
+	}
+	if _, err := control.Activate(ctx, evalProtocolTenant, "activate-under-production-privacy-gate"); err != nil {
+		t.Fatalf("Activate with production privacy vocabulary: %v", err)
+	}
+}
+
 func TestEvalProfileProtocolsEnabledInAssembledServer(t *testing.T) {
 	cfg := config.Default()
 	cfg.Protocols.Profile = config.ProtocolProfileEval

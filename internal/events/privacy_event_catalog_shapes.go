@@ -298,6 +298,8 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 	case "protocol.est.cacerts", "protocol.est.serverkeygen", "protocol.est.simpleenroll", "protocol.est.simplereenroll":
 		return shape(`{"op":"","decision":"","reason":"","profile":""}`,
 			catalogPrivacyShapeOptions{Optional: []string{"/reason", "/profile"}}), true
+	case "protocol.eval_profile.activated":
+		return shape(`{"profile":"","protocols":[""]}`), true
 	case "protocol.issued":
 		return shape(`{"protocol":"","serial":"","decision":""}`,
 			catalogPrivacyShapeOptions{Optional: []string{"/serial"}}), true

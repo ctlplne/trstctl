@@ -279,6 +279,8 @@ var coreProductionPrivacyEventCatalog = func() []productionPrivacyEventPolicy {
 		entry("protocol.est.simplereenroll",
 			catalogPrivacyRule("/op", opaque), catalogPrivacyRule("/decision", opaque),
 			catalogPrivacyRule("/reason", clear), catalogPrivacyRule("/profile", opaque)),
+		entry("protocol.eval_profile.activated",
+			catalogPrivacyRule("/profile", opaque), catalogPrivacyRule("/protocols/*", opaque)),
 		entry("protocol.issued",
 			catalogPrivacyRule("/protocol", opaque), catalogPrivacyRule("/serial", opaque),
 			catalogPrivacyRule("/decision", opaque)),
