@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/config"
@@ -173,38 +175,87 @@ func TestOutboxConnectorSaturationDoesNotStarveOtherFamilies(t *testing.T) {
 	// held across either external call.
 	waitForNonConnectorOutboxPools(t, set)
 	lockCtx, cancel := context.WithTimeout(ctx, time.Second)
-	tx, err := st.SystemPool().Begin(lockCtx)
+	tx, err := acquireOutboxExclusiveProbeLock(lockCtx, st)
 	if err != nil {
-		cancel()
-		t.Fatalf("begin no-open-transaction probe: %v", err)
-	}
-	if _, err := tx.Exec(lockCtx, `LOCK TABLE outbox IN ACCESS EXCLUSIVE MODE NOWAIT`); err != nil {
-		_ = tx.Rollback(context.Background())
 		cancel()
 		t.Fatalf("outbox transaction remained open during blocked external calls: %v", err)
 	}
+	cancel()
+	verifyCtx, verifyCancel := context.WithTimeout(ctx, time.Second)
+	defer verifyCancel()
 	for _, id := range connectorIDs {
 		var status string
-		if err := tx.QueryRow(lockCtx, `SELECT status FROM outbox WHERE id = $1`, id).Scan(&status); err != nil {
+		if err := tx.QueryRow(verifyCtx, `SELECT status FROM outbox WHERE id = $1`, id).Scan(&status); err != nil {
 			_ = tx.Rollback(context.Background())
-			cancel()
 			t.Fatalf("read connector row %d under lock: %v", id, err)
 		}
 		if status != "processing" {
 			_ = tx.Rollback(context.Background())
-			cancel()
 			t.Fatalf("connector row %d status = %q, want processing while external call is blocked", id, status)
 		}
 	}
-	if err := tx.Rollback(lockCtx); err != nil {
-		cancel()
+	if err := tx.Rollback(verifyCtx); err != nil {
 		t.Fatalf("rollback no-open-transaction probe: %v", err)
 	}
-	cancel()
 
 	release()
 	for _, id := range connectorIDs {
 		waitForOutboxStatus(t, srv.outbox, tenantID, id, "delivered")
+	}
+}
+
+// acquireOutboxExclusiveProbeLock distinguishes a short, legitimate claim/finalize
+// transaction from the AN-6 failure this oracle guards against. NOWAIT can collide
+// with a dispatcher transaction for a few milliseconds even after the pools report
+// quiescent. We retry only PostgreSQL lock_not_available within the caller's strict
+// deadline. The connector handlers remain blocked throughout, so a transaction held
+// across their external I/O can never clear and still fails this probe.
+func acquireOutboxExclusiveProbeLock(ctx context.Context, st *store.Store) (pgx.Tx, error) {
+	for {
+		tx, err := st.SystemPool().Begin(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if _, err = tx.Exec(ctx, `LOCK TABLE outbox IN ACCESS EXCLUSIVE MODE NOWAIT`); err == nil {
+			return tx, nil
+		}
+		_ = tx.Rollback(context.Background())
+		var pgErr *pgconn.PgError
+		if !errors.As(err, &pgErr) || pgErr.Code != "55P03" {
+			return nil, err
+		}
+		timer := time.NewTimer(10 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, fmt.Errorf("outbox exclusive lock unavailable before probe deadline: %w", ctx.Err())
+		case <-timer.C:
+		}
+	}
+}
+
+func TestOutboxExclusiveLockProbeRejectsLongTransaction(t *testing.T) {
+	st := newServerTestStore(t)
+	blocker, err := st.SystemPool().Begin(context.Background())
+	if err != nil {
+		t.Fatalf("begin planted long transaction: %v", err)
+	}
+	t.Cleanup(func() { _ = blocker.Rollback(context.Background()) })
+	// Even a read holds ACCESS SHARE until this transaction ends. ACCESS EXCLUSIVE
+	// must therefore remain unavailable for the entire probe deadline.
+	if _, err := blocker.Exec(context.Background(), `SELECT count(*) FROM outbox`); err != nil {
+		t.Fatalf("hold outbox read lock: %v", err)
+	}
+
+	probeCtx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	tx, err := acquireOutboxExclusiveProbeLock(probeCtx, st)
+	if tx != nil {
+		_ = tx.Rollback(context.Background())
+		t.Fatal("exclusive-lock probe succeeded while a planted transaction held the outbox table")
+	}
+	if err == nil || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("exclusive-lock probe error = %v, want deadline exceeded for planted long transaction", err)
 	}
 }
 
