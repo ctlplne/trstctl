@@ -188,6 +188,10 @@ func TestBuildQuarantinesHistoricalOutboxConflictAndServesRecoveryIncidentAUD97(
 	tokenA := seedScopedToken(t, st, tenantA, string(authz.IncidentsRead))
 	tokenB := seedScopedToken(t, st, tenantB, string(authz.IncidentsRead))
 	status, body := aud97RecoveryGET(t, ts, tokenA, tenantB)
+	if status != http.StatusForbidden {
+		t.Fatalf("tenant-A token with tenant-B header = %d, want 403 body=%s", status, body)
+	}
+	status, body = aud97RecoveryGET(t, ts, tokenA, tenantA)
 	if status != http.StatusOK {
 		t.Fatalf("tenant-A recovery surface = %d body=%s", status, body)
 	}
@@ -213,6 +217,10 @@ func TestBuildQuarantinesHistoricalOutboxConflictAndServesRecoveryIncidentAUD97(
 	}
 
 	status, body = aud97RecoveryGET(t, ts, tokenB, tenantA)
+	if status != http.StatusForbidden {
+		t.Fatalf("tenant-B token with tenant-A header = %d, want 403 body=%s", status, body)
+	}
+	status, body = aud97RecoveryGET(t, ts, tokenB, tenantB)
 	if status != http.StatusOK {
 		t.Fatalf("tenant-B recovery surface = %d body=%s", status, body)
 	}
@@ -257,14 +265,14 @@ func aud97ReplayableTransition(t *testing.T, identityID, from, to, requestKey st
 	return payload
 }
 
-func aud97RecoveryGET(t *testing.T, ts *httptest.Server, token, forgedTenant string) (int, []byte) {
+func aud97RecoveryGET(t *testing.T, ts *httptest.Server, token, requestedTenant string) (int, []byte) {
 	t.Helper()
 	req, err := http.NewRequest(http.MethodGet, ts.URL+"/api/v1/incidents/outbox-reconciliation-conflicts", nil)
 	if err != nil {
 		t.Fatalf("create recovery request: %v", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("X-Tenant-ID", forgedTenant)
+	req.Header.Set("X-Tenant-ID", requestedTenant)
 	resp, err := ts.Client().Do(req)
 	if err != nil {
 		t.Fatalf("request recovery surface: %v", err)
