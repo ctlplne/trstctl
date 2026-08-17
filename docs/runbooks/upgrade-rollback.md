@@ -19,6 +19,29 @@ helm get values trstctl -n trstctl -o yaml > trstctl-values.before.yaml
 - Run `trstctl --check-config` in the candidate environment and confirm the
   `agent_channel.*` lines match the planned fleet topology.
 
+## Idempotency keys across this upgrade
+
+An idempotency key is a retry label. It tells trstctl that two copies of the
+same command must produce one effect. The upgraded API also binds that label to
+the authenticated caller, method, path, canonical query, and request-body
+digest. This prevents a changed command from silently receiving an earlier
+command's cached response.
+
+Bodyless, queryless commands keep their previous binding and replay normally.
+An older successful mutation that had a body or query cannot be proved to match
+after the upgrade because the older row did not record those input digests. Its
+first retry therefore fails closed with `409 Conflict` and this detail:
+
+```text
+Idempotency-Key was already used for a different authenticated request
+```
+
+When this happens, confirm the intended effect in trstctl, then submit the
+intended command once with a new unique idempotency key. Do not delete or edit
+the old idempotency row: it is the durable proof that the earlier command ran.
+Record the old and new key references in the change ticket. Never place the
+request body or a credential value in either key.
+
 ## Commands: preflight
 
 Render the chart with the exact values file and inspect the agent channel and
