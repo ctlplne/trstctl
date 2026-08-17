@@ -48,11 +48,17 @@ Every command accepts these, each with a `TRSTCTL_*` environment fallback:
 | `--server`          | `TRSTCTL_SERVER`          | Base URL of the control plane.                            |
 | `--token`           | `TRSTCTL_TOKEN`           | API token, sent as `Authorization: Bearer`.               |
 | `--tenant`          | `TRSTCTL_TENANT`          | Tenant id (`X-Tenant-ID`) for header/dev auth.            |
+| `--ca-file`         | `TRSTCTL_CA_FILE`         | PEM CA bundle used to verify the control plane.           |
 | `--idempotency-key` | `TRSTCTL_IDEMPOTENCY_KEY` | Stable key for safe retries; generated per call if unset. |
 
 A trstctl API token carries its own tenant and scopes, so with `--token` you
 usually need nothing else. Mutations always send an `Idempotency-Key` so a
 retried command can never execute twice.
+
+For an evaluation server using its self-signed internal certificate, point
+`--ca-file` at the certificate you inspected and chose to trust. Production
+deployments should use the operator-managed CA bundle for `server.tls.mode=file`.
+The CLI deliberately has no switch that disables certificate verification.
 
 ## Output and exit codes
 

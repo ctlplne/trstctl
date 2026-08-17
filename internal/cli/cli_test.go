@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"encoding/pem"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -1667,6 +1668,46 @@ func TestMissingServerErrors(t *testing.T) {
 	code, _, _ := run(t, []string{"owners", "list"}, cli.Env{}, "")
 	if code == 0 {
 		t.Error("missing --server should exit non-zero")
+	}
+}
+
+func TestCAFileTrustsSelfSignedControlPlaneWithoutDisablingVerification(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/owners" {
+			t.Errorf("path = %q, want /api/v1/owners", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"items":[]}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	caPath := filepath.Join(t.TempDir(), "control-plane-ca.pem")
+	caPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: srv.Certificate().Raw})
+	if err := os.WriteFile(caPath, caPEM, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	code, stdout, stderr := run(t,
+		[]string{"--server", srv.URL, "--ca-file", caPath, "owners", "list"}, cli.Env{}, "")
+	if code != 0 || !sameJSON([]byte(stdout), []byte(`{"items":[]}`)) {
+		t.Fatalf("CA-file request = exit %d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+
+	code, _, stderr = run(t, []string{"owners", "list"}, cli.Env{Server: srv.URL, CAFile: caPath}, "")
+	if code != 0 {
+		t.Fatalf("environment CA-file request = exit %d stderr=%q", code, stderr)
+	}
+}
+
+func TestCAFileRejectsInvalidTrustBundle(t *testing.T) {
+	caPath := filepath.Join(t.TempDir(), "not-a-ca.pem")
+	if err := os.WriteFile(caPath, []byte("not a certificate"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr := run(t,
+		[]string{"--server", "https://control-plane.example", "--ca-file", caPath, "owners", "list"}, cli.Env{}, "")
+	if code != 2 || !strings.Contains(stderr, "CA file") {
+		t.Fatalf("invalid CA file = exit %d stderr=%q", code, stderr)
 	}
 }
 

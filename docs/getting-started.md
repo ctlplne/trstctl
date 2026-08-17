@@ -215,6 +215,14 @@ export TRSTCTL_SERVER=https://localhost:8443
 export TRSTCTL_BOOTSTRAP_TOKEN=trst_...
 export TRSTCTL_TOKEN="$TRSTCTL_BOOTSTRAP_TOKEN"
 
+# The evaluation certificate is self-signed. Capture its public certificate,
+# compare this fingerprint with the one your browser accepted, then let the CLI
+# trust only that certificate. Re-capture it if the control-plane process restarts.
+openssl s_client -connect localhost:8443 -servername localhost </dev/null 2>/dev/null \
+  | openssl x509 -out trstctl-eval-ca.pem
+openssl x509 -in trstctl-eval-ca.pem -noout -fingerprint -sha256
+export TRSTCTL_CA_FILE="$PWD/trstctl-eval-ca.pem"
+
 # The blank Compose stack selects PROFILE=eval. Activate the assembled responders
 # for this authenticated tenant before using their public protocol endpoints.
 curl -fksS -X POST "$TRSTCTL_SERVER/api/v1/setup/protocols/activate" \

@@ -48,6 +48,8 @@ in lockstep.
    ```sh
    export TRSTCTL_SERVER=https://localhost:8443
    export TRSTCTL_TOKEN=trst_...
+   # For the self-signed evaluation server, also set TRSTCTL_CA_FILE as shown
+   # in Getting started. Production uses your operator-managed CA bundle.
    trstctl-cli certificates list --limit 50
    ```
 
@@ -61,7 +63,7 @@ in lockstep.
 
    ```sh
    echo '{"kind":"workload","name":"payments"}' \
-     | trstctl-cli owners create -f - --idempotency-key my-stable-key
+     | trstctl-cli --idempotency-key my-stable-key owners create -f -
    ```
 
    You should see the owner created once; re-running the exact command returns the

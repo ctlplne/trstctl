@@ -25,6 +25,7 @@ import (
 
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/buildinfo"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/secretjson"
 	"trstctl.com/trstctl/internal/secretscli"
@@ -36,6 +37,7 @@ type Env struct {
 	Server         string
 	Token          string
 	Tenant         string
+	CAFile         string
 	IdempotencyKey string
 	HTTPClient     *http.Client
 }
@@ -49,6 +51,7 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 	server := fs.String("server", env.Server, "control-plane base URL (env TRSTCTL_SERVER)")
 	token := fs.String("token", env.Token, "API token (env TRSTCTL_TOKEN)")
 	tenant := fs.String("tenant", env.Tenant, "tenant id for header auth (env TRSTCTL_TENANT)")
+	caFile := fs.String("ca-file", env.CAFile, "PEM CA bundle for control-plane TLS (env TRSTCTL_CA_FILE)")
 	idem := fs.String("idempotency-key", env.IdempotencyKey, "Idempotency-Key for a mutation (generated if unset)")
 	globalForce := fs.Bool("force", false, "allow a destructive command")
 	fs.Usage = func() { usage(stderr) }
@@ -65,7 +68,7 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 		return 0
 	}
 	if rest[0] == "run" {
-		return runWithSecrets(ctx, rest[1:], env, stdin, stdout, stderr, *server, *token, *tenant)
+		return runWithSecrets(ctx, rest[1:], env, stdin, stdout, stderr, *server, *token, *tenant, *caFile)
 	}
 	if len(rest) >= 2 && hasPrefix(rest, []string{"audit", "verify"}) {
 		if commandHelpRequested(rest[2:]) {
@@ -120,7 +123,11 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 		idemKey = generateIdempotencyKey()
 	}
 
-	client := httpClientForEnv(env)
+	client, err := httpClientForEnv(env, *caFile)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "error: CA file: %v\n", err)
+		return 2
+	}
 	status, respBody, err := do(ctx, client, *server, cmd.Method, path, query, body, *token, *tenant, idemKey)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
@@ -135,14 +142,25 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 	return 0
 }
 
-func httpClientForEnv(env Env) *http.Client {
+func httpClientForEnv(env Env, caFile string) (*http.Client, error) {
 	if env.HTTPClient != nil {
-		return env.HTTPClient
+		return env.HTTPClient, nil
 	}
-	return &http.Client{Timeout: 30 * time.Second}
+	if caFile == "" {
+		return &http.Client{Timeout: 30 * time.Second}, nil
+	}
+	caPEM, err := os.ReadFile(caFile) // #nosec G304 -- the operator explicitly names the public trust-bundle path (CWE-22)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", caFile, err)
+	}
+	transport, err := mtls.HTTPTransport(caPEM)
+	if err != nil {
+		return nil, err
+	}
+	return &http.Client{Timeout: 30 * time.Second, Transport: transport}, nil
 }
 
-func runWithSecrets(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, stderr io.Writer, server, token, tenant string) int {
+func runWithSecrets(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, stderr io.Writer, server, token, tenant, caFile string) int {
 	fs := flag.NewFlagSet("trstctl run", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	var secretFlags runSecretFlags
@@ -183,8 +201,13 @@ func runWithSecrets(ctx context.Context, args []string, env Env, stdin io.Reader
 		mappings = append(mappings, mapping)
 	}
 
+	httpClient, err := httpClientForEnv(env, caFile)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "error: CA file: %v\n", err)
+		return 2
+	}
 	client := secretAPIClient{
-		client:  httpClientForEnv(env),
+		client:  httpClient,
 		server:  server,
 		token:   token,
 		tenant:  tenant,
@@ -518,7 +541,7 @@ func writeJSON(w io.Writer, body []byte) {
 
 func usage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "trstctl — command-line interface for the trstctl control plane")
-	_, _ = fmt.Fprintln(w, "\nUsage: trstctl [--server URL] [--token TOKEN] [--tenant ID] <command> [args]")
+	_, _ = fmt.Fprintln(w, "\nUsage: trstctl [--server URL] [--token TOKEN] [--tenant ID] [--ca-file PATH] <command> [args]")
 	_, _ = fmt.Fprintln(w, "\nCommands:")
 	for _, c := range Commands() {
 		_, _ = fmt.Fprintf(w, "  %-26s %s\n", strings.Join(c.Name, " "), c.Summary)

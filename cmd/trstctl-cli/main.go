@@ -2,8 +2,7 @@
 
 // Command trstctl-cli is the trstctl command-line interface — a scriptable
 // client at parity with the REST API (F11). Configuration comes from flags or
-// the TRSTCTL_SERVER / TRSTCTL_TOKEN / TRSTCTL_TENANT environment variables, so
-// it drops cleanly into CI.
+// TRSTCTL_* environment variables, so it drops cleanly into CI.
 package main
 
 import (
@@ -23,6 +22,7 @@ func main() {
 		Server:         os.Getenv("TRSTCTL_SERVER"),
 		Token:          os.Getenv("TRSTCTL_TOKEN"),
 		Tenant:         os.Getenv("TRSTCTL_TENANT"),
+		CAFile:         os.Getenv("TRSTCTL_CA_FILE"),
 		IdempotencyKey: os.Getenv("TRSTCTL_IDEMPOTENCY_KEY"),
 	}
 	os.Exit(cli.Run(ctx, os.Args[1:], env, os.Stdin, os.Stdout, os.Stderr))
