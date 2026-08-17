@@ -83,9 +83,9 @@ func TestHeaderOnlyRequestIsRejected(t *testing.T) {
 	}
 }
 
-// TestTokenForTenantACannotReachTenantB: an authenticated tenant-A token cannot
-// read another tenant's data, even when it forges X-Tenant-ID for tenant B — the
-// token's own tenant is authoritative (RLS + authenticated tenant).
+// TestTokenForTenantACannotReachTenantB proves both tenant-context boundaries:
+// an explicit header that conflicts with the authenticated token fails closed,
+// and a matching tenant-A request cannot read tenant-B data (guard + RLS).
 func TestTokenForTenantACannotReachTenantB(t *testing.T) {
 	srv, s := prodAPIServer(t)
 	tokenA := mintTokenFor(t, s, tenantA, "*")
@@ -95,17 +95,34 @@ func TestTokenForTenantACannotReachTenantB(t *testing.T) {
 	if st, _, body := do(t, srv, "POST", "/api/v1/owners", reqOpts{tenant: tenantB, bearer: tokenB, idem: "b1", body: map[string]any{"kind": "service", "name": "beta-owner"}}); st != http.StatusCreated {
 		t.Fatalf("tenant B create owner = %d: %s", st, body)
 	}
+	// Tenant A creates a different owner so the matching-token control proves that
+	// the successful read is scoped, not merely an empty response.
+	if st, _, body := do(t, srv, "POST", "/api/v1/owners", reqOpts{tenant: tenantA, bearer: tokenA, idem: "a1", body: map[string]any{"kind": "service", "name": "alpha-owner"}}); st != http.StatusCreated {
+		t.Fatalf("tenant A create owner = %d: %s", st, body)
+	}
 	// Tenant B sees it.
-	if _, _, body := do(t, srv, "GET", "/api/v1/owners", reqOpts{tenant: tenantB, bearer: tokenB}); !strings.Contains(string(body), "beta-owner") {
+	if _, _, body := do(t, srv, "GET", "/api/v1/owners", reqOpts{tenant: tenantB, bearer: tokenB}); !strings.Contains(string(body), "beta-owner") || strings.Contains(string(body), "alpha-owner") {
 		t.Fatalf("tenant B should see its own owner: %s", body)
 	}
-	// Tenant A's token, even claiming X-Tenant-ID = tenant B, sees none of B's data.
-	st, _, body := do(t, srv, "GET", "/api/v1/owners", reqOpts{tenant: tenantB, bearer: tokenA})
+	// Tenant A's token combined with an explicit tenant-B header is ambiguous and
+	// therefore rejected before a tenant-scoped handler runs.
+	st, headers, body := do(t, srv, "GET", "/api/v1/owners", reqOpts{tenant: tenantB, bearer: tokenA})
+	if st != http.StatusForbidden {
+		t.Fatalf("tenant A token with tenant B header = %d, want 403: %s", st, body)
+	}
+	if got := headers.Get("Content-Type"); !strings.HasPrefix(got, "application/problem+json") {
+		t.Errorf("mismatch Content-Type = %q, want application/problem+json", got)
+	}
+	// With a matching header, tenant A succeeds and RLS exposes only A's owner.
+	st, _, body = do(t, srv, "GET", "/api/v1/owners", reqOpts{tenant: tenantA, bearer: tokenA})
 	if st != http.StatusOK {
-		t.Fatalf("tenant A list = %d: %s", st, body)
+		t.Fatalf("tenant A matching list = %d: %s", st, body)
+	}
+	if !strings.Contains(string(body), "alpha-owner") {
+		t.Errorf("tenant A could not read its own owner: %s", body)
 	}
 	if strings.Contains(string(body), "beta-owner") {
-		t.Errorf("tenant A token read tenant B's data through a forged X-Tenant-ID header: %s", body)
+		t.Errorf("tenant A matching request read tenant B's data: %s", body)
 	}
 }
 
