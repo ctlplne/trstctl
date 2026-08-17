@@ -643,8 +643,8 @@ not this file.
 | `internal/api/csrf_test.go:71` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/rate_limit_guard_test.go:50` | test cookie against the test's own local server (CWE-1004) |
 | `internal/connector/netscaler/netscaler.go:272` | cookie on an outbound API request; response-cookie attributes do not apply (CWE-1004) |
-| `internal/projections/auth_resolver_test.go:150` | test cookie against the test's own local server (CWE-1004) |
-| `internal/projections/auth_resolver_test.go:159` | test cookie against the test's own local server (CWE-1004) |
+| `internal/projections/auth_resolver_test.go:167` | test cookie against the test's own local server (CWE-1004) |
+| `internal/projections/auth_resolver_test.go:176` | test cookie against the test's own local server (CWE-1004) |
 | `internal/server/scim_served_test.go:201` | test cookie against the test's own local server (CWE-1004) |
 
 ### G201 — CWE-? (unmapped rule) (1 sites)
