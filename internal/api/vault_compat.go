@@ -230,6 +230,10 @@ func (a *API) vaultAuth(perm authz.Permission, h http.HandlerFunc) http.HandlerF
 			writeVaultError(w, http.StatusForbidden, "permission denied")
 			return
 		}
+		if !tenantHeaderMatchesPrincipal(r, principal) {
+			writeVaultError(w, http.StatusForbidden, "permission denied")
+			return
+		}
 		if perm != "" {
 			target := authz.Scope{TenantID: principal.TenantID, Project: r.Header.Get("X-Project")}
 			if !principal.Can(perm, target) {

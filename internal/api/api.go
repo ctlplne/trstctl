@@ -367,7 +367,8 @@ func transitionFeatureAction(to orchestrator.State) (feature, action string, ok 
 
 // WithPrincipalResolver overrides how the caller's principal (tenant, subject,
 // role grants) is resolved from a request — the seam where OIDC/token auth
-// (S3.6) plugs in. The default reads request headers.
+// (S3.6) plugs in. The production default accepts verified API tokens and OIDC
+// sessions; it never trusts caller-supplied identity headers.
 func WithPrincipalResolver(fn func(*http.Request) (authz.Principal, error)) Option {
 	return func(c *config) { c.principalFn = fn }
 }
@@ -1417,8 +1418,10 @@ const (
 
 // tenant returns the tenant the request operates in. For a guarded route the
 // authenticated principal (placed in the context by guard) is authoritative —
-// this is what lets a bearer API token carry its own tenant; otherwise it falls
-// back to the tenant header (e.g. the public spec route has no principal).
+// this is what lets a bearer API token carry its own tenant. The guard rejects a
+// non-empty, conflicting X-Tenant-ID instead of silently ignoring it. Without an
+// authenticated principal, tenant falls back to the header only for the small
+// set of routes that deliberately resolve tenant before authentication.
 //
 // TENANT-003 (fail closed): once a principal is present in the context, ITS tenant
 // is authoritative and we never fall back to the client-supplied X-Tenant-ID
@@ -1434,6 +1437,20 @@ func (a *API) tenant(r *http.Request) (string, bool) {
 	}
 	t, err := a.tenantFn(r)
 	return t, err == nil && t != ""
+}
+
+// tenantHeaderMatchesPrincipal treats X-Tenant-ID as an optional assertion, never
+// as authentication. A caller may omit it and use the credential-bound tenant, but
+// every supplied value must agree with that tenant. Checking every header line also
+// prevents a proxy/client from hiding a conflicting value behind a duplicate field.
+func tenantHeaderMatchesPrincipal(r *http.Request, principal authz.Principal) bool {
+	for _, supplied := range r.Header.Values("X-Tenant-ID") {
+		supplied = strings.TrimSpace(supplied)
+		if supplied != "" && supplied != principal.TenantID {
+			return false
+		}
+	}
+	return true
 }
 
 // resolvePrincipal is the default, authenticated resolver: an Authorization:
@@ -1538,6 +1555,10 @@ func (a *API) guard(perm authz.Permission, scope routeScope, h http.HandlerFunc)
 		principal, err := a.principal(r)
 		if err != nil {
 			a.writeProblem(w, problemUnauthorized())
+			return
+		}
+		if !tenantHeaderMatchesPrincipal(r, principal) {
+			a.writeProblem(w, problem.New(http.StatusForbidden, "authenticated tenant does not match X-Tenant-ID"))
 			return
 		}
 		// CSRF defense for the cookie-session path (SEC-007): a session-authenticated
