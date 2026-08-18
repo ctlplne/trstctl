@@ -53,6 +53,10 @@ WORKDIR /src
 
 # Resolve modules first so they cache independently of source changes.
 COPY go.mod go.sum ./
+# A local replacement is part of the module graph, so its module file must be
+# visible during `go mod download`. The complete replacement source arrives in
+# the later `COPY . .`, preserving the dependency-cache boundary.
+COPY third_party/embedded-postgres/go.mod ./third_party/embedded-postgres/
 RUN go mod download
 
 COPY . .

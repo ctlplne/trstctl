@@ -144,6 +144,42 @@ func TestDockerfileIsMinimalAndReproducible(t *testing.T) {
 	})
 }
 
+// TestDockerfileStagesLocalModuleReplacementsBeforeDownload closes the gap
+// between a host build and the release image. A local `replace` in go.mod is a
+// second little module tree; Docker must copy its go.mod before `go mod download`
+// or the image fails even though every host-side Go test is green.
+func TestDockerfileStagesLocalModuleReplacementsBeforeDownload(t *testing.T) {
+	dockerfile := readArtifact(t, "Dockerfile")
+	goMod := readArtifact(t, filepath.Join("..", "..", "go.mod"))
+	downloadAt := strings.Index(dockerfile, "RUN go mod download")
+	fullSourceAfterDownload := -1
+	if downloadAt >= 0 {
+		if relative := strings.Index(dockerfile[downloadAt:], "COPY . ."); relative >= 0 {
+			fullSourceAfterDownload = downloadAt + relative
+		}
+	}
+	if downloadAt < 0 || fullSourceAfterDownload < downloadAt {
+		t.Fatal("Dockerfile must download modules before copying the complete source tree")
+	}
+
+	localReplace := regexp.MustCompile(`(?m)^replace\s+\S+\s+=>\s+\./([^\s]+)\s*$`)
+	matches := localReplace.FindAllStringSubmatch(goMod, -1)
+	if len(matches) == 0 {
+		t.Fatal("go.mod has no local replacement; remove or repoint this packaging guard")
+	}
+	for _, match := range matches {
+		moduleDir := filepath.ToSlash(match[1])
+		if _, err := os.Stat(filepath.Join("..", "..", filepath.FromSlash(moduleDir), "go.mod")); err != nil {
+			t.Fatalf("local replacement %s has no go.mod: %v", moduleDir, err)
+		}
+		want := "COPY " + moduleDir + "/go.mod ./" + moduleDir + "/"
+		copyAt := strings.Index(dockerfile, want)
+		if copyAt < 0 || copyAt > downloadAt {
+			t.Errorf("Dockerfile must stage local replacement before module download: %s", want)
+		}
+	}
+}
+
 // TestDockerfileBuildsForBuildKitTargetPlatform prevents a multi-architecture
 // image from carrying a binary for a different CPU. BuildKit supplies TARGETOS
 // and TARGETARCH for each requested platform. Redeclaring either argument with
