@@ -33,6 +33,8 @@ action behind an approval.
   [Getting started](../getting-started.md). Containment is a privileged action, so
   your principal needs issuance authority (the bootstrap token deliberately
   withholds it).
+- The inspected public CA bundle from Getting started exported as
+  `TRSTCTL_CA_FILE`; incident pressure is not permission to disable TLS checks.
 - Know which credential is affected. The blast-radius and revocation surfaces are
   described in [Incident response & just-in-time access](../features/incident-and-jit.md)
   and [Issuance & certificate authorities](../features/issuance-and-cas.md).
@@ -116,7 +118,7 @@ action behind an approval.
    a second operator approves it:
 
    ```sh
-   curl -fksS -X POST \
+   curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST \
      -H "Authorization: Bearer $TRSTCTL_TOKEN" \
      -H "Content-Type: application/json" \
      -d '{}' \
@@ -132,7 +134,7 @@ action behind an approval.
    sharing a long-lived password or SSH key:
 
    ```sh
-   curl -fksS -X POST \
+   curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST \
      -H "Authorization: Bearer $TRSTCTL_TOKEN" \
      -H "Idempotency-Key: incident-2026-06-25-db-readonly" \
      -H "Content-Type: application/json" \

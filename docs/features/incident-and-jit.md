@@ -370,7 +370,8 @@ trstctl-cli itsm servicenow tickets create -f servicenow-ticket.json
 Equivalent REST call:
 
 ```bash
-curl -fksS -X POST "https://trstctl.example.com/api/v1/itsm/servicenow/tickets" \
+export TRSTCTL_CA_FILE=/etc/trstctl/pki/control-plane-ca.pem
+curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST "https://trstctl.example.com/api/v1/itsm/servicenow/tickets" \
   -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   -H "Idempotency-Key: incident-2026-06-25-servicenow" \
   -H "Content-Type: application/json" \
@@ -385,7 +386,7 @@ Online break-glass issue is API-served when the signer-backed break-glass issuer
 configured:
 
 ```bash
-curl -X POST "https://trstctl.example.com/api/v1/breakglass/issue-ceremonies" \
+curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST "https://trstctl.example.com/api/v1/breakglass/issue-ceremonies" \
   -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   -H "Idempotency-Key: incident-2026-06-25-bg-ceremony" \
   -H "Content-Type: application/json" \
@@ -395,7 +396,7 @@ curl -X POST "https://trstctl.example.com/api/v1/breakglass/issue-ceremonies" \
 trstctl-cli ca ceremonies approve <ceremony-id>
 trstctl-cli ca ceremonies approve <ceremony-id>
 
-curl -X POST "https://trstctl.example.com/api/v1/breakglass/issue" \
+curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST "https://trstctl.example.com/api/v1/breakglass/issue" \
   -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   -H "Idempotency-Key: incident-2026-06-25-bg-issue" \
   -H "Content-Type: application/json" \
@@ -405,7 +406,7 @@ curl -X POST "https://trstctl.example.com/api/v1/breakglass/issue" \
 Break-glass reconciliation remains API-served after an offline ceremony:
 
 ```bash
-curl -X POST "https://trstctl.example.com/api/v1/breakglass/reconcile" \
+curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST "https://trstctl.example.com/api/v1/breakglass/reconcile" \
   -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   -H "Idempotency-Key: incident-2026-06-25-bg-reconcile" \
   -H "Content-Type: application/json" \
@@ -418,7 +419,7 @@ The caller needs `certs:issue`; audit readers can then confirm the result with
 Open a short-lived Postgres session:
 
 ```bash
-curl -fksS -X POST "https://trstctl.example.com/api/v1/access/sessions" \
+curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST "https://trstctl.example.com/api/v1/access/sessions" \
   -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   -H "Idempotency-Key: incident-2026-06-25-pg-readonly" \
   -H "Content-Type: application/json" \
@@ -433,7 +434,7 @@ Open a short-lived SSH session:
 
 ```bash
 ssh-keygen -t ed25519 -N "" -f /tmp/pam_id
-curl -fksS -X POST "https://trstctl.example.com/api/v1/access/sessions" \
+curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST "https://trstctl.example.com/api/v1/access/sessions" \
   -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   -H "Idempotency-Key: incident-2026-06-25-ssh" \
   -H "Content-Type: application/json" \

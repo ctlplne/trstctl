@@ -32,6 +32,9 @@ recover from a datastore loss, and confirm you can hand an auditor a verifiable 
 - If the production environment is disconnected, read
   [Air-gapped install](../airgap.md) first. It adds the no-phone-home egress guard
   and the strict Helm egress overlay to the same production posture below.
+- Set `TRSTCTL_SERVER` to the production origin and `TRSTCTL_CA_FILE` to the
+  trusted public CA bundle for its certificate. Do not use the evaluation
+  `curl -k` shortcut in production.
 
 ## Steps
 
@@ -59,7 +62,7 @@ recover from a datastore loss, and confirm you can hand an auditor a verifiable 
    NATS, and the signer, so make it your readiness probe:
 
    ```sh
-   curl -fksS https://localhost:8443/readyz   # {"status":"ok","checks":{"db":"ok","nats":"ok","signer":"ok"}}
+   curl -fsS --cacert "$TRSTCTL_CA_FILE" "$TRSTCTL_SERVER/readyz"
    ```
 
    You should get `{"status":"ok",...}` with each dependency `ok`. If one drops,
@@ -70,7 +73,7 @@ recover from a datastore loss, and confirm you can hand an auditor a verifiable 
    under load:
 
    ```sh
-   curl -fksS https://localhost:8443/metrics   # # TYPE trstctl_http_requests_total counter ...
+   curl -fsS --cacert "$TRSTCTL_CA_FILE" "$TRSTCTL_SERVER/metrics"
    ```
 
    You should see series such as `trstctl_http_requests_total` and `trstctl_signer_up`.

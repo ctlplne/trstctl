@@ -15,6 +15,8 @@ helm get values trstctl -n trstctl -o yaml > trstctl-values.before.yaml
 
 - Confirm `/readyz` is `200`.
 - Confirm `trstctl_signer_up == 1`.
+- Set `TRSTCTL_CA_FILE` to the trusted public CA bundle for the control-plane
+  certificate; never disable TLS verification to get through an outage.
 - Record `trstctl-cli agents list` and inventory counts before the upgrade.
 - Run `trstctl --check-config` in the candidate environment and confirm the
   `agent_channel.*` lines match the planned fleet topology.
@@ -129,8 +131,8 @@ the signer or DR runbook depending on the failing dependency:
 
 ```sh
 kubectl -n trstctl rollout pause daemonset/trstctl-agent
-curl -fksS https://cp.example.com/readyz
-curl -fksS https://cp.example.com/metrics | grep trstctl_signer_up
+curl -fsS --cacert "$TRSTCTL_CA_FILE" https://cp.example.com/readyz
+curl -fsS --cacert "$TRSTCTL_CA_FILE" https://cp.example.com/metrics | grep trstctl_signer_up
 ```
 
 ## Post-checks

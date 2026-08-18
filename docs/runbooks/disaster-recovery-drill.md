@@ -72,11 +72,14 @@ breach. Negative or malformed objective durations fail configuration validation.
   restore refuses to run against a non-empty target.
 - The target uses the same chart values for CA certificate paths, signer key-store
   paths, signer authorization secret path, and KEK path.
+- Set `TRSTCTL_CA_FILE` to the source control plane's trusted public CA bundle.
+  Keep a separately verified restore-target bundle in
+  `TRSTCTL_RESTORE_CA_FILE`; recovery must not rely on `curl -k`.
 - Record source baselines before the drill:
 
 ```sh
-curl -fksS https://cp.example.com/readyz
-curl -fksS https://cp.example.com/metrics | grep 'trstctl_signer_up\|trstctl_event_log_replicas'
+curl -fsS --cacert "$TRSTCTL_CA_FILE" https://cp.example.com/readyz
+curl -fsS --cacert "$TRSTCTL_CA_FILE" https://cp.example.com/metrics | grep 'trstctl_signer_up\|trstctl_event_log_replicas'
 trstctl-cli certificates list --limit 50
 trstctl-cli agents list
 ```
@@ -171,8 +174,8 @@ helm upgrade --install trstctl deploy/helm/trstctl \
   --wait --timeout=10m
 
 kubectl -n trstctl-restore rollout status deployment/trstctl --timeout=10m
-curl -fksS https://restore-cp.example.com/readyz
-curl -fksS https://restore-cp.example.com/metrics | grep trstctl_signer_up
+curl -fsS --cacert "$TRSTCTL_RESTORE_CA_FILE" https://restore-cp.example.com/readyz
+curl -fsS --cacert "$TRSTCTL_RESTORE_CA_FILE" https://restore-cp.example.com/metrics | grep trstctl_signer_up
 ```
 
 If isolated signer mode is enabled, also wait for the signer deployment:

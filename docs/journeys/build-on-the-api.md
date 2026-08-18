@@ -36,7 +36,8 @@ in lockstep.
    single spec — no auth needed to read it:
 
    ```sh
-   curl -fksS https://localhost:8443/api/v1/openapi.json
+   export TRSTCTL_CA_FILE="$PWD/trstctl-eval-ca.pem" # captured and inspected in Getting started
+   curl -fsS --cacert "$TRSTCTL_CA_FILE" https://localhost:8443/api/v1/openapi.json
    ```
 
    You should get the full OpenAPI 3.1 document. Point your code generator or API
@@ -105,7 +106,8 @@ in lockstep.
    `{ items, next_cursor }`. Pass the returned cursor back to get the next page:
 
    ```sh
-   curl -fksS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+   curl -fsS --cacert "$TRSTCTL_CA_FILE" \
+     -H "Authorization: Bearer $TRSTCTL_TOKEN" \
      "https://localhost:8443/api/v1/certificates?limit=50&cursor=<next_cursor>"
    ```
 

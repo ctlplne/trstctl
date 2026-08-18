@@ -23,11 +23,13 @@ the tail cannot apply a sequence, it records that failed sequence before it
 retries and `/readyz` returns 503. A normal short-lived positive lag does not flap
 readiness; only a recorded failure that still lies ahead of the applied
 checkpoint degrades it. The response contains safe sequence and lag numbers, not
-the stored database error or event payload.
+the stored database error or event payload. Set `TRSTCTL_CA_FILE` to the inspected
+public evaluation CA or the operator-managed production CA before probing HTTPS;
+do not train monitors to disable certificate verification.
 
 ```bash
-curl -fksS https://localhost:8443/readyz   # {"status":"ok","checks":{"db":"ok","nats":"ok","projection":"ok","signer":"ok"}}
-curl -fksS https://localhost:8443/metrics  # # TYPE trstctl_http_requests_total counter ...
+curl -fsS --cacert "$TRSTCTL_CA_FILE" https://localhost:8443/readyz # {"status":"ok","checks":{"db":"ok","nats":"ok","projection":"ok","signer":"ok"}}
+curl -fsS --cacert "$TRSTCTL_CA_FILE" https://localhost:8443/metrics
 ```
 
 The leader retries a failed projection tail. Once it applies the failed sequence,

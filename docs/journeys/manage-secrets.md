@@ -79,6 +79,7 @@ today (see [Current limitations](../limitations.md) and
    ```sh
    export TRSTCTL_SERVER=https://localhost:8443
    export TRSTCTL_TOKEN=trst_...
+   export TRSTCTL_CA_FILE="$PWD/trstctl-eval-ca.pem" # captured and inspected in Getting started
    export TRSTCTL_SECRETS_KEK_FILE=/etc/trstctl/secrets-kek
    ```
 
@@ -97,7 +98,7 @@ today (see [Current limitations](../limitations.md) and
    `secret.version.written` event. See [Secrets](../features/secrets.md).
 
    ```sh
-   curl -fksS -X POST https://localhost:8443/api/v1/secrets/store/db/password \
+   curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST https://localhost:8443/api/v1/secrets/store/db/password \
      -H "Authorization: Bearer $TRSTCTL_TOKEN" \
      -H "Idempotency-Key: $(uuidgen)" \
      -H 'Content-Type: application/json' \
@@ -139,19 +140,19 @@ today (see [Current limitations](../limitations.md) and
    `resolve=true`, so a normal read does not fan out across hidden dependencies.
 
    ```sh
-   curl -fksS -X POST https://localhost:8443/api/v1/secrets/store \
+   curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST https://localhost:8443/api/v1/secrets/store \
      -H "Authorization: Bearer $TRSTCTL_TOKEN" \
      -H "Idempotency-Key: $(uuidgen)" \
      -H 'Content-Type: application/json' \
      -d '{"name":"app/db/user","value":"payments"}'
 
-   curl -fksS -X POST https://localhost:8443/api/v1/secrets/store \
+   curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST https://localhost:8443/api/v1/secrets/store \
      -H "Authorization: Bearer $TRSTCTL_TOKEN" \
      -H "Idempotency-Key: $(uuidgen)" \
      -H 'Content-Type: application/json' \
      -d '{"name":"app/db/dsn","value":"postgres://${secret.app/db/user}@db.service.local/payments"}'
 
-   curl -fksS "https://localhost:8443/api/v1/secrets/store/app/db/dsn?resolve=true" \
+   curl -fsS --cacert "$TRSTCTL_CA_FILE" "https://localhost:8443/api/v1/secrets/store/app/db/dsn?resolve=true" \
      -H "Authorization: Bearer $TRSTCTL_TOKEN"
    ```
 
@@ -169,7 +170,7 @@ today (see [Current limitations](../limitations.md) and
    [Secrets](../features/secrets.md).
 
    ```sh
-   curl -fksS -X PUT https://localhost:8443/api/v1/secrets/store/db/password \
+   curl -fsS --cacert "$TRSTCTL_CA_FILE" -X PUT https://localhost:8443/api/v1/secrets/store/db/password \
      -H "Authorization: Bearer $TRSTCTL_TOKEN" \
      -H "Idempotency-Key: $(uuidgen)" \
      -H 'Content-Type: application/json' \
@@ -180,7 +181,7 @@ today (see [Current limitations](../limitations.md) and
    are enabled, the requester gets `403` and approvers continue:
 
    ```sh
-   curl -fksS -X POST https://localhost:8443/api/v1/secrets/store/approvals/db/password \
+   curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST https://localhost:8443/api/v1/secrets/store/approvals/db/password \
      -H "Authorization: Bearer $APPROVER_TOKEN" \
      -H "Idempotency-Key: $(uuidgen)" \
      -H 'Content-Type: application/json' \
@@ -215,10 +216,10 @@ today (see [Current limitations](../limitations.md) and
    next monotonic version.
 
    ```sh
-   curl -fksS "https://localhost:8443/api/v1/secrets/store/history/db/password?version=1" \
+   curl -fsS --cacert "$TRSTCTL_CA_FILE" "https://localhost:8443/api/v1/secrets/store/history/db/password?version=1" \
      -H "Authorization: Bearer $TRSTCTL_TOKEN"
 
-   curl -fksS -X POST https://localhost:8443/api/v1/secrets/store/recover/db/password \
+   curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST https://localhost:8443/api/v1/secrets/store/recover/db/password \
      -H "Authorization: Bearer $TRSTCTL_TOKEN" \
      -H "Idempotency-Key: $(uuidgen)" \
      -H 'Content-Type: application/json' \
@@ -253,22 +254,22 @@ today (see [Current limitations](../limitations.md) and
    closes.
 
    ```sh
-   curl -fksS -X POST https://localhost:8443/api/v1/secrets/leases \
+   curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST https://localhost:8443/api/v1/secrets/leases \
      -H "Authorization: Bearer $TRSTCTL_TOKEN" \
      -H "Idempotency-Key: $(uuidgen)" \
      -H 'Content-Type: application/json' \
      -d '{"provider":"postgresql","role":"readonly","ttl_seconds":900}'
 
-   curl -fksS https://localhost:8443/api/v1/secrets/leases/<lease-id> \
+   curl -fsS --cacert "$TRSTCTL_CA_FILE" https://localhost:8443/api/v1/secrets/leases/<lease-id> \
      -H "Authorization: Bearer $TRSTCTL_TOKEN"
 
-   curl -fksS -X POST https://localhost:8443/api/v1/secrets/leases/<lease-id>/renew \
+   curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST https://localhost:8443/api/v1/secrets/leases/<lease-id>/renew \
      -H "Authorization: Bearer $TRSTCTL_TOKEN" \
      -H "Idempotency-Key: $(uuidgen)" \
      -H 'Content-Type: application/json' \
      -d '{"extend_seconds":900}'
 
-   curl -fksS -X POST https://localhost:8443/api/v1/secrets/leases/<lease-id>/revoke \
+   curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST https://localhost:8443/api/v1/secrets/leases/<lease-id>/revoke \
      -H "Authorization: Bearer $TRSTCTL_TOKEN" \
      -H "Idempotency-Key: $(uuidgen)"
    ```
@@ -281,7 +282,7 @@ today (see [Current limitations](../limitations.md) and
    served leaseworker records `api_token.revoked` when the TTL passes.
 
    ```sh
-   curl -fksS -X POST https://localhost:8443/api/v1/ephemeral/api-keys \
+   curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST https://localhost:8443/api/v1/ephemeral/api-keys \
      -H "Authorization: Bearer $TRSTCTL_TOKEN" \
      -H "Idempotency-Key: $(uuidgen)" \
      -H 'Content-Type: application/json' \
@@ -306,7 +307,7 @@ today (see [Current limitations](../limitations.md) and
    ```sh
    openssl ecparam -name prime256v1 -genkey -noout -out payments.key
    openssl req -new -key payments.key -subj '/CN=payments.internal' -out payments.csr
-   curl -fksS -X POST https://localhost:8443/api/v1/secrets/pki \
+   curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST https://localhost:8443/api/v1/secrets/pki \
      -H "Authorization: Bearer $TRSTCTL_TOKEN" \
      -H "Idempotency-Key: $(uuidgen)" \
      -H 'Content-Type: application/json' \
@@ -320,7 +321,7 @@ today (see [Current limitations](../limitations.md) and
 10. Share a one-off secret that destroys itself after a single read.
 
    ```sh
-   curl -fksS -X POST https://localhost:8443/api/v1/secrets/shares \
+   curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST https://localhost:8443/api/v1/secrets/shares \
      -H "Authorization: Bearer $TRSTCTL_TOKEN" \
      -H "Idempotency-Key: $(uuidgen)" \
      -H 'Content-Type: application/json' \
@@ -332,7 +333,7 @@ today (see [Current limitations](../limitations.md) and
    cannot redeem it.
 
    ```sh
-   curl -fksS -X POST https://localhost:8443/api/v1/secrets/shares/redeem \
+   curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST https://localhost:8443/api/v1/secrets/shares/redeem \
      -H "Authorization: Bearer $TRSTCTL_TOKEN" \
      -H "Idempotency-Key: $(uuidgen)" \
      -H 'Content-Type: application/json' \
@@ -402,7 +403,7 @@ today (see [Current limitations](../limitations.md) and
    trstctl-cli --idempotency-key third-party-scan-1 \
      secrets scans third-party ingest slack -f third-party-scan.json
 
-   curl -fksS "https://localhost:8443/api/v1/discovery/findings?run_id=<run-id>" \
+   curl -fsS --cacert "$TRSTCTL_CA_FILE" "https://localhost:8443/api/v1/discovery/findings?run_id=<run-id>" \
      -H "Authorization: Bearer $TRSTCTL_TOKEN"
    ```
 

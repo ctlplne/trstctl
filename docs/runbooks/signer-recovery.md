@@ -24,6 +24,8 @@ key store healthy again, not silently making a new CA.
   socket paths, DSNs, tenant IDs, raw environment values, or credentials.
 - Capture `trstctl_signer_up`, signer pod logs, control-plane logs, agent
   heartbeat age, and inventory counts before changing anything.
+- Set `TRSTCTL_CA_FILE` to the trusted public CA bundle for the control-plane
+  certificate. A signer incident is not permission to disable TLS verification.
 - Have a recent full backup if the signer key store, signer auth Secret, local KEK,
   or externalKMS adapter configuration must be restored.
 
@@ -41,8 +43,8 @@ kubectl -n trstctl rollout status deployment/trstctl-signer --timeout=10m
 Then check the control plane:
 
 ```sh
-curl -fksS https://cp.example.com/readyz
-curl -fksS https://cp.example.com/metrics | grep trstctl_signer_up
+curl -fsS --cacert "$TRSTCTL_CA_FILE" https://cp.example.com/readyz
+curl -fsS --cacert "$TRSTCTL_CA_FILE" https://cp.example.com/metrics | grep trstctl_signer_up
 trstctl-cli agents list
 trstctl-cli certificates list
 ```
