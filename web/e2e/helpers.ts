@@ -21,10 +21,15 @@ export async function signIn(page: Page): Promise<void> {
   }
   await expect(dashboard).toBeVisible({ timeout: 20_000 });
   // Firefox reports a font request canceled by the next page.goto as a
-  // console error. Finish the authenticated shell's self-hosted font loads
-  // before the caller clears sign-in diagnostics and navigates to the route
-  // under test, so a Dashboard cancellation is never blamed on that route.
-  await page.evaluate(() => document.fonts.ready);
+  // console error. `fonts.ready` only covers faces this page already asked
+  // for, and Dashboard does not always paint with DM Mono. Ask for that face
+  // explicitly, then finish every requested self-hosted font before the
+  // caller clears sign-in diagnostics and navigates to the route under test.
+  // That keeps a canceled first-load request from being blamed on that route.
+  await page.evaluate(async () => {
+    await document.fonts.load('400 1em "DM Mono"');
+    await document.fonts.ready;
+  });
 }
 
 /** The five spaces and, for each, the sidebar row that proves the scoped
