@@ -1254,7 +1254,7 @@ export function Secrets() {
   }
 
   return (
-    <section aria-labelledby="secrets-heading" className="grid gap-6">
+    <section aria-labelledby="secrets-heading" className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
       <PageHeader
         titleId="secrets-heading"
         title={tab === "store" ? translateNow("source.secrets.d8707d411d") : t(secretsRouteTitleKeys[tab])}
@@ -2427,8 +2427,8 @@ export function Secrets() {
       )}
 
       {tab === "scanning" && (
-        <div className="grid gap-6">
-          <section aria-labelledby="secret-scanning-heading" className="grid gap-4 border-y border-border py-4">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
+          <section aria-labelledby="secret-scanning-heading" className="grid min-w-0 gap-4 border-y border-border py-4">
             <div>
               <h2 id="secret-scanning-heading" className="text-title font-semibold">
                 {translateNow("source.code.and.ci.secret.scanning.bridge.27c18d763b")}

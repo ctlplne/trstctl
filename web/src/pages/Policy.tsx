@@ -696,10 +696,10 @@ export function Policy() {
   }
 
   return (
-    <section aria-labelledby="policy-heading" className="grid gap-6">
+    <section aria-labelledby="policy-heading" className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
       <PageHeader titleId="policy-heading" title={t("nav.item.policy")} description={t("policy.overview.description")} />
 
-      <section aria-labelledby="policy-gate-heading" className="grid gap-4 border-y border-border py-4">
+      <section aria-labelledby="policy-gate-heading" className="grid min-w-0 gap-4 border-y border-border py-4">
         <div>
           <h2 id="policy-gate-heading" className="text-title font-semibold">
             {t("policy.enforcement.heading")}
@@ -723,7 +723,7 @@ export function Policy() {
         </div>
       </section>
 
-      <section aria-labelledby="policy-version-heading" className="grid gap-4 border-y border-border py-4">
+      <section aria-labelledby="policy-version-heading" className="grid min-w-0 gap-4 border-y border-border py-4">
         <div>
           <h2 id="policy-version-heading" className="text-title font-semibold">
             {t("policy.versions.heading")}
@@ -731,38 +731,38 @@ export function Policy() {
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("policy.versions.description")}</p>
         </div>
 
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
-          <form className="grid gap-3 rounded-md border border-border p-4 text-sm" onSubmit={(event) => void createPolicyVersion(event)}>
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="grid gap-1">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
+          <form className="grid min-w-0 gap-3 rounded-md border border-border p-4 text-sm" onSubmit={(event) => void createPolicyVersion(event)}>
+            <div className="grid min-w-0 gap-3 md:grid-cols-2">
+              <label className="grid min-w-0 gap-1">
                 <span className="font-medium">{t("policy.versions.descriptionLabel")}</span>
                 <input
-                  className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
+                  className="min-h-10 min-w-0 w-full rounded-md border border-border bg-background px-3 py-2"
                   value={policyVersionForm.description}
                   onChange={(event) => setPolicyVersionForm((current) => ({ ...current, description: event.target.value }))}
                 />
               </label>
-              <label className="grid gap-1">
+              <label className="grid min-w-0 gap-1">
                 <span className="font-medium">{t("policy.versions.changeRef")}</span>
                 <input
-                  className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
+                  className="min-h-10 min-w-0 w-full rounded-md border border-border bg-background px-3 py-2"
                   value={policyVersionForm.changeRef}
                   onChange={(event) => setPolicyVersionForm((current) => ({ ...current, changeRef: event.target.value }))}
                 />
               </label>
             </div>
-            <label className="grid gap-1">
+            <label className="grid min-w-0 gap-1">
               <span className="font-medium">{t("policy.versions.evidenceRefs")}</span>
               <input
-                className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
+                className="min-h-10 min-w-0 w-full rounded-md border border-border bg-background px-3 py-2"
                 value={policyVersionForm.evidenceRefs}
                 onChange={(event) => setPolicyVersionForm((current) => ({ ...current, evidenceRefs: event.target.value }))}
               />
             </label>
-            <label className="grid gap-1">
+            <label className="grid min-w-0 gap-1">
               <span className="font-medium">{t("policy.versions.lifecycleModule")}</span>
               <textarea
-                className="min-h-64 rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+                className="min-h-64 min-w-0 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
                 spellCheck={false}
                 value={policyVersionForm.module}
                 onChange={(event) => setPolicyVersionForm((current) => ({ ...current, module: event.target.value }))}
@@ -775,7 +775,7 @@ export function Policy() {
             </div>
           </form>
 
-          <section aria-labelledby="policy-active-version-heading" className="rounded-md border border-border p-4 text-sm">
+          <section aria-labelledby="policy-active-version-heading" className="min-w-0 rounded-md border border-border p-4 text-sm">
             <h3 id="policy-active-version-heading" className="text-sm font-semibold">
               {t("policy.versions.activePolicy")}
             </h3>
@@ -808,7 +808,7 @@ export function Policy() {
           </p>
         )}
 
-        <div className="overflow-x-auto rounded-md border border-border">
+        <div className="min-w-0 max-w-full overflow-x-auto rounded-md border border-border">
           <table className="min-w-full text-left text-sm" aria-label={t("policy.versions.tableLabel")}>
             <thead className="border-b border-border text-xs uppercase text-muted-foreground">
               <tr>

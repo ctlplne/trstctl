@@ -456,13 +456,13 @@ export function DynamicLeaseMetadata({ lease }: { lease: DynamicLease }) {
 export function RepositoryScanPosture({ posture }: { posture: SecretRepositoryScanPosture }) {
   const { t } = useTranslation();
   return (
-    <div className="ui-panel grid gap-3 p-comfortable text-sm">
+    <div className="ui-panel grid min-w-0 max-w-full gap-3 p-comfortable text-sm">
       <div className="flex flex-wrap items-center gap-3">
         <span className="rounded-md bg-status-success/10 px-2 py-1 font-mono text-xs text-status-success">{posture.capability}</span>
         <span className="font-medium">{posture.served ? t("secrets.repoScan.active") : t("secrets.repoScan.unavailable")}</span>
         <span className="text-muted-foreground">{t("secrets.repoScan.ruleFloor", { scanner: posture.scanner, rules: posture.minimum_rules_active })}</span>
       </div>
-      <div className="overflow-x-auto">
+      <div className="min-w-0 max-w-full overflow-x-auto">
         <table className="ui-table min-w-[52rem]">
           <caption className="sr-only">{t("secrets.repoScan.providerCaption")}</caption>
           <thead>
@@ -518,13 +518,13 @@ export function RepositoryScanPosture({ posture }: { posture: SecretRepositorySc
 export function ThirdPartyScanPosture({ posture }: { posture: ThirdPartySecretScanPosture }) {
   const { t } = useTranslation();
   return (
-    <div className="ui-panel grid gap-3 p-comfortable text-sm">
+    <div className="ui-panel grid min-w-0 max-w-full gap-3 p-comfortable text-sm">
       <div className="flex flex-wrap items-center gap-3">
         <span className="rounded-md bg-status-success/10 px-2 py-1 font-mono text-xs text-status-success">{posture.capability}</span>
         <span className="font-medium">{posture.served ? t("secrets.thirdPartyScan.active") : t("secrets.thirdPartyScan.unavailable")}</span>
         <span className="text-muted-foreground">{t("secrets.repoScan.ruleFloor", { scanner: posture.scanner, rules: posture.minimum_rules_active })}</span>
       </div>
-      <div className="overflow-x-auto">
+      <div className="min-w-0 max-w-full overflow-x-auto">
         <table className="ui-table min-w-[52rem]">
           <caption className="sr-only">{t("secrets.thirdPartyScan.providerCaption")}</caption>
           <thead>

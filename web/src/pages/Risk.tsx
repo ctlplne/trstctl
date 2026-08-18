@@ -313,7 +313,7 @@ export function Risk() {
   );
 
   return (
-    <section aria-labelledby="risk-heading" className="min-w-0">
+    <section aria-labelledby="risk-heading" className="min-w-0 w-full max-w-full">
       <PageHeader
         titleId="risk-heading"
         title={t("nav.item.risk")}
@@ -385,7 +385,7 @@ function ContextualRiskPanel({ priorities, loading, error }: { priorities: Conte
   const { t } = useTranslation();
   const topPriorities = priorities?.priorities?.slice(0, 5) ?? [];
   return (
-    <section aria-labelledby="contextual-risk-heading" className="mb-4 min-w-0 border-b border-border pb-4">
+    <section aria-labelledby="contextual-risk-heading" className="mb-4 min-w-0 w-full max-w-full border-b border-border pb-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 id="contextual-risk-heading" className="text-title font-semibold">
@@ -418,7 +418,7 @@ function ContextualRiskPanel({ priorities, loading, error }: { priorities: Conte
       )}
       {!loading && !error && priorities && topPriorities.length === 0 && <p className="mt-3 text-sm text-muted-foreground">{t("risk.contextual.empty")}</p>}
       {!loading && !error && topPriorities.length > 0 && (
-        <div className="mt-3 min-w-0 max-w-full overflow-x-auto">
+        <div className="mt-3 min-w-0 w-full max-w-full overflow-x-auto">
           <table className="ui-table min-w-[58rem]">
             <caption className="sr-only">{t("risk.contextual.caption")}</caption>
             <thead>

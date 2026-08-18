@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
 import { SSHTrust } from "@/pages/SSHTrust";
+import { ApiError } from "@/lib/api";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -140,6 +141,17 @@ describe("SSH trust served workflow surface", () => {
 
     expect(await screen.findByText("No agent-reported SSH key locations yet.")).toBeInTheDocument();
     expect(screen.queryByRole("table", { name: "SSH standing access inventory" })).not.toBeInTheDocument();
+  });
+
+  it("explains when the SSH workflow is not enabled", async () => {
+    apiMock.sshStatus.mockRejectedValue(
+      new ApiError(503, JSON.stringify({ title: "Service Unavailable", status: 503, detail: "ssh workflow is not enabled" })),
+    );
+
+    renderSSHTrust();
+
+    expect(await screen.findByText("SSH workflow failed")).toBeInTheDocument();
+    expect(screen.getByText("ssh workflow is not enabled")).toBeInTheDocument();
   });
 
   it("issues an attested user cert, revokes it into the KRL, and retires a host", async () => {

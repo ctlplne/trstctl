@@ -190,7 +190,7 @@ export function Graph() {
   }
 
   return (
-    <section aria-labelledby="graph-heading">
+    <section aria-labelledby="graph-heading" className="min-w-0 w-full max-w-full">
       <PageHeader
         titleId="graph-heading"
         title={t("nav.item.graph")}
@@ -382,75 +382,79 @@ export function Graph() {
               {blastError && <ErrorState title={translateNow("source.blast.radius.unavailable.8114fa5306")}>{blastError}</ErrorState>}
               {reachableError && <ErrorState title={translateNow("source.reachability.unavailable.526510e61e")}>{reachableError}</ErrorState>}
 
-              <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
-                <div className="space-y-5">
-                  <table className="ui-table">
-                    <caption className="sr-only">{translateNow("source.credential.graph.nodes.4c10852dfc")}</caption>
-                    <thead>
-                      <tr>
-                        <th scope="col">{translateNow("source.name.dcd1d5223f")}</th>
-                        <th scope="col">{translateNow("source.kind.f5387f9bb6")}</th>
-                        <th scope="col">{translateNow("source.id.3843971dcf")}</th>
-                        <th scope="col">{translateNow("source.action.64cff1319d")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredNodes.length === 0 && (
-                        <tr>
-                          <td colSpan={4} className="text-muted-foreground">
-                            {translateNow("source.no.graph.nodes.match.the.current.filters.d6f91b2251")}
-                          </td>
-                        </tr>
-                      )}
-                      {filteredNodes.map((node) => (
-                        <tr key={node.id}>
-                          <td data-testid="graph-node-name">{node.name || "-"}</td>
-                          <td>{node.kind}</td>
-                          <td>
-                            <CredentialChip value={node.id} label="node ID" />
-                          </td>
-                          <td>
-                            <Button type="button" size="sm" variant="outline" onClick={() => setSelected(node.id)}>
-                              {translateNow("source.select.2a78025de6")} {node.name || node.id}
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-
-                  <section aria-labelledby="graph-edges-heading">
-                    <h2 id="graph-edges-heading" className="mb-2 text-title font-semibold">
-                      {translateNow("source.edges.658b158af9")}
-                    </h2>
+              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
+                <div className="min-w-0 space-y-5">
+                  <div className="min-w-0 max-w-full overflow-x-auto">
                     <table className="ui-table">
-                      <caption className="sr-only">{translateNow("source.credential.graph.edges.3f0fea5e6d")}</caption>
+                      <caption className="sr-only">{translateNow("source.credential.graph.nodes.4c10852dfc")}</caption>
                       <thead>
                         <tr>
-                          <th scope="col">{translateNow("source.from.2181976934")}</th>
-                          <th scope="col">{translateNow("source.type.baaddf70fb")}</th>
-                          <th scope="col">{translateNow("source.to.f4b06ef6d3")}</th>
-                          <th scope="col">{translateNow("source.explanation.16ee4625bc")}</th>
+                          <th scope="col">{translateNow("source.name.dcd1d5223f")}</th>
+                          <th scope="col">{translateNow("source.kind.f5387f9bb6")}</th>
+                          <th scope="col">{translateNow("source.id.3843971dcf")}</th>
+                          <th scope="col">{translateNow("source.action.64cff1319d")}</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {visibleEdges.length === 0 && (
+                        {filteredNodes.length === 0 && (
                           <tr>
                             <td colSpan={4} className="text-muted-foreground">
-                              {translateNow("source.no.graph.edges.match.the.current.filters.421adc32b8")}
+                              {translateNow("source.no.graph.nodes.match.the.current.filters.d6f91b2251")}
                             </td>
                           </tr>
                         )}
-                        {visibleEdges.map((edge) => (
-                          <tr key={`${edge.from}-${edge.type}-${edge.to}`}>
-                            <td>{nodeByID.get(edge.from)?.name ?? edge.from}</td>
-                            <td className="font-mono text-xs">{edge.type}</td>
-                            <td>{nodeByID.get(edge.to)?.name ?? edge.to}</td>
-                            <td className="text-muted-foreground">{edgeExplanation(edge.type)}</td>
+                        {filteredNodes.map((node) => (
+                          <tr key={node.id}>
+                            <td data-testid="graph-node-name">{node.name || "-"}</td>
+                            <td>{node.kind}</td>
+                            <td>
+                              <CredentialChip value={node.id} label="node ID" />
+                            </td>
+                            <td>
+                              <Button type="button" size="sm" variant="outline" onClick={() => setSelected(node.id)}>
+                                {translateNow("source.select.2a78025de6")} {node.name || node.id}
+                              </Button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
+                  </div>
+
+                  <section aria-labelledby="graph-edges-heading" className="min-w-0">
+                    <h2 id="graph-edges-heading" className="mb-2 text-title font-semibold">
+                      {translateNow("source.edges.658b158af9")}
+                    </h2>
+                    <div className="min-w-0 max-w-full overflow-x-auto">
+                      <table className="ui-table">
+                        <caption className="sr-only">{translateNow("source.credential.graph.edges.3f0fea5e6d")}</caption>
+                        <thead>
+                          <tr>
+                            <th scope="col">{translateNow("source.from.2181976934")}</th>
+                            <th scope="col">{translateNow("source.type.baaddf70fb")}</th>
+                            <th scope="col">{translateNow("source.to.f4b06ef6d3")}</th>
+                            <th scope="col">{translateNow("source.explanation.16ee4625bc")}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {visibleEdges.length === 0 && (
+                            <tr>
+                              <td colSpan={4} className="text-muted-foreground">
+                                {translateNow("source.no.graph.edges.match.the.current.filters.421adc32b8")}
+                              </td>
+                            </tr>
+                          )}
+                          {visibleEdges.map((edge) => (
+                            <tr key={`${edge.from}-${edge.type}-${edge.to}`}>
+                              <td>{nodeByID.get(edge.from)?.name ?? edge.from}</td>
+                              <td className="font-mono text-xs">{edge.type}</td>
+                              <td>{nodeByID.get(edge.to)?.name ?? edge.to}</td>
+                              <td className="text-muted-foreground">{edgeExplanation(edge.type)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </section>
                 </div>
 

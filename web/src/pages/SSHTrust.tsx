@@ -14,6 +14,7 @@ import {
   type SSHTrustRollout,
   type SSHTrustRolloutRequest,
 } from "@/lib/api";
+import { apiProblemMessage } from "@/lib/apiProblem";
 
 const fallbackAttestors = ["k8s_sat", "github_oidc", "aws_iid", "azure_imds", "gcp_iit", "tpm"];
 const rolloutStatuses: SSHTrustRolloutRequest["status"][] = ["planned", "validating", "health_passed", "rolled_back", "failed"];
@@ -120,7 +121,7 @@ export function SSHTrust() {
         setStatus(next);
         setError(null);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+      .catch((err) => setError(apiProblemMessage(err, "Could not load the SSH workflow")));
 
   useEffect(() => {
     let cancelled = false;
@@ -133,7 +134,7 @@ export function SSHTrust() {
         }
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+        if (!cancelled) setError(apiProblemMessage(err, "Could not load the SSH workflow"));
       });
     return () => {
       cancelled = true;

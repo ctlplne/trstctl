@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/PageHeader";
 import { UnavailableState } from "@/components/StatePrimitives";
 import { cn } from "@/lib/utils";
+import { apiProblemMessage } from "@/lib/apiProblem";
 import { useTranslation, type I18nContextValue, translateNow } from "@/i18n/I18nProvider";
 
 type Tab = "query" | "rca" | "mcp";
@@ -349,6 +350,9 @@ export function Assistant() {
         }
       />
       <AssistantRuntimeDisclosure status={runtime.data} error={runtime.error} loading={runtime.loading} />
+      {tools.errorCause != null && (
+        <UnavailableState title="MCP tools are unavailable">{apiProblemMessage(tools.errorCause, "Could not load MCP tools")}</UnavailableState>
+      )}
 
       <div className="mb-5 flex flex-wrap gap-2" role="group" aria-label={translateNow("source.assistant.workflow.8962351a8a")}>
         <ToggleTab active={tab === "query"} onClick={() => setTab("query")} icon={<Search aria-hidden="true" className="h-4 w-4" />}>
@@ -474,11 +478,6 @@ export function Assistant() {
             {tools.loading && (
               <p role="status" className="text-body text-muted-foreground">
                 {translateNow("source.loading.tools.efc190cd4c")}
-              </p>
-            )}
-            {tools.error && (
-              <p role="alert" className="text-body text-destructive">
-                {translateNow("source.could.not.load.tools.2e7b9eae6f")} {tools.error}
               </p>
             )}
             {tools.data && mcpToolCount === 0 && (

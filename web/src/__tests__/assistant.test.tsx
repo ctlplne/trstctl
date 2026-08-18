@@ -211,6 +211,16 @@ describe("assistant console workflow", () => {
     expect(await screen.findByText("No MCP tools are available for this tenant.")).toBeInTheDocument();
   });
 
+  it("explains when the MCP tool surface is not enabled", async () => {
+    const { ApiError } = await import("@/lib/api");
+    apiMock.mcpTools.mockRejectedValue(new ApiError(503, JSON.stringify({ title: "Service Unavailable", status: 503, detail: "AI surface is not enabled" })));
+
+    renderAssistant();
+
+    expect(await screen.findByText("MCP tools are unavailable")).toBeInTheDocument();
+    expect(screen.getByText("AI surface is not enabled")).toBeInTheDocument();
+  });
+
   it("does not route write-capable MCP tools through the read-only subject form", async () => {
     apiMock.mcpTools.mockResolvedValue({
       identity: "spiffe://example.org/mcp-server",

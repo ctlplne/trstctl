@@ -24,7 +24,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { PageTabs, tabPanelProps } from "@/components/PageTabs";
 import { CAOverview } from "@/components/ca";
 import { EdgeDelegationsPanel } from "@/components/EdgeDelegationsPanel";
-import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/StatePrimitives";
+import { ErrorState, LoadingState, PermissionDeniedState, UnavailableState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useToast } from "@/components/ToastProvider";
 import { Button } from "@/components/ui/button";
@@ -52,6 +52,7 @@ import {
   type Profile,
 } from "@/lib/api";
 import { defaultIssuerConfigValues, issuerTypes, splitPEMChain, type IssuerConfigField, type IssuerTypeConfig } from "@/lib/issuerCatalog";
+import { apiProblemMessage } from "@/lib/apiProblem";
 
 type Notice = { kind: "permission" | "error"; message: string };
 type ProbeState = { issuerID: string; issuerName: string; status: "pending" | "passed" | "failed"; message: string };
@@ -335,6 +336,7 @@ export function CAHierarchy() {
   // "matrix unavailable", which told the operator the census was broken when it
   // was the lookup that was.
   const [externalCARegistry, setExternalCARegistry] = useState<ExternalCA[]>([]);
+  const [externalCAError, setExternalCAError] = useState<string | null>(null);
   const [caDiscovery, setCADiscovery] = useState<CADiscovery | null>(null);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -407,7 +409,13 @@ export function CAHierarchy() {
       externalCARead,
     ]);
     setCapabilities(capabilityResult.status === "fulfilled" ? capabilityResult.value : null);
-    setExternalCARegistry(externalCAResult.status === "fulfilled" ? externalCAResult.value : []);
+    if (externalCAResult.status === "fulfilled") {
+      setExternalCARegistry(externalCAResult.value);
+      setExternalCAError(null);
+    } else {
+      setExternalCARegistry([]);
+      setExternalCAError(apiProblemMessage(externalCAResult.reason, "Could not load the external CA registry"));
+    }
     if (issuerResult.status === "fulfilled") {
       setIssuers(issuerResult.value);
     } else {
@@ -834,6 +842,7 @@ export function CAHierarchy() {
           managedKey={managedKey}
           onOpen={selectTab}
         />
+        {externalCAError && <UnavailableState title="External CA registry is unavailable">{externalCAError}</UnavailableState>}
       </div>
 
       <div className={tab === "overview" ? undefined : "hidden"}>

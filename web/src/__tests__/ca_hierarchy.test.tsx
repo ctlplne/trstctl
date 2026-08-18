@@ -725,6 +725,17 @@ describe("CA hierarchy and custody surface", () => {
     expect(screen.getByText("No domain validation")).toBeInTheDocument();
   });
 
+  it("explains when the external CA registry is not enabled", async () => {
+    apiMock.externalCAs.mockRejectedValue(
+      new ApiError(503, JSON.stringify({ title: "Service Unavailable", status: 503, detail: "external CA registry is not enabled" })),
+    );
+
+    renderCAHierarchy();
+
+    expect(await screen.findByText("External CA registry is unavailable")).toBeInTheDocument();
+    expect(screen.getByText("external CA registry is not enabled")).toBeInTheDocument();
+  });
+
   it("requires explicit confirmation, requests signer-gated retirement, and downloads the projected record", async () => {
     const user = userEvent.setup();
     apiMock.caAuthorities.mockResolvedValue({
