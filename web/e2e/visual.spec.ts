@@ -1,6 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 import { signIn, spaceSmoke } from "./helpers";
 
+test.skip(process.env.TRSTCTL_VISUAL_E2E !== "1", "pixel baselines are an explicit opt-in review surface");
+test.skip(({ browserName }) => browserName !== "chromium", "pixel baselines are recorded and reviewed in Chromium only");
+
 /** S-C4 visual regression: pixel baselines for the shell and one page per
  * space, dark theme (the flagship). Baselines are local-only and untracked:
  * `npm run e2e -- --update-snapshots` records them for THIS machine and a later

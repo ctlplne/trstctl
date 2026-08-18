@@ -27,7 +27,7 @@
     "storybook": "storybook dev -p 6006",
     "storybook:build": "storybook build --output-dir=.storybook-static",
     "e2e": "playwright test",
-    "e2e:install": "playwright install --with-deps chromium"
+    "e2e:install": "playwright install --with-deps chromium firefox webkit"
   },
   "dependencies": {
     "@fontsource-variable/sora": "^5.2.8",

@@ -1,5 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 
+const previewBaseURL = process.env.TRSTCTL_PREVIEW_E2E_URL;
+test.skip(!previewBaseURL, "requires a bundle compiled with VITE_TRSTCTL_DEMO=1; production and local-SSO stacks are not preview mode");
+
 const previewRoutes = [
   { path: "/", heading: "Dashboard", proof: "api.preview-lab.example" },
   { path: "/certificates", heading: "Certificates", proof: "api.preview-lab.example" },
@@ -23,7 +26,7 @@ async function assertPreviewRoutes(page: Page, theme: "light" | "dark") {
   }, theme);
 
   for (const route of previewRoutes) {
-    await page.goto(route.path);
+    await page.goto(new URL(route.path, previewBaseURL).href);
     await expect(page.getByTestId("preview-read-only-banner")).toContainText("Changes are disabled and nothing leaves this browser");
     await expect(page.getByRole("heading", { level: 1, name: route.heading })).toBeVisible();
     await expect(page.getByText(route.proof, { exact: false }).first()).toBeVisible();
@@ -40,7 +43,7 @@ async function assertPreviewRoutes(page: Page, theme: "light" | "dark") {
     expect(viewport.mainScrollWidth).toBeLessThanOrEqual(viewport.mainClientWidth);
   }
 
-  await page.goto("/secrets");
+  await page.goto(new URL("/secrets", previewBaseURL).href);
   const createSecret = page.getByRole("form", { name: "Create secret" });
   await createSecret.getByLabel("Secret name").fill("blocked/preview/write");
   await createSecret.getByLabel("Secret value").fill("never leaves the browser");
