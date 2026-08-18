@@ -332,7 +332,7 @@ export function DataGrid<Row>({
         </GridState>
       ) : (
         <div
-          className="overflow-auto rounded-panel border border-border bg-card shadow-elevation1"
+          className="overflow-auto rounded-panel border border-border bg-card shadow-elevation1 [contain:paint]"
           data-testid="data-grid-scroll-viewport"
           data-virtualized={virtualized ? "true" : "false"}
           data-total-rows={rows.length}

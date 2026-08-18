@@ -456,8 +456,8 @@ export function DynamicLeaseMetadata({ lease }: { lease: DynamicLease }) {
 export function RepositoryScanPosture({ posture }: { posture: SecretRepositoryScanPosture }) {
   const { t } = useTranslation();
   return (
-    <div className="ui-panel grid min-w-0 max-w-full gap-3 p-comfortable text-sm">
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="ui-panel grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-3 p-comfortable text-sm">
+      <div className="flex min-w-0 flex-wrap items-center gap-3">
         <span className="rounded-md bg-status-success/10 px-2 py-1 font-mono text-xs text-status-success">{posture.capability}</span>
         <span className="font-medium">{posture.served ? t("secrets.repoScan.active") : t("secrets.repoScan.unavailable")}</span>
         <span className="text-muted-foreground">{t("secrets.repoScan.ruleFloor", { scanner: posture.scanner, rules: posture.minimum_rules_active })}</span>
@@ -485,10 +485,10 @@ export function RepositoryScanPosture({ posture }: { posture: SecretRepositorySc
           </tbody>
         </table>
       </div>
-      <dl className="grid gap-3 md:grid-cols-2">
+      <dl className="grid min-w-0 gap-3 md:grid-cols-2">
         <div>
           <dt className="font-medium text-muted-foreground">{t("secrets.repoScan.webhookPaths")}</dt>
-          <dd className="mt-1 grid gap-1 font-mono text-xs">
+          <dd className="mt-1 grid min-w-0 gap-1 break-all font-mono text-xs">
             {posture.webhook_paths.map((path) => (
               <span key={path}>{path}</span>
             ))}
@@ -496,7 +496,7 @@ export function RepositoryScanPosture({ posture }: { posture: SecretRepositorySc
         </div>
         <div>
           <dt className="font-medium text-muted-foreground">{t("secrets.repoScan.eventFlow")}</dt>
-          <dd className="mt-1 grid gap-1 font-mono text-xs">
+          <dd className="mt-1 grid min-w-0 gap-1 break-all font-mono text-xs">
             {posture.event_flow.map((event) => (
               <span key={event}>{event}</span>
             ))}
@@ -518,8 +518,8 @@ export function RepositoryScanPosture({ posture }: { posture: SecretRepositorySc
 export function ThirdPartyScanPosture({ posture }: { posture: ThirdPartySecretScanPosture }) {
   const { t } = useTranslation();
   return (
-    <div className="ui-panel grid min-w-0 max-w-full gap-3 p-comfortable text-sm">
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="ui-panel grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-3 p-comfortable text-sm">
+      <div className="flex min-w-0 flex-wrap items-center gap-3">
         <span className="rounded-md bg-status-success/10 px-2 py-1 font-mono text-xs text-status-success">{posture.capability}</span>
         <span className="font-medium">{posture.served ? t("secrets.thirdPartyScan.active") : t("secrets.thirdPartyScan.unavailable")}</span>
         <span className="text-muted-foreground">{t("secrets.repoScan.ruleFloor", { scanner: posture.scanner, rules: posture.minimum_rules_active })}</span>
@@ -547,10 +547,10 @@ export function ThirdPartyScanPosture({ posture }: { posture: ThirdPartySecretSc
           </tbody>
         </table>
       </div>
-      <dl className="grid gap-3 md:grid-cols-2">
+      <dl className="grid min-w-0 gap-3 md:grid-cols-2">
         <div>
           <dt className="font-medium text-muted-foreground">{t("secrets.thirdPartyScan.ingestPaths")}</dt>
-          <dd className="mt-1 grid gap-1 font-mono text-xs">
+          <dd className="mt-1 grid min-w-0 gap-1 break-all font-mono text-xs">
             {posture.ingest_paths.map((path) => (
               <span key={path}>{path}</span>
             ))}
@@ -558,7 +558,7 @@ export function ThirdPartyScanPosture({ posture }: { posture: ThirdPartySecretSc
         </div>
         <div>
           <dt className="font-medium text-muted-foreground">{t("secrets.repoScan.eventFlow")}</dt>
-          <dd className="mt-1 grid gap-1 font-mono text-xs">
+          <dd className="mt-1 grid min-w-0 gap-1 break-all font-mono text-xs">
             {posture.event_flow.map((event) => (
               <span key={event}>{event}</span>
             ))}

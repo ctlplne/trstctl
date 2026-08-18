@@ -860,7 +860,7 @@ export function Policy() {
         </div>
       </section>
 
-      <section aria-labelledby="compliance-heading" className="grid gap-4 border-y border-border py-4">
+      <section aria-labelledby="compliance-heading" className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 border-y border-border py-4">
         <div>
           <h2 id="compliance-heading" className="text-title font-semibold">
             {t("policy.compliance.heading")}
@@ -890,7 +890,10 @@ export function Policy() {
         {inventoryReport && <ComplianceInventoryReportPanel report={inventoryReport} schedules={reportSchedules} />}
         {nhiComplianceReport && <NHIComplianceReportPanel report={nhiComplianceReport} />}
 
-        <form className="grid gap-3 rounded-md border border-border p-4 text-sm lg:grid-cols-6" onSubmit={(event) => void createReportSchedule(event)}>
+        <form
+          className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 rounded-md border border-border p-4 text-sm lg:grid-cols-6"
+          onSubmit={(event) => void createReportSchedule(event)}
+        >
           <label className="grid gap-1 lg:col-span-2">
             <span className="font-medium">{t("policy.reporting.schedule")}</span>
             <input
@@ -977,7 +980,7 @@ export function Policy() {
         )}
       </section>
 
-      <section aria-labelledby="nhi-access-review-heading" className="grid gap-4 border-y border-border py-4">
+      <section aria-labelledby="nhi-access-review-heading" className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 border-y border-border py-4">
         <div>
           <h2 id="nhi-access-review-heading" className="text-title font-semibold">
             {translateNow("source.nhi.access.certification.3fd94ffdff")}
@@ -1107,7 +1110,7 @@ export function Policy() {
         </div>
       </section>
 
-      <section aria-labelledby="access-change-heading" className="grid gap-4 border-y border-border py-4">
+      <section aria-labelledby="access-change-heading" className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 border-y border-border py-4">
         <div>
           <h2 id="access-change-heading" className="text-title font-semibold">
             {t("policy.accessChange.heading")}
@@ -1279,7 +1282,7 @@ export function Policy() {
         </div>
       </section>
 
-      <section aria-labelledby="policy-dry-run-heading" className="grid gap-4 border-y border-border py-4">
+      <section aria-labelledby="policy-dry-run-heading" className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 border-y border-border py-4">
         <div>
           <h2 id="policy-dry-run-heading" className="text-title font-semibold">
             {t("policy.dryRun.heading")}
@@ -1357,7 +1360,7 @@ function PolicyDryRunResultPanel({ result }: { result: PolicyDryRun }) {
         ? t("policy.dryRun.decisionDeny")
         : t("policy.dryRun.decisionNone");
   return (
-    <section aria-labelledby="policy-dry-run-result-heading" className="ui-panel p-comfortable text-sm" role="status">
+    <section aria-labelledby="policy-dry-run-result-heading" className="ui-panel min-w-0 p-comfortable text-sm" role="status">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 id="policy-dry-run-result-heading" className="text-title font-semibold">
@@ -1382,7 +1385,7 @@ function PolicyDryRunResultPanel({ result }: { result: PolicyDryRun }) {
         <Metric label={t("policy.dryRun.metricIdempotency")} value={result.idempotency_key} mono />
       </dl>
       {trace.length > 0 && (
-        <div className="mt-4 overflow-x-auto rounded-md border border-border">
+        <div className="mt-4 min-w-0 max-w-full overflow-x-auto rounded-md border border-border">
           <table className="ui-table min-w-[64rem]">
             <caption className="sr-only">{t("policy.dryRun.traceCaption")}</caption>
             <thead>
@@ -1415,7 +1418,7 @@ function ComplianceInventoryReportPanel({ report, schedules }: { report: Complia
   const rows = schedules.length > 0 ? schedules : report.schedules;
 
   return (
-    <section aria-labelledby="compliance-inventory-report-heading" className="ui-panel p-comfortable text-sm">
+    <section aria-labelledby="compliance-inventory-report-heading" className="ui-panel min-w-0 p-comfortable text-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 id="compliance-inventory-report-heading" className="text-title font-semibold">
@@ -1445,7 +1448,7 @@ function ComplianceInventoryReportPanel({ report, schedules }: { report: Complia
       </div>
 
       {rows.length > 0 ? (
-        <div className="mt-4 overflow-x-auto rounded-md border border-border">
+        <div className="mt-4 min-w-0 max-w-full overflow-x-auto rounded-md border border-border">
           <table className="ui-table min-w-[48rem]">
             <caption className="sr-only">{t("policy.reporting.tableCaption")}</caption>
             <thead>
@@ -1485,7 +1488,7 @@ function NHIComplianceReportPanel({ report }: { report: NHIComplianceReport }) {
   const controlRows = report.controls.slice(0, 8);
 
   return (
-    <section aria-labelledby="nhi-compliance-report-heading" className="ui-panel p-comfortable text-sm">
+    <section aria-labelledby="nhi-compliance-report-heading" className="ui-panel min-w-0 p-comfortable text-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 id="nhi-compliance-report-heading" className="text-title font-semibold">
@@ -1519,7 +1522,7 @@ function NHIComplianceReportPanel({ report }: { report: NHIComplianceReport }) {
       </div>
 
       {controlRows.length > 0 && (
-        <div className="mt-4 overflow-x-auto rounded-md border border-border">
+        <div className="mt-4 min-w-0 max-w-full overflow-x-auto rounded-md border border-border">
           <table className="ui-table min-w-[58rem]">
             <caption className="sr-only">{t("policy.nhiCompliance.tableCaption")}</caption>
             <thead>
@@ -1574,7 +1577,7 @@ function NHIReviewCampaignPanel({
   const items = campaign.items ?? [];
 
   return (
-    <section aria-labelledby="nhi-access-review-detail-heading" className="ui-panel p-comfortable text-sm">
+    <section aria-labelledby="nhi-access-review-detail-heading" className="ui-panel min-w-0 p-comfortable text-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 id="nhi-access-review-detail-heading" className="text-title font-semibold">
@@ -1597,7 +1600,7 @@ function NHIReviewCampaignPanel({
       </dl>
 
       {items.length > 0 ? (
-        <div className="mt-4 overflow-x-auto rounded-md border border-border">
+        <div className="mt-4 min-w-0 max-w-full overflow-x-auto rounded-md border border-border">
           <table className="ui-table min-w-[64rem]">
             <caption className="sr-only">{translateNow("source.nhi.access.review.items.d360cac314")}</caption>
             <thead>
@@ -1692,7 +1695,7 @@ function AccessChangeRequestPanel({
   };
 
   return (
-    <section aria-labelledby="access-change-detail-heading" className="ui-panel p-comfortable text-sm">
+    <section aria-labelledby="access-change-detail-heading" className="ui-panel min-w-0 p-comfortable text-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 id="access-change-detail-heading" className="text-title font-semibold">
@@ -1759,7 +1762,7 @@ function AccessChangeRequestPanel({
       )}
 
       {decisions.length > 0 && (
-        <div className="mt-4 overflow-x-auto rounded-md border border-border">
+        <div className="mt-4 min-w-0 max-w-full overflow-x-auto rounded-md border border-border">
           <table className="ui-table min-w-[48rem]">
             <caption className="sr-only">{t("policy.accessChange.decisionsCaption")}</caption>
             <thead>

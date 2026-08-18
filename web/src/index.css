@@ -63,6 +63,16 @@
     --elevation-3: 0 22px 60px -30px hsl(216 28% 9% / 0.45);
   }
 
+  /* Native controls have an intrinsic minimum width in several engines. A
+     control inside a narrow grid cell must shrink with that cell instead of
+     widening the entire page; explicit width utilities still work normally. */
+  input,
+  select,
+  textarea {
+    min-width: 0;
+    max-width: 100%;
+  }
+
   .dark {
     --background: 223 30% 5%;
     --foreground: 40 33% 93%;
@@ -246,6 +256,8 @@
   }
   /* A plain elevated panel surface matching the Card primitive (Clarity). */
   .ui-panel {
+    min-width: 0;
+    max-width: 100%;
     border: 1px solid hsl(var(--border));
     border-radius: var(--radius-panel);
     background: hsl(var(--card));

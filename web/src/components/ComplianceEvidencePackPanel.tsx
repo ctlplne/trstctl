@@ -58,7 +58,7 @@ export function ComplianceEvidencePackPanel({ label, pack }: { label: string; pa
   const payload = JSON.stringify(pack, null, 2);
 
   return (
-    <section aria-labelledby="compliance-pack-heading" className="ui-panel p-comfortable text-sm">
+    <section aria-labelledby="compliance-pack-heading" className="ui-panel min-w-0 p-comfortable text-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 id="compliance-pack-heading" className="text-title font-semibold">
@@ -128,7 +128,7 @@ export function ComplianceEvidencePackPanel({ label, pack }: { label: string; pa
       ) : null}
 
       {custody && custody.unrecorded_certificates.length > 0 && (
-        <div className="mt-4 overflow-x-auto rounded-md border border-border">
+        <div className="mt-4 min-w-0 max-w-full overflow-x-auto rounded-md border border-border">
           <table className="ui-table min-w-[48rem]">
             <caption className="text-left font-medium">{t("policy.compliance.custodyGaps")}</caption>
             <thead>
@@ -155,7 +155,7 @@ export function ComplianceEvidencePackPanel({ label, pack }: { label: string; pa
       )}
 
       {controls.length > 0 && (
-        <div className="mt-4 overflow-x-auto rounded-md border border-border">
+        <div className="mt-4 min-w-0 max-w-full overflow-x-auto rounded-md border border-border">
           <table className="ui-table min-w-[72rem]">
             <caption className="sr-only">
               {label} {translateNow("source.controls.1e2135d1b5")}

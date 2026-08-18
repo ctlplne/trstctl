@@ -38,12 +38,12 @@ export function BlastRadiusExplorer({ nodes, selectedId, onAnalyze }: { nodes: G
       title={translateNow("source.blast.radius.explorer.447e6bd3bc")}
       description="pick a credential and see everything that breaks if it is compromised"
     >
-      <label className="grid gap-1 text-body">
+      <label className="grid min-w-0 gap-1 text-body">
         <span className="font-medium">{translateNow("source.credential.b1c42b3ce1")}</span>
         <select
           value={selected}
           onChange={(event) => void explore(event.target.value)}
-          className="min-h-9 rounded-control border border-border bg-background px-2 text-body"
+          className="min-h-9 min-w-0 w-full rounded-control border border-border bg-background px-2 text-body"
         >
           <option value="">{translateNow("source.select.a.node.f85197a6e6")}</option>
           {nodes.map((node) => (

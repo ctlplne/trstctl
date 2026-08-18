@@ -34,13 +34,13 @@ export function CryptoReadinessPanel() {
   }
 
   return (
-    <section className="ui-panel p-comfortable" aria-labelledby="crypto-readiness-heading">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+    <section className="ui-panel min-w-0 p-comfortable" aria-labelledby="crypto-readiness-heading">
+      <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
           <h2 id="crypto-readiness-heading" className="text-title font-semibold">
             {translateNow("source.crypto.readiness.m2seq00001")}
           </h2>
-          {data ? <p className="mt-1 font-mono text-xs text-muted-foreground">{data.dataset_digest}</p> : null}
+          {data ? <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{data.dataset_digest}</p> : null}
         </div>
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" disabled={!data || exporting} onClick={() => void exportReadiness("csv")}>
@@ -82,7 +82,7 @@ export function CryptoReadinessPanel() {
           </dl>
 
           {items.length > 0 ? (
-            <div className="mt-4 overflow-x-auto">
+            <div className="mt-4 min-w-0 max-w-full overflow-x-auto">
               <table className="w-full text-caption">
                 <thead>
                   <tr>
