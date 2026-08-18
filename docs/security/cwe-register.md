@@ -41,7 +41,7 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1310 annotated sites across 26 rules. Each row is
+1313 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -581,7 +581,7 @@ not this file.
 | Location | Reason |
 |---|---|
 | `deploy/deploycheck_test.go:558` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `deploy/helm/airgap_bundle_test.go:123` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `deploy/helm/airgap_bundle_test.go:163` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/ai_surface_placement_test.go:27` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/deferred_wipe_guard_test.go:45` | walking the repo's own tree (CWE-22) |
 | `docs/docs_test.go:2540` | test walks the repo's own checkout; no hostile symlink exposure (CWE-367) |
@@ -660,7 +660,7 @@ not this file.
 | `ee/whitelabel/email.go:99` | scheme and host validated above; https only (CWE-79) |
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 
-### G204 — CWE-78 OS command injection (158 sites)
+### G204 — CWE-78 OS command injection (159 sites)
 
 | Location | Reason |
 |---|---|
@@ -686,6 +686,7 @@ not this file.
 | `deploy/docker/reproducible_test.go:64` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/helm/airgap_bundle_test.go:34` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/helm/airgap_bundle_test.go:49` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `deploy/helm/airgap_bundle_test.go:111` | test executes a fixed local tool (CWE-78). |
 | `deploy/helm/helm_docs_commands_test.go:48` | executes the repo's own documented helm command under test (CWE-78) |
 | `deploy/helm/helm_docs_commands_test.go:113` | executes the repo's own documented helm command under test (CWE-78) |
 | `deploy/helm/helm_test.go:1115` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -905,7 +906,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (353 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (355 sites)
 
 | Location | Reason |
 |---|---|
@@ -952,9 +953,11 @@ not this file.
 | `deploy/docker/dist_test.go:24` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/docker/dist_test.go:933` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/docker/reproducible_test.go:35` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/helm/airgap_bundle_test.go:123` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `deploy/helm/airgap_bundle_test.go:139` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/helm/airgap_bundle_test.go:185` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/helm/airgap_bundle_test.go:62` | bundle is created inside this test's TempDir (CWE-22). |
+| `deploy/helm/airgap_bundle_test.go:69` | bundle is created inside this test's TempDir (CWE-22). |
+| `deploy/helm/airgap_bundle_test.go:163` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `deploy/helm/airgap_bundle_test.go:179` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/helm/airgap_bundle_test.go:225` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/helm/helm_docs_commands_test.go:130` | reads the repo's own docs pages from a walked list (CWE-22) |
 | `deploy/helm/helm_test.go:1077` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/helm/helm_test.go:1138` | test reads its own fixture/tempdir path (CWE-22) |
