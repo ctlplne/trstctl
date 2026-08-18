@@ -956,6 +956,29 @@ func TestApprovedCertificateConsumesAuthorityAndRebuildsExactlyOnce(t *testing.T
 	}); err != nil || certificateEvents != 0 {
 		t.Fatalf("metadata swap retained certificate events = %d, replay err %v; want 0", certificateEvents, err)
 	}
+	// The rejected metadata control above deliberately performs database and
+	// event-log work before the real issuance. Refresh the still-identical
+	// approved certificate here so a heavily loaded race run tests the canonical
+	// record path, not whether that unrelated negative control consumed most of a
+	// three-second fixture lifetime. The binding, key, SPIFFE ID, CA, and TTL are
+	// unchanged; only the signer-owned serial and issuance clock advance.
+	certificateDER, err = crypto.SignSVID(caDER, caKey, leafKey.Public().DER, spiffeID, certificateTTL)
+	if err != nil {
+		t.Fatalf("refresh approved certificate after metadata control: %v", err)
+	}
+	certificateInfo, err = certinfo.Inspect(certificateDER)
+	if err != nil {
+		t.Fatalf("inspect refreshed approved certificate: %v", err)
+	}
+	nb, na = certificateInfo.NotBefore, certificateInfo.NotAfter
+	certificate = store.Certificate{
+		CAID: approvalTestCAID, Subject: certificateInfo.Subject, SANs: []string{spiffeID}, Issuer: certificateInfo.Issuer,
+		Serial: certificateInfo.SerialNumber, Fingerprint: certificateInfo.SHA256Fingerprint,
+		KeyAlgorithm: certificateInfo.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
+		Source: "ephemeral:test", CertificateDER: certificateDER,
+		IssuanceIdempotencyKey: "ephemeral-issue:" + request.ID,
+		KeyOrigin:              "requester",
+	}
 	first, err := orch.RecordCertificateWithApproval(ctx, tenantA, certificate, use, binding)
 	if err != nil {
 		t.Fatalf("record approved certificate: %v", err)
