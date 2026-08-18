@@ -141,7 +141,7 @@ build-trstctl: ## Build the default static control-plane artifact used by the Do
 	@$(GO_BUILD) -o $(BIN_DIR)/trstctl ./cmd/trstctl
 
 .PHONY: airgap-bundle
-airgap-bundle: ## Build an offline install bundle (requires VERSION=vX.Y.Z; docker unless TRSTCTL_AIRGAP_SKIP_IMAGES=1)
+airgap-bundle: ## Build a platform-specific offline bundle (requires VERSION=vX.Y.Z and PLATFORM=linux/amd64|linux/arm64; docker unless TRSTCTL_AIRGAP_SKIP_IMAGES=1)
 	@scripts/airgap-bundle.sh
 
 # GOFIPS140 value for the regulated FIPS-capable build. The default pins the

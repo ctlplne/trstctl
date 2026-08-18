@@ -23,13 +23,18 @@ On a connected build host, verify the release image first, then build the bundle
 ```bash
 export VERSION=v0.5.4
 export IMAGE=ghcr.io/ctlplne/trstctl:v0.5.4
+export PLATFORM=linux/amd64 # or linux/arm64; match the disconnected nodes
 
 scripts/verify-image.sh "$IMAGE"
-make airgap-bundle VERSION="$VERSION" IMAGE="$IMAGE"
+make airgap-bundle VERSION="$VERSION" IMAGE="$IMAGE" PLATFORM="$PLATFORM"
 ```
 
-The output is `dist/airgap/trstctl-<version>-airgap.tar.gz` plus a `.sha256`
-checksum. The bundle contains:
+The output is
+`dist/airgap/trstctl-<version>-<os>-<architecture>-airgap.tar.gz` plus a
+`.sha256` checksum. A bundle contains exactly the named platform so a build host
+cannot silently substitute its own architecture. Build one bundle per node
+architecture when the disconnected environment is mixed amd64/arm64. The bundle
+contains:
 
 - the Helm chart and `values-airgap.yaml`;
 - `docs/airgap.md`, `docs/install.md`, `docs/configuration.md`, and
@@ -41,10 +46,11 @@ Move both the archive and `.sha256` file into the disconnected environment and
 verify them there:
 
 ```bash
-shasum -a 256 -c trstctl-0.5.4-airgap.tar.gz.sha256
-tar -xzf trstctl-0.5.4-airgap.tar.gz
-cd trstctl-0.5.4-airgap
+shasum -a 256 -c trstctl-0.5.4-linux-amd64-airgap.tar.gz.sha256
+tar -xzf trstctl-0.5.4-linux-amd64-airgap.tar.gz
+cd trstctl-0.5.4-linux-amd64-airgap
 shasum -a 256 -c CHECKSUMS.txt
+cat images/trstctl-image.platform # must match the disconnected nodes
 ```
 
 ## Load and install

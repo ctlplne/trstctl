@@ -7,6 +7,7 @@ Build a trstctl air-gap install bundle.
 
 Required:
   VERSION=vX.Y.Z scripts/airgap-bundle.sh
+  PLATFORM=linux/amd64|linux/arm64
 
 Optional:
   IMAGE=ghcr.io/ctlplne/trstctl:vX.Y.Z
@@ -29,10 +30,24 @@ if [[ -z "$version" ]]; then
   usage
   exit 2
 fi
+platform="${PLATFORM:-}"
+case "$platform" in
+  linux/amd64|linux/arm64) ;;
+  "")
+    echo "PLATFORM is required (linux/amd64 or linux/arm64)" >&2
+    usage
+    exit 2
+    ;;
+  *)
+    echo "unsupported PLATFORM: $platform (want linux/amd64 or linux/arm64)" >&2
+    exit 2
+    ;;
+esac
 
 image="${IMAGE:-ghcr.io/ctlplne/trstctl:${version}}"
 out_root="${OUT_DIR:-${repo_root}/dist/airgap}"
-bundle_name="trstctl-${version#v}-airgap"
+platform_slug="${platform//\//-}"
+bundle_name="trstctl-${version#v}-${platform_slug}-airgap"
 bundle_dir="${out_root}/${bundle_name}"
 archive="${out_root}/${bundle_name}.tar.gz"
 
@@ -101,15 +116,17 @@ if [[ "${TRSTCTL_AIRGAP_SKIP_IMAGES:-0}" == "1" ]]; then
   printf 'image save skipped by TRSTCTL_AIRGAP_SKIP_IMAGES=1; do not use this bundle for production install\n' > "$bundle_dir/images/README.txt"
 else
   require docker
-  docker pull "$image"
-  docker save "$image" -o "$bundle_dir/images/trstctl-image.tar"
+  docker pull --platform "$platform" "$image"
+  docker image save --platform "$platform" "$image" -o "$bundle_dir/images/trstctl-image.tar"
   printf '%s\n' "$image" > "$bundle_dir/images/trstctl-image.ref"
 fi
+printf '%s\n' "$platform" > "$bundle_dir/images/trstctl-image.platform"
 
 cat > "$bundle_dir/MANIFEST.txt" <<EOF
 trstctl air-gap bundle
 version: ${version}
 image: ${image}
+platform: ${platform}
 created_by: scripts/airgap-bundle.sh
 
 install entrypoints:

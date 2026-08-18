@@ -50,6 +50,7 @@ func TestAirGapBundleUsesOnlyTrackedChartFiles(t *testing.T) {
 		cmd.Dir = repo
 		cmd.Env = append(os.Environ(),
 			"VERSION=v0.5.0",
+			"PLATFORM=linux/amd64",
 			"IMAGE=ghcr.io/ctlplne/trstctl:v0.5.0",
 			"OUT_DIR="+out,
 			"TRSTCTL_AIRGAP_SKIP_IMAGES=1",
@@ -57,7 +58,21 @@ func TestAirGapBundleUsesOnlyTrackedChartFiles(t *testing.T) {
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("build %d: %v\n%s", build+1, err, output)
 		}
-		bundle := filepath.Join(out, "trstctl-0.5.0-airgap")
+		bundle := filepath.Join(out, "trstctl-0.5.0-linux-amd64-airgap")
+		manifest, err := os.ReadFile(filepath.Join(bundle, "MANIFEST.txt")) // #nosec G304 -- bundle is created inside this test's TempDir (CWE-22).
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(manifest), "platform: linux/amd64") {
+			t.Fatalf("bundle manifest does not bind its image platform:\n%s", manifest)
+		}
+		platform, err := os.ReadFile(filepath.Join(bundle, "images", "trstctl-image.platform")) // #nosec G304 -- bundle is created inside this test's TempDir (CWE-22).
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.TrimSpace(string(platform)) != "linux/amd64" {
+			t.Fatalf("image platform receipt = %q, want linux/amd64", platform)
+		}
 		exploded := filepath.Join(bundle, "charts", "trstctl")
 		assertTrackedTree(t, exploded, tracked)
 		assertNoCanary(t, exploded)
@@ -76,10 +91,35 @@ func TestAirGapBundleUsesOnlyTrackedChartFiles(t *testing.T) {
 		if output, err := check.CombinedOutput(); err != nil {
 			t.Fatalf("checksum verification: %v\n%s", err, output)
 		}
-		manifests = append(manifests, tarManifest(t, filepath.Join(out, "trstctl-0.5.0-airgap.tar.gz")))
+		manifests = append(manifests, tarManifest(t, filepath.Join(out, "trstctl-0.5.0-linux-amd64-airgap.tar.gz")))
 	}
 	if strings.Join(manifests[0], "\n") != strings.Join(manifests[1], "\n") {
 		t.Fatalf("same-commit air-gap file manifests differ:\nfirst=%v\nsecond=%v", manifests[0], manifests[1])
+	}
+}
+
+func TestAirGapBundleRequiresSupportedPlatform(t *testing.T) {
+	repo, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, platform := range map[string]string{
+		"missing":     "",
+		"unsupported": "linux/s390x",
+	} {
+		t.Run(name, func(t *testing.T) {
+			cmd := exec.Command(filepath.Join(repo, "scripts", "airgap-bundle.sh")) // #nosec G204 -- test executes a fixed local tool (CWE-78).
+			cmd.Dir = repo
+			cmd.Env = append(os.Environ(),
+				"VERSION=v0.5.0",
+				"PLATFORM="+platform,
+				"OUT_DIR="+t.TempDir(),
+				"TRSTCTL_AIRGAP_SKIP_IMAGES=1",
+			)
+			if output, err := cmd.CombinedOutput(); err == nil {
+				t.Fatalf("bundle accepted PLATFORM=%q:\n%s", platform, output)
+			}
+		})
 	}
 }
 
