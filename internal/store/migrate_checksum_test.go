@@ -5,12 +5,14 @@ package store_test
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"testing/fstest"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -36,6 +38,62 @@ const (
 	ledgerProbeBodyV2 = "CREATE TABLE IF NOT EXISTS migration_ledger_probe (id bigint PRIMARY KEY);\n" +
 		"ALTER TABLE migration_ledger_probe ADD COLUMN IF NOT EXISTS edited_in_place boolean;\n"
 )
+
+type shippedMigrationDigest struct {
+	name     string
+	expected string
+}
+
+// immutableShippedMigrationDigests is deliberately narrow. It records only the
+// post-SCHEMA-006 files that were already deployed before AUD-148 tried to move
+// their DDL into 0187/0188. The online-safety scanner may grandfather one only
+// while its bytes still match this exact digest; any edit loses the exemption.
+var immutableShippedMigrationDigests = []shippedMigrationDigest{
+	{name: "0152_application_secret_fence_actor.sql", expected: "sha256:aaf49224e7c99f01dfcbe2fcc43f20f2ef031e240c84e2759a00d22d25afc401"},
+	{name: "0156_dynamic_secret_tenant_epoch_recovery.sql", expected: "sha256:fada6e0ae2d6a012fb82dbe7b9be632deceb83bf5d9ffa18fcc7066800e3e295"},
+	{name: "0159_secret_rotation_schedule_registration_identity.sql", expected: "sha256:6d0b7092cdc6f8dc2af2ae6728701c8b0a57e34a1e673d3a593a14601897cdfc"},
+	{name: "0179_enrollment_diagnostic_workflows.sql", expected: "sha256:c48eef73f1b6d542bddd10a57ac96c9f671834678bcd1acacf71d3a757cd0f38"},
+}
+
+func normalizedMigrationDigest(raw []byte) string {
+	normalized := strings.ReplaceAll(string(raw), "\r\n", "\n")
+	normalized = strings.TrimRight(normalized, "\n")
+	return "sha256:" + crypto.SHA256Hex([]byte(normalized))
+}
+
+func isExactImmutableShippedMigration(name string, raw []byte) bool {
+	got := normalizedMigrationDigest(raw)
+	for _, migration := range immutableShippedMigrationDigests {
+		if migration.name == name {
+			return got == migration.expected
+		}
+	}
+	return false
+}
+
+// TestShippedMigrationDigestsStayImmutable is the regression for QA's real
+// preserved-volume upgrade failure. AUD-148 moved index work into migrations
+// 0187/0188, but it also edited four earlier files in place. A node that had
+// already recorded the original bytes correctly refused to boot. These exact
+// historical digests are now a review-visible ratchet: future index or schema
+// work must use a new migration instead of silently rewriting deployed history.
+func TestShippedMigrationDigestsStayImmutable(t *testing.T) {
+	t.Parallel()
+	migrations := os.DirFS("migrations")
+	for _, tc := range immutableShippedMigrationDigests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			raw, err := fs.ReadFile(migrations, tc.name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := normalizedMigrationDigest(raw)
+			if got != tc.expected {
+				t.Fatalf("%s digest = %s, want deployed digest %s; restore the file and add a new numbered migration", tc.name, got, tc.expected)
+			}
+		})
+	}
+}
 
 func ledgerProbeFS(body string) fstest.MapFS {
 	return fstest.MapFS{

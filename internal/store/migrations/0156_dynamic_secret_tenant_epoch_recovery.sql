@@ -93,8 +93,11 @@ ALTER TABLE dynamic_secret_operations
     ADD CONSTRAINT dynamic_secret_operations_tenant_epoch_nonempty_chk
         CHECK (tenant_epoch <> '');
 
--- Migration 0187 builds the two populated-table lookup indexes online, after
--- this transactional backfill has installed every tenant epoch.
+CREATE INDEX dynamic_secret_leases_epoch_idempotency_idx
+    ON dynamic_secret_leases (tenant_id, tenant_epoch, idempotency_key);
+
+CREATE INDEX dynamic_secret_operations_epoch_idempotency_idx
+    ON dynamic_secret_operations (tenant_id, tenant_epoch, idempotency_key);
 
 COMMENT ON COLUMN dynamic_secret_leases.tenant_epoch IS
     'Tenant registration epoch that owns this lease; old epochs are inert after offboard/re-registration.';

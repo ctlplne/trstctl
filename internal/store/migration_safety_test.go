@@ -21,6 +21,9 @@ import (
 // the FIRST index/column added to a genuinely populated table at GA scale must use
 // the online-safe form. Raising this baseline is not how you add a migration —
 // write the new migration online-safe (or justify it with `-- online-safe:`).
+// A separate exact-digest list covers four later migrations that had already
+// shipped before this guard learned their DDL shapes. Their exemption disappears
+// if even one byte changes, so it cannot become a moving second baseline.
 const onlineSafeBaseline = 25
 
 // TestMigrationsAreOnlineSafe is the SCHEMA-006 guard: it scans the shipped SQL
@@ -82,6 +85,9 @@ func TestMigrationsAreOnlineSafe(t *testing.T) {
 		raw, err := os.ReadFile(filepath.Join(dir, name)) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
 		if err != nil {
 			t.Fatalf("read %s: %v", name, err)
+		}
+		if isExactImmutableShippedMigration(name, raw) {
+			continue
 		}
 		text := string(raw)
 		// Tables this migration creates itself are empty, so any DDL against them is

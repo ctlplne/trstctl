@@ -78,8 +78,11 @@ UPDATE secret_rotation_schedule_scan_cursors
        updated_at = clock_timestamp()
  WHERE active_tick_key <> '';
 
--- Migration 0187 builds the populated command ledger's registration-claim index
--- online.
+CREATE INDEX secret_rotation_schedule_commands_registration_claim_idx
+    ON secret_rotation_schedule_commands (
+        tenant_id, tenant_registration_event_sequence,
+        status, lease_until, due_at, schedule_id
+    );
 
 GRANT INSERT (
     identity_version, tenant_registration_event_id,
