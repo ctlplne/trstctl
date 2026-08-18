@@ -116,3 +116,35 @@ d63285d172695e0db57f35e2b8e873fc2923501d:internal/connector/postfix/postfix_test
 d63285d172695e0db57f35e2b8e873fc2923501d:internal/connector/traefik/traefik_test.go:private-key:15
 f35c9820a35dd84b2ea1e6ce1a8f765e6116d925:internal/ca/profilelint/profilelint_test.go:generic-api-key:129
 fe9c68d97f060c976f11ae0f601a72f39ecd2c56:internal/server/aisurface_served_test.go:private-key:96
+
+# QA g60 full-history calibration (2026-08-18). Each exact fingerprint below
+# was inspected at its introducing commit with values redacted. They are
+# deterministic idempotency/request keys, marker strings, generated identifier
+# names, or deliberately malformed/private-key scanner fixtures. No path, rule,
+# commit, or value pattern is exempted; a new match anywhere still fails.
+a33ec8a4b4a7c1a58aa1fa9de9f454b14076b67c:internal/store/secret_rotation_schedule_tick_test.go:generic-api-key:117
+80912374d9b2552dffd55ff8ef1cf53d5fdc9707:internal/server/ssh_journey_served_test.go:generic-api-key:205
+f03886625a723e039782a4269a4f89d89dde4c62:internal/server/aud65_test.go:generic-api-key:95
+f5252d63cf7a2d1c140079594be785b31e7d8359:internal/server/enrollment_diagnostics_served_test.go:generic-api-key:268
+f5252d63cf7a2d1c140079594be785b31e7d8359:internal/server/enrollment_diagnostics_served_test.go:generic-api-key:366
+df84447241ac550681acc9482d9d21da5f08ad0f:internal/server/github_action_served_test.go:generic-api-key:145
+c9eade3b824b765ebc6a875d198daaf593acc168:internal/server/adcs_inventory_served_test.go:generic-api-key:302
+a5797e7e2bbbe9bc9da36a05a92eb36ec398b445:internal/kms/pkcs11/softhsm_real_test.go:generic-api-key:55
+a666a44fc3ba4ec077b02e0d80e63cd144374cc2:internal/server/ownership_readiness_served_test.go:generic-api-key:213
+a666a44fc3ba4ec077b02e0d80e63cd144374cc2:internal/server/ownership_readiness_served_test.go:generic-api-key:271
+56fcccb7c77caa92301ff32f6b3277a01b5930ec:internal/server/discovery_relay_served_test.go:generic-api-key:346
+e3231d48f817e4cdae48bda4dbb8d21f81f68afe:internal/orchestrator/outbox_internal_test.go:generic-api-key:206
+e3231d48f817e4cdae48bda4dbb8d21f81f68afe:internal/orchestrator/operation_approval_durability_test.go:generic-api-key:160
+e3231d48f817e4cdae48bda4dbb8d21f81f68afe:internal/projections/zz_privacy_event_policies.go:generic-api-key:316
+e3231d48f817e4cdae48bda4dbb8d21f81f68afe:internal/store/managed_key_approval_test.go:generic-api-key:25
+e3231d48f817e4cdae48bda4dbb8d21f81f68afe:internal/store/managed_key_approval_test.go:generic-api-key:133
+e3231d48f817e4cdae48bda4dbb8d21f81f68afe:internal/store/secret_rotation_schedule_error_test.go:generic-api-key:50
+e3231d48f817e4cdae48bda4dbb8d21f81f68afe:internal/server/secrets_rotation_served_test.go:generic-api-key:1382
+c5a260d61b49b2d9f70e3c406ee6bf463c86f60e:internal/store/migration_content_test.go:generic-api-key:1011
+6928dec371d630a96c10f16334475369c1923d43:internal/connector/cisco/ciscotest/ciscotest_test.go:private-key:50
+942bcd9b46480ffa3c63075d020225731b588009:internal/server/csr_first_issuance_served_test.go:private-key:128
+942bcd9b46480ffa3c63075d020225731b588009:internal/server/host_renewal_enqueue_test.go:private-key:92
+942bcd9b46480ffa3c63075d020225731b588009:internal/server/private_key_scanner_test.go:private-key:37
+942bcd9b46480ffa3c63075d020225731b588009:internal/server/private_key_scanner_test.go:private-key:40
+942bcd9b46480ffa3c63075d020225731b588009:internal/server/private_key_scanner_test.go:private-key:188
+2fff14152b570652d345dd414000bdb4cf26ffbb:internal/server/agent_job_credentials_served_test.go:private-key:36
