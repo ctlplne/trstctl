@@ -1237,10 +1237,15 @@ func TestTailFromFollowsGenerationAndRestartsAtProjectionCheckpoint(t *testing.T
 	defer cancelRestart()
 	restartSeen := make(chan Event, 2)
 	restartDone := make(chan error, 1)
+	restartReady := make(chan struct{})
+	var restartReadyOnce sync.Once
 	go func() {
 		restartDone <- reopened.TailFrom(
 			restartCtx,
-			func(context.Context) (uint64, error) { return checkpoint.Load(), nil },
+			func(context.Context) (uint64, error) {
+				restartReadyOnce.Do(func() { close(restartReady) })
+				return checkpoint.Load(), nil
+			},
 			func(event Event) error {
 				checkpoint.Store(event.Sequence)
 				restartSeen <- event
@@ -1249,8 +1254,17 @@ func TestTailFromFollowsGenerationAndRestartsAtProjectionCheckpoint(t *testing.T
 		)
 	}()
 	select {
+	case <-restartReady:
+	case err := <-restartDone:
+		t.Fatalf("restart tail exited before reading its durable checkpoint: %v", err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("restart tail did not read its durable checkpoint")
+	}
+	select {
 	case event := <-restartSeen:
 		t.Fatalf("restart replayed checkpointed event %+v", event)
+	case err := <-restartDone:
+		t.Fatalf("restart tail exited before the post-checkpoint append: %v", err)
 	case <-time.After(400 * time.Millisecond):
 	}
 	appended, err := reopened.Append(ctx, Event{
@@ -1264,12 +1278,17 @@ func TestTailFromFollowsGenerationAndRestartsAtProjectionCheckpoint(t *testing.T
 		if event.ID != appended.ID || event.Sequence != 4 {
 			t.Fatalf("restart tail event = %+v, want appended seq 4", event)
 		}
+	case err := <-restartDone:
+		t.Fatalf("restart tail exited before delivering the post-checkpoint append: %v", err)
 	case <-time.After(5 * time.Second):
 		t.Fatal("restart tail did not receive post-checkpoint append")
 	}
 	cancelRestart()
 	select {
-	case <-restartDone:
+	case err := <-restartDone:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("restart TailFrom error = %v, want context cancellation", err)
+		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("restart tail did not stop")
 	}

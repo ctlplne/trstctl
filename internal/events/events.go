@@ -996,6 +996,13 @@ func decodeStored(data []byte, seq uint64) (Event, error) {
 // cursors belong to one stream and cannot move across a generation switch.
 const tailConsumerName = "trstctl_projector"
 
+// tailAckConfirmationTimeout bounds the final server-confirmed acknowledgement
+// after a projection callback has durably committed. That acknowledgement uses a
+// context which survives caller cancellation: otherwise a shutdown arriving in
+// the few instructions between commit and ack can leave JetStream's single
+// MaxAckPending slot occupied until redelivery, hiding every newer event.
+const tailAckConfirmationTimeout = 5 * time.Second
+
 // TailCheckpointSource returns the durable sequence already committed by the
 // callback's read model. TailFrom invokes it when creating a consumer for a stream
 // generation; sequence preservation makes checkpoint+1 the first safe delivery on
@@ -1134,7 +1141,12 @@ func (l *Log) tailFrom(
 					_ = msg.Nak()
 					return fmt.Errorf("events: tail apply seq %d: %w", ev.Sequence, applyErr)
 				}
-				if ackErr := msg.Ack(); ackErr != nil {
+				ackCtx, cancelAck := context.WithTimeout(
+					context.WithoutCancel(readCtx), tailAckConfirmationTimeout,
+				)
+				ackErr := msg.DoubleAck(ackCtx)
+				cancelAck()
+				if ackErr != nil {
 					return fmt.Errorf("events: tail ack seq %d: %w", ev.Sequence, ackErr)
 				}
 				lastApplied = ev.Sequence
