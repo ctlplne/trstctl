@@ -93,6 +93,52 @@ func TestDisabledProtocolNamespacesFailClosedAUD75(t *testing.T) {
 	}
 }
 
+// TestSSHConsoleDeepLinkDoesNotCollideWithMachineNamespaceAUD75 protects the
+// one intentional name overlap between the browser console and a machine
+// protocol. The console owns exact /ssh; the SSH CA owns children such as
+// /ssh/ca and /ssh/krl. Without an explicit exact handler, net/http helpfully
+// redirects /ssh to /ssh/, where the protocol namespace correctly returns a
+// problem document. That makes the UI look healthy when clicked inside the SPA
+// but turns a bookmark or browser refresh into raw JSON.
+func TestSSHConsoleDeepLinkDoesNotCollideWithMachineNamespaceAUD75(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		protocols config.Protocols
+	}{
+		{name: "machine protocol disabled", protocols: config.Protocols{}},
+		{name: "machine protocol enabled", protocols: config.Protocols{SSH: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newServedHarness(t, tt.protocols)
+			resp, err := h.ts.Client().Get(h.ts.URL + "/ssh")
+			if err != nil {
+				t.Fatalf("GET console deep link /ssh: %v", err)
+			}
+			defer func() {
+				if err := resp.Body.Close(); err != nil {
+					t.Errorf("close console deep-link response: %v", err)
+				}
+			}()
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatalf("read console deep-link response: %v", err)
+			}
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("status=%d body=%q, want console index", resp.StatusCode, body)
+			}
+			if resp.Request.URL.Path != "/ssh" {
+				t.Fatalf("final path=%q, want exact /ssh without ServeMux slash redirect", resp.Request.URL.Path)
+			}
+			if contentType := resp.Header.Get("Content-Type"); !strings.HasPrefix(contentType, "text/html") {
+				t.Fatalf("Content-Type=%q body=%q, want console HTML", contentType, body)
+			}
+			if !bytes.Contains(body, []byte(`id="root"`)) {
+				t.Fatalf("exact /ssh did not serve the embedded console index")
+			}
+		})
+	}
+}
+
 // TestEnabledProtocolRoutesSurviveNamespaceReservationAUD75 proves the fail-closed
 // reservation is not a blanket block. The exact public discovery/probe route for
 // every HTTP protocol still reaches its real enabled handler, while reservation-only

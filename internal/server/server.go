@@ -2000,6 +2000,7 @@ func (s *Server) configureRootMux(d Deps, a *api.API) {
 		cbomHandler = bulkheadHandler(s.bulk, bulkhead.SubsystemCBOM, a)
 	}
 	mux := http.NewServeMux()
+	consoleHandler := webui.Handler(webui.Assets())
 	mux.HandleFunc("GET /healthz", s.health)
 	mux.HandleFunc("GET /readyz", s.readiness.Handler())
 	mux.Handle("GET /metrics", s.metricsHandler())
@@ -2028,7 +2029,13 @@ func (s *Server) configureRootMux(d Deps, a *api.API) {
 	} else {
 		mux.HandleFunc("/provider/", http.NotFound)
 	}
-	mux.Handle("/", webui.Handler(webui.Assets()))
+	// Exact /ssh is the browser's SSH Trust workspace; only its children belong
+	// to the SSH machine protocol. Registering /ssh/ for /ssh/ca and /ssh/krl
+	// makes net/http redirect a bare /ssh to /ssh/ unless this exact pattern is
+	// present. That redirect bypasses the SPA fallback and turns bookmarks and
+	// refreshes into a protocol 404 even though in-app navigation works.
+	mux.Handle("/ssh", consoleHandler)
+	mux.Handle("/", consoleHandler)
 	mw := observ.NewMiddleware(observ.Options{Logger: s.logger, Tracer: s.tracer, Registry: s.registry})
 	s.agentHTTPRenewalHandler = securityHeadersMiddleware(d.SecurityHeaders, mw.Handler(bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, a.AgentRenewalHandler())))
 	s.handler = securityHeadersMiddleware(d.SecurityHeaders, mw.Handler(mux))
