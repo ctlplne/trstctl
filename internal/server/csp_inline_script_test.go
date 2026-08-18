@@ -19,11 +19,11 @@ var inlineScriptRe = regexp.MustCompile(`(?s)<script>(.*?)</script>`)
 // TestServedInlineScriptMatchesCSPHash is the regression guard for a security
 // header that silently broke a feature.
 //
-// The served console ships one inline script — the pre-paint theme applier — and
-// script-src was 'self' with no allowance for it. The browser refused to run it,
-// so the theme-flash prevention did nothing in production and every page load
-// logged a CSP violation. Nothing failed loudly, because a blocked inline script
-// looks exactly like a script that decided to do nothing.
+// The served console ships one inline bootstrap script. It selects Zod's
+// CSP-compatible interpreter before any schema bundle loads, then applies the
+// pre-paint theme. script-src originally allowed neither operation. Nothing
+// failed loudly, because a blocked inline script looks exactly like a script
+// that decided to do nothing.
 //
 // The fix allows those exact bytes by hash. This test pins the two together: edit
 // the script without updating the hash and it breaks here, at build time, instead
@@ -43,10 +43,24 @@ func TestServedInlineScriptMatchesCSPHash(t *testing.T) {
 	}
 
 	want := "'sha256-" + base64.StdEncoding.EncodeToString(crypto.SHA256Sum([]byte(matches[0][1]))) + "'"
-	if want != webUIThemeScriptCSPHash {
+	if want != webUIBootstrapScriptCSPHash {
 		t.Fatalf("the shipped inline script hashes to %s but the CSP allows %s;\n"+
-			"the browser will refuse to run it and the theme-flash prevention will silently "+
-			"do nothing. Update webUIThemeScriptCSPHash.", want, webUIThemeScriptCSPHash)
+			"the browser will refuse to run it and the console bootstrap will silently "+
+			"do nothing. Update webUIBootstrapScriptCSPHash.", want, webUIBootstrapScriptCSPHash)
+	}
+}
+
+// TestInlineBootstrapSelectsZodJitlessMode prevents a tempting but unsafe
+// repair for schema validation under CSP: adding 'unsafe-eval'. Zod's jitless
+// interpreter validates the same inputs without compiling JavaScript in the
+// browser, so the bootstrap must select it before the module bundle loads.
+func TestInlineBootstrapSelectsZodJitlessMode(t *testing.T) {
+	body, err := os.ReadFile("../webui/dist/index.html")
+	if err != nil {
+		t.Skipf("no built web UI to check: %v", err)
+	}
+	if !strings.Contains(string(body), "__zod_globalConfig = { jitless: true }") {
+		t.Fatal("the shipped bootstrap does not select Zod jitless mode; strict-CSP Firefox will report blocked eval")
 	}
 }
 
@@ -76,8 +90,11 @@ func TestCSPAllowsTheInlineScriptWithoutUnsafeInline(t *testing.T) {
 		t.Error("script-src allows 'unsafe-inline', which permits every injected script — " +
 			"the inline theme applier must be allowed by hash, not by opening the door")
 	}
-	if !strings.Contains(scriptSrc, webUIThemeScriptCSPHash) {
+	if !strings.Contains(scriptSrc, webUIBootstrapScriptCSPHash) {
 		t.Errorf("script-src does not carry the inline script's hash: %s", scriptSrc)
+	}
+	if strings.Contains(scriptSrc, "'unsafe-eval'") {
+		t.Error("script-src allows 'unsafe-eval'; schema validation must use Zod jitless mode instead")
 	}
 	if !strings.Contains(scriptSrc, "'self'") {
 		t.Errorf("script-src no longer allows the app's own bundles: %s", scriptSrc)

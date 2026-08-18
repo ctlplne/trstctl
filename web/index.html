@@ -6,6 +6,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>trstctl</title>
     <script>
+      // Zod normally probes whether runtime-generated JavaScript is allowed.
+      // Our strict CSP correctly forbids that, so choose Zod's interpreter
+      // before its bundle loads instead of making the browser report a block.
+      globalThis.__zod_globalConfig = { jitless: true };
+
       // Apply the persisted/system theme before paint to avoid a flash.
       (function () {
         try {

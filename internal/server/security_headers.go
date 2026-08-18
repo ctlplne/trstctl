@@ -32,21 +32,22 @@ type SecurityHeaders struct {
 // allow-list, reflecting only an exact-matched Origin and short-circuiting the
 // preflight. It sets headers before delegating so they are present even on error
 // and 304 responses.
-// webUIThemeScriptCSPHash allows the one inline script the served console ships:
-// the pre-paint theme applier in internal/webui/dist/index.html.
+// webUIBootstrapScriptCSPHash allows the one inline script the served console
+// ships: the strict-CSP schema setup plus pre-paint theme applier in
+// internal/webui/dist/index.html.
 //
 // script-src was 'self' with no allowance for it, so the browser refused to run
-// it — the theme-flash prevention silently did nothing in production and every
-// page load logged a CSP violation. The obvious repairs are both worse: adding
-// 'unsafe-inline' would permit EVERY injected script, which is the thing this
-// header exists to stop, and moving the applier to an external file reintroduces
+// it — the bootstrap silently did nothing in production and every page load
+// logged a CSP violation. Adding 'unsafe-inline' would permit EVERY injected
+// script, and adding 'unsafe-eval' for schema validation would let an injection
+// compile code. Moving the theme applier to an external file also reintroduces
 // the flash it was written to prevent (it must run before first paint, ahead of
 // any deferred bundle).
 //
 // A hash allows exactly these bytes and nothing else. It is pinned rather than
 // computed at startup so a change to the shipped script is a deliberate, reviewed
 // edit; TestServedInlineScriptMatchesCSPHash fails if the two drift.
-const webUIThemeScriptCSPHash = "'sha256-M9ixH4soEPquiasSgVg+DBslvqGO2zGIOhVLHZPVnrA='"
+const webUIBootstrapScriptCSPHash = "'sha256-9f+uH5n0VwM7syyWow/xuGZd4JogQPPPR8yAPlHMo04='"
 
 func securityHeadersMiddleware(cfg SecurityHeaders, next http.Handler) http.Handler {
 	allowed := make(map[string]bool, len(cfg.AllowedOrigins))
@@ -61,7 +62,7 @@ func securityHeadersMiddleware(cfg SecurityHeaders, next http.Handler) http.Hand
 		// resource class, allow same-origin scripts/styles/connections, forbid framing
 		// and base-URI/ form-action hijacks, and upgrade any stray http subresource.
 		h.Set("Content-Security-Policy",
-			"default-src 'self'; script-src 'self' "+webUIThemeScriptCSPHash+"; "+
+			"default-src 'self'; script-src 'self' "+webUIBootstrapScriptCSPHash+"; "+
 				"style-src 'self' 'unsafe-inline'; "+
 				"img-src 'self' data:; font-src 'self'; connect-src 'self'; "+
 				"object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
