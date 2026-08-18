@@ -56,9 +56,14 @@ usually need nothing else. Mutations always send an `Idempotency-Key` so a
 retried command can never execute twice.
 
 For an evaluation server using its self-signed internal certificate, point
-`--ca-file` at the certificate you inspected and chose to trust. Production
-deployments should use the operator-managed CA bundle for `server.tls.mode=file`.
-The CLI deliberately has no switch that disables certificate verification.
+`--ca-file` at the public certificate you inspected and chose to trust. Internal
+mode persists its private identity in `data/tls/internal-server.pem`, so a normal
+restart with the same data volume keeps that pin valid. Never copy that combined
+private state file to a client; capture only the public certificate from the TLS
+endpoint. A missing data volume is a new identity and must be inspected again.
+Production deployments should use the operator-managed CA bundle for
+`server.tls.mode=file`. The CLI deliberately has no switch that disables
+certificate verification.
 
 ## Output and exit codes
 

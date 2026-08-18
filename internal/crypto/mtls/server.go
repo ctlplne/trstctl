@@ -10,10 +10,13 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
+	"runtime"
 	"time"
 
 	boundarycrypto "trstctl.com/trstctl/internal/crypto"
@@ -88,6 +91,155 @@ func SelfSignedServerCert(hosts []string, ttl time.Duration) (*ServerCert, error
 		cert:     tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key, Leaf: leaf},
 		TrustPEM: certPEM,
 	}, nil
+}
+
+// LoadOrCreateSelfSignedServerCert returns one stable internal-mode HTTPS
+// identity from stateFile. The private key and certificate share one mode-0600
+// PEM file so publication is one atomic filesystem operation: a restart can see
+// the old complete identity or the new complete identity, never a mismatched
+// cert/key pair. Existing malformed or over-permissive state fails closed and is
+// never silently replaced, because a changed trust anchor must be an explicit
+// operator decision.
+func LoadOrCreateSelfSignedServerCert(stateFile string, hosts []string, ttl time.Duration) (*ServerCert, error) {
+	stateFile = filepath.Clean(stateFile)
+	if stateFile == "." || stateFile == string(filepath.Separator) {
+		return nil, errors.New("mtls: persistent internal TLS state file is required")
+	}
+	if _, err := os.Stat(stateFile); err == nil {
+		return loadSelfSignedServerState(stateFile)
+	} else if !os.IsNotExist(err) {
+		return nil, fmt.Errorf("mtls: stat persistent internal TLS state: %w", err)
+	}
+
+	dir := filepath.Dir(stateFile)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil, fmt.Errorf("mtls: create persistent internal TLS directory: %w", err)
+	}
+	generated, err := SelfSignedServerCert(hosts, ttl)
+	if err != nil {
+		return nil, err
+	}
+	key, ok := generated.cert.PrivateKey.(*ecdsa.PrivateKey)
+	if !ok {
+		return nil, errors.New("mtls: generated internal TLS key is not ECDSA")
+	}
+	defer boundarycrypto.WipeECDSAPrivateKey(key)
+	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		return nil, fmt.Errorf("mtls: marshal persistent internal TLS key: %w", err)
+	}
+	defer wipeBytes(keyDER)
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
+	defer wipeBytes(keyPEM)
+	combined := make([]byte, 0, len(generated.TrustPEM)+len(keyPEM))
+	combined = append(combined, generated.TrustPEM...)
+	combined = append(combined, keyPEM...)
+	defer wipeBytes(combined)
+
+	tmp, err := os.CreateTemp(dir, ".internal-server-*.pem")
+	if err != nil {
+		return nil, fmt.Errorf("mtls: create persistent internal TLS staging file: %w", err)
+	}
+	tmpName := tmp.Name()
+	defer func() { _ = os.Remove(tmpName) }()
+	closeWithError := func(in error) error {
+		if closeErr := tmp.Close(); in == nil {
+			return closeErr
+		}
+		return in
+	}
+	if err := tmp.Chmod(0o600); err != nil {
+		return nil, closeWithError(err)
+	}
+	if _, err := tmp.Write(combined); err != nil {
+		return nil, closeWithError(err)
+	}
+	if err := tmp.Sync(); err != nil {
+		return nil, closeWithError(err)
+	}
+	if err := tmp.Close(); err != nil {
+		return nil, err
+	}
+	// A hard link publishes the fully-written inode only if stateFile is still
+	// absent. A concurrent first boot loses with EEXIST and loads the winner,
+	// instead of two processes serving different certificates under one path.
+	if err := os.Link(tmpName, stateFile); err != nil {
+		if os.IsExist(err) {
+			return loadSelfSignedServerState(stateFile)
+		}
+		return nil, fmt.Errorf("mtls: publish persistent internal TLS state: %w", err)
+	}
+	if err := syncStateDirectory(dir); err != nil {
+		return nil, fmt.Errorf("mtls: sync persistent internal TLS directory: %w", err)
+	}
+	return loadSelfSignedServerState(stateFile)
+}
+
+// syncStateDirectory makes publication of the new state-file name durable.
+// This local stdlib-only copy is intentional: packages inside internal/crypto
+// cannot import a platform helper from outside the sacred crypto boundary.
+func syncStateDirectory(path string) error {
+	// Windows does not expose directory handles that os.File.Sync can flush.
+	// The state file itself was synced before publication; skip only the
+	// directory-entry flush that Windows cannot perform.
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	dir, err := os.Open(path) // #nosec G304 -- parent of the validated internal TLS state path (CWE-22)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = dir.Close() }()
+	return dir.Sync()
+}
+
+func loadSelfSignedServerState(stateFile string) (*ServerCert, error) {
+	info, err := os.Stat(stateFile)
+	if err != nil {
+		return nil, fmt.Errorf("mtls: stat persistent internal TLS state: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return nil, errors.New("mtls: persistent internal TLS state is not a regular file")
+	}
+	if info.Mode().Perm()&0o077 != 0 {
+		return nil, fmt.Errorf("mtls: persistent internal TLS state permissions are %04o, want 0600 or stricter", info.Mode().Perm())
+	}
+	raw, err := os.ReadFile(stateFile) // #nosec G304 -- operator-selected internal TLS state path, validated as a private regular file (CWE-22)
+	if err != nil {
+		return nil, fmt.Errorf("mtls: read persistent internal TLS state: %w", err)
+	}
+	defer wipeBytes(raw)
+	cert, err := tls.X509KeyPair(raw, raw)
+	if err != nil {
+		return nil, fmt.Errorf("mtls: parse persistent internal TLS state: %w", err)
+	}
+	if len(cert.Certificate) != 1 {
+		return nil, fmt.Errorf("mtls: persistent internal TLS state has %d certificates, want exactly one self-signed leaf", len(cert.Certificate))
+	}
+	leaf, err := x509.ParseCertificate(cert.Certificate[0])
+	if err != nil {
+		return nil, fmt.Errorf("mtls: parse persistent internal TLS certificate: %w", err)
+	}
+	if err := leaf.CheckSignature(leaf.SignatureAlgorithm, leaf.RawTBSCertificate, leaf.Signature); err != nil {
+		return nil, fmt.Errorf("mtls: persistent internal TLS certificate is not self-signed: %w", err)
+	}
+	hasServerAuth := false
+	for _, usage := range leaf.ExtKeyUsage {
+		if usage == x509.ExtKeyUsageServerAuth {
+			hasServerAuth = true
+			break
+		}
+	}
+	if !hasServerAuth {
+		return nil, errors.New("mtls: persistent internal TLS certificate is not authorized for server authentication")
+	}
+	now := time.Now()
+	if now.Before(leaf.NotBefore) || !now.Before(leaf.NotAfter) {
+		return nil, fmt.Errorf("mtls: persistent internal TLS certificate is outside its validity window (%s to %s)", leaf.NotBefore.UTC(), leaf.NotAfter.UTC())
+	}
+	cert.Leaf = leaf
+	trustPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leaf.Raw})
+	return &ServerCert{cert: cert, TrustPEM: trustPEM}, nil
 }
 
 // ServerCertFromFiles loads an operator-provided server certificate chain and

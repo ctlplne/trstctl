@@ -35,7 +35,12 @@ agent-channel off; this eval stack enables it explicitly so the documented
 first-agent path reaches a real listener. The agent pins a combined public CA
 bundle: capture the eval HTTPS certificate from `localhost:8443` and copy the
 agent CA from `/data/ca/agent-ca.crt` in the `trstctl` service, as shown in
-[Getting started](../../docs/getting-started.md#install-an-agent).
+[Getting started](../../docs/getting-started.md#install-an-agent). The inspected
+HTTPS pin survives control-container replacement because the private internal-TLS
+identity is mode `0600` under the persistent `/data` volume. The image also
+prepares `/run/trstctl-spiffe` for uid `65532` before Docker initializes the
+`spiffesock` volume, so the nonroot control plane can bind the advertised SPIFFE
+Workload API socket without a root init container.
 
 The control plane is wired to Postgres and NATS through the external datastore
 configuration (`TRSTCTL_POSTGRES_MODE=external`, `TRSTCTL_NATS_MODE=external`),

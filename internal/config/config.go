@@ -947,9 +947,14 @@ type Server struct {
 // internal (self-signed, the default), file (operator-provided cert+key), or
 // disabled (plaintext, dev-only).
 type TLS struct {
-	Mode              string `json:"mode"`
-	CertFile          string `json:"cert_file"` // required when mode is file
-	KeyFile           string `json:"key_file"`  // required when mode is file
+	Mode     string `json:"mode"`
+	CertFile string `json:"cert_file"` // required when mode is file
+	KeyFile  string `json:"key_file"`  // required when mode is file
+	// InternalStateFile is the mode-0600 combined certificate/private-key state
+	// used only by internal mode. Keeping one identity in the deployment data
+	// directory lets explicitly pinned evaluation clients survive a process or
+	// container restart. File mode never reads it.
+	InternalStateFile string `json:"internal_state_file,omitempty"`
 	AllowPlaintextDev bool   `json:"allow_plaintext_dev,omitempty"`
 }
 
@@ -2111,7 +2116,9 @@ func (c CA) GovernanceModeValue() string {
 // deployment that needs no external services.
 func Default() *Config {
 	return &Config{
-		Server:   Server{Addr: ":8443", TLS: TLS{Mode: TLSInternal}},
+		Server: Server{Addr: ":8443", TLS: TLS{
+			Mode: TLSInternal, InternalStateFile: "data/tls/internal-server.pem",
+		}},
 		Postgres: Postgres{Mode: PostgresBundled, DataDir: "data/postgres", Port: 5432},
 		// The embedded event log fsyncs on a tight bounded cadence by default so a
 		// single-node power loss bounds data loss to ~1s rather than nats-server's
@@ -2462,6 +2469,7 @@ func applyServerAndSpineEnv(getenv func(string) string, c *Config) {
 	setString(getenv, "TRSTCTL_SERVER_TLS_MODE", &c.Server.TLS.Mode)
 	setString(getenv, "TRSTCTL_SERVER_TLS_CERT_FILE", &c.Server.TLS.CertFile)
 	setString(getenv, "TRSTCTL_SERVER_TLS_KEY_FILE", &c.Server.TLS.KeyFile)
+	setString(getenv, "TRSTCTL_SERVER_TLS_INTERNAL_STATE_FILE", &c.Server.TLS.InternalStateFile)
 	setBool(getenv, "TRSTCTL_DEV_ALLOW_PLAINTEXT", &c.Server.TLS.AllowPlaintextDev)
 	setCSV(getenv, "TRSTCTL_CORS_ALLOWED_ORIGINS", &c.Server.CORSAllowedOrigins)
 	setString(getenv, "TRSTCTL_POSTGRES_MODE", &c.Postgres.Mode)

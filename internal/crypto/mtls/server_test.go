@@ -3,18 +3,114 @@
 package mtls_test
 
 import (
+	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
 	"io"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto/mtls"
 )
+
+func TestPersistentSelfSignedServerCertReusesOnePrivateState(t *testing.T) {
+	stateFile := filepath.Join(t.TempDir(), "tls", "internal-server.pem")
+	first, err := mtls.LoadOrCreateSelfSignedServerCert(stateFile, []string{"localhost", "127.0.0.1"}, time.Hour)
+	if err != nil {
+		t.Fatalf("first identity: %v", err)
+	}
+	second, err := mtls.LoadOrCreateSelfSignedServerCert(stateFile, []string{"localhost", "127.0.0.1"}, time.Hour)
+	if err != nil {
+		t.Fatalf("reloaded identity: %v", err)
+	}
+	if !bytes.Equal(first.TrustPEM, second.TrustPEM) {
+		t.Fatal("reloading the same state path rotated the explicitly pinned server identity")
+	}
+	info, err := os.Stat(stateFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("persistent internal TLS state mode = %04o, want 0600", got)
+	}
+	raw, err := os.ReadFile(stateFile) // #nosec G304 -- test-owned path under t.TempDir (CWE-22)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(raw, []byte("PRIVATE KEY")) {
+		t.Fatal("persistent state does not contain the private half needed after restart")
+	}
+	if bytes.Contains(first.TrustPEM, []byte("PRIVATE KEY")) {
+		t.Fatal("public TrustPEM exposed the persisted private key")
+	}
+	fresh, err := mtls.LoadOrCreateSelfSignedServerCert(filepath.Join(t.TempDir(), "other.pem"), []string{"localhost"}, time.Hour)
+	if err != nil {
+		t.Fatalf("fresh independent identity: %v", err)
+	}
+	if bytes.Equal(first.TrustPEM, fresh.TrustPEM) {
+		t.Fatal("independent state paths unexpectedly reused one trust identity")
+	}
+}
+
+func TestPersistentSelfSignedServerCertFailsClosedOnUnsafeState(t *testing.T) {
+	stateFile := filepath.Join(t.TempDir(), "internal-server.pem")
+	if err := os.WriteFile(stateFile, []byte("corrupted"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(stateFile) // #nosec G304 -- test-owned path under t.TempDir (CWE-22)
+	if _, err := mtls.LoadOrCreateSelfSignedServerCert(stateFile, []string{"localhost"}, time.Hour); err == nil {
+		t.Fatal("corrupted persistent TLS state was silently replaced")
+	}
+	after, _ := os.ReadFile(stateFile) // #nosec G304 -- test-owned path under t.TempDir (CWE-22)
+	if !bytes.Equal(before, after) {
+		t.Fatal("failed-closed load modified corrupted operator-visible state")
+	}
+	if err := os.Chmod(stateFile, 0o644); err != nil { // #nosec G302 -- deliberate over-permissive negative fixture (CWE-276)
+		t.Fatal(err)
+	}
+	if _, err := mtls.LoadOrCreateSelfSignedServerCert(stateFile, []string{"localhost"}, time.Hour); err == nil || !strings.Contains(err.Error(), "permissions") {
+		t.Fatalf("over-permissive persistent TLS state error = %v, want permissions refusal", err)
+	}
+	expiredFile := filepath.Join(t.TempDir(), "expired.pem")
+	if _, err := mtls.LoadOrCreateSelfSignedServerCert(expiredFile, []string{"localhost"}, -time.Hour); err == nil || !strings.Contains(err.Error(), "validity window") {
+		t.Fatalf("expired persistent TLS state error = %v, want validity-window refusal", err)
+	}
+}
+
+func TestPersistentSelfSignedServerCertConcurrentFirstBootConverges(t *testing.T) {
+	stateFile := filepath.Join(t.TempDir(), "tls", "internal-server.pem")
+	const callers = 16
+	trust := make([][]byte, callers)
+	errs := make([]error, callers)
+	var wg sync.WaitGroup
+	for i := range callers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			cert, err := mtls.LoadOrCreateSelfSignedServerCert(stateFile, []string{"localhost"}, time.Hour)
+			errs[i] = err
+			if err == nil {
+				trust[i] = cert.TrustPEM
+			}
+		}()
+	}
+	wg.Wait()
+	for i := range callers {
+		if errs[i] != nil {
+			t.Fatalf("caller %d: %v", i, errs[i])
+		}
+		if !bytes.Equal(trust[0], trust[i]) {
+			t.Fatalf("caller %d served a different first-boot trust anchor", i)
+		}
+	}
+}
 
 // TestServeHTTPSEncryptsAndRefusesPlaintext is the B4 acceptance: the control
 // plane served with a self-signed internal certificate answers over TLS to a

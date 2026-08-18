@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/config"
@@ -16,6 +17,8 @@ import (
 
 // internalCertTTL is the validity of the self-signed internal server certificate.
 const internalCertTTL = 365 * 24 * time.Hour
+
+const defaultInternalTLSStateFile = "data/tls/internal-server.pem"
 
 // serveControlPlane serves srv over ln according to the TLS configuration (B4).
 // The default (internal) and file modes serve TLS, so no credential or session
@@ -35,11 +38,15 @@ func serveControlPlane(srv *http.Server, ln net.Listener, tlsCfg config.TLS, war
 		}
 		return sc.ServeHTTPS(srv, ln)
 	default: // TLSInternal, and the zero value defensively
-		sc, err := mtls.SelfSignedServerCert(serverHosts(), internalCertTTL)
+		stateFile := strings.TrimSpace(tlsCfg.InternalStateFile)
+		if stateFile == "" {
+			stateFile = defaultInternalTLSStateFile
+		}
+		sc, err := mtls.LoadOrCreateSelfSignedServerCert(stateFile, serverHosts(), internalCertTTL)
 		if err != nil {
 			return err
 		}
-		_, _ = fmt.Fprintln(warn, "serving the control plane over TLS with a self-signed internal certificate (server.tls.mode=internal); trust it for evaluation, or set server.tls.mode=file with an operator certificate for production")
+		_, _ = fmt.Fprintf(warn, "serving the control plane over TLS with a persistent self-signed internal certificate (server.tls.mode=internal, private state %s); trust it for evaluation, or set server.tls.mode=file with an operator certificate for production\n", stateFile)
 		return sc.ServeHTTPS(srv, ln)
 	}
 }

@@ -112,6 +112,11 @@ func TestDockerfileIsMinimalAndReproducible(t *testing.T) {
 	if !strings.Contains(runtimeBlock, "\nWORKDIR /\n") {
 		t.Error("Dockerfile runtime must set WORKDIR / so relative data/* defaults resolve inside the persistent /data mount")
 	}
+	mustContainAll(t, "Dockerfile prepares nonroot UDS volume roots", df,
+		"/mnt-skel/run/trstctl",
+		"/mnt-skel/run/trstctl-spiffe",
+		"COPY --from=build --chown=65532:65532 /mnt-skel/run/trstctl /run/trstctl",
+		"COPY --from=build --chown=65532:65532 /mnt-skel/run/trstctl-spiffe /run/trstctl-spiffe")
 	mustContainAll(t, "Dockerfile entrypoint", df, "ENTRYPOINT")
 	mustContainAll(t, "Dockerfile builds the web console before Go embeds it", df,
 		"FROM ${WEB_BUILD_IMAGE} AS web-build",

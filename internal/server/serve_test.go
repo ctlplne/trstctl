@@ -6,6 +6,8 @@ import (
 	"bytes"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -26,7 +28,10 @@ func TestServeControlPlaneInternalRefusesPlaintext(t *testing.T) {
 		t.Fatal(err)
 	}
 	srv := newHandler()
-	go func() { _ = serveControlPlane(srv, ln, config.TLS{Mode: config.TLSInternal}, &bytes.Buffer{}) }()
+	stateFile := filepath.Join(t.TempDir(), "internal.pem")
+	go func() {
+		_ = serveControlPlane(srv, ln, config.TLS{Mode: config.TLSInternal, InternalStateFile: stateFile}, &bytes.Buffer{})
+	}()
 	t.Cleanup(func() { _ = srv.Close() })
 
 	// Poll until the TLS server is up enough to refuse a plaintext request (Go
@@ -51,6 +56,38 @@ func TestServeControlPlaneInternalRefusesPlaintext(t *testing.T) {
 	}
 	if !responded {
 		t.Fatal("internal-TLS server never responded (even to refuse plaintext); it may not have started")
+	}
+}
+
+func TestServeControlPlaneInternalPersistsIdentityAcrossRestart(t *testing.T) {
+	stateFile := filepath.Join(t.TempDir(), "tls", "internal-server.pem")
+	serveOnce := func() []byte {
+		t.Helper()
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		srv := newHandler()
+		go func() {
+			_ = serveControlPlane(srv, ln, config.TLS{Mode: config.TLSInternal, InternalStateFile: stateFile}, &bytes.Buffer{})
+		}()
+		for i := 0; i < 100; i++ {
+			if raw, readErr := os.ReadFile(stateFile); readErr == nil && len(raw) > 0 { // #nosec G304 -- test-owned path under t.TempDir (CWE-22)
+				_ = srv.Close()
+				_ = ln.Close()
+				return raw
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		_ = srv.Close()
+		_ = ln.Close()
+		t.Fatal("internal TLS state was not persisted before serving")
+		return nil
+	}
+	first := serveOnce()
+	second := serveOnce()
+	if !bytes.Equal(first, second) {
+		t.Fatal("control-plane restart replaced the persistent internal TLS identity")
 	}
 }
 

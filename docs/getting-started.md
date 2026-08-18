@@ -49,6 +49,10 @@ blank stack also enables the agent mTLS gRPC channel for the wizard at
     Default is `server.tls.mode=internal` (self-signed). For production, set
     `server.tls.mode=file` with your own certificate
     (`TRSTCTL_SERVER_TLS_CERT_FILE` / `TRSTCTL_SERVER_TLS_KEY_FILE`).
+    Internal mode stores its combined private identity at
+    `data/tls/internal-server.pem` (`/data/tls/internal-server.pem` in Compose,
+    mode `0600`), so the inspected public pin survives a restart with the same
+    data volume. Never copy that private state file to a client.
     Plaintext is local-dev only: it requires `server.tls.mode=disabled`,
     `TRSTCTL_DEV_ALLOW_PLAINTEXT=true`, and a loopback `server.addr`, and it
     logs a loud warning. See [Configuration](configuration.md#transport-encryption-tls).

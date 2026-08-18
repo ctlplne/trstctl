@@ -4264,10 +4264,14 @@ func TestWireStrengthGuardsStayRequired(t *testing.T) {
 		"case config.TLSFile:",
 		"return sc.ServeHTTPS(srv, ln)",
 		"default: // TLSInternal, and the zero value defensively",
-		"mtls.SelfSignedServerCert(serverHosts(), internalCertTTL)",
+		"mtls.LoadOrCreateSelfSignedServerCert(stateFile, serverHosts(), internalCertTTL)",
+		"defaultInternalTLSStateFile",
 	)
 	serverTLS := read(t, "../internal/crypto/mtls/server.go")
 	check("internal/crypto/mtls/server.go TLS floor", serverTLS,
+		"func LoadOrCreateSelfSignedServerCert",
+		"persistent internal TLS state permissions",
+		"os.Link(tmpName, stateFile)",
 		"func CurvePreferences() []tls.CurveID",
 		"tls.X25519",
 		"tls.CurveP256",

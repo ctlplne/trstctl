@@ -10,8 +10,12 @@ import (
 // TestTLSOnByDefault: the control plane serves TLS by default — plaintext is an
 // explicit opt-in, not the fallback (B4).
 func TestTLSOnByDefault(t *testing.T) {
-	if got := Default().Server.TLS.Mode; got != TLSInternal {
+	tls := Default().Server.TLS
+	if got := tls.Mode; got != TLSInternal {
 		t.Errorf("default server.tls.mode = %q, want %q (TLS must be on by default)", got, TLSInternal)
+	}
+	if tls.InternalStateFile == "" {
+		t.Error("default internal TLS identity has no persistent state file; every restart would rotate explicitly pinned eval trust")
 	}
 	if err := Default().Validate(); err != nil {
 		t.Fatalf("Default() must be valid, got: %v", err)
@@ -174,10 +178,11 @@ func TestTLSDisabledLoopbackOnly(t *testing.T) {
 // TestTLSEnvOverrides: the TLS mode and cert/key paths come from the environment.
 func TestTLSEnvOverrides(t *testing.T) {
 	env := map[string]string{
-		"TRSTCTL_SERVER_TLS_MODE":      "file",
-		"TRSTCTL_SERVER_TLS_CERT_FILE": "/etc/trstctl/tls.crt",
-		"TRSTCTL_SERVER_TLS_KEY_FILE":  "/etc/trstctl/tls.key",
-		"TRSTCTL_DEV_ALLOW_PLAINTEXT":  "true",
+		"TRSTCTL_SERVER_TLS_MODE":                "file",
+		"TRSTCTL_SERVER_TLS_CERT_FILE":           "/etc/trstctl/tls.crt",
+		"TRSTCTL_SERVER_TLS_KEY_FILE":            "/etc/trstctl/tls.key",
+		"TRSTCTL_SERVER_TLS_INTERNAL_STATE_FILE": "/var/lib/trstctl/internal-tls.pem",
+		"TRSTCTL_DEV_ALLOW_PLAINTEXT":            "true",
 	}
 	cfg, err := Load(func(k string) string { return env[k] })
 	if err != nil {
@@ -185,6 +190,9 @@ func TestTLSEnvOverrides(t *testing.T) {
 	}
 	if cfg.Server.TLS.Mode != TLSFile || cfg.Server.TLS.CertFile != "/etc/trstctl/tls.crt" || cfg.Server.TLS.KeyFile != "/etc/trstctl/tls.key" {
 		t.Errorf("TLS env not applied: %+v", cfg.Server.TLS)
+	}
+	if cfg.Server.TLS.InternalStateFile != "/var/lib/trstctl/internal-tls.pem" {
+		t.Errorf("TLS internal state env not applied: %+v", cfg.Server.TLS)
 	}
 	if !cfg.Server.TLS.AllowPlaintextDev {
 		t.Error("TRSTCTL_DEV_ALLOW_PLAINTEXT was not applied")
