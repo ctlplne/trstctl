@@ -31,9 +31,9 @@ const (
 // TestEvidencePackServedTenantScopedExactClaimsAUD76 proves the production
 // route, authz guard, audit query, control evaluator, signed envelope, and
 // verifier together. Tenant B owns the exact three event types needed by CC7;
-// tenant A owns only an unrelated event. A request authenticated as A also sends
-// a forged B tenant header, which must have no effect on either the manifest or
-// its control verdicts.
+// tenant A owns only an unrelated event. A request authenticated as A first sends
+// a forged B tenant header, which must be rejected. A second request with matching
+// principal and tenant headers must return only A's evidence.
 func TestEvidencePackServedTenantScopedExactClaimsAUD76(t *testing.T) {
 	ctx := context.Background()
 	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
@@ -203,9 +203,18 @@ func mustJSON(t *testing.T, value any) []byte {
 
 func serveEvidencePack(t *testing.T, handler http.Handler, signer crypto.DigestSigner, principalTenant, forgedHeaderTenant string) (api.ComplianceEvidencePack, Report) {
 	t.Helper()
+	forged := httptest.NewRequest(http.MethodGet, "/api/v1/compliance/evidence-packs/soc2", nil)
+	forged.Header.Set("X-Test-Principal-Tenant", principalTenant)
+	forged.Header.Set("X-Tenant-ID", forgedHeaderTenant)
+	forgedRec := httptest.NewRecorder()
+	handler.ServeHTTP(forgedRec, forged)
+	if forgedRec.Code != http.StatusForbidden {
+		t.Fatalf("cross-tenant evidence request status = %d, want 403; body=%s", forgedRec.Code, forgedRec.Body.String())
+	}
+
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/compliance/evidence-packs/soc2", nil)
 	req.Header.Set("X-Test-Principal-Tenant", principalTenant)
-	req.Header.Set("X-Tenant-ID", forgedHeaderTenant)
+	req.Header.Set("X-Tenant-ID", principalTenant)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
