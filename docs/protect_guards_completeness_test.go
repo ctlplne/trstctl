@@ -650,15 +650,20 @@ func TestJourney006Trace014ConsoleDisclosesLibraryGaps(t *testing.T) {
 	// loose cable; this checks that the labeled cable is plugged into the page.
 	messages := read(t, "../web/src/i18n/messages.ts")
 	platform := read(t, "../web/src/pages/Platform.tsx")
-	requireAllContained(t, "JOURNEY-006/TRACE-014", "web/src/pages/Platform.tsx", platform,
+	access := read(t, "../web/src/pages/AdminAccess.tsx")
+	requireAllContained(t, "JOURNEY-006/TRACE-014", "web/src/pages/AdminAccess.tsx", access,
 		`"platform.tabs.access"`,
 		`"source.oidc.mapping.status.358515bade"`,
+		`<UnavailableState title={t("admin.access.pamUnavailableTitle")}>{pamUnavailable}</UnavailableState>`,
+	)
+	requireAllContained(t, "JOURNEY-006/TRACE-014", "web/src/pages/Platform.tsx", platform,
 		`"source.passive.read.state.model.projections.can.b.9f2d6a2da6"`,
 		"served worker",
-		`<UnavailableState title="Privileged access sessions are unavailable">{pamUnavailable}</UnavailableState>`,
 	)
 	requireAllContained(t, "JOURNEY-006/TRACE-014", "web/src/i18n/messages.ts", messages,
 		"Access administration",
+		`"admin.access.pamUnavailableTitle"`,
+		"Privileged access sessions are unavailable",
 		"OIDC mapping status",
 		"Passive-read-state model",
 		"one writable region per tenant",
@@ -667,11 +672,11 @@ func TestJourney006Trace014ConsoleDisclosesLibraryGaps(t *testing.T) {
 	// request can independently return an exact problem response (for example,
 	// a deployment without that capability). One scoped disclosure is honest;
 	// replacing the whole page with a generic future-state panel is not.
-	if got := strings.Count(platform, "<UnavailableState"); got != 1 {
-		t.Errorf("JOURNEY-006/TRACE-014: Platform unavailable disclosures = %d, want exactly the scoped privileged-session disclosure", got)
+	if got := strings.Count(access, "<UnavailableState"); got != 1 {
+		t.Errorf("JOURNEY-006/TRACE-014: AdminAccess unavailable disclosures = %d, want exactly the scoped privileged-session disclosure", got)
 	}
-	if strings.Contains(strings.ToLower(platform), "not served yet") {
-		t.Error("JOURNEY-006/TRACE-014: Platform should name exact served or unavailable evidence, not generic future-state copy")
+	if strings.Contains(strings.ToLower(access+platform), "not served yet") {
+		t.Error("JOURNEY-006/TRACE-014: admin pages should name exact served or unavailable evidence, not generic future-state copy")
 	}
 
 	discovery := read(t, "../web/src/pages/Discovery.tsx")
