@@ -65,8 +65,8 @@ function CopyRef({ value }: { value: string }) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   return (
-    <span className="flex items-center gap-2">
-      <code className="flex-1 truncate rounded bg-muted px-2 py-1 font-mono text-xs">{value}</code>
+    <span className="flex min-w-0 items-center gap-2">
+      <code className="min-w-0 flex-1 truncate rounded bg-muted px-2 py-1 font-mono text-xs">{value}</code>
       <Button
         type="button"
         size="sm"
@@ -192,7 +192,7 @@ export function Integrate() {
   }
 
   return (
-    <section aria-labelledby="integrate-heading" className="grid gap-6">
+    <section aria-labelledby="integrate-heading" className="grid min-w-0 gap-6">
       <PageHeader
         titleId="integrate-heading"
         title={t("integrate.title")}
@@ -232,7 +232,7 @@ export function Integrate() {
       </SectionCard>
 
       <SectionCard title={t("integrate.gitops.title")} description={t("integrate.gitops.description")}>
-        <div className="grid gap-4">
+        <div className="grid min-w-0 gap-4">
           {loadError && (
             <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning-foreground" role="status">
               {loadError}
@@ -277,7 +277,7 @@ export function Integrate() {
 
           {loading && <p className="text-sm text-muted-foreground">{t("integrate.gitops.loading")}</p>}
 
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(22rem,0.9fr)]">
+          <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(22rem,0.9fr)]">
             <label className="grid gap-1 text-sm">
               <span className="font-medium">{t("integrate.gitops.declarativeManifest")}</span>
               <textarea
@@ -292,7 +292,7 @@ export function Integrate() {
               />
             </label>
 
-            <div className="grid content-start gap-3">
+            <div className="grid min-w-0 content-start gap-3">
               <div className="flex flex-wrap items-center gap-2">
                 <Button type="button" onClick={() => void validateDeclaration()} disabled={validationBusy || !manifestText.trim()}>
                   <ShieldCheck className="h-4 w-4" aria-hidden="true" />

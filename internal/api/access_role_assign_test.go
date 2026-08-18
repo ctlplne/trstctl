@@ -4,11 +4,23 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/store"
 )
+
+func TestMemberResponseSerializesMissingRolesAsEmptyArray(t *testing.T) {
+	got, err := json.Marshal(toMemberResponse(store.TenantMember{Subject: "member-without-roles"}))
+	if err != nil {
+		t.Fatalf("marshal member response: %v", err)
+	}
+	if !strings.Contains(string(got), `"roles":[]`) {
+		t.Fatalf("member response = %s, want roles to be an empty JSON array", got)
+	}
+}
 
 func TestAuthorizeRoleAssignmentRequiresDedicatedPermission(t *testing.T) {
 	const tenantID = "11111111-1111-1111-1111-111111111111"

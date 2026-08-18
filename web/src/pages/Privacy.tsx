@@ -265,7 +265,7 @@ export function Privacy() {
   }
 
   return (
-    <section aria-labelledby="privacy-heading" className="grid gap-6">
+    <section aria-labelledby="privacy-heading" className="grid min-w-0 gap-6">
       <PageHeader titleId="privacy-heading" title={t("privacy.title")} description={t("privacy.description")} />
 
       {loading ? (
@@ -309,26 +309,28 @@ export function Privacy() {
             {erasures.length === 0 ? (
               <p className="mt-3 text-caption text-muted-foreground">{t("privacy.erasure.empty")}</p>
             ) : (
-              <table className="mt-4 w-full text-sm" aria-label={t("privacy.erasure.tableCaption")}>
-                <thead>
-                  <tr className="border-b border-border text-left text-caption text-muted-foreground">
-                    <th className="py-2 font-medium">{t("privacy.subjectColumn")}</th>
-                    <th className="py-2 font-medium">{t("privacy.erasure.recordsErasedColumn")}</th>
-                    <th className="py-2 font-medium">{t("privacy.erasure.reasonLabel")}</th>
-                    <th className="py-2 font-medium">{t("privacy.erasure.erasedAtColumn")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {erasures.map((erasure, index) => (
-                    <tr key={`${erasure.subject_ref}-${index}`} className="border-b border-border/60 align-top">
-                      <td className="py-2 font-mono text-caption">{erasure.subject_ref}</td>
-                      <td className="py-2 tabular-nums">{countTotal(erasure.counts)}</td>
-                      <td className="py-2 text-muted-foreground">{erasure.reason || "—"}</td>
-                      <td className="py-2 text-muted-foreground">{formatDateTimePolicy(erasure.erased_at)}</td>
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full min-w-[42rem] text-sm" aria-label={t("privacy.erasure.tableCaption")}>
+                  <thead>
+                    <tr className="border-b border-border text-left text-caption text-muted-foreground">
+                      <th className="py-2 font-medium">{t("privacy.subjectColumn")}</th>
+                      <th className="py-2 font-medium">{t("privacy.erasure.recordsErasedColumn")}</th>
+                      <th className="py-2 font-medium">{t("privacy.erasure.reasonLabel")}</th>
+                      <th className="py-2 font-medium">{t("privacy.erasure.erasedAtColumn")}</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {erasures.map((erasure, index) => (
+                      <tr key={`${erasure.subject_ref}-${index}`} className="border-b border-border/60 align-top">
+                        <td className="py-2 font-mono text-caption">{erasure.subject_ref}</td>
+                        <td className="py-2 tabular-nums">{countTotal(erasure.counts)}</td>
+                        <td className="py-2 text-muted-foreground">{erasure.reason || "—"}</td>
+                        <td className="py-2 text-muted-foreground">{formatDateTimePolicy(erasure.erased_at)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </SectionCard>
 
@@ -556,26 +558,28 @@ export function Privacy() {
             {runs.length === 0 ? (
               <p className="text-caption text-muted-foreground">{t("privacy.retention.empty")}</p>
             ) : (
-              <table className="w-full text-sm" aria-label={t("privacy.retention.tableCaption")}>
-                <thead>
-                  <tr className="border-b border-border text-left text-caption text-muted-foreground">
-                    <th className="py-2 font-medium">{t("privacy.retention.runColumn")}</th>
-                    <th className="py-2 font-medium">{t("privacy.retention.recordsAffectedColumn")}</th>
-                    <th className="py-2 font-medium">{t("privacy.retention.requestedByColumn")}</th>
-                    <th className="py-2 font-medium">{t("privacy.retention.enforcedAtColumn")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {runs.map((run) => (
-                    <tr key={run.run_id} className="border-b border-border/60 align-top">
-                      <td className="py-2 font-mono text-caption">{run.run_id}</td>
-                      <td className="py-2 tabular-nums">{countTotal(run.counts)}</td>
-                      <td className="py-2 text-muted-foreground">{run.requested_by_ref || translateNow("source.system.bbc5e661e1")}</td>
-                      <td className="py-2 text-muted-foreground">{formatDateTimePolicy(run.enforced_at)}</td>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[42rem] text-sm" aria-label={t("privacy.retention.tableCaption")}>
+                  <thead>
+                    <tr className="border-b border-border text-left text-caption text-muted-foreground">
+                      <th className="py-2 font-medium">{t("privacy.retention.runColumn")}</th>
+                      <th className="py-2 font-medium">{t("privacy.retention.recordsAffectedColumn")}</th>
+                      <th className="py-2 font-medium">{t("privacy.retention.requestedByColumn")}</th>
+                      <th className="py-2 font-medium">{t("privacy.retention.enforcedAtColumn")}</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {runs.map((run) => (
+                      <tr key={run.run_id} className="border-b border-border/60 align-top">
+                        <td className="py-2 font-mono text-caption">{run.run_id}</td>
+                        <td className="py-2 tabular-nums">{countTotal(run.counts)}</td>
+                        <td className="py-2 text-muted-foreground">{run.requested_by_ref || translateNow("source.system.bbc5e661e1")}</td>
+                        <td className="py-2 text-muted-foreground">{formatDateTimePolicy(run.enforced_at)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </SectionCard>
 
@@ -583,28 +587,30 @@ export function Privacy() {
             {catalog.length === 0 ? (
               <p className="text-caption text-muted-foreground">{t("privacy.catalog.empty")}</p>
             ) : (
-              <table className="w-full text-sm" aria-label={t("privacy.catalog.title")}>
-                <thead>
-                  <tr className="border-b border-border text-left text-caption text-muted-foreground">
-                    <th className="py-2 font-medium">{t("privacy.catalog.categoryColumn")}</th>
-                    <th className="py-2 font-medium">{t("privacy.catalog.locationColumn")}</th>
-                    <th className="py-2 font-medium">{t("privacy.catalog.ownerColumn")}</th>
-                    <th className="py-2 font-medium">{t("privacy.catalog.purposeColumn")}</th>
-                    <th className="py-2 font-medium">{t("privacy.catalog.retentionColumn")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {catalog.map((entry) => (
-                    <tr key={entry.id} className="border-b border-border/60 align-top">
-                      <td className="py-2">{entry.category}</td>
-                      <td className="py-2 font-mono text-caption">{entry.location}</td>
-                      <td className="py-2 text-muted-foreground">{entry.owner}</td>
-                      <td className="py-2 text-muted-foreground">{entry.purpose}</td>
-                      <td className="py-2 text-muted-foreground">{entry.retention_class}</td>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[56rem] text-sm" aria-label={t("privacy.catalog.title")}>
+                  <thead>
+                    <tr className="border-b border-border text-left text-caption text-muted-foreground">
+                      <th className="py-2 font-medium">{t("privacy.catalog.categoryColumn")}</th>
+                      <th className="py-2 font-medium">{t("privacy.catalog.locationColumn")}</th>
+                      <th className="py-2 font-medium">{t("privacy.catalog.ownerColumn")}</th>
+                      <th className="py-2 font-medium">{t("privacy.catalog.purposeColumn")}</th>
+                      <th className="py-2 font-medium">{t("privacy.catalog.retentionColumn")}</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {catalog.map((entry) => (
+                      <tr key={entry.id} className="border-b border-border/60 align-top">
+                        <td className="py-2">{entry.category}</td>
+                        <td className="py-2 font-mono text-caption">{entry.location}</td>
+                        <td className="py-2 text-muted-foreground">{entry.owner}</td>
+                        <td className="py-2 text-muted-foreground">{entry.purpose}</td>
+                        <td className="py-2 text-muted-foreground">{entry.retention_class}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </SectionCard>
         </>

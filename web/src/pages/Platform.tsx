@@ -1601,7 +1601,7 @@ export function AdminAccess() {
                   {members.map((member) => (
                     <tr key={member.subject} className="align-top">
                       <td className="font-medium">{member.subject}</td>
-                      <td className="font-mono text-xs">{member.roles.join(", ")}</td>
+                      <td className="font-mono text-xs">{(member.roles ?? []).join(", ")}</td>
                       <td>{member.status}</td>
                       <td>{formatOptionalDate(member.updated_at, formatPolicy)}</td>
                     </tr>

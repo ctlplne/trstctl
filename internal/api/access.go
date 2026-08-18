@@ -394,7 +394,7 @@ func (a *API) validatePermissionScopes(scopes []string) error {
 func toMemberResponse(m store.TenantMember) memberResponse {
 	return memberResponse{
 		TenantID: m.TenantID, Subject: m.Subject, DisplayName: m.DisplayName, Email: m.Email,
-		Roles: append([]string(nil), m.Roles...), Source: m.Source, Status: m.Status,
+		Roles: append([]string{}, m.Roles...), Source: m.Source, Status: m.Status,
 		CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt, OffboardedAt: m.OffboardedAt,
 		OffboardedBy: m.OffboardedBy, OffboardReason: m.OffboardReason,
 	}

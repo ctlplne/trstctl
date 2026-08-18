@@ -387,6 +387,27 @@ describe("WIRE-12 Platform served admin surface", () => {
     expect(document.body.textContent).not.toMatch(/connector-f5\.wasm|unsigned plugin|replication worker|fixture|coming soon|not served yet/i);
   });
 
+  it("keeps Admin Access usable when an older member record returns null roles", async () => {
+    apiMock.members.mockResolvedValue({
+      items: [
+        {
+          tenant_id: "tenant-platform",
+          subject: "legacy-member@example.test",
+          roles: null,
+          source: "oidc",
+          status: "active",
+          created_at: "2026-06-26T13:00:00Z",
+          updated_at: "2026-06-26T13:01:00Z",
+        },
+      ],
+    });
+
+    renderAdminPage("access");
+
+    expect(await screen.findByRole("heading", { name: "Access administration" })).toBeInTheDocument();
+    expect((await screen.findAllByText("legacy-member@example.test")).length).toBeGreaterThan(0);
+  });
+
   it("removes the unserved Platform fixture arrays and unavailable-state disclosures", () => {
     const source = readFileSync(path.join(process.cwd(), "src/pages/Platform.tsx"), "utf8");
     expect(source).not.toMatch(/runtimeRows|pluginAdminRows|federationRows/);
