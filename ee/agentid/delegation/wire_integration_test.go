@@ -133,13 +133,14 @@ func TestAGID_Wire_VerifyChainInRealSignerBeforeKeygen(t *testing.T) {
 	buildChain := func(t *testing.T, childAuthority delegation.Authority) ([]delegation.RecordEnvelope, []byte) {
 		t.Helper()
 		rootRec := delegation.Record{
-			TenantID:       tenantID,
-			DelegatorID:    "root",
-			DelegatorKey:   delegation.KeyRef{ID: rootKeyID, Algorithm: "ECDSA-P256"},
-			DelegateID:     "mid",
-			Authority:      wide,
-			DepthRemaining: 3,
-			RootAnchor:     true,
+			TenantID:              tenantID,
+			DelegatorID:           "root",
+			DelegatorKey:          delegation.KeyRef{ID: rootKeyID, Algorithm: "ECDSA-P256"},
+			DelegateID:            "mid",
+			DelegateKeyThumbprint: delegation.DelegateKeyThumbprintOf(childSigner.Public().DER),
+			Authority:             wide,
+			DepthRemaining:        3,
+			RootAnchor:            true,
 		}
 		rootSigned, err := rootRec.Sign(rootSigner, reg)
 		if err != nil {
