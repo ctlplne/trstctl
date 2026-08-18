@@ -12,9 +12,13 @@ export function LoadingState({ children }: { children: ReactNode }) {
 
 export function ErrorState({ title, children }: { title: string; children?: ReactNode }) {
   return (
-    <div role="alert" data-state-primitive="error" className="rounded-control border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm">
+    <div
+      role="alert"
+      data-state-primitive="error"
+      className="min-w-0 max-w-full rounded-control border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm [overflow-wrap:anywhere]"
+    >
       <p className="font-medium text-destructive">{title}</p>
-      {children && <div className="mt-1 text-muted-foreground">{children}</div>}
+      {children && <div className="mt-1 min-w-0 text-muted-foreground">{children}</div>}
     </div>
   );
 }
@@ -26,19 +30,22 @@ export function PermissionDeniedState({ children }: { children: ReactNode }) {
     <div
       role="alert"
       data-state-primitive="permission-denied"
-      className="rounded-control border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm"
+      className="min-w-0 max-w-full rounded-control border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm [overflow-wrap:anywhere]"
     >
       <p className="font-medium text-status-warning">{t("state.permissionDenied")}</p>
-      <div className="mt-1 text-muted-foreground">{children}</div>
+      <div className="mt-1 min-w-0 text-muted-foreground">{children}</div>
     </div>
   );
 }
 
 export function UnavailableState({ title, children }: { title: string; children?: ReactNode }) {
   return (
-    <div data-state-primitive="unavailable" className="rounded-control border border-dashed border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+    <div
+      data-state-primitive="unavailable"
+      className="min-w-0 max-w-full rounded-control border border-dashed border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground [overflow-wrap:anywhere]"
+    >
       <p className="font-medium text-foreground">{title}</p>
-      {children && <div className="mt-1">{children}</div>}
+      {children && <div className="mt-1 min-w-0">{children}</div>}
     </div>
   );
 }
