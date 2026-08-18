@@ -1967,9 +1967,12 @@ func (s Signer) MTLSEnabled() bool { return s.MTLSAddress != "" }
 
 // CA configures the assembled issuing CA. CertFile is where its self-signed
 // certificate is persisted; reusing it (with the signer's persisted key) keeps
-// the CA stable across restarts (R3.2 — no silent rotation).
+// the CA stable across restarts (R3.2 — no silent rotation). PublicCertFile is
+// an optional certificate-only mirror for less-privileged clients that must not
+// receive the control plane's private data volume.
 type CA struct {
-	CertFile string `json:"cert_file"`
+	CertFile       string `json:"cert_file"`
+	PublicCertFile string `json:"public_cert_file,omitempty"`
 
 	// Served-leaf issuance profile (PKIGOV-001). These RFC 5280 / CA-Browser-Forum
 	// pointers are stamped on every leaf the served binary mints so relying parties
@@ -2360,6 +2363,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_SIGNER_MTLS_PEER_CA_FILE", &c.Signer.MTLSPeerCAFile)
 	setString(getenv, "TRSTCTL_SIGNER_MTLS_PEER_PIN", &c.Signer.MTLSPeerPin)
 	setString(getenv, "TRSTCTL_CA_CERT_FILE", &c.CA.CertFile)
+	setString(getenv, "TRSTCTL_CA_PUBLIC_CERT_FILE", &c.CA.PublicCertFile)
 	// Regulated CA-governance posture (PKIGOV-003): the single coherent switch and
 	// its declared FIPS requirement, operator-settable via env.
 	setString(getenv, "TRSTCTL_CA_GOVERNANCE_MODE", &c.CA.GovernanceMode)

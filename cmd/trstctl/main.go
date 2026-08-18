@@ -443,6 +443,10 @@ func configSummary(cfg *config.Config) string {
 		fmt.Fprintf(&b, "server.tls.cert_file: %s\n", cfg.Server.TLS.CertFile)
 		fmt.Fprintf(&b, "server.tls.key_file: %s\n", cfg.Server.TLS.KeyFile)
 	}
+	fmt.Fprintf(&b, "ca.cert_file: %s\n", cfg.CA.CertFile)
+	if cfg.CA.PublicCertFile != "" {
+		fmt.Fprintf(&b, "ca.public_cert_file: %s\n", cfg.CA.PublicCertFile)
+	}
 	fmt.Fprintf(&b, "postgres.mode: %s\n", cfg.Postgres.Mode)
 	if cfg.Postgres.Mode == config.PostgresExternal {
 		fmt.Fprintf(&b, "postgres.dsn: %s\n", redact(cfg.Postgres.DSN))

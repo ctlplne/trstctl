@@ -714,7 +714,7 @@ func TestScheduledRestoreDrillRestoresFullDeliveredSetAndRecoveredRuntime(t *tes
 	}
 	assertNoSourceTreeSignerAuthSecret(t, "starting the source signer")
 	provisioner := &Server{signAuthz: signerRuntime.tokenProvider}
-	if err := provisioner.provisionCA(ctx, signerRuntime.signer.Client(), "Drill Source CA", cfg.CA.CertFile); err != nil {
+	if err := provisioner.provisionCA(ctx, signerRuntime.signer.Client(), "Drill Source CA", cfg.CA.CertFile, cfg.CA.PublicCertFile); err != nil {
 		signerRuntime.Close()
 		t.Fatalf("provision source CA: %v", err)
 	}

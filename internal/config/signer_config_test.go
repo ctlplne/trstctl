@@ -29,6 +29,22 @@ func TestSignerDefaultsToChild(t *testing.T) {
 	}
 }
 
+func TestCAPublicCertificateMirrorEnv(t *testing.T) {
+	const publicPath = "/public-trust/issuing-ca.crt"
+	c, err := config.Load(func(key string) string {
+		if key == "TRSTCTL_CA_PUBLIC_CERT_FILE" {
+			return publicPath
+		}
+		return ""
+	})
+	if err != nil {
+		t.Fatalf("load CA public certificate mirror env: %v", err)
+	}
+	if c.CA.PublicCertFile != publicPath {
+		t.Fatalf("ca.public_cert_file = %q, want %q", c.CA.PublicCertFile, publicPath)
+	}
+}
+
 // TestSignerExternalRequiresSocket: an external signer needs a socket; a bogus
 // mode fails fast.
 func TestSignerExternalRequiresSocket(t *testing.T) {

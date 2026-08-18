@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"trstctl.com/trstctl/internal/agent/enroll"
 	"trstctl.com/trstctl/internal/aimodel"
 	"trstctl.com/trstctl/internal/api"
@@ -207,7 +209,8 @@ type Deps struct {
 	LicensedSPIFFESVIDFactory LicensedSPIFFESVIDFactory
 	SignTimeout               time.Duration // per-issuance signer deadline (slow → fail closed)
 	CACommonName              string
-	CACertFile                string             // persisted issuing-CA cert path; reused across restarts so the CA is stable (R3.2)
+	CACertFile                string             // authoritative persisted issuing-CA cert path; reused across restarts so the CA is stable (R3.2)
+	CAPublicCertFile          string             // optional certificate-only mirror for clients outside the private data volume
 	LeafProfile               crypto.LeafProfile // served-leaf RFC 5280/BR profile: CDP/AIA/policy + constraints (PKIGOV-001/002)
 	DefaultProfile            string             // certificate-profile name enforced on the served mint when it resolves (PKIGOV-002); empty = none
 	// PolicyModule is the OPA/Rego policy document gating the served issue/deploy/
@@ -1530,7 +1533,7 @@ func (s *Server) provisionIssuingCA(ctx context.Context, d Deps) error {
 		return nil
 	}
 	return d.Store.WithCAProvisionLock(ctx, func(ctx context.Context) error {
-		if err := s.provisionCA(ctx, d.Signer.Client(), d.CACommonName, d.CACertFile); err != nil {
+		if err := s.provisionCA(ctx, d.Signer.Client(), d.CACommonName, d.CACertFile, d.CAPublicCertFile); err != nil {
 			return fmt.Errorf("server: provision CA in signer: %w", err)
 		}
 		return nil
@@ -2043,24 +2046,49 @@ var errPrivilegedSignerAuthorizationRequired = errors.New("server: privileged si
 // across restarts (R3.2): if a persisted CA cert exists at caCertFile AND the
 // signer still holds the CA key, both are reused. Otherwise it generates the key
 // under the fixed handle, self-signs, and persists the cert for future boots.
-func (s *Server) provisionCA(ctx context.Context, c *signing.Client, cn, caCertFile string) error {
+// When caPublicCertFile is set, the exact public certificate is also published
+// there so a less-privileged client need not mount the private data volume.
+func (s *Server) provisionCA(ctx context.Context, c *signing.Client, cn, caCertFile, caPublicCertFile string) error {
 	if cn == "" {
 		cn = "trstctl Issuing CA"
 	}
 
-	// Reuse path: persisted cert + a signer that still has the CA key. Bind the
-	// reloaded key to the CA-signing purpose so the signer's persisted
-	// per-key constraint (SIGNER-002/003) is satisfied across a restart.
+	// Read public state before inspecting or generating the key. Malformed state
+	// may be operator-recoverable, so never overwrite it and hide the damage.
+	var persistedDER []byte
 	if caCertFile != "" {
-		if pemBytes, err := os.ReadFile(caCertFile); err == nil { // #nosec G304 -- operator-configured local file path from deployment config (CWE-22)
-			if blk, _ := pem.Decode(pemBytes); blk != nil && blk.Type == "CERTIFICATE" {
-				if remote, herr := s.signerForPrivilegedHandle(ctx, c, issuingCAHandle, signing.PurposeCASign); herr == nil {
-					s.caSigner = remote
-					s.caCertDER = blk.Bytes
-					return nil
-				}
+		pemBytes, err := os.ReadFile(caCertFile) // #nosec G304 -- operator-configured local file path from deployment config (CWE-22)
+		if err == nil {
+			blk, rest := pem.Decode(pemBytes)
+			if blk == nil || blk.Type != "CERTIFICATE" || len(rest) != 0 {
+				return fmt.Errorf("issuing CA certificate %q is invalid; refusing to overwrite it: restore the certificate that matches signer handle %q", caCertFile, issuingCAHandle)
 			}
+			persistedDER = blk.Bytes
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("read issuing CA certificate %q: %w", caCertFile, err)
 		}
+	}
+
+	// Reuse path: persisted cert + a signer that still has the exact CA key. Bind
+	// the reloaded key to the CA-signing purpose so the signer's persisted per-key
+	// constraint (SIGNER-002/003) is satisfied across a restart.
+	remote, handleErr := s.signerForPrivilegedHandle(ctx, c, issuingCAHandle, signing.PurposeCASign)
+	if handleErr == nil && len(persistedDER) > 0 {
+		if err := crypto.VerifyCertificateSigner(persistedDER, remote.Public()); err != nil {
+			return fmt.Errorf("issuing CA certificate %q does not match signer handle %q; refusing trust rotation: %w", caCertFile, issuingCAHandle, err)
+		}
+		s.caSigner = remote
+		s.caCertDER = persistedDER
+		return publishCAPublicCert(caCertFile, caPublicCertFile, persistedDER)
+	}
+	if handleErr != nil && status.Code(handleErr) != codes.NotFound {
+		return fmt.Errorf("inspect signer-held issuing CA handle %q: %w", issuingCAHandle, handleErr)
+	}
+	if handleErr == nil {
+		return fmt.Errorf("signer handle %q exists but issuing CA certificate %q is missing; refusing implicit trust replacement: restore the certificate or perform an explicit CA rotation", issuingCAHandle, caCertFile)
+	}
+	if len(persistedDER) > 0 {
+		return fmt.Errorf("issuing CA certificate %q exists but signer handle %q is missing; refusing to generate a replacement key: restore signer custody or perform an explicit CA rotation", caCertFile, issuingCAHandle)
 	}
 
 	// Fresh path: generate the CA key under the fixed handle, bound to the
@@ -2083,6 +2111,16 @@ func (s *Server) provisionCA(ctx context.Context, c *signing.Client, cn, caCertF
 		if err := writeCertPEM(caCertFile, caDER); err != nil {
 			return fmt.Errorf("persist CA cert: %w", err)
 		}
+	}
+	return publishCAPublicCert(caCertFile, caPublicCertFile, caDER)
+}
+
+func publishCAPublicCert(caCertFile, caPublicCertFile string, caDER []byte) error {
+	if caPublicCertFile == "" || (caCertFile != "" && filepath.Clean(caPublicCertFile) == filepath.Clean(caCertFile)) {
+		return nil
+	}
+	if err := writeCertPEM(caPublicCertFile, caDER); err != nil {
+		return fmt.Errorf("publish public CA cert: %w", err)
 	}
 	return nil
 }

@@ -1363,6 +1363,7 @@ two ways:
 | `TRSTCTL_SIGNER_MTLS_PEER_CA_FILE` | — | PEM CA bundle anchoring the **signer's** certificate. Required with `…_MTLS_ADDRESS`. |
 | `TRSTCTL_SIGNER_MTLS_PEER_PIN` | — | Hex SHA-256 of the **signer** certificate's public key, pinned by the control plane. Required with `…_MTLS_ADDRESS`. |
 | `TRSTCTL_CA_CERT_FILE` | `data/ca/issuing-ca.crt` | Where the issuing CA's self-signed certificate is persisted, so the control plane **reuses the same CA cert** across restarts. |
+| `TRSTCTL_CA_PUBLIC_CERT_FILE` | — | Optional certificate-only mirror of the issuing CA. Use this to give an unprivileged bootstrap client the public trust anchor without mounting the private control-plane data volume. The control plane republishes it from `TRSTCTL_CA_CERT_FILE` on every successful CA bind. |
 
 In Helm deployments, the signer key store uses local KEK custody by default:
 `kek.existingSecret` or eval-only `kek.generate=true` mounts

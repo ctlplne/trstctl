@@ -66,7 +66,7 @@ func TestProvisionCAUsesDualControlSignerHandle(t *testing.T) {
 	client := serveSignerWithAuthorizer(t, authz)
 	s := &Server{signAuthz: authz}
 	ctx := context.Background()
-	if err := s.provisionCA(ctx, client, "trstctl Test Issuing CA", ""); err != nil {
+	if err := s.provisionCA(ctx, client, "trstctl Test Issuing CA", "", ""); err != nil {
 		t.Fatalf("provisionCA: %v", err)
 	}
 	if s.caSigner == nil || len(s.caCertDER) == 0 {
@@ -105,7 +105,7 @@ func TestProvisionCAUsesSignerAuthTokenCommand(t *testing.T) {
 	script := signerTokenHelperCommand(t, secret)
 	s := &Server{signAuthz: newSignTokenCommand(script)}
 
-	if err := s.provisionCA(context.Background(), client, "trstctl Test Issuing CA", ""); err != nil {
+	if err := s.provisionCA(context.Background(), client, "trstctl Test Issuing CA", "", ""); err != nil {
 		t.Fatalf("provisionCA with signer token command: %v", err)
 	}
 	if s.caSigner == nil || len(s.caCertDER) == 0 {

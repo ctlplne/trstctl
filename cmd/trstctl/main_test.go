@@ -417,6 +417,24 @@ func TestRun_CheckConfigAgentChannel(t *testing.T) {
 	}
 }
 
+func TestRun_CheckConfigShowsCAPublicCertificateMirror(t *testing.T) {
+	env := envFunc(map[string]string{
+		"TRSTCTL_CA_PUBLIC_CERT_FILE": "/public-trust/issuing-ca.crt",
+	})
+	var stdout, stderr bytes.Buffer
+	if err := run(context.Background(), []string{"--check-config"}, env, &stdout, &stderr); err != nil {
+		t.Fatalf("run(--check-config, CA public mirror) returned error: %v", err)
+	}
+	for _, want := range []string{
+		"ca.cert_file: data/ca/issuing-ca.crt",
+		"ca.public_cert_file: /public-trust/issuing-ca.crt",
+	} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Errorf("check-config output %q missing %q", stdout.String(), want)
+		}
+	}
+}
+
 // TestRun_InvalidConfigFailsFast encodes that an invalid configuration is
 // rejected before the control plane boots — external Postgres with no DSN must
 // be an error, not a silent fallback.

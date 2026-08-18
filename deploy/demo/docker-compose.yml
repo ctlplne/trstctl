@@ -208,7 +208,8 @@ services:
       # walkthrough runs; the old 168-hour window renewed 1h/7d rows as soon as
       # they were seeded and made preserved-volume convergence impossible.
       TRSTCTL_LIFECYCLE_RENEW_BEFORE: "5m"
-      TRSTCTL_CA_CERT_FILE: /public-trust/issuing-ca.crt
+      TRSTCTL_CA_CERT_FILE: /data/ca/issuing-ca.crt
+      TRSTCTL_CA_PUBLIC_CERT_FILE: /public-trust/issuing-ca.crt
       TRSTCTL_AUTH_OIDC_ENABLED: "true"
       TRSTCTL_AUTH_OIDC_ISSUER: "http://127.0.0.1:19081"
       TRSTCTL_AUTH_OIDC_CLIENT_ID: trstctl-demo-ui

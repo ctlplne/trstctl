@@ -57,6 +57,118 @@ func TestProvisionCAStableAcrossSignerRestart(t *testing.T) {
 	}
 }
 
+// TestProvisionCAPublishesMirrorAfterUpgrade reproduces the demo upgrade that
+// first introduced a separate public-trust volume. The old persistent data
+// volume still owns the authoritative certificate and the signer still owns its
+// key, while the new public volume begins empty. Boot must bind the retained
+// pair and publish the public copy; it must not try to generate a duplicate key.
+func TestProvisionCAPublishesMirrorAfterUpgrade(t *testing.T) {
+	dir := t.TempDir()
+	kekW, err := kek.LoadOrCreate(filepath.Join(dir, "kek.bin"))
+	if err != nil {
+		t.Fatalf("LoadOrCreate KEK: %v", err)
+	}
+	defer kekW.Destroy()
+	keysDir := filepath.Join(dir, "keys")
+	socketDir, err := os.MkdirTemp("", "ts-ca-mirror-")
+	if err != nil {
+		t.Fatalf("create short temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(socketDir) }()
+	socket := filepath.Join(socketDir, "s.sock")
+	caCertFile := filepath.Join(dir, "private-data", "issuing-ca.crt")
+	publicCertFile := filepath.Join(dir, "public-trust", "issuing-ca.crt")
+
+	certBefore := provisionOnce(t, keysDir, kekW, socket, caCertFile, "")
+	if _, err := os.Stat(publicCertFile); !os.IsNotExist(err) {
+		t.Fatalf("public mirror unexpectedly existed before upgrade: %v", err)
+	}
+	certAfter := provisionOnce(t, keysDir, kekW, socket, caCertFile, publicCertFile)
+
+	if !bytes.Equal(certBefore, certAfter) {
+		t.Fatal("publishing the public mirror rotated the issuing CA")
+	}
+	authoritative, err := os.ReadFile(caCertFile) // #nosec G304 -- test-owned path verifies upgrade custody
+	if err != nil {
+		t.Fatalf("read authoritative CA certificate: %v", err)
+	}
+	public, err := os.ReadFile(publicCertFile) // #nosec G304 -- test-owned path verifies public mirror
+	if err != nil {
+		t.Fatalf("read public CA certificate mirror: %v", err)
+	}
+	if !bytes.Equal(authoritative, public) {
+		t.Fatal("public CA certificate mirror does not exactly match the authoritative certificate")
+	}
+}
+
+func TestProvisionCARefusesIncompleteOrMismatchedCustody(t *testing.T) {
+	t.Run("retained key without authoritative certificate", func(t *testing.T) {
+		dir := t.TempDir()
+		kekW, err := kek.LoadOrCreate(filepath.Join(dir, "kek.bin"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer kekW.Destroy()
+		keysDir := filepath.Join(dir, "keys")
+		socketDir, err := os.MkdirTemp("", "ts-ca-missing-")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = os.RemoveAll(socketDir) }()
+		socket := filepath.Join(socketDir, "s.sock")
+		caCertFile := filepath.Join(dir, "private-data", "issuing-ca.crt")
+		publicCertFile := filepath.Join(dir, "public-trust", "issuing-ca.crt")
+		_ = provisionOnce(t, keysDir, kekW, socket, caCertFile)
+		if err := os.Remove(caCertFile); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = provisionAttempt(t, keysDir, kekW, socket, caCertFile, publicCertFile)
+		if err == nil || !strings.Contains(err.Error(), "exists") || !strings.Contains(err.Error(), "refusing implicit trust replacement") {
+			t.Fatalf("missing authoritative certificate error = %v, want fail-closed retained-key refusal", err)
+		}
+		if _, statErr := os.Stat(publicCertFile); !os.IsNotExist(statErr) {
+			t.Fatalf("public mirror was published from incomplete custody: %v", statErr)
+		}
+	})
+
+	t.Run("certificate for another key", func(t *testing.T) {
+		dir := t.TempDir()
+		kekW, err := kek.LoadOrCreate(filepath.Join(dir, "kek.bin"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer kekW.Destroy()
+		keysDir := filepath.Join(dir, "keys")
+		socketDir, err := os.MkdirTemp("", "ts-ca-mismatch-")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = os.RemoveAll(socketDir) }()
+		socket := filepath.Join(socketDir, "s.sock")
+		caCertFile := filepath.Join(dir, "private-data", "issuing-ca.crt")
+		_ = provisionOnce(t, keysDir, kekW, socket, caCertFile)
+
+		other, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer other.Destroy()
+		mismatchedDER, err := crypto.SelfSignedCACert(other, "Unrelated CA", 24*time.Hour)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := writeCertPEM(caCertFile, mismatchedDER); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = provisionAttempt(t, keysDir, kekW, socket, caCertFile, "")
+		if err == nil || !strings.Contains(err.Error(), "does not match") || !strings.Contains(err.Error(), "refusing trust rotation") {
+			t.Fatalf("mismatched issuing CA error = %v, want fail-closed key/certificate refusal", err)
+		}
+	})
+}
+
 // TestProvisionAgentCARecoversMissingCertificateFromPersistedHandle is the
 // AUD-100 pre-fix container-recreation shape. The public certificate used to be
 // written into the disposable container layer while the private key correctly
@@ -165,7 +277,20 @@ func TestProvisionAgentCARefusesMalformedOrMismatchedCertificate(t *testing.T) {
 // socket, has a control-plane Server provision the issuing CA against it, and
 // returns the CA certificate PEM. The signer is stopped before returning, so the
 // next call is a genuine restart over the same persisted keys.
-func provisionOnce(t *testing.T, keysDir string, kekW *seal.LocalKEK, socket, caCertFile string) []byte {
+func provisionOnce(t *testing.T, keysDir string, kekW *seal.LocalKEK, socket, caCertFile string, caPublicCertFile ...string) []byte {
+	t.Helper()
+	publicCertFile := ""
+	if len(caPublicCertFile) > 0 {
+		publicCertFile = caPublicCertFile[0]
+	}
+	cert, err := provisionAttempt(t, keysDir, kekW, socket, caCertFile, publicCertFile)
+	if err != nil {
+		t.Fatalf("provisionCA: %v", err)
+	}
+	return cert
+}
+
+func provisionAttempt(t *testing.T, keysDir string, kekW *seal.LocalKEK, socket, caCertFile, caPublicCertFile string) ([]byte, error) {
 	t.Helper()
 	ks := signing.NewKeyStore(keysDir, kekW)
 	authz, err := crypto.NewSignAuthorizer(bytes.Repeat([]byte{0x5A}, 32))
@@ -187,15 +312,15 @@ func provisionOnce(t *testing.T, keysDir string, kekW *seal.LocalKEK, socket, ca
 
 	client, err := signing.DialReady(context.Background(), socket, 10*time.Second)
 	if err != nil {
-		t.Fatalf("dial signer: %v", err)
+		return nil, fmt.Errorf("dial signer: %w", err)
 	}
 	defer func() { _ = client.Close() }()
 
 	s := &Server{signAuthz: authz}
-	if err := s.provisionCA(ctx, client, "", caCertFile); err != nil {
-		t.Fatalf("provisionCA: %v", err)
+	if err := s.provisionCA(ctx, client, "", caCertFile, caPublicCertFile); err != nil {
+		return nil, err
 	}
-	return s.CACertPEM()
+	return s.CACertPEM(), nil
 }
 
 func provisionAgentOnce(t *testing.T, keysDir string, kekW *seal.LocalKEK, socket, caCertFile string) []byte {

@@ -99,8 +99,12 @@ signer or create a second credential-encryption key: `docker compose run` gives 
 the running deployment's signer socket plus read-only views of the deployment KEK
 and signer authorization secret. It receives only certificate material through a
 separate public-trust volume; it cannot read the control plane's private data
-volume. A separate admin service would only duplicate that security-sensitive
-wiring.
+volume. The authoritative issuing certificate remains at its historical
+`/data/ca/issuing-ca.crt` path beside the preserved deployment state, and the
+control plane publishes an exact certificate-only copy to public trust after it
+successfully rebinds that certificate to the signer-held key. This keeps upgrades
+stable without exposing `/data`. A separate admin service would only duplicate
+that security-sensitive wiring.
 
 Run the assembled custody proof from the repository root:
 

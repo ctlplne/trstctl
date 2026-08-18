@@ -76,7 +76,8 @@ func TestDemoComposeIsSeparatePrepopulatedStack(t *testing.T) {
 	}
 	for k, want := range map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE":               "/data/ca/agent-ca.crt",
-		"TRSTCTL_CA_CERT_FILE":                             "/public-trust/issuing-ca.crt",
+		"TRSTCTL_CA_CERT_FILE":                             "/data/ca/issuing-ca.crt",
+		"TRSTCTL_CA_PUBLIC_CERT_FILE":                      "/public-trust/issuing-ca.crt",
 		"TRSTCTL_AUTH_OIDC_ENABLED":                        "true",
 		"TRSTCTL_AUTH_OIDC_REDIRECT_URI":                   "https://localhost:9443/auth/callback",
 		"TRSTCTL_AUTH_OIDC_AUTH_ENDPOINT":                  "http://127.0.0.1:19081/authorize",
