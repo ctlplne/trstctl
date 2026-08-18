@@ -402,7 +402,11 @@ done
 							"image":   image,
 							"command": []any{"/bin/sh", "-c"},
 							"args": []any{
-								"set -eu; mkdir -p /var/lib/trstctl-agent; chown 65532:65532 /var/lib/trstctl-agent; chmod 700 /var/lib/trstctl-agent",
+								// Temporarily take ownership before setting the mode, then
+								// hand the directory to the agent. This is idempotent when
+								// the hostPath persists across pod replacement. The init
+								// container deliberately keeps CHOWN but not FOWNER.
+								"set -eu; mkdir -p /var/lib/trstctl-agent; chown 0:0 /var/lib/trstctl-agent; chmod 700 /var/lib/trstctl-agent; chown 65532:65532 /var/lib/trstctl-agent",
 							},
 							"volumeMounts": []any{
 								map[string]any{"name": "identity", "mountPath": "/var/lib/trstctl-agent"},
