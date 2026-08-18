@@ -719,8 +719,12 @@ describe("i18n boundary", () => {
       // QA g35 login-truth re-pin: two keys replace the broken SSO action on
       // OIDC-disabled installs with explicit setup/API-token guidance.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "5f0519ad95d4ed0f385e1a0838033e1a8dbe2816aedccdd05db6805301cbe29a",
-      "de-DE": "b13ff00241638fcff238abbdf3c55ead5877bb7d62b352b38f53ad845885d2ec",
+      // QA g57 unavailable-state re-pin: three strings that were previously
+      // hard-coded now use typed keys for privileged access, MCP tools, and
+      // the external-CA registry. Machine-authored es/de — FLAGGED FOR HUMAN
+      // TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "ded72dcebf8fb14fec224121f9b109ed8ac25bbcced493e400ddaedf73352a42",
+      "de-DE": "0f9412a62969be4f68b2c9f29ff2f9f6057105efa2cca09e78f283f5f9a3a137",
     });
   });
 

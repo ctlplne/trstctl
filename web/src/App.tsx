@@ -33,7 +33,7 @@ const Profiles = lazyPage(() => import("@/pages/Profiles"), "Profiles");
 const Audit = lazyPage(() => import("@/pages/Audit"), "Audit");
 const Graph = lazyPage(() => import("@/pages/Graph"), "Graph");
 const Migration = lazyPage(() => import("@/pages/Migration"), "Migration");
-const AdminAccess = lazyPage(() => import("@/pages/Platform"), "AdminAccess");
+const AdminAccess = lazyPage(() => import("@/pages/AdminAccess"), "AdminAccess");
 const AdminEditions = lazyPage(() => import("@/pages/Platform"), "AdminEditions");
 const AdminSystem = lazyPage(() => import("@/pages/Platform"), "AdminSystem");
 const PlatformRedirect = lazyPage(() => import("@/pages/Platform"), "PlatformRedirect");

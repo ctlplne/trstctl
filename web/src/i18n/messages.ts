@@ -32,6 +32,14 @@ export const messages = {
     defaultMessage: "Skip to main content",
     description: "Keyboard skip-link label.",
   },
+  "admin.access.pamUnavailableTitle": {
+    defaultMessage: "Privileged access sessions are unavailable",
+    description: "Unavailable-state heading when privileged access sessions cannot be loaded.",
+  },
+  "assistant.toolsUnavailableTitle": {
+    defaultMessage: "MCP tools are unavailable",
+    description: "Unavailable-state heading when the assistant cannot load its MCP tool catalog.",
+  },
   "credentialChip.copy": {
     defaultMessage: "Copy {label}",
     description: "Accessible label for the copy button on a credential chip; label names the identifier kind (e.g. serial number).",
@@ -59,6 +67,10 @@ export const messages = {
   "caHierarchy.workspace.label": {
     defaultMessage: "CA hierarchy workspaces",
     description: "Accessible label for the task-oriented CA hierarchy workspace tabs.",
+  },
+  "caHierarchy.externalRegistryUnavailableTitle": {
+    defaultMessage: "External CA registry is unavailable",
+    description: "Unavailable-state heading when external certificate authority entries cannot be loaded.",
   },
   "caHierarchy.workspace.tabs.overview": {
     defaultMessage: "Overview",

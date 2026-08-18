@@ -15,6 +15,8 @@ const deDECatalog = {
   "auth.browserLoginDisabled.body":
     "Diese Steuerungsebene läuft, aber Browser-SSO ist deaktiviert. Konfigurieren Sie Browser-SSO und laden Sie die Seite neu, oder verwenden Sie ein bereichsbeschränktes API-Token mit trstctl-cli.",
   "auth.browserLoginDisabled.title": "Browser-Anmeldung ist nicht konfiguriert",
+  "admin.access.pamUnavailableTitle": "Sitzungen mit privilegiertem Zugriff sind nicht verfügbar",
+  "assistant.toolsUnavailableTitle": "MCP-Werkzeuge sind nicht verfügbar",
   "platform.dr.history.title": "Signierter Übungsverlauf",
   "platform.dr.history.aria": "Verlauf signierter Wiederherstellungsübungen",
   "platform.dr.history.completed": "Abgeschlossen",
@@ -32,6 +34,7 @@ const deDECatalog = {
   "graph.view.resetView": "Ansicht zurücksetzen",
   "graph.explorer.delegatedHint": "Ergebnisse werden auf der Karte unten dargestellt und in der Analyseleiste detailliert.",
   "caHierarchy.workspace.label": "Arbeitsbereiche der CA-Hierarchie",
+  "caHierarchy.externalRegistryUnavailableTitle": "Das Register externer Zertifizierungsstellen ist nicht verfügbar",
   "caHierarchy.workspace.tabs.overview": "Übersicht",
   "caHierarchy.workspace.tabs.authorities": "Zertifizierungsstellen",
   "caHierarchy.workspace.tabs.lifecycle": "Lebenszyklus",

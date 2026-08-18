@@ -842,7 +842,7 @@ export function CAHierarchy() {
           managedKey={managedKey}
           onOpen={selectTab}
         />
-        {externalCAError && <UnavailableState title="External CA registry is unavailable">{externalCAError}</UnavailableState>}
+        {externalCAError && <UnavailableState title={t("caHierarchy.externalRegistryUnavailableTitle")}>{externalCAError}</UnavailableState>}
       </div>
 
       <div className={tab === "overview" ? undefined : "hidden"}>

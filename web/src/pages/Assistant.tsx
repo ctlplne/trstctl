@@ -351,7 +351,7 @@ export function Assistant() {
       />
       <AssistantRuntimeDisclosure status={runtime.data} error={runtime.error} loading={runtime.loading} />
       {tools.errorCause != null && (
-        <UnavailableState title="MCP tools are unavailable">{apiProblemMessage(tools.errorCause, "Could not load MCP tools")}</UnavailableState>
+        <UnavailableState title={t("assistant.toolsUnavailableTitle")}>{apiProblemMessage(tools.errorCause, "Could not load MCP tools")}</UnavailableState>
       )}
 
       <div className="mb-5 flex flex-wrap gap-2" role="group" aria-label={translateNow("source.assistant.workflow.8962351a8a")}>

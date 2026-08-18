@@ -11,6 +11,8 @@ const esESCatalog = {
   "auth.browserLoginDisabled.body":
     "Este plano de control está en ejecución, pero el SSO del navegador está desactivado. Configure el SSO del navegador y vuelva a cargar, o use un token de API con ámbito con trstctl-cli.",
   "auth.browserLoginDisabled.title": "El inicio de sesión en el navegador no está configurado",
+  "admin.access.pamUnavailableTitle": "Las sesiones de acceso privilegiado no están disponibles",
+  "assistant.toolsUnavailableTitle": "Las herramientas MCP no están disponibles",
   "platform.dr.history.title": "Historial de simulacros firmados",
   "platform.dr.history.aria": "Historial de simulacros de restauración firmados",
   "platform.dr.history.completed": "Completado",
@@ -28,6 +30,7 @@ const esESCatalog = {
   "graph.view.resetView": "Restablecer vista",
   "graph.explorer.delegatedHint": "Los resultados se pintan en el mapa inferior y se detallan en el panel de análisis.",
   "caHierarchy.workspace.label": "Espacios de trabajo de la jerarquía de CA",
+  "caHierarchy.externalRegistryUnavailableTitle": "El registro de CA externas no está disponible",
   "caHierarchy.workspace.tabs.overview": "Resumen",
   "caHierarchy.workspace.tabs.authorities": "Autoridades",
   "caHierarchy.workspace.tabs.lifecycle": "Ciclo de vida",
