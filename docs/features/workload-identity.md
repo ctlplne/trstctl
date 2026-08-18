@@ -101,6 +101,7 @@ UpstreamAuthority "trstctl" {
   plugin_cmd = "/opt/spire/plugins/trstctl-spire-upstream-authority"
   plugin_data {
     endpoint = "https://trstctl.example.com:8443"
+    ca_bundle_file = "/run/secrets/trstctl-server-ca.pem"
     ca_authority_id = "11111111-1111-1111-1111-111111111111"
     token_file = "/run/secrets/trstctl-spire-token"
     common_name = "SPIRE Server CA"
@@ -109,6 +110,12 @@ UpstreamAuthority "trstctl" {
   }
 }
 ```
+
+For trstctl's default private/internal TLS, mount its published certificate-only
+trust file at `ca_bundle_file`. The plugin pins that bundle for this upstream HTTPS
+connection only; it does not disable verification or modify SPIRE's process-wide
+trust store. Omit the field when the endpoint chains to a CA already trusted by the
+host.
 
 This is container-proven end to end: CI runs a real SPIRE server, loads the plugin,
 mints an X.509-SVID, and verifies the chain as workload leaf -> SPIRE intermediate ->

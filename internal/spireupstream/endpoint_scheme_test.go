@@ -61,6 +61,22 @@ func TestUpstreamEndpointAllowsHTTPSAndLoopback(t *testing.T) {
 	}
 }
 
+func TestCABundleRequiresHTTPS(t *testing.T) {
+	tokenFile := filepath.Join(t.TempDir(), "token")
+	if err := os.WriteFile(tokenFile, []byte("test-token"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c := &Config{
+		Endpoint:      "http://127.0.0.1:8080",
+		CABundleFile:  "/run/secrets/trstctl-ca.pem",
+		CAAuthorityID: "ca-1",
+		TokenFile:     tokenFile,
+	}
+	if err := c.validate(); err == nil || !strings.Contains(err.Error(), "requires an https endpoint") {
+		t.Fatalf("plaintext endpoint with ca_bundle_file error = %v, want explicit HTTPS refusal", err)
+	}
+}
+
 // TestIsLoopbackHostRejectsLookalikes pins the shared predicate (J4/V26): a
 // hostname that merely mentions localhost is not loopback.
 func TestIsLoopbackHostRejectsLookalikes(t *testing.T) {

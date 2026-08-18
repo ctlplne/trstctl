@@ -171,6 +171,7 @@ needs access, and gets a pass (an SVID) that expires in minutes.
      plugin_cmd = "/opt/spire/plugins/trstctl-spire-upstream-authority"
      plugin_data {
        endpoint = "https://trstctl:8443"
+       ca_bundle_file = "/run/secrets/trstctl-server-ca.pem"
        ca_authority_id = "<ca-authority-id>"
        token_file = "/run/secrets/trstctl-spire-token"
        common_name = "SPIRE Server CA"

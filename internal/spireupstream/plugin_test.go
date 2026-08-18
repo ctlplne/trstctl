@@ -55,7 +55,7 @@ func TestPluginMintX509CAAndSubscribeCallsServedTrstctlPath(t *testing.T) {
 	var seenTTL float64
 	var seenAuth string
 	var seenIdem string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/ca/authorities/root-1/intermediates/csr" {
 			t.Fatalf("unexpected trstctl request %s %s", r.Method, r.URL.Path)
 		}
@@ -80,10 +80,15 @@ func TestPluginMintX509CAAndSubscribeCallsServedTrstctlPath(t *testing.T) {
 		})
 	}))
 	t.Cleanup(srv.Close)
+	caBundleFile := t.TempDir() + "/trstctl-ca.pem"
+	if err := os.WriteFile(caBundleFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: srv.Certificate().Raw}), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	p := New()
 	_, err = p.Configure(context.Background(), &configv1.ConfigureRequest{HclConfiguration: `
 endpoint = "` + srv.URL + `"
+ca_bundle_file = "` + caBundleFile + `"
 ca_authority_id = "root-1"
 token_file = "` + tokenFile + `"
 common_name = "SPIRE Server CA"

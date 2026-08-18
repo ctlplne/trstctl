@@ -23,6 +23,7 @@ import (
 	configv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/service/common/config/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/netsec"
 )
 
@@ -31,6 +32,7 @@ const defaultCommonName = "SPIRE Server CA"
 // Config is the HCL plugin_data consumed by SPIRE Server.
 type Config struct {
 	Endpoint            string   `hcl:"endpoint"`
+	CABundleFile        string   `hcl:"ca_bundle_file"`
 	CAAuthorityID       string   `hcl:"ca_authority_id"`
 	TokenFile           string   `hcl:"token_file"`
 	CommonName          string   `hcl:"common_name"`
@@ -69,8 +71,22 @@ func (p *Plugin) Configure(_ context.Context, req *configv1.ConfigureRequest) (*
 	if err := cfg.validate(); err != nil {
 		return nil, err
 	}
+	client := http.DefaultClient
+	if cfg.CABundleFile != "" {
+		caPEM, err := os.ReadFile(cfg.CABundleFile) // #nosec G304 -- operator-configured public CA bundle path
+		if err != nil {
+			return nil, status.Errorf(codes.FailedPrecondition, "read ca_bundle_file: %v", err)
+		}
+		transport, transportErr := mtls.HTTPTransport(caPEM)
+		zero(caPEM)
+		if transportErr != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "ca_bundle_file: %v", transportErr)
+		}
+		client = &http.Client{Transport: transport}
+	}
 	p.mu.Lock()
 	p.config = cfg
+	p.client = client
 	p.mu.Unlock()
 	return &configv1.ConfigureResponse{}, nil
 }
@@ -81,7 +97,7 @@ func (p *Plugin) MintX509CAAndSubscribe(req *upstreamauthorityv1.MintX509CAReque
 	if len(req.GetCsr()) == 0 {
 		return status.Error(codes.InvalidArgument, "CSR is required")
 	}
-	cfg, err := p.currentConfig()
+	cfg, client, err := p.currentConfig()
 	if err != nil {
 		return err
 	}
@@ -92,7 +108,7 @@ func (p *Plugin) MintX509CAAndSubscribe(req *upstreamauthorityv1.MintX509CAReque
 	if ttl <= 0 {
 		return status.Error(codes.InvalidArgument, "ttl_seconds must be configured or preferred_ttl must be positive")
 	}
-	certPEM, err := p.issueIntermediate(stream.Context(), cfg, req.GetCsr(), ttl)
+	certPEM, err := p.issueIntermediate(stream.Context(), cfg, client, req.GetCsr(), ttl)
 	if err != nil {
 		return err
 	}
@@ -121,7 +137,7 @@ func (p *Plugin) PublishJWTKeyAndSubscribe(*upstreamauthorityv1.PublishJWTKeyReq
 	return status.Error(codes.Unimplemented, "trstctl upstream authority publishes X.509 roots only")
 }
 
-func (p *Plugin) issueIntermediate(ctx context.Context, cfg *Config, csrDER []byte, ttl int64) ([]byte, error) {
+func (p *Plugin) issueIntermediate(ctx context.Context, cfg *Config, client *http.Client, csrDER []byte, ttl int64) ([]byte, error) {
 	token, err := readTokenFile(cfg.TokenFile)
 	if err != nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "read token file: %v", err)
@@ -159,7 +175,7 @@ func (p *Plugin) issueIntermediate(ctx context.Context, cfg *Config, csrDER []by
 	httpReq.Header.Set("Authorization", "Bearer "+string(token))
 	httpReq.Header.Set("Idempotency-Key", idempotencyKey(cfg, csrDER))
 
-	resp, err := p.httpClient().Do(httpReq)
+	resp, err := client.Do(httpReq)
 	if err != nil {
 		return nil, status.Errorf(codes.Unavailable, "call trstctl: %v", err)
 	}
@@ -183,23 +199,20 @@ func (p *Plugin) issueIntermediate(ctx context.Context, cfg *Config, csrDER []by
 	return []byte(issued.CertificatePEM), nil
 }
 
-func (p *Plugin) currentConfig() (*Config, error) {
+func (p *Plugin) currentConfig() (*Config, *http.Client, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	if p.config == nil {
-		return nil, status.Error(codes.FailedPrecondition, "plugin is not configured")
+		return nil, nil, status.Error(codes.FailedPrecondition, "plugin is not configured")
 	}
 	cp := *p.config
 	cp.PermittedDNSDomains = append([]string(nil), p.config.PermittedDNSDomains...)
 	cp.ExtendedKeyUsages = append([]string(nil), p.config.ExtendedKeyUsages...)
-	return &cp, nil
-}
-
-func (p *Plugin) httpClient() *http.Client {
-	if p.client != nil {
-		return p.client
+	client := p.client
+	if client == nil {
+		client = http.DefaultClient
 	}
-	return http.DefaultClient
+	return &cp, client, nil
 }
 
 func (c *Config) validate() error {
@@ -224,6 +237,10 @@ func (c *Config) validate() error {
 		}
 	default:
 		return status.Errorf(codes.InvalidArgument, "endpoint scheme %q is not supported", u.Scheme)
+	}
+	c.CABundleFile = strings.TrimSpace(c.CABundleFile)
+	if c.CABundleFile != "" && u.Scheme != "https" {
+		return status.Error(codes.InvalidArgument, "ca_bundle_file requires an https endpoint")
 	}
 	c.CAAuthorityID = strings.TrimSpace(c.CAAuthorityID)
 	if c.CAAuthorityID == "" {

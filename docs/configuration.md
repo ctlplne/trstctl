@@ -1635,6 +1635,7 @@ environment variables.
 | Field | Required | Meaning |
 | --- | --- | --- |
 | `endpoint` | yes | Base URL of the trstctl control plane, for example `https://trstctl.example.com:8443`. The plugin calls `/api/v1/ca/authorities/{id}/intermediates/csr`. |
+| `ca_bundle_file` | no | PEM CA bundle used only to verify the HTTPS trstctl endpoint. Set this to trstctl's published internal trust file for a self-signed/private deployment; omit it to use the host's normal trust store. Plain HTTP cannot use this field. |
 | `ca_authority_id` | yes | The trstctl CA authority that signs SPIRE's intermediate CA CSR. |
 | `token_file` | yes | File containing a trstctl API token with `certs:issue`. Mount it as a secret file readable only by the SPIRE server process. |
 | `common_name` | no | Subject common name for the SPIRE intermediate; defaults to `SPIRE Server CA`. |
@@ -1651,6 +1652,7 @@ UpstreamAuthority "trstctl" {
   plugin_cmd = "/opt/spire/plugins/trstctl-spire-upstream-authority"
   plugin_data {
     endpoint = "https://trstctl.example.com:8443"
+    ca_bundle_file = "/run/secrets/trstctl-server-ca.pem"
     ca_authority_id = "11111111-1111-1111-1111-111111111111"
     token_file = "/run/secrets/trstctl-spire-token"
     common_name = "SPIRE Server CA"

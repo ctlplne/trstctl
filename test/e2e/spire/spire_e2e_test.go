@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
 const spireServerSocket = "/tmp/spire-server/private/api.sock"
@@ -50,7 +51,7 @@ func TestSPIREServerMintsSVIDChainedToTrstctlUpstreamAuthority(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	trstctlHTTP, closeHTTP := serveFakeTrstctlIntermediateCSR(t, rootKey, root)
+	trstctlHTTP, trstctlTrustPEM, closeHTTP := serveFakeTrstctlIntermediateCSR(t, rootKey, root)
 	t.Cleanup(closeHTTP)
 
 	dir := t.TempDir()
@@ -61,10 +62,13 @@ func TestSPIREServerMintsSVIDChainedToTrstctlUpstreamAuthority(t *testing.T) {
 	pluginPath := filepath.Join(pluginDir, "trstctl-spire-upstream-authority")
 	buildPluginForDocker(t, ctx, pluginPath)
 	writeFile(t, filepath.Join(confDir, "trstctl-token"), []byte("e2e-token\n"), 0o600)
+	writeFile(t, filepath.Join(confDir, "trstctl-ca.pem"), trstctlTrustPEM, 0o600)
 	writeFile(t, filepath.Join(confDir, "server.conf"), []byte(spireServerConfig(trstctlHTTP)), 0o600)
 
 	name := "trstctl-spire-e2e-" + strings.ToLower(randomSuffix())
-	run(t, ctx, "docker", "run", "-d", "--rm",
+	// Keep an early-exiting container long enough for waitForSPIREServer to
+	// collect its logs. The cleanup below still removes the run-owned container.
+	run(t, ctx, "docker", "run", "-d",
 		"--name", name,
 		"--add-host", "host.docker.internal:host-gateway",
 		"-v", confDir+":/opt/spire/conf/server:ro",
@@ -115,7 +119,7 @@ func TestSPIREServerMintsSVIDChainedToTrstctlUpstreamAuthority(t *testing.T) {
 	}
 }
 
-func serveFakeTrstctlIntermediateCSR(t *testing.T, rootKey crypto.DigestSigner, root crypto.IssuedHierarchyCA) (string, func()) {
+func serveFakeTrstctlIntermediateCSR(t *testing.T, rootKey crypto.DigestSigner, root crypto.IssuedHierarchyCA) (string, []byte, func()) {
 	t.Helper()
 	ln, err := net.Listen("tcp", "0.0.0.0:0")
 	if err != nil {
@@ -171,7 +175,11 @@ func serveFakeTrstctlIntermediateCSR(t *testing.T, rootKey crypto.DigestSigner, 
 		})
 	})
 	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
-	go func() { _ = srv.Serve(ln) }()
+	serverCert, err := mtls.SelfSignedServerCert([]string{"host.docker.internal"}, 24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() { _ = serverCert.ServeHTTPS(srv, ln) }()
 	closeFn := func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -181,7 +189,7 @@ func serveFakeTrstctlIntermediateCSR(t *testing.T, rootKey crypto.DigestSigner, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	return "http://host.docker.internal:" + port, closeFn
+	return "https://host.docker.internal:" + port, append([]byte(nil), serverCert.TrustPEM...), closeFn
 }
 
 func buildPluginForDocker(t *testing.T, ctx context.Context, out string) {
@@ -240,6 +248,7 @@ plugins {
         plugin_cmd = "/opt/spire/plugins/trstctl-spire-upstream-authority"
         plugin_data {
             endpoint = %q
+            ca_bundle_file = "/opt/spire/conf/server/trstctl-ca.pem"
             ca_authority_id = "root-1"
             token_file = "/opt/spire/conf/server/trstctl-token"
             common_name = "SPIRE Server CA"
