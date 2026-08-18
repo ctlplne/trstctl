@@ -41,7 +41,18 @@ async function sanitizedResponse(response: Response): Promise<RouteReceipt["http
     status: response.status(),
   };
   if (response.headers()["content-type"]?.includes("application/problem+json")) {
-    const body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+    // A broken or streaming error response must not hold the entire route
+    // audit open forever. Preserve the status/path receipt immediately and
+    // give the optional problem body a small, explicit parsing budget.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const body = (await Promise.race([
+      response.json().catch(() => null),
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), 2_000);
+      }),
+    ]).finally(() => {
+      if (timer) clearTimeout(timer);
+    })) as Record<string, unknown> | null;
     if (body) {
       receipt.problem = {
         type: typeof body.type === "string" ? body.type : undefined,
