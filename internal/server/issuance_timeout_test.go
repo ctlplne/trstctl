@@ -79,3 +79,36 @@ func TestIssueLeafNoSignerFailsClosed(t *testing.T) {
 		t.Fatal("issuance with no out-of-process signer must fail closed, never sign in-process")
 	}
 }
+
+// TestIssueLeafRejectsAnExpiredServedIssuer is the credential-time boundary for
+// the primary served CA. An expired root or intermediate can still produce a
+// mathematically valid signature, but no relying party can build a valid chain
+// through it. Issuance must therefore stop before the signer is called instead
+// of returning a certificate that is dead on arrival.
+func TestIssueLeafRejectsAnExpiredServedIssuer(t *testing.T) {
+	caKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(caKey.Destroy)
+	caDER, err := crypto.SelfSignedCACert(caKey, "Expired Served CA", -time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	leafKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(leafKey.Destroy)
+	csrDER, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{CommonName: "expired-issuer.example"}, leafKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s := &Server{caSigner: caKey, caCertDER: caDER, signTO: time.Second}
+	if _, err := s.IssueLeaf(context.Background(), csrDER, time.Hour); err == nil {
+		t.Fatal("the served path issued a leaf after its CA expired")
+	} else if !strings.Contains(err.Error(), "issuing CA expired") {
+		t.Fatalf("expired issuer error = %v, want a precise fail-closed reason", err)
+	}
+}

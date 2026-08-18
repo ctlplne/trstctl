@@ -2220,6 +2220,10 @@ func (s *Server) IssueLeafWithProfile(ctx context.Context, csrDER []byte, ttl ti
 	if s.caSigner == nil || s.caCertDER == nil {
 		return nil, errors.New("server: issuance unavailable — no out-of-process signer (fail closed)")
 	}
+	// A mathematically valid signature from an expired CA is still an unusable
+	// credential. Make issuer-lifetime enforcement a property of the served
+	// boundary, not an optional profile knob that a caller can forget to set.
+	leafProfile.ClampTTLToIssuer = true
 	// The signer must be reachable and serving before we attempt to sign.
 	if s.signer != nil {
 		c := s.signer.Client()
@@ -2269,6 +2273,9 @@ func (s *Server) IssueLicensedLeafWithProfile(ctx context.Context, csrDER []byte
 	if s.caSigner == nil || s.caCertDER == nil {
 		return nil, errors.New("server: licensed issuance unavailable — no out-of-process signer (fail closed)")
 	}
+	// Licensed algorithms share the same issuer-time boundary as core issuance.
+	// The edition seam may change the leaf algorithm, never CA validity rules.
+	leafProfile.ClampTTLToIssuer = true
 	if s.licensedLeafSigner == nil {
 		return nil, errors.New("server: licensed issuance unavailable — no licensed signer extension (fail closed)")
 	}
