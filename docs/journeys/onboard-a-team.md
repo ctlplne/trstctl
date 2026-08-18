@@ -40,9 +40,18 @@ group on a shared trstctl deployment.
    data — see [Platform & API](../features/platform-and-api.md).
 
    ```sh
-   trstctl token create --tenant 22222222-2222-2222-2222-222222222222 --subject payments-team
-   # -> prints a trst_... token once. Store it now.
+   umask 077
+   docker compose -f deploy/docker/docker-compose.yml exec -T trstctl \
+     /usr/local/bin/trstctl token create \
+     --tenant 22222222-2222-2222-2222-222222222222 \
+     --subject payments-team > ./payments-team-api-token
+   export TRSTCTL_TOKEN="$(cat ./payments-team-api-token)"
+   # The trst_... token is shown once and the file is mode 0600 because of umask.
    ```
+
+   Outside Compose, run the same server command inside the control-plane custody
+   boundary with the deployed PostgreSQL/signer/audit configuration; never mint
+   from an unconfigured workstation binary.
 
    -> you have a credential confined to the new tenant; every CLI/API call with it acts
    only on that team's data.

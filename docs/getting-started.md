@@ -165,9 +165,11 @@ trstctl-agent --enroll-url https://localhost:8443 \
   --inventory-private-key-roots /etc/ssl/private,/etc/ssh
 ```
 
-If you recreate the Compose control-plane container before enrolling, capture
-the HTTPS eval certificate again and rebuild `./trstctl-ca.pem` — it is
-self-signed at boot. The agent CA persists in the `trstctldata` volume.
+Recreating or restarting the Compose control-plane container with the same
+`trstctldata` volume keeps both CA pins valid. Capture the HTTPS certificate
+again and rebuild `./trstctl-ca.pem` only after you replace/delete that volume
+or intentionally rotate the internal TLS identity. A missing volume is a new
+identity and must not inherit trust from the old one.
 
 The agent generates its key locally and enrolls with the token; **private
 keys never leave the host**. The three `--inventory-*` flags report,
@@ -195,10 +197,22 @@ straight to the datastore (no existing token required) and prints a
 tenant-scoped token once:
 
 ```bash
-# Pick any UUID as your tenant id (a single-tenant deployment uses one well-known id):
-trstctl token create --tenant 11111111-1111-1111-1111-111111111111 --subject ci-bot
-# -> prints a trst_... token on stdout. Store it now; it is shown only once.
+# Pick any UUID as your tenant id (a single-tenant deployment uses one well-known id).
+# Run the server binary inside the Compose custody boundary: its PostgreSQL service
+# is deliberately not exposed to the host.
+umask 077
+docker compose -f deploy/docker/docker-compose.yml exec -T trstctl \
+  /usr/local/bin/trstctl token create \
+  --tenant 11111111-1111-1111-1111-111111111111 \
+  --subject ci-bot > ./trstctl-api-token
+export TRSTCTL_BOOTSTRAP_TOKEN="$(cat ./trstctl-api-token)"
+# The trst_... token is printed once and the file is mode 0600 because of umask.
 ```
+
+For a non-Compose deployment, run `trstctl token create` on the control-plane
+host with the same PostgreSQL, signer, event-log, and audit configuration as the
+running service. Do not run an unconfigured local binary: it would bootstrap a
+different datastore.
 
 The token carries a full set of operator scopes deliberately excluding
 certificate issuance (`certs:issue`): a bootstrap credential can administer
@@ -216,12 +230,12 @@ split is described in [Policy & governance](features/policy-and-governance.md).
 
 ```bash
 export TRSTCTL_SERVER=https://localhost:8443
-export TRSTCTL_BOOTSTRAP_TOKEN=trst_...
 export TRSTCTL_TOKEN="$TRSTCTL_BOOTSTRAP_TOKEN"
 
 # The evaluation certificate is self-signed. Capture its public certificate,
 # compare this fingerprint with the one your browser accepted, then let the CLI
-# trust only that certificate. Re-capture it if the control-plane process restarts.
+# trust only that certificate. The pin survives a normal restart with the same
+# trstctldata volume; inspect a new pin after replacing the volume or rotating TLS.
 openssl s_client -connect localhost:8443 -servername localhost </dev/null 2>/dev/null \
   | openssl x509 -out trstctl-eval-ca.pem
 openssl x509 -in trstctl-eval-ca.pem -noout -fingerprint -sha256
@@ -229,7 +243,8 @@ export TRSTCTL_CA_FILE="$PWD/trstctl-eval-ca.pem"
 
 # The blank Compose stack selects PROFILE=eval. Activate the assembled responders
 # for this authenticated tenant before using their public protocol endpoints.
-curl -fksS -X POST "$TRSTCTL_SERVER/api/v1/setup/protocols/activate" \
+curl -fsS --cacert "$TRSTCTL_CA_FILE" \
+  -X POST "$TRSTCTL_SERVER/api/v1/setup/protocols/activate" \
   -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   -H "Idempotency-Key: first-run-eval-protocols"
 
@@ -246,6 +261,7 @@ cat > issuer-token.json <<'JSON'
 JSON
 trstctl-cli --idempotency-key first-cert-issuer-token access tokens create -f issuer-token.json > issuer-token-response.json
 export TRSTCTL_ISSUER_TOKEN="$(jq -r .token issuer-token-response.json)"
+rm -f issuer-token.json issuer-token-response.json
 
 # Transition to "issued" with the issuer token: the running outbox dispatcher
 # mints the certificate through the internal signer-backed CA.

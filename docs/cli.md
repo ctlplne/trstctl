@@ -343,6 +343,17 @@ network trust required) and prints a tenant-scoped token once:
 trstctl token create --tenant <uuid> [--subject <name>] [--scopes a,b,c] [--tenant-name <label>]
 ```
 
+For the shipped evaluation Compose stack, run that server binary inside the
+control-plane container so it reaches the Compose-only PostgreSQL service:
+
+```bash
+docker compose -f deploy/docker/docker-compose.yml exec -T trstctl \
+  /usr/local/bin/trstctl token create --tenant <uuid> --subject <name>
+```
+
+Running an unconfigured host binary can bootstrap a different local datastore;
+it does not recover the Compose deployment.
+
 - `--tenant` (required) is the UUID the token is scoped to. If it is new, the
   tenant is registered through the event log. If it already exists, the command
   first proves that the read model points to the exact retained

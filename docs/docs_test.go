@@ -2680,6 +2680,35 @@ func TestFirstCertDocBackedByRealIssuance(t *testing.T) {
 	}
 }
 
+// TestGettingStartedUsesComposeCustodyAndPersistentTrust keeps the copyable
+// first-use commands on the datastore and TLS identity the live stack actually
+// uses. A control-plane container restart is not a trust rotation when its data
+// volume survives.
+func TestGettingStartedUsesComposeCustodyAndPersistentTrust(t *testing.T) {
+	body := read(t, "getting-started.md")
+	normalized := strings.Join(strings.Fields(body), " ")
+	for _, want := range []string{
+		"docker compose -f deploy/docker/docker-compose.yml exec -T trstctl",
+		"/usr/local/bin/trstctl token create",
+		"--cacert \"$TRSTCTL_CA_FILE\"",
+		"with the same `trstctldata` volume keeps both CA pins valid",
+		"Do not run an unconfigured local binary",
+	} {
+		if !strings.Contains(normalized, want) {
+			t.Errorf("getting-started.md must preserve the live Compose custody/trust contract %q", want)
+		}
+	}
+	for _, stale := range []string{
+		"self-signed at boot",
+		"Re-capture it if the control-plane process restarts",
+		`curl -fksS -X POST "$TRSTCTL_SERVER/api/v1/setup/protocols/activate"`,
+	} {
+		if strings.Contains(body, stale) {
+			t.Errorf("getting-started.md still contains unsafe or false first-use guidance %q", stale)
+		}
+	}
+}
+
 // TestDesign001FirstCertificateDocsMatchServedRAGate keeps the first-certificate
 // copy aligned across docs, wizard, bootstrap tokens, and the served mutation gate.
 func TestDesign001FirstCertificateDocsMatchServedRAGate(t *testing.T) {

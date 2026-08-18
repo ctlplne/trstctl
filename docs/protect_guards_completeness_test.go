@@ -655,6 +655,7 @@ func TestJourney006Trace014ConsoleDisclosesLibraryGaps(t *testing.T) {
 		`"source.oidc.mapping.status.358515bade"`,
 		`"source.passive.read.state.model.projections.can.b.9f2d6a2da6"`,
 		"served worker",
+		`<UnavailableState title="Privileged access sessions are unavailable">{pamUnavailable}</UnavailableState>`,
 	)
 	requireAllContained(t, "JOURNEY-006/TRACE-014", "web/src/i18n/messages.ts", messages,
 		"Access administration",
@@ -662,8 +663,15 @@ func TestJourney006Trace014ConsoleDisclosesLibraryGaps(t *testing.T) {
 		"Passive-read-state model",
 		"one writable region per tenant",
 	)
-	if strings.Contains(platform, "UnavailableState") || strings.Contains(strings.ToLower(platform), "not served yet") {
-		t.Error("JOURNEY-006/TRACE-014: Platform should stay on served access-admin evidence, not unavailable-state copy")
+	// The access page remains a served surface, but its privileged-session
+	// request can independently return an exact problem response (for example,
+	// a deployment without that capability). One scoped disclosure is honest;
+	// replacing the whole page with a generic future-state panel is not.
+	if got := strings.Count(platform, "<UnavailableState"); got != 1 {
+		t.Errorf("JOURNEY-006/TRACE-014: Platform unavailable disclosures = %d, want exactly the scoped privileged-session disclosure", got)
+	}
+	if strings.Contains(strings.ToLower(platform), "not served yet") {
+		t.Error("JOURNEY-006/TRACE-014: Platform should name exact served or unavailable evidence, not generic future-state copy")
 	}
 
 	discovery := read(t, "../web/src/pages/Discovery.tsx")
