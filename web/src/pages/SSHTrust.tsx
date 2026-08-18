@@ -125,17 +125,19 @@ export function SSHTrust() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([api.sshStatus(), api.sshFleet()])
-      .then(([next, nextFleet]) => {
-        if (!cancelled) {
-          setStatus(next);
-          setFleet(nextFleet);
-          setError(null);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) setError(apiProblemMessage(err, "Could not load the SSH workflow"));
-      });
+    Promise.allSettled([api.sshStatus(), api.sshFleet()]).then(([statusResult, fleetResult]) => {
+      if (cancelled) return;
+
+      if (statusResult.status === "fulfilled") setStatus(statusResult.value);
+      if (fleetResult.status === "fulfilled") setFleet(fleetResult.value);
+
+      // The status response says whether SSH exists at all; the fleet response
+      // is secondary inventory. During overload both can fail, and Promise.all
+      // used to surface whichever network rejection won the race. That let a
+      // fleet 429 hide the more important "SSH workflow is not enabled" 503.
+      const failure = statusResult.status === "rejected" ? statusResult.reason : fleetResult.status === "rejected" ? fleetResult.reason : null;
+      setError(failure ? apiProblemMessage(failure, "Could not load the SSH workflow") : null);
+    });
     return () => {
       cancelled = true;
     };

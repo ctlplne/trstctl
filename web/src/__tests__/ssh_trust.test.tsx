@@ -154,6 +154,20 @@ describe("SSH trust served workflow surface", () => {
     expect(screen.getByText("ssh workflow is not enabled")).toBeInTheDocument();
   });
 
+  it("keeps the workflow reason when secondary fleet inventory is rate limited", async () => {
+    apiMock.sshStatus.mockRejectedValue(
+      new ApiError(503, JSON.stringify({ title: "Service Unavailable", status: 503, detail: "ssh workflow is not enabled" })),
+    );
+    apiMock.sshFleet.mockRejectedValue(
+      new ApiError(429, JSON.stringify({ title: "Too Many Requests", status: 429, detail: "rate limit exceeded for this tenant" }), 1),
+    );
+
+    renderSSHTrust();
+
+    expect(await screen.findByText("ssh workflow is not enabled")).toBeInTheDocument();
+    expect(screen.queryByText(/retry in 1s/i)).not.toBeInTheDocument();
+  });
+
   it("issues an attested user cert, revokes it into the KRL, and retires a host", async () => {
     const user = userEvent.setup();
     renderSSHTrust();
