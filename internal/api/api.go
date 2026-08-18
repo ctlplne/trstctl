@@ -251,9 +251,9 @@ type config struct {
 	ownershipAttestationCadence time.Duration
 }
 
-// WithAuth wires the browser OIDC login + session bridge used by the web UI
-// (/auth/login, /auth/callback, /auth/me, /auth/logout). These are not core API
-// operations, so they are not part of the route registry (or the OpenAPI spec).
+// WithAuth wires browser login methods and the session bridge used by the web
+// UI. These are not core API operations, so they are not part of the route
+// registry (or the OpenAPI spec).
 func WithAuth(cfg AuthConfig) Option {
 	return func(c *config) { c.auth = &cfg }
 }
@@ -553,6 +553,10 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 	// without creating a second OpenAPI/client operation.
 	mux.HandleFunc("GET /v1/editions", a.getEditions)
 	a.mountVaultCompat(mux)
+	// The embedded login page must know which browser sign-in button is real.
+	// This public response contains booleans only: no issuer, tenant mapping,
+	// endpoint, or other configuration detail crosses the pre-auth boundary.
+	mux.HandleFunc("GET /auth/methods", a.authMethods)
 	// The browser SSO login + session bridge for the web UI. These routes are
 	// registered outside the route registry so they stay out of the CLI/OpenAPI
 	// surface.

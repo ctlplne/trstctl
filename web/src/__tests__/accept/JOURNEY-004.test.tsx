@@ -13,6 +13,7 @@ const { apiMock, clearApiCalls } = vi.hoisted(() => {
   const generatedAt = "2026-07-03T00:00:00Z";
 
   function defaultResponse(name: string): unknown {
+    if (name === "authMethods") return { oidc: true, saml: false, ldap: false };
     if (name === "me") {
       return {
         subject: "journey-operator",

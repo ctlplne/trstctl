@@ -8,6 +8,9 @@ import type { MessageKey } from "@/i18n/messages";
  * error, so every new message key still ships with its translation in the
  * same commit. */
 const esESCatalog = {
+  "auth.browserLoginDisabled.body":
+    "Este plano de control está en ejecución, pero el SSO del navegador está desactivado. Configure el SSO del navegador y vuelva a cargar, o use un token de API con ámbito con trstctl-cli.",
+  "auth.browserLoginDisabled.title": "El inicio de sesión en el navegador no está configurado",
   "platform.dr.history.title": "Historial de simulacros firmados",
   "platform.dr.history.aria": "Historial de simulacros de restauración firmados",
   "platform.dr.history.completed": "Completado",

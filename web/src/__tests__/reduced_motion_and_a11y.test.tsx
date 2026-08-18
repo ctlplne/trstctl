@@ -18,6 +18,7 @@ const REPO_ROOT = path.resolve(SRC, "..", "..");
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     me: vi.fn(),
+    authMethods: vi.fn().mockResolvedValue({ oidc: true, saml: false, ldap: false }),
     certificates: vi.fn(),
     identities: vi.fn(),
     risk: vi.fn(),
@@ -26,7 +27,7 @@ const { apiMock } = vi.hoisted(() => ({
 
 vi.mock("@/lib/api", async (orig) => {
   const actual = await orig<typeof import("@/lib/api")>();
-  return { ...actual, api: { ...actual.api, me: apiMock.me } };
+  return { ...actual, api: { ...actual.api, me: apiMock.me, authMethods: apiMock.authMethods } };
 });
 
 function renderAt(path: string) {
@@ -60,6 +61,8 @@ function renderShell() {
 describe("reduced motion and a11y evidence (PRODUCT-005 / COVER-010)", () => {
   beforeEach(() => {
     apiMock.me.mockReset();
+    apiMock.authMethods.mockReset();
+    apiMock.authMethods.mockResolvedValue({ oidc: true, saml: false, ldap: false });
     apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "user-1", tenant_id: "t1", email: "u@example.test" });
     apiMock.certificates.mockResolvedValue([]);
     apiMock.identities.mockResolvedValue([]);

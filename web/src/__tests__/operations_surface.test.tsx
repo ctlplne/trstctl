@@ -10,6 +10,7 @@ import { AppRoutes } from "@/App";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     me: vi.fn(),
+    authMethods: vi.fn().mockResolvedValue({ oidc: true, saml: false, ldap: false }),
     profiles: vi.fn(),
     getProfileVersion: vi.fn(),
     createProfile: vi.fn(),
@@ -57,6 +58,7 @@ function renderAt(path: string) {
 describe("operational console surface", () => {
   beforeEach(() => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
+    apiMock.authMethods.mockResolvedValue({ oidc: true, saml: false, ldap: false });
     apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "user-1", tenant_id: "t1", email: "u@example.test" });
     apiMock.rotationRuns.mockResolvedValue({ items: [] });
     apiMock.connectorDeliveries.mockResolvedValue({ items: [] });

@@ -12,6 +12,9 @@ import type { MessageKey } from "@/i18n/messages";
  * clause turns a missing key into a type error, so every new message key
  * ships with an es-ES AND a de-DE entry from the same commit. */
 const deDECatalog = {
+  "auth.browserLoginDisabled.body":
+    "Diese Steuerungsebene läuft, aber Browser-SSO ist deaktiviert. Konfigurieren Sie Browser-SSO und laden Sie die Seite neu, oder verwenden Sie ein bereichsbeschränktes API-Token mit trstctl-cli.",
+  "auth.browserLoginDisabled.title": "Browser-Anmeldung ist nicht konfiguriert",
   "platform.dr.history.title": "Signierter Übungsverlauf",
   "platform.dr.history.aria": "Verlauf signierter Wiederherstellungsübungen",
   "platform.dr.history.completed": "Abgeschlossen",

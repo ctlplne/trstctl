@@ -9,6 +9,7 @@ import { AppRoutes } from "@/App";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     me: vi.fn(),
+    authMethods: vi.fn().mockResolvedValue({ oidc: true, saml: false, ldap: false }),
     aiStatus: vi.fn(),
     aiQuery: vi.fn(),
     aiRCA: vi.fn(),
@@ -37,6 +38,7 @@ function renderAt(path: string) {
 describe("POL-04 login and assistant polish", () => {
   beforeEach(() => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
+    apiMock.authMethods.mockResolvedValue({ oidc: true, saml: false, ldap: false });
     apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "user-1", tenant_id: "t1", email: "u@example.test" });
     apiMock.aiStatus.mockResolvedValue({
       enabled: true,

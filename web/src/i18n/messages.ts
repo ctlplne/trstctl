@@ -8,6 +8,14 @@ export type Locale = (typeof supportedLocales)[number];
 export type MessageValues = Record<string, number | string>;
 
 export const messages = {
+  "auth.browserLoginDisabled.body": {
+    defaultMessage: "This control plane is running, but browser SSO is off. Configure browser SSO and reload, or use a scoped API token with trstctl-cli.",
+    description: "Login guidance when no browser OIDC route is mounted.",
+  },
+  "auth.browserLoginDisabled.title": {
+    defaultMessage: "Browser sign-in is not configured",
+    description: "Login heading when no browser OIDC route is mounted.",
+  },
   "app.loading": {
     defaultMessage: "Loading...",
     description: "Status text shown while the authenticated session is loading.",

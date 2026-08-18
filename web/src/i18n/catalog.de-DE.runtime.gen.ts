@@ -5,6 +5,8 @@ import { buildTranslatedCatalog } from "@/i18n/messages";
 // One value per canonical message key keeps generation deterministic.
 // prettier-ignore
 const translatedValues = [
+  "Diese Steuerungsebene läuft, aber Browser-SSO ist deaktiviert. Konfigurieren Sie Browser-SSO und laden Sie die Seite neu, oder verwenden Sie ein bereichsbeschränktes API-Token mit trstctl-cli.",
+  "Browser-Anmeldung ist nicht konfiguriert",
   "Wird geladen...",
   "trstctl",
   "Control Plane",

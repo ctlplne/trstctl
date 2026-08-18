@@ -9,7 +9,7 @@ import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { CommandPalette } from "@/components/CommandPalette";
 
 const { apiMock } = vi.hoisted(() => ({
-  apiMock: { me: vi.fn(), logout: vi.fn() },
+  apiMock: { me: vi.fn(), authMethods: vi.fn().mockResolvedValue({ oidc: true, saml: false, ldap: false }), logout: vi.fn() },
 }));
 
 vi.mock("@/lib/api", async (orig) => {

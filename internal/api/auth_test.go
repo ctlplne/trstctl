@@ -62,6 +62,59 @@ func authAPI(t *testing.T) (http.Handler, *auth.SessionIssuer) {
 	return api.New(nil, nil, nil, api.WithAuth(cfg)), sessions
 }
 
+func TestAuthMethodsReportsOnlyMountedBrowserLoginRoutes(t *testing.T) {
+	t.Run("browser SSO disabled", func(t *testing.T) {
+		h := api.New(nil, nil, nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/auth/methods", nil))
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("auth methods = %d, want 200", rec.Code)
+		}
+		if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+			t.Fatalf("Cache-Control = %q, want no-store", got)
+		}
+		var body map[string]bool
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatalf("decode auth methods: %v", err)
+		}
+		if len(body) != 3 {
+			t.Fatalf("auth methods fields = %v, want only oidc/saml/ldap", body)
+		}
+		if _, ok := body["oidc"]; !ok {
+			t.Fatalf("auth methods fields = %v, missing oidc", body)
+		}
+		if _, ok := body["saml"]; !ok {
+			t.Fatalf("auth methods fields = %v, missing saml", body)
+		}
+		if _, ok := body["ldap"]; !ok {
+			t.Fatalf("auth methods fields = %v, missing ldap", body)
+		}
+		if body["oidc"] || body["saml"] || body["ldap"] {
+			t.Fatalf("disabled auth methods = %+v, want all false", body)
+		}
+	})
+
+	t.Run("OIDC login mounted", func(t *testing.T) {
+		h, _ := authAPI(t)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/auth/methods", nil))
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("auth methods = %d, want 200", rec.Code)
+		}
+		var body struct {
+			OIDC bool `json:"oidc"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatalf("decode auth methods: %v", err)
+		}
+		if !body.OIDC {
+			t.Fatal("auth methods must advertise the mounted OIDC login")
+		}
+	})
+}
+
 func TestAuthLoginRedirectsToIdP(t *testing.T) {
 	h, _ := authAPI(t)
 	rec := httptest.NewRecorder()

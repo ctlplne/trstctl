@@ -1022,6 +1022,14 @@ export interface Me {
   time_zone?: string;
 }
 
+/** Public, boolean-only login-route metadata. No IdP endpoint, issuer, tenant
+ * mapping, or other pre-auth configuration detail is included. */
+export interface AuthMethods {
+  oidc: boolean;
+  saml: boolean;
+  ldap: boolean;
+}
+
 export interface AuditQuery {
   type?: string;
   since?: string;
@@ -1458,6 +1466,7 @@ export function firstCertificateIdentityRequest(input: IssueCertificateInput, ow
  * field the server does not accept — the same contract guarantee as the responses. */
 export interface Api {
   me(): Promise<Me>;
+  authMethods(): Promise<AuthMethods>;
   logout(): Promise<void>;
   editions(): Promise<EditionsInfo>;
   enterpriseSupportStatus(): Promise<EnterpriseSupportStatus>;
@@ -1863,6 +1872,7 @@ async function allPendingApprovalRequests(): Promise<PendingApprovalRequest[]> {
 
 const liveApi: Api = {
   me: () => req<Me>("/auth/me"),
+  authMethods: () => req<AuthMethods>("/auth/methods"),
   logout: () => req<void>("/auth/logout", { method: "POST" }),
   editions: () => req<EditionsInfo>("/api/v1/editions"),
   enterpriseSupportStatus: () => req<EnterpriseSupportStatus>("/api/v1/support/enterprise"),

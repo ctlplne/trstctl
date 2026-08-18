@@ -9,6 +9,7 @@ import { AdminAccess, AdminEditions, AdminSystem } from "@/pages/Platform";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     me: vi.fn(),
+    authMethods: vi.fn().mockResolvedValue({ oidc: true, saml: false, ldap: false }),
     accessRoles: vi.fn(),
     oidcMappingStatus: vi.fn(),
     members: vi.fn(),
@@ -45,6 +46,7 @@ describe("WIRE-12 Platform served admin surface", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     for (const mock of Object.values(apiMock)) mock.mockReset();
+    apiMock.authMethods.mockResolvedValue({ oidc: true, saml: false, ldap: false });
     apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "platform-admin", tenant_id: "tenant-platform", email: "admin@example.test" });
     apiMock.accessRoles.mockResolvedValue({
       items: [{ name: "platform-owner", permissions: ["access:read", "access:write"] }],

@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { translateNow } from "@/i18n/I18nProvider";
 
 export function Login() {
-  const { previewAvailable, startPreview } = useAuth();
+  const { oidcAvailable, previewAvailable, startPreview } = useAuth();
   const navigate = useNavigate();
 
   function enterPreview() {
@@ -34,13 +34,17 @@ export function Login() {
 
         <Card className="shadow-elevation2">
           <CardHeader>
-            <CardTitle>{translateNow("source.sign.in.bfd402b2f6")}</CardTitle>
+            <CardTitle>{translateNow(oidcAvailable ? "source.sign.in.bfd402b2f6" : "auth.browserLoginDisabled.title")}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="mb-4 text-body text-muted-foreground">{translateNow("source.authenticate.with.your.organization.s.iden.c19821f6a0")}</p>
-            <Button className="w-full" onClick={beginLogin}>
-              {translateNow("source.sign.in.with.sso.73e984e9b4")}
-            </Button>
+            <p className="mb-4 text-body text-muted-foreground">
+              {translateNow(oidcAvailable ? "source.authenticate.with.your.organization.s.iden.c19821f6a0" : "auth.browserLoginDisabled.body")}
+            </p>
+            {oidcAvailable && (
+              <Button className="w-full" onClick={beginLogin}>
+                {translateNow("source.sign.in.with.sso.73e984e9b4")}
+              </Button>
+            )}
             {previewAvailable && (
               <div className="mt-4 border-t border-border pt-4">
                 <p className="mb-3 text-caption text-muted-foreground">{translateNow("source.preview.uses.sample.data.in.this.browser.a.7b39b478d2")}</p>

@@ -9,6 +9,7 @@ import { AppRoutes } from "@/App";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     me: vi.fn(),
+    authMethods: vi.fn().mockResolvedValue({ oidc: true, saml: false, ldap: false }),
     createAPIToken: vi.fn(),
     revokeAPIToken: vi.fn(),
   },

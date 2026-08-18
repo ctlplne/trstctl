@@ -14,6 +14,7 @@ interface AuthState {
   user: Me | null;
   loading: boolean;
   error: string | null;
+  oidcAvailable: boolean;
   preview: boolean;
   previewAvailable: boolean;
   startPreview: () => void;
@@ -34,6 +35,7 @@ const AuthContext = createContext<AuthState>({
   user: null,
   loading: true,
   error: null,
+  oidcAvailable: false,
   preview: false,
   previewAvailable: false,
   startPreview: () => {},
@@ -48,35 +50,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     demoBuild
       ? // Demo build: land signed-in on the showcase — no /auth/me round-trip,
         // no login click, transport already isolated above.
-        { user: previewUser, loading: false, error: null, preview: true, previewAvailable: true }
-      : { user: null, loading: true, error: null, preview: false, previewAvailable: previewAllowed },
+        { user: previewUser, loading: false, error: null, oidcAvailable: false, preview: true, previewAvailable: true }
+      : { user: null, loading: true, error: null, oidcAvailable: false, preview: false, previewAvailable: previewAllowed },
   );
 
   const startPreview = useCallback(() => {
     if (!previewAllowed) return;
     previewRef.current = true;
     setPreviewTransportIsolation(true);
-    setState({
+    setState((current) => ({
       user: previewUser,
       loading: false,
       error: null,
+      oidcAvailable: current.oidcAvailable,
       preview: true,
       previewAvailable: true,
-    });
+    }));
   }, []);
 
   const logout = useCallback(async () => {
     if (previewRef.current) {
       previewRef.current = false;
       setPreviewTransportIsolation(false);
-      setState({ user: null, loading: false, error: null, preview: false, previewAvailable: previewAllowed });
+      setState((current) => ({
+        user: null,
+        loading: false,
+        error: null,
+        oidcAvailable: current.oidcAvailable,
+        preview: false,
+        previewAvailable: previewAllowed,
+      }));
       return;
     }
 
     setState((current) => ({ ...current, error: null }));
     try {
       await api.logout();
-      setState({ user: null, loading: false, error: null, preview: false, previewAvailable: previewAllowed });
+      setState((current) => ({
+        user: null,
+        loading: false,
+        error: null,
+        oidcAvailable: current.oidcAvailable,
+        preview: false,
+        previewAvailable: previewAllowed,
+      }));
     } catch (err) {
       setState((current) => ({ ...current, loading: false, error: String(err) }));
       throw err;
@@ -86,20 +103,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (demoBuild) return; // no session to resolve — preview is the session
     let active = true;
-    api
-      .me()
-      .then((user) => {
+    void (async () => {
+      // Login-method discovery is public UI metadata, not the session
+      // authority. A transient failure here must hide login actions safely,
+      // but it must not evict an already-authenticated operator.
+      const methods = await api.authMethods().catch(() => ({ oidc: false, saml: false, ldap: false }));
+      try {
+        const user = await api.me();
         if (!active || previewRef.current) return;
-        setState({ user, loading: false, error: null, preview: false, previewAvailable: import.meta.env.DEV });
-      })
-      .catch((err) => {
+        setState({
+          user,
+          loading: false,
+          error: null,
+          oidcAvailable: methods.oidc,
+          preview: false,
+          previewAvailable: import.meta.env.DEV,
+        });
+      } catch (err) {
         if (!active || previewRef.current) return;
         if (err instanceof UnauthorizedError) {
-          setState({ user: null, loading: false, error: null, preview: false, previewAvailable: import.meta.env.DEV });
+          setState({
+            user: null,
+            loading: false,
+            error: null,
+            oidcAvailable: methods.oidc,
+            preview: false,
+            previewAvailable: import.meta.env.DEV,
+          });
         } else {
-          setState({ user: null, loading: false, error: String(err), preview: false, previewAvailable: import.meta.env.DEV });
+          setState({
+            user: null,
+            loading: false,
+            error: String(err),
+            oidcAvailable: methods.oidc,
+            preview: false,
+            previewAvailable: import.meta.env.DEV,
+          });
         }
-      });
+      }
+    })();
     return () => {
       active = false;
     };

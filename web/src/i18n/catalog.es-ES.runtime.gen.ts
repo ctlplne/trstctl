@@ -5,6 +5,8 @@ import { buildTranslatedCatalog } from "@/i18n/messages";
 // One value per canonical message key keeps generation deterministic.
 // prettier-ignore
 const translatedValues = [
+  "Este plano de control está en ejecución, pero el SSO del navegador está desactivado. Configure el SSO del navegador y vuelva a cargar, o use un token de API con ámbito con trstctl-cli.",
+  "El inicio de sesión en el navegador no está configurado",
   "Cargando...",
   "trstctl",
   "plano de control",

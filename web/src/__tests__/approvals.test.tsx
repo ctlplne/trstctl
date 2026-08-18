@@ -10,6 +10,7 @@ import { ApiError, UnauthorizedError, type PendingApprovalRequest } from "@/lib/
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     me: vi.fn(),
+    authMethods: vi.fn().mockResolvedValue({ oidc: true, saml: false, ldap: false }),
     identities: vi.fn(),
     approvalRequests: vi.fn(),
     approveApprovalRequest: vi.fn(),
@@ -61,6 +62,7 @@ function approvalRequest(overrides: Partial<PendingApprovalRequest> = {}): Pendi
 describe("dedicated approvals inbox", () => {
   beforeEach(() => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
+    apiMock.authMethods.mockResolvedValue({ oidc: true, saml: false, ldap: false });
     apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "ra-1", tenant_id: "t1", email: "ra@example.test" });
     apiMock.approvalRequests.mockResolvedValue([]);
     apiMock.approveApprovalRequest.mockResolvedValue({

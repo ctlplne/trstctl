@@ -11,6 +11,7 @@ import { AppRoutes } from "@/App";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     me: vi.fn(),
+    authMethods: vi.fn().mockResolvedValue({ oidc: true, saml: false, ldap: false }),
     profiles: vi.fn(),
     owners: vi.fn(),
     issuanceRequests: vi.fn(),
@@ -70,6 +71,7 @@ const otherOwner = {
 describe("self-service credential requests", () => {
   beforeEach(() => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
+    apiMock.authMethods.mockResolvedValue({ oidc: true, saml: false, ldap: false });
     apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "dev-1", tenant_id: "t1", email: "dev@example.test" });
     apiMock.profiles.mockResolvedValue([activeProfile]);
     apiMock.owners.mockResolvedValue([otherOwner, selectedOwner]);

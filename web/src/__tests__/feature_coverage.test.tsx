@@ -13,6 +13,7 @@ const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     me: vi.fn(),
+    authMethods: vi.fn().mockResolvedValue({ oidc: true, saml: false, ldap: false }),
     certificates: vi.fn(),
     identities: vi.fn(),
     risk: vi.fn(),

@@ -11,6 +11,7 @@ import { AdminAccess, AdminEditions, AdminSystem, PlatformRedirect } from "@/pag
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     me: vi.fn(),
+    authMethods: vi.fn().mockResolvedValue({ oidc: true, saml: false, ldap: false }),
     certificates: vi.fn(),
     certificatePage: vi.fn(),
     identities: vi.fn(),

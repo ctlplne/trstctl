@@ -17,6 +17,7 @@ import type { Me } from "@/lib/api";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     me: vi.fn(),
+    authMethods: vi.fn().mockResolvedValue({ oidc: true, saml: false, ldap: false }),
     auditEvents: vi.fn(),
     exportAudit: vi.fn(),
   } as Record<string, ReturnType<typeof vi.fn>>,

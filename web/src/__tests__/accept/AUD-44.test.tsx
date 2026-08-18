@@ -9,6 +9,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     me: vi.fn(),
+    authMethods: vi.fn().mockResolvedValue({ oidc: true, saml: false, ldap: false }),
     owners: vi.fn(),
     ownershipAttribution: vi.fn(),
     unownedIdentities: vi.fn(),
@@ -55,6 +56,7 @@ const owner = {
 describe("AUD-44 ownership readiness console", () => {
   beforeEach(() => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
+    apiMock.authMethods.mockResolvedValue({ oidc: true, saml: false, ldap: false });
     apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "operator-44", tenant_id: "t1", email: "operator@example.test" });
     apiMock.owners.mockResolvedValue([owner]);
     apiMock.ownershipAttribution.mockResolvedValue({

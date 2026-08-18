@@ -7,7 +7,14 @@ import { AuthProvider } from "@/auth/AuthProvider";
 import { AppRoutes } from "@/App";
 
 const { apiMock } = vi.hoisted(() => ({
-  apiMock: { me: vi.fn(), approvalRequests: vi.fn(), approveApprovalRequest: vi.fn(), auditEvents: vi.fn(), exportAudit: vi.fn() },
+  apiMock: {
+    me: vi.fn(),
+    authMethods: vi.fn().mockResolvedValue({ oidc: true, saml: false, ldap: false }),
+    approvalRequests: vi.fn(),
+    approveApprovalRequest: vi.fn(),
+    auditEvents: vi.fn(),
+    exportAudit: vi.fn(),
+  },
 }));
 
 vi.mock("@/lib/api", async (orig) => {
@@ -46,6 +53,7 @@ const pending = {
 
 beforeEach(() => {
   for (const mock of Object.values(apiMock)) mock.mockReset();
+  apiMock.authMethods.mockResolvedValue({ oidc: true, saml: false, ldap: false });
   apiMock.approveApprovalRequest.mockResolvedValue({
     id: pending.id,
     intent_digest: pending.intent_digest,

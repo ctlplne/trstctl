@@ -8,6 +8,7 @@ import { AppRoutes } from "@/App";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     me: vi.fn(),
+    authMethods: vi.fn().mockResolvedValue({ oidc: true, saml: false, ldap: false }),
     certificates: vi.fn(),
     identities: vi.fn(),
     risk: vi.fn(),
@@ -38,6 +39,7 @@ describe("C10-5 dashboard trend charts", () => {
     vi.restoreAllMocks();
     document.documentElement.classList.remove("dark");
     for (const mock of Object.values(apiMock)) mock.mockReset();
+    apiMock.authMethods.mockResolvedValue({ oidc: true, saml: false, ldap: false });
     apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "operator", tenant_id: "t1", email: "ops@example.test" });
     apiMock.certificates.mockResolvedValue([
       {

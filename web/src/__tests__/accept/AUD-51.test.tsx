@@ -7,7 +7,7 @@ import { AuthProvider } from "@/auth/AuthProvider";
 import { AppRoutes } from "@/App";
 
 const { apiMock } = vi.hoisted(() => ({
-  apiMock: { me: vi.fn(), auditEvents: vi.fn(), exportAudit: vi.fn() },
+  apiMock: { me: vi.fn(), authMethods: vi.fn().mockResolvedValue({ oidc: true, saml: false, ldap: false }), auditEvents: vi.fn(), exportAudit: vi.fn() },
 }));
 
 vi.mock("@/lib/api", async (orig) => {

@@ -8,12 +8,13 @@ import { AppShell } from "@/components/AppShell";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     me: vi.fn(),
+    authMethods: vi.fn().mockResolvedValue({ oidc: true, saml: false, ldap: false }),
   },
 }));
 
 vi.mock("@/lib/api", async (orig) => {
   const actual = await orig<typeof import("@/lib/api")>();
-  return { ...actual, api: { ...actual.api, me: apiMock.me } };
+  return { ...actual, api: { ...actual.api, me: apiMock.me, authMethods: apiMock.authMethods } };
 });
 
 function renderShell() {
@@ -34,6 +35,7 @@ function renderShell() {
 
 describe("UX-02 shell metadata declutter", () => {
   beforeEach(() => {
+    apiMock.authMethods.mockResolvedValue({ oidc: true, saml: false, ldap: false });
     apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "user-1", tenant_id: "t1", email: "u@example.test" });
   });
 

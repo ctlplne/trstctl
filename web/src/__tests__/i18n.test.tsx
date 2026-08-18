@@ -716,8 +716,11 @@ describe("i18n boundary", () => {
       // and empty roster states, searchable name/kind/email/UUID filtering,
       // and actionable recovery. Machine-authored
       // es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "3cb96b1bd0c2302d49271e5a5ee5ccdddd2e3d04b9816bd32ab12c3541a3d181",
-      "de-DE": "8aa0f20fc54d8fcd899c3d28b1e1bf64ad6484a2920ef40ed47c8f9491019f47",
+      // QA g35 login-truth re-pin: two keys replace the broken SSO action on
+      // OIDC-disabled installs with explicit setup/API-token guidance.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "5f0519ad95d4ed0f385e1a0838033e1a8dbe2816aedccdd05db6805301cbe29a",
+      "de-DE": "b13ff00241638fcff238abbdf3c55ead5877bb7d62b352b38f53ad845885d2ec",
     });
   });
 

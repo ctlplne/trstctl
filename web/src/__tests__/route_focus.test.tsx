@@ -10,6 +10,7 @@ import { AppShell } from "@/components/AppShell";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     me: vi.fn(),
+    authMethods: vi.fn().mockResolvedValue({ oidc: true, saml: false, ldap: false }),
     logout: vi.fn(),
   },
 }));

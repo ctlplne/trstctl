@@ -11,6 +11,7 @@ import { ApiError, type Me } from "@/lib/api";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     me: vi.fn(),
+    authMethods: vi.fn(),
     logout: vi.fn(),
     certificates: vi.fn(),
     certificatePage: vi.fn(),
@@ -139,6 +140,8 @@ function contextualRiskFixture(critical: number, high: number) {
 describe("auth + dashboards", () => {
   beforeEach(() => {
     apiMock.me.mockReset();
+    apiMock.authMethods.mockReset();
+    apiMock.authMethods.mockResolvedValue({ oidc: true, saml: false, ldap: false });
     apiMock.logout.mockReset();
     apiMock.certificates.mockReset();
     apiMock.certificatePage.mockReset();
@@ -177,6 +180,33 @@ describe("auth + dashboards", () => {
     renderAt("/");
 
     await waitFor(() => expect(screen.getByRole("button", { name: /Sign in with SSO/i })).toBeInTheDocument());
+  });
+
+  it("does not offer a broken SSO link when browser authentication is disabled", async () => {
+    const { UnauthorizedError } = await import("@/lib/api");
+    apiMock.me.mockRejectedValue(new UnauthorizedError());
+    apiMock.authMethods.mockResolvedValue({ oidc: false, saml: false, ldap: false });
+
+    renderAt("/");
+
+    expect(await screen.findByRole("heading", { name: "Browser sign-in is not configured" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Sign in with SSO/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/control plane is running.*browser SSO is off/i)).toBeInTheDocument();
+    expect(screen.getByText(/scoped API token.*trstctl-cli/i)).toBeInTheDocument();
+  });
+
+  it("keeps an authenticated session usable if login capability discovery is temporarily unavailable", async () => {
+    apiMock.authMethods.mockRejectedValue(new Error("capability probe offline"));
+    apiMock.me.mockResolvedValue({ subject: "operator-1", tenant_id: "t1", permissions: ["*"] });
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    expect(await screen.findByText("operator-1")).toBeInTheDocument();
+    expect(apiMock.me).toHaveBeenCalled();
   });
 
   it("allows local dev preview without storing an auth token", async () => {

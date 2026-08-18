@@ -15,6 +15,7 @@ import { AppRoutes } from "@/App";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     me: vi.fn(),
+    authMethods: vi.fn().mockResolvedValue({ oidc: true, saml: false, ldap: false }),
     logout: vi.fn(),
     accessRoles: vi.fn(),
     oidcMappingStatus: vi.fn(),
@@ -53,6 +54,7 @@ function renderAt(path: string) {
 describe("C-A1 /admin split + permanent /platform redirects", () => {
   beforeEach(() => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
+    apiMock.authMethods.mockResolvedValue({ oidc: true, saml: false, ldap: false });
     apiMock.me.mockResolvedValue({
       subject: "admin-1",
       tenant_id: "t1",

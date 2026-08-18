@@ -147,6 +147,27 @@ type meResponse struct {
 	TimeZone    string   `json:"time_zone,omitempty"`
 }
 
+type authMethodsResponse struct {
+	OIDC bool `json:"oidc"`
+	SAML bool `json:"saml"`
+	LDAP bool `json:"ldap"`
+}
+
+// authMethods publishes only whether each browser login route is mounted. A
+// fresh fail-closed install intentionally has no browser login, and the SPA
+// needs this bit of public truth so it does not advertise a link that 404s.
+// Provider metadata, tenant mappings, and endpoint URLs remain authenticated.
+func (a *API) authMethods(w http.ResponseWriter, _ *http.Request) {
+	methods := authMethodsResponse{}
+	if a.auth != nil {
+		methods.OIDC = a.auth.OIDCEnabled || a.auth.Exchange != nil || a.auth.VerifyIDToken != nil
+		methods.SAML = a.auth.SAMLEnabled || a.auth.VerifySAMLResponse != nil
+		methods.LDAP = a.auth.LDAPEnabled || a.auth.VerifyLDAPLogin != nil
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	a.writeJSON(w, http.StatusOK, methods)
+}
+
 type ldapLoginRequest struct {
 	Username string       `json:"username"`
 	Password ldapPassword `json:"password"`
