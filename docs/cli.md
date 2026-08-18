@@ -331,24 +331,29 @@ JSON
 trstctl-cli --idempotency-key ci-preview-key ephemeral api-keys issue -f ephemeral-api-key.json
 ```
 
-## Bootstrapping the first API token
+## Bootstrapping or recovering a local API token
 
 `trstctl-cli` authenticates with an API token, but a freshly deployed control
 plane has none and fails closed (every route `401`s). Mint the first one with the
-**server** binary's first-run bootstrap verb, run on the control-plane host — it
-writes straight to the datastore (no existing credential, no network trust
-required) and prints a tenant-scoped token once:
+**server** binary's local bootstrap verb, run inside the control-plane custody
+boundary. It writes straight to the datastore (no existing HTTP credential or
+network trust required) and prints a tenant-scoped token once:
 
 ```bash
 trstctl token create --tenant <uuid> [--subject <name>] [--scopes a,b,c] [--tenant-name <label>]
 ```
 
-- `--tenant` (required) is the UUID the token is scoped to; the tenant is
-  registered through the event log if it does not exist yet.
+- `--tenant` (required) is the UUID the token is scoped to. If it is new, the
+  tenant is registered through the event log. If it already exists, the command
+  first proves that the read model points to the exact retained
+  `tenant.registered` event; it does not rename or register the tenant again.
 - The default scope set is full operator control **excluding** certificate
   issuance (`certs:issue`) — bootstrapping a credential never grants self-issue.
 - The raw `trst_…` token is printed once to stdout (only its hash is stored); save
   it immediately. Then export it as `TRSTCTL_TOKEN` for `trstctl-cli`.
+- Because this command can recover access without an existing HTTP token, run it
+  only with direct PostgreSQL plus signer/audit custody on the control-plane host.
+  Possession of the public server binary alone is not enough.
 
 ## Examples
 

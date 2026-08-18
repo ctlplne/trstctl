@@ -129,7 +129,8 @@ func TestBootstrapTokenAuthenticatesServedRequest(t *testing.T) {
 	// opens/closes its own event log internally (no NATS overlaps the served one).
 	bootCfg := config.Default()
 	bootCfg.Postgres = config.Postgres{Mode: config.PostgresExternal, DSN: dsn}
-	bootCfg.NATS = config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}
+	bootNATSDir := t.TempDir()
+	bootCfg.NATS = config.NATS{Mode: config.NATSEmbedded, StoreDir: bootNATSDir}
 	bootCfg.Audit.SigningKeyFile = filepath.Join(t.TempDir(), "audit-signing-key.pem")
 	bootCfg.Secrets.KEKFile = filepath.Join(t.TempDir(), "credential-kek.bin")
 	configureExternalAuditTestSigner(t, bootCfg)
@@ -143,6 +144,52 @@ func TestBootstrapTokenAuthenticatesServedRequest(t *testing.T) {
 	}
 	bearer := secrettext.String(raw)
 	secret.Wipe(raw)
+	registered, err := st.GetTenant(ctx, tenantA)
+	if err != nil {
+		t.Fatalf("load freshly registered tenant: %v", err)
+	}
+
+	// The generic AN-5 receipt is retained for seven days, while a local operator
+	// may need to recover API access months later. Reproduce that real expiry by
+	// deleting only the completed bootstrap receipt. The second local command must
+	// verify the existing tenant's retained registration event, mint a fresh raw
+	// token, and leave the registration sequence unchanged.
+	if _, err := st.SystemPool().Exec(ctx,
+		`DELETE FROM idempotency_keys WHERE tenant_id = $1 AND key = $2`,
+		tenantA, "bootstrap-tenant:"+tenantA); err != nil {
+		t.Fatalf("expire bootstrap registration receipt: %v", err)
+	}
+	recoveredRaw, err := RunTokenCreate(ctx, bootCfg, TokenCreateOptions{
+		TenantID: tenantA, TenantName: "ignored-existing-label", Subject: "recovery-bot",
+	})
+	if err != nil {
+		t.Fatalf("RunTokenCreate after registration receipt expiry: %v", err)
+	}
+	if !bytes.HasPrefix(recoveredRaw, []byte("trst_")) || bytes.Equal(recoveredRaw, []byte(bearer)) {
+		t.Fatal("existing-tenant recovery did not mint a distinct trst_ token")
+	}
+	recoveredBearer := secrettext.String(recoveredRaw)
+	secret.Wipe(recoveredRaw)
+	afterRecovery, err := st.GetTenant(ctx, tenantA)
+	if err != nil {
+		t.Fatalf("load tenant after bootstrap recovery: %v", err)
+	}
+	if afterRecovery.EventSeq != registered.EventSeq || afterRecovery.Name != registered.Name {
+		t.Fatalf("bootstrap recovery changed tenant registration from %+v to %+v", registered, afterRecovery)
+	}
+
+	// A SQL-only tenant row is not recovery authority. The command must refuse it
+	// because no exact retained registration event backs the read model.
+	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: tenantB, Name: "forged-sql-only"}); err != nil {
+		t.Fatalf("seed SQL-only tenant row: %v", err)
+	}
+	forgedRaw, err := RunTokenCreate(ctx, bootCfg, TokenCreateOptions{
+		TenantID: tenantB, TenantName: "forged-sql-only", Subject: "must-not-mint",
+	})
+	secret.Wipe(forgedRaw)
+	if err == nil {
+		t.Fatal("bootstrap recovery minted a token for a tenant row with no retained registration event")
+	}
 
 	// RED-004 guard: the bootstrap token must NOT carry issuance authority. The
 	// default scope set withholds certs:issue (it only creates an API credential).
@@ -164,7 +211,7 @@ func TestBootstrapTokenAuthenticatesServedRequest(t *testing.T) {
 	// (3+4) The printed token authenticates the SAME served route -> 200, and is
 	// tenant-scoped: it lists ONLY its own tenant's owner.
 	withServed(func(get func(string) (int, []byte)) {
-		code, body := get(bearer)
+		code, body := get(recoveredBearer)
 		if code != http.StatusOK {
 			t.Fatalf("bootstrap token GET /api/v1/owners = %d, want 200; body=%s", code, body)
 		}

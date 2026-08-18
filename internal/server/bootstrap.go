@@ -8,22 +8,26 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/jackc/pgx/v5"
+
 	"trstctl.com/trstctl/internal/app"
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/secrets"
 	"trstctl.com/trstctl/internal/store"
 )
 
-// TokenCreateOptions parameterizes the first-run bootstrap that mints the first
-// tenant-scoped API token (WIRE-002).
+// TokenCreateOptions parameterizes the local bootstrap/recovery command that
+// mints a tenant-scoped API token (WIRE-002).
 type TokenCreateOptions struct {
 	// TenantID is the tenant the token is scoped to. It is required and must be a
-	// UUID; the bootstrap registers it through the event-sourced spine if it does
-	// not already exist (so the read model and audit trail stay projections of the
-	// log, AN-2). A single-tenant deployment uses one well-known tenant id here.
+	// UUID. The bootstrap registers it through the event-sourced spine when new;
+	// for an existing tenant it verifies the exact retained registration envelope
+	// before minting (so the read model and audit trail stay projections of the log,
+	// AN-2). A single-tenant deployment uses one well-known tenant id here.
 	TenantID string
 	// TenantName is the human label recorded for a freshly registered tenant. It is
 	// ignored when the tenant already exists.
@@ -62,20 +66,22 @@ func BootstrapAdminScopes() []string {
 	}
 }
 
-// RunTokenCreate is the network-trust-free first-run bootstrap that mints the
-// first tenant-scoped API token and returns its raw secret (WIRE-002). It is the
+// RunTokenCreate is the network-trust-free local bootstrap/recovery command that
+// mints a tenant-scoped API token and returns its raw secret (WIRE-002). It is the
 // served path's missing on-ramp: with OIDC not yet wired and every guarded route
 // failing closed (401), a fresh binary otherwise has no obtainable credential. It
-// requires NO existing credential — it is an operator/admin command run against
-// the local datastore, not an HTTP call.
+// can also recover an existing tenant after its prior raw token or short-lived
+// idempotency receipt is gone, but only after matching the tenant read model to
+// its exact retained registration event. It requires NO existing HTTP credential
+// because it is an operator/admin command inside datastore and signer/audit
+// custody, not an HTTP call.
 //
 // It opens the datastore exactly as Run does (bundled single-node, or external by
-// DSN), applies pending migrations, registers the tenant through the event-sourced
-// spine (app.RegisterTenant, so tenant state remains a projection of the event log
-// per AN-2 and is idempotent per AN-5), then inserts the token under the tenant's
-// row-level-security context (store.CreateAPIToken, AN-1). Only the token's hash
-// is stored; the raw secret is returned to the caller exactly once and is NEVER
-// written to any log.
+// DSN), applies pending migrations, registers a new tenant through the
+// event-sourced spine or verifies an existing tenant against that spine, then
+// inserts the token under the tenant's row-level-security context
+// (store.CreateAPIToken, AN-1). Only the token's hash is stored; the raw secret is
+// returned to the caller exactly once and is NEVER written to any log.
 //
 // It deliberately touches no signing/issuance authority: it creates an API
 // credential and nothing else, so bootstrapping a first token cannot open
@@ -152,8 +158,25 @@ func RunTokenCreate(ctx context.Context, cfg *config.Config, opts TokenCreateOpt
 
 	svc := app.New(log, st, resultProtector)
 	defer svc.Close()
-	if err := svc.RegisterTenant(ctx, opts.TenantID, opts.TenantName, "bootstrap-tenant:"+opts.TenantID); err != nil {
-		return nil, fmt.Errorf("bootstrap: register tenant: %w", err)
+	// A new tenant still goes through the event-sourced registration command. An
+	// existing tenant instead has its read-model pointer verified against the
+	// exact retained tenant.registered envelope. That is the local break-glass
+	// path after the generic seven-day idempotency receipt expires: it neither
+	// fabricates a receipt nor appends a second registration. Direct datastore
+	// plus signer/audit custody is already this server-admin command's boundary;
+	// the HTTP API remains fully authenticated.
+	_, tenantErr := st.GetTenant(ctx, opts.TenantID)
+	switch {
+	case tenantErr == nil:
+		if _, err := orchestrator.ResolveLiveTenantRegistrationAuthority(ctx, log, st, opts.TenantID); err != nil {
+			return nil, fmt.Errorf("bootstrap: verify existing tenant registration: %w", err)
+		}
+	case errors.Is(tenantErr, pgx.ErrNoRows):
+		if err := svc.RegisterTenant(ctx, opts.TenantID, opts.TenantName, "bootstrap-tenant:"+opts.TenantID); err != nil {
+			return nil, fmt.Errorf("bootstrap: register tenant: %w", err)
+		}
+	default:
+		return nil, fmt.Errorf("bootstrap: inspect tenant: %w", tenantErr)
 	}
 
 	// Mint the token: generate a high-entropy secret, store ONLY its hash under the
