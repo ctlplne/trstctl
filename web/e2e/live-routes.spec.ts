@@ -18,6 +18,7 @@ type RouteReceipt = {
     width: number;
   }>;
   alerts: string[];
+  capabilityDisclosures: string[];
   httpFailures: Array<{
     method: string;
     path: string;
@@ -113,6 +114,9 @@ async function auditRoute(page: Page, route: string): Promise<RouteReceipt> {
     });
 
     const alerts = (await main.getByRole("alert").allTextContents()).map((text) => text.replace(/\s+/g, " ").trim()).filter(Boolean);
+    const capabilityDisclosures = (await main.locator('[data-state-primitive="unavailable"]').allTextContents())
+      .map((text) => text.replace(/\s+/g, " ").trim())
+      .filter(Boolean);
     await Promise.all(pendingResponseReceipts);
     return {
       route,
@@ -120,6 +124,7 @@ async function auditRoute(page: Page, route: string): Promise<RouteReceipt> {
       heading: headingText,
       ...widths,
       alerts,
+      capabilityDisclosures,
       httpFailures,
     };
   } finally {
@@ -163,7 +168,7 @@ for (const viewport of viewports) {
         failure.problem?.title === "Service Unavailable" &&
         failure.problem.status === 503 &&
         Boolean(failure.problem.detail) &&
-        receipt.alerts.some((alert) => alert.includes(failure.problem?.detail ?? ""));
+        [...receipt.alerts, ...receipt.capabilityDisclosures].some((disclosure) => disclosure.includes(failure.problem?.detail ?? ""));
       const serverErrors = receipt.httpFailures.filter((failure) => failure.status >= 500 && !explainedUnavailable(failure));
       const documentOverflow = receipt.documentWidth.scroll > receipt.documentWidth.client ? receipt.documentWidth : null;
 
