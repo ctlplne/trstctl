@@ -15,6 +15,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/hashicorp/hcl"
 
@@ -33,6 +34,7 @@ const defaultCommonName = "SPIRE Server CA"
 type Config struct {
 	Endpoint            string   `hcl:"endpoint"`
 	CABundleFile        string   `hcl:"ca_bundle_file"`
+	AllowPrivateCIDRs   []string `hcl:"allow_private_cidrs"`
 	CAAuthorityID       string   `hcl:"ca_authority_id"`
 	TokenFile           string   `hcl:"token_file"`
 	CommonName          string   `hcl:"common_name"`
@@ -58,7 +60,7 @@ type Plugin struct {
 
 // New constructs an unconfigured plugin.
 func New() *Plugin {
-	return &Plugin{client: http.DefaultClient}
+	return &Plugin{}
 }
 
 // Configure receives SPIRE's plugin_data HCL and replaces the active config
@@ -71,18 +73,9 @@ func (p *Plugin) Configure(_ context.Context, req *configv1.ConfigureRequest) (*
 	if err := cfg.validate(); err != nil {
 		return nil, err
 	}
-	client := http.DefaultClient
-	if cfg.CABundleFile != "" {
-		caPEM, err := os.ReadFile(cfg.CABundleFile) // #nosec G304 -- operator-configured public CA bundle path
-		if err != nil {
-			return nil, status.Errorf(codes.FailedPrecondition, "read ca_bundle_file: %v", err)
-		}
-		transport, transportErr := mtls.HTTPTransport(caPEM)
-		zero(caPEM)
-		if transportErr != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "ca_bundle_file: %v", transportErr)
-		}
-		client = &http.Client{Transport: transport}
+	client, err := upstreamHTTPClient(cfg)
+	if err != nil {
+		return nil, err
 	}
 	p.mu.Lock()
 	p.config = cfg
@@ -208,11 +201,67 @@ func (p *Plugin) currentConfig() (*Config, *http.Client, error) {
 	cp := *p.config
 	cp.PermittedDNSDomains = append([]string(nil), p.config.PermittedDNSDomains...)
 	cp.ExtendedKeyUsages = append([]string(nil), p.config.ExtendedKeyUsages...)
+	cp.AllowPrivateCIDRs = append([]string(nil), p.config.AllowPrivateCIDRs...)
 	client := p.client
 	if client == nil {
-		client = http.DefaultClient
+		return nil, nil, status.Error(codes.FailedPrecondition, "plugin HTTP client is not configured")
 	}
 	return &cp, client, nil
+}
+
+func upstreamHTTPClient(cfg *Config) (*http.Client, error) {
+	u, err := url.Parse(cfg.Endpoint)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "parse endpoint: %v", err)
+	}
+
+	opts := netsec.SafeClientOptions{}
+	for _, raw := range cfg.AllowPrivateCIDRs {
+		prefix, err := netsec.ParseEgressAllowPrefix(raw)
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "allow_private_cidrs entry %q: %v", raw, err)
+		}
+		opts.AllowPrivateCIDRs = append(opts.AllowPrivateCIDRs, prefix)
+	}
+
+	const timeout = 30 * time.Second
+	var client *http.Client
+	if netsec.IsLoopbackHost(u.Hostname()) {
+		client = netsec.InsecureLoopbackClient(timeout)
+	} else {
+		if err := netsec.ValidatePublicHTTPSURLWithOptions(cfg.Endpoint, opts); err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "validate endpoint egress: %v", err)
+		}
+		client = netsec.SafeClientWithOptions(timeout, opts)
+	}
+
+	if cfg.CABundleFile != "" {
+		caPEM, err := os.ReadFile(cfg.CABundleFile) // #nosec G304 -- operator-configured public CA bundle path (CWE-22)
+		if err != nil {
+			return nil, status.Errorf(codes.FailedPrecondition, "read ca_bundle_file: %v", err)
+		}
+		trusted, transportErr := mtls.HTTPTransport(caPEM)
+		zero(caPEM)
+		if transportErr != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "ca_bundle_file: %v", transportErr)
+		}
+		safe, ok := client.Transport.(*http.Transport)
+		if !ok {
+			return nil, status.Error(codes.Internal, "upstream transport does not expose the reviewed HTTP transport seam")
+		}
+		trusted.DialContext = safe.DialContext
+		trusted.DialTLSContext = nil
+		trusted.TLSHandshakeTimeout = safe.TLSHandshakeTimeout
+		trusted.ResponseHeaderTimeout = safe.ResponseHeaderTimeout
+		trusted.DisableKeepAlives = true
+		client.Transport = trusted
+	}
+
+	client.Transport, err = netsec.BindTransportToOrigin(cfg.Endpoint, client.Transport)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "bind endpoint origin: %v", err)
+	}
+	return client, nil
 }
 
 func (c *Config) validate() error {
@@ -241,6 +290,9 @@ func (c *Config) validate() error {
 	c.CABundleFile = strings.TrimSpace(c.CABundleFile)
 	if c.CABundleFile != "" && u.Scheme != "https" {
 		return status.Error(codes.InvalidArgument, "ca_bundle_file requires an https endpoint")
+	}
+	for i := range c.AllowPrivateCIDRs {
+		c.AllowPrivateCIDRs[i] = strings.TrimSpace(c.AllowPrivateCIDRs[i])
 	}
 	c.CAAuthorityID = strings.TrimSpace(c.CAAuthorityID)
 	if c.CAAuthorityID == "" {

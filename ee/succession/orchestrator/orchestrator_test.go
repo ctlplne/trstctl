@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
+	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
 
 	pcasstore "trstctl.com/trstctl/ee/succession/store"
 

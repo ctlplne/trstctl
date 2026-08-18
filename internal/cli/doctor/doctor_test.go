@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
+	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
 
 	boundarycrypto "trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"

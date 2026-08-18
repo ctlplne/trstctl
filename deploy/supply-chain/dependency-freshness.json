@@ -4,6 +4,7 @@
   "max_report_age_days": 30,
   "source_commands": [
     "go list -m -u all",
+    "go list -m -versions github.com/fergusstrange/embedded-postgres",
     "npm --prefix web outdated --json",
     "make vuln",
     "npm --prefix web audit --omit=dev --audit-level=high"
@@ -42,7 +43,7 @@
   ],
   "tracked_upgrades": [
     {
-      "ecosystem": "gomod",
+      "ecosystem": "vendored-go",
       "name": "github.com/fergusstrange/embedded-postgres",
       "current_version": "v1.29.0",
       "latest_observed_version": "v1.34.0",
@@ -53,7 +54,7 @@
       "behind_since": "2026-06-21",
       "next_review_by": "2026-08-29",
       "deferral_until": "2026-09-05",
-      "rationale": "AUD-15 dated deferral. Bundled eval PostgreSQL affects local integration tests and single-node eval startup only; it is not in a served path, which is why it carries the shortest deferral of the four. The upgrade must refresh committed archive pins and Trivy receipts rather than moving only go.mod, so it is one reviewed change and not a manifest bump."
+      "rationale": "AUD-15 dated deferral. The security-maintained source fork is compiled from third_party/embedded-postgres and affects local integration tests and single-node eval startup only. The upgrade must rebase the reviewed fork, refresh committed archive pins, and refresh Trivy receipts together, so it is one reviewed change and not a source-version-only bump."
     },
     {
       "ecosystem": "gomod",

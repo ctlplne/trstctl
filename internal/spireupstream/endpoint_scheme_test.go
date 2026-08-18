@@ -77,6 +77,23 @@ func TestCABundleRequiresHTTPS(t *testing.T) {
 	}
 }
 
+func TestUpstreamClientRequiresNarrowPrivateEgressAllowance(t *testing.T) {
+	private := &Config{Endpoint: "https://10.20.30.40:8443"}
+	if _, err := upstreamHTTPClient(private); err == nil || !strings.Contains(err.Error(), "non-public") {
+		t.Fatalf("private endpoint without allowance error = %v, want non-public refusal", err)
+	}
+
+	private.AllowPrivateCIDRs = []string{"0.0.0.0/0"}
+	if _, err := upstreamHTTPClient(private); err == nil || !strings.Contains(err.Error(), "disables the SSRF guard") {
+		t.Fatalf("default-route allowance error = %v, want SSRF-guard refusal", err)
+	}
+
+	private.AllowPrivateCIDRs = []string{"10.20.30.40/32"}
+	if _, err := upstreamHTTPClient(private); err != nil {
+		t.Fatalf("exact private endpoint allowance was refused: %v", err)
+	}
+}
+
 // TestIsLoopbackHostRejectsLookalikes pins the shared predicate (J4/V26): a
 // hostname that merely mentions localhost is not loopback.
 func TestIsLoopbackHostRejectsLookalikes(t *testing.T) {

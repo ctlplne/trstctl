@@ -60,6 +60,26 @@ func TestReviewedExecAllowlistPinsConnectorLocalOpsBoundary(t *testing.T) {
 	}
 }
 
+func TestReviewedExecAllowlistPinsEmbeddedPostgres(t *testing.T) {
+	want := map[string]map[string]bool{
+		"third_party/embedded-postgres/embedded_postgres.go": {
+			"startPostgres": true,
+			"stopPostgres":  true,
+		},
+		"third_party/embedded-postgres/prepare_database.go": {
+			"defaultInitDatabase": true,
+		},
+		"third_party/embedded-postgres/version_strategy.go": {
+			"linuxMachineName": true,
+		},
+	}
+	for file, functions := range want {
+		if got := reviewedExecUses[file]; !reflect.DeepEqual(got, functions) {
+			t.Fatalf("%s reviewed exec allowlist = %#v, want %#v", file, got, functions)
+		}
+	}
+}
+
 // TestAmbientHTTPGuardPackagesStayTwo pins the ONLY structural exemption from
 // the SEC-005 ambient-client rule. internal/netsec and internal/egress are the
 // packages that build the sanctioned clients, so the rule cannot apply to them

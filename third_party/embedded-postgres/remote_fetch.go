@@ -1,11 +1,10 @@
+// SPDX-License-Identifier: MIT
+
 package embeddedpostgres
 
 import (
 	"archive/zip"
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -13,13 +12,16 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	boundarycrypto "trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 // RemoteFetchStrategy provides a strategy to fetch a Postgres binary so that it is available for use.
 type RemoteFetchStrategy func() error
 
 //nolint:funlen
-func defaultRemoteFetchStrategy(remoteFetchHost string, versionStrategy VersionStrategy, cacheLocator CacheLocator) RemoteFetchStrategy {
+func defaultRemoteFetchStrategy(remoteFetchHost string, versionStrategy VersionStrategy, cacheLocator CacheLocator, client *http.Client) RemoteFetchStrategy {
 	return func() error {
 		operatingSystem, architecture, version := versionStrategy()
 
@@ -31,8 +33,14 @@ func defaultRemoteFetchStrategy(remoteFetchHost string, versionStrategy VersionS
 			operatingSystem,
 			architecture,
 			version)
+		if client == nil {
+			return fmt.Errorf("download client is required")
+		}
+		if err := netsec.ValidatePublicHTTPSURL(jarDownloadURL); err != nil {
+			return fmt.Errorf("validate PostgreSQL download URL: %w", err)
+		}
 
-		jarDownloadResponse, err := http.Get(jarDownloadURL)
+		jarDownloadResponse, err := client.Get(jarDownloadURL)
 		if err != nil {
 			return fmt.Errorf("unable to connect to %s", remoteFetchHost)
 		}
@@ -49,17 +57,20 @@ func defaultRemoteFetchStrategy(remoteFetchHost string, versionStrategy VersionS
 		}
 
 		shaDownloadURL := fmt.Sprintf("%s.sha256", jarDownloadURL)
-		shaDownloadResponse, err := http.Get(shaDownloadURL)
-
+		shaDownloadResponse, err := client.Get(shaDownloadURL)
+		if err != nil {
+			return fmt.Errorf("download checksum from %s: %w", shaDownloadURL, err)
+		}
 		defer closeBody(shaDownloadResponse)()
-
-		if err == nil && shaDownloadResponse.StatusCode == http.StatusOK {
-			if shaBodyBytes, err := io.ReadAll(shaDownloadResponse.Body); err == nil {
-				jarChecksum := sha256.Sum256(jarBodyBytes)
-				if !bytes.Equal(shaBodyBytes, []byte(hex.EncodeToString(jarChecksum[:]))) {
-					return errors.New("downloaded checksums do not match")
-				}
-			}
+		if shaDownloadResponse.StatusCode != http.StatusOK {
+			return fmt.Errorf("download checksum from %s: HTTP %d", shaDownloadURL, shaDownloadResponse.StatusCode)
+		}
+		shaBodyBytes, err := io.ReadAll(shaDownloadResponse.Body)
+		if err != nil {
+			return fmt.Errorf("read checksum from %s: %w", shaDownloadURL, err)
+		}
+		if strings.TrimSpace(string(shaBodyBytes)) != boundarycrypto.SHA256Hex(jarBodyBytes) {
+			return fmt.Errorf("downloaded checksums do not match")
 		}
 
 		return decompressResponse(jarBodyBytes, jarDownloadResponse.ContentLength, cacheLocator, jarDownloadURL)

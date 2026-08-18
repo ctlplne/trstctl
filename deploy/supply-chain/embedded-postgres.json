@@ -2,7 +2,7 @@
   "_comment": "Provenance + scan policy for the PostgreSQL binary that the embedded-postgres dependency downloads at runtime. It lives OUTSIDE go.sum (Maven Central, not the Go module proxy), so it needs its own COMMITTED pin + scan. This binary is used both by the integration tests AND by the served single-node/eval path (internal/server/startBundledPostgres), so the pin is enforced at runtime (SUPPLY-003), not just in CI. See deploy/supply-chain/README.md and docs/supply-chain.md.",
   "module": "github.com/fergusstrange/embedded-postgres",
   "moduleVersion": "v1.29.0",
-  "modulePatch": "third_party/embedded-postgres replaces only the startup/health-check lib/pq connector with github.com/jackc/pgx/v5/stdlib; see PATCHES.md and the shipped dependency-closure gate.",
+  "modulePatch": "third_party/embedded-postgres is compiled inside the root module: it replaces the startup/health-check lib/pq connector with github.com/jackc/pgx/v5/stdlib, requires the Maven checksum sidecar, and routes SHA-256 through internal/crypto; see PATCHES.md and the shipped dependency-closure gate.",
   "postgresVersion": "16.14.0",
   "pinnedBy": "internal/server/bundled_pg_pins.go — bundledPGVersion plus the per-arch txz_sha256 map. internal/server/bundled_pg.go passes bundledPGVersion straight to embeddedpostgres.Version(), so the version that is downloaded, the version in the cache filename, and the version this manifest pins cannot diverge. SCOPE: the integration tests still request the library constant embeddedpostgres.V16 (frozen at 16.4.0 in v1.29.0); they are CI-only, never run on an operator host, and are NOT covered by this manifest.",
   "runtimeEnforced": true,

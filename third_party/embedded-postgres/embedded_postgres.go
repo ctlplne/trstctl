@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package embeddedpostgres
 
 import (
@@ -10,6 +12,9 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
+
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 var mu sync.Mutex
@@ -45,7 +50,12 @@ func newDatabaseWithConfig(config Config) *EmbeddedPostgres {
 		shouldUseAlpineLinuxBuild,
 	)
 	cacheLocator := defaultCacheLocator(config.cachePath, versionStrategy)
-	remoteFetchStrategy := defaultRemoteFetchStrategy(config.binaryRepositoryURL, versionStrategy, cacheLocator)
+	remoteFetchStrategy := defaultRemoteFetchStrategy(
+		config.binaryRepositoryURL,
+		versionStrategy,
+		cacheLocator,
+		netsec.SafeClient(30*time.Second),
+	)
 
 	return &EmbeddedPostgres{
 		config:              config,

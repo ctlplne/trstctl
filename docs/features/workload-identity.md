@@ -102,6 +102,7 @@ UpstreamAuthority "trstctl" {
   plugin_data {
     endpoint = "https://trstctl.example.com:8443"
     ca_bundle_file = "/run/secrets/trstctl-server-ca.pem"
+    allow_private_cidrs = ["10.96.42.15/32"]
     ca_authority_id = "11111111-1111-1111-1111-111111111111"
     token_file = "/run/secrets/trstctl-spire-token"
     common_name = "SPIRE Server CA"
@@ -116,6 +117,11 @@ trust file at `ca_bundle_file`. The plugin pins that bundle for this upstream HT
 connection only; it does not disable verification or modify SPIRE's process-wide
 trust store. Omit the field when the endpoint chains to a CA already trusted by the
 host.
+
+The plugin also applies resolved-address SSRF protection and locks requests to the
+configured scheme and host. If a private trstctl name resolves to RFC 1918 space,
+list only its expected address or smallest practical range in
+`allow_private_cidrs`; private destinations are refused by default.
 
 This is container-proven end to end: CI runs a real SPIRE server, loads the plugin,
 mints an X.509-SVID, and verifies the chain as workload leaf -> SPIRE intermediate ->

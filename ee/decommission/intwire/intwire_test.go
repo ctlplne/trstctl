@@ -21,10 +21,10 @@ import (
 	"testing"
 	"time"
 
-	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 	"github.com/jackc/pgx/v5"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
 
 	eedecommission "trstctl.com/trstctl/ee/decommission"
 	"trstctl.com/trstctl/ee/decommission/aggregate"

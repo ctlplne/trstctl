@@ -65,6 +65,25 @@ func TestTaggedAttachSeamsAcceptRepositoryRelativePaths(t *testing.T) {
 	}
 }
 
+func TestVendoredEmbeddedPostgresLicenseBoundaryIsExact(t *testing.T) {
+	for _, path := range []string{
+		"third_party/embedded-postgres/embedded_postgres.go",
+		"third_party/embedded-postgres/remote_fetch_test.go",
+	} {
+		if !isEmbeddedPostgresSource(path) {
+			t.Fatalf("fixture escaped exact vendored source prefix: %s", path)
+		}
+	}
+	for _, path := range []string{
+		"third_party/other/library.go",
+		"internal/embedded-postgres/library.go",
+	} {
+		if isEmbeddedPostgresSource(path) {
+			t.Fatalf("unrelated source acquired the MIT boundary: %s", path)
+		}
+	}
+}
+
 func TestPQCOperatorLabExemptionContainsNoAlgorithmOrEEImplementation(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join("..", "..", "pqclab", "main.go"))
 	if err != nil {

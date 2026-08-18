@@ -4,17 +4,12 @@ go 1.26.0
 
 toolchain go1.26.6
 
-// Security-maintained local fork: upstream v1.29.0 links github.com/lib/pq,
-// which has five reachable GO-2026 vulnerabilities and no fixed release.
-replace github.com/fergusstrange/embedded-postgres => ./third_party/embedded-postgres
-
 require (
 	github.com/aws/aws-sdk-go-v2 v1.42.0
 	github.com/aws/aws-sdk-go-v2/service/kms v1.53.4
 	github.com/aws/smithy-go v1.27.1
 	github.com/cloudflare/circl v1.6.3
 	github.com/crewjam/saml v0.5.1
-	github.com/fergusstrange/embedded-postgres v1.29.0
 	github.com/go-asn1-ber/asn1-ber v1.5.7
 	github.com/go-ldap/ldap/v3 v3.4.10
 	github.com/go-sql-driver/mysql v1.9.3
@@ -37,6 +32,7 @@ require (
 	github.com/smallstep/pkcs7 v0.2.1
 	github.com/spiffe/spire-plugin-sdk v1.15.1
 	github.com/tetratelabs/wazero v1.8.2
+	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8
 	go.mongodb.org/mongo-driver/v2 v2.8.0
 	go.opentelemetry.io/proto/otlp v1.5.0
 	golang.org/x/crypto v0.55.0
@@ -133,7 +129,6 @@ require (
 	github.com/xdg-go/stringprep v1.0.4 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect
-	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 // indirect
 	github.com/yashtewari/glob-intersection v0.2.0 // indirect
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
 	github.com/zclconf/go-cty v1.18.1 // indirect

@@ -69,6 +69,9 @@ LICENSE_TITLES = [
 # diligence hunts for.
 DENIED = {"AGPL-3.0", "GPL", "LGPL", "SSPL", "CDDL", "EPL"}
 
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+VENDORED_EMBEDDED_POSTGRES = "trstctl.com/trstctl/third_party/embedded-postgres"
+
 
 def linked_modules(packages: list[str]) -> dict[str, str]:
     out = subprocess.run(
@@ -83,6 +86,24 @@ def linked_modules(packages: list[str]) -> dict[str, str]:
         path, directory = line.split("\t", 1)
         if directory.strip():
             mods[path] = directory
+
+    # Source copied into the root module has no separate .Module in `go list`,
+    # but its upstream MIT license still ships in the binary and must not vanish
+    # from the receipt merely because we removed the vulnerable upstream module
+    # replacement. Only add it when the shipped dependency closure really links
+    # the vendored package.
+    imports = subprocess.run(
+        ["go", "list", "-deps", "-f", "{{.ImportPath}}", *packages],
+        capture_output=True, text=True, check=True,
+    )
+    if VENDORED_EMBEDDED_POSTGRES in imports.stdout.splitlines():
+        manifest_path = os.path.join(
+            REPO_ROOT, "deploy", "supply-chain", "embedded-postgres.json"
+        )
+        with open(manifest_path, encoding="utf-8") as handle:
+            manifest = json.load(handle)
+        identity = f"{manifest['module']}@{manifest['moduleVersion']} (vendored source)"
+        mods[identity] = os.path.join(REPO_ROOT, "third_party", "embedded-postgres")
     return mods
 
 

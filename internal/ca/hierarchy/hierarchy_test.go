@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 	"github.com/jackc/pgx/v5"
+	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
 
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/config"

@@ -164,6 +164,7 @@ for (const required of requiredSLOClasses) {
 
 const goVersions = parseGoModDirectVersions();
 const npmVersions = parsePackageLockVersions();
+const embeddedPostgresSource = readJSON(path.join(repoRoot, "deploy/supply-chain/embedded-postgres.json"));
 const tracked = new Set();
 const today = utcToday();
 
@@ -270,6 +271,14 @@ for (const upgrade of report.tracked_upgrades ?? []) {
       fail(`tracked Go module ${upgrade.name} is not a direct go.mod dependency`);
     } else if (actual !== upgrade.current_version) {
       fail(`tracked Go module ${upgrade.name} current_version=${upgrade.current_version}, go.mod has ${actual}`);
+    }
+  } else if (upgrade.ecosystem === "vendored-go") {
+    if (upgrade.name !== embeddedPostgresSource.module) {
+      fail(`unsupported vendored Go source ${upgrade.name}`);
+    } else if (upgrade.current_version !== embeddedPostgresSource.moduleVersion) {
+      fail(`tracked vendored source ${upgrade.name} current_version=${upgrade.current_version}, source manifest has ${embeddedPostgresSource.moduleVersion}`);
+    } else if (!fs.existsSync(path.join(repoRoot, "third_party/embedded-postgres/PATCHES.md"))) {
+      fail(`tracked vendored source ${upgrade.name} has no third_party/embedded-postgres/PATCHES.md`);
     }
   } else if (upgrade.ecosystem === "npm") {
     const actual = npmVersions.get(upgrade.name);

@@ -249,6 +249,7 @@ plugins {
         plugin_data {
             endpoint = %q
             ca_bundle_file = "/opt/spire/conf/server/trstctl-ca.pem"
+            allow_private_cidrs = ["172.16.0.0/12", "192.168.0.0/16"]
             ca_authority_id = "root-1"
             token_file = "/opt/spire/conf/server/trstctl-token"
             common_name = "SPIRE Server CA"

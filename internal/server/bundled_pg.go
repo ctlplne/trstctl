@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
-	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
+	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
 
 	"trstctl.com/trstctl/internal/config"
 )

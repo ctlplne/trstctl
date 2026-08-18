@@ -42,4 +42,13 @@ func TestShippedCommandsExcludeLibPQ(t *testing.T) {
 			t.Fatalf("embedded-postgres security patch lost pgx anchor %q", anchor)
 		}
 	}
+	for _, file := range []string{"prepare_database.go", "remote_fetch.go"} {
+		source, err := os.ReadFile(filepath.Join(root, "third_party", "embedded-postgres", file)) // #nosec G304 -- fixed repository source path (CWE-22)
+		if err != nil {
+			t.Fatalf("read embedded-postgres fork source %s: %v", file, err)
+		}
+		if strings.Contains(string(source), `"crypto/`) {
+			t.Fatalf("embedded-postgres fork %s bypasses the internal/crypto boundary", file)
+		}
+	}
 }

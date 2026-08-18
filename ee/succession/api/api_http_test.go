@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
+	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
 
 	"trstctl.com/trstctl/ee/succession"
 	succapi "trstctl.com/trstctl/ee/succession/api"

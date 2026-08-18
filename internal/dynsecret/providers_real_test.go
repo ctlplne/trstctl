@@ -23,9 +23,9 @@ import (
 	"testing"
 	"time"
 
-	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 	"github.com/jackc/pgx/v5"
 	"go.mongodb.org/mongo-driver/v2/bson"
+	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
 )
 
 func TestPostgresBackendCreatesUsableLoginAndRevokes(t *testing.T) {

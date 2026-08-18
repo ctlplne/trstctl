@@ -389,3 +389,20 @@ func TestFreshnessAcceptsAReviewOnTheDeadlineItself(t *testing.T) {
 			"time and must be allowed:\n%s", out)
 	}
 }
+
+func TestFreshnessRejectsVendoredSourceVersionDrift(t *testing.T) {
+	body := mutateFreshnessReport(t, func(row map[string]any) bool {
+		if row["name"] != "github.com/fergusstrange/embedded-postgres" {
+			return false
+		}
+		row["current_version"] = "v1.28.0"
+		return true
+	})
+	out, failed := runFreshnessChecker(t, body)
+	if !failed {
+		t.Fatalf("CODE-111: a vendored-source/report version mismatch must fail, got success:\n%s", out)
+	}
+	if !strings.Contains(out, "source manifest has v1.29.0") {
+		t.Errorf("CODE-111: vendored-source drift failure did not name the manifest version:\n%s", out)
+	}
+}

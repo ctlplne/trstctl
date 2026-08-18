@@ -18,6 +18,7 @@ const (
 	modulePath = "trstctl.com/trstctl"
 	coreSPDX   = "SPDX-License-Identifier: MPL-2.0"
 	eeSPDX     = "SPDX-License-Identifier: LicenseRef-trstctl-EE"
+	mitSPDX    = "SPDX-License-Identifier: MIT"
 )
 
 var Analyzer = &analysis.Analyzer{
@@ -39,7 +40,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 		}
 		body := string(bodyBytes)
 		isEE := isEEPath(sourcePath) || strings.HasPrefix(pass.Pkg.Path(), modulePath+"/ee")
-		checkSPDX(pass, file, isEE, body)
+		checkSPDX(pass, file, sourcePath, isEE, body)
 		if !isEE {
 			checkCoreImports(pass, file, sourcePath)
 			checkCorePQCPlacement(pass, file, sourcePath, body)
@@ -73,7 +74,7 @@ func repoSourcePath(filename, pkgPath string) string {
 	return relPkg + "/" + base
 }
 
-func checkSPDX(pass *analysis.Pass, file *ast.File, isEE bool, body string) {
+func checkSPDX(pass *analysis.Pass, file *ast.File, sourcePath string, isEE bool, body string) {
 	header := spdxHeaderWindow(body)
 	if isEE {
 		if strings.Contains(header, coreSPDX) {
@@ -85,6 +86,12 @@ func checkSPDX(pass *analysis.Pass, file *ast.File, isEE bool, body string) {
 		}
 		return
 	}
+	if isEmbeddedPostgresSource(sourcePath) {
+		if !strings.Contains(header, mitSPDX) || strings.Contains(header, coreSPDX) || strings.Contains(header, eeSPDX) {
+			pass.Reportf(file.Package, "embedded-postgres source file must preserve upstream %s", mitSPDX)
+		}
+		return
+	}
 	if strings.Contains(header, eeSPDX) {
 		pass.Reportf(file.Package, "core file must not carry proprietary EE SPDX; use %s", coreSPDX)
 		return
@@ -92,6 +99,10 @@ func checkSPDX(pass *analysis.Pass, file *ast.File, isEE bool, body string) {
 	if !strings.Contains(header, coreSPDX) {
 		pass.Reportf(file.Package, "core file must carry %s", coreSPDX)
 	}
+}
+
+func isEmbeddedPostgresSource(sourcePath string) bool {
+	return strings.HasPrefix(sourcePath, "third_party/embedded-postgres/")
 }
 
 func spdxHeaderWindow(body string) string {

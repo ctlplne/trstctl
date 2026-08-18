@@ -213,6 +213,20 @@ var reviewedAmbientHTTPClients = map[string]map[string]bool{
 }
 
 var reviewedExecUses = map[string]map[string]bool{
+	// The vendored embedded-Postgres launcher executes only fixed PostgreSQL
+	// utilities from the checksum-pinned archive (plus the fixed local `uname`
+	// probe). No shell is involved, the password uses a mode-0600 file, and the
+	// exact function set is pinned by TestReviewedExecAllowlistPinsEmbeddedPostgres.
+	"third_party/embedded-postgres/embedded_postgres.go": {
+		"startPostgres": true,
+		"stopPostgres":  true,
+	},
+	"third_party/embedded-postgres/prepare_database.go": {
+		"defaultInitDatabase": true,
+	},
+	"third_party/embedded-postgres/version_strategy.go": {
+		"linuxMachineName": true,
+	},
 	// A5's single-box demo spawns the SIBLING trstctl-agent binary. Reviewed
 	// rather than refactored because there is nothing to validate away: the
 	// program is resolved beside this executable (or from PATH) and never comes

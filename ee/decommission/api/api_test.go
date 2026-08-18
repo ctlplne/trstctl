@@ -27,7 +27,7 @@ import (
 	"testing"
 	"time"
 
-	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
+	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
 
 	eedecommission "trstctl.com/trstctl/ee/decommission"
 	decapi "trstctl.com/trstctl/ee/decommission/api"
