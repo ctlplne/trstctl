@@ -139,6 +139,10 @@ services:
         condition: service_completed_successfully
     environment:
       TRSTCTL_SERVER_ADDR: ":8443"
+      # Internal TLS keeps private key state in /data but publishes a separate
+      # certificate-only trust file. Seeder and other clients receive only this
+      # public volume; they never mount the control plane's private data volume.
+      TRSTCTL_SERVER_TLS_INTERNAL_TRUST_FILE: /public-trust/control-plane.crt
       # A5: the agent channel is OFF by default, which is the right production
       # default and wrong for a demo. Without it the seed job advertises agent
       # enrollment tokens that nothing can redeem — an evaluator gets a token,
@@ -204,7 +208,7 @@ services:
       # walkthrough runs; the old 168-hour window renewed 1h/7d rows as soon as
       # they were seeded and made preserved-volume convergence impossible.
       TRSTCTL_LIFECYCLE_RENEW_BEFORE: "5m"
-      TRSTCTL_CA_CERT_FILE: /data/ca/issuing-ca.crt
+      TRSTCTL_CA_CERT_FILE: /public-trust/issuing-ca.crt
       TRSTCTL_AUTH_OIDC_ENABLED: "true"
       TRSTCTL_AUTH_OIDC_ISSUER: "http://127.0.0.1:19081"
       TRSTCTL_AUTH_OIDC_CLIENT_ID: trstctl-demo-ui
@@ -233,6 +237,7 @@ services:
       - signersock:/run/trstctl
       - secrets:/data/secrets
       - trstctldata:/data
+      - publictrust:/public-trust
       - demoidp:/demo-oidc:ro
       - managedkeys:/demo-managed-keys:ro
     ports:
@@ -383,14 +388,15 @@ services:
       TRSTCTL_DEMO_URL: "https://localhost:9443"
       TRSTCTL_TENANT: "11111111-1111-4111-8111-111111111111"
       TRSTCTL_DEMO_BOOTSTRAP_TOKEN_FILE: /seed-state/bootstrap.token
-      NODE_TLS_REJECT_UNAUTHORIZED: "0"
+      # Node verifies the exact public certificate exported by the healthy
+      # control plane. Never use NODE_TLS_REJECT_UNAUTHORIZED=0 here.
+      NODE_EXTRA_CA_CERTS: /public-trust/control-plane.crt
     volumes:
       - signersock:/run/trstctl
       # Read-only is deliberate: a healthy control plane proves these files
       # already exist, and an admin job must fail rather than mint a new domain.
       - secrets:/data/secrets:ro
-      - trstctldata:/data:ro
-      - trstctldata:/trstctl-data:ro
+      - publictrust:/public-trust:ro
       # The seed's own bootstrap bearer is persisted separately from signer/KEK
       # custody. Replays reuse it, so an ordinary compose restart does not mint a
       # new admin token merely to discover that the seed already completed.
@@ -405,5 +411,6 @@ volumes:
   seedstate:
   secrets:
   trstctldata:
+  publictrust:
   demoidp:
   managedkeys:

@@ -94,6 +94,7 @@ RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS}" -o /out/trstctl-ope
 RUN install -d -m 0700 -o 65532 -g 65532 \
       /mnt-skel/data /mnt-skel/data/secrets /mnt-skel/data/signer /mnt-skel/data/ca /mnt-skel/data/tls \
       /mnt-skel/run/trstctl /mnt-skel/run/trstctl-spiffe
+RUN install -d -m 0750 -o 65532 -g 65532 /mnt-skel/public-trust
 
 # The local click-through demo exercises the real offline-license seam. Its
 # image-only target creates a throw-away signing key, bakes only that key's
@@ -156,6 +157,7 @@ COPY --from=build /out/trstctl-operator /usr/local/bin/trstctl-operator
 COPY --from=build --chown=65532:65532 /mnt-skel/data /data
 COPY --from=build --chown=65532:65532 /mnt-skel/run/trstctl /run/trstctl
 COPY --from=build --chown=65532:65532 /mnt-skel/run/trstctl-spiffe /run/trstctl-spiffe
+COPY --from=build --chown=65532:65532 /mnt-skel/public-trust /public-trust
 
 # 65532 is distroless' "nonroot" uid:gid — the process never runs as root.
 USER 65532:65532

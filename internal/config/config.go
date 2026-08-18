@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -955,6 +956,10 @@ type TLS struct {
 	// directory lets explicitly pinned evaluation clients survive a process or
 	// container restart. File mode never reads it.
 	InternalStateFile string `json:"internal_state_file,omitempty"`
+	// InternalTrustFile is a certificate-only PEM published by internal mode for
+	// clients that need to verify the self-signed server. It must never alias the
+	// combined private state file. Mount or distribute this file, never the state.
+	InternalTrustFile string `json:"internal_trust_file,omitempty"`
 	AllowPlaintextDev bool   `json:"allow_plaintext_dev,omitempty"`
 }
 
@@ -2117,7 +2122,7 @@ func (c CA) GovernanceModeValue() string {
 func Default() *Config {
 	return &Config{
 		Server: Server{Addr: ":8443", TLS: TLS{
-			Mode: TLSInternal, InternalStateFile: "data/tls/internal-server.pem",
+			Mode: TLSInternal, InternalStateFile: "data/tls/internal-server.pem", InternalTrustFile: "data/tls/internal-server.crt",
 		}},
 		Postgres: Postgres{Mode: PostgresBundled, DataDir: "data/postgres", Port: 5432},
 		// The embedded event log fsyncs on a tight bounded cadence by default so a
@@ -2470,6 +2475,7 @@ func applyServerAndSpineEnv(getenv func(string) string, c *Config) {
 	setString(getenv, "TRSTCTL_SERVER_TLS_CERT_FILE", &c.Server.TLS.CertFile)
 	setString(getenv, "TRSTCTL_SERVER_TLS_KEY_FILE", &c.Server.TLS.KeyFile)
 	setString(getenv, "TRSTCTL_SERVER_TLS_INTERNAL_STATE_FILE", &c.Server.TLS.InternalStateFile)
+	setString(getenv, "TRSTCTL_SERVER_TLS_INTERNAL_TRUST_FILE", &c.Server.TLS.InternalTrustFile)
 	setBool(getenv, "TRSTCTL_DEV_ALLOW_PLAINTEXT", &c.Server.TLS.AllowPlaintextDev)
 	setCSV(getenv, "TRSTCTL_CORS_ALLOWED_ORIGINS", &c.Server.CORSAllowedOrigins)
 	setString(getenv, "TRSTCTL_POSTGRES_MODE", &c.Postgres.Mode)
@@ -3070,7 +3076,15 @@ func validateServerConfig(c *Config) []error {
 	}
 	switch c.Server.TLS.Mode {
 	case TLSInternal:
-		// no extra requirements
+		if strings.TrimSpace(c.Server.TLS.InternalStateFile) == "" {
+			errs = append(errs, errors.New("server.tls.internal_state_file is required when server.tls.mode is internal"))
+		}
+		if strings.TrimSpace(c.Server.TLS.InternalTrustFile) == "" {
+			errs = append(errs, errors.New("server.tls.internal_trust_file is required when server.tls.mode is internal"))
+		}
+		if c.Server.TLS.InternalStateFile != "" && c.Server.TLS.InternalTrustFile != "" && filepath.Clean(c.Server.TLS.InternalStateFile) == filepath.Clean(c.Server.TLS.InternalTrustFile) {
+			errs = append(errs, errors.New("server.tls.internal_trust_file must not alias the private server.tls.internal_state_file"))
+		}
 	case TLSDisabled:
 		if !c.Server.TLS.AllowPlaintextDev {
 			errs = append(errs, errors.New("server.tls.mode=disabled requires explicit local-dev override TRSTCTL_DEV_ALLOW_PLAINTEXT=true (or server.tls.allow_plaintext_dev=true)"))

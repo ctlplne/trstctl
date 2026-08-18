@@ -76,6 +76,7 @@ func TestDemoComposeIsSeparatePrepopulatedStack(t *testing.T) {
 	}
 	for k, want := range map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE":               "/data/ca/agent-ca.crt",
+		"TRSTCTL_CA_CERT_FILE":                             "/public-trust/issuing-ca.crt",
 		"TRSTCTL_AUTH_OIDC_ENABLED":                        "true",
 		"TRSTCTL_AUTH_OIDC_REDIRECT_URI":                   "https://localhost:9443/auth/callback",
 		"TRSTCTL_AUTH_OIDC_AUTH_ENDPOINT":                  "http://127.0.0.1:19081/authorize",
@@ -91,6 +92,7 @@ func TestDemoComposeIsSeparatePrepopulatedStack(t *testing.T) {
 		"TRSTCTL_LIFECYCLE_RENEW_BEFORE":                   "5m",
 		"TRSTCTL_PROTOCOLS_ACME_TENANT_ID":                 "11111111-1111-4111-8111-111111111111",
 		"TRSTCTL_PROTOCOLS_EST_TENANT_ID":                  "11111111-1111-4111-8111-111111111111",
+		"TRSTCTL_SERVER_TLS_INTERNAL_TRUST_FILE":           "/public-trust/control-plane.crt",
 	} {
 		if got := stringValue(cp.Environment[k]); got != want {
 			t.Fatalf("demo trstctl env %s = %q, want %q", k, got, want)
@@ -131,6 +133,40 @@ func TestDemoComposeIsSeparatePrepopulatedStack(t *testing.T) {
 	}
 	if got := seed.DependsOn["trstctl"].Condition; got != "service_healthy" {
 		t.Fatalf("demo seed must wait for a healthy control plane, got %q", got)
+	}
+	if strings.Contains(read(t, "seed.mjs"), "/trstctl-data/") {
+		t.Fatal("demo seed still refers to the private control-plane data-volume alias")
+	}
+	if _, ok := seed.Environment["NODE_TLS_REJECT_UNAUTHORIZED"]; ok {
+		t.Fatal("demo seed globally disables TLS verification")
+	}
+	if got := stringValue(seed.Environment["NODE_EXTRA_CA_CERTS"]); got != "/public-trust/control-plane.crt" {
+		t.Fatalf("demo seed explicit TLS trust file = %q, want public control-plane certificate", got)
+	}
+	if contains(seed.Volumes, "trstctldata:/data:ro") || contains(seed.Volumes, "trstctldata:/trstctl-data:ro") {
+		t.Fatalf("demo seed can read the private control-plane data volume: %v", seed.Volumes)
+	}
+	if !contains(seed.Volumes, "publictrust:/public-trust:ro") {
+		t.Fatalf("demo seed lacks the public-only trust volume: %v", seed.Volumes)
+	}
+}
+
+func TestDemoSeedSourceNeverLogsOneTimeCredentials(t *testing.T) {
+	body := read(t, "seed.mjs")
+	for _, forbidden := range []string{
+		"One-time share token:",
+		"Demo API token for ci-release-bot:",
+		"Ephemeral incident token:",
+		"Agent enrollment token:",
+	} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("demo seed source still renders credential-bearing log label %q", forbidden)
+		}
+	}
+	for _, line := range strings.Split(body, "\n") {
+		if strings.Contains(line, "console.log") && strings.Contains(line, ".token") {
+			t.Fatalf("demo seed log statement can render a token field: %s", strings.TrimSpace(line))
+		}
 	}
 }
 
@@ -312,21 +348,21 @@ func TestDemoSeedCustodyGuardRejectsMissingOrWrongConfigurationAUD68(t *testing.
 			},
 		},
 		{
-			name: "missing audit data mount",
-			want: "audit data volume",
+			name: "private control data exposed",
+			want: "exact custody mount allowlist",
 			mutate: func(cf *composeFile) {
 				seed := cf.Services["demo-seed"]
-				seed.Volumes = withoutComposeMount(seed.Volumes, "trstctldata", "/data")
+				seed.Volumes = append(seed.Volumes, "trstctldata:/data:ro")
 				cf.Services["demo-seed"] = seed
 			},
 		},
 		{
-			name: "writable audit data mount",
-			want: "audit data volume",
+			name: "writable public trust mount",
+			want: "public trust volume",
 			mutate: func(cf *composeFile) {
 				seed := cf.Services["demo-seed"]
-				seed.Volumes = withoutComposeMount(seed.Volumes, "trstctldata", "/data")
-				seed.Volumes = append(seed.Volumes, "trstctldata:/data")
+				seed.Volumes = withoutComposeMount(seed.Volumes, "publictrust", "/public-trust")
+				seed.Volumes = append(seed.Volumes, "publictrust:/public-trust")
 				cf.Services["demo-seed"] = seed
 			},
 		},
@@ -406,11 +442,11 @@ func TestDemoSeedCustodyGuardMutatesEverySharedAuthorityAUD68(t *testing.T) {
 	t.Run("seed-ca-view-missing", func(t *testing.T) {
 		cf := parseCompose(t)
 		seed := cf.Services["demo-seed"]
-		seed.Volumes = withoutComposeMount(seed.Volumes, "trstctldata", "/trstctl-data")
+		seed.Volumes = withoutComposeMount(seed.Volumes, "publictrust", "/public-trust")
 		cf.Services["demo-seed"] = seed
 		err := validateDemoSeedCustody(cf)
-		if err == nil || !strings.Contains(err.Error(), "exact custody mount allowlist") {
-			t.Fatalf("custody guard error=%v, want exact custody mount allowlist refusal", err)
+		if err == nil || !strings.Contains(err.Error(), "public trust volume") {
+			t.Fatalf("custody guard error=%v, want public trust volume refusal", err)
 		}
 	})
 	t.Run("signer-socket-read-only", func(t *testing.T) {
@@ -867,7 +903,7 @@ func validateAUD68ProofSource(body string) error {
 		{label: "project-unique control image", needle: `export TRSTCTL_DEMO_CONTROL_IMAGE="${proof_control_image}"`},
 		{label: "project-unique seed image", needle: `export TRSTCTL_DEMO_SEED_IMAGE="${proof_seed_image}"`},
 		{label: "complete service-name collision census", needle: "readonly -a proof_services=(\n  postgres nats localstack oidc-keys managedkeys-config signer trstctl demo-oidc\n  oidc-loopback localstack-loopback localstack-signer-loopback demo-seed\n)"},
-		{label: "complete volume-name collision census", needle: "readonly -a proof_volumes=(\n  pgdata natsdata localstack signersock signerkeys seedstate secrets trstctldata demoidp managedkeys\n)"},
+		{label: "complete volume-name collision census", needle: "readonly -a proof_volumes=(\n  pgdata natsdata localstack signersock signerkeys seedstate secrets trstctldata publictrust demoidp managedkeys\n)"},
 		{label: "exact container collision", needle: `assert_named_object_absent container "${proof_project}-${service_name}-1"`},
 		{label: "exact volume collision", needle: `assert_named_object_absent volume "${proof_project}_${volume_name}"`},
 		{label: "exact network collision", needle: `assert_named_object_absent network "${proof_project}_default"`},
@@ -889,7 +925,8 @@ func validateAUD68ProofSource(body string) error {
 		{label: "whole token file load", needle: `loaded_token="$(<"${path}")"`},
 		{label: "whole token file byte comparison", needle: `cmp -s -- "${path}" <(printf '%s\n' "${loaded_token}")`},
 		{label: "exact token syntax", needle: `[[ "${loaded_token}" =~ ^trst_[A-Za-z0-9_-]{43}$ ]]`},
-		{label: "stdin-only bearer config", needle: `curl --silent --show-error --insecure --config -`},
+		{label: "verified TLS with stdin-only bearer config", needle: `curl --silent --show-error --cacert "${proof_tls_trust}" --config -`},
+		{label: "public trust extraction", needle: `"${compose[@]}" cp trstctl:/public-trust/control-plane.crt "${proof_tls_trust}"`},
 		{label: "parsed certificate-list response", needle: `jq -e --arg tenant "${tenant_id}" '`},
 		{label: "certificate-list object", needle: `type == "object" and`},
 		{label: "nonempty seeded certificate list", needle: `(.items | (type == "array" and length > 0))`},
@@ -1153,16 +1190,23 @@ func validateDemoSeedCustody(cf composeFile) error {
 		!composeMountHasMode(seed.Volumes, "secrets", "/data/secrets", "ro") {
 		return fmt.Errorf("demo custody: signer/trstctl must share the secrets volume and demo-seed must mount it read-only at /data/secrets")
 	}
-	if !composeMountHasMode(signer.Volumes, "trstctldata", "/data", "") ||
-		!composeMountHasMode(cp.Volumes, "trstctldata", "/data", "") ||
-		!composeMountHasMode(seed.Volumes, "trstctldata", "/data", "ro") {
-		return fmt.Errorf("demo custody: signer/trstctl must share the audit data volume and demo-seed must mount it read-only at /data")
+	if !composeMountHasMode(cp.Volumes, "publictrust", "/public-trust", "") ||
+		!composeMountHasMode(seed.Volumes, "publictrust", "/public-trust", "ro") {
+		return fmt.Errorf("demo custody: trstctl must publish and demo-seed must read the public trust volume")
+	}
+	if got := stringValue(cp.Environment["TRSTCTL_SERVER_TLS_INTERNAL_TRUST_FILE"]); got != "/public-trust/control-plane.crt" {
+		return fmt.Errorf("demo custody: control-plane public TLS trust path=%q, want /public-trust/control-plane.crt", got)
+	}
+	if got := stringValue(seed.Environment["NODE_EXTRA_CA_CERTS"]); got != "/public-trust/control-plane.crt" {
+		return fmt.Errorf("demo custody: seed TLS trust path=%q, want exact control-plane public certificate", got)
+	}
+	if _, forbidden := seed.Environment["NODE_TLS_REJECT_UNAUTHORIZED"]; forbidden {
+		return fmt.Errorf("demo custody: seed must not disable TLS verification")
 	}
 	wantSeedVolumes := []string{
 		"signersock:/run/trstctl",
 		"secrets:/data/secrets:ro",
-		"trstctldata:/data:ro",
-		"trstctldata:/trstctl-data:ro",
+		"publictrust:/public-trust:ro",
 		"seedstate:/seed-state",
 	}
 	if !sameStringSet(seed.Volumes, wantSeedVolumes) {
@@ -1182,6 +1226,7 @@ func validateDemoSeedCustody(cf composeFile) error {
 		"signersock:/run/trstctl",
 		"secrets:/data/secrets",
 		"trstctldata:/data",
+		"publictrust:/public-trust",
 		"demoidp:/demo-oidc:ro",
 		"managedkeys:/demo-managed-keys:ro",
 	}

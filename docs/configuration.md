@@ -20,6 +20,7 @@ trstctl -check-config
 | `TRSTCTL_SERVER_TLS_CERT_FILE` | — | Server certificate chain (PEM); **required** when `mode=file`. |
 | `TRSTCTL_SERVER_TLS_KEY_FILE` | — | Server private key (PEM); **required** when `mode=file`. |
 | `TRSTCTL_SERVER_TLS_INTERNAL_STATE_FILE` | `data/tls/internal-server.pem` | Mode-`0600` combined certificate/private-key state used only by `mode=internal`. Keep it on persistent private storage so an inspected evaluation trust pin survives restart. Never distribute this file; capture only the public certificate from the TLS endpoint. |
+| `TRSTCTL_SERVER_TLS_INTERNAL_TRUST_FILE` | `data/tls/internal-server.crt` | Certificate-only PEM published by `mode=internal`. Give this file to evaluation clients that must verify the self-signed server. It contains no private key and must never point at the private state file above. |
 | `TRSTCTL_DEV_ALLOW_PLAINTEXT` | `false` | Explicit local-dev override required when `TRSTCTL_SERVER_TLS_MODE=disabled`; `TRSTCTL_SERVER_ADDR` must also bind loopback only. |
 | `TRSTCTL_CORS_ALLOWED_ORIGINS` | empty (same-origin only) | Comma-separated exact browser Origins (scheme+host+port, e.g. `https://console.example.com`) allowed to make cross-origin, credentialed requests to the API (SEC-003). Empty means same-origin only: no `Access-Control-Allow-Origin` is emitted, so a cross-origin XHR is blocked by the browser. `*` is deliberately not honored for a credentialed API. |
 | `TRSTCTL_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, or `error`. |
@@ -34,9 +35,10 @@ session ever travels in cleartext.
   once and reloads it from `server.tls.internal_state_file` on later starts. The
   certificate covers `localhost`, `127.0.0.1`, the first-boot hostname, and the
   Compose service name `trstctl`. Existing malformed, expired, or group/world-
-  readable state fails closed instead of rotating trust silently. Clients must
-  inspect and trust the public certificate (or use `curl -k` only for a local
-  liveness check); suitable for evaluation and tightly controlled internal or
+  readable state fails closed instead of rotating trust silently. The server
+  atomically publishes the matching certificate-only PEM at
+  `server.tls.internal_trust_file`; clients verify with that file instead of
+  disabling TLS checks. This is suitable for evaluation and tightly controlled internal or
   air-gapped use. Public deployments must use `server.tls.mode=file` with an
   operator-provided certificate chain from your CA; do not expose the eval
   self-signed certificate to public clients.

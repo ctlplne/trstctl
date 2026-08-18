@@ -9,9 +9,22 @@ HTTPS APIs.
 docker compose -f deploy/demo/docker-compose.yml up --build
 ```
 
-Open <https://localhost:9443>, accept the local TLS certificate, and click **Sign
-in with SSO**. The demo IdP signs you in as `demo-admin@trstctl.local` for tenant
-`11111111-1111-4111-8111-111111111111`.
+The stack creates one stable self-signed browser certificate and publishes only
+its public half. Copy it out and verify the API before opening the browser:
+
+```bash
+docker compose -f deploy/demo/docker-compose.yml cp \
+  trstctl:/public-trust/control-plane.crt ./trstctl-demo-control-plane.crt
+curl --cacert ./trstctl-demo-control-plane.crt https://localhost:9443/healthz
+```
+
+Import `trstctl-demo-control-plane.crt` into the trust store used by your local
+evaluation browser, then open <https://localhost:9443> and click **Sign in with
+SSO**. Do not bypass a certificate warning: if the browser still warns, it is not
+using the copied trust file. The demo IdP signs you in as
+`demo-admin@trstctl.local` for tenant
+`11111111-1111-4111-8111-111111111111`. Remove the local trust entry when the
+evaluation ends.
 
 The seed job creates a 180-day realistic history: owners, members, profiles, an
 internal CA catalog row, real signer-issued X.509 inventory, imported and
@@ -83,9 +96,11 @@ bearer, so the next `up` performs a genuinely fresh seed.
 
 The seed image is also the demo's reusable admin image. It does not start its own
 signer or create a second credential-encryption key: `docker compose run` gives it
-the running deployment's signer socket plus read-only views of the deployment KEK,
-signer authorization secret, and audit data. A separate admin service would only
-duplicate that security-sensitive wiring.
+the running deployment's signer socket plus read-only views of the deployment KEK
+and signer authorization secret. It receives only certificate material through a
+separate public-trust volume; it cannot read the control plane's private data
+volume. A separate admin service would only duplicate that security-sensitive
+wiring.
 
 Run the assembled custody proof from the repository root:
 

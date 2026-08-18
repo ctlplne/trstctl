@@ -171,7 +171,8 @@ services:
       TRSTCTL_PROTOCOLS_SPIFFE_SOCKET_PATH: /run/trstctl-spiffe/workload.sock
       # TLS is on by default (server.tls.mode=internal): the control plane serves
       # HTTPS with a self-signed certificate, so reach it at https://localhost:8443
-      # (curl -k). For production set TRSTCTL_SERVER_TLS_MODE=file with your cert.
+      # and verify with the certificate-only /data/tls/internal-server.crt file.
+      # For production set TRSTCTL_SERVER_TLS_MODE=file with your certificate.
     volumes:
       - signersock:/run/trstctl   # reach the signer over the shared UDS
       - spiffesock:/run/trstctl-spiffe # mount this volume into a workload container to use the SPIFFE Workload API

@@ -29,8 +29,9 @@ func TestServeControlPlaneInternalRefusesPlaintext(t *testing.T) {
 	}
 	srv := newHandler()
 	stateFile := filepath.Join(t.TempDir(), "internal.pem")
+	trustFile := filepath.Join(t.TempDir(), "internal.crt")
 	go func() {
-		_ = serveControlPlane(srv, ln, config.TLS{Mode: config.TLSInternal, InternalStateFile: stateFile}, &bytes.Buffer{})
+		_ = serveControlPlane(srv, ln, config.TLS{Mode: config.TLSInternal, InternalStateFile: stateFile, InternalTrustFile: trustFile}, &bytes.Buffer{})
 	}()
 	t.Cleanup(func() { _ = srv.Close() })
 
@@ -61,6 +62,7 @@ func TestServeControlPlaneInternalRefusesPlaintext(t *testing.T) {
 
 func TestServeControlPlaneInternalPersistsIdentityAcrossRestart(t *testing.T) {
 	stateFile := filepath.Join(t.TempDir(), "tls", "internal-server.pem")
+	trustFile := filepath.Join(t.TempDir(), "public", "internal-server.crt")
 	serveOnce := func() []byte {
 		t.Helper()
 		ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -69,7 +71,7 @@ func TestServeControlPlaneInternalPersistsIdentityAcrossRestart(t *testing.T) {
 		}
 		srv := newHandler()
 		go func() {
-			_ = serveControlPlane(srv, ln, config.TLS{Mode: config.TLSInternal, InternalStateFile: stateFile}, &bytes.Buffer{})
+			_ = serveControlPlane(srv, ln, config.TLS{Mode: config.TLSInternal, InternalStateFile: stateFile, InternalTrustFile: trustFile}, &bytes.Buffer{})
 		}()
 		for i := 0; i < 100; i++ {
 			if raw, readErr := os.ReadFile(stateFile); readErr == nil && len(raw) > 0 { // #nosec G304 -- test-owned path under t.TempDir (CWE-22)
@@ -88,6 +90,13 @@ func TestServeControlPlaneInternalPersistsIdentityAcrossRestart(t *testing.T) {
 	second := serveOnce()
 	if !bytes.Equal(first, second) {
 		t.Fatal("control-plane restart replaced the persistent internal TLS identity")
+	}
+	publicTrust, err := os.ReadFile(trustFile) // #nosec G304 -- test-owned path under t.TempDir (CWE-22)
+	if err != nil {
+		t.Fatalf("read published public trust: %v", err)
+	}
+	if bytes.Contains(publicTrust, []byte("PRIVATE KEY")) || !bytes.Contains(publicTrust, []byte("BEGIN CERTIFICATE")) {
+		t.Fatal("published internal trust is not a public-certificate-only PEM")
 	}
 }
 

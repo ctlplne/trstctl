@@ -8,9 +8,29 @@ import {
   checkpointSource,
   findUniqueLogicalRecord,
   seedInventoryDigest,
+  seedCompletionSummary,
   stableDemoValue,
   stableSeedSemantics,
 } from "./seed.mjs";
+
+test("demo completion summary never renders one-time credential material", () => {
+  const sentinel = "trst_should-never-reach-logs";
+  const lines = seedCompletionSummary({
+    url: "https://localhost:9443",
+    tenant: "tenant-a",
+    plannedEvents: 70,
+    owners: 8,
+    certificates: 17,
+    secrets: 4,
+    runs: 4,
+    findings: 0,
+    notifications: 1,
+    oneTimeCredential: sentinel,
+  });
+  assert.ok(lines.some((line) => line.includes("Raw credential values: withheld")));
+  assert.ok(lines.every((line) => !line.includes(sentinel)));
+  assert.ok(lines.every((line) => !/One-time share token|Demo API token|Ephemeral incident token|Agent enrollment token/.test(line)));
+});
 
 test("AUD-66 stable demo request material survives process-level retries", () => {
   assert.equal(stableDemoValue("payments"), stableDemoValue("payments"));

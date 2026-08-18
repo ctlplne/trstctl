@@ -1130,6 +1130,13 @@ func runProofCleanupFatalDriver(t *testing.T) {
 }
 
 func runProofCleanupSubstrate(t *testing.T) {
+	// Install the cleanup signal handler before announcing READY. If READY is
+	// emitted first, the parent can immediately enter t.Cleanup and deliver
+	// SIGINT during the tiny pre-Notify window; the default signal action then
+	// kills this fixture before it writes the marker the oracle requires.
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt)
+	defer signal.Stop(interrupt)
 	ready := substrateReady{
 		SchemaVersion:  1,
 		Challenge:      os.Getenv("TRSTCTL_DOD_CHALLENGE"),
@@ -1141,9 +1148,6 @@ func runProofCleanupSubstrate(t *testing.T) {
 	if err := json.NewEncoder(os.Stdout).Encode(ready); err != nil {
 		t.Fatal(err)
 	}
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt)
-	defer signal.Stop(interrupt)
 	select {
 	case <-interrupt:
 	case <-time.After(20 * time.Second):

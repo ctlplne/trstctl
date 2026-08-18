@@ -17,6 +17,12 @@ func TestTLSOnByDefault(t *testing.T) {
 	if tls.InternalStateFile == "" {
 		t.Error("default internal TLS identity has no persistent state file; every restart would rotate explicitly pinned eval trust")
 	}
+	if tls.InternalTrustFile == "" {
+		t.Error("default internal TLS identity has no public trust file; clients would have to bypass certificate verification")
+	}
+	if tls.InternalTrustFile == tls.InternalStateFile {
+		t.Error("public internal TLS trust file aliases the private certificate/key state")
+	}
 	if err := Default().Validate(); err != nil {
 		t.Fatalf("Default() must be valid, got: %v", err)
 	}
@@ -123,7 +129,7 @@ func TestTLSValidateFailFast(t *testing.T) {
 
 	// The valid combinations pass.
 	for _, ok := range []TLS{
-		{Mode: TLSInternal},
+		{Mode: TLSInternal, InternalStateFile: "/x/internal.pem", InternalTrustFile: "/x/internal.crt"},
 		{Mode: TLSFile, CertFile: "/x/cert.pem", KeyFile: "/x/key.pem"},
 	} {
 		c := Default()
@@ -182,6 +188,7 @@ func TestTLSEnvOverrides(t *testing.T) {
 		"TRSTCTL_SERVER_TLS_CERT_FILE":           "/etc/trstctl/tls.crt",
 		"TRSTCTL_SERVER_TLS_KEY_FILE":            "/etc/trstctl/tls.key",
 		"TRSTCTL_SERVER_TLS_INTERNAL_STATE_FILE": "/var/lib/trstctl/internal-tls.pem",
+		"TRSTCTL_SERVER_TLS_INTERNAL_TRUST_FILE": "/var/lib/trstctl/internal-tls.crt",
 		"TRSTCTL_DEV_ALLOW_PLAINTEXT":            "true",
 	}
 	cfg, err := Load(func(k string) string { return env[k] })
@@ -193,6 +200,9 @@ func TestTLSEnvOverrides(t *testing.T) {
 	}
 	if cfg.Server.TLS.InternalStateFile != "/var/lib/trstctl/internal-tls.pem" {
 		t.Errorf("TLS internal state env not applied: %+v", cfg.Server.TLS)
+	}
+	if cfg.Server.TLS.InternalTrustFile != "/var/lib/trstctl/internal-tls.crt" {
+		t.Errorf("TLS internal trust env not applied: %+v", cfg.Server.TLS)
 	}
 	if !cfg.Server.TLS.AllowPlaintextDev {
 		t.Error("TRSTCTL_DEV_ALLOW_PLAINTEXT was not applied")

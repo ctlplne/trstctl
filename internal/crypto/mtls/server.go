@@ -3,6 +3,7 @@
 package mtls
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -17,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	boundarycrypto "trstctl.com/trstctl/internal/crypto"
@@ -191,6 +193,108 @@ func syncStateDirectory(path string) error {
 	}
 	defer func() { _ = dir.Close() }()
 	return dir.Sync()
+}
+
+// PublishServerTrust publishes a certificate-only PEM that clients can mount or
+// copy without gaining access to the combined internal certificate/private-key
+// state. Publication is atomic and idempotent. An existing different file fails
+// closed because silently changing an explicitly pinned trust anchor would turn
+// a deployment error into a certificate-verification bypass.
+func PublishServerTrust(trustFile string, trustPEM []byte) error {
+	trustFile = filepath.Clean(trustFile)
+	if trustFile == "." || trustFile == string(filepath.Separator) {
+		return errors.New("mtls: public internal TLS trust file is required")
+	}
+	if err := validateServerTrustPEM(trustPEM); err != nil {
+		return err
+	}
+	validateExisting := func() error {
+		info, err := os.Lstat(trustFile)
+		if err != nil {
+			return fmt.Errorf("mtls: inspect public internal TLS trust: %w", err)
+		}
+		if !info.Mode().IsRegular() {
+			return errors.New("mtls: public internal TLS trust is not a regular file")
+		}
+		if info.Mode().Perm()&0o022 != 0 {
+			return fmt.Errorf("mtls: public internal TLS trust permissions are writable by group or other: %04o", info.Mode().Perm())
+		}
+		raw, err := os.ReadFile(trustFile) // #nosec G304 -- operator-selected public certificate path, validated as a regular file (CWE-22)
+		if err != nil {
+			return fmt.Errorf("mtls: read public internal TLS trust: %w", err)
+		}
+		if !bytes.Equal(raw, trustPEM) {
+			return errors.New("mtls: existing public internal TLS trust contains a different certificate")
+		}
+		return nil
+	}
+	if _, err := os.Lstat(trustFile); err == nil {
+		return validateExisting()
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("mtls: inspect public internal TLS trust: %w", err)
+	}
+
+	dir := filepath.Dir(trustFile)
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return fmt.Errorf("mtls: create public internal TLS trust directory: %w", err)
+	}
+	tmp, err := os.CreateTemp(dir, ".internal-server-trust-*.crt")
+	if err != nil {
+		return fmt.Errorf("mtls: create public internal TLS trust staging file: %w", err)
+	}
+	tmpName := tmp.Name()
+	defer func() { _ = os.Remove(tmpName) }()
+	closeWithError := func(in error) error {
+		if closeErr := tmp.Close(); in == nil {
+			return closeErr
+		}
+		return in
+	}
+	if err := tmp.Chmod(0o644); err != nil {
+		return closeWithError(err)
+	}
+	if _, err := tmp.Write(trustPEM); err != nil {
+		return closeWithError(err)
+	}
+	if err := tmp.Sync(); err != nil {
+		return closeWithError(err)
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Link(tmpName, trustFile); err != nil {
+		if os.IsExist(err) {
+			return validateExisting()
+		}
+		return fmt.Errorf("mtls: publish public internal TLS trust: %w", err)
+	}
+	if err := syncStateDirectory(dir); err != nil {
+		return fmt.Errorf("mtls: sync public internal TLS trust directory: %w", err)
+	}
+	return nil
+}
+
+func validateServerTrustPEM(trustPEM []byte) error {
+	rest := trustPEM
+	certificates := 0
+	for len(bytes.TrimSpace(rest)) > 0 {
+		block, remaining := pem.Decode(rest)
+		if block == nil {
+			return errors.New("mtls: public internal TLS trust contains malformed or trailing PEM data")
+		}
+		if block.Type != "CERTIFICATE" {
+			return fmt.Errorf("mtls: public internal TLS trust contains forbidden PEM block %q", block.Type)
+		}
+		if _, err := x509.ParseCertificate(block.Bytes); err != nil {
+			return fmt.Errorf("mtls: parse public internal TLS certificate: %w", err)
+		}
+		certificates++
+		rest = remaining
+	}
+	if certificates == 0 || strings.TrimSpace(string(trustPEM)) == "" {
+		return errors.New("mtls: public internal TLS trust contains no certificate")
+	}
+	return nil
 }
 
 func loadSelfSignedServerState(stateFile string) (*ServerCert, error) {

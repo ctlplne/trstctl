@@ -44,7 +44,7 @@ readonly -a proof_services=(
   oidc-loopback localstack-loopback localstack-signer-loopback demo-seed
 )
 readonly -a proof_volumes=(
-  pgdata natsdata localstack signersock signerkeys seedstate secrets trstctldata demoidp managedkeys
+  pgdata natsdata localstack signersock signerkeys seedstate secrets trstctldata publictrust demoidp managedkeys
 )
 proof_started=0
 proof_namespace_owned=0
@@ -217,7 +217,7 @@ assert_scoped_read() {
   unset loaded_token
   if ! status="$(
     printf 'header = "Authorization: Bearer %s"\n' "${token}" |
-      curl --silent --show-error --insecure --config - \
+      curl --silent --show-error --cacert "${proof_tls_trust}" --config - \
         --output "${response_file}" --write-out '%{http_code}' "${api_url}"
   )"; then
     unset token
@@ -419,10 +419,11 @@ wrong_stdout="${proof_tmp}/wrong-custody.stdout"
 wrong_stderr="${proof_tmp}/wrong-custody.stderr"
 missing_stdout="${proof_tmp}/missing-custody.stdout"
 missing_stderr="${proof_tmp}/missing-custody.stderr"
+proof_tls_trust="${proof_tmp}/control-plane.crt"
 artifacts+=(
   "${control_before_token}" "${admin_before_token}"
   "${control_after_token}" "${admin_after_token}"
-  "${wrong_stdout}" "${wrong_stderr}" "${missing_stdout}" "${missing_stderr}"
+  "${wrong_stdout}" "${wrong_stderr}" "${missing_stdout}" "${missing_stderr}" "${proof_tls_trust}"
 )
 
 printf 'AUD-68 proof: starting fresh isolated project %s\n' "${proof_project}"
@@ -430,6 +431,8 @@ proof_started=1
 "${compose[@]}" up -d --build
 "${compose[@]}" wait demo-seed
 "${compose[@]}" up -d --wait --wait-timeout 120 signer trstctl
+"${compose[@]}" cp trstctl:/public-trust/control-plane.crt "${proof_tls_trust}"
+chmod 0600 "${proof_tls_trust}"
 
 registration_authority="$(snapshot_registration_authority)"
 assert_registration_authority_ready "${registration_authority}"

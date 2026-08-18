@@ -117,6 +117,9 @@ func TestDockerfileIsMinimalAndReproducible(t *testing.T) {
 		"/mnt-skel/run/trstctl-spiffe",
 		"COPY --from=build --chown=65532:65532 /mnt-skel/run/trstctl /run/trstctl",
 		"COPY --from=build --chown=65532:65532 /mnt-skel/run/trstctl-spiffe /run/trstctl-spiffe")
+	mustContainAll(t, "Dockerfile prepares a nonroot public-only trust volume root", df,
+		"install -d -m 0750 -o 65532 -g 65532 /mnt-skel/public-trust",
+		"COPY --from=build --chown=65532:65532 /mnt-skel/public-trust /public-trust")
 	mustContainAll(t, "Dockerfile entrypoint", df, "ENTRYPOINT")
 	mustContainAll(t, "Dockerfile builds the web console before Go embeds it", df,
 		"FROM ${WEB_BUILD_IMAGE} AS web-build",

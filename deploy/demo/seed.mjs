@@ -924,7 +924,7 @@ async function collectSeedInventory(history, resolved) {
 }
 
 async function readCA() {
-  const path = "/trstctl-data/ca/issuing-ca.crt";
+  const path = "/public-trust/issuing-ca.crt";
   for (let i = 0; i < 60; i += 1) {
     if (existsSync(path)) {
       const pem = readFileSync(path, "utf8");
@@ -1050,7 +1050,7 @@ async function main() {
   await ensureSecret("demo/stripe/api-key", "demo-stripe-api-key", 1, secretItems);
   await ensureSecret("demo/github/actions/deploy-token", "demo-github-actions-deploy-token", 1, secretItems);
   await ensureSecret("demo/aws/iam/rotator", "demo-aws-iam-rotator", 1, secretItems);
-  const share = await api("POST", "/api/v1/secrets/shares", {
+  await api("POST", "/api/v1/secrets/shares", {
     value: stableDemoValue("breakglass-share"),
     ttl_seconds: 86400,
   }, stableKey("secret-share-breakglass"));
@@ -1159,15 +1159,17 @@ async function main() {
       subject: "ci-release-bot",
       scopes: ["certs:read", "secrets:read", "keys:read", "graph:read"],
     }, stableKey("access-token-release-bot"));
+    // The API returns the raw credential once. The demo proves creation but does
+    // not need to use it, so drop it immediately and never render it to logs.
+    delete demoAPIToken.token;
   }
-  const jitToken = await api("POST", "/api/v1/ephemeral/api-keys", {
+  await api("POST", "/api/v1/ephemeral/api-keys", {
     subject: "incident-rotator",
     scopes: ["certs:read", "keys:read"],
     ttl_seconds: 1800,
   }, stableKey("ephemeral-api-key-incident-rotator"));
-  const enrollmentTokens = [];
   for (const token of history.agentTokens) {
-    enrollmentTokens.push(await api("POST", "/api/v1/agents/enrollment-tokens", undefined, stableKey(`agent-enrollment-token-${token.key}`)));
+    await api("POST", "/api/v1/agents/enrollment-tokens", undefined, stableKey(`agent-enrollment-token-${token.key}`));
   }
 
   const coverage = await api("GET", "/api/v1/discovery/coverage");
@@ -1200,23 +1202,38 @@ async function main() {
   }
   await validateCompletedSeed(history, committedCheckpoint);
 
-  console.log("");
-  console.log("trstctl demo seed complete");
-  console.log(`  URL: ${demoURL}`);
-  console.log("  Browser login: click Sign in with SSO, then use demo-admin@trstctl.local");
-  console.log(`  Tenant: ${tenant}`);
-  console.log(`  Planned 180-day history events: ${history.events.length}`);
-  console.log(`  Owners: ${(ownersList?.items || []).length}`);
-  console.log(`  Certificate inventory rows: ${(certs?.items || []).length}`);
-  console.log(`  Stored secrets: ${(secrets?.items || []).length}`);
-  console.log(`  Discovery runs: ${(runs?.items || []).length}`);
-  console.log(`  Discovery findings: ${(findings?.items || []).length}`);
-  console.log(`  Notifications: ${(notifications?.items || []).length}`);
-  console.log(`  One-time share token: ${share?.token || "(replay hidden)"}`);
-  console.log(`  Demo API token for ci-release-bot: ${demoAPIToken?.token || "(replay hidden)"}`);
-  console.log(`  Ephemeral incident token: ${jitToken?.token || "(replay hidden)"}`);
-  console.log(`  Agent enrollment token: ${enrollmentTokens.find((token) => token?.token)?.token || "(replay hidden)"}`);
-  console.log("");
+  for (const line of seedCompletionSummary({
+    url: demoURL,
+    tenant,
+    plannedEvents: history.events.length,
+    owners: (ownersList?.items || []).length,
+    certificates: (certs?.items || []).length,
+    secrets: (secrets?.items || []).length,
+    runs: (runs?.items || []).length,
+    findings: (findings?.items || []).length,
+    notifications: (notifications?.items || []).length,
+  })) {
+    console.log(line);
+  }
+}
+
+function seedCompletionSummary({ url, tenant, plannedEvents, owners, certificates, secrets, runs, findings, notifications }) {
+  return [
+    "",
+    "trstctl demo seed complete",
+    `  URL: ${url}`,
+    "  Browser login: click Sign in with SSO, then use demo-admin@trstctl.local",
+    `  Tenant: ${tenant}`,
+    `  Planned 180-day history events: ${plannedEvents}`,
+    `  Owners: ${owners}`,
+    `  Certificate inventory rows: ${certificates}`,
+    `  Stored secrets: ${secrets}`,
+    `  Discovery runs: ${runs}`,
+    `  Discovery findings: ${findings}`,
+    `  Notifications: ${notifications}`,
+    "  Raw credential values: withheld from logs; create or retrieve credentials only through an authorized workflow",
+    "",
+  ];
 }
 
 export {
@@ -1224,6 +1241,7 @@ export {
   checkpointSource,
   findUniqueLogicalRecord,
   seedInventoryDigest,
+  seedCompletionSummary,
   stableDemoValue,
   stableSeedSemantics,
 };

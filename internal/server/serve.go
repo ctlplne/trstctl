@@ -3,6 +3,7 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -46,7 +47,14 @@ func serveControlPlane(srv *http.Server, ln net.Listener, tlsCfg config.TLS, war
 		if err != nil {
 			return err
 		}
-		_, _ = fmt.Fprintf(warn, "serving the control plane over TLS with a persistent self-signed internal certificate (server.tls.mode=internal, private state %s); trust it for evaluation, or set server.tls.mode=file with an operator certificate for production\n", stateFile)
+		trustFile := strings.TrimSpace(tlsCfg.InternalTrustFile)
+		if trustFile == "" {
+			return errors.New("server: internal TLS public trust file is required")
+		}
+		if err := mtls.PublishServerTrust(trustFile, sc.TrustPEM); err != nil {
+			return fmt.Errorf("server: publish internal TLS public trust: %w", err)
+		}
+		_, _ = fmt.Fprintf(warn, "serving the control plane over TLS with a persistent self-signed internal certificate (private state %s, public trust %s); distribute only the public trust file for evaluation, or set server.tls.mode=file with an operator certificate for production\n", stateFile, trustFile)
 		return sc.ServeHTTPS(srv, ln)
 	}
 }

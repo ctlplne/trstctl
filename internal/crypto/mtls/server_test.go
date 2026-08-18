@@ -59,6 +59,44 @@ func TestPersistentSelfSignedServerCertReusesOnePrivateState(t *testing.T) {
 	}
 }
 
+func TestPublishServerTrustWritesOnlyThePublicCertificateAndFailsClosed(t *testing.T) {
+	cert, err := mtls.SelfSignedServerCert([]string{"localhost"}, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	trustFile := filepath.Join(t.TempDir(), "public", "internal-server.crt")
+	if err := mtls.PublishServerTrust(trustFile, cert.TrustPEM); err != nil {
+		t.Fatalf("publish trust: %v", err)
+	}
+	raw, err := os.ReadFile(trustFile) // #nosec G304 -- test-owned path under t.TempDir (CWE-22)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(raw, cert.TrustPEM) {
+		t.Fatal("published trust file differs from the certificate clients must pin")
+	}
+	if bytes.Contains(raw, []byte("PRIVATE KEY")) {
+		t.Fatal("published trust file exposed private key material")
+	}
+	info, err := os.Stat(trustFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o644 {
+		t.Fatalf("published trust mode = %04o, want 0644", got)
+	}
+	if err := mtls.PublishServerTrust(trustFile, cert.TrustPEM); err != nil {
+		t.Fatalf("idempotent trust publication: %v", err)
+	}
+	other, err := mtls.SelfSignedServerCert([]string{"localhost"}, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := mtls.PublishServerTrust(trustFile, other.TrustPEM); err == nil || !strings.Contains(err.Error(), "different") {
+		t.Fatalf("mismatched existing trust error = %v, want fail-closed mismatch", err)
+	}
+}
+
 func TestPersistentSelfSignedServerCertFailsClosedOnUnsafeState(t *testing.T) {
 	stateFile := filepath.Join(t.TempDir(), "internal-server.pem")
 	if err := os.WriteFile(stateFile, []byte("corrupted"), 0o600); err != nil {

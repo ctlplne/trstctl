@@ -436,6 +436,9 @@ func configSummary(cfg *config.Config) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "server.addr: %s\n", cfg.Server.Addr)
 	fmt.Fprintf(&b, "server.tls.mode: %s\n", cfg.Server.TLS.Mode)
+	if cfg.Server.TLS.Mode == config.TLSInternal {
+		fmt.Fprintf(&b, "server.tls.internal_trust_file: %s\n", cfg.Server.TLS.InternalTrustFile)
+	}
 	if cfg.Server.TLS.Mode == config.TLSFile {
 		fmt.Fprintf(&b, "server.tls.cert_file: %s\n", cfg.Server.TLS.CertFile)
 		fmt.Fprintf(&b, "server.tls.key_file: %s\n", cfg.Server.TLS.KeyFile)
