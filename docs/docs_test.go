@@ -2709,6 +2709,42 @@ func TestGettingStartedUsesComposeCustodyAndPersistentTrust(t *testing.T) {
 	}
 }
 
+// TestRenderedDocsDoNotLoadThirdPartyFonts protects the customer-facing docs
+// build, not just the product binary. MkDocs Material phones home to Google
+// Fonts unless its font loader is disabled explicitly.
+func TestRenderedDocsDoNotLoadThirdPartyFonts(t *testing.T) {
+	config := read(t, "../mkdocs.yml")
+	if !strings.Contains(config, "font: false") {
+		t.Error("mkdocs.yml must disable Material's third-party Google Fonts loader")
+	}
+	for _, host := range []string{"fonts.googleapis.com", "fonts.gstatic.com"} {
+		if strings.Contains(config, "https://"+host) {
+			t.Errorf("mkdocs.yml must not load customer-facing assets from %s", host)
+		}
+	}
+}
+
+// TestDemoClickThroughUsesShippedTLSAddress keeps the design-partner guide on
+// the same TLS origin the shipped demo actually publishes and makes the guide
+// discoverable from both navigation and first-use documentation.
+func TestDemoClickThroughUsesShippedTLSAddress(t *testing.T) {
+	walkthrough := read(t, "demo-click-through.html")
+	if !strings.Contains(walkthrough, "https://localhost:9443/") {
+		t.Error("demo click-through must link to the shipped HTTPS demo origin")
+	}
+	for _, stale := range []string{"http://127.0.0.1:18081", "not HTTPS, not port 9443"} {
+		if strings.Contains(walkthrough, stale) {
+			t.Errorf("demo click-through still contains stale plaintext demo guidance %q", stale)
+		}
+	}
+	if !strings.Contains(read(t, "getting-started.md"), "[beginner demo walkthrough](demo-click-through.html)") {
+		t.Error("getting-started.md must expose the beginner demo walkthrough")
+	}
+	if !strings.Contains(read(t, "../mkdocs.yml"), "Demo browser walkthrough: demo-click-through.html") {
+		t.Error("MkDocs navigation must expose the beginner demo walkthrough")
+	}
+}
+
 // TestDesign001FirstCertificateDocsMatchServedRAGate keeps the first-certificate
 // copy aligned across docs, wizard, bootstrap tokens, and the served mutation gate.
 func TestDesign001FirstCertificateDocsMatchServedRAGate(t *testing.T) {

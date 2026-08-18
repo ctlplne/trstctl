@@ -346,8 +346,9 @@
       <h1>Learn trstctl by clicking through the real control plane</h1>
       <p class="lede">No PKI background required. This guide explains what to click, what you should see, and why each screen matters. The main tour is read-only and safe.</p>
       <div class="hero-actions">
-        <a class="button primary" href="http://127.0.0.1:18081/" target="_blank" rel="noopener">Open the trstctl demo</a>
+        <a class="button primary" href="https://localhost:9443/" target="_blank" rel="noopener">Open the trstctl demo</a>
         <a class="button secondary" href="#before-you-start">Start the walkthrough</a>
+        <a class="button secondary" href="getting-started/">Back to the documentation</a>
         <button class="secondary" type="button" onclick="window.print()">Print or save as PDF</button>
       </div>
     </div>
@@ -393,7 +394,7 @@
       <div class="intro-grid">
         <article class="mini-card">
           <strong>Demo address</strong>
-          <p><a href="http://127.0.0.1:18081/" target="_blank" rel="noopener">http://127.0.0.1:18081</a></p>
+          <p><a href="https://localhost:9443/" target="_blank" rel="noopener">https://localhost:9443</a></p>
         </article>
         <article class="mini-card">
           <strong>Demo user</strong>
@@ -441,7 +442,7 @@
         <div class="tour-body">
           <h4>Click</h4>
           <ol>
-            <li><a class="button small primary" href="http://127.0.0.1:18081/" target="_blank" rel="noopener">Open demo home</a></li>
+            <li><a class="button small primary" href="https://localhost:9443/" target="_blank" rel="noopener">Open demo home</a></li>
             <li>If you see the sign-in page, click <strong>Sign in with SSO</strong>. The local identity provider signs you in automatically.</li>
             <li>Look at the top-right corner for <code>demo-admin@trstctl.local</code>.</li>
             <li>Look at the top bar for <strong>Tenant</strong> and the UUID beginning <code>11111111</code>.</li>
@@ -480,7 +481,7 @@
         </header>
         <div class="tour-body">
           <ol>
-            <li>Click <strong>Journeys</strong> in the left navigation, or <a href="http://127.0.0.1:18081/journeys" target="_blank" rel="noopener">open it directly</a>.</li>
+            <li>Click <strong>Journeys</strong> in the left navigation, or <a href="https://localhost:9443/journeys" target="_blank" rel="noopener">open it directly</a>.</li>
             <li>Notice the <strong>Verified path · shipped wiring 81/81</strong> badge. This means the journey is backed by capabilities wired into the shipped binary.</li>
             <li>Select <strong>First certificate</strong>. Read its four steps: setup, request, approval, inventory.</li>
             <li>Select <strong>Migrate from an existing CA</strong>, then <strong>Respond to a compromise</strong>. Observe how each journey crosses several product screens.</li>
@@ -816,11 +817,11 @@
       </section>
       <details open>
         <summary>The page says “token exchange failed”</summary>
-        <div><p>Close the error tab, reopen <a href="http://127.0.0.1:18081/" target="_blank" rel="noopener">the demo root</a>, and click <strong>Sign in with SSO</strong> again. If it repeats, the local OIDC sidecar needs to be reattached; ask the demo operator to restart it.</p></div>
+        <div><p>Close the error tab, reopen <a href="https://localhost:9443/" target="_blank" rel="noopener">the demo root</a>, and click <strong>Sign in with SSO</strong> again. If it repeats, the local OIDC sidecar needs to be reattached; ask the demo operator to restart it.</p></div>
       </details>
       <details>
         <summary>The browser cannot connect</summary>
-        <div><p>Confirm the address is exactly <code>http://127.0.0.1:18081</code>—not HTTPS, not port 9443, and not a remote hostname. The demo stack must remain running on this Mac.</p></div>
+        <div><p>Confirm the address is exactly <code>https://localhost:9443</code>. The local certificate is self-signed, so inspect and accept it for this evaluation only. Do not replace HTTPS with a plaintext proxy. The demo stack must remain running on this machine.</p></div>
       </details>
       <details>
         <summary>A screen has no rows</summary>

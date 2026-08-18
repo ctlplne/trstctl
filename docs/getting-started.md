@@ -16,6 +16,8 @@ stores a terminal version checkpoint and reads lifecycle state before acting,
 so repeating `up --build` with the same volumes preserves the exact seeded
 inventory. `scripts/ci/demo-seed-convergence.sh` waits for the first seed and
 proves a second pass changes neither logical inventory nor event/outbox counts.
+For a read-only, click-by-click product tour, open the
+**[beginner demo walkthrough](demo-click-through.html)** beside the seeded UI.
 
 ## Prerequisites
 

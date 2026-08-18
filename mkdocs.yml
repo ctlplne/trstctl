@@ -6,6 +6,10 @@ site_dir: .site
 
 theme:
   name: material
+  # Keep the rendered docs usable in an air-gapped evaluation and avoid leaking
+  # every reader's IP/user-agent to Google merely by opening a local page.
+  # Material otherwise injects Google's remote font endpoints at runtime.
+  font: false
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
@@ -33,6 +37,7 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Getting started: getting-started.md
+  - Demo browser walkthrough: demo-click-through.html
   - Journeys:
       - Automate TLS across your fleet: journeys/automate-fleet-tls.md
       - Kubernetes workload identity: journeys/kubernetes-workload-identity.md
