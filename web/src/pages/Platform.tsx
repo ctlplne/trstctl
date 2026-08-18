@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { DRPosturePanel } from "@/components/DRPosturePanel";
 import { IdempotencyResultProtectionPanel, TenantKeyDomainPanel, UsageEvidencePanel } from "@/components/TenantCustodyPanels";
+import { UnavailableState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { formatCurrency as formatCurrencyPolicy, formatDateTime, formatNumber as formatNumberPolicy, type FormatPolicy } from "@/i18n/format";
@@ -31,6 +32,7 @@ import {
   type DRPosture,
 } from "@/lib/api";
 import { optionalApiCall } from "@/lib/optionalApi";
+import { apiProblemMessage } from "@/lib/apiProblem";
 import type { StatusTone } from "@/lib/statusVocab";
 
 function browserTransport(): { label: string; detail: string; warning?: string } {
@@ -1195,6 +1197,7 @@ export function AdminAccess() {
   const [offboardSubject, setOffboardSubject] = useState("");
   const [offboardReason, setOffboardReason] = useState("");
   const [pamRows, setPAMRows] = useState<PAMSession[] | null>(null);
+  const [pamUnavailable, setPAMUnavailable] = useState<string | null>(null);
   const [pamCursor, setPAMCursor] = useState<string | undefined>(undefined);
   const [pamLoadingMore, setPAMLoadingMore] = useState(false);
   const [pamDetail, setPAMDetail] = useState<PAMSession | null>(null);
@@ -1265,10 +1268,14 @@ export function AdminAccess() {
       .then(() => api.pamSessions({ limit: 20 }))
       .then((page) => {
         if (!active) return;
+        setPAMUnavailable(null);
         setPAMRows(page.items ?? []);
         setPAMCursor(page.next_cursor);
       })
-      .catch(() => null);
+      .catch((err: unknown) => {
+        if (!active) return;
+        setPAMUnavailable(apiProblemMessage(err, "Privileged access sessions are unavailable"));
+      });
     return () => {
       active = false;
     };
@@ -1541,6 +1548,11 @@ export function AdminAccess() {
                   ) : undefined
                 }
               />
+            </div>
+          )}
+          {pamUnavailable && (
+            <div className="mb-4">
+              <UnavailableState title="Privileged access sessions are unavailable">{pamUnavailable}</UnavailableState>
             </div>
           )}
           <div className="mb-4 grid gap-4 xl:grid-cols-2">

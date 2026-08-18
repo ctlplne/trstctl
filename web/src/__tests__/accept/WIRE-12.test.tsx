@@ -5,6 +5,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { AdminAccess, AdminEditions, AdminSystem } from "@/pages/Platform";
+import { ApiError } from "@/lib/api";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -23,6 +24,7 @@ const { apiMock } = vi.hoisted(() => ({
     upsertMember: vi.fn(),
     offboardMember: vi.fn(),
     apiTokens: vi.fn(),
+    pamSessions: vi.fn(),
     createAPIToken: vi.fn(),
     logout: vi.fn(),
   },
@@ -83,6 +85,7 @@ describe("WIRE-12 Platform served admin surface", () => {
         },
       ],
     });
+    apiMock.pamSessions.mockResolvedValue({ items: [] });
     apiMock.editions.mockResolvedValue({
       tier: "enterprise",
       state: "active",
@@ -408,10 +411,20 @@ describe("WIRE-12 Platform served admin surface", () => {
     expect((await screen.findAllByText("legacy-member@example.test")).length).toBeGreaterThan(0);
   });
 
+  it("explains when privileged access sessions are not enabled", async () => {
+    apiMock.pamSessions.mockRejectedValue(
+      new ApiError(503, JSON.stringify({ title: "Service Unavailable", status: 503, detail: "PAM broker is not enabled" })),
+    );
+
+    renderAdminPage("access");
+
+    expect(await screen.findByText("Privileged access sessions are unavailable")).toBeInTheDocument();
+    expect(screen.getByText("PAM broker is not enabled")).toBeInTheDocument();
+  });
+
   it("removes the unserved Platform fixture arrays and unavailable-state disclosures", () => {
     const source = readFileSync(path.join(process.cwd(), "src/pages/Platform.tsx"), "utf8");
     expect(source).not.toMatch(/runtimeRows|pluginAdminRows|federationRows/);
-    expect(source).not.toMatch(/UnavailableState/);
     expect(source).not.toMatch(/Upgrade to Enterprise|Contact sales|unlock/i);
     expect(source).not.toMatch(/Single-binary runtime|Plugin SDK and capability sandbox|Cross-cluster federation/);
     expect(source).not.toMatch(/Runtime status view coming soon|Plugin administration coming soon|Platform status view coming soon/);
