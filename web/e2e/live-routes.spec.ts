@@ -97,6 +97,25 @@ async function auditRoute(page: Page, route: string): Promise<RouteReceipt> {
     // and layout receipts so a late 5xx or late table cannot escape the audit.
     await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => undefined);
 
+    // A response event fires when headers arrive, before fetch has necessarily
+    // parsed the body and before React has painted the resulting disclosure or
+    // table. Under concurrent browser load the old oracle sampled the DOM here,
+    // then learned about the completed 503 below, producing a false
+    // "unexplained" error and occasionally grading a one-frame layout. Drain
+    // the bounded receipts first, then let fonts and two animation frames settle.
+    // Repeat if draining a body exposed another response in the same turn.
+    for (let pass = 0; pass < 3; pass += 1) {
+      const receiptCount = pendingResponseReceipts.length;
+      await Promise.all(pendingResponseReceipts);
+      await page.evaluate(async () => {
+        await document.fonts.ready;
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        });
+      });
+      if (pendingResponseReceipts.length === receiptCount) break;
+    }
+
     const widths = await page.evaluate(() => {
       const mainElement = document.querySelector("main");
       const viewportWidth = document.documentElement.clientWidth;
@@ -128,7 +147,6 @@ async function auditRoute(page: Page, route: string): Promise<RouteReceipt> {
     const capabilityDisclosures = (await main.locator('[data-state-primitive="unavailable"]').allTextContents())
       .map((text) => text.replace(/\s+/g, " ").trim())
       .filter(Boolean);
-    await Promise.all(pendingResponseReceipts);
     return {
       route,
       finalPath: new URL(page.url()).pathname,
