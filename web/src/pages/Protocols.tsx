@@ -1019,7 +1019,7 @@ export function Protocols() {
         </div>
         {statusLoading && <LoadingState>{t("protocols.dns01.configLoading")}</LoadingState>}
         {!statusLoading && !statusError && dnsProviderConfigs.length === 0 && (
-          <ErrorState title={t("protocols.dns01.configEmptyTitle")}>{t("protocols.dns01.configEmpty")}</ErrorState>
+          <NeutralEmptyState title={t("protocols.dns01.configEmptyTitle")} body={t("protocols.dns01.configEmpty")} />
         )}
       </section>
 
@@ -1138,7 +1138,7 @@ export function Protocols() {
         </div>
         {statusLoading && <LoadingState>{t("protocols.mdm.loading")}</LoadingState>}
         {!statusLoading && !statusError && (mdmSCEPStatus?.policies ?? []).length === 0 && (
-          <ErrorState title={t("protocols.mdm.emptyTitle")}>{t("protocols.mdm.empty")}</ErrorState>
+          <NeutralEmptyState title={t("protocols.mdm.emptyTitle")} body={t("protocols.mdm.empty")} />
         )}
       </section>
 
@@ -1199,6 +1199,15 @@ export function Protocols() {
       {dnsDeleteConfig && <DNS01ConfigDeleteDialog config={dnsDeleteConfig} onClose={() => setDNSDeleteConfig(null)} onDeleted={handleDNSConfigDeleted} />}
       {dnsPreflightConfig && <DNS01PreflightDialog config={dnsPreflightConfig} onClose={() => setDNSPreflightConfig(null)} />}
     </section>
+  );
+}
+
+function NeutralEmptyState({ title, body }: { title: string; body: string }) {
+  return (
+    <div role="status" className="min-w-0 max-w-full rounded-control border border-border bg-muted/20 px-3 py-2 text-sm [overflow-wrap:anywhere]">
+      <p className="font-medium">{title}</p>
+      <p className="mt-1 text-muted-foreground">{body}</p>
+    </div>
   );
 }
 

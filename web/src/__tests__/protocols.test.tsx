@@ -770,8 +770,14 @@ describe("protocol surface", () => {
     mountProtocols();
 
     expect(await screen.findByText("DNS-01 providers unavailable")).toBeInTheDocument();
-    expect(screen.getByText("DNS-01 provider configs unavailable")).toBeInTheDocument();
-    expect(screen.getByText("MDM SCEP policies unavailable")).toBeInTheDocument();
+    const dnsConfigSection = screen.getByRole("heading", { name: "DNS-01 provider configs" }).closest("section");
+    const mdmSection = screen.getByRole("heading", { name: "Intune / MDM SCEP policies" }).closest("section");
+    expect(dnsConfigSection).not.toBeNull();
+    expect(mdmSection).not.toBeNull();
+    expect(within(dnsConfigSection as HTMLElement).getByText("No DNS-01 provider configured")).toBeInTheDocument();
+    expect(within(mdmSection as HTMLElement).getByText("No MDM SCEP policy configured")).toBeInTheDocument();
+    expect(dnsConfigSection?.querySelector('[data-state-primitive="error"]')).not.toBeInTheDocument();
+    expect(mdmSection?.querySelector('[data-state-primitive="error"]')).not.toBeInTheDocument();
     expect(screen.getAllByText("Not browser-readable").length).toBeGreaterThan(0);
     expect(screen.getByText("unix:///tmp/trstctl-spiffe-workload.sock")).toBeInTheDocument();
     expect(screen.getByText("Unknown")).toBeInTheDocument();

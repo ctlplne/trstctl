@@ -7608,11 +7608,11 @@ export const messages = {
     description: "Loading message for DNS-01 provider configuration table.",
   },
   "protocols.dns01.configEmptyTitle": {
-    defaultMessage: "DNS-01 provider configs unavailable",
+    defaultMessage: "No DNS-01 provider configured",
     description: "Empty-state title for DNS-01 provider configuration table.",
   },
   "protocols.dns01.configEmpty": {
-    defaultMessage: "No provider configs were returned.",
+    defaultMessage: "Add a provider connection before using automated DNS-01 challenges.",
     description: "Empty-state message for DNS-01 provider configuration table.",
   },
   "protocols.eab.accountsBound": {
@@ -7762,11 +7762,11 @@ export const messages = {
     description: "Loading message for MDM SCEP policy table.",
   },
   "protocols.mdm.emptyTitle": {
-    defaultMessage: "MDM SCEP policies unavailable",
+    defaultMessage: "No MDM SCEP policy configured",
     description: "Empty-state title for MDM SCEP policies.",
   },
   "protocols.mdm.empty": {
-    defaultMessage: "No MDM SCEP policies were returned.",
+    defaultMessage: "Add a policy before managed devices can request certificates through SCEP.",
     description: "Empty-state message for MDM SCEP policies.",
   },
   "secrets.scan.description": {

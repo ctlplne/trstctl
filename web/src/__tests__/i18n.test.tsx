@@ -736,9 +736,11 @@ describe("i18n boundary", () => {
       // names request methods, rules, authorities, and software signing in
       // task-first language. Four new primary actions and the reviewed label
       // changes are mirrored in es/de. Machine-authored es/de — FLAGGED FOR
-      // HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "7cddeb2f867057fafee752984c6d9a37a4c96ae6e2447a388c2ce0b211174615",
-      "de-DE": "764f19f6ed485662dbe6fd8377bfe856ec41019c5822a1504221e41c250ab4f2",
+      // HUMAN TRANSLATION REVIEW before release. The live-browser follow-up
+      // also distinguishes an empty DNS-01 or MDM policy list from a failed
+      // load and gives the operator the next safe setup step.
+      "es-ES": "237a4c45e86e2b966fda6e44882ea9922f6460a4b2329afd62d4a06760033621",
+      "de-DE": "d6970c07342eb00078a1d949de7d363b0a38714c054e1655dfb9ace4d5f43cac",
     });
   });
 

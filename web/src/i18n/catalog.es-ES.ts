@@ -1925,8 +1925,8 @@ const esESCatalog = {
   "protocols.dns01.wildcardsAllowed": "Wildcards permitidos",
   "protocols.dns01.wildcardsDenied": "Wildcards denegados",
   "protocols.dns01.configLoading": "Cargando configuraciones de proveedor DNS-01.",
-  "protocols.dns01.configEmptyTitle": "Configuraciones de proveedor DNS-01 no disponibles",
-  "protocols.dns01.configEmpty": "No se devolvieron configuraciones de proveedor.",
+  "protocols.dns01.configEmptyTitle": "No hay ningún proveedor DNS-01 configurado",
+  "protocols.dns01.configEmpty": "Añada una conexión de proveedor antes de usar desafíos DNS-01 automatizados.",
   "protocols.eab.accountsBound": "{count} cuentas",
   "protocols.eab.description":
     "Cada credencial es una autorizaci\u00f3n, no solo una llave: una cuenta recuerda qu\u00e9 credencial la admiti\u00f3, y cada pedido bajo esa cuenta se comprueba contra el alcance de la credencial. Deshabilitar una detiene las nuevas cuentas y pedidos bajo ella y deja v\u00e1lidos los certificados ya emitidos.",
@@ -1965,8 +1965,8 @@ const esESCatalog = {
   "protocols.mdm.runtimeConfigured": "Configurado",
   "protocols.mdm.runtimeUnknown": "Desconocido",
   "protocols.mdm.loading": "Cargando políticas SCEP de MDM.",
-  "protocols.mdm.emptyTitle": "Políticas SCEP de MDM no disponibles",
-  "protocols.mdm.empty": "No se devolvieron políticas SCEP de MDM.",
+  "protocols.mdm.emptyTitle": "No hay ninguna política SCEP de MDM configurada",
+  "protocols.mdm.empty": "Añada una política antes de que los dispositivos administrados puedan solicitar certificados mediante SCEP.",
   "secrets.scan.description":
     "Ejecuta un escaneo de un repositorio o espacio de trabajo de build. Los hallazgos muestran solo regla, archivo, línea y la referencia de credencial redactada.",
   "secrets.scan.triageLibraryOnlyTitle": "La revisión de hallazgos del escaneo aún no está disponible",

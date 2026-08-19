@@ -1933,8 +1933,8 @@ const deDECatalog = {
   "protocols.dns01.wildcardsAllowed": "Wildcards erlaubt",
   "protocols.dns01.wildcardsDenied": "Wildcards verweigert",
   "protocols.dns01.configLoading": "DNS-01-Anbieterkonfigurationen werden geladen.",
-  "protocols.dns01.configEmptyTitle": "DNS-01-Anbieterkonfigurationen nicht verfügbar",
-  "protocols.dns01.configEmpty": "Es wurden keine Anbieterkonfigurationen zurückgegeben.",
+  "protocols.dns01.configEmptyTitle": "Kein DNS-01-Anbieter konfiguriert",
+  "protocols.dns01.configEmpty": "Fügen Sie eine Anbieter-Verbindung hinzu, bevor Sie automatisierte DNS-01-Challenges verwenden.",
   "protocols.eab.accountsBound": "{count} Konten",
   "protocols.eab.description":
     "Jede Berechtigung ist eine Autorisierung, nicht nur ein T\u00fcrschl\u00fcssel: Ein Konto merkt sich, welche Berechtigung es zugelassen hat, und jede Bestellung dieses Kontos wird gegen deren Geltungsbereich gepr\u00fcft. Das Deaktivieren stoppt neue Konten und Bestellungen; bereits ausgestellte Zertifikate bleiben g\u00fcltig.",
@@ -1973,8 +1973,8 @@ const deDECatalog = {
   "protocols.mdm.runtimeConfigured": "Konfiguriert",
   "protocols.mdm.runtimeUnknown": "Unbekannt",
   "protocols.mdm.loading": "MDM-SCEP-Richtlinien werden geladen.",
-  "protocols.mdm.emptyTitle": "MDM-SCEP-Richtlinien nicht verfügbar",
-  "protocols.mdm.empty": "Es wurden keine MDM-SCEP-Richtlinien zurückgegeben.",
+  "protocols.mdm.emptyTitle": "Keine MDM-SCEP-Richtlinie konfiguriert",
+  "protocols.mdm.empty": "Fügen Sie eine Richtlinie hinzu, bevor verwaltete Geräte Zertifikate über SCEP anfordern können.",
   "secrets.scan.description":
     "Scan für ein Repository oder einen Build-Workspace ausführen. Funde zeigen nur Regel, Datei, Zeile und die geschwärzte Credential-Referenz.",
   "secrets.scan.triageLibraryOnlyTitle": "Die Überprüfung von Scan-Funden ist noch nicht verfügbar",

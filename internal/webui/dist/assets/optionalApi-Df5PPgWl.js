@@ -1,0 +1,1 @@
+import{z as e}from"./index-Cg9O3l2M.js";function t(t,n,...r){let i=e[t];return typeof i==`function`?i(...r):Promise.resolve(n)}export{t};
