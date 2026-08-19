@@ -36,7 +36,7 @@ export async function signIn(page: Page): Promise<void> {
  * sidebar rendered. Labels mirror the space registry (src/lib/navigation.ts);
  * if the carve changes, this table changes with it. */
 export const spaceSmoke = [
-  { space: "Certificates & PKI", row: "CA hierarchy" },
+  { space: "Certificates & PKI", row: "Certificate authorities" },
   { space: "Secrets", row: "Machine access" },
   { space: "Workload & SSH", row: "SSH trust" },
   { space: "Posture & response", row: "Credential graph" },

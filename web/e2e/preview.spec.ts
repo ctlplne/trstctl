@@ -11,7 +11,7 @@ const previewRoutes = [
   { path: "/secrets", heading: "Secrets", proof: "payments/production/database" },
   { path: "/ssh", heading: "SSH trust", proof: "bastion.preview-lab.example" },
   { path: "/incidents", heading: "Incidents", proof: "incident-preview-001" },
-  { path: "/ca-hierarchy", heading: "CA hierarchy", proof: "Preview Lab Root CA" },
+  { path: "/ca-hierarchy", heading: "Certificate authorities", proof: "Preview Lab Root CA" },
 ] as const;
 
 async function assertPreviewRoutes(page: Page, theme: "light" | "dark") {
