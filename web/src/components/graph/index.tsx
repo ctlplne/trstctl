@@ -38,7 +38,7 @@ export function BlastRadiusExplorer({ nodes, selectedId, onAnalyze }: { nodes: G
       title={translateNow("source.blast.radius.explorer.447e6bd3bc")}
       description="pick a credential and see everything that breaks if it is compromised"
     >
-      <label className="grid min-w-0 gap-1 text-body">
+      <label className="grid min-w-0 gap-1 overflow-x-hidden text-body">
         <span className="font-medium">{translateNow("source.credential.b1c42b3ce1")}</span>
         <select
           value={selected}
