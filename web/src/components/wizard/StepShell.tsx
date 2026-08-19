@@ -30,6 +30,7 @@ export function StepShell({
   const reducedMotion = usePrefersReducedMotion();
   const currentStep = steps[currentIndex];
   const progress = Math.round(((currentIndex + 1) / steps.length) * 100);
+  const compactSteps = steps.map((step, index) => ({ step, index })).filter(({ index }) => Math.abs(index - currentIndex) <= 1);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -61,7 +62,11 @@ export function StepShell({
           </div>
           <p className="font-mono text-caption text-muted-foreground">{progress}%</p>
         </div>
-        <ol className="mt-5 grid gap-2 sm:grid-cols-4" aria-label={translateNow("source.onboarding.progress.ad8a0dac00")}>
+        <ol
+          className="mt-5 hidden gap-2 sm:grid sm:grid-cols-4"
+          aria-label={translateNow("source.onboarding.progress.ad8a0dac00")}
+          data-testid="full-step-progress"
+        >
           {steps.map((step, index) => {
             const state = index < currentIndex ? "done" : index === currentIndex ? "current" : "upcoming";
             return (
@@ -72,6 +77,26 @@ export function StepShell({
                   </span>
                   <span className="truncate">{step.label}</span>
                 </div>
+              </li>
+            );
+          })}
+        </ol>
+        <ol className="mt-4 grid gap-1 sm:hidden" aria-label={translateNow("source.onboarding.progress.ad8a0dac00")} data-testid="compact-step-progress">
+          {compactSteps.map(({ step, index }) => {
+            const state = index < currentIndex ? "done" : index === currentIndex ? "current" : "upcoming";
+            return (
+              <li
+                key={`compact-${step.id}`}
+                aria-current={state === "current" ? "step" : undefined}
+                className={cn(
+                  "flex min-w-0 items-center gap-2 border-s-2 px-2 py-1.5 text-sm",
+                  state === "current" ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground",
+                )}
+              >
+                <span className="w-5 shrink-0 text-center text-caption tabular-nums" aria-hidden="true">
+                  {state === "done" ? "✓" : index + 1}
+                </span>
+                <span className="min-w-0 flex-1 truncate">{step.label}</span>
               </li>
             );
           })}

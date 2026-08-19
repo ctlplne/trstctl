@@ -1,11 +1,12 @@
 # trstctl design system
 
-The console shares one design language with trstctl.com: ink-black blue
-surfaces, warm cream ink, **gold** primary (`#ffd166`), **mint** accent
-(`#5eead4`), and the Sora / DM Mono / Syne type trio. Dark is the flagship
-theme (a direct port of the website palette); light is the same language on
-warm paper. The living spec renders at **`/styleguide`** — every swatch and
-component there comes from the real implementation.
+The console uses a quieter product expression of the trstctl brand: warm paper
+or ink-black blue surfaces, **gold** primary (`#ffd166`), and **mint** focus
+(`#5eead4`). Light is the default work surface; dark remains a fully supported
+operator preference. Sora is the UI face, DM Mono is reserved for exact machine
+data, and Syne is reserved for the wordmark or a rare brand moment. The living
+spec renders at **`/styleguide`** — every swatch and component there comes from
+the real implementation.
 
 This file is the console's whole in-repo contract: the visual system and the
 shell, data, i18n, and test rules the S-C1…S-C10 trains established. When a
@@ -47,9 +48,8 @@ the same change.
 5. **Digits align, data is mono (S-C9).** All tables inherit `tabular-nums`;
    standalone numerals opt in with the utility class, and inline data values
    in sans copy (counts, TTLs, serials, timestamps) render through `Num`.
-   Micro-labels use the single `Eyebrow` cluster — do not hand-roll new
-   uppercase/tracking combinations (PageHeader's accent eyebrow is the one
-   sanctioned brand-flavored variant). `Eyebrow` and `Num`
+   Micro-labels use the single quiet, sentence-case `Eyebrow` cluster — do not
+   hand-roll uppercase/tracking combinations. `Eyebrow` and `Num`
    (`src/components/typography.tsx`) are the ONLY sanctioned micro-label and
    inline-data styles. `text-2xs` is the smallest type rung and there are no
    `text-[Npx]` arbitraries. `cn()` (`src/lib/utils.ts`) extends tailwind-merge
@@ -108,9 +108,12 @@ the same change.
     `design_system_foundation.test.tsx` only goes down. Native checkboxes and
     radios ride the gold `accent-color` base rule until a Checkbox primitive
     exists.
-15. **One panel, one table — the criteria (R-05).** `Card` is the panel:
+15. **One panel, one table — the criteria (R-05).** `Card` is a meaningful
+    boundary, not the default wrapper for every section:
     new sectioned surfaces use `Card`/`CardHeader`/`CardTitle` (headings get
-    `text-title` for free instead of a hand-set size). `.ui-panel` is a
+    `text-title` for free instead of a hand-set size). Ordinary sections use
+    spacing and dividers. Cards have no default shadow; add elevation only for
+    overlays or objects whose boundary materially matters. `.ui-panel` is a
     legacy alias with the identical visual spec — do not add new call sites;
     migrate to `Card` when the surface is next touched (exemplar:
     Request Credential's boundary panel). `DataGrid` renders any list that
@@ -158,6 +161,21 @@ the same change.
     edits one of them, first extract the section being edited into
     `pages/<page>/…Parts` files (the `pages/secrets/SecretsPageParts.tsx`
     pattern), then make the edit. No standalone big-bang refactor.
+21. **Every page speaks Answer → Operate → Prove.** `PageHeader` puts the plain
+    outcome first, the real next-step controls second, and exact technical
+    evidence in a disclosure. Above the fold has one primary action and at most
+    one saturated region. Existing expert descriptions move to
+    `technicalDetails`; they are never deleted. Summary sentences precede KPI
+    grids, expected absence is neutral, and optional metrics/configuration come
+    after the page's main object or task.
+22. **Product controls are not marketing pills.** Buttons use the shared 6px
+    control radius and no hover lift. Pills remain appropriate for filters and
+    tags. Status badges are neutral by default; success, caution, danger, and
+    active-operation color appears only when the distinction carries meaning.
+23. **Mobile shows the current decision.** Multi-step flows show only the
+    previous, current, and next step on small screens. The shell groups account,
+    language, theme, keyboard help, and sign-out under one account menu so the
+    task keeps the chrome.
 
 ## Test surfaces
 

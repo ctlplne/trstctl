@@ -14,8 +14,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 /** Styleguide is the living spec for the trstctl design language: every token
  * and primitive rendered from the real implementation, so what this page shows
  * is — by construction — what ships. The palette, type, and components are
- * ported from trstctl.com (ink-black blue surfaces, warm cream ink, gold
- * primary, mint accent, Sora/DM Mono/Syne). See web/DESIGN.md for the rules. */
+ * adapted from trstctl.com into a quiet operator surface: light-first neutral
+ * space, one gold action channel, mint focus, Sora UI copy, DM Mono machine
+ * data, and Syne only for the wordmark. See web/DESIGN.md for the rules. */
 
 const colorTokens: Array<{ group: string; tokens: Array<{ name: string; className: string }> }> = [
   {
@@ -82,6 +83,7 @@ export function Styleguide() {
         title="Styleguide"
         eyebrow="Design system"
         description="The living spec: every token and primitive below renders from the real implementation. If it looks right here, it ships right."
+        technicalDetails="Token values, accessibility tests, primitive contracts, and implementation examples live together on this route."
       />
 
       <PageTabs
@@ -106,9 +108,7 @@ export function Styleguide() {
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {colorTokens.map((group) => (
                 <div key={group.group} className="ui-panel grid content-start gap-2 p-4">
-                  <Eyebrow as="h3" className="font-mono font-medium tracking-wider">
-                    {group.group}
-                  </Eyebrow>
+                  <Eyebrow as="h3">{group.group}</Eyebrow>
                   {group.tokens.map((token) => (
                     <div key={token.name} className="flex items-center gap-3">
                       <span aria-hidden="true" className={`h-8 w-14 shrink-0 rounded-control ${token.className}`} />
@@ -125,16 +125,16 @@ export function Styleguide() {
               Type ramp
             </h2>
             <div className="ui-panel grid gap-3 p-4">
-              <p className="font-display text-display font-bold tracking-tight">Display / Syne — page titles</p>
+              <p className="font-display text-display font-bold tracking-tight">Display / Syne — wordmark and rare brand moments</p>
               <p className="text-heading font-semibold">Heading — section titles</p>
               <p className="text-title font-semibold">Title — card and panel titles</p>
-              <p className="text-body">Body / Sora — running interface text at 14px with 1.5 line height.</p>
+              <p className="text-body">Body / Sora — explanatory interface text at 15px; dense data remains 14px.</p>
               <p className="text-caption text-muted-foreground">Caption — metadata, table headers, eyebrows.</p>
               <p className="font-mono text-body">DM Mono — credential material, identifiers, commands.</p>
               <p className="text-body tabular-nums">Tabular numerals: 1,284 / 3,471 / 612 — digits align in columns.</p>
               <p className="text-body">
-                <Eyebrow>Eyebrow primitive</Eyebrow> — the one tracked micro-label (S-C9); inline data uses <Num>Num</Num>: <Num>2026-07-24T00:00:00Z</Num> ·{" "}
-                <Num>1,284</Num> · <Num>90d</Num>.
+                <Eyebrow>Eyebrow primitive</Eyebrow> — the one quiet sentence-case micro-label; inline data uses <Num>Num</Num>: <Num>2026-07-24T00:00:00Z</Num>{" "}
+                · <Num>1,284</Num> · <Num>90d</Num>.
               </p>
             </div>
           </section>
@@ -201,6 +201,39 @@ export function Styleguide() {
             </div>
           </section>
 
+          <section aria-labelledby="sg-page-anatomy" className="grid gap-3">
+            <h2 id="sg-page-anatomy" className="text-title font-semibold">
+              Quiet page anatomy
+            </h2>
+            <div className="grid gap-4 border-y border-border py-4 md:grid-cols-[minmax(0,1.5fr)_auto]">
+              <div>
+                <Eyebrow as="p">Answer</Eyebrow>
+                <h3 className="mt-1 text-heading font-semibold">3 credentials need attention.</h3>
+                <p className="mt-1 text-body text-muted-foreground">1 critical and 2 high. Everything else is healthy.</p>
+                <ul className="mt-4 divide-y divide-border text-body">
+                  <li className="flex justify-between gap-4 py-2">
+                    <span>api.preview-lab.example</span>
+                    <span className="text-risk-critical">Critical</span>
+                  </li>
+                  <li className="flex justify-between gap-4 py-2">
+                    <span>payments/database</span>
+                    <span className="text-risk-high">High</span>
+                  </li>
+                </ul>
+              </div>
+              <div className="min-w-44">
+                <Eyebrow as="p">Do next</Eyebrow>
+                <Button type="button" className="mt-1">
+                  Review top issue
+                </Button>
+                <details className="mt-4 text-caption text-muted-foreground">
+                  <summary className="cursor-pointer font-medium">Technical details</summary>
+                  <p className="mt-1">Risk inputs, evidence IDs, projection version, event history, and recovery controls.</p>
+                </details>
+              </div>
+            </div>
+          </section>
+
           <section aria-labelledby="sg-badges" className="grid gap-3">
             <h2 id="sg-badges" className="text-title font-semibold">
               Status vocabulary
@@ -239,7 +272,7 @@ export function Styleguide() {
                 <CardHeader>
                   <CardTitle>Evidence queue</CardTitle>
                 </CardHeader>
-                <CardContent>Token-backed card body on an elevated surface.</CardContent>
+                <CardContent>A bounded decision or object with no default shadow.</CardContent>
               </Card>
               <div className="grid gap-2">
                 <Skeleton className="h-4 w-40" />

@@ -23,6 +23,16 @@ const esESCatalog = {
   "app.brand.name": "trstctl",
   "app.brand.subtitle": "plano de control",
   "app.skipToMain": "Saltar al contenido principal",
+  // Quiet-confidence page anatomy — Machine-authored, FLAG FOR HUMAN REVIEW.
+  "pageHeader.answer": "Respuesta",
+  "pageHeader.answerFallback": "Comprenda el estado actual antes de cambiarlo.",
+  "pageHeader.operate": "Hacer a continuación",
+  "pageHeader.prove": "Detalles técnicos",
+  "pageHeader.openDetails": "Mostrar evidencia exacta",
+  "pageHeader.closeDetails": "Ocultar evidencia exacta",
+  "pageHeader.proveFallback":
+    "Los identificadores exactos, los hechos de política, el historial de eventos y la evidencia de recuperación siguen disponibles en este espacio de trabajo.",
+  "shell.accountMenu": "Cuenta y preferencias",
   "credentialChip.copy": "Copiar {label}",
   "credentialChip.copied": "Copiado al portapapeles",
   "graph.view.zoomIn": "Acercar",
@@ -145,6 +155,24 @@ const esESCatalog = {
   "certificates.lifecycle.renewStarted": "Renovación iniciada",
   "certificates.lifecycle.renewFailed": "No se pudo iniciar la renovación",
   "dashboard.recentActivity.empty": "Aún no hay eventos de auditoría.",
+  // Quiet-confidence dashboard — Machine-authored, FLAG FOR HUMAN REVIEW.
+  "dashboard.homeDescription": "Vea qué necesita atención ahora y qué está sano.",
+  "dashboard.homeTechnicalDetails":
+    "Las proyecciones de inventario, las entradas del modelo de riesgo, las bandas de vencimiento de certificados, las observaciones de endpoints, los trabajos de renovación y la actividad inmutable siguen disponibles abajo.",
+  "dashboard.attention.needsAttentionOne": "1 credencial necesita atención.",
+  "dashboard.attention.needsAttentionMany": "{count} credenciales necesitan atención.",
+  "dashboard.attention.healthy": "No se informa de ningún riesgo urgente de credenciales.",
+  "dashboard.attention.unavailable": "El resumen de atención no está disponible.",
+  "dashboard.attention.breakdown": "{critical} elementos críticos y {high} de alta prioridad. Revise la credencial afectada antes de cambiarla.",
+  "dashboard.attention.healthyHelp": "Todo lo demás sigue disponible abajo; cero elementos urgentes no significa que se haya analizado todo el entorno.",
+  "dashboard.attention.unavailableHelp":
+    "No se puede mostrar un total seguro. Abra la lista de riesgos o vuelva a intentarlo cuando se recuperen las proyecciones.",
+  "dashboard.attention.listLabel": "Credenciales de mayor prioridad",
+  "dashboard.attention.review": "Revisar →",
+  "dashboard.moreActions": "Más acciones",
+  "dashboard.estateSummary": "{credentials} credenciales registradas · {agents} agentes en línea · {expiring} certificados vencen esta semana",
+  "dashboard.exploreMetrics": "Explorar todas las métricas",
+  "dashboard.exploreMetricsHelp": "Inventario, tendencias, algoritmos, vencimientos y actividad",
   // Traducciones creadas por máquina para AUD-67 — REQUIEREN REVISIÓN HUMANA ANTES DEL LANZAMIENTO.
   "dashboard.urgentRisk.label": "Riesgo urgente",
   "dashboard.urgentRisk.allProjections": "todas las proyecciones de riesgo",
@@ -364,8 +392,9 @@ const esESCatalog = {
   "wizard.protocols.summaryActive": "Perfil de evaluación activo",
   "wizard.protocols.summaryOperator": "Perfil configurado por el operador",
   "wizard.protocols.next": "Siguiente: habilitar protocolos",
-  "wizard.header.description":
-    "Conecte un emisor, habilite los protocolos de inscripción, emita un certificado, verifique las integraciones configuradas, inscriba un agente y termine.",
+  "wizard.header.description": "Dé el siguiente paso seguro hacia un certificado de prueba sano.",
+  "wizard.header.technicalDetails":
+    "La ruta completa conecta un emisor, habilita protocolos de inscripción, emite un certificado, prueba las integraciones configuradas, inscribe un agente y registra la finalización en este navegador.",
   "wizard.integrations.stepLabel": "Probar integraciones",
   "wizard.integrations.stepDescription": "Ejecute operaciones de conectores, CA ascendentes y secretos dinámicos contra los sistemas configurados.",
   "wizard.integrations.heading": "Verificar integraciones configuradas",
@@ -450,13 +479,17 @@ const esESCatalog = {
   "certificates.ingest.nextPlacement": "Siguiente: asignar propiedad",
   "certificates.ingest.nextReview": "Siguiente: revisar",
   "certificates.ingest.ownerUnassigned": "Sin propietario (asignar más tarde)",
-  "nav.item.journeys": "Recorridos",
+  "nav.item.journeys": "Configuración guiada",
   "journeys.eyebrow": "Rutas guiadas",
-  "journeys.description":
-    "Los recorridos documentados del operador como listas vivas: cada paso lleva con un clic al lugar correcto y los pasos terminados se marcan solos a partir de datos servidos.",
+  "journeys.description": "Elija el resultado que desea y continúe desde el primer paso sin terminar.",
+  "journeys.technicalDetails":
+    "Cada paso abre el espacio de trabajo exacto. Los pasos que podemos verificar usan resultados reales del inquilino; los pasos manuales quedan claramente marcados para que el operador los confirme.",
   "journeys.listLabel": "Recorridos disponibles",
   "journeys.progress": "{done} de {total} pasos completados",
   "journeys.census.verified": "Ruta verificada · cableado publicado {passed}/{total}",
+  "journeys.testingDetails": "Cómo probamos esto",
+  "journeys.testingSummary":
+    "El censo de rutas publicado verifica cada paso requerido. Esta es evidencia de ingeniería, no una afirmación de que un cliente real completó el recorrido.",
   "journeys.open": "Llévame allí",
   "journeys.refresh": "Actualizar estado",
   "journeys.doc": "Guía de referencia",
@@ -744,7 +777,7 @@ const esESCatalog = {
   "nav.group.incidentsJit": "Aprobar y responder",
   "nav.group.governance": "Gobierno",
   "nav.group.platform": "Administrar",
-  "nav.item.dashboard": "Panel",
+  "nav.item.dashboard": "Inicio",
   "nav.item.setUp": "Configuración inicial",
   "nav.item.requestCredential": "Solicitar credencial",
   "nav.item.certificates": "Certificados",

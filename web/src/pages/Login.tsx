@@ -25,9 +25,7 @@ export function Login() {
             </svg>
           </span>
           <div>
-            <Eyebrow as="p" className="font-mono font-medium tracking-wider text-brand-accent">
-              {translateNow("source.machine.credential.access.bb586fcf38")}
-            </Eyebrow>
+            <Eyebrow as="p">{translateNow("source.machine.credential.access.bb586fcf38")}</Eyebrow>
             <h1 className="text-heading font-semibold tracking-tight">{translateNow("source.trstctl.74de2c6ee4")}</h1>
           </div>
         </div>

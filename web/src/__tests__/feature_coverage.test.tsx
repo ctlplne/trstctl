@@ -54,7 +54,7 @@ describe("feature coverage ledger removal", () => {
   it("redirects /coverage to the customer dashboard without a coverage nav item", async () => {
     renderAt("/coverage");
 
-    expect(await screen.findByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Home" })).toBeInTheDocument();
     const nav = screen.getByRole("navigation", { name: "Primary" });
     expect(within(nav).queryByRole("link", { name: /coverage/i })).not.toBeInTheDocument();
     expect(screen.queryByText("Backend-to-GUI coverage")).not.toBeInTheDocument();

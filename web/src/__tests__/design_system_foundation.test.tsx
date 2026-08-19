@@ -19,6 +19,10 @@ const tailwind = readFileSync(path.join(webRoot, "tailwind.config.js"), "utf8");
 const agentsSource = readFileSync(path.join(webRoot, "src/pages/Agents.tsx"), "utf8");
 const certsSource = readFileSync(path.join(webRoot, "src/pages/Certificates.tsx"), "utf8");
 const riskSource = readFileSync(path.join(webRoot, "src/pages/Risk.tsx"), "utf8");
+const buttonSource = readFileSync(path.join(webRoot, "src/components/ui/button.tsx"), "utf8");
+const cardSource = readFileSync(path.join(webRoot, "src/components/ui/card.tsx"), "utf8");
+const pageHeaderSource = readFileSync(path.join(webRoot, "src/components/PageHeader.tsx"), "utf8");
+const themeProviderSource = readFileSync(path.join(webRoot, "src/components/ThemeProvider.tsx"), "utf8");
 
 type Row = { id: string; name: string; status: string; owner: string };
 type HslToken = { h: number; s: number; l: number };
@@ -126,6 +130,17 @@ describe("Clarity/Console design-system foundation", () => {
     for (const themeKey of ["brand", "operate", "observe", "disclose", "risk", "fontSize", "elevation2"]) {
       expect(tailwind).toContain(themeKey);
     }
+  });
+
+  it("pins the quiet-confidence attention hierarchy instead of marketing chrome", () => {
+    expect(pageHeaderSource).toContain('data-testid="page-depth-answer"');
+    expect(pageHeaderSource).toContain('data-testid="page-depth-operate"');
+    expect(pageHeaderSource).toContain('data-testid="page-depth-prove"');
+    expect(buttonSource).toContain("rounded-control");
+    expect(buttonSource).not.toContain("gap-2 rounded-full text-sm");
+    expect(buttonSource).not.toContain("translate-y");
+    expect(cardSource).toContain("shadow-none");
+    expect(themeProviderSource).toContain('stored ?? "light"');
   });
 
   it("defines every ui-* component class that source references (R-01 guard)", () => {
@@ -270,7 +285,7 @@ describe("Clarity/Console design-system foundation", () => {
 
     expect(screen.getByText("Evidence queue")).toHaveClass("text-title");
     expect(screen.getByText("Token-backed card body")).toHaveClass("text-body");
-    expect(screen.getByText("Evidence queue").closest(".rounded-panel")).toHaveClass("shadow-elevation1");
+    expect(screen.getByText("Evidence queue").closest(".rounded-panel")).toHaveClass("shadow-none");
   });
 
   it("renders shared StatusBadge labels from one vocabulary and real token classes", async () => {
@@ -285,8 +300,9 @@ describe("Clarity/Console design-system foundation", () => {
 
     expect(screen.getByText("revoked")).toHaveAttribute("data-status-badge", "certificate");
     expect(screen.getByText("<7d critical")).toHaveClass("text-risk-critical");
-    expect(screen.getByText("Disclose")).toHaveClass("text-disclose");
+    expect(screen.getByText("Disclose")).toHaveClass("border-border", "bg-transparent", "text-muted-foreground");
     expect(screen.getByText("Critical")).toHaveClass("text-risk-critical");
+    expect(screen.getByText("Critical")).toHaveClass("bg-risk-critical/10");
     expect(describeStatus("agent", "online")).toMatchObject({ label: "online", tone: "success" });
     expect(expiryBandForDate(new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString())).toBe("critical");
 

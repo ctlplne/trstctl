@@ -49,7 +49,7 @@ describe("UX-01 coverage route removal", () => {
     const user = userEvent.setup();
     renderAt("/coverage");
 
-    expect(await screen.findByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Home" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Backend-to-GUI coverage" })).not.toBeInTheDocument();
 
     const nav = screen.getByRole("navigation", { name: "Primary" });

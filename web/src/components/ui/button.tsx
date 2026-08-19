@@ -2,22 +2,19 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { forwardRef, type ButtonHTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
-/* Pill buttons ported from the trstctl.com design language: gold primary with
- * near-black ink (AA in both themes), a quiet secondary that warms to the
- * accent on hover, and a real destructive variant so revoke/delete flows stop
- * hand-rolling red styles. The subtle hover lift mirrors the website CTA. */
+/* Product controls use the shared 6px radius. Gold remains the single action
+ * channel, but marketing-style pills and hover lifts stay out of dense
+ * operator workflows. */
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 rounded-full text-sm font-medium transition-[color,background-color,border-color,box-shadow,filter,transform] duration-fast disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+  "inline-flex items-center justify-center gap-2 rounded-control text-sm font-medium transition-[color,background-color,border-color,box-shadow,filter] duration-fast disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background",
   {
     variants: {
       variant: {
-        default:
-          "bg-primary text-primary-foreground shadow-elevation1 hover:brightness-105 active:brightness-95 motion-safe:hover:-translate-y-px motion-safe:active:translate-y-0",
+        default: "bg-primary text-primary-foreground shadow-elevation1 hover:brightness-105 active:brightness-95",
         secondary: "border border-border bg-foreground/[0.03] text-foreground hover:border-brand-accent/60 hover:text-brand-accent",
         outline: "border border-border bg-background hover:border-brand-accent/40 hover:bg-muted/60",
         ghost: "hover:bg-foreground/[0.05]",
-        destructive:
-          "bg-destructive text-destructive-foreground shadow-elevation1 hover:brightness-105 active:brightness-95 motion-safe:hover:-translate-y-px motion-safe:active:translate-y-0",
+        destructive: "bg-destructive text-destructive-foreground shadow-elevation1 hover:brightness-105 active:brightness-95",
         "destructive-outline": "border border-destructive/50 bg-background text-destructive hover:border-destructive hover:bg-destructive/10",
       },
       size: {

@@ -117,12 +117,15 @@ describe("journeys hub", () => {
     const user = userEvent.setup();
     const { container } = renderJourneys();
 
-    expect(await screen.findByRole("heading", { name: "Journeys" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Guided setup" })).toBeInTheDocument();
 
-    // The label is generated from wiring-census.json, not hand-authored page
-    // copy. Every card has the same current shipped-binary proof boundary.
-    expect(screen.getAllByText("Verified path · shipped wiring 81/81")).toHaveLength(journeys.length);
-    expect(screen.getByRole("button", { name: /First certificate/ }).querySelector('[data-journey-census="first-certificate"]')).toBeInTheDocument();
+    // Engineering proof stays reachable once, without repeating a bright
+    // shipped-wiring badge on all twelve outcome choices.
+    expect(screen.getAllByText("Verified path · shipped wiring 81/81")).toHaveLength(1);
+    const proof = screen.getByText("How we tested this").closest("details");
+    expect(proof).not.toHaveAttribute("open");
+    expect(proof).toHaveTextContent("Verified path · shipped wiring 81/81");
+    expect(screen.getByRole("button", { name: /First certificate/ }).querySelector("[data-journey-census]")).not.toBeInTheDocument();
 
     // Detector-backed progress: the issuer exists, so first-certificate shows 1 of 4.
     const firstCert = screen.getByRole("button", { name: /First certificate/ });

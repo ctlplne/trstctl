@@ -15,12 +15,12 @@ function systemPrefersDark(): boolean {
   return typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
 
-/** ThemeProvider drives light/dark/system theming, defaulting to the OS setting
- * and persisting the choice. */
+/** ThemeProvider drives light/dark/system theming. A new operator starts in
+ * the quieter light work surface; dark and system remain persisted choices. */
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
     const stored = typeof localStorage !== "undefined" ? (localStorage.getItem(STORAGE_KEY) as Theme | null) : null;
-    return stored ?? "system";
+    return stored ?? "light";
   });
 
   const resolved: "light" | "dark" = theme === "system" ? (systemPrefersDark() ? "dark" : "light") : theme;

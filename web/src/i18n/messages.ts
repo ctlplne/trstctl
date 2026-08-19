@@ -32,6 +32,34 @@ export const messages = {
     defaultMessage: "Skip to main content",
     description: "Keyboard skip-link label.",
   },
+  "pageHeader.answer": {
+    defaultMessage: "Answer",
+    description: "Label for the plain-language outcome at the top of every product page.",
+  },
+  "pageHeader.answerFallback": {
+    defaultMessage: "Understand the current state before you change it.",
+    description: "Fallback plain-language outcome when a page has no specific description.",
+  },
+  "pageHeader.operate": {
+    defaultMessage: "Do next",
+    description: "Accessible label for the page's real primary and secondary controls.",
+  },
+  "pageHeader.prove": {
+    defaultMessage: "Technical details",
+    description: "Label for the exact-evidence disclosure in the standard page header.",
+  },
+  "pageHeader.openDetails": {
+    defaultMessage: "Show exact evidence",
+    description: "Collapsed affordance for page-level technical evidence.",
+  },
+  "pageHeader.closeDetails": {
+    defaultMessage: "Hide exact evidence",
+    description: "Expanded affordance for page-level technical evidence.",
+  },
+  "pageHeader.proveFallback": {
+    defaultMessage: "Exact identifiers, policy facts, event history, and recovery evidence remain available in this workspace.",
+    description: "Fallback explanation of where expert evidence remains after progressive disclosure.",
+  },
   "admin.access.pamUnavailableTitle": {
     defaultMessage: "Privileged access sessions are unavailable",
     description: "Unavailable-state heading when privileged access sessions cannot be loaded.",
@@ -509,6 +537,67 @@ export const messages = {
   "dashboard.recentActivity.empty": {
     defaultMessage: "No audit events yet.",
     description: "Dashboard recent-activity empty state when the served audit stream has no events.",
+  },
+  "dashboard.homeDescription": {
+    defaultMessage: "See what needs attention now and what is healthy.",
+    description: "Plain-language dashboard outcome shown in the shared Answer layer.",
+  },
+  "dashboard.homeTechnicalDetails": {
+    defaultMessage:
+      "Inventory projections, risk model inputs, certificate expiry bands, endpoint observations, renewal jobs, and immutable activity stay available below.",
+    description: "Exact dashboard evidence retained behind the shared Technical details disclosure.",
+  },
+  "dashboard.attention.needsAttentionOne": {
+    defaultMessage: "1 credential needs attention.",
+    description: "Dashboard result sentence when exactly one canonical urgent item exists.",
+  },
+  "dashboard.attention.needsAttentionMany": {
+    defaultMessage: "{count} credentials need attention.",
+    description: "Dashboard result sentence when multiple canonical urgent items exist.",
+  },
+  "dashboard.attention.healthy": {
+    defaultMessage: "No urgent credential risk is reported.",
+    description: "Quiet dashboard result sentence when canonical urgent work is zero.",
+  },
+  "dashboard.attention.unavailable": {
+    defaultMessage: "The attention summary is unavailable.",
+    description: "Honest dashboard result sentence when canonical risk projections cannot be read.",
+  },
+  "dashboard.attention.breakdown": {
+    defaultMessage: "{critical} critical and {high} high-priority items. Review the affected credential before changing it.",
+    description: "Dashboard severity breakdown and safety instruction.",
+  },
+  "dashboard.attention.healthyHelp": {
+    defaultMessage: "Everything else stays available below; zero urgent items is not a claim that the whole estate was scanned.",
+    description: "Dashboard coverage-honesty note for the quiet healthy state.",
+  },
+  "dashboard.attention.unavailableHelp": {
+    defaultMessage: "No safe total can be shown. Open the risk worklist or retry after the projections recover.",
+    description: "Dashboard recovery guidance when the canonical attention summary is unavailable.",
+  },
+  "dashboard.attention.listLabel": {
+    defaultMessage: "Highest-priority credentials",
+    description: "Accessible label for the short dashboard attention list.",
+  },
+  "dashboard.attention.review": {
+    defaultMessage: "Review →",
+    description: "Dashboard action for opening the prioritized risk worklist.",
+  },
+  "dashboard.moreActions": {
+    defaultMessage: "More actions",
+    description: "Dashboard disclosure containing secondary discovery and rotation actions.",
+  },
+  "dashboard.estateSummary": {
+    defaultMessage: "{credentials} credentials recorded · {agents} agents online · {expiring} certificates expire this week",
+    description: "Quiet inline estate summary replacing a wall of equal-weight KPI cards.",
+  },
+  "dashboard.exploreMetrics": {
+    defaultMessage: "Explore all metrics",
+    description: "Dashboard disclosure for inventory, charts, and exact operational summaries.",
+  },
+  "dashboard.exploreMetricsHelp": {
+    defaultMessage: "Inventory, trends, algorithms, expiry, and activity",
+    description: "Short description beside the dashboard metrics disclosure.",
   },
   "dashboard.urgentRisk.label": {
     defaultMessage: "Urgent risk",
@@ -1399,8 +1488,13 @@ export const messages = {
     description: "First-run wizard button from issuer confirmation to protocol activation.",
   },
   "wizard.header.description": {
-    defaultMessage: "Connect an issuer, enable enrollment protocols, issue a certificate, verify configured integrations, enroll an agent, and finish.",
+    defaultMessage: "Take the next safe step toward one healthy test certificate.",
     description: "Description at the top of the first-run wizard.",
+  },
+  "wizard.header.technicalDetails": {
+    defaultMessage:
+      "The full path connects an issuer, enables enrollment protocols, issues a certificate, proves configured integrations, enrolls an agent, and records completion in this browser.",
+    description: "Exact first-run sequence retained behind the page-level Technical details disclosure.",
   },
   "wizard.integrations.stepLabel": {
     defaultMessage: "Prove integrations",
@@ -1717,7 +1811,7 @@ export const messages = {
     description: "Owner picker option for ingesting a certificate without an owner.",
   },
   "nav.item.journeys": {
-    defaultMessage: "Journeys",
+    defaultMessage: "Guided setup",
     description: "Sidebar label for the guided-journeys hub.",
   },
   "journeys.eyebrow": {
@@ -1725,9 +1819,13 @@ export const messages = {
     description: "Eyebrow above the Journeys page title.",
   },
   "journeys.description": {
-    defaultMessage:
-      "The documented operator journeys as live checklists: every step is one click to the right place, and finished steps check themselves off from live tenant data.",
+    defaultMessage: "Choose the outcome you want and continue from the first unfinished step.",
     description: "Journeys page description.",
+  },
+  "journeys.technicalDetails": {
+    defaultMessage:
+      "Each step opens the exact workspace. Steps we can verify use live tenant results; manual steps remain clearly marked for operator confirmation.",
+    description: "Technical evidence retained behind the Journeys page header disclosure.",
   },
   "journeys.listLabel": {
     defaultMessage: "Available journeys",
@@ -1739,7 +1837,16 @@ export const messages = {
   },
   "journeys.census.verified": {
     defaultMessage: "Verified path · shipped wiring {passed}/{total}",
-    description: "Generated shipped-binary census badge on every journey card.",
+    description: "Generated shipped-binary census badge inside the one journey evidence disclosure.",
+  },
+  "journeys.testingDetails": {
+    defaultMessage: "How we tested this",
+    description: "Collapsed trust detail for the selected journey's generated wiring proof.",
+  },
+  "journeys.testingSummary": {
+    defaultMessage:
+      "The shipped route census verifies every required step. This is engineering evidence, not a claim that a real customer completed the journey.",
+    description: "Honest interpretation boundary under the selected journey's wiring proof.",
   },
   "journeys.open": {
     defaultMessage: "Take me there",
@@ -2290,6 +2397,10 @@ export const messages = {
     defaultMessage: "Language",
     description: "Header locale selector label.",
   },
+  "shell.accountMenu": {
+    defaultMessage: "Account and preferences",
+    description: "Mobile shell menu grouping identity, language, theme, keyboard help, and sign-out.",
+  },
   "shell.openKeyboardShortcuts": {
     defaultMessage: "Open keyboard shortcuts",
     description: "Keyboard-shortcuts help button label.",
@@ -2708,7 +2819,7 @@ export const messages = {
     description: "Primary navigation group.",
   },
   "nav.item.dashboard": {
-    defaultMessage: "Dashboard",
+    defaultMessage: "Home",
     description: "Primary navigation item.",
   },
   "nav.item.setUp": {

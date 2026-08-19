@@ -32,6 +32,7 @@ import {
   Siren,
   Search,
   Users,
+  UserRound,
   Vault,
   X,
 } from "lucide-react";
@@ -317,7 +318,7 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
         {activeSpace && (
           <li>
             {/* S-C1: the sidebar names the active space; the rail switches it. */}
-            <p className="px-3 pb-1 pt-0.5 font-display text-sm font-bold tracking-tight text-white">{t(activeSpace.labelKey)}</p>
+            <p className="px-3 pb-1 pt-0.5 text-sm font-bold text-white">{t(activeSpace.labelKey)}</p>
           </li>
         )}
         {visibleGroups.map((group) => {
@@ -384,6 +385,10 @@ function isEditableTarget(target: EventTarget | null): boolean {
  * title-cased path segment for routes that are not in the primary nav. */
 function routeLabel(pathname: string, t: (key: MessageKey) => string): string {
   if (pathname === "/") return t("nav.item.dashboard");
+  for (const item of primaryNavItems) {
+    const base = item.to.split("?")[0];
+    if (base === pathname) return t(item.labelKey);
+  }
   for (const group of navGroups) {
     for (const item of group.items) {
       const base = item.to.split("?")[0];
@@ -451,6 +456,7 @@ export function AppShell() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [mobileAccountOpen, setMobileAccountOpen] = useState(false);
   const [logoutPending, setLogoutPending] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const mobileNavId = "mobile-primary-nav";
@@ -599,6 +605,76 @@ export function AppShell() {
               <Bell className="h-4 w-4" aria-hidden="true" />
             </Link>
           )}
+          {user && !isDesktop && (
+            <div className="relative">
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                aria-controls="mobile-account-menu"
+                aria-expanded={mobileAccountOpen}
+                aria-label={t("shell.accountMenu")}
+                onClick={() => setMobileAccountOpen((open) => !open)}
+              >
+                <UserRound className="h-4 w-4" aria-hidden="true" />
+              </Button>
+              {mobileAccountOpen && (
+                <div
+                  id="mobile-account-menu"
+                  role="dialog"
+                  aria-label={t("shell.accountMenu")}
+                  className="absolute end-0 top-11 z-50 grid w-[min(19rem,calc(100vw-1rem))] gap-3 rounded-panel border border-border bg-card p-3 text-card-foreground shadow-elevation3"
+                >
+                  <div className="min-w-0 border-b border-border pb-3 text-sm">
+                    <strong className="block truncate">{user.email || user.subject}</strong>
+                    <span className="block truncate text-caption text-muted-foreground">{user.tenant_id}</span>
+                  </div>
+                  <label className="grid gap-1 text-caption font-medium text-muted-foreground">
+                    {t("shell.locale")}
+                    <select
+                      aria-label={t("shell.locale")}
+                      className="h-9 rounded-control border border-border bg-background px-3 text-sm text-foreground"
+                      value={locale}
+                      onChange={(event) => setLocale(event.target.value as Locale)}
+                    >
+                      {localeChoices.map((candidate) => (
+                        <option key={`mobile-${candidate}`} value={candidate}>
+                          {t(localeLabelKeys[candidate])}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="flex items-center justify-between gap-2">
+                    <ThemeToggle />
+                    <Button
+                      ref={shortcutsButtonRef}
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      aria-label={t("shell.openKeyboardShortcuts")}
+                      onClick={() => {
+                        setMobileAccountOpen(false);
+                        setShortcutsOpen(true);
+                      }}
+                    >
+                      <CircleHelp className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      aria-label={t("shell.signOut")}
+                      title={t("shell.signOut")}
+                      onClick={handleLogout}
+                      disabled={logoutPending}
+                    >
+                      <LogOut className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           <Button
             ref={shortcutsButtonRef}
             type="button"
@@ -606,10 +682,13 @@ export function AppShell() {
             variant="ghost"
             aria-label={t("shell.openKeyboardShortcuts")}
             onClick={() => setShortcutsOpen(true)}
+            className="hidden md:inline-flex"
           >
             <CircleHelp className="h-4 w-4" aria-hidden="true" />
           </Button>
-          <ThemeToggle />
+          <span className="hidden md:block">
+            <ThemeToggle />
+          </span>
           {user && (
             <span className="hidden max-w-44 truncate text-sm text-muted-foreground sm:inline" data-testid="current-user">
               {user.email || user.subject}
@@ -629,6 +708,7 @@ export function AppShell() {
               title={t("shell.signOut")}
               onClick={handleLogout}
               disabled={logoutPending}
+              className="hidden md:inline-flex"
             >
               <LogOut className="h-4 w-4" aria-hidden="true" />
             </Button>

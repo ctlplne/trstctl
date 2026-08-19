@@ -20,8 +20,8 @@ describe("PageHeader", () => {
       />,
     );
 
-    const heading = screen.getByRole("heading", { name: "Certificates" });
-    const actions = heading.parentElement?.nextElementSibling;
+    expect(screen.getByRole("heading", { name: "Certificates" })).toBeVisible();
+    const actions = screen.getByRole("group", { name: "Do next" });
     expect(actions).toBeInstanceOf(HTMLElement);
     expect(actions).toHaveClass("flex", "w-full", "min-w-0", "flex-wrap", "sm:w-auto", "sm:shrink-0");
 
@@ -35,5 +35,23 @@ describe("PageHeader", () => {
       await user.tab();
       expect(button).toHaveFocus();
     }
+  });
+
+  it("orders plain outcome, real controls, and exact evidence as Answer, Operate, and Prove", () => {
+    render(
+      <PageHeader
+        title="Certificates"
+        description="See what is healthy and what expires soon."
+        technicalDetails="Serials, renewal jobs, and audit events remain available."
+        actions={<Button>Add certificate</Button>}
+      />,
+    );
+
+    expect(screen.getByTestId("page-depth-answer")).toHaveTextContent("Answer");
+    expect(screen.getByTestId("page-depth-answer")).toHaveTextContent("See what is healthy and what expires soon.");
+    expect(screen.getByTestId("page-depth-operate")).toHaveTextContent("Do next");
+    expect(screen.getByRole("button", { name: "Add certificate" })).toBeVisible();
+    expect(screen.getByTestId("page-depth-prove")).toHaveTextContent("Technical details");
+    expect(screen.getByTestId("page-depth-prove")).toHaveTextContent("Serials, renewal jobs, and audit events remain available.");
   });
 });

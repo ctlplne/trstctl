@@ -133,7 +133,20 @@ function contextualRiskFixture(critical: number, high: number) {
       credential_risk: { analyzed: 0, critical: 0, high: 0 },
       contextual_priorities: { analyzed: urgent, critical, high },
     },
-    priorities: [],
+    priorities: [
+      ...Array.from({ length: critical }, (_, index) => ({
+        credential_id: `critical-${index + 1}`,
+        subject: `contextual-critical-${index + 1}`,
+        severity: "critical",
+        contextual_score: 96 - index,
+      })),
+      ...Array.from({ length: high }, (_, index) => ({
+        credential_id: `high-${index + 1}`,
+        subject: `contextual-high-${index + 1}`,
+        severity: "high",
+        contextual_score: 84 - index,
+      })),
+    ],
   };
 }
 
@@ -218,7 +231,7 @@ describe("auth + dashboards", () => {
 
     await user.click(await screen.findByRole("button", { name: /Preview UI without backend/i }));
 
-    expect(await screen.findByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Home" })).toBeInTheDocument();
     expect(screen.getByTestId("preview-read-only-banner")).toHaveTextContent(
       "Read-only sample workspace. Changes are disabled and nothing leaves this browser.",
     );
@@ -297,11 +310,15 @@ describe("auth + dashboards", () => {
 
     renderAt("/");
 
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Dashboard" })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Home" })).toBeInTheDocument());
     expect(screen.getByText("u@example.test")).toBeInTheDocument(); // the session principal
 
-    const dash = screen.getByRole("region", { name: "Dashboard" });
+    const dash = screen.getByRole("region", { name: "Home" });
     expect(within(dash).getByRole("link", { name: /Issue credential/i })).toHaveAttribute("href", "/request");
+    const primaryActions = within(dash).getByRole("group", { name: "Do next" });
+    expect(within(primaryActions).getAllByRole("link")).toHaveLength(1);
+    expect(await within(dash).findByRole("heading", { name: "No urgent credential risk is reported." })).toBeInTheDocument();
+    expect(within(dash).getByText("Explore all metrics").closest("details")).not.toHaveAttribute("open");
     expect(within(dash).getByText(/Identities \(NHI\)/)).toBeInTheDocument();
     expect(within(dash).getByText(/Urgent risk/)).toBeInTheDocument();
     // Real mode shows the served daily issuance chart, never the demo monthly trend (S-N0 / DA-01).
@@ -350,7 +367,7 @@ describe("auth + dashboards", () => {
 
     renderAt("/");
 
-    const dash = await screen.findByRole("region", { name: "Dashboard" });
+    const dash = await screen.findByRole("region", { name: "Home" });
     // First data-dependent read is a findBy (web/DESIGN.md S-C3): react-query
     // delivers results on a macrotask, so the header region appears before the
     // gate settles — awaiting the CTA is the settle point.
@@ -484,7 +501,9 @@ describe("auth + dashboards", () => {
     seededTenant();
 
     renderAt("/");
-    const dash = await screen.findByRole("region", { name: "Dashboard" });
+    const dash = await screen.findByRole("region", { name: "Home" });
+    expect(await within(dash).findByRole("heading", { name: "1 credential needs attention." })).toBeInTheDocument();
+    expect(within(dash).getByRole("list", { name: "Highest-priority credentials" })).toHaveTextContent("contextual-critical-1");
 
     // Expiring ≤7d: exactly one fixture cert expires within 7 days.
     const expiring = kpiTile(dash, /Expiring ≤7d/);
@@ -515,7 +534,7 @@ describe("auth + dashboards", () => {
     apiMock.contextualRiskPriorities.mockResolvedValue(contextualRiskFixture(3, 0));
 
     renderAt("/");
-    const dash = await screen.findByRole("region", { name: "Dashboard" });
+    const dash = await screen.findByRole("region", { name: "Home" });
     await waitFor(() => expect(apiMock.contextualRiskPriorities).toHaveBeenCalledTimes(1));
     const urgent = kpiTile(dash, /Urgent risk/);
     await waitFor(() => expect(within(urgent).getByText("3")).toBeInTheDocument());
@@ -527,7 +546,7 @@ describe("auth + dashboards", () => {
     apiMock.contextualRiskPriorities.mockRejectedValue(new Error("contextual projection failed"));
 
     renderAt("/");
-    const dash = await screen.findByRole("region", { name: "Dashboard" });
+    const dash = await screen.findByRole("region", { name: "Home" });
     const urgent = kpiTile(dash, /Urgent risk/);
     await waitFor(() => expect(within(urgent).getByText(/summary unavailable/i)).toBeInTheDocument(), { timeout: 3_000 });
     expect(within(urgent).getByText("—")).toBeInTheDocument();
@@ -538,7 +557,7 @@ describe("auth + dashboards", () => {
     seededTenant();
 
     renderAt("/");
-    const dash = await screen.findByRole("region", { name: "Dashboard" });
+    const dash = await screen.findByRole("region", { name: "Home" });
     await within(dash).findByText(/Algorithm mix/);
 
     // Demo-dataset fingerprints from lib/demoData must not appear for a live tenant.
@@ -556,7 +575,7 @@ describe("auth + dashboards", () => {
     seededTenant();
 
     renderAt("/");
-    const dash = await screen.findByRole("region", { name: "Dashboard" });
+    const dash = await screen.findByRole("region", { name: "Home" });
     await within(dash).findByText(/Algorithm mix/);
 
     // Legend entries come from served certs; center count equals their total (3).
@@ -577,7 +596,7 @@ describe("auth + dashboards", () => {
     renderAt("/");
     await user.click(await screen.findByRole("button", { name: /Preview UI without backend/i }));
 
-    const dash = await screen.findByRole("region", { name: "Dashboard" });
+    const dash = await screen.findByRole("region", { name: "Home" });
     expect(await within(dash).findByText(/Non-human identity inventory/)).toBeInTheDocument();
     expect(within(dash).getByText(/Algorithm mix/)).toBeInTheDocument();
     expect(within(dash).queryByText(/Issuance trend/)).not.toBeInTheDocument();
@@ -597,7 +616,7 @@ describe("auth + dashboards", () => {
     });
 
     renderAt("/");
-    const dash = await screen.findByRole("region", { name: "Dashboard" });
+    const dash = await screen.findByRole("region", { name: "Home" });
 
     expect(await within(dash).findByText("47-day renewal readiness")).toBeInTheDocument();
     await waitFor(() => expect(within(dash).getByText("33%")).toBeInTheDocument());
@@ -616,7 +635,7 @@ describe("auth + dashboards", () => {
     renderAt("/");
     await user.click(await screen.findByRole("button", { name: /Preview UI without backend/i }));
 
-    const dash = await screen.findByRole("region", { name: "Dashboard" });
+    const dash = await screen.findByRole("region", { name: "Home" });
     expect(await within(dash).findByText("47-day renewal readiness")).toBeInTheDocument();
   });
 
@@ -679,7 +698,7 @@ describe("auth + dashboards", () => {
       { id: "c1", tenant_id: "t1", subject: "CN=api.example.test", issuer: "CN=CA", status: "active", fingerprint: "fp1" },
     ]);
     renderAt("/");
-    const dash = await screen.findByRole("region", { name: "Dashboard" });
+    const dash = await screen.findByRole("region", { name: "Home" });
     await waitFor(() => expect(apiMock.endpointVerifications).toHaveBeenCalled());
     expect(within(dash).queryByText(/endpoints verified/i)).toBeNull();
   });
@@ -697,7 +716,7 @@ describe("auth + dashboards", () => {
       guidance: "",
     });
     renderAt("/");
-    const dash = await screen.findByRole("region", { name: "Dashboard" });
+    const dash = await screen.findByRole("region", { name: "Home" });
 
     expect(await within(dash).findByText(/endpoints verified/i)).toBeInTheDocument();
     expect(within(dash).getByText("75")).toBeInTheDocument();

@@ -4,10 +4,10 @@ import { cn } from "@/lib/utils";
 /** S-C9: the console's typographic refinement rules, named as primitives so
  * the discipline is reusable instead of tribal knowledge (see web/DESIGN.md):
  *
- * - Eyebrow — the ONE tracked-uppercase micro-label style for section
+ * - Eyebrow — the ONE quiet sentence-case micro-label style for section
  *   headers, stat labels, chart titles, and definition terms. Pages had four
- *   slightly different hand-rolled versions of this cluster; that drift is
- *   exactly what reads as "unrefined".
+ *   slightly different uppercase/mono versions of this cluster; that drift
+ *   is exactly what read as visual noise.
  * - Num — data values render in the mono face with tabular figures so
  *   numbers align as columns and read as data; prose stays in the sans face.
  *   Tables already get tabular figures globally (index.css); Num is for the
@@ -22,7 +22,7 @@ export interface EyebrowProps extends HTMLAttributes<HTMLElement> {
 }
 
 export function Eyebrow({ as = "span", className, children, ...rest }: EyebrowProps) {
-  return createElement(as, { ...rest, className: cn("text-caption font-semibold uppercase tracking-wide text-muted-foreground", className) }, children);
+  return createElement(as, { ...rest, className: cn("text-caption font-semibold text-muted-foreground", className) }, children);
 }
 
 export interface NumProps extends HTMLAttributes<HTMLElement> {

@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { Activity, AlertTriangle, Boxes, KeyRound, RotateCw, Rocket, ScrollText, Search, ShieldCheck, ShieldAlert, Siren } from "lucide-react";
+import { Activity, AlertTriangle, Boxes, KeyRound, Rocket, ScrollText, ShieldCheck, ShieldAlert, Siren } from "lucide-react";
 import { api, type AuditEvent, type Certificate, type NHIInventory as NHIInventoryResponse, type RotationRun } from "@/lib/api";
 import { useAuth } from "@/auth/AuthProvider";
 import { useApiQuery } from "@/lib/query";
@@ -210,12 +210,17 @@ export function Dashboard() {
   const rotateFirst = contextualRotateFirst.length
     ? contextualRotateFirst
     : topRisk.map((r) => ({ subject: r.subject, detail: `risk score ${Math.round(r.score)}`, score: Math.round(r.score) }));
+  const contextualPriorities = urgentRisk.data?.priorities ?? [];
+  const criticalAttention = contextualPriorities.filter((row) => row.severity === "critical").length;
+  const highAttention = contextualPriorities.filter((row) => row.severity === "high").length;
+  const attentionCount = urgentSummary?.status === "complete" ? urgentSummary.urgent : null;
+  const attentionRows = attentionCount && attentionCount > 0 ? rotateFirst.slice(0, 3) : [];
 
   if (showOnboarding) {
     return (
       <section aria-labelledby="dashboard-heading" className="space-y-6">
         <PageHeader
-          title={translateNow("source.dashboard.67b6964686")}
+          title={t("nav.item.dashboard")}
           titleId="dashboard-heading"
           description="A single pane of glass over every non-human identity across your hybrid fleet."
         />
@@ -251,85 +256,80 @@ export function Dashboard() {
   return (
     <section aria-labelledby="dashboard-heading" className="space-y-6">
       <PageHeader
-        title={translateNow("source.dashboard.67b6964686")}
+        title={t("nav.item.dashboard")}
         titleId="dashboard-heading"
-        description="A single pane of glass over every non-human identity — certificates, workloads, secrets, SSH and AI agents — across your hybrid fleet."
+        description={t("dashboard.homeDescription")}
+        technicalDetails={t("dashboard.homeTechnicalDetails")}
         actions={
-          <>
-            <ActionLink to="/discovery" icon={<Search className="h-4 w-4" aria-hidden="true" />}>
-              {translateNow("source.discover.d4a33d5b78")}
-            </ActionLink>
-            <ActionLink to="/identities" icon={<RotateCw className="h-4 w-4" aria-hidden="true" />}>
-              {translateNow("source.rotate.c3613b1704")}
-            </ActionLink>
-            <ActionLink to="/request" icon={<KeyRound className="h-4 w-4" aria-hidden="true" />} primary>
-              {translateNow("source.issue.credential.ab0616c48f")}
-            </ActionLink>
-          </>
+          <ActionLink to="/request" icon={<KeyRound className="h-4 w-4" aria-hidden="true" />} primary>
+            {translateNow("source.issue.credential.ab0616c48f")}
+          </ActionLink>
         }
       />
 
-      {/* KPI row */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Kpi icon={<ScrollText className="h-4 w-4" />} label="Certificates" value={kpis.certificates} to="/certificates" />
-        <Kpi icon={<KeyRound className="h-4 w-4" />} label="Identities (NHI)" value={kpis.identities} to="/identities" />
-        <Kpi icon={<Boxes className="h-4 w-4" />} label="Secrets" value={kpis.secrets} to="/secrets" />
-        <Kpi
-          icon={<Activity className="h-4 w-4" />}
-          label="Agents online"
-          value={kpis.agentsOnline}
-          to="/agents"
-          sub={kpis.agentsTotal ? `${kpis.agentsOnline}/${kpis.agentsTotal}` : undefined}
-        />
-        <Kpi
-          icon={<AlertTriangle className="h-4 w-4" />}
-          label="Expiring ≤7d"
-          value={kpis.expiring7d}
-          sub="needs action"
-          tone="warn"
-          to="/certificates?expiry=7d"
-        />
-        <Kpi
-          icon={<ShieldAlert className="h-4 w-4" />}
-          label={t("dashboard.urgentRisk.label")}
-          value={kpis.urgentRisk}
-          sub={urgentSub}
-          tone={typeof kpis.urgentRisk === "number" && kpis.urgentRisk > 0 ? "crit" : undefined}
-          to="/risk?sort=score"
-        />
-        {/* D2: verified % is a percentage of OBSERVED endpoints, not of the
-            estate. Endpoints nobody has configured a listener address for are
-            absent rather than counted — counting them as unverified would
-            punish operators for the parts they have not reached yet, and
-            counting them as verified would be a lie. The tile is hidden
-            entirely until something has been observed, because "100%" over
-            zero endpoints is the most misleading number this page could show. */}
-        {verificationTile ? (
-          <Kpi
-            icon={<ShieldCheck className="h-4 w-4" />}
-            label="Endpoints verified"
-            value={verificationTile.percent}
-            valueSuffix="%"
-            sub={verificationTile.sub}
-            tone={verificationTile.tone}
-            to="/connectors"
-          />
-        ) : null}
-        <Kpi
-          icon={<Siren className="h-4 w-4" />}
-          label="Open incidents"
-          value={kpis.openIncidents}
-          sub={kpis.openIncidents ? `${kpis.openIncidents} active` : "none"}
-          tone={kpis.openIncidents ? "warn" : "ok"}
-          to="/incidents"
-        />
-        <Kpi icon={<ShieldCheck className="h-4 w-4" />} label="Future-ready" value={kpis.pqcReady} to="/posture" tone="ok" />
-      </div>
+      <section aria-labelledby="dashboard-attention-heading" className="border-b border-border pb-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h2 id="dashboard-attention-heading" className="text-heading font-semibold">
+              {attentionCount === null
+                ? t("dashboard.attention.unavailable")
+                : attentionCount > 0
+                  ? t(attentionCount === 1 ? "dashboard.attention.needsAttentionOne" : "dashboard.attention.needsAttentionMany", {
+                      count: formatNumber(attentionCount),
+                    })
+                  : t("dashboard.attention.healthy")}
+            </h2>
+            <p className="mt-1 text-body text-muted-foreground">
+              {attentionCount === null
+                ? t("dashboard.attention.unavailableHelp")
+                : attentionCount > 0
+                  ? t("dashboard.attention.breakdown", {
+                      critical: formatNumber(criticalAttention),
+                      high: formatNumber(highAttention),
+                    })
+                  : t("dashboard.attention.healthyHelp")}
+            </p>
+          </div>
+          <details className="relative">
+            <summary className="cursor-pointer rounded-control border border-border px-3 py-2 text-sm font-medium hover:bg-muted/60">
+              {t("dashboard.moreActions")}
+            </summary>
+            <div className="absolute end-0 top-11 z-10 grid min-w-56 gap-1 rounded-panel border border-border bg-card p-2 shadow-elevation2">
+              <Link to="/discovery" className="rounded-control px-3 py-2 text-sm hover:bg-muted">
+                {translateNow("source.discover.d4a33d5b78")}
+              </Link>
+              <Link to="/identities" className="rounded-control px-3 py-2 text-sm hover:bg-muted">
+                {translateNow("source.rotate.c3613b1704")}
+              </Link>
+            </div>
+          </details>
+        </div>
 
-      {/* Non-human identity inventory — by kind, with a shared risk lens. */}
-      <NhiInventory identities={identities.data ?? []} inventory={nhiInventory.data ?? undefined} risks={riskRows} />
-      <NotificationCenter risks={riskRows} certs={certs.data ?? []} />
-      <DashboardTrendCharts certificates={servedCertificates} rotationRuns={servedRotationRuns} />
+        {attentionRows.length > 0 ? (
+          <ul className="mt-4 divide-y divide-border" aria-label={t("dashboard.attention.listLabel")}>
+            {attentionRows.map((row) => (
+              <li key={row.subject} className="flex min-w-0 items-center justify-between gap-4 py-3">
+                <span className="min-w-0">
+                  <strong className="block truncate text-body">{row.subject}</strong>
+                  <span className="block truncate text-caption text-muted-foreground">{row.detail}</span>
+                </span>
+                <Link to="/risk?sort=score" className="shrink-0 text-sm font-medium text-brand-accent hover:underline">
+                  {t("dashboard.attention.review")}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        <p className="mt-4 text-caption text-muted-foreground">
+          {t("dashboard.estateSummary", {
+            credentials: formatNumber(kpis.certificates + kpis.identities + kpis.secrets),
+            agents: formatNumber(kpis.agentsOnline),
+            expiring: formatNumber(kpis.expiring7d),
+          })}
+        </p>
+      </section>
+
       {/* 47-day renewal readiness on the global home (C-D1, 07-closeout plan):
           derived from the same served certs + rotation runs as the trend
           charts — the posture statement lives here, the simulator stays on
@@ -344,81 +344,142 @@ export function Dashboard() {
         }
       />
 
-      {/* Algorithm and expiry projections use the same served response shapes in
-          both tenant and isolated-preview modes. */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              {translateNow("source.algorithm.mix.a5ab80b898")}{" "}
-              <span className="ml-1 text-caption font-normal text-muted-foreground">{translateNow("source.by.key.type.7228596a06")}</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Donut
-              segments={algoSegments(servedAlgoMix(servedCertificates))}
-              ariaLabel="Algorithm mix by key type"
-              centerLabel={formatNumber(kpis.certificates)}
-              centerSub="certificates"
-              withLegend
+      <details className="group border-t border-border pt-4">
+        <summary className="cursor-pointer text-sm font-semibold text-foreground hover:text-brand-accent">
+          {t("dashboard.exploreMetrics")}
+          <span className="ms-2 text-caption font-normal text-muted-foreground">{t("dashboard.exploreMetricsHelp")}</span>
+        </summary>
+        <div className="mt-5 grid gap-6">
+          {/* KPI row: retained as exact operational depth, after the answer. */}
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <Kpi icon={<ScrollText className="h-4 w-4" />} label="Certificates" value={kpis.certificates} to="/certificates" />
+            <Kpi icon={<KeyRound className="h-4 w-4" />} label="Identities (NHI)" value={kpis.identities} to="/identities" />
+            <Kpi icon={<Boxes className="h-4 w-4" />} label="Secrets" value={kpis.secrets} to="/secrets" />
+            <Kpi
+              icon={<Activity className="h-4 w-4" />}
+              label="Agents online"
+              value={kpis.agentsOnline}
+              to="/agents"
+              sub={kpis.agentsTotal ? `${kpis.agentsOnline}/${kpis.agentsTotal}` : undefined}
             />
-          </CardContent>
-        </Card>
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>
-              {translateNow("source.expiry.bands.cbfe64f7cb")}{" "}
-              <span className="ml-1 text-caption font-normal text-muted-foreground">{translateNow("source.time.to.expiry.b1bf11183a")}</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Bands bands={servedExpiryBands(servedCertificates)} />
-          </CardContent>
-        </Card>
-      </div>
+            <Kpi
+              icon={<AlertTriangle className="h-4 w-4" />}
+              label="Expiring ≤7d"
+              value={kpis.expiring7d}
+              sub="needs action"
+              tone="warn"
+              to="/certificates?expiry=7d"
+            />
+            <Kpi
+              icon={<ShieldAlert className="h-4 w-4" />}
+              label={t("dashboard.urgentRisk.label")}
+              value={kpis.urgentRisk}
+              sub={urgentSub}
+              tone={typeof kpis.urgentRisk === "number" && kpis.urgentRisk > 0 ? "crit" : undefined}
+              to="/risk?sort=score"
+            />
+            {verificationTile ? (
+              <Kpi
+                icon={<ShieldCheck className="h-4 w-4" />}
+                label="Endpoints verified"
+                value={verificationTile.percent}
+                valueSuffix="%"
+                sub={verificationTile.sub}
+                tone={verificationTile.tone}
+                to="/connectors"
+              />
+            ) : null}
+            <Kpi
+              icon={<Siren className="h-4 w-4" />}
+              label="Open incidents"
+              value={kpis.openIncidents}
+              sub={kpis.openIncidents ? `${kpis.openIncidents} active` : "none"}
+              tone={kpis.openIncidents ? "warn" : "ok"}
+              to="/incidents"
+            />
+            <Kpi icon={<ShieldCheck className="h-4 w-4" />} label="Future-ready" value={kpis.pqcReady} to="/posture" tone="ok" />
+          </div>
 
-      {/* Rotate first + recent activity */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card>
-          <CardHeader className="flex-row items-baseline justify-between space-y-0">
-            <CardTitle>
-              {translateNow("source.rotate.first.f4ea83b5ca")}{" "}
-              <span className="ml-1 text-caption font-normal text-muted-foreground">{translateNow("source.highest.risk.c56ed7dd58")}</span>
-            </CardTitle>
-            <Link to="/risk?sort=score" className="text-caption font-medium text-brand-accent hover:underline">
-              {translateNow("source.view.all.9a780508de")}
-            </Link>
-          </CardHeader>
-          <CardContent>
-            <ul className="-mt-1 divide-y divide-border">
-              {rotateFirst.map((r) => (
-                <li key={r.subject} className="flex items-center justify-between gap-3 py-2">
-                  <span className="min-w-0">
-                    <span className="block truncate text-body font-medium">{r.subject}</span>
-                    <span className="block truncate text-caption text-muted-foreground">{r.detail}</span>
-                  </span>
-                  <RiskPip score={r.score} />
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
+          <NhiInventory identities={identities.data ?? []} inventory={nhiInventory.data ?? undefined} risks={riskRows} />
+          <NotificationCenter risks={riskRows} certs={certs.data ?? []} />
+          <DashboardTrendCharts certificates={servedCertificates} rotationRuns={servedRotationRuns} />
 
-        <Card>
-          <CardHeader className="flex-row items-baseline justify-between space-y-0">
-            <CardTitle>
-              {translateNow("source.recent.activity.6cb44b5633")}{" "}
-              <span className="ml-1 text-caption font-normal text-muted-foreground">{translateNow("source.audit.stream.22c7391e55")}</span>
-            </CardTitle>
-            <Link to="/audit" className="text-caption font-medium text-brand-accent hover:underline">
-              {translateNow("source.explorer.464ef011fa")}
-            </Link>
-          </CardHeader>
-          <CardContent>
-            <RecentAuditList events={recentAudit.data ?? []} />
-          </CardContent>
-        </Card>
-      </div>
+          {/* Algorithm and expiry projections use the same served response shapes in both modes. */}
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  {translateNow("source.algorithm.mix.a5ab80b898")}{" "}
+                  <span className="ml-1 text-caption font-normal text-muted-foreground">{translateNow("source.by.key.type.7228596a06")}</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Donut
+                  segments={algoSegments(servedAlgoMix(servedCertificates))}
+                  ariaLabel="Algorithm mix by key type"
+                  centerLabel={formatNumber(kpis.certificates)}
+                  centerSub="certificates"
+                  withLegend
+                />
+              </CardContent>
+            </Card>
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle>
+                  {translateNow("source.expiry.bands.cbfe64f7cb")}{" "}
+                  <span className="ml-1 text-caption font-normal text-muted-foreground">{translateNow("source.time.to.expiry.b1bf11183a")}</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Bands bands={servedExpiryBands(servedCertificates)} />
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Exact risk ordering and immutable activity remain reachable. */}
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Card>
+              <CardHeader className="flex-row items-baseline justify-between space-y-0">
+                <CardTitle>
+                  {translateNow("source.rotate.first.f4ea83b5ca")}{" "}
+                  <span className="ml-1 text-caption font-normal text-muted-foreground">{translateNow("source.highest.risk.c56ed7dd58")}</span>
+                </CardTitle>
+                <Link to="/risk?sort=score" className="text-caption font-medium text-brand-accent hover:underline">
+                  {translateNow("source.view.all.9a780508de")}
+                </Link>
+              </CardHeader>
+              <CardContent>
+                <ul className="-mt-1 divide-y divide-border">
+                  {rotateFirst.map((r) => (
+                    <li key={r.subject} className="flex items-center justify-between gap-3 py-2">
+                      <span className="min-w-0">
+                        <span className="block truncate text-body font-medium">{r.subject}</span>
+                        <span className="block truncate text-caption text-muted-foreground">{r.detail}</span>
+                      </span>
+                      <RiskPip score={r.score} />
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex-row items-baseline justify-between space-y-0">
+                <CardTitle>
+                  {translateNow("source.recent.activity.6cb44b5633")}{" "}
+                  <span className="ml-1 text-caption font-normal text-muted-foreground">{translateNow("source.audit.stream.22c7391e55")}</span>
+                </CardTitle>
+                <Link to="/audit" className="text-caption font-medium text-brand-accent hover:underline">
+                  {translateNow("source.explorer.464ef011fa")}
+                </Link>
+              </CardHeader>
+              <CardContent>
+                <RecentAuditList events={recentAudit.data ?? []} />
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </details>
     </section>
   );
 }

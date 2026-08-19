@@ -116,7 +116,7 @@ describe("i18n boundary", () => {
     const nav = screen.getByRole("navigation", { name: pseudoLocalize("Primary") });
     expect(nav).toBeInTheDocument();
     expect(screen.getByText(pseudoLocalize("Needs action"))).toBeInTheDocument();
-    expect(within(nav).getByText(pseudoLocalize("Dashboard"))).toBeInTheDocument();
+    expect(within(nav).getByText(pseudoLocalize("Home"))).toBeInTheDocument();
 
     fireEvent.keyDown(document, { key: "?" });
     // The shortcuts dialog title went through the DA-14 sweep, so under the
@@ -143,7 +143,7 @@ describe("i18n boundary", () => {
     // resolves (never raw keys), then swaps in place.
     const nav = await screen.findByRole("navigation", { name: "Principal" });
     expect(await screen.findByText("Acción requerida")).toBeInTheDocument();
-    expect(within(nav).getByText("Panel")).toBeInTheDocument();
+    expect(within(nav).getByText("Inicio")).toBeInTheDocument();
     const selector = screen.getByRole("combobox", { name: "Idioma" });
     expect(selector).toHaveValue("es-ES");
 
@@ -723,8 +723,17 @@ describe("i18n boundary", () => {
       // hard-coded now use typed keys for privileged access, MCP tools, and
       // the external-CA registry. Machine-authored es/de — FLAGGED FOR HUMAN
       // TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "ded72dcebf8fb14fec224121f9b109ed8ac25bbcced493e400ddaedf73352a42",
-      "de-DE": "0f9412a62969be4f68b2c9f29ff2f9f6057105efa2cca09e78f283f5f9a3a137",
+      // Quiet-confidence foundation re-pin: the seven shared page-depth keys
+      // label Answer, Do next, and Technical details without hiding exact
+      // evidence; the account key groups mobile identity and preferences.
+      // The Home/first-run extension adds an honest attention sentence,
+      // inline estate summary, optional metrics depth, selected-journey proof,
+      // and simpler first-run outcome. The operator-facing Dashboard and
+      // Journeys labels are now the plainer Home and Guided setup. Placeholders
+      // and negations are retained.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW.
+      "es-ES": "0ca4714988d333433a5d8c1ac959391d8f031cc2be6a0d8f538c37da0236f05c",
+      "de-DE": "51b47a94a384143c359fbd8a63989ef970d1ca0e7f4da48b987a2a2d05307eb2",
     });
   });
 

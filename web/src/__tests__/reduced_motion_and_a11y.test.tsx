@@ -97,10 +97,10 @@ describe("reduced motion and a11y evidence (PRODUCT-005 / COVER-010)", () => {
     const nav = screen.getByRole("navigation", { name: /Primary/i });
     expect(nav).toBeInTheDocument();
     // Primary nav links carry accessible names (text content), not bare icons.
-    expect(within(nav).getByRole("link", { name: /Dashboard/i })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: /^Home$/i })).toBeInTheDocument();
     // S-A1 moved first-run setup off the rail; Journeys is the always-present
     // guided entry point instead.
-    expect(within(nav).getByRole("link", { name: /Journeys/i })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: /Guided setup/i })).toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: /Coverage|Roadmap/i })).not.toBeInTheDocument();
   });
 
@@ -113,7 +113,7 @@ describe("reduced motion and a11y evidence (PRODUCT-005 / COVER-010)", () => {
     const results = await axe(container);
     expect(results).toHaveNoViolations();
 
-    const dashboardLink = screen.getByRole("link", { name: /Dashboard/i });
+    const dashboardLink = screen.getByRole("link", { name: /^Home$/i });
     dashboardLink.focus();
     expect(dashboardLink).toHaveFocus();
     await user.tab();

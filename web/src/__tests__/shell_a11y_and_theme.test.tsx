@@ -428,7 +428,7 @@ describe("app shell accessibility and theme", () => {
     await screen.findByText("u@example.test");
     await user.tab(); // skip link
     await user.tab(); // theme toggle
-    const dashboardLink = screen.getByRole("link", { name: /Dashboard/i });
+    const dashboardLink = screen.getByRole("link", { name: /^Home$/i });
     dashboardLink.focus();
     expect(dashboardLink).toHaveFocus();
   });
@@ -454,7 +454,7 @@ describe("app shell accessibility and theme", () => {
     expect(toggle).toHaveAttribute("aria-expanded", "true");
     const drawer = screen.getByRole("dialog", { name: "Primary navigation" });
     expect(within(drawer).getByRole("navigation", { name: /Primary/i })).toBeInTheDocument();
-    expect(within(drawer).getByRole("link", { name: /Dashboard/i })).toBeInTheDocument();
+    expect(within(drawer).getByRole("link", { name: /^Home$/i })).toBeInTheDocument();
     expect(within(drawer).getByRole("button", { name: "Close primary navigation" })).toBeInTheDocument();
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(380);
 
@@ -468,6 +468,26 @@ describe("app shell accessibility and theme", () => {
     const reopened = screen.getByRole("dialog", { name: "Primary navigation" });
     await user.click(within(reopened).getByRole("button", { name: "Close primary navigation" }));
     expect(screen.queryByRole("dialog", { name: "Primary navigation" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the mobile header quiet by grouping identity and preferences in one menu", async () => {
+    const user = userEvent.setup();
+    resizeViewport(380);
+    renderShell();
+    await screen.findByText("u@example.test");
+
+    const opener = screen.getByRole("button", { name: "Account and preferences" });
+    expect(opener).toHaveAttribute("aria-expanded", "false");
+    await user.click(opener);
+
+    const menu = screen.getByRole("dialog", { name: "Account and preferences" });
+    expect(opener).toHaveAttribute("aria-expanded", "true");
+    expect(within(menu).getByText("u@example.test")).toBeVisible();
+    expect(within(menu).getByText("t1")).toBeVisible();
+    expect(within(menu).getByRole("combobox", { name: "Language" })).toBeVisible();
+    expect(within(menu).getByRole("button", { name: /Theme:/i })).toBeVisible();
+    expect(within(menu).getByRole("button", { name: "Open keyboard shortcuts" })).toBeVisible();
+    expect(within(menu).getByRole("button", { name: "Sign out" })).toBeVisible();
   });
 
   it("shows tenant context without a fake tenant switch", async () => {
@@ -760,7 +780,7 @@ describe("app shell accessibility and theme", () => {
     const user = userEvent.setup();
     renderShell();
     await screen.findByText("u@example.test");
-    // First load resolves the OS default (light here) — not dark.
+    // First load uses the quiet light work surface — not the OS appearance.
     expect(document.documentElement.classList.contains("dark")).toBe(false);
     const toggle = screen.getByRole("button", { name: /Theme:/i });
     await user.click(toggle); // light -> dark

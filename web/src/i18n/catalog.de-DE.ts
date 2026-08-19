@@ -27,6 +27,16 @@ const deDECatalog = {
   "app.brand.name": "trstctl",
   "app.brand.subtitle": "Control Plane",
   "app.skipToMain": "Zum Hauptinhalt springen",
+  // Quiet-confidence page anatomy — Machine-authored, FLAG FOR HUMAN REVIEW.
+  "pageHeader.answer": "Antwort",
+  "pageHeader.answerFallback": "Verstehen Sie den aktuellen Zustand, bevor Sie ihn ändern.",
+  "pageHeader.operate": "Als Nächstes",
+  "pageHeader.prove": "Technische Details",
+  "pageHeader.openDetails": "Exakte Nachweise anzeigen",
+  "pageHeader.closeDetails": "Exakte Nachweise ausblenden",
+  "pageHeader.proveFallback":
+    "Exakte Kennungen, Richtlinienfakten, Ereignisverlauf und Wiederherstellungsnachweise bleiben in diesem Arbeitsbereich verfügbar.",
+  "shell.accountMenu": "Konto und Einstellungen",
   "credentialChip.copy": "{label} kopieren",
   "credentialChip.copied": "In die Zwischenablage kopiert",
   "graph.view.zoomIn": "Vergrößern",
@@ -149,6 +159,24 @@ const deDECatalog = {
   "certificates.lifecycle.renewStarted": "Erneuerung gestartet",
   "certificates.lifecycle.renewFailed": "Erneuerung konnte nicht starten",
   "dashboard.recentActivity.empty": "Noch keine Audit-Ereignisse.",
+  // Quiet-confidence dashboard — Machine-authored, FLAG FOR HUMAN REVIEW.
+  "dashboard.homeDescription": "Sehen Sie, was jetzt Aufmerksamkeit braucht und was in Ordnung ist.",
+  "dashboard.homeTechnicalDetails":
+    "Inventarprojektionen, Eingaben des Risikomodells, Zertifikatsablaufbänder, Endpunktbeobachtungen, Erneuerungsaufträge und unveränderliche Aktivität bleiben unten verfügbar.",
+  "dashboard.attention.needsAttentionOne": "1 Zugangsdaten-Eintrag benötigt Aufmerksamkeit.",
+  "dashboard.attention.needsAttentionMany": "{count} Zugangsdaten benötigen Aufmerksamkeit.",
+  "dashboard.attention.healthy": "Es wird kein dringendes Zugangsdatenrisiko gemeldet.",
+  "dashboard.attention.unavailable": "Die Aufmerksamkeitsübersicht ist nicht verfügbar.",
+  "dashboard.attention.breakdown": "{critical} kritische und {high} hochpriorisierte Einträge. Prüfen Sie die betroffene Zugangsdaten vor einer Änderung.",
+  "dashboard.attention.healthyHelp": "Alles Weitere bleibt unten verfügbar; null dringende Einträge bedeuten nicht, dass der gesamte Bestand geprüft wurde.",
+  "dashboard.attention.unavailableHelp":
+    "Es kann keine sichere Summe angezeigt werden. Öffnen Sie die Risikoliste oder versuchen Sie es erneut, sobald die Projektionen wiederhergestellt sind.",
+  "dashboard.attention.listLabel": "Zugangsdaten mit höchster Priorität",
+  "dashboard.attention.review": "Prüfen →",
+  "dashboard.moreActions": "Weitere Aktionen",
+  "dashboard.estateSummary": "{credentials} Zugangsdaten erfasst · {agents} Agenten online · {expiring} Zertifikate laufen diese Woche ab",
+  "dashboard.exploreMetrics": "Alle Kennzahlen untersuchen",
+  "dashboard.exploreMetricsHelp": "Inventar, Trends, Algorithmen, Ablauf und Aktivität",
   // Maschinell erstellte Übersetzungen für AUD-67 — VOR RELEASE IST EINE MENSCHLICHE PRÜFUNG ERFORDERLICH.
   "dashboard.urgentRisk.label": "Dringendes Risiko",
   "dashboard.urgentRisk.allProjections": "alle Risikoprojektionen",
@@ -373,8 +401,9 @@ const deDECatalog = {
   "wizard.protocols.summaryActive": "Eval-Profil aktiv",
   "wizard.protocols.summaryOperator": "Betreiberkonfiguriertes Profil",
   "wizard.protocols.next": "Weiter: Protokolle aktivieren",
-  "wizard.header.description":
-    "Aussteller verbinden, Enrollment-Protokolle aktivieren, Zertifikat ausstellen, konfigurierte Integrationen prüfen, Agent registrieren und abschließen.",
+  "wizard.header.description": "Gehen Sie den nächsten sicheren Schritt zu einem gesunden Testzertifikat.",
+  "wizard.header.technicalDetails":
+    "Der vollständige Pfad verbindet einen Aussteller, aktiviert Registrierungsprotokolle, stellt ein Zertifikat aus, prüft konfigurierte Integrationen, registriert einen Agenten und speichert den Abschluss in diesem Browser.",
   "wizard.integrations.stepLabel": "Integrationen nachweisen",
   "wizard.integrations.stepDescription": "Connector-, Upstream-CA- und Dynamic-Secret-Operationen gegen von Ihnen konfigurierte Systeme ausführen.",
   "wizard.integrations.heading": "Konfigurierte Integrationen prüfen",
@@ -459,13 +488,17 @@ const deDECatalog = {
   "certificates.ingest.nextPlacement": "Weiter: Verantwortung zuweisen",
   "certificates.ingest.nextReview": "Weiter: prüfen",
   "certificates.ingest.ownerUnassigned": "Kein Eigentümer (später zuweisen)",
-  "nav.item.journeys": "Journeys",
+  "nav.item.journeys": "Geführte Einrichtung",
   "journeys.eyebrow": "Geführte Pfade",
-  "journeys.description":
-    "Die dokumentierten Betreiber-Journeys als lebendige Checklisten: Jeder Schritt ist einen Klick vom richtigen Ort entfernt, und erledigte Schritte haken sich anhand von Live-Tenant-Daten selbst ab.",
+  "journeys.description": "Wählen Sie das gewünschte Ergebnis und fahren Sie beim ersten unerledigten Schritt fort.",
+  "journeys.technicalDetails":
+    "Jeder Schritt öffnet den genauen Arbeitsbereich. Prüfbare Schritte verwenden aktuelle Mandantenergebnisse; manuelle Schritte bleiben für die Bestätigung durch den Betreiber klar gekennzeichnet.",
   "journeys.listLabel": "Verfügbare Journeys",
   "journeys.progress": "{done} von {total} Schritten erledigt",
   "journeys.census.verified": "Verifizierter Pfad · ausgelieferte Verdrahtung {passed}/{total}",
+  "journeys.testingDetails": "So haben wir dies getestet",
+  "journeys.testingSummary":
+    "Der ausgelieferte Routenzensus prüft jeden erforderlichen Schritt. Dies ist ein technischer Nachweis, keine Behauptung, dass ein echter Kunde die Journey abgeschlossen hat.",
   "journeys.open": "Bring mich hin",
   "journeys.refresh": "Status aktualisieren",
   "journeys.doc": "Referenz-Walkthrough",
@@ -753,7 +786,7 @@ const deDECatalog = {
   "nav.group.incidentsJit": "Freigeben & Reagieren",
   "nav.group.governance": "Governance",
   "nav.group.platform": "Verwalten",
-  "nav.item.dashboard": "Dashboard",
+  "nav.item.dashboard": "Start",
   "nav.item.setUp": "Einrichten",
   "nav.item.requestCredential": "Credential anfordern",
   "nav.item.certificates": "Zertifikate",

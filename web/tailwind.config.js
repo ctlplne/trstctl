@@ -60,6 +60,7 @@ export default {
         // below caption so the historical text-[10px] uses migrate losslessly.
         "2xs": ["0.625rem", { lineHeight: "0.875rem" }],
         caption: ["var(--font-size-caption)", { lineHeight: "var(--line-height-caption)" }],
+        data: ["var(--font-size-data)", { lineHeight: "var(--line-height-data)" }],
         body: ["var(--font-size-body)", { lineHeight: "var(--line-height-body)" }],
         title: ["var(--font-size-title)", { lineHeight: "var(--line-height-title)" }],
         heading: ["var(--font-size-heading)", { lineHeight: "var(--line-height-heading)" }],

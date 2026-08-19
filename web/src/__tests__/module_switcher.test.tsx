@@ -131,7 +131,7 @@ describe("space switcher (S-C1)", () => {
     const rail = screen.getByRole("navigation", { name: /Spaces/i });
 
     expect(within(rail).getByRole("button", { name: "Home" })).toHaveAttribute("aria-current", "true");
-    expect(within(nav).getByRole("link", { name: /Journeys/i })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: /Guided setup/i })).toBeInTheDocument();
     expect(within(nav).getByRole("list", { name: "Needs action worklists" })).toBeInTheDocument();
     // Space-owned rows do not leak onto the Home sidebar.
     expect(within(nav).queryByRole("link", { name: /CA hierarchy/i })).not.toBeInTheDocument();

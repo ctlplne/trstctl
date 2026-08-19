@@ -102,7 +102,7 @@ describe("C10-5 dashboard trend charts", () => {
   it.each(["light", "dark"] as const)("renders served dashboard trend charts in %s mode", async (mode) => {
     renderDashboard(mode);
 
-    const dash = await screen.findByRole("region", { name: "Dashboard" });
+    const dash = await screen.findByRole("region", { name: "Home" });
     expect(await within(dash).findByRole("img", { name: "Certificate issuance rate by day" })).toBeInTheDocument();
     expect(await within(dash).findByRole("img", { name: "Renewal job success and failure trend" })).toBeInTheDocument();
     expect(await within(dash).findByRole("img", { name: "Certificate expirations over the next 90 days" })).toBeInTheDocument();

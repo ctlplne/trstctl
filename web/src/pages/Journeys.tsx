@@ -96,6 +96,7 @@ export function Journeys() {
         title={t("nav.item.journeys")}
         eyebrow={t("journeys.eyebrow")}
         description={t("journeys.description")}
+        technicalDetails={t("journeys.technicalDetails")}
         actions={
           <Button type="button" variant="outline" loading={checking} onClick={() => void refreshStatus()}>
             <RefreshCw className="h-4 w-4" aria-hidden="true" />
@@ -104,107 +105,119 @@ export function Journeys() {
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-4" aria-label={t("journeys.listLabel")}>
-        {journeys.map((journey) => {
-          const progress = journeyProgress(journey, detected, marks);
-          const selected = journey.id === active.id;
-          const served = journeyCensus.journeys[journey.id];
-          return (
-            <button
-              key={journey.id}
-              type="button"
-              aria-pressed={selected}
-              onClick={() => selectJourney(journey.id)}
-              className={cn(
-                "grid content-start gap-2 rounded-panel border bg-card p-4 text-left shadow-elevation1 transition-colors duration-fast",
-                selected ? "border-primary" : "border-border hover:border-brand-accent/50",
-              )}
-            >
-              <span className="font-display text-title font-bold">{t(journey.titleKey)}</span>
-              <span className="text-body text-muted-foreground">{t(journey.descriptionKey)}</span>
+      <div className="grid gap-6 lg:grid-cols-[minmax(15rem,19rem)_minmax(0,1fr)]">
+        <nav aria-label={t("journeys.listLabel")} className="min-w-0 border-y border-border lg:border-e lg:border-y-0 lg:pe-5">
+          <div className="divide-y divide-border">
+            {journeys.map((journey) => {
+              const progress = journeyProgress(journey, detected, marks);
+              const selected = journey.id === active.id;
+              return (
+                <button
+                  key={journey.id}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => selectJourney(journey.id)}
+                  className={cn(
+                    "grid w-full gap-1 border-s-2 px-3 py-3 text-start transition-colors duration-fast",
+                    selected ? "border-primary bg-primary/10" : "border-transparent hover:bg-muted/60",
+                  )}
+                >
+                  <span className="text-body font-semibold">{t(journey.titleKey)}</span>
+                  <span className="line-clamp-2 text-caption text-muted-foreground">{t(journey.descriptionKey)}</span>
+                  <span className="text-caption font-medium tabular-nums text-brand-accent">
+                    {formatMessage("journeys.progress", { done: progress.done, total: progress.total })}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+
+        <div className="grid min-w-0 content-start gap-4">
+          <StepShell
+            steps={shellSteps}
+            currentIndex={step}
+            nextDisabled={step >= active.steps.length - 1}
+            onNext={step < active.steps.length - 1 ? () => setStep((currentStep) => Math.min(currentStep + 1, active.steps.length - 1)) : undefined}
+            onPrevious={() => setStep((currentStep) => Math.max(currentStep - 1, 0))}
+          >
+            {current && (
+              <div className="grid max-w-2xl gap-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  {currentDone ? (
+                    <StatusBadge value="issued" label={t("journeys.status.done")} tone="success" />
+                  ) : (
+                    <StatusBadge value="requested" label={t("journeys.status.pending")} tone="neutral" />
+                  )}
+                  <p className="text-body text-muted-foreground">{t(current.bodyKey)}</p>
+                </div>
+                {current.command && (
+                  <div className="grid gap-2 rounded-panel border border-border bg-muted/40 p-3">
+                    <pre className="overflow-x-auto whitespace-pre font-mono text-caption leading-relaxed">{current.command}</pre>
+                    <div>
+                      <CopyCommand value={current.command} />
+                    </div>
+                  </div>
+                )}
+                <div className="flex flex-wrap items-center gap-3">
+                  {current.to && (
+                    <>
+                      <Link
+                        to={current.to}
+                        className="inline-flex min-h-9 items-center justify-center gap-2 rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground shadow-elevation1 transition-[filter,transform] duration-fast hover:brightness-105 motion-safe:hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                      >
+                        {t("journeys.open")}
+                        <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+                      </Link>
+                      <span className="font-mono text-caption text-muted-foreground">{current.to}</span>
+                    </>
+                  )}
+                  {!current.detect && (
+                    <Button
+                      type="button"
+                      variant={currentDone ? "outline" : "secondary"}
+                      aria-pressed={currentDone}
+                      onClick={() => setMarks((currentMarks) => toggleJourneyMark(currentMarks, active.id, current.id))}
+                    >
+                      <Check className="h-4 w-4" aria-hidden="true" />
+                      {currentDone ? t("journeys.undoDone") : t("journeys.markDone")}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+          </StepShell>
+
+          <details className="border-t border-border pt-3">
+            <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground">{t("journeys.testingDetails")}</summary>
+            <div className="mt-3 grid gap-2 text-caption text-muted-foreground">
               <StatusBadge
-                value={served.status}
+                value={journeyCensus.journeys[active.id].status}
                 tone="success"
                 label={formatMessage("journeys.census.verified", {
                   passed: journeyCensus.summary.served,
                   total: journeyCensus.summary.total,
                 })}
-                data-journey-census={journey.id}
+                data-journey-census={active.id}
               />
-              <span className="text-caption font-medium tabular-nums text-brand-accent">
-                {formatMessage("journeys.progress", { done: progress.done, total: progress.total })}
-              </span>
-            </button>
-          );
-        })}
+              <p>{t("journeys.testingSummary")}</p>
+            </div>
+          </details>
+
+          <p className="text-caption text-muted-foreground">
+            {t("journeys.doc")}:{" "}
+            <a
+              href={journeyDocUrl(active)}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 font-mono text-brand-accent underline underline-offset-2 hover:text-foreground"
+            >
+              {journeyDocUrl(active)}
+              <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
+            </a>
+          </p>
+        </div>
       </div>
-
-      <StepShell
-        steps={shellSteps}
-        currentIndex={step}
-        nextDisabled={step >= active.steps.length - 1}
-        onNext={step < active.steps.length - 1 ? () => setStep((currentStep) => Math.min(currentStep + 1, active.steps.length - 1)) : undefined}
-        onPrevious={() => setStep((currentStep) => Math.max(currentStep - 1, 0))}
-      >
-        {current && (
-          <div className="grid max-w-2xl gap-4">
-            <div className="flex flex-wrap items-center gap-3">
-              {currentDone ? (
-                <StatusBadge value="issued" label={t("journeys.status.done")} tone="success" />
-              ) : (
-                <StatusBadge value="requested" label={t("journeys.status.pending")} tone="neutral" />
-              )}
-              <p className="text-body text-muted-foreground">{t(current.bodyKey)}</p>
-            </div>
-            {current.command && (
-              <div className="grid gap-2 rounded-panel border border-border bg-muted/40 p-3">
-                <pre className="overflow-x-auto whitespace-pre font-mono text-caption leading-relaxed">{current.command}</pre>
-                <div>
-                  <CopyCommand value={current.command} />
-                </div>
-              </div>
-            )}
-            <div className="flex flex-wrap items-center gap-3">
-              {current.to && (
-                <>
-                  <Link
-                    to={current.to}
-                    className="inline-flex min-h-9 items-center justify-center gap-2 rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground shadow-elevation1 transition-[filter,transform] duration-fast hover:brightness-105 motion-safe:hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                  >
-                    {t("journeys.open")}
-                    <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
-                  </Link>
-                  <span className="font-mono text-caption text-muted-foreground">{current.to}</span>
-                </>
-              )}
-              {!current.detect && (
-                <Button
-                  type="button"
-                  variant={currentDone ? "outline" : "secondary"}
-                  aria-pressed={currentDone}
-                  onClick={() => setMarks((currentMarks) => toggleJourneyMark(currentMarks, active.id, current.id))}
-                >
-                  <Check className="h-4 w-4" aria-hidden="true" />
-                  {currentDone ? t("journeys.undoDone") : t("journeys.markDone")}
-                </Button>
-              )}
-            </div>
-          </div>
-        )}
-      </StepShell>
-
-      <p className="text-caption text-muted-foreground">
-        {t("journeys.doc")}:{" "}
-        <a
-          href={journeyDocUrl(active)}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1 font-mono text-brand-accent underline underline-offset-2 hover:text-foreground"
-        >
-          {journeyDocUrl(active)}
-          <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
-        </a>
-      </p>
     </section>
   );
 }

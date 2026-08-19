@@ -124,7 +124,12 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
 
   return (
     <section aria-labelledby="wizard-heading" className="mx-auto grid max-w-3xl gap-6">
-      <PageHeader title={translateNow("source.set.up.trstctl.b56c208e41")} titleId="wizard-heading" description={t("wizard.header.description")} />
+      <PageHeader
+        title={translateNow("source.set.up.trstctl.b56c208e41")}
+        titleId="wizard-heading"
+        description={t("wizard.header.description")}
+        technicalDetails={t("wizard.header.technicalDetails")}
+      />
 
       <StepShell
         steps={steps}
