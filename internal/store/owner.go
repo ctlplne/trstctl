@@ -482,7 +482,7 @@ func (s *Store) ListUnownedIdentitiesAt(ctx context.Context, tenantID string, no
 		cadence = DefaultOwnershipAttestationCadence
 	}
 	now = now.UTC()
-	out := make([]UnownedIdentity, 0, limit)
+	out := make([]UnownedIdentity, 0, 500)
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
 			// LEFT JOIN, so an identity whose owner row is missing entirely

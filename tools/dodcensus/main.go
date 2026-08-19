@@ -382,7 +382,7 @@ func validateDODGoInvocation(name string, args []string) error {
 }
 
 func dodCommandEnvironment(base []string, cacheDir string, profile BuildProfile) []string {
-	out := make([]string, 0, len(base)+8+len(profile.RuntimeEnv))
+	var out []string
 	for _, item := range base {
 		if strings.HasPrefix(item, "CGO_ENABLED=") || strings.HasPrefix(item, "GOCACHE=") || strings.HasPrefix(item, "GOFLAGS=") || strings.HasPrefix(item, "GOOS=") || strings.HasPrefix(item, "GOARCH=") || strings.HasPrefix(item, "TRSTCTL_") {
 			continue

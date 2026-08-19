@@ -90,7 +90,7 @@ func (c *Connector) Deploy(_ context.Context, sb connector.Sandbox, dep connecto
 // file HAProxy expects (certificate first, then key), ensuring a newline
 // separates them.
 func combine(certPEM, keyPEM []byte) []byte {
-	out := make([]byte, 0, len(certPEM)+len(keyPEM)+1)
+	var out []byte
 	out = append(out, certPEM...)
 	if len(out) > 0 && out[len(out)-1] != '\n' {
 		out = append(out, '\n')

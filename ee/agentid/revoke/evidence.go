@@ -52,7 +52,7 @@ func (e CompletionEvidence) evidenceBodyBytes() ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("revoke: marshal evidence body: %w", err)
 	}
-	out := make([]byte, 0, len(evidenceDomain)+1+len(j))
+	var out []byte
 	out = append(out, evidenceDomain...)
 	out = append(out, ':')
 	out = append(out, j...)

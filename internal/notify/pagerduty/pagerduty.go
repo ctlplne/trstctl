@@ -144,7 +144,7 @@ func (c *Channel) Notify(ctx context.Context, alert notify.Alert) error {
 	if err != nil {
 		return fmt.Errorf("pagerduty: encode event: %w", err)
 	}
-	body := make([]byte, 0, len(payload)+c.routingKey.Len()+32)
+	var body []byte
 	body = append(body, `{"routing_key":"`...)
 	body = append(body, c.routingKey.Bytes()...)
 	body = append(body, `",`...)

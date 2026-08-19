@@ -4,6 +4,8 @@ package delegation
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -39,6 +41,26 @@ func TestDurableAnchorStore_PutLoadAndLookup(t *testing.T) {
 	}
 	if dynamic.AuthRef != want.AuthRef {
 		t.Fatalf("dynamic anchor auth_ref = %q, want %q", dynamic.AuthRef, want.AuthRef)
+	}
+}
+
+func TestDurableAnchorStore_RefusesSymlinkEscapeOnWrite(t *testing.T) {
+	floor := t.TempDir()
+	outside := t.TempDir()
+	anchorDir := filepath.Join(floor, durableAnchorDir)
+	if err := os.Mkdir(anchorDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(anchorDir, "tenant")); err != nil {
+		t.Fatal(err)
+	}
+	store := NewDurableAnchorStore(floor)
+	err := store.PutRootAnchor(context.Background(), "tenant", "root-key", RootAnchor{PublicDER: []byte{1}, AuthRef: "a"})
+	if err == nil {
+		t.Fatal("symlink escape from the signer floor was accepted")
+	}
+	if _, statErr := os.Stat(filepath.Join(outside, "root-key.pem")); !os.IsNotExist(statErr) {
+		t.Fatalf("write escaped signer floor: stat err = %v", statErr)
 	}
 }
 

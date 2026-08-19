@@ -5972,7 +5972,7 @@ func discoveryUrgentRiskAlert(finding store.DiscoveryFinding) (string, []byte, s
 }
 
 func adcsDriftTemplateNames(pl ADCSTemplateDriftObserved) []string {
-	seen := make(map[string]bool, len(pl.Changes)+len(pl.Lifecycle))
+	seen := make(map[string]bool)
 	for _, change := range pl.Changes {
 		if name := strings.TrimSpace(change.Template); name != "" {
 			seen[name] = true

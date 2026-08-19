@@ -52,7 +52,11 @@ func (*SoftwareBackend) GenerateKey(algorithm Algorithm) (Signer, error) {
 func generateStdlibKey(algorithm Algorithm) (crypto.Signer, error) {
 	switch algorithm {
 	case RSA2048, RSA3072, RSA4096:
-		key, err := rsa.GenerateKey(rand.Reader, rsaBits(algorithm))
+		bits := rsaBits(algorithm)
+		if bits < 2048 {
+			return nil, fmt.Errorf("refuse unsafe RSA key size %d", bits)
+		}
+		key, err := rsa.GenerateKey(rand.Reader, bits)
 		if err != nil {
 			return nil, fmt.Errorf("generate %s: %w", algorithm, err)
 		}

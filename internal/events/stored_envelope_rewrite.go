@@ -36,7 +36,7 @@ func RewriteStoredEnvelopeDataExact(stored, beforeData, afterData []byte) ([]byt
 	if err != nil {
 		return nil, errors.New("events: encode replacement stored envelope data token")
 	}
-	rewritten := make([]byte, 0, len(stored)-(end-start)+len(replacement))
+	rewritten := make([]byte, 0, len(stored))
 	rewritten = append(rewritten, stored[:start]...)
 	rewritten = append(rewritten, replacement...)
 	rewritten = append(rewritten, stored[end:]...)

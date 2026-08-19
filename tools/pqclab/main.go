@@ -769,7 +769,7 @@ func writeArchive(path string, files map[string][]byte) error {
 	if len(files) == 0 {
 		return errors.New("refuse to write an empty rehearsal archive")
 	}
-	clean := make(map[string][]byte, len(files)+1)
+	clean := make(map[string][]byte)
 	names := make([]string, 0, len(files))
 	for name, body := range files {
 		normalized := filepath.ToSlash(filepath.Clean(name))

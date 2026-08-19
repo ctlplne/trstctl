@@ -30,7 +30,7 @@ entropy = 3.5
 	configCopy := filepath.Join(t.TempDir(), "config.toml")
 	fake := fakeGitleaksCommand(t, argsPath, configCopy, `[]`)
 
-	report, err := (&GitleaksRunner{Binary: fake}).ScanWithOptions(context.Background(), repo, ScanOptions{
+	report, err := (&GitleaksRunner{Binary: fake, AllowedRoots: []string{repo, filepath.Dir(customRules)}}).ScanWithOptions(context.Background(), repo, ScanOptions{
 		Mode:            "deep",
 		CustomRulesPath: customRules,
 	})
@@ -62,9 +62,33 @@ func TestGitleaksRunnerRejectsCustomRulesThatWeakenDefaults(t *testing.T) {
 	if err := os.WriteFile(customRules, []byte("[extend]\ndisabledRules = [\"generic-api-key\"]\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	_, _, err := prepareCustomRulesConfig(customRules)
+	_, _, err := prepareCustomRulesConfig(customRules, []string{filepath.Dir(customRules)})
 	if err == nil || !strings.Contains(err.Error(), ErrInvalidCustomRules.Error()) {
 		t.Fatalf("prepareCustomRulesConfig err = %v, want invalid custom rules", err)
+	}
+}
+
+func TestGitleaksRunnerRejectsPathsOutsideConfiguredRoots(t *testing.T) {
+	allowed := t.TempDir()
+	outside := t.TempDir()
+	target := filepath.Join(outside, "repository")
+	if err := os.Mkdir(target, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	runner := &GitleaksRunner{Binary: "/unused", AllowedRoots: []string{allowed}}
+	if _, err := runner.Scan(context.Background(), target); err == nil || !strings.Contains(err.Error(), ErrInvalidScanTarget.Error()) {
+		t.Fatalf("Scan outside configured roots err = %v, want invalid scan target", err)
+	}
+}
+
+func TestGitleaksRunnerRejectsCustomRulesOutsideConfiguredRoots(t *testing.T) {
+	allowed := t.TempDir()
+	customRules := filepath.Join(t.TempDir(), "custom.toml")
+	if err := os.WriteFile(customRules, []byte("[[rules]]\nid = \"outside\"\nregex = '''outside'''\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := prepareCustomRulesConfig(customRules, []string{allowed}); err == nil || !strings.Contains(err.Error(), ErrInvalidCustomRules.Error()) {
+		t.Fatalf("prepareCustomRulesConfig outside configured roots err = %v, want invalid custom rules", err)
 	}
 }
 

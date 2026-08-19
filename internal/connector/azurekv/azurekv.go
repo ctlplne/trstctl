@@ -148,7 +148,7 @@ type secretProps struct {
 // pemBundle concatenates the private key and certificate chain into a single PEM
 // (key first), the form Key Vault imports as application/x-pem-file.
 func pemBundle(keyPEM, certPEM []byte) []byte {
-	out := make([]byte, 0, len(keyPEM)+len(certPEM)+1)
+	var out []byte
 	out = append(out, keyPEM...)
 	if len(out) > 0 && out[len(out)-1] != '\n' {
 		out = append(out, '\n')

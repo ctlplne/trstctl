@@ -40,7 +40,11 @@ func secretScannerFromDeps(d Deps) secretScanner {
 	if d.SecretScanner != nil {
 		return d.SecretScanner
 	}
-	return secretscan.NewGitleaksRunner(d.SecretScanGitleaksBin)
+	runner := secretscan.NewGitleaksRunner(d.SecretScanGitleaksBin)
+	if len(d.SecretScanRoots) > 0 {
+		runner.AllowedRoots = append([]string(nil), d.SecretScanRoots...)
+	}
+	return runner
 }
 
 // This file wires the SERVED secrets/identity surface (GAP-006): it assembles the

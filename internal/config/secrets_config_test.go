@@ -46,6 +46,7 @@ func TestSecretsGitleaksEnvOverride(t *testing.T) {
 		"TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND":           "/usr/local/bin/trstctl-sign-approve",
 		"TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER": "false",
 		"TRSTCTL_SECRETS_GITLEAKS_BIN":                "/opt/trstctl/tools/gitleaks",
+		"TRSTCTL_SECRETS_SCAN_ROOTS":                  "/workspace/repos,/workspace/rules",
 	}
 	cfg, err := config.Load(func(k string) string { return env[k] })
 	if err != nil {
@@ -53,6 +54,9 @@ func TestSecretsGitleaksEnvOverride(t *testing.T) {
 	}
 	if cfg.Secrets.GitleaksBin != "/opt/trstctl/tools/gitleaks" {
 		t.Errorf("secrets.gitleaks_bin = %q, want the env override", cfg.Secrets.GitleaksBin)
+	}
+	if len(cfg.Secrets.ScanRoots) != 2 || cfg.Secrets.ScanRoots[0] != "/workspace/repos" || cfg.Secrets.ScanRoots[1] != "/workspace/rules" {
+		t.Errorf("secrets.scan_roots = %#v, want the two configured roots", cfg.Secrets.ScanRoots)
 	}
 }
 

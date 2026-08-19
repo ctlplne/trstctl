@@ -710,7 +710,7 @@ func (a *API) vaultTransitSign(w http.ResponseWriter, r *http.Request) {
 		}
 		defer secret.Wipe(sig)
 		defer secret.Wipe(publicDER)
-		packed := make([]byte, 4, 4+len(publicDER)+len(sig))
+		packed := make([]byte, 4)
 		binary.BigEndian.PutUint32(packed, uint32(len(publicDER))) // #nosec G115 -- DER length of a public key, far under the uint32 bound (CWE-190)
 		packed = append(packed, publicDER...)
 		packed = append(packed, sig...)

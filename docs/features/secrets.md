@@ -560,7 +560,11 @@ The scanning bridge runs the pinned Gitleaks scanner from the served control pla
 recording redacted findings into [discovery](discovery-and-inventory.md), the
 [credential graph](graph-query-ai.md), and the risk view. `TRSTCTL_SECRETS_GITLEAKS_BIN`
 points at the Gitleaks `v8.27.2` binary from `tools/gitleaks/install.sh`, which
-checksums the release tarball before installing. `POST /api/v1/secrets/scans` scans a
+checksums the release tarball before installing. `secrets.scan_roots` (or
+`TRSTCTL_SECRETS_SCAN_ROOTS`, a comma-separated list) is the closed set of mounted
+filesystem trees the served scanner may read; an empty setting confines scans to the
+control-plane working directory. This prevents a caller with `secrets:write` from
+turning the scanner into a general host-file reader. `POST /api/v1/secrets/scans` scans a
 repo or workspace with the pinned `213`-rule default set (above the 140-rule floor);
 the response and stored finding carry only rule id, file, line, scanner version, and
 fingerprint — Gitleaks redacts the value, never reaching the API, event log, graph, or

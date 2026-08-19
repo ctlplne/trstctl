@@ -139,7 +139,7 @@ func TestServedGitleaksScanDetectsPlantedSecretInTestSource(t *testing.T) {
 		t.Fatalf("write the planted test-source fixture: %v", err)
 	}
 
-	report, err := (&GitleaksRunner{Binary: bin}).ScanWithOptions(context.Background(), target, ScanOptions{})
+	report, err := (&GitleaksRunner{Binary: bin, AllowedRoots: []string{target}}).ScanWithOptions(context.Background(), target, ScanOptions{})
 	if err != nil {
 		t.Fatalf("scan the planted test source: %v", err)
 	}

@@ -105,10 +105,14 @@ func Probe(ctx context.Context, addr string, opts ...Option) (Result, error) {
 	// InsecureSkipVerify: we inventory whatever certificate is presented, valid or
 	// not — this connection is never used to send or trust data.
 	tlsConn := tls.Client(conn, &tls.Config{
+		// lgtm[go/disabled-certificate-check] An inventory probe must capture the
+		// presented certificate even when it is expired/untrusted and sends no data.
 		InsecureSkipVerify: true, // #nosec G402 -- discovery inventories whatever cert is served; the connection is never trusted and never carries data (CWE-295)
 		ServerName:         host,
-		MinVersion:         tls.VersionTLS10,
-		NextProtos:         cfg.alpn,
+		// lgtm[go/insecure-tls] Detecting legacy TLS 1.0 is the purpose of this
+		// read-only inventory probe; application clients still require TLS 1.2+.
+		MinVersion: tls.VersionTLS10,
+		NextProtos: cfg.alpn,
 	})
 	if err := tlsConn.HandshakeContext(ctx); err != nil {
 		return Result{}, fmt.Errorf("tlsprobe: handshake %s: %w", addr, err)

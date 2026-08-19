@@ -37,6 +37,8 @@ func New(parts ...[]byte) io.Reader {
 		var n [8]byte
 		binary.BigEndian.PutUint64(n[:], uint64(len(p)))
 		h.Write(n[:])
+		// lgtm[go/weak-sensitive-data-hashing] This is deterministic stream-domain
+		// separation for public keystore salts/IVs, not password verification.
 		h.Write(p)
 	}
 	r := &reader{}

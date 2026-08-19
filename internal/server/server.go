@@ -517,6 +517,9 @@ type Deps struct {
 	// POST /api/v1/secrets/scans (SEC-07/F39). Empty resolves
 	// TRSTCTL_GITLEAKS_BIN/tools/bin/gitleaks/PATH at request time.
 	SecretScanGitleaksBin string
+	// SecretScanRoots confines served scan targets/custom rules to explicitly
+	// mounted operator-owned trees. Empty means the process working directory.
+	SecretScanRoots []string
 	// SecretScanner overrides the pinned Gitleaks runner for tests and embedded
 	// compositions. Production leaves it nil so both the REST scan route and the
 	// repository-scan outbox worker use the same pinned binary resolution.

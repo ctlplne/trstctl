@@ -118,7 +118,7 @@ func VerifyJWTBytes(token []byte, jwks JWKS) (claimsJSON []byte, err error) {
 		return nil, fmt.Errorf("crypto: JWT signature: %w", err)
 	}
 	sig = sig[:n]
-	signingInput := make([]byte, 0, len(parts[0])+1+len(parts[1]))
+	var signingInput []byte
 	signingInput = append(signingInput, parts[0]...)
 	signingInput = append(signingInput, '.')
 	signingInput = append(signingInput, parts[1]...)

@@ -184,7 +184,7 @@ func RewriteLegacyRun(data []byte) ([]byte, bool, error) {
 	if err != nil {
 		return nil, false, errors.New("scheduler history: encode canonical error")
 	}
-	next := make([]byte, 0, len(data)-span.end+span.start+len(replacement))
+	next := make([]byte, 0, len(data))
 	next = append(next, data[:span.start]...)
 	next = append(next, replacement...)
 	next = append(next, data[span.end:]...)
@@ -217,7 +217,7 @@ func ValidateLegacyRunPair(before, after []byte) error {
 	if err != nil {
 		return errors.New("scheduler history: encode pair canonical error")
 	}
-	expected := make([]byte, 0, len(before)-span.end+span.start+len(replacement))
+	expected := make([]byte, 0, len(before))
 	expected = append(expected, before[:span.start]...)
 	expected = append(expected, replacement...)
 	expected = append(expected, before[span.end:]...)

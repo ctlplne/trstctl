@@ -576,9 +576,9 @@ describe("licensed PQC migration client", () => {
       "/api/v1/pqc/migrations/run-1/rollback",
     ]);
     expect((calls[0][1]?.headers as Record<string, string>)["Idempotency-Key"]).toBeUndefined();
-    expect((calls[1][1]?.headers as Record<string, string>)["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+    expect((calls[1][1]?.headers as Record<string, string>)["Idempotency-Key"]).toMatch(/^(?:idem-.+|[0-9a-f-]{36})$/);
     expect(calls[2][1]?.method).toBeUndefined();
-    expect((calls[3][1]?.headers as Record<string, string>)["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+    expect((calls[3][1]?.headers as Record<string, string>)["Idempotency-Key"]).toMatch(/^(?:idem-.+|[0-9a-f-]{36})$/);
   });
 });
 
@@ -681,7 +681,7 @@ describe("api CA hierarchy and managed keys", () => {
     expect(calls.map((call) => call[0])).toEqual(["/api/v1/ca/ceremonies", "/api/v1/ca/ceremonies/ceremony-root-1/approvals"]);
     for (const call of calls) {
       expect(call[1]?.method).toBe("POST");
-      expect((call[1]?.headers as Record<string, string>)["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+      expect((call[1]?.headers as Record<string, string>)["Idempotency-Key"]).toMatch(/^(?:idem-.+|[0-9a-f-]{36})$/);
     }
   });
 
@@ -729,7 +729,7 @@ describe("api CSRF contract (SEC-001)", () => {
     await api.createOwner({ kind: "team", name: "Platform" });
 
     expect(sentHeaders()["X-CSRF-Token"]).toBe("csrf-token-1");
-    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^(?:idem-.+|[0-9a-f-]{36})$/);
   });
 
   it("echoes the CSRF cookie on session read POST requests", async () => {
@@ -772,7 +772,7 @@ describe("api CSRF contract (SEC-001)", () => {
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/certificates");
     expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe("POST");
     expect(sentHeaders()["X-CSRF-Token"]).toBe("csrf-token-3");
-    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^(?:idem-.+|[0-9a-f-]{36})$/);
   });
 
   it("uses a distinct Idempotency-Key for each identity transition mutation", async () => {
@@ -785,8 +785,8 @@ describe("api CSRF contract (SEC-001)", () => {
     const calls = vi.mocked(fetch).mock.calls;
     const firstHeaders = calls[0][1]?.headers as Record<string, string>;
     const secondHeaders = calls[1][1]?.headers as Record<string, string>;
-    expect(firstHeaders["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
-    expect(secondHeaders["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+    expect(firstHeaders["Idempotency-Key"]).toMatch(/^(?:idem-.+|[0-9a-f-]{36})$/);
+    expect(secondHeaders["Idempotency-Key"]).toMatch(/^(?:idem-.+|[0-9a-f-]{36})$/);
     expect(firstHeaders["Idempotency-Key"]).not.toBe(secondHeaders["Idempotency-Key"]);
   });
 
@@ -811,7 +811,7 @@ describe("api CSRF contract (SEC-001)", () => {
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/nhi/decommission");
     expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe("POST");
     expect(sentHeaders()["X-CSRF-Token"]).toBe("csrf-token-decommission");
-    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^(?:idem-.+|[0-9a-f-]{36})$/);
     expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toMatchObject({
       reason: "vendor termination",
       signals: [{ type: "vendor_term", vendor_name: "Acme SaaS" }],
@@ -828,7 +828,7 @@ describe("api CSRF contract (SEC-001)", () => {
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/agents/enrollment-tokens");
     expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe("POST");
     expect(sentHeaders()["X-CSRF-Token"]).toBe("csrf-token-agent");
-    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^(?:idem-.+|[0-9a-f-]{36})$/);
     expect(vi.mocked(fetch).mock.calls[0][1]?.body).toBeUndefined();
   });
 
@@ -841,7 +841,7 @@ describe("api CSRF contract (SEC-001)", () => {
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/agents/enrollment-tokens");
     expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe("POST");
     expect(sentHeaders()["X-CSRF-Token"]).toBe("csrf-token-agent-pin");
-    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^(?:idem-.+|[0-9a-f-]{36})$/);
     expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toEqual({ allowed_identity: "node-a" });
   });
 
@@ -925,7 +925,7 @@ describe("api CSRF contract (SEC-001)", () => {
       const headers = call[1]?.headers as Record<string, string>;
       expect(call[1]?.method).toBe("POST");
       expect(headers["X-CSRF-Token"]).toBe("csrf-token-lease");
-      expect(headers["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+      expect(headers["Idempotency-Key"]).toMatch(/^(?:idem-.+|[0-9a-f-]{36})$/);
     }
     expect(new Set(calls.map((call) => (call[1]?.headers as Record<string, string>)["Idempotency-Key"])).size).toBe(3);
   });
@@ -1026,7 +1026,7 @@ describe("api CSRF contract (SEC-001)", () => {
       owner_id: "owner-1",
     });
     expect(JSON.stringify(calls[1][1]?.body)).not.toContain("issuer_id");
-    expect((calls[1][1]?.headers as Record<string, string>)["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+    expect((calls[1][1]?.headers as Record<string, string>)["Idempotency-Key"]).toMatch(/^(?:idem-.+|[0-9a-f-]{36})$/);
   });
 });
 
@@ -1213,7 +1213,7 @@ describe("secrets contract", () => {
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/store/app%2Fdb%2Fpassword");
     expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe("PUT");
     expect(sentHeaders()["X-CSRF-Token"]).toBe("csrf-secret-rotate");
-    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^(?:idem-.+|[0-9a-f-]{36})$/);
   });
 
   it("verifies a secret read with only the workload bearer credential", async () => {
@@ -1408,7 +1408,7 @@ describe("secrets contract", () => {
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/store/recover/app%2Fdb%2Fpassword");
     expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe("POST");
     expect(sentHeaders()["X-CSRF-Token"]).toBe("csrf-secret-recover");
-    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^(?:idem-.+|[0-9a-f-]{36})$/);
   });
 
   it("sends served secret creation, PKI issue, login, and sharing as idempotent mutations", async () => {
@@ -1416,12 +1416,12 @@ describe("secrets contract", () => {
     mockFetch(201, JSON.stringify({ name: "app/api", version: 1 }));
     await api.createSecret({ name: "app/api", value: "stored" });
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/store");
-    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^(?:idem-.+|[0-9a-f-]{36})$/);
 
     mockFetch(201, JSON.stringify({ serial: "01", common_name: "svc.internal", certificate: "CERT" }));
     await api.issuePKISecret({ csr_pem: "-----BEGIN CERTIFICATE REQUEST-----\nCSR\n-----END CERTIFICATE REQUEST-----", ttl_seconds: 600 });
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/pki");
-    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^(?:idem-.+|[0-9a-f-]{36})$/);
     expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toEqual({
       csr_pem: "-----BEGIN CERTIFICATE REQUEST-----\nCSR\n-----END CERTIFICATE REQUEST-----",
       ttl_seconds: 600,
@@ -1430,17 +1430,17 @@ describe("secrets contract", () => {
     mockFetch(200, JSON.stringify({ session_id: "sess-1", principal: "svc", method: "token", scopes: ["secrets:read"], expires_at: "2026-06-19T13:00:00Z" }));
     await api.machineLogin({ method: "token", credential: "machine-token" });
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/login");
-    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^(?:idem-.+|[0-9a-f-]{36})$/);
 
     mockFetch(201, JSON.stringify({ token: "share-token", expires_at: "2026-06-19T13:00:00Z" }));
     await api.createShare({ value: "secret", ttl_seconds: 300 });
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/shares");
-    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^(?:idem-.+|[0-9a-f-]{36})$/);
 
     mockFetch(200, JSON.stringify({ value: "redeemed-once" }));
     await api.redeemShare({ token: "share-token" });
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/shares/redeem");
-    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^(?:idem-.+|[0-9a-f-]{36})$/);
   });
 });
 
@@ -1867,7 +1867,7 @@ describe("response integration dispatch contract", () => {
 
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/incidents/response-integrations/dispatch");
     expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe("POST");
-    expect(lastSentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+    expect(lastSentHeaders()["Idempotency-Key"]).toMatch(/^(?:idem-.+|[0-9a-f-]{36})$/);
   });
 });
 

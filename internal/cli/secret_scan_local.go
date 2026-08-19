@@ -64,7 +64,9 @@ func runSecretScanStagedDiff(ctx context.Context, args []string, stdout, stderr 
 		return 1
 	}
 	defer target.Cleanup()
-	report, err := secretscan.NewGitleaksRunner(*gitleaksBin).Scan(ctx, target.Path)
+	runner := secretscan.NewGitleaksRunner(*gitleaksBin)
+	runner.AllowedRoots = []string{target.Path}
+	report, err := runner.Scan(ctx, target.Path)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
 		return 1

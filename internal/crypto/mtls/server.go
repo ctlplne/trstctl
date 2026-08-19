@@ -133,7 +133,7 @@ func LoadOrCreateSelfSignedServerCert(stateFile string, hosts []string, ttl time
 	defer wipeBytes(keyDER)
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
 	defer wipeBytes(keyPEM)
-	combined := make([]byte, 0, len(generated.TrustPEM)+len(keyPEM))
+	var combined []byte
 	combined = append(combined, generated.TrustPEM...)
 	combined = append(combined, keyPEM...)
 	defer wipeBytes(combined)
@@ -442,6 +442,8 @@ func LoopbackProbeClient(timeout time.Duration) *http.Client {
 		Timeout: timeout,
 		Transport: &http.Transport{
 			// Loopback liveness only — see the doc comment above.
+			// lgtm[go/disabled-certificate-check] This client can only be handed the
+			// fixed loopback health URL by the binary's internal probe command.
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS12}, // #nosec G402 -- localhost liveness probe of this process's own ephemeral self-signed listener; no credential, no data (CWE-295)
 		},
 	}

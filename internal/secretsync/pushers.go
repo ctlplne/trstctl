@@ -832,7 +832,7 @@ func (p *JSONPusher) Push(ctx context.Context, key string, value []byte) error {
 func (p *JSONPusher) Close() { destroySecretBuffer(&p.token) }
 
 func marshalGitLabVariable(key string, value []byte, scope string) []byte {
-	out := make([]byte, 0, len(value)+len(key)+len(scope)+160)
+	var out []byte
 	out = append(out, `{"key":`...)
 	out = appendJSONValueBytes(out, []byte(key))
 	out = append(out, `,"value":`...)
@@ -847,7 +847,7 @@ func marshalVercelEnvironmentVariable(key string, value []byte, targets []string
 	if err != nil {
 		return nil, err
 	}
-	out := make([]byte, 0, len(value)+len(key)+len(encodedTargets)+80)
+	var out []byte
 	out = append(out, `{"key":`...)
 	out = appendJSONValueBytes(out, []byte(key))
 	out = append(out, `,"value":`...)

@@ -108,6 +108,12 @@ func (c HTTPSignedSTSClient) GetCallerIdentity(ctx context.Context, credential [
 	if err != nil {
 		return AWSIdentity{}, fmt.Errorf("parse configured STS endpoint: %w", err)
 	}
+	if (allowed.Scheme != "https" && allowed.Scheme != "http") || allowed.Host == "" || allowed.User != nil {
+		return AWSIdentity{}, fmt.Errorf("configured STS endpoint must be an absolute http(s) URL without user info")
+	}
+	if !strings.EqualFold(u.Scheme, allowed.Scheme) {
+		return AWSIdentity{}, fmt.Errorf("STS URL scheme %q is not the configured endpoint scheme", u.Scheme)
+	}
 	if !sameHost(u, allowed) {
 		return AWSIdentity{}, fmt.Errorf("STS URL host %q is not the configured endpoint host", u.Host)
 	}
@@ -117,7 +123,14 @@ func (c HTTPSignedSTSClient) GetCallerIdentity(ctx context.Context, credential [
 	if !hasAWSSignature(signed.Headers, u.Query()) {
 		return AWSIdentity{}, fmt.Errorf("signed STS request is missing SigV4 authorization")
 	}
-	req, err := http.NewRequestWithContext(ctx, method, u.String(), bytes.NewReader([]byte(signed.Body)))
+	// The network authority comes only from operator configuration. The submitted
+	// signed request still supplies the path/query covered by SigV4, but it cannot
+	// select a different host through URL parsing tricks or redirects (CWE-918).
+	target := *u
+	target.Scheme = allowed.Scheme
+	target.Host = allowed.Host
+	target.User = nil
+	req, err := http.NewRequestWithContext(ctx, method, target.String(), bytes.NewReader([]byte(signed.Body)))
 	if err != nil {
 		return AWSIdentity{}, err
 	}
@@ -133,7 +146,11 @@ func (c HTTPSignedSTSClient) GetCallerIdentity(ctx context.Context, credential [
 	if client == nil {
 		client = http.DefaultClient
 	}
-	resp, err := client.Do(req)
+	closedClient := *client
+	closedClient.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	resp, err := closedClient.Do(req)
 	if err != nil {
 		return AWSIdentity{}, err
 	}

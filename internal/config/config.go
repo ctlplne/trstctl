@@ -1787,6 +1787,11 @@ type Secrets struct {
 	// code/CI secret scan route. Empty resolves TRSTCTL_GITLEAKS_BIN, then
 	// tools/bin/gitleaks, then PATH at request time.
 	GitleaksBin string `json:"gitleaks_bin,omitempty"`
+	// ScanRoots is the closed set of local filesystem trees the served Gitleaks
+	// bridge may read. Empty means the control-plane working directory. Operators
+	// mount repositories/rules beneath these roots; API callers cannot scan other
+	// host or container paths merely because they hold secrets:write.
+	ScanRoots []string `json:"scan_roots,omitempty"`
 	// MachineAuth configures the non-token machine-auth login methods exposed by
 	// POST /api/v1/secrets/login. Each entry is either tenant-pinned with tenant_id
 	// or token-bound with tenant_claim; otherwise a credential could be replayed
@@ -2324,6 +2329,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setBool(getenv, "TRSTCTL_SECRETS_ENABLE_API", &c.Secrets.EnableAPI)
 	setString(getenv, "TRSTCTL_SECRETS_AUTH_SECRET_FILE", &c.Secrets.AuthSecretFile)
 	setString(getenv, "TRSTCTL_SECRETS_GITLEAKS_BIN", &c.Secrets.GitleaksBin)
+	setCSV(getenv, "TRSTCTL_SECRETS_SCAN_ROOTS", &c.Secrets.ScanRoots)
 	setString(getenv, "TRSTCTL_TRANSIT_KEYRING_DIR", &c.Transit.KeyringDir)
 	setBool(getenv, "TRSTCTL_IDEMPOTENCY_RESULT_FLEET_READY", &c.Secrets.IdempotencyResultFleetReady)
 	setBool(getenv, "TRSTCTL_SECRET_ROTATION_HISTORY_FLEET_READY", &c.Secrets.SecretRotationHistoryFleetReady)

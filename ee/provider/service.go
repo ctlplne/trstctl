@@ -272,7 +272,7 @@ func (s *Service) ListActivity(ctx context.Context, actor Operator, limit int) (
 	if limit > maxProviderActivityLimit {
 		limit = maxProviderActivityLimit
 	}
-	out := make([]ProviderActivity, 0, min(limit, len(all)))
+	out := make([]ProviderActivity, 0, maxProviderActivityLimit)
 	for index := len(all) - 1; index >= 0 && len(out) < limit; index-- {
 		item := all[index]
 		if visible[item.TenantID] || (item.TenantID == providerAuditTenant && actor.Role == OperatorAdmin) {

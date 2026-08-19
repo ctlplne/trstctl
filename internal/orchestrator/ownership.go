@@ -289,7 +289,7 @@ func ownershipReattestationOutboxEntry(
 	tenantID, eventID string,
 	payload projections.OwnerReattestationRequested,
 ) (Entry, error) {
-	recipients := make([]notify.AlertRecipient, 0, 1+len(payload.EscalationRecipients))
+	var recipients []notify.AlertRecipient
 	if payload.OwnerEmail != "" {
 		recipients = append(recipients, notify.AlertRecipient{
 			Kind: "owner", Subject: payload.OwnerID, DisplayName: payload.OwnerName, Email: payload.OwnerEmail,

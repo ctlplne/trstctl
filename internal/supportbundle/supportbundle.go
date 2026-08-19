@@ -203,7 +203,7 @@ func Create(ctx context.Context, opts Options) (string, error) {
 	}
 	entries["logs/recent.log"] = []byte(logs)
 
-	names := make([]string, 0, len(entries)+1)
+	var names []string
 	for name := range entries {
 		names = append(names, name)
 	}

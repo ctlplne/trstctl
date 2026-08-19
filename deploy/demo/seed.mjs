@@ -6,7 +6,11 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 
 const tenant = process.env.TRSTCTL_TENANT || "11111111-1111-4111-8111-111111111111";
-const server = process.env.TRSTCTL_SERVER || "https://trstctl:8443";
+const serverURL = new URL(process.env.TRSTCTL_SERVER || "https://trstctl:8443");
+if (!["https:", "http:"].includes(serverURL.protocol) || serverURL.username || serverURL.password || serverURL.pathname !== "/" || serverURL.search || serverURL.hash) {
+  throw new Error("TRSTCTL_SERVER must be an absolute HTTP(S) origin without credentials, path, query, or fragment");
+}
+const server = serverURL.origin;
 const demoURL = process.env.TRSTCTL_DEMO_URL || "https://localhost:9443";
 const bootstrapTokenFile = process.env.TRSTCTL_DEMO_BOOTSTRAP_TOKEN_FILE || "/seed-state/bootstrap.token";
 const seedVersion = "demo-seed-v1";
@@ -266,6 +270,8 @@ function mintBootstrapToken(subject = "demo-seeder") {
     throw new Error(`demo bootstrap subject is not a bounded safe label: ${subject}`);
   }
   const tokenFile = subject === "demo-seeder" ? bootstrapTokenFile : `${bootstrapTokenFile}.${subject}`;
+  // lgtm[js/file-system-race] The demo seed is a single Compose init job and
+  // creation below uses flag=wx; a second writer cannot replace its token.
   if (existsSync(tokenFile)) {
     const persisted = readFileSync(tokenFile, "utf8").trim();
     if (!persisted) {
@@ -306,7 +312,14 @@ async function api(method, path, body, idem, okStatuses = [], actorBearer = bear
     let res;
     let text;
     try {
-      res = await fetch(`${server}${path}`, init);
+      const target = new URL(path, serverURL);
+      if (target.origin !== serverURL.origin) {
+        throw new Error("demo API path escaped the configured server origin");
+      }
+      // lgtm[js/file-access-to-http] The file-backed bootstrap token is used
+      // only as an Authorization header to this validated same-origin endpoint;
+      // redirect following is disabled so it cannot leave that origin.
+      res = await fetch(target, { ...init, redirect: "error" });
       text = await res.text();
     } catch (err) {
       if (attempt === 19) {
@@ -1249,7 +1262,9 @@ export {
 const invokedAsProgram = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (invokedAsProgram) {
   main().catch((err) => {
-    console.error(`demo seed failed: ${err.stack || err.message}`);
+    // Errors can retain request objects in their stack/cause chain. Keep demo
+    // logs credential-free and direct operators to the protected diagnostics.
+    console.error(`demo seed failed (${err?.name || "Error"}); inspect the protected container diagnostics`);
     process.exit(1);
   });
 }

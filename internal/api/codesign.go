@@ -172,7 +172,7 @@ func codeSigningRequestBinding(operation, principal string, request any) (string
 		return "", err
 	}
 	defer secret.Wipe(encoded)
-	material := make([]byte, 0, len(operation)+len(principal)+2+len(encoded))
+	var material []byte
 	material = append(material, operation...)
 	material = append(material, 0)
 	material = append(material, principal...)

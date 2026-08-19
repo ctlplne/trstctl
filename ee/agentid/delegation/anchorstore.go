@@ -40,13 +40,33 @@ func (s *DurableAnchorStore) PutRootAnchor(_ context.Context, tenantID, keyID st
 	if anchor.AuthRef == "" {
 		return errors.New("delegation: root anchor auth_ref is required")
 	}
-	if err := os.MkdirAll(filepath.Dir(pemPath), 0o700); err != nil {
+	if err := os.MkdirAll(s.floorDir, 0o700); err != nil {
 		return fmt.Errorf("delegation: create root-anchor directory: %w", err)
 	}
-	if err := os.WriteFile(pemPath, EncodeRootAnchorPEM(anchor.PublicDER), 0o600); err != nil {
+	root, err := os.OpenRoot(s.floorDir)
+	if err != nil {
+		return fmt.Errorf("delegation: open signer floor directory: %w", err)
+	}
+	defer func() { _ = root.Close() }()
+	relDir, err := filepath.Rel(s.floorDir, filepath.Dir(pemPath))
+	if err != nil || !filepath.IsLocal(relDir) {
+		return errors.New("delegation: root-anchor directory escaped signer floor")
+	}
+	if err := root.MkdirAll(relDir, 0o700); err != nil {
+		return fmt.Errorf("delegation: create root-anchor directory: %w", err)
+	}
+	relPEM, err := filepath.Rel(s.floorDir, pemPath)
+	if err != nil || !filepath.IsLocal(relPEM) {
+		return errors.New("delegation: root-anchor public key path escaped signer floor")
+	}
+	relAuthRef, err := filepath.Rel(s.floorDir, authRefPath)
+	if err != nil || !filepath.IsLocal(relAuthRef) {
+		return errors.New("delegation: root-anchor auth-ref path escaped signer floor")
+	}
+	if err := root.WriteFile(relPEM, EncodeRootAnchorPEM(anchor.PublicDER), 0o600); err != nil {
 		return fmt.Errorf("delegation: write root-anchor public key: %w", err)
 	}
-	if err := os.WriteFile(authRefPath, []byte(anchor.AuthRef+"\n"), 0o600); err != nil {
+	if err := root.WriteFile(relAuthRef, []byte(anchor.AuthRef+"\n"), 0o600); err != nil {
 		return fmt.Errorf("delegation: write root-anchor auth ref: %w", err)
 	}
 	return nil
@@ -160,7 +180,7 @@ func (s *DurableAnchorStore) rootDir() string {
 }
 
 func safeAnchorSegment(s string) bool {
-	if s == "" || s == "." || s == ".." {
+	if s == "" || s == "." || s == ".." || !filepath.IsLocal(s) || filepath.Base(s) != s {
 		return false
 	}
 	for _, r := range s {

@@ -150,7 +150,7 @@ describe("journeys hub", () => {
     expect(localStorage.getItem("trstctl-journey-progress")).toContain("automate-fleet-tls:certbot");
 
     // Every journey links to its published walkthrough on the docs site.
-    const docLink = screen.getByRole("link", { name: /docs\.trstctl\.com\/journeys\/automate-fleet-tls/ });
+    const docLink = screen.getByRole("link", { name: "https://docs.trstctl.com/journeys/automate-fleet-tls/" });
     expect(docLink).toHaveAttribute("href", "https://docs.trstctl.com/journeys/automate-fleet-tls/");
     expect(docLink).toHaveAttribute("target", "_blank");
 

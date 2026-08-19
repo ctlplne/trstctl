@@ -801,18 +801,19 @@ func encodeBytes(tag uint32, value []byte) []byte {
 }
 
 func encodeItem(tag uint32, typ TTLVType, value []byte) []byte {
-	out := make([]byte, 8+len(value)+ttlvPadding(len(value)))
+	padding := ttlvPadding(len(value))
+	if len(value) > DefaultTTLVLimits.MaxFrameSize-8-padding {
+		panic(fmt.Errorf("kmip: encoded value length %d exceeds frame cap %d", len(value), DefaultTTLVLimits.MaxFrameSize))
+	}
+	length, err := frameLen32(len(value))
+	if err != nil {
+		panic(err)
+	}
+	out := make([]byte, 8+len(value)+padding)
 	out[0] = byte(tag >> 16 & 0xFF)
 	out[1] = byte(tag >> 8 & 0xFF)
 	out[2] = byte(tag & 0xFF)
 	out[3] = byte(typ)
-	length, err := frameLen32(len(value))
-	if err != nil {
-		// Unreachable for any frame this server builds: every value is bounded by
-		// MaxFrameSize long before it reaches here. Encoding a truncated length
-		// would desynchronise the peer's parser, so refuse to emit anything.
-		panic(err)
-	}
 	binary.BigEndian.PutUint32(out[4:8], length)
 	copy(out[8:], value)
 	return out

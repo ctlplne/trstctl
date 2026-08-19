@@ -107,7 +107,7 @@ func (a AggregateEvidence) aggregateBodyBytes() ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("revoke: marshal aggregate body: %w", err)
 	}
-	out := make([]byte, 0, len(aggregateDomain)+1+len(j))
+	var out []byte
 	out = append(out, aggregateDomain...)
 	out = append(out, ':')
 	out = append(out, j...)

@@ -14,10 +14,9 @@ function extractSdkReferences(): Record<string, string> {
   expect(block, "Integrate.tsx should define the copyable SDK list").not.toBeNull();
 
   return Object.fromEntries(
-    [...block![1].matchAll(/\{\s*name:\s*"([^"]+)",\s*reference:\s*"((?:\\.|[^"])*)"\s*\}/g)].map(([, name, reference]) => [
-      name,
-      JSON.parse(`"${reference}"`) as string,
-    ]),
+    [...block![1].matchAll(/\{\s*name:\s*"([^"]+)",\s*reference:\s*("(?:[^"\\]|\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4}))*")\s*\}/g)].map(
+      ([, name, encodedReference]) => [name, JSON.parse(encodedReference) as string],
+    ),
   );
 }
 

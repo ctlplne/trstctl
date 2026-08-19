@@ -167,7 +167,11 @@ export class TrstctlClient {
 
   constructor(opts: ClientOptions) {
     if (!opts.baseUrl) throw new Error("trstctl: baseUrl is required");
-    this.baseUrl = opts.baseUrl.replace(/\/+$/, "");
+    let normalizedBaseUrl = opts.baseUrl;
+    while (normalizedBaseUrl.endsWith("/")) {
+      normalizedBaseUrl = normalizedBaseUrl.slice(0, -1);
+    }
+    this.baseUrl = normalizedBaseUrl;
     this.token = opts.token;
     this.tenant = opts.tenant;
     const f = opts.fetch ?? (globalThis as { fetch?: typeof fetch }).fetch;
