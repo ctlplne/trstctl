@@ -16,7 +16,37 @@ test("Home shows the worklists and the rail lists every space", async ({ page })
   for (const { space } of spaceSmoke) {
     await expect(rail.getByRole("button", { name: space })).toBeVisible();
   }
-  await expect(page.getByRole("navigation", { name: /primary/i }).getByRole("link", { name: /journeys/i })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: /primary/i }).getByRole("link", { name: /guided setup/i })).toBeVisible();
+});
+
+test("mobile shell groups account and preferences into one menu", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const account = page.getByRole("button", { name: "Account and preferences" });
+  await expect(account).toBeVisible();
+  await account.click();
+
+  const menu = page.getByRole("dialog", { name: "Account and preferences" });
+  await expect(menu).toBeVisible();
+  await expect(menu).toContainText("demo-admin@trstctl.local");
+  await expect(menu.getByRole("combobox", { name: "Language" })).toBeVisible();
+  await expect(menu.getByRole("button", { name: /Theme:/ })).toBeVisible();
+  await expect(menu.getByRole("button", { name: "Open keyboard shortcuts" })).toBeVisible();
+  await expect(menu.getByRole("button", { name: "Sign out" })).toBeVisible();
+});
+
+test("mobile first-run shows only the current step and its nearest context", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/wizard");
+
+  await expect(page.getByRole("heading", { level: 1, name: "Set up trstctl" })).toBeVisible();
+  await expect(page).toHaveTitle(/^Set up trstctl · trstctl$/);
+  await expect(page.getByTestId("full-step-progress")).toBeHidden();
+  const compact = page.getByTestId("compact-step-progress");
+  await expect(compact).toBeVisible();
+  await expect(compact.getByRole("listitem")).toHaveCount(2);
+  await expect(compact).toContainText("Connect issuer");
+  await expect(compact).toContainText("Enable protocols");
+  await expect(compact).not.toContainText("Complete");
 });
 
 for (const { space, row } of spaceSmoke) {

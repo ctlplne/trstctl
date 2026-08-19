@@ -4,7 +4,7 @@ const previewBaseURL = process.env.TRSTCTL_PREVIEW_E2E_URL;
 test.skip(!previewBaseURL, "requires a bundle compiled with VITE_TRSTCTL_DEMO=1; production and local-SSO stacks are not preview mode");
 
 const previewRoutes = [
-  { path: "/", heading: "Dashboard", proof: "api.preview-lab.example" },
+  { path: "/", heading: "Home", proof: "api.preview-lab.example" },
   { path: "/certificates", heading: "Certificates", proof: "api.preview-lab.example" },
   { path: "/posture", heading: "Crypto posture", proof: "*.payments.preview-lab.example" },
   { path: "/risk", heading: "Credential risk", proof: "api.preview-lab.example" },

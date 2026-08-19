@@ -139,6 +139,8 @@ function railTargets(): Array<{ to: string; labelKey: MessageKey }> {
   return items;
 }
 
+const standaloneTargets: Array<{ to: string; labelKey: MessageKey }> = [{ to: "/wizard", labelKey: "source.set.up.trstctl.b56c208e41" }];
+
 function renderAt(path: string) {
   return render(
     <ThemeProvider>
@@ -158,7 +160,7 @@ describe("naming parity (S-A2)", () => {
     localStorage.clear();
   });
 
-  for (const target of railTargets()) {
+  for (const target of [...railTargets(), ...standaloneTargets]) {
     const expected = messages[target.labelKey].defaultMessage;
     it(`nav label, H1, and title agree for ${target.to} ("${expected}")`, async () => {
       const view = renderAt(target.to);

@@ -385,6 +385,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
  * title-cased path segment for routes that are not in the primary nav. */
 function routeLabel(pathname: string, t: (key: MessageKey) => string): string {
   if (pathname === "/") return t("nav.item.dashboard");
+  if (pathname === "/wizard") return t("source.set.up.trstctl.b56c208e41");
   for (const item of primaryNavItems) {
     const base = item.to.split("?")[0];
     if (base === pathname) return t(item.labelKey);
