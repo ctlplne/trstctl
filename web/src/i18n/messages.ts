@@ -125,8 +125,8 @@ export const messages = {
     description: "Accessible label for the overview-first CA hierarchy summary.",
   },
   "caHierarchy.workspace.authorityHealth": {
-    defaultMessage: "Authority health",
-    description: "Heading for the authority-health summary on the CA hierarchy overview.",
+    defaultMessage: "Managed authorities",
+    description: "Heading for signer-backed root and intermediate authorities on the CA hierarchy overview.",
   },
   "caHierarchy.workspace.lineage": {
     defaultMessage: "Lineage",
@@ -141,16 +141,16 @@ export const messages = {
     description: "Heading for the pending-action summary on the CA hierarchy overview.",
   },
   "caHierarchy.workspace.healthLoading": {
-    defaultMessage: "Loading certificate authority health.",
+    defaultMessage: "Loading managed root and intermediate authorities.",
     description: "Authority-health summary while the authority inventory is loading.",
   },
   "caHierarchy.workspace.healthUnavailable": {
-    defaultMessage: "Certificate authority health is unavailable.",
+    defaultMessage: "The managed authority inventory is unavailable.",
     description: "Authority-health summary when the authority inventory cannot be read.",
   },
   "caHierarchy.workspace.healthReady": {
-    defaultMessage: "{count} certificate authorities are available.",
-    description: "Authority-health summary with the count of available authorities.",
+    defaultMessage: "{count} managed root or intermediate authorities are configured.",
+    description: "Managed-authority summary with the count of signer-backed roots and intermediates.",
   },
   "caHierarchy.workspace.lineageSummary": {
     defaultMessage: "{roots} roots and {intermediates} intermediates; {discovered} hierarchy authorities discovered.",
@@ -1394,19 +1394,19 @@ export const messages = {
     description: "Legacy PKI-as-a-secret result warning.",
   },
   "request.wizard.profile.label": {
-    defaultMessage: "Choose profile",
+    defaultMessage: "Choose certificate rule",
     description: "Request-credential wizard step 1 title.",
   },
   "request.wizard.profile.description": {
-    defaultMessage: "The issuance profile governs key type, lifetime, and how many approvals the request needs.",
+    defaultMessage: "A certificate rule (technical name: issuance profile) controls key type, lifetime, allowed names, and required approvals.",
     description: "Request-credential wizard step 1 description.",
   },
   "request.wizard.details.label": {
-    defaultMessage: "Name the credential",
+    defaultMessage: "Name the certificate",
     description: "Request-credential wizard step 2 title.",
   },
   "request.wizard.details.description": {
-    defaultMessage: "Approvers see exactly this: what the credential is called, who owns it, and why it exists.",
+    defaultMessage: "Approvers see exactly this: what the certificate is called, who owns it, and why the machine needs it.",
     description: "Request-credential wizard step 2 description.",
   },
   "request.wizard.review.label": {
@@ -2827,7 +2827,7 @@ export const messages = {
     description: "Primary navigation item.",
   },
   "nav.item.requestCredential": {
-    defaultMessage: "Request credential",
+    defaultMessage: "Request a certificate",
     description: "Primary navigation item.",
   },
   "nav.item.certificates": {
@@ -2919,8 +2919,16 @@ export const messages = {
     description: "Primary navigation item.",
   },
   "nav.item.profiles": {
-    defaultMessage: "Certificate profiles",
+    defaultMessage: "Certificate rules",
     description: "Primary navigation item.",
+  },
+  "profiles.action.createRule": {
+    defaultMessage: "Create rule",
+    description: "Primary action that opens the certificate rule builder.",
+  },
+  "profiles.action.closeForm": {
+    defaultMessage: "Close rule form",
+    description: "Action that closes the open certificate rule builder without submitting it.",
   },
   "profiles.deviceAttestation.column": {
     defaultMessage: "Device attestation",
@@ -2967,8 +2975,12 @@ export const messages = {
     description: "Primary navigation item.",
   },
   "nav.item.caHierarchy": {
-    defaultMessage: "CA hierarchy",
+    defaultMessage: "Certificate authorities",
     description: "Primary navigation item.",
+  },
+  "caHierarchy.action.addAuthority": {
+    defaultMessage: "Add authority",
+    description: "Primary action that opens the certificate authority workspace.",
   },
   "caHierarchy.discovery.heading": {
     defaultMessage: "CA discovery inventory",
@@ -3616,8 +3628,60 @@ export const messages = {
     description: "Metadata label for an imported existing CA serial number.",
   },
   "nav.item.protocols": {
-    defaultMessage: "Protocols",
+    defaultMessage: "Machine request methods",
     description: "Primary navigation item.",
+  },
+  "protocols.action.setUpNext": {
+    defaultMessage: "Set up next method",
+    description: "Primary action that moves to the machine enrollment method register.",
+  },
+  "protocols.readiness.checking": {
+    defaultMessage: "Checking machine request methods…",
+    description: "Heading while public machine certificate request responders are being checked.",
+  },
+  "protocols.readiness.unavailable": {
+    defaultMessage: "Method readiness is unavailable.",
+    description: "Heading when machine certificate request responder readiness cannot be loaded.",
+  },
+  "protocols.readiness.summary": {
+    defaultMessage: "{ready} of {total} methods are ready.",
+    description: "Summary count of machine certificate request methods whose public responders are ready.",
+  },
+  "protocols.readiness.checkingBody": {
+    defaultMessage: "trstctl is probing the same public responders that machines use.",
+    description: "Explanation shown while machine certificate request methods are checked.",
+  },
+  "protocols.readiness.unavailableBody": {
+    defaultMessage: "The status probe failed, so this page will not guess which methods are safe to use. Open the exact error below.",
+    description: "Fail-closed explanation when request method status cannot be checked.",
+  },
+  "protocols.readiness.next": {
+    defaultMessage: "{method} is the next method that needs setup or repair.",
+    description: "Names the next machine certificate request method needing operator attention.",
+  },
+  "protocols.readiness.allReady": {
+    defaultMessage: "Every shipped method is enabled, tenant-bound, and answering its public probe.",
+    description: "Confirmation shown when all machine certificate request methods are ready.",
+  },
+  "protocols.networkEvidence.summary": {
+    defaultMessage: "Network-segment evidence",
+    description: "Collapsed section heading for relay and revocation-cache evidence.",
+  },
+  "protocols.networkEvidence.unavailable": {
+    defaultMessage: "Relay evidence unavailable",
+    description: "Summary when relay topology evidence could not be loaded.",
+  },
+  "protocols.networkEvidence.countOne": {
+    defaultMessage: "1 reported segment path",
+    description: "Summary when one network path has been reported by an enrollment relay.",
+  },
+  "protocols.networkEvidence.countMany": {
+    defaultMessage: "{count} reported segment paths",
+    description: "Count when multiple network paths have been reported by enrollment relays.",
+  },
+  "protocols.networkEvidence.empty": {
+    defaultMessage: "No relay evidence yet",
+    description: "Honest unknown state before any enrollment relay has reported network evidence.",
   },
   "nav.item.acmeAndDns": {
     defaultMessage: "ACME and DNS",
@@ -3717,7 +3781,7 @@ export const messages = {
     description: "Standing and orphaned grant counts for one SSH key location.",
   },
   "nav.item.codeSigning": {
-    defaultMessage: "Code signing",
+    defaultMessage: "Software signing",
     description: "Primary navigation item.",
   },
   "nav.item.tsa": {
@@ -12097,7 +12161,7 @@ export const messages = {
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
   },
   "source.create.a.certificate.profile.before.issuin.cdb32f2c2e": {
-    defaultMessage: "Create a certificate profile before issuing from a constrained template.",
+    defaultMessage: "Create a certificate rule before issuing. The rule limits key strength, names, uses, lifetime, and request methods.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Profiles.tsx.",
   },
   "source.create.a.profile.6d7beeefb5": {
@@ -12141,7 +12205,7 @@ export const messages = {
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
   },
   "source.create.profile.61d30d997d": {
-    defaultMessage: "Create profile",
+    defaultMessage: "Create rule",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Profiles.tsx.",
   },
   "source.create.schedule.5b08f3c719": {
@@ -12880,7 +12944,7 @@ export const messages = {
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Assistant.tsx.",
   },
   "source.guided.builder.16111a6ae3": {
-    defaultMessage: "Guided builder",
+    defaultMessage: "Guided form",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Profiles.tsx.",
   },
   "source.hash.a91069147f": {
@@ -13185,7 +13249,7 @@ export const messages = {
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
   },
   "source.json.editor.b58c887f78": {
-    defaultMessage: "JSON editor",
+    defaultMessage: "Expert JSON",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Profiles.tsx.",
   },
   "source.json.import.bc2fd1db82": {
@@ -13390,11 +13454,11 @@ export const messages = {
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Owners.tsx.",
   },
   "source.loading.profile.version.dc6b63b7c9": {
-    defaultMessage: "Loading profile version...",
+    defaultMessage: "Loading rule version…",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Profiles.tsx.",
   },
   "source.loading.profiles.12a7541833": {
-    defaultMessage: "Loading profiles...",
+    defaultMessage: "Loading certificate rules…",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Profiles.tsx, src/pages/RequestCredential.tsx.",
   },
   "source.loading.ssh.workflow.eee4586266": {
@@ -13793,7 +13857,7 @@ export const messages = {
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
   },
   "source.no.profiles.yet.bd4729eb8f": {
-    defaultMessage: "No profiles yet",
+    defaultMessage: "No certificate rules yet",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Profiles.tsx.",
   },
   "source.no.rotation.runs.cf68af2637": {
@@ -14690,11 +14754,11 @@ export const messages = {
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
   },
   "source.profile.authoring.mode.4bba88d160": {
-    defaultMessage: "Profile authoring mode",
+    defaultMessage: "Rule editing mode",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Profiles.tsx.",
   },
   "source.profile.comparison.unavailable.70eb2b404e": {
-    defaultMessage: "Profile comparison unavailable",
+    defaultMessage: "Rule comparison unavailable",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Profiles.tsx.",
   },
   "source.profile.d696a35bdd": {
@@ -14702,7 +14766,7 @@ export const messages = {
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/RequestCredential.tsx.",
   },
   "source.profile.diff.e8bc2bbc32": {
-    defaultMessage: "Profile diff",
+    defaultMessage: "Exact rule changes",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Profiles.tsx.",
   },
   "source.profile.evaluations.fc73272085": {
@@ -14714,19 +14778,19 @@ export const messages = {
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Certificates.tsx.",
   },
   "source.profile.list.unavailable.3759c2905e": {
-    defaultMessage: "Profile list unavailable",
+    defaultMessage: "Certificate rule list unavailable",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Profiles.tsx, src/pages/RequestCredential.tsx.",
   },
   "source.profile.name.d3663280e1": {
-    defaultMessage: "Profile name",
+    defaultMessage: "Rule name",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Profiles.tsx.",
   },
   "source.profile.rejected.e9c8593d8e": {
-    defaultMessage: "Profile rejected",
+    defaultMessage: "Rule rejected",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Profiles.tsx.",
   },
   "source.profile.version.unavailable.ec6a0646c4": {
-    defaultMessage: "Profile version unavailable",
+    defaultMessage: "Rule version unavailable",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Profiles.tsx.",
   },
   "source.proof.payloads.are.submitted.directly.and.893894a52b": {
@@ -15594,7 +15658,7 @@ export const messages = {
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Discovery.tsx.",
   },
   "source.spec.preview.73cee36c4b": {
-    defaultMessage: "Spec preview",
+    defaultMessage: "Exact rule preview",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Profiles.tsx.",
   },
   "source.spiffe.helper.7ba7061b6b": {
@@ -16156,7 +16220,7 @@ export const messages = {
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Posture.tsx.",
   },
   "source.this.json.is.sent.to.the.profile.workflow.37a80f1c5b": {
-    defaultMessage: "This JSON is sent to the profile workflow. The backend remains the source of truth.",
+    defaultMessage: "This exact JSON is stored as the versioned issuance profile. The server validates it before the rule can issue anything.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Profiles.tsx.",
   },
   "source.this.month.5510b12a58": {

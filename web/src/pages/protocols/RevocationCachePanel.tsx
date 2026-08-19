@@ -1,4 +1,4 @@
-import { ErrorState, LoadingState } from "@/components/StatePrimitives";
+import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatDateTime } from "@/i18n/format";
 import { useTranslation } from "@/i18n/I18nProvider";
@@ -31,7 +31,7 @@ export function RevocationCachePanel() {
       {query.loading ? <LoadingState>{t("protocols.revocationCache.loading")}</LoadingState> : null}
       {query.error ? <ErrorState title={t("protocols.revocationCache.loadFailed")}>{query.error}</ErrorState> : null}
       {!query.loading && !query.error && (!posture?.observed || posture.items.length === 0) ? (
-        <ErrorState title={t("protocols.revocationCache.emptyTitle")}>{t("protocols.revocationCache.emptyBody")}</ErrorState>
+        <UnavailableState title={t("protocols.revocationCache.emptyTitle")}>{t("protocols.revocationCache.emptyBody")}</UnavailableState>
       ) : null}
 
       {posture?.observed && posture.items.length > 0 ? (

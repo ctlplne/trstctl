@@ -407,7 +407,7 @@ describe("auth + dashboards", () => {
     // rail advertises that space, while privileged rows stay hidden.
     const rail = screen.getByRole("navigation", { name: /Spaces/i });
     expect(within(rail).getByRole("button", { name: "Posture & response" })).toBeInTheDocument();
-    expect(within(nav).queryByRole("link", { name: /Request credential/i })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole("link", { name: /Request a certificate/i })).not.toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: /Approvals/i })).not.toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: /^Audit$/i })).not.toBeInTheDocument();
   });
@@ -423,7 +423,7 @@ describe("auth + dashboards", () => {
     expect(within(nav).getByRole("link", { name: /^Audit$/i })).toHaveAttribute("href", "/audit");
     expect(within(nav).queryByRole("link", { name: /Certificates/i })).not.toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: /Discovery/i })).not.toBeInTheDocument();
-    expect(within(nav).queryByRole("link", { name: /Request credential/i })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole("link", { name: /Request a certificate/i })).not.toBeInTheDocument();
   });
 
   it("shapes RA officer navigation and command actions around certificate requests", async () => {
@@ -435,7 +435,7 @@ describe("auth + dashboards", () => {
 
     expect(await screen.findByRole("heading", { name: "Certificates" })).toBeInTheDocument();
     const nav = screen.getByRole("navigation", { name: "Primary" });
-    expect(within(nav).getByRole("link", { name: /Request credential/i })).toHaveAttribute("href", "/request");
+    expect(within(nav).getByRole("link", { name: /Request a certificate/i })).toHaveAttribute("href", "/request");
     expect(within(nav).getByRole("link", { name: /Certificates/i })).toHaveAttribute("href", "/certificates");
     expect(within(nav).queryByRole("link", { name: /Discovery/i })).not.toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: /^Audit$/i })).not.toBeInTheDocument();

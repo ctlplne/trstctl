@@ -141,6 +141,45 @@ function railTargets(): Array<{ to: string; labelKey: MessageKey }> {
 
 const standaloneTargets: Array<{ to: string; labelKey: MessageKey }> = [{ to: "/wizard", labelKey: "source.set.up.trstctl.b56c208e41" }];
 
+const certificateDesignTargets = [
+  {
+    to: "/certificates",
+    answer: /healthy.*expire soon.*needs action/i,
+    proof: /subject.*serial.*issuer chain.*renewal job.*revocation/i,
+    primary: "Add certificate",
+  },
+  {
+    to: "/profiles",
+    answer: /control what machines may request.*key strength.*lifetime/i,
+    proof: /versioned JSON spec.*minimum strengths.*policy binding/i,
+    primary: "Create rule",
+  },
+  {
+    to: "/request",
+    answer: /choose a rule.*name the machine.*submit for approval/i,
+    proof: /profile version.*requester subject.*idempotency.*issuance event/i,
+    primary: "Next: name it",
+  },
+  {
+    to: "/ca-hierarchy",
+    answer: /who signs each certificate.*trust chain.*multiple people/i,
+    proof: /root.*intermediate lineage.*signer custody.*ceremony quorum.*rollover/i,
+    primary: "Add authority",
+  },
+  {
+    to: "/protocols",
+    answer: /safe doorway.*request and renew.*ACME.*EST.*SCEP.*CMP/i,
+    proof: /public endpoints.*responder health.*tenant.*profile binding.*diagnostics/i,
+    primary: "Set up next method",
+  },
+  {
+    to: "/codesign",
+    answer: /sign a software digest.*without uploading.*private key/i,
+    proof: /artifact digest.*signing mode.*policy.*signature receipt.*audit/i,
+    primary: "Sign artifact",
+  },
+] as const;
+
 function renderAt(path: string) {
   return render(
     <ThemeProvider>
@@ -168,6 +207,21 @@ describe("naming parity (S-A2)", () => {
       await waitFor(() => expect(heading).toHaveTextContent(expected));
       await waitFor(() => expect(document.title.startsWith(expected)).toBe(true));
       view.unmount();
+    });
+  }
+
+  for (const target of certificateDesignTargets) {
+    it(`opens ${target.to} with a plain answer, exact proof, and one obvious next action`, async () => {
+      const view = renderAt(target.to);
+      try {
+        const answer = await screen.findByTestId("page-depth-answer");
+        const proof = await screen.findByTestId("page-depth-prove");
+        expect(answer).toHaveTextContent(target.answer);
+        expect(proof).toHaveTextContent(target.proof);
+        expect(await screen.findByRole(target.to === "/protocols" ? "link" : "button", { name: target.primary })).toBeInTheDocument();
+      } finally {
+        view.unmount();
+      }
     });
   }
 

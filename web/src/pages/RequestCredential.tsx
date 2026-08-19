@@ -259,7 +259,8 @@ export function RequestCredential() {
       <PageHeader
         title={t("nav.item.requestCredential")}
         titleId="request-credential-heading"
-        description="Request a certificate against an issuance profile. Requesting and approving stay separate steps, so no one can self-issue."
+        description="Choose a rule, name the machine, and submit for approval. A request cannot approve or mint its own certificate."
+        technicalDetails="Exact evidence includes the selected profile version, owner, requester subject, CSR fingerprint, policy decision, approval events, Idempotency-Key, issuance event, and certificate chain. When you supply a CSR, the private key stays with the requester."
       />
 
       {notice && (

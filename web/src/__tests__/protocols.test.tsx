@@ -356,7 +356,7 @@ describe("protocol surface", () => {
   it("keeps wide protocol tables inside the page at narrow viewports (AUD-125)", async () => {
     await renderProtocols();
 
-    expect(screen.getByRole("region", { name: "Protocols" })).toHaveClass("min-w-0", "[&>*]:min-w-0");
+    expect(screen.getByRole("region", { name: "Machine request methods" })).toHaveClass("min-w-0", "[&>*]:min-w-0");
     expect(screen.getByRole("region", { name: "Client setup" })).toHaveClass("min-w-0", "[&>*]:min-w-0");
     expect(screen.getByRole("region", { name: "ACME" })).toHaveClass("min-w-0");
   });
@@ -365,7 +365,7 @@ describe("protocol surface", () => {
     const writeText = installClipboardSpy();
     await renderProtocols();
 
-    expect(screen.getByRole("heading", { name: "Protocols" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Machine request methods" })).toBeInTheDocument();
     expect(screen.getAllByText("ACME directory, account, order, challenge, and certificate issuance flow").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Protocol enabled").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Tenant binding").length).toBeGreaterThan(0);
@@ -419,6 +419,7 @@ describe("protocol surface", () => {
 
   it("renders exact per-segment enrollment relay topology and durable failover evidence", async () => {
     await renderProtocols();
+    fireEvent.click(screen.getByText("Network-segment evidence"));
 
     const panel = await screen.findByRole("region", { name: "Enrollment relay topology" });
     expect(within(panel).getByText("plant-7")).toBeInTheDocument();
@@ -441,6 +442,7 @@ describe("protocol surface", () => {
       ),
     });
     await renderProtocols();
+    fireEvent.click(screen.getByText("Network-segment evidence"));
 
     const panel = await screen.findByRole("region", { name: "Enrollment relay topology" });
     expect(within(panel).queryByText("2 relays")).not.toBeInTheDocument();
@@ -449,6 +451,7 @@ describe("protocol surface", () => {
 
   it("renders signed multi-issuer revocation-cache freshness without cache bytes or upstream locations", async () => {
     await renderProtocols();
+    fireEvent.click(screen.getByText("Network-segment evidence"));
 
     const panel = await screen.findByRole("region", { name: "Revocation cache by segment" });
     expect(within(panel).getByText("3 fresh / 1 stale / 0 empty / 0 error")).toBeInTheDocument();

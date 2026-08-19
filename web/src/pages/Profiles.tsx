@@ -103,7 +103,7 @@ export function Profiles() {
   }
 
   const profileColumns: DataGridColumn<(typeof profileGroups)[number]>[] = [
-    { id: "name", header: "Name", className: "font-medium", cell: (group) => group.name },
+    { id: "name", header: "Rule", className: "font-medium", cell: (group) => group.name },
     {
       id: "versions",
       header: "Versions",
@@ -135,12 +135,6 @@ export function Profiles() {
           : translateNow("profiles.deviceAttestation.status.disabled"),
     },
     { id: "createdby", header: "Created by", cell: (group) => group.active.created_by ?? "-" },
-    {
-      id: "evidence",
-      header: "Evidence",
-      className: "text-muted-foreground",
-      cell: () => "Prior versions stay resolvable for audit; issuing through a bound profile uses the recorded version.",
-    },
   ];
 
   return (
@@ -148,11 +142,12 @@ export function Profiles() {
       <PageHeader
         titleId="profiles-heading"
         title={t("nav.item.profiles")}
-        description="Versioned rulebooks for what may be issued: key strength, allowed key usages (EKUs), maximum validity, enrollment protocols, and which DNS names (SANs) are permitted."
+        description="Control what machines may request: key strength, allowed names and uses, certificate lifetime, and renewal method. Every change creates a new version, so an old decision stays explainable."
+        technicalDetails="Exact evidence includes the versioned JSON spec, allowed algorithms and minimum strengths, extended key usages, maximum validity, enrollment protocols, DNS suffix constraints, device attestation, policy binding, author, and event history."
         actions={
           <Button type="button" onClick={() => setShowForm((s) => !s)}>
             <Plus className="h-4 w-4" aria-hidden="true" />
-            {translateNow("source.new.profile.fcf4f3f4d5")}
+            {showForm ? t("profiles.action.closeForm") : t("profiles.action.createRule")}
           </Button>
         }
       />
@@ -177,7 +172,7 @@ export function Profiles() {
       )}
 
       {items && items.length > 0 && (
-        <DataGrid ariaLabel="Certificate profile versions" rows={profileGroups} columns={profileColumns} getRowId={(group) => group.name} state="ready" />
+        <DataGrid ariaLabel="Certificate rule versions" rows={profileGroups} columns={profileColumns} getRowId={(group) => group.name} state="ready" />
       )}
 
       {detailLoading && <LoadingState>{translateNow("source.loading.profile.version.dc6b63b7c9")}</LoadingState>}
@@ -207,7 +202,7 @@ function ProfileForm({ onDone }: { onDone: () => void }) {
     setError(null);
     const profileName = name.trim();
     if (!profileName) {
-      setError("Profile name is required.");
+      setError("Rule name is required.");
       return;
     }
     const validation = mode === "guided" ? validateBuilder(fields) : null;
@@ -228,7 +223,7 @@ function ProfileForm({ onDone }: { onDone: () => void }) {
       await api.createProfile({ name: profileName, spec });
       onDone();
     } catch (err) {
-      setError(apiProblemMessage(err, "Could not create profile"));
+      setError(apiProblemMessage(err, "Could not create rule"));
     } finally {
       setBusy(false);
     }

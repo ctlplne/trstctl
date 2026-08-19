@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { MDMDevicesPanel } from "@/components/MDMDevicesPanel";
-import { Link } from "react-router-dom";
-import { Braces, Copy, Signature, X } from "lucide-react";
+import { Copy, X } from "lucide-react";
 import { Dialog } from "@/components/Dialog";
 import { PageHeader } from "@/components/PageHeader";
 import { useCan } from "@/components/rbac";
@@ -315,6 +314,14 @@ export function Protocols() {
 
   const statusByProtocol = new Map(protocolStatuses.map((status) => [status.protocol, status]));
   const relaySegments = enrollmentRelaySegments(relayAgents);
+  const readyMethodCount = protocolSurfaces.filter((protocol) => {
+    const status = statusByProtocol.get(protocol.id);
+    return status?.enabled && status.served;
+  }).length;
+  const nextUnreadyMethod = protocolSurfaces.find((protocol) => {
+    const status = statusByProtocol.get(protocol.id);
+    return !status?.enabled || !status.served;
+  });
 
   async function copySnippet(protocol: ProtocolSurface, snippet: ProtocolSnippet) {
     try {
@@ -444,28 +451,39 @@ export function Protocols() {
     <section aria-labelledby="protocols-heading" className="grid min-w-0 gap-6 [&>*]:min-w-0">
       <PageHeader
         titleId="protocols-heading"
-        title={translateNow("source.protocols.1019490835")}
-        description="The enrollment endpoints clients use to obtain certificates automatically — ACME, EST, SCEP, and CMP — with responder status and copy-paste client setup."
+        title={t("nav.item.protocols")}
+        description="Choose the safe doorway a machine uses to request and renew a certificate: ACME for servers, EST or SCEP for managed devices, and CMP for established PKI systems."
+        technicalDetails="Exact evidence includes public endpoints, responder health, tenant and profile binding, authentication challenges, copy-paste client commands, enrollment diagnostics, signed relay health, and CRL or OCSP cache freshness."
         actions={
-          <>
-            <Link
-              to="/ssh"
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:border-brand-accent/40 hover:bg-muted/60"
-            >
-              <Braces className="h-4 w-4" aria-hidden="true" />
-              <MDMDevicesPanel />
-              {t("nav.item.sshTrust")}
-            </Link>
-            <Link
-              to="/codesign"
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:border-brand-accent/40 hover:bg-muted/60"
-            >
-              <Signature className="h-4 w-4" aria-hidden="true" />
-              {t("nav.item.codeSigning")}
-            </Link>
-          </>
+          <a
+            href="#protocol-table-heading"
+            className="inline-flex h-9 items-center justify-center rounded-control bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-elevation1 hover:brightness-105"
+          >
+            {t("protocols.action.setUpNext")}
+          </a>
         }
       />
+
+      <MDMDevicesPanel />
+
+      <section aria-labelledby="method-readiness-heading" className="ui-panel grid gap-1 p-comfortable">
+        <h2 id="method-readiness-heading" className="text-title font-semibold">
+          {statusLoading
+            ? t("protocols.readiness.checking")
+            : statusError
+              ? t("protocols.readiness.unavailable")
+              : t("protocols.readiness.summary", { ready: readyMethodCount, total: protocolSurfaces.length })}
+        </h2>
+        <p className="text-body text-muted-foreground">
+          {statusLoading
+            ? t("protocols.readiness.checkingBody")
+            : statusError
+              ? t("protocols.readiness.unavailableBody")
+              : nextUnreadyMethod
+                ? t("protocols.readiness.next", { method: nextUnreadyMethod.name })
+                : t("protocols.readiness.allReady")}
+        </p>
+      </section>
 
       {/* I4: what enrolments are failing and what to do about it. Rendered only
           when something has failed — an empty panel on a healthy estate is
@@ -577,97 +595,116 @@ export function Protocols() {
         </section>
       ) : null}
 
-      <section aria-labelledby="enrollment-relay-topology-heading" aria-label={t("protocols.relays.heading")}>
-        <h2 id="enrollment-relay-topology-heading" className="text-title font-semibold">
-          {t("protocols.relays.heading")}
-        </h2>
-        <p className="mt-1 max-w-4xl text-caption text-muted-foreground">{t("protocols.relays.description")}</p>
-        {relayTopologyError ? (
-          <div className="mt-3">
-            <ErrorState title={t("protocols.relays.loadFailed")}>{relayTopologyError}</ErrorState>
-          </div>
-        ) : relaySegments.length === 0 ? (
-          <div className="mt-3">
-            <ErrorState title={t("protocols.relays.emptyTitle")}>{t("protocols.relays.emptyBody")}</ErrorState>
-          </div>
-        ) : (
-          <div className="ui-panel mt-3 overflow-x-auto">
-            <table className="ui-table min-w-[76rem]">
-              <caption className="sr-only">{t("protocols.relays.caption")}</caption>
-              <thead>
-                <tr>
-                  <th scope="col">{t("protocols.relays.segment")}</th>
-                  <th scope="col">{t("protocols.relays.redundancy")}</th>
-                  <th scope="col">{t("protocols.relays.relay")}</th>
-                  <th scope="col">{t("protocols.relays.publicURL")}</th>
-                  <th scope="col">{t("protocols.relays.state")}</th>
-                  <th scope="col">{t("protocols.relays.upstreams")}</th>
-                  <th scope="col">{t("protocols.relays.evidence")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {relaySegments.flatMap((segment) =>
-                  segment.relays.map((relay, index) => {
-                    const proxy = relay.enrollment_proxy;
-                    return (
-                      <tr key={relay.id} className="align-top">
-                        {index === 0 ? (
-                          <td rowSpan={segment.relays.length} className="font-medium">
-                            {segment.name}
-                          </td>
-                        ) : null}
-                        {index === 0 ? (
-                          <td rowSpan={segment.relays.length}>
-                            {segment.relays.length === 1 ? t("protocols.relays.oneRelay") : t("protocols.relays.manyRelays", { count: segment.relays.length })}
-                          </td>
-                        ) : null}
-                        <td>
-                          <p className="font-medium">{relay.name}</p>
-                          <p className="mt-1 font-mono text-xs text-muted-foreground">{relay.id}</p>
-                        </td>
-                        <td className="font-mono text-xs">{proxy.public_url}</td>
-                        <td>
-                          <StatusBadge value={proxy.state} />
-                          <p className="mt-1 max-w-[18rem] text-caption text-muted-foreground">{proxy.detail}</p>
-                        </td>
-                        <td className="text-xs">
-                          <p>
-                            {t("protocols.relays.upstreamHealth", {
-                              healthy: proxy.healthy_upstreams,
-                              unhealthy: proxy.unhealthy_upstreams,
-                              unknown: proxy.unknown_upstreams,
-                            })}
-                          </p>
-                          <p className="mt-1 text-muted-foreground">{t("protocols.relays.upstreamFailures", { count: proxy.upstream_failures })}</p>
-                        </td>
-                        <td className="text-xs">
-                          <p>{t("protocols.relays.forwarded", { count: proxy.forwarded_requests })}</p>
-                          <p>{t("protocols.relays.refused", { count: proxy.refused_requests })}</p>
-                          <p className="mt-1 text-muted-foreground">
-                            {proxy.last_forwarded_at
-                              ? t("protocols.relays.lastForwarded", { at: formatDateTimePolicy(proxy.last_forwarded_at) })
-                              : t("protocols.relays.lastForwarded", { at: t("protocols.relays.never") })}
-                          </p>
-                          <p className="text-muted-foreground">
-                            {proxy.last_failover_at
-                              ? t("protocols.relays.lastFailover", { at: formatDateTimePolicy(proxy.last_failover_at) })
-                              : t("protocols.relays.lastFailover", { at: t("protocols.relays.never") })}
-                          </p>
-                          {proxy.reported_at ? (
-                            <p className="text-muted-foreground">{t("protocols.relays.reported", { at: formatDateTimePolicy(proxy.reported_at) })}</p>
-                          ) : null}
-                        </td>
-                      </tr>
-                    );
-                  }),
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      <details data-testid="protocol-network-evidence" className="group border-y border-border py-3">
+        <summary className="cursor-pointer list-none marker:hidden">
+          <span className="font-medium">{t("protocols.networkEvidence.summary")}</span>
+          <span className="ms-2 text-caption text-muted-foreground">
+            {relayTopologyError
+              ? t("protocols.networkEvidence.unavailable")
+              : relaySegments.length > 0
+                ? relaySegments.length === 1
+                  ? t("protocols.networkEvidence.countOne")
+                  : t("protocols.networkEvidence.countMany", { count: relaySegments.length })
+                : t("protocols.networkEvidence.empty")}
+          </span>
+        </summary>
+        <div className="mt-4 grid gap-6">
+          <section aria-labelledby="enrollment-relay-topology-heading" aria-label={t("protocols.relays.heading")}>
+            <h2 id="enrollment-relay-topology-heading" className="text-title font-semibold">
+              {t("protocols.relays.heading")}
+            </h2>
+            <p className="mt-1 max-w-4xl text-caption text-muted-foreground">{t("protocols.relays.description")}</p>
+            {relayTopologyError ? (
+              <div className="mt-3">
+                <ErrorState title={t("protocols.relays.loadFailed")}>{relayTopologyError}</ErrorState>
+              </div>
+            ) : relaySegments.length === 0 ? (
+              <div role="status" className="mt-3 rounded-panel border border-border bg-muted/20 p-4">
+                <p className="text-body font-semibold">{t("protocols.relays.emptyTitle")}</p>
+                <p className="mt-1 text-caption text-muted-foreground">{t("protocols.relays.emptyBody")}</p>
+              </div>
+            ) : (
+              <div className="ui-panel mt-3 overflow-x-auto">
+                <table className="ui-table min-w-[76rem]">
+                  <caption className="sr-only">{t("protocols.relays.caption")}</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">{t("protocols.relays.segment")}</th>
+                      <th scope="col">{t("protocols.relays.redundancy")}</th>
+                      <th scope="col">{t("protocols.relays.relay")}</th>
+                      <th scope="col">{t("protocols.relays.publicURL")}</th>
+                      <th scope="col">{t("protocols.relays.state")}</th>
+                      <th scope="col">{t("protocols.relays.upstreams")}</th>
+                      <th scope="col">{t("protocols.relays.evidence")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {relaySegments.flatMap((segment) =>
+                      segment.relays.map((relay, index) => {
+                        const proxy = relay.enrollment_proxy;
+                        return (
+                          <tr key={relay.id} className="align-top">
+                            {index === 0 ? (
+                              <td rowSpan={segment.relays.length} className="font-medium">
+                                {segment.name}
+                              </td>
+                            ) : null}
+                            {index === 0 ? (
+                              <td rowSpan={segment.relays.length}>
+                                {segment.relays.length === 1
+                                  ? t("protocols.relays.oneRelay")
+                                  : t("protocols.relays.manyRelays", { count: segment.relays.length })}
+                              </td>
+                            ) : null}
+                            <td>
+                              <p className="font-medium">{relay.name}</p>
+                              <p className="mt-1 font-mono text-xs text-muted-foreground">{relay.id}</p>
+                            </td>
+                            <td className="font-mono text-xs">{proxy.public_url}</td>
+                            <td>
+                              <StatusBadge value={proxy.state} />
+                              <p className="mt-1 max-w-[18rem] text-caption text-muted-foreground">{proxy.detail}</p>
+                            </td>
+                            <td className="text-xs">
+                              <p>
+                                {t("protocols.relays.upstreamHealth", {
+                                  healthy: proxy.healthy_upstreams,
+                                  unhealthy: proxy.unhealthy_upstreams,
+                                  unknown: proxy.unknown_upstreams,
+                                })}
+                              </p>
+                              <p className="mt-1 text-muted-foreground">{t("protocols.relays.upstreamFailures", { count: proxy.upstream_failures })}</p>
+                            </td>
+                            <td className="text-xs">
+                              <p>{t("protocols.relays.forwarded", { count: proxy.forwarded_requests })}</p>
+                              <p>{t("protocols.relays.refused", { count: proxy.refused_requests })}</p>
+                              <p className="mt-1 text-muted-foreground">
+                                {proxy.last_forwarded_at
+                                  ? t("protocols.relays.lastForwarded", { at: formatDateTimePolicy(proxy.last_forwarded_at) })
+                                  : t("protocols.relays.lastForwarded", { at: t("protocols.relays.never") })}
+                              </p>
+                              <p className="text-muted-foreground">
+                                {proxy.last_failover_at
+                                  ? t("protocols.relays.lastFailover", { at: formatDateTimePolicy(proxy.last_failover_at) })
+                                  : t("protocols.relays.lastFailover", { at: t("protocols.relays.never") })}
+                              </p>
+                              {proxy.reported_at ? (
+                                <p className="text-muted-foreground">{t("protocols.relays.reported", { at: formatDateTimePolicy(proxy.reported_at) })}</p>
+                              ) : null}
+                            </td>
+                          </tr>
+                        );
+                      }),
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
 
-      <RevocationCachePanel />
+          <RevocationCachePanel />
+        </div>
+      </details>
 
       <section aria-labelledby="protocol-status-heading" className="border-y border-border py-4">
         <h2 id="protocol-status-heading" className="text-title font-semibold">

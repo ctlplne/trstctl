@@ -1023,32 +1023,17 @@ export function Certificates() {
     <section aria-labelledby="certs-heading">
       <PageHeader
         titleId="certs-heading"
-        title={translateNow("source.certificates.16f637921e")}
-        description="Your X.509 certificate inventory — search, filter by expiry, import, and inspect. For the non-human identities that hold these certificates, see Identities."
+        title={t("nav.item.certificates")}
+        description="See which certificates are healthy, which expire soon, and what needs action."
+        technicalDetails="Exact evidence includes the subject and SANs, serial number, issuer chain, validity window, source, owner, deployment receipt, renewal job, revocation state, CRL and CT state, and immutable events. Private keys are never displayed."
         actions={
-          <>
-            <Link
-              to="/ca-hierarchy"
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:border-brand-accent/40 hover:bg-muted/60"
-            >
-              <PlugZap className="h-4 w-4" aria-hidden="true" />
-              {t("nav.item.caHierarchy")}
-            </Link>
-            <Link
-              to="/profiles"
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:border-brand-accent/40 hover:bg-muted/60"
-            >
-              <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-              {t("nav.item.profiles")}
-            </Link>
-            <button
-              type="button"
-              onClick={() => setShowIngest((v) => !v)}
-              className="inline-flex min-h-10 items-center justify-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
-            >
-              {showIngest ? translateNow("source.close.ingest.9381182077") : translateNow("source.add.certificate.6fa2cfd67c")}
-            </button>
-          </>
+          <button
+            type="button"
+            onClick={() => setShowIngest((v) => !v)}
+            className="inline-flex h-9 items-center justify-center rounded-control bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-elevation1 hover:brightness-105"
+          >
+            {showIngest ? translateNow("source.close.ingest.9381182077") : translateNow("source.add.certificate.6fa2cfd67c")}
+          </button>
         }
       />
 

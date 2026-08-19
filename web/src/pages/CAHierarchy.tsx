@@ -808,13 +808,20 @@ export function CAHierarchy() {
     <section aria-labelledby="ca-heading" className="grid gap-6">
       <PageHeader
         titleId="ca-heading"
-        title={translateNow("source.ca.hierarchy.73e4cbcaf4")}
-        description="Your certificate authorities — roots and intermediates — and their issuers, with multi-person approval ceremonies (no single admin can act alone) and custody controls for the signing keys."
+        title={t("nav.item.caHierarchy")}
+        description="See who signs each certificate and whether every link in the trust chain is healthy. Sensitive key actions require multiple people, so one admin cannot change trust alone."
+        technicalDetails="Exact evidence includes root and intermediate lineage, fingerprints and serial numbers, signer custody, ceremony quorum, authority state, retirement and rollover, trust distribution, and immutable audit events."
         actions={
-          <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
-            <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
-            {translateNow("source.refresh.0e91610117")}
-          </Button>
+          <>
+            <Button type="button" onClick={() => selectTab("authorities")}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              {t("caHierarchy.action.addAuthority")}
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => void load()} disabled={loading}>
+              <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
+              {translateNow("source.refresh.0e91610117")}
+            </Button>
+          </>
         }
       />
 
@@ -1170,7 +1177,7 @@ function CAWorkspaceOverview({
 
 function WorkspaceSummaryCard({ heading, body, action, onOpen }: { heading: string; body: string; action: string; onOpen: () => void }) {
   return (
-    <article className="rounded-panel border border-border bg-card p-4 shadow-elevation1">
+    <article className="rounded-panel border border-border bg-card p-4">
       <h2 className="text-body font-semibold">{heading}</h2>
       <p className="mt-2 min-h-10 text-sm text-muted-foreground">{body}</p>
       <Button type="button" variant="ghost" size="sm" className="mt-3 px-0" onClick={onOpen}>

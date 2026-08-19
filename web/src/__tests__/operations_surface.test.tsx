@@ -139,18 +139,18 @@ describe("operational console surface", () => {
     const user = userEvent.setup();
     renderAt("/profiles");
 
-    expect(await screen.findByRole("heading", { name: "Certificate profiles" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /New profile/i })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Certificate rules" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Create rule/i })).toBeInTheDocument();
     expect(await screen.findByText("server")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /New profile/i }));
-    await user.clear(screen.getByLabelText(/Profile name/i));
-    await user.type(screen.getByLabelText(/Profile name/i), "server");
+    await user.click(screen.getByRole("button", { name: /Create rule/i }));
+    await user.clear(screen.getByLabelText(/Rule name/i));
+    await user.type(screen.getByLabelText(/Rule name/i), "server");
     await user.click(screen.getByLabelText("Ed25519"));
     await user.click(screen.getByLabelText("Hybrid-ML-DSA-44-ECDSA-P256"));
     await user.click(screen.getByLabelText("ML-DSA-65"));
     await user.click(screen.getByLabelText("SLH-DSA-SHA2-128s"));
-    await user.click(screen.getByRole("button", { name: /Create profile/i }));
+    await user.click(screen.getByRole("button", { name: /Create rule/i }));
 
     await waitFor(() =>
       expect(apiMock.createProfile).toHaveBeenCalledWith({
@@ -173,13 +173,13 @@ describe("operational console surface", () => {
     const user = userEvent.setup();
     renderAt("/profiles");
 
-    await user.click(await screen.findByRole("button", { name: /New profile/i }));
-    await user.type(screen.getByLabelText(/Profile name/i), "oversized");
-    await user.click(screen.getByRole("button", { name: /JSON editor/i }));
+    await user.click(await screen.findByRole("button", { name: /Create rule/i }));
+    await user.type(screen.getByLabelText(/Rule name/i), "oversized");
+    await user.click(screen.getByRole("button", { name: /Expert JSON/i }));
     fireEvent.change(screen.getByLabelText(/JSON spec/i), {
       target: { value: '{"max_validity":"999999h"}' },
     });
-    await user.click(screen.getByRole("button", { name: /Create profile/i }));
+    await user.click(screen.getByRole("button", { name: /Create rule/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("max_validity exceeds the tenant profile ceiling");
   });
@@ -211,13 +211,13 @@ describe("operational console surface", () => {
     renderAt("/profiles");
 
     expect(await screen.findByText("TPM enabled")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /New profile/i }));
-    await user.type(screen.getByLabelText(/Profile name/i), "devices");
+    await user.click(screen.getByRole("button", { name: /Create rule/i }));
+    await user.type(screen.getByLabelText(/Rule name/i), "devices");
     await user.click(screen.getByLabelText("Enable device-attest-01 for this profile"));
     fireEvent.change(screen.getByLabelText("Operator attestation roots (PEM)"), {
       target: { value: "-----BEGIN CERTIFICATE-----\nnew-root\n-----END CERTIFICATE-----" },
     });
-    await user.click(screen.getByRole("button", { name: /Create profile/i }));
+    await user.click(screen.getByRole("button", { name: /Create rule/i }));
 
     await waitFor(() =>
       expect(apiMock.createProfile).toHaveBeenCalledWith({
@@ -241,10 +241,10 @@ describe("operational console surface", () => {
     const user = userEvent.setup();
     renderAt("/profiles");
 
-    await user.click(await screen.findByRole("button", { name: /New profile/i }));
-    await user.type(screen.getByLabelText(/Profile name/i), "devices");
+    await user.click(await screen.findByRole("button", { name: /Create rule/i }));
+    await user.type(screen.getByLabelText(/Rule name/i), "devices");
     await user.click(screen.getByLabelText("Enable device-attest-01 for this profile"));
-    await user.click(screen.getByRole("button", { name: /Create profile/i }));
+    await user.click(screen.getByRole("button", { name: /Create rule/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("requires at least one PEM trust root");
     expect(apiMock.createProfile).not.toHaveBeenCalled();

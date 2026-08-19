@@ -84,8 +84,9 @@ export function CodeSigning() {
     <section aria-labelledby="codesign-heading" className="grid gap-6">
       <PageHeader
         titleId="codesign-heading"
-        title={translateNow("source.code.signing.4871711be4")}
-        description="Bind an artifact digest to a signature through the dedicated signer (key-backed) or a keyless provider (Fulcio). Only the digest is submitted — artifact bytes and private keys never enter the browser."
+        title={t("nav.item.codeSigning")}
+        description="Sign a software digest without uploading the software or exposing a private key. Use a managed signing key or an approved keyless identity."
+        technicalDetails="Exact evidence includes the artifact digest, signing mode, managed key or provider identity, policy and approval decision, signature receipt, timestamp or transparency proof, signer identity, and immutable audit event."
       />
 
       <SectionCard

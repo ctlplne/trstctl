@@ -732,8 +732,13 @@ describe("i18n boundary", () => {
       // Journeys labels are now the plainer Home and Guided setup. Placeholders
       // and negations are retained.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW.
-      "es-ES": "0ca4714988d333433a5d8c1ac959391d8f031cc2be6a0d8f538c37da0236f05c",
-      "de-DE": "51b47a94a384143c359fbd8a63989ef970d1ca0e7f4da48b987a2a2d05307eb2",
+      // Checkpoint 5 certificate-language re-pin: the certificate workspace now
+      // names request methods, rules, authorities, and software signing in
+      // task-first language. Four new primary actions and the reviewed label
+      // changes are mirrored in es/de. Machine-authored es/de — FLAGGED FOR
+      // HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "7cddeb2f867057fafee752984c6d9a37a4c96ae6e2447a388c2ce0b211174615",
+      "de-DE": "764f19f6ed485662dbe6fd8377bfe856ec41019c5822a1504221e41c250ab4f2",
     });
   });
 

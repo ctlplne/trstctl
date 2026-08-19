@@ -345,7 +345,7 @@ describe("CA hierarchy and custody surface", () => {
     renderCAHierarchy();
 
     expect(await screen.findByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("heading", { name: "Authority health" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Managed authorities" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Lineage" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Key custody" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Pending actions" })).toBeInTheDocument();
@@ -364,7 +364,7 @@ describe("CA hierarchy and custody surface", () => {
   it("renders issuers with kind, chain, public key, and certificate links", async () => {
     renderCAHierarchy();
 
-    expect(await screen.findByRole("heading", { name: "CA hierarchy" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Certificate authorities" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Issuer visibility" })).toBeInTheDocument();
     expect((await screen.findAllByText("Root CA")).length).toBeGreaterThan(0);
     expect(screen.getByText("x509_ca")).toBeInTheDocument();

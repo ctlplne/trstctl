@@ -91,10 +91,10 @@ describe("space switcher (S-C1)", () => {
     }
 
     // On a certificates route, the Certificates & PKI space is active and its
-    // sidebar shows CA hierarchy / Certificate profiles.
+    // sidebar shows the certificate authority and rule workspaces.
     expect(within(rail).getByRole("button", { name: "Certificates & PKI" })).toHaveAttribute("aria-current", "true");
-    expect(within(nav).getByRole("link", { name: /CA hierarchy/i })).toBeInTheDocument();
-    expect(within(nav).getByRole("link", { name: /Certificate profiles/i })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: /Certificate authorities/i })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: /Certificate rules/i })).toBeInTheDocument();
 
     // Other spaces' surfaces stay out of the sidebar — the space owns it.
     expect(within(nav).queryByRole("link", { name: /Credential graph/i })).not.toBeInTheDocument();
@@ -114,7 +114,7 @@ describe("space switcher (S-C1)", () => {
     await screen.findByRole("heading", { level: 1, name: "Workloads" });
     const nav = screen.getByRole("navigation", { name: /Primary/i });
     await waitFor(() => expect(within(nav).getByRole("link", { name: /SSH trust/i })).toBeInTheDocument());
-    expect(within(nav).queryByRole("link", { name: /CA hierarchy/i })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole("link", { name: /Certificate authorities/i })).not.toBeInTheDocument();
     expect(within(rail).getByRole("button", { name: "Workload & SSH" })).toHaveAttribute("aria-current", "true");
   });
 
@@ -134,7 +134,7 @@ describe("space switcher (S-C1)", () => {
     expect(within(nav).getByRole("link", { name: /Guided setup/i })).toBeInTheDocument();
     expect(within(nav).getByRole("list", { name: "Needs action worklists" })).toBeInTheDocument();
     // Space-owned rows do not leak onto the Home sidebar.
-    expect(within(nav).queryByRole("link", { name: /CA hierarchy/i })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole("link", { name: /Certificate authorities/i })).not.toBeInTheDocument();
   });
 
   it("hides spaces the session cannot use and keeps permitted ones", async () => {

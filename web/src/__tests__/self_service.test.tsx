@@ -96,8 +96,8 @@ describe("self-service credential requests", () => {
     const user = userEvent.setup();
     renderAt("/request");
 
-    expect(await screen.findByRole("heading", { name: "Request credential" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Request credential/i })).toHaveAttribute("href", "/request");
+    expect(await screen.findByRole("heading", { name: "Request a certificate" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Request a certificate/i })).toHaveAttribute("href", "/request");
 
     // Step 1 — choose the issuance profile.
     await waitFor(() => expect(screen.getByLabelText("Profile")).toHaveDisplayValue("web-server v2 active"));
@@ -202,7 +202,7 @@ describe("self-service credential requests", () => {
 
   it("keeps the requester portal accessible", async () => {
     const { container } = renderAt("/request");
-    await screen.findByRole("heading", { name: "Request credential" });
+    await screen.findByRole("heading", { name: "Request a certificate" });
     await waitFor(() => expect(screen.getByLabelText("Profile")).toHaveDisplayValue("web-server v2 active"));
     expect(await axe(container)).toHaveNoViolations();
   });
