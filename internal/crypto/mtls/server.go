@@ -441,9 +441,9 @@ func LoopbackProbeClient(timeout time.Duration) *http.Client {
 	return &http.Client{
 		Timeout: timeout,
 		Transport: &http.Transport{
-			// Loopback liveness only — see the doc comment above.
-			// lgtm[go/disabled-certificate-check] This client can only be handed the
-			// fixed loopback health URL by the binary's internal probe command.
+			// Loopback liveness only — see the doc comment above. This client can
+			// only be handed the fixed loopback health URL by the internal probe.
+			// codeql[go/disabled-certificate-check]
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS12}, // #nosec G402 -- localhost liveness probe of this process's own ephemeral self-signed listener; no credential, no data (CWE-295)
 		},
 	}

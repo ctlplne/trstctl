@@ -50,9 +50,9 @@ export function writeGridPreferences(key: string, preferences: GridPreferences) 
     visibleColumnIds: preferences.visibleColumnIds?.filter(isString),
     views: preferences.views.map(sanitizeView),
   };
-  // lgtm[js/clear-text-storage-of-sensitive-data] Only sanitized view labels,
-  // column identifiers, sort state, and primitive display metadata reach storage;
-  // the SEC-005 regression suite proves credentials and row payloads are dropped.
+  // Only sanitized view labels, column identifiers, sort state, and primitive
+  // display metadata reach storage; SEC-005 proves credentials are dropped.
+  // codeql[js/clear-text-storage-of-sensitive-data]
   localStorage.setItem(gridStorageName(key), JSON.stringify(safe));
 }
 

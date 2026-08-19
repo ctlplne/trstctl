@@ -8,8 +8,8 @@ const kid = process.env.OIDC_KEY_ID || "trstctl-demo-idp";
 
 mkdirSync(outDir, { recursive: true });
 
-// lgtm[js/file-system-race] This is a single Compose init job; output writes use
-// fixed root-owned paths and no second process consumes them until the job exits.
+// This is a single Compose init job; output writes use fixed root-owned paths
+// and no second process consumes them until the job exits.
 if (!existsSync(privateKeyPath) || !existsSync(jwksPath)) {
   const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
   const privatePem = privateKey.export({ type: "pkcs8", format: "pem" });
@@ -18,6 +18,7 @@ if (!existsSync(privateKeyPath) || !existsSync(jwksPath)) {
   jwk.alg = "RS256";
   jwk.use = "sig";
 
+  // codeql[js/file-system-race]
   writeFileSync(privateKeyPath, privatePem, { mode: 0o600 });
   writeFileSync(jwksPath, JSON.stringify({ keys: [jwk] }, null, 2) + "\n", { mode: 0o644 });
 }

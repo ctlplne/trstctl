@@ -150,6 +150,10 @@ func (c HTTPSignedSTSClient) GetCallerIdentity(ctx context.Context, credential [
 	closedClient.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
 		return http.ErrUseLastResponse
 	}
+	// The network authority is rebuilt above from the operator-configured
+	// endpoint, scheme changes and userinfo are rejected, and redirects are
+	// disabled. Attacker-controlled request fields cannot select the peer.
+	// codeql[go/request-forgery]
 	resp, err := closedClient.Do(req)
 	if err != nil {
 		return AWSIdentity{}, err

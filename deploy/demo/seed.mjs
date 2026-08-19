@@ -270,8 +270,8 @@ function mintBootstrapToken(subject = "demo-seeder") {
     throw new Error(`demo bootstrap subject is not a bounded safe label: ${subject}`);
   }
   const tokenFile = subject === "demo-seeder" ? bootstrapTokenFile : `${bootstrapTokenFile}.${subject}`;
-  // lgtm[js/file-system-race] The demo seed is a single Compose init job and
-  // creation below uses flag=wx; a second writer cannot replace its token.
+  // The demo seed is a single Compose init job and creation below uses flag=wx;
+  // a second writer cannot replace its token.
   if (existsSync(tokenFile)) {
     const persisted = readFileSync(tokenFile, "utf8").trim();
     if (!persisted) {
@@ -292,6 +292,7 @@ function mintBootstrapToken(subject = "demo-seeder") {
     "--scopes",
     "*",
   ], { env });
+  // codeql[js/file-system-race]
   writeFileSync(tokenFile, `${token}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
   return token;
 }
@@ -1261,10 +1262,10 @@ export {
 
 const invokedAsProgram = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (invokedAsProgram) {
-  main().catch((err) => {
+  main().catch(() => {
     // Errors can retain request objects in their stack/cause chain. Keep demo
     // logs credential-free and direct operators to the protected diagnostics.
-    console.error(`demo seed failed (${err?.name || "Error"}); inspect the protected container diagnostics`);
+    console.error("demo seed failed; inspect the protected container diagnostics");
     process.exit(1);
   });
 }
