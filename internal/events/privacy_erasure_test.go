@@ -432,6 +432,27 @@ func TestCoreProductionPrivacyCatalogExercisesEverySubjectBearingPath(t *testing
 	}
 }
 
+func TestCoreProductionPrivacyCatalogCoversCertificateExpiring(t *testing.T) {
+	const eventType = "certificate.expiring"
+	if !HasPrivacyEventPolicy(eventType, DefaultSchemaVersion) {
+		t.Fatalf("%s v%d has no privacy policy", eventType, DefaultSchemaVersion)
+	}
+	payload := []byte(`{"certificate_id":"cert-1","serial":"01ab","not_after":"2027-01-02T03:04:05Z"}`)
+	rewritten, changed, err := applyRegisteredPrivacyEventPolicy(
+		payload,
+		"11111111-1111-4111-8111-111111111111",
+		"alice@example.com",
+		eventType,
+		DefaultSchemaVersion,
+	)
+	if err != nil {
+		t.Fatalf("apply %s privacy policy: %v", eventType, err)
+	}
+	if changed || !bytes.Equal(rewritten, payload) {
+		t.Fatalf("opaque %s payload changed: changed=%t got=%s", eventType, changed, rewritten)
+	}
+}
+
 func TestCTSubmissionQueuedPrivacyPolicyRewritesNestedProducerIdentityFields(t *testing.T) {
 	const subject = "operator@example.test"
 	raw := []byte(`{
