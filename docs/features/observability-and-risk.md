@@ -47,6 +47,15 @@ by blast-radius impact, CBOM crypto context, owner state, staleness, and expiry 
 returning priority reasons, evidence refs, severity, and a recommended action — useful
 when two credentials score similarly but differ sharply in blast radius.
 
+The web route calls this decision **What to fix first**. Its default layer turns the
+contextual ranking into a quiet, human-readable worklist with one review action per
+credential. Opening a review shows the recommended next action first. Exact score
+inputs, raw reason codes, the versioned model contract, immutable evidence IDs,
+generation time, and projection coverage are preserved behind an explicit evidence
+disclosure. The certificate-only score table and all supporting posture projections
+remain available in a second disclosure, so an operator can audit the complete model
+without making proof machinery compete with the first decision.
+
 `GET /api/v1/risk/contextual-priorities` also returns the canonical tenant-scoped
 `urgent_summary`. Think of this as counting red lights after combining both served
 maps, rather than counting only one map and accidentally showing zero. It names the

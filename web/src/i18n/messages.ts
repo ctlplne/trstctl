@@ -4081,7 +4081,7 @@ export const messages = {
     description: "Primary navigation item.",
   },
   "nav.item.risk": {
-    defaultMessage: "Credential risk",
+    defaultMessage: "What to fix first",
     description: "Primary navigation item. Matches the Risk page H1 and title (S-A2 naming parity).",
   },
   "nav.item.posture": {
@@ -5264,8 +5264,201 @@ export const messages = {
     description: "Stale NHI table column for remediation recommendation.",
   },
   "risk.contextual.heading": {
-    defaultMessage: "Contextual priorities",
-    description: "Risk page section heading for blast-radius contextual prioritization.",
+    defaultMessage: "Highest-risk credentials",
+    description: "Decision-first heading for the highest contextual credential risks.",
+  },
+  "risk.page.answer": {
+    defaultMessage: "Which credentials create the greatest real-world risk.",
+    description: "One-sentence answer at the top of the What to fix first route.",
+  },
+  "risk.page.details": {
+    defaultMessage:
+      "CAP-POST-05 combines credential score, ownership, expiry, graph impact, and cryptography context. Review a credential to see exact score inputs, the model contract, evidence IDs, generation time, and projection coverage.",
+    description: "Collapsed technical explanation for the risk route.",
+  },
+  "risk.action.reviewTop": {
+    defaultMessage: "Review top risk",
+    description: "Primary action that focuses the first credential in the risk worklist.",
+  },
+  "risk.supporting.title": {
+    defaultMessage: "Score inputs and supporting projections",
+    description: "Disclosure title for the full risk model and posture surfaces.",
+  },
+  "risk.supporting.description": {
+    defaultMessage: "Open the complete score, crypto migration, policy, posture, and certificate projection views.",
+    description: "Explains what remains available inside the supporting evidence disclosure.",
+  },
+  "risk.supporting.open": {
+    defaultMessage: "Show supporting evidence",
+    description: "Closed-state hint for the supporting risk disclosure.",
+  },
+  "risk.supporting.close": {
+    defaultMessage: "Hide supporting evidence",
+    description: "Open-state hint for the supporting risk disclosure.",
+  },
+  "risk.certificateWorklist.title": {
+    defaultMessage: "Certificate score worklist",
+    description: "Heading for the certificate-only score projection inside supporting evidence.",
+  },
+  "risk.certificateWorklist.description": {
+    defaultMessage: "Filter the certificate score projection or open all six score factors.",
+    description: "ELI5 description for the certificate score projection.",
+  },
+  "risk.contextual.decisionSummary": {
+    defaultMessage: "The first {count} items with a concrete next action.",
+    description: "Compact summary above the contextual risk worklist.",
+  },
+  "risk.contextual.analyzedSummary": {
+    defaultMessage: "Credentials analyzed: {count}",
+    description: "Compact coverage count beside the contextual risk worklist.",
+  },
+  "risk.contextual.why": {
+    defaultMessage: "Why it matters",
+    description: "Contextual risk table column for human-readable reasons.",
+  },
+  "risk.contextual.review": {
+    defaultMessage: "Review risk",
+    description: "Row action that opens one contextual risk review.",
+  },
+  "risk.contextual.reviewAria": {
+    defaultMessage: "Review {subject}",
+    description: "Accessible risk row review action label.",
+  },
+  "risk.review.title": {
+    defaultMessage: "Review {subject}",
+    description: "Heading for the selected contextual risk.",
+  },
+  "risk.review.kind": {
+    defaultMessage: "Credential type",
+    description: "Selected risk summary label for credential type.",
+  },
+  "risk.review.affected": {
+    defaultMessage: "Known affected items",
+    description: "Selected risk summary label for blast radius.",
+  },
+  "risk.review.owner": {
+    defaultMessage: "Owner",
+    description: "Selected risk summary label for owner state.",
+  },
+  "risk.review.ownerActive": {
+    defaultMessage: "Active owner",
+    description: "Human label for a credential with an active owner.",
+  },
+  "risk.review.ownerMissing": {
+    defaultMessage: "No active owner",
+    description: "Human label for an orphaned credential.",
+  },
+  "risk.review.expires": {
+    defaultMessage: "Expires",
+    description: "Selected risk summary label for expiration.",
+  },
+  "risk.review.exactEvidence": {
+    defaultMessage: "Exact score and evidence",
+    description: "Disclosure title for exact risk model evidence.",
+  },
+  "risk.review.credentialId": {
+    defaultMessage: "Credential ID",
+    description: "Exact risk evidence label for credential ID.",
+  },
+  "risk.review.rawKind": {
+    defaultMessage: "Raw credential kind",
+    description: "Exact risk evidence label for the machine credential kind.",
+  },
+  "risk.review.contextualScore": {
+    defaultMessage: "Contextual score",
+    description: "Exact risk evidence label for the contextual score.",
+  },
+  "risk.review.baseScore": {
+    defaultMessage: "Base score",
+    description: "Exact risk evidence label for the base score.",
+  },
+  "risk.review.model": {
+    defaultMessage: "Model contract",
+    description: "Exact risk evidence label for the versioned risk capability contract.",
+  },
+  "risk.review.generatedAt": {
+    defaultMessage: "Generated at",
+    description: "Exact risk evidence label for projection generation time.",
+  },
+  "risk.review.projectionCoverage": {
+    defaultMessage: "Projection coverage",
+    description: "Exact risk evidence label for model input projections.",
+  },
+  "risk.review.includedProjections": {
+    defaultMessage: "Urgent-summary projections",
+    description: "Exact risk evidence label for merged urgent projections.",
+  },
+  "risk.review.rawReasons": {
+    defaultMessage: "Raw priority reasons",
+    description: "Exact risk evidence label for machine reason codes.",
+  },
+  "risk.review.scoreInputs": {
+    defaultMessage: "Score inputs",
+    description: "Exact risk evidence label for the six normalized score factors.",
+  },
+  "risk.review.evidenceIds": {
+    defaultMessage: "Evidence IDs",
+    description: "Exact risk evidence heading for immutable evidence references.",
+  },
+  "risk.review.unnamed": {
+    defaultMessage: "Unnamed",
+    description: "Safe fallback for a credential whose projection has no display name.",
+  },
+  "risk.kind.certificate": {
+    defaultMessage: "TLS certificate",
+    description: "Human credential kind label.",
+  },
+  "risk.kind.sshKey": {
+    defaultMessage: "SSH key",
+    description: "Human credential kind label.",
+  },
+  "risk.kind.apiKey": {
+    defaultMessage: "API key",
+    description: "Human credential kind label.",
+  },
+  "risk.kind.token": {
+    defaultMessage: "Token",
+    description: "Human credential kind label.",
+  },
+  "risk.kind.secret": {
+    defaultMessage: "Secret",
+    description: "Human credential kind label.",
+  },
+  "risk.kind.workloadIdentity": {
+    defaultMessage: "Workload identity",
+    description: "Human credential kind label.",
+  },
+  "risk.kind.credential": {
+    defaultMessage: "Credential",
+    description: "Safe fallback human credential kind label.",
+  },
+  "risk.reason.wideImpact": {
+    defaultMessage: "Wide impact",
+    description: "Human risk reason for a large graph blast radius.",
+  },
+  "risk.reason.weakCrypto": {
+    defaultMessage: "Outdated cryptography",
+    description: "Human risk reason for weak or quantum-vulnerable cryptography.",
+  },
+  "risk.reason.noOwner": {
+    defaultMessage: "No active owner",
+    description: "Human risk reason for an orphaned credential.",
+  },
+  "risk.reason.nearExpiry": {
+    defaultMessage: "Expires soon",
+    description: "Human risk reason for near expiry.",
+  },
+  "risk.reason.overdueRotation": {
+    defaultMessage: "Rotation overdue",
+    description: "Human risk reason for stale rotation.",
+  },
+  "risk.reason.highPrivilege": {
+    defaultMessage: "High privilege",
+    description: "Human risk reason for elevated privilege.",
+  },
+  "risk.reason.other": {
+    defaultMessage: "Needs review",
+    description: "Safe fallback human risk reason.",
   },
   "risk.urgent.loading": {
     defaultMessage: "Loading urgent risk across every projection.",

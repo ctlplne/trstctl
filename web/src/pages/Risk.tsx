@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from "react";
 import { Info } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import {
   api,
   type ContextualRiskPriorities,
+  type ContextualRiskPriority,
   type CredentialRisk,
   type NHIExposurePosture,
   type NHIOverPrivilegePosture,
@@ -84,6 +85,8 @@ export function Risk() {
   const [contextualRisk, setContextualRisk] = useState<ContextualRiskPriorities | null>(null);
   const [contextualRiskLoading, setContextualRiskLoading] = useState(true);
   const [contextualRiskError, setContextualRiskError] = useState<string | null>(null);
+  const [reviewedPriorityID, setReviewedPriorityID] = useState<string | null>(null);
+  const topPriorityButtonRef = useRef<HTMLButtonElement>(null);
   const certRows = useMemo(() => (data ?? []).filter(isCertificateRisk), [data]);
   const rows = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -93,6 +96,10 @@ export function Risk() {
     );
   }, [certRows, search]);
   const expandedRisk = useMemo(() => certRows.find((row) => row.credential_id === expanded) ?? null, [certRows, expanded]);
+  const reviewedPriority = useMemo(
+    () => contextualRisk?.priorities?.find((priority) => priority.credential_id === reviewedPriorityID) ?? null,
+    [contextualRisk, reviewedPriorityID],
+  );
 
   useEffect(() => {
     let active = true;
@@ -312,101 +319,136 @@ export function Risk() {
     [expanded],
   );
 
+  function reviewTopRisk() {
+    topPriorityButtonRef.current?.scrollIntoView?.({ block: "center" });
+    topPriorityButtonRef.current?.focus();
+  }
+
   return (
-    <section aria-labelledby="risk-heading" className="min-w-0 w-full max-w-full">
+    <section aria-labelledby="risk-heading" className="grid min-w-0 w-full max-w-full gap-6">
       <PageHeader
         titleId="risk-heading"
         title={t("nav.item.risk")}
-        description="A ranked list of individual credentials by urgency — what to rotate first. For fleet-wide crypto hygiene like configuration drift and post-quantum readiness, see Crypto posture."
+        description={t("risk.page.answer")}
+        technicalDetails={t("risk.page.details")}
+        actions={
+          <Button type="button" onClick={reviewTopRisk} disabled={contextualRiskLoading || !contextualRisk?.priorities?.length}>
+            {t("risk.action.reviewTop")}
+          </Button>
+        }
       />
 
-      <RiskPosture summary={contextualRisk?.urgent_summary ?? null} loading={contextualRiskLoading} error={contextualRiskError} />
-      {/* M2: which crypto to migrate FIRST, ordered by who actually depends on
-          it rather than by severity alone. Sits above the per-credential list
-          because it answers the sequencing question that comes before "what do
-          I rotate today". */}
-      <CryptoReadinessPanel />
-      <ContextualRiskPanel priorities={contextualRisk} loading={contextualRiskLoading} error={contextualRiskError} />
-      <NHIPolicyCompliancePanel posture={nhiPolicyCompliance} loading={nhiPolicyComplianceLoading} error={nhiPolicyComplianceError} />
-      <NHIOverPrivilegePanel posture={nhiPosture} loading={nhiPostureLoading} error={nhiPostureError} />
-      <NHIStalePanel posture={nhiStalePosture} loading={nhiStalePostureLoading} error={nhiStalePostureError} />
-      <NHIStaticPanel posture={nhiStaticPosture} loading={nhiStaticPostureLoading} error={nhiStaticPostureError} />
-      <NHIExposurePanel posture={nhiExposurePosture} loading={nhiExposurePostureLoading} error={nhiExposurePostureError} />
-
-      <RiskLegend />
-
-      <DataGrid
-        ariaLabel="Certificate risk scores"
-        rows={rows}
-        columns={columns}
-        getRowId={(risk) => risk.credential_id}
-        state={loading ? "loading" : error ? "error" : rows.length === 0 ? "empty" : "ready"}
-        stateTitle={error ? "Could not load risk scores" : "No matching certificate rows"}
-        stateMessage={error ?? "No certificate risk scores match the current filter."}
-        sort={sort}
-        onSort={applySort}
-        showColumnChooser
-        className="min-w-0"
-        toolbar={({ columnChooser }) => (
-          <DataGridToolbar
-            searchLabel="Search credential risk rows"
-            searchPlaceholder="Search credential or owner state"
-            searchValue={search}
-            onSearchChange={setSearch}
-            filters={
-              <RiskFilterForm
-                minScore={minScore}
-                privilege={privilege}
-                owner={owner}
-                onMinScore={setMinScore}
-                onPrivilege={setPrivilege}
-                onOwner={setOwner}
-                onSubmit={applyFilters}
-              />
-            }
-            columnChooser={columnChooser}
-          />
-        )}
+      <ContextualRiskPanel
+        priorities={contextualRisk}
+        loading={contextualRiskLoading}
+        error={contextualRiskError}
+        reviewedID={reviewedPriorityID}
+        onReview={setReviewedPriorityID}
+        topReviewRef={topPriorityButtonRef}
       />
 
-      {expandedRisk && (
-        <section aria-labelledby="risk-detail-heading" className="mt-4 rounded-panel border border-border bg-card p-4 shadow-elevation1">
-          <h2 id="risk-detail-heading" className="mb-2 text-title font-semibold">
-            {translateNow("source.six.factor.breakdown.for.e30661db39")} {expandedRisk.subject}
-          </h2>
-          <RiskDetail risk={expandedRisk} activeFactor={topFactor(expandedRisk)} />
-        </section>
-      )}
+      {reviewedPriority && contextualRisk && <ContextualRiskReview priority={reviewedPriority} context={contextualRisk} />}
+
+      <details className="group overflow-hidden rounded-panel border border-border bg-card">
+        <summary className="cursor-pointer list-none px-4 py-3 marker:hidden hover:bg-muted/40">
+          <span className="block text-sm font-semibold">{t("risk.supporting.title")}</span>
+          <span className="mt-0.5 block text-caption text-muted-foreground">{t("risk.supporting.description")}</span>
+          <span className="mt-2 block text-xs text-muted-foreground group-open:hidden">{t("risk.supporting.open")}</span>
+          <span className="mt-2 hidden text-xs text-muted-foreground group-open:block">{t("risk.supporting.close")}</span>
+        </summary>
+        <div className="grid min-w-0 gap-5 border-t border-border p-4">
+          <RiskPosture summary={contextualRisk?.urgent_summary ?? null} loading={contextualRiskLoading} error={contextualRiskError} />
+          <CryptoReadinessPanel />
+          <NHIPolicyCompliancePanel posture={nhiPolicyCompliance} loading={nhiPolicyComplianceLoading} error={nhiPolicyComplianceError} />
+          <NHIOverPrivilegePanel posture={nhiPosture} loading={nhiPostureLoading} error={nhiPostureError} />
+          <NHIStalePanel posture={nhiStalePosture} loading={nhiStalePostureLoading} error={nhiStalePostureError} />
+          <NHIStaticPanel posture={nhiStaticPosture} loading={nhiStaticPostureLoading} error={nhiStaticPostureError} />
+          <NHIExposurePanel posture={nhiExposurePosture} loading={nhiExposurePostureLoading} error={nhiExposurePostureError} />
+
+          <section aria-labelledby="certificate-risk-heading" className="min-w-0">
+            <h2 id="certificate-risk-heading" className="mb-1 text-title font-semibold">
+              {t("risk.certificateWorklist.title")}
+            </h2>
+            <p className="mb-3 text-sm text-muted-foreground">{t("risk.certificateWorklist.description")}</p>
+            <RiskLegend />
+
+            <DataGrid
+              ariaLabel="Certificate risk scores"
+              rows={rows}
+              columns={columns}
+              getRowId={(risk) => risk.credential_id}
+              state={loading ? "loading" : error ? "error" : rows.length === 0 ? "empty" : "ready"}
+              stateTitle={error ? "Could not load risk scores" : "No matching certificate rows"}
+              stateMessage={error ?? "No certificate risk scores match the current filter."}
+              sort={sort}
+              onSort={applySort}
+              showColumnChooser
+              className="min-w-0"
+              toolbar={({ columnChooser }) => (
+                <DataGridToolbar
+                  searchLabel="Search credential risk rows"
+                  searchPlaceholder="Search credential or owner state"
+                  searchValue={search}
+                  onSearchChange={setSearch}
+                  filters={
+                    <RiskFilterForm
+                      minScore={minScore}
+                      privilege={privilege}
+                      owner={owner}
+                      onMinScore={setMinScore}
+                      onPrivilege={setPrivilege}
+                      onOwner={setOwner}
+                      onSubmit={applyFilters}
+                    />
+                  }
+                  columnChooser={columnChooser}
+                />
+              )}
+            />
+
+            {expandedRisk && (
+              <section aria-labelledby="risk-detail-heading" className="mt-4 rounded-panel border border-border bg-card p-4 shadow-elevation1">
+                <h2 id="risk-detail-heading" className="mb-2 text-title font-semibold">
+                  {translateNow("source.six.factor.breakdown.for.e30661db39")} {expandedRisk.subject}
+                </h2>
+                <RiskDetail risk={expandedRisk} activeFactor={topFactor(expandedRisk)} />
+              </section>
+            )}
+          </section>
+        </div>
+      </details>
     </section>
   );
 }
 
-function ContextualRiskPanel({ priorities, loading, error }: { priorities: ContextualRiskPriorities | null; loading: boolean; error: string | null }) {
+function ContextualRiskPanel({
+  priorities,
+  loading,
+  error,
+  reviewedID,
+  onReview,
+  topReviewRef,
+}: {
+  priorities: ContextualRiskPriorities | null;
+  loading: boolean;
+  error: string | null;
+  reviewedID: string | null;
+  onReview: (credentialID: string) => void;
+  topReviewRef: RefObject<HTMLButtonElement>;
+}) {
   const { t } = useTranslation();
   const topPriorities = priorities?.priorities?.slice(0, 5) ?? [];
   return (
-    <section aria-labelledby="contextual-risk-heading" className="mb-4 min-w-0 w-full max-w-full border-b border-border pb-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <section aria-labelledby="contextual-risk-heading" className="min-w-0 w-full max-w-full border-b border-border pb-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 id="contextual-risk-heading" className="text-title font-semibold">
             {t("risk.contextual.heading")}
           </h2>
-          {priorities && (
-            <p className="mt-1 text-sm text-muted-foreground">
-              {t("risk.contextual.summary", {
-                priorities: priorities.summary.priorities,
-                total: priorities.summary.total_analyzed,
-                highBlast: priorities.summary.high_blast_radius,
-                weakCrypto: priorities.summary.weak_crypto_context,
-              })}
-            </p>
-          )}
+          {priorities && <p className="mt-1 text-sm text-muted-foreground">{t("risk.contextual.decisionSummary", { count: topPriorities.length })}</p>}
         </div>
         {priorities && (
-          <StatusBadge
-            vocabulary="risk"
-            value={priorities.summary.critical > 0 ? "critical" : priorities.summary.high > 0 ? "high" : priorities.summary.medium > 0 ? "medium" : "low"}
-          />
+          <p className="text-caption text-muted-foreground">{t("risk.contextual.analyzedSummary", { count: priorities.summary.total_analyzed })}</p>
         )}
       </div>
 
@@ -419,53 +461,173 @@ function ContextualRiskPanel({ priorities, loading, error }: { priorities: Conte
       {!loading && !error && priorities && topPriorities.length === 0 && <p className="mt-3 text-sm text-muted-foreground">{t("risk.contextual.empty")}</p>}
       {!loading && !error && topPriorities.length > 0 && (
         <div className="mt-3 min-w-0 w-full max-w-full overflow-x-auto">
-          <table className="ui-table min-w-[58rem]">
+          <table className="ui-table min-w-[48rem]">
             <caption className="sr-only">{t("risk.contextual.caption")}</caption>
             <thead>
               <tr>
                 <th scope="col">{t("risk.contextual.credential")}</th>
-                <th scope="col">{t("risk.contextual.priority")}</th>
+                <th scope="col">{t("risk.contextual.why")}</th>
                 <th scope="col">{t("risk.contextual.blastRadius")}</th>
                 <th scope="col">{t("risk.contextual.action")}</th>
               </tr>
             </thead>
             <tbody>
-              {topPriorities.map((priority) => (
-                <tr key={priority.credential_id}>
-                  <td>
-                    <p className="font-medium">{priority.subject}</p>
-                    <p className="text-caption text-muted-foreground">
-                      #{priority.rank} · {priority.credential_id}
-                    </p>
-                  </td>
-                  <td>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <StatusBadge vocabulary="risk" value={priority.severity} />
-                      <span>
-                        {t("risk.contextual.scoreValue", {
-                          contextual: priority.contextual_score.toFixed(1),
-                          base: priority.base_score.toFixed(1),
-                        })}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-caption text-muted-foreground">{priority.priority_reasons.join(", ")}</p>
-                  </td>
-                  <td>
-                    {t("risk.contextual.blastValue", {
-                      total: priority.blast_radius,
-                      resources: priority.resource_blast_radius,
-                      cryptoAssets: priority.crypto_asset_blast_radius,
-                    })}
-                  </td>
-                  <td>{priority.recommended_action}</td>
-                </tr>
-              ))}
+              {topPriorities.map((priority, index) => {
+                const subject = riskPrioritySubject(priority);
+                return (
+                  <tr key={priority.credential_id} aria-current={reviewedID === priority.credential_id ? "true" : undefined}>
+                    <td>
+                      <p className="font-medium">{subject}</p>
+                      <p className="text-caption text-muted-foreground">{humanCredentialKind(priority.kind)}</p>
+                    </td>
+                    <td>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <StatusBadge vocabulary="risk" value={priority.severity} />
+                        {priority.priority_reasons.slice(0, 3).map((reason) => (
+                          <span key={reason} className="rounded-control border border-border px-2 py-1 text-caption text-muted-foreground">
+                            {contextualReasonLabel(reason)}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td>
+                      {t("risk.contextual.blastValue", {
+                        total: priority.blast_radius,
+                        resources: priority.resource_blast_radius,
+                        cryptoAssets: priority.crypto_asset_blast_radius,
+                      })}
+                    </td>
+                    <td>
+                      <Button
+                        ref={index === 0 ? topReviewRef : undefined}
+                        type="button"
+                        size="sm"
+                        variant={reviewedID === priority.credential_id ? "secondary" : "outline"}
+                        aria-label={t("risk.contextual.reviewAria", { subject })}
+                        onClick={() => onReview(priority.credential_id)}
+                      >
+                        {t("risk.contextual.review")}
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
     </section>
   );
+}
+
+function ContextualRiskReview({ priority, context }: { priority: ContextualRiskPriority; context: ContextualRiskPriorities }) {
+  const { t } = useTranslation();
+  const subject = riskPrioritySubject(priority);
+  return (
+    <section aria-labelledby="contextual-review-heading" className="rounded-panel border border-border bg-card p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 id="contextual-review-heading" className="text-title font-semibold">
+            {t("risk.review.title", { subject })}
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{priority.recommended_action}</p>
+        </div>
+        <StatusBadge vocabulary="risk" value={priority.severity} />
+      </div>
+
+      <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+        <RiskFact label={t("risk.review.kind")} value={humanCredentialKind(priority.kind)} />
+        <RiskFact label={t("risk.review.affected")} value={String(priority.blast_radius)} />
+        <RiskFact label={t("risk.review.owner")} value={priority.owner_active ? t("risk.review.ownerActive") : t("risk.review.ownerMissing")} />
+        <RiskFact label={t("risk.review.expires")} value={formatDate(priority.expires_at)} />
+      </dl>
+
+      <details className="group mt-4 border-t border-border pt-4">
+        <summary className="cursor-pointer text-sm font-medium">{t("risk.review.exactEvidence")}</summary>
+        <div className="mt-3 grid gap-4 rounded-control bg-muted/25 p-3">
+          <dl className="grid gap-3 text-sm md:grid-cols-2 xl:grid-cols-4">
+            <RiskFact label={t("risk.review.credentialId")} value={priority.credential_id} mono />
+            <RiskFact label={t("risk.review.rawKind")} value={priority.kind} mono />
+            <RiskFact label={t("risk.review.contextualScore")} value={priority.contextual_score.toFixed(1)} />
+            <RiskFact label={t("risk.review.baseScore")} value={priority.base_score.toFixed(1)} />
+            <RiskFact label={t("risk.review.model")} value={context.capability} mono />
+            <RiskFact label={t("risk.review.generatedAt")} value={context.generated_at} mono />
+            <RiskFact label={t("risk.review.projectionCoverage")} value={context.coverage.join(", ")} mono />
+            <RiskFact label={t("risk.review.includedProjections")} value={context.urgent_summary.included_projections.join(", ")} mono />
+            <RiskFact label={t("risk.review.rawReasons")} value={priority.priority_reasons.join(", ")} mono />
+            <RiskFact
+              label={t("risk.review.scoreInputs")}
+              value={factorKeys.map((factor) => `${factor}=${factorPercent(priority.components[factor])}`).join(", ")}
+              mono
+            />
+          </dl>
+          <div>
+            <h3 className="text-sm font-medium">{t("risk.review.evidenceIds")}</h3>
+            <ul className="mt-1 grid gap-1 font-mono text-xs text-muted-foreground">
+              {priority.evidence_refs.map((reference) => (
+                <li key={reference}>{reference}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </details>
+    </section>
+  );
+}
+
+function RiskFact({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="min-w-0 rounded-control border border-border p-2">
+      <dt className="text-caption font-medium text-muted-foreground">{label}</dt>
+      <dd className={mono ? "mt-1 break-all font-mono text-xs" : "mt-1 break-words"}>{value || "—"}</dd>
+    </div>
+  );
+}
+
+function riskPrioritySubject(priority: ContextualRiskPriority): string {
+  return priority.subject.trim() || `${translateNow("risk.review.unnamed")} ${humanCredentialKind(priority.kind)}`;
+}
+
+function humanCredentialKind(kind: string): string {
+  switch (kind) {
+    case "certificate":
+    case "x509_certificate":
+      return translateNow("risk.kind.certificate");
+    case "ssh_key":
+      return translateNow("risk.kind.sshKey");
+    case "api_key":
+      return translateNow("risk.kind.apiKey");
+    case "token":
+      return translateNow("risk.kind.token");
+    case "secret":
+      return translateNow("risk.kind.secret");
+    case "spiffe":
+    case "workload_identity":
+      return translateNow("risk.kind.workloadIdentity");
+    default:
+      return translateNow("risk.kind.credential");
+  }
+}
+
+function contextualReasonLabel(reason: string): string {
+  switch (reason) {
+    case "high_blast_radius":
+    case "resource_blast_radius":
+      return translateNow("risk.reason.wideImpact");
+    case "weak_crypto_context":
+      return translateNow("risk.reason.weakCrypto");
+    case "orphaned_owner":
+      return translateNow("risk.reason.noOwner");
+    case "near_expiry":
+      return translateNow("risk.reason.nearExpiry");
+    case "stale_rotation":
+      return translateNow("risk.reason.overdueRotation");
+    case "privileged_credential":
+    case "high_privilege":
+      return translateNow("risk.reason.highPrivilege");
+    default:
+      return translateNow("risk.reason.other");
+  }
 }
 
 function NHIPolicyCompliancePanel({ posture, loading, error }: { posture: NHIPolicyCompliance | null; loading: boolean; error: string | null }) {

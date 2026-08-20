@@ -636,6 +636,101 @@ describe("operational console surface", () => {
     expect(await screen.findByText(/Could not run graph query: query parser rejected RETURN/)).toBeInTheDocument();
   });
 
+  it("makes risk a quiet what-to-fix-first worklist while retaining exact proof", async () => {
+    apiMock.risk.mockResolvedValue([
+      riskRow({
+        credential_id: "cert-payments",
+        subject: "payments-api.prod",
+        score: 64.4,
+        owner_active: true,
+      }),
+    ]);
+    apiMock.contextualRiskPriorities.mockResolvedValue({
+      ...emptyContextualRiskPriorities(),
+      capability: "CAP-POST-05",
+      generated_at: "2026-08-20T12:00:00Z",
+      coverage: ["credential_risk_scores", "graph_blast_radius", "cbom_crypto_context"],
+      summary: {
+        ...emptyContextualRiskPriorities().summary,
+        total_analyzed: 1,
+        priorities: 1,
+        critical: 1,
+        high_blast_radius: 1,
+        weak_crypto_context: 1,
+        recommendations: 1,
+      },
+      urgent_summary: {
+        status: "complete",
+        scope: "All served risk projections for this tenant.",
+        included_projections: ["credential_risk_scores", "contextual_priorities"],
+        unique_analyzed: 1,
+        urgent: 1,
+        critical: 1,
+        high: 0,
+        credential_risk: { analyzed: 1, critical: 0, high: 0 },
+        contextual_priorities: { analyzed: 1, critical: 1, high: 0 },
+      },
+      priorities: [
+        {
+          rank: 1,
+          credential_id: "cert-payments",
+          subject: "payments-api.prod",
+          kind: "certificate",
+          severity: "critical",
+          contextual_score: 96.4,
+          base_score: 64.4,
+          blast_radius: 4,
+          resource_blast_radius: 1,
+          workload_blast_radius: 0,
+          credential_blast_radius: 0,
+          crypto_asset_blast_radius: 3,
+          weak_crypto_context: 3,
+          privilege: 2,
+          sensitivity: 1,
+          owner_active: true,
+          expires_at: "2026-08-29T00:00:00Z",
+          components: { age: 0.8, rotation: 0.7, privilege: 0.7, exposure: 0.2, owner: 0, sensitivity: 0.5 },
+          priority_reasons: ["high_blast_radius", "weak_crypto_context"],
+          evidence_refs: ["credential:cert-payments", "graph:blast-radius:cert:cert-payments"],
+          recommended_action: "Rotate and redeploy before lower-blast-radius work.",
+        },
+      ],
+    });
+    const user = userEvent.setup();
+
+    renderAt("/risk");
+
+    expect(await screen.findByRole("heading", { name: "What to fix first" })).toBeInTheDocument();
+    expect(screen.getByText("Which credentials create the greatest real-world risk.")).toBeInTheDocument();
+    const pageAction = screen.getByRole("button", { name: "Review top risk" });
+    const topReview = await screen.findByRole("button", { name: "Review payments-api.prod" });
+    expect(screen.getByRole("heading", { name: "Highest-risk credentials" })).toBeInTheDocument();
+    expect(screen.getByText("Wide impact")).toBeInTheDocument();
+    expect(screen.getByText("Outdated cryptography")).toBeInTheDocument();
+    expect(screen.queryByText("high_blast_radius, weak_crypto_context")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Crypto migration sequencing" })).not.toBeVisible();
+
+    await user.click(pageAction);
+    expect(topReview).toHaveFocus();
+    await user.click(topReview);
+    expect(screen.getByRole("heading", { name: "Review payments-api.prod" })).toBeInTheDocument();
+    expect(screen.getByText("Rotate and redeploy before lower-blast-radius work.")).toBeInTheDocument();
+
+    const exactEvidence = screen.getByText("Exact score and evidence").closest("details");
+    expect(exactEvidence).not.toHaveAttribute("open");
+    expect(screen.getByText("cert-payments")).not.toBeVisible();
+    await user.click(screen.getByText("Exact score and evidence"));
+    expect(screen.getByText("cert-payments")).toBeVisible();
+    expect(screen.getByText("CAP-POST-05")).toBeVisible();
+    expect(screen.getByText("graph:blast-radius:cert:cert-payments")).toBeVisible();
+    expect(screen.getByText("credential_risk_scores, graph_blast_radius, cbom_crypto_context")).toBeVisible();
+
+    const supporting = screen.getByText("Score inputs and supporting projections").closest("details");
+    expect(supporting).not.toHaveAttribute("open");
+    await user.click(screen.getByText("Score inputs and supporting projections"));
+    expect(screen.getByRole("heading", { name: "Crypto migration sequencing" })).toBeVisible();
+  });
+
   it("routes to risk, expands all six served components, and sends server-side sort and filters", async () => {
     apiMock.risk.mockResolvedValue([
       riskRow({
@@ -860,7 +955,7 @@ describe("operational console surface", () => {
     const user = userEvent.setup();
     renderAt("/risk");
 
-    expect(await screen.findByRole("heading", { name: "Credential risk" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "What to fix first" })).toBeInTheDocument();
     await waitFor(() => expect(apiMock.risk).toHaveBeenCalledWith({ sort: "score" }));
     await waitFor(() => expect(apiMock.contextualRiskPriorities).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(apiMock.nhiPolicyCompliance).toHaveBeenCalledTimes(1));
@@ -868,11 +963,13 @@ describe("operational console surface", () => {
     await waitFor(() => expect(apiMock.nhiStalePosture).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(apiMock.nhiStaticPosture).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(apiMock.nhiExposurePosture).toHaveBeenCalledTimes(1));
-    expect(screen.getByRole("heading", { name: "Contextual priorities" })).toBeInTheDocument();
-    expect(screen.getByText(/CAP-POST-05: 2 prioritized of 2 credentials; 1 high-blast-radius/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Highest-risk credentials" })).toBeInTheDocument();
+    expect(screen.getByText("Credentials analyzed: 2")).toBeInTheDocument();
     expect(screen.getByText("payments-api.prod")).toBeInTheDocument();
-    expect(screen.getByText("high_blast_radius, weak_crypto_context")).toBeInTheDocument();
+    expect(screen.getByText("Wide impact")).toBeInTheDocument();
+    expect(screen.getByText("Outdated cryptography")).toBeInTheDocument();
     expect(screen.getByText("4 affected; 1 resources, 3 crypto assets")).toBeInTheDocument();
+    await user.click(screen.getByText("Score inputs and supporting projections"));
     expect(screen.getByRole("heading", { name: "NHI policy compliance" })).toBeInTheDocument();
     expect(screen.getByText(/CAP-GOV-03: 2 policy violations across 3 governed NHIs/)).toBeInTheDocument();
     expect(screen.getByText("governed-ci-token")).toBeInTheDocument();
@@ -1004,7 +1101,9 @@ describe("operational console surface", () => {
     renderAt("/risk");
 
     expect(await screen.findByText("ssh-key-prod")).toBeInTheDocument();
-    expect(screen.getByText(/CAP-POST-05: 1 prioritized of 1 credentials; 1 high-blast-radius/)).toBeInTheDocument();
+    expect(screen.getByText("Credentials analyzed: 1")).toBeInTheDocument();
+    expect(screen.getByText("Wide impact")).toBeInTheDocument();
+    expect(screen.getByText("No active owner")).toBeInTheDocument();
     expect(screen.queryByText("Certificates only today")).not.toBeInTheDocument();
     expect(screen.queryByText(/Risk scoring covers certificates today/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/waiting on console support/i)).not.toBeInTheDocument();

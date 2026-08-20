@@ -196,14 +196,19 @@ signature-verified host-agent trust readback and live-listener receipts move a g
 Backed by `/api/v1/migrations/assess`, `/api/v1/migrations/runs`, and the
 `/api/v1/migrations/runs/{id}/{pause,resume,rollback}` mutations.
 
-### Risk (`/risk`)
+### What to fix first (`/risk`)
 
-Risk is the ranked-by-urgency list of individual credentials — what to rotate first —
-scored on age, rotation history, privilege, exposure, owner, and sensitivity, with a
-per-row factor breakdown. Alongside it sit contextual risk priorities and NHI
-posture panels for policy compliance, over-privilege, stale, and static credentials,
-and exposure. For fleet-wide crypto hygiene (drift, PQC readiness) see Posture
-instead. Backed by `/api/v1/risk/credentials`, `/api/v1/risk/contextual-priorities`,
+What to fix first opens with one ranked worklist of the credentials that create the
+greatest real-world risk. Human-readable reasons explain why each item matters, and
+**Review risk** shows the recommended action. Exact IDs, raw reason codes, the
+versioned `CAP-POST-05` model contract, score inputs, evidence IDs, generation time,
+and projection coverage remain available under **Exact score and evidence**.
+
+The full certificate score projection and NHI posture panels for policy compliance,
+over-privilege, stale/static credentials, and exposure stay available under **Score
+inputs and supporting projections**. They do not compete with the default decision.
+For fleet-wide crypto hygiene (drift, PQC readiness), see Posture. Backed by
+`/api/v1/risk/credentials`, `/api/v1/risk/contextual-priorities`,
 `/api/v1/nhi/policy/compliance`, `/api/v1/nhi/posture/overprivilege`,
 `/api/v1/nhi/posture/stale`, `/api/v1/nhi/posture/static-credentials`, and
 `/api/v1/nhi/posture/exposure`.
@@ -487,7 +492,7 @@ grounded and sufficient. Backed by `/api/v1/ai/status`, `/api/v1/mcp/tools`, `/a
 | `/agents` | Agents |
 | `/workloads` | Workloads |
 | `/discovery` | Find unmanaged credentials |
-| `/risk` | Risk |
+| `/risk` | What to fix first |
 | `/posture` | Posture |
 | `/graph` | Graph |
 | `/incidents` | Incidents |

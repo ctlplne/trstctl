@@ -620,11 +620,11 @@
         </header>
         <div class="tour-body">
           <ol>
-            <li>In the <strong>Posture &amp; response</strong> space, click <strong>Credential risk</strong>.</li>
-            <li>Read the summary: credentials scored, critical, high, orphaned, and average score.</li>
-            <li>In <strong>Contextual priorities</strong>, compare the base score with contextual score. Blast radius can make a moderate credential urgent.</li>
+            <li>In the <strong>Posture &amp; response</strong> space, click <strong>What to fix first</strong>.</li>
+            <li>Start with <strong>Highest-risk credentials</strong>: each row states why the credential matters in plain language.</li>
+            <li>Click <strong>Review risk</strong> on an item. Read the recommended action, then open <strong>Exact score and evidence</strong> to inspect its model contract, score inputs, raw reason codes, evidence IDs, and projection coverage.</li>
             <li>Find the demo entries such as <code>old-vpn.demo.trstctl.local:443</code> and <code>ci/buildkite/release-token</code>.</li>
-            <li>Review <strong>NHI policy compliance</strong>, <strong>over-privilege</strong>, <strong>stale and dormant NHIs</strong>, <strong>static credentials</strong>, and <strong>exposed deployments</strong>.</li>
+            <li>Open <strong>Score inputs and supporting projections</strong> to review certificate scores, <strong>NHI policy compliance</strong>, <strong>over-privilege</strong>, <strong>stale and dormant NHIs</strong>, <strong>static credentials</strong>, and <strong>exposed deployments</strong>.</li>
             <li>Open <strong>Risk bands</strong> to see how scores map to critical, high, medium, low, and none.</li>
           </ol>
           <div class="expected"><strong>Expected:</strong> A ranked list with human-readable reasons such as blast radius, orphaned owner, near expiry, and stale rotation.</div>
