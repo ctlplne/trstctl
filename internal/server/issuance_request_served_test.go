@@ -241,7 +241,11 @@ func TestServedApprovedIssuanceRequestCanBePreparedIssuedAndCompleted(t *testing
 		t.Fatalf("create request profile: status %d body %s", status, body)
 	}
 
-	hostKey, err := trstcrypto.GenerateHostSubjectKey("qa-design-partner-mtls", []string{"qa-design-partner-mtls"})
+	// The request subject is a friendly work-item label. A requester-held CSR is
+	// allowed to carry the real X.509 name, and completion must not confuse the
+	// two different concepts when locating signer evidence.
+	csrName := "qa-design-partner.demo.trstctl.local"
+	hostKey, err := trstcrypto.GenerateHostSubjectKey(csrName, []string{csrName})
 	if err != nil {
 		t.Fatalf("generate requester-held CSR: %v", err)
 	}
@@ -315,8 +319,9 @@ func TestServedApprovedIssuanceRequestCanBePreparedIssuedAndCompleted(t *testing
 	if err := h.srv.Drain(t.Context()); err != nil {
 		t.Fatalf("drain request issuance outbox: %v", err)
 	}
-	preCompletionCerts, preCompletionErr := h.store.ListActiveIssuedCertificatesForIdentity(
-		t.Context(), h.tenant, ownerID, "qa-design-partner-mtls")
+	certificateKey := "issue:transition:" + issueKey
+	preCompletionCerts, preCompletionErr := h.store.ListCertificatesByIssuanceIdempotencyKey(
+		t.Context(), h.tenant, certificateKey)
 	if preCompletionErr != nil {
 		t.Fatalf("read pre-completion certificate evidence: %v", preCompletionErr)
 	}
@@ -353,14 +358,14 @@ func TestServedApprovedIssuanceRequestCanBePreparedIssuedAndCompleted(t *testing
 		t.Fatalf("completed request = %+v", completed)
 	}
 
-	certs, err := h.store.ListActiveIssuedCertificatesForIdentity(t.Context(), h.tenant, ownerID, "qa-design-partner-mtls")
+	certs, err := h.store.ListCertificatesByIssuanceIdempotencyKey(t.Context(), h.tenant, certificateKey)
 	if err != nil || len(certs) != 1 {
 		t.Fatalf("matching issued certificates = %d err=%v", len(certs), err)
 	}
-	if certs[0].IssuanceIdempotencyKey != "issue:transition:"+issueKey ||
+	if certs[0].IssuanceIdempotencyKey != certificateKey || certs[0].Subject == "CN=qa-design-partner-mtls" ||
 		(len(certs[0].CertificateDER) == 0 && len(certs[0].CertificatePEM) == 0) {
-		t.Fatalf("issued certificate is not bound to the approved request: key=%q der=%d pem=%d",
-			certs[0].IssuanceIdempotencyKey, len(certs[0].CertificateDER), len(certs[0].CertificatePEM))
+		t.Fatalf("issued certificate is not bound to the approved request and real CSR name: key=%q subject=%q der=%d pem=%d",
+			certs[0].IssuanceIdempotencyKey, certs[0].Subject, len(certs[0].CertificateDER), len(certs[0].CertificatePEM))
 	}
 
 	for _, eventType := range []string{"issuance.request.prepared", "identity.issued", "certificate.recorded", "issuance.request.issued"} {
