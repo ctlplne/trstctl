@@ -5521,8 +5521,8 @@ export const messages = {
     description: "Empty-state text for contextual risk priorities.",
   },
   "risk.contextual.caption": {
-    defaultMessage: "Blast-radius contextual risk priorities",
-    description: "Accessible caption for the contextual risk table.",
+    defaultMessage: "Highest-risk credentials and known affected items",
+    description: "Plain-language accessible caption for the contextual risk table.",
   },
   "risk.contextual.credential": {
     defaultMessage: "Credential",

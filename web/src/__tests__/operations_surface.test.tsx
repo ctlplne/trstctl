@@ -728,6 +728,7 @@ describe("operational console surface", () => {
     const pageAction = screen.getByRole("button", { name: "Review top risk" });
     const topReview = await screen.findByRole("button", { name: "Review payments-api.prod" });
     expect(screen.getByRole("heading", { name: "Highest-risk credentials" })).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "Highest-risk credentials and known affected items" })).toBeInTheDocument();
     expect(screen.getByText("Showing the top 2 with a concrete next action.")).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Known affected items" })).toBeInTheDocument();
     expect(within(topReview.closest("tr") as HTMLElement).getByText("4")).toBeInTheDocument();

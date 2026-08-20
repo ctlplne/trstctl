@@ -1503,7 +1503,7 @@ const translatedValues = [
   "Cargando prioridades contextuales.",
   "Prioridades contextuales no disponibles",
   "No se detectaron prioridades de riesgo contextual.",
-  "Prioridades de riesgo contextual por radio de impacto",
+  "Credenciales de mayor riesgo y elementos afectados conocidos",
   "Credencial",
   "Prioridad",
   "Elementos afectados conocidos",

@@ -1479,7 +1479,7 @@ const deDECatalog = {
   "risk.contextual.loading": "Kontextuelle Prioritäten werden geladen.",
   "risk.contextual.unavailableTitle": "Kontextuelle Prioritäten nicht verfügbar",
   "risk.contextual.empty": "Keine kontextuellen Risikoprioritäten erkannt.",
-  "risk.contextual.caption": "Kontextuelle Risikoprioritäten nach Explosionsradius",
+  "risk.contextual.caption": "Credentials mit höchstem Risiko und bekannte betroffene Elemente",
   "risk.contextual.credential": "Credential",
   "risk.contextual.priority": "Priorität",
   "risk.contextual.blastRadius": "Bekannte betroffene Elemente",

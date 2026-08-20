@@ -1503,7 +1503,7 @@ const translatedValues = [
   "Kontextuelle Prioritäten werden geladen.",
   "Kontextuelle Prioritäten nicht verfügbar",
   "Keine kontextuellen Risikoprioritäten erkannt.",
-  "Kontextuelle Risikoprioritäten nach Explosionsradius",
+  "Credentials mit höchstem Risiko und bekannte betroffene Elemente",
   "Credential",
   "Priorität",
   "Bekannte betroffene Elemente",

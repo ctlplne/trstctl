@@ -1469,7 +1469,7 @@ const esESCatalog = {
   "risk.contextual.loading": "Cargando prioridades contextuales.",
   "risk.contextual.unavailableTitle": "Prioridades contextuales no disponibles",
   "risk.contextual.empty": "No se detectaron prioridades de riesgo contextual.",
-  "risk.contextual.caption": "Prioridades de riesgo contextual por radio de impacto",
+  "risk.contextual.caption": "Credenciales de mayor riesgo y elementos afectados conocidos",
   "risk.contextual.credential": "Credencial",
   "risk.contextual.priority": "Prioridad",
   "risk.contextual.blastRadius": "Elementos afectados conocidos",
