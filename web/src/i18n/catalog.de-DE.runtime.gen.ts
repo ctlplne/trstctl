@@ -92,6 +92,7 @@ const translatedValues = [
   "Der Flottenplan nennt {count} betroffene Zugangsdaten-Einträge.",
   "Setzen Sie die signierten Flottenprüfungen fort und prüfen Sie jede Kohorte vor dem Widerruf.",
   "Prüfen Sie die Nachweise für Flottenstopp oder Rollback, bevor Sie über eine Fortsetzung entscheiden.",
+  "Warteschlange geladen",
   "Exakte Vorfallreaktionsdatensätze",
   "Exakten Reaktionsstatus anzeigen",
   "Ereigniszeitverlauf",

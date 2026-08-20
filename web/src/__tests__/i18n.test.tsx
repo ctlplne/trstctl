@@ -793,10 +793,12 @@ describe("i18n boundary", () => {
       // approval record, idempotency key, evidence bundle, replacement,
       // revocation, delivery, failed targets, and rollback references without
       // turning absent evidence into a success claim.
+      // The live visual follow-up replaces the owner-remediation API status
+      // "served" with the plain Queue-loaded evidence state in every locale.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
       // release.
-      "es-ES": "f0f7880649ec9687d64b869677fb4473cd7735bb67fb6486b52eddb5ab144092",
-      "de-DE": "8eb1a7436b3f239190c0af256a41f4085861cef7743d514012d558242ece7fca",
+      "es-ES": "8a21242e405e92201c86470088557b7c442d9439c8f3bfaad85acc498373e21d",
+      "de-DE": "106cd096d3c25eb16a3636d7ba05eb3268e47562bafaca09127548e0a4fba2bc",
     });
   });
 

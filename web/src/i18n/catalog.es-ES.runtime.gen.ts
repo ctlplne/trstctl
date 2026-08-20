@@ -92,6 +92,7 @@ const translatedValues = [
   "El plan de flota nombra {count} credenciales afectadas.",
   "Continúe las puertas firmadas de la flota y verifique cada cohorte antes de revocar.",
   "Revise la evidencia de detención o reversión de la flota antes de decidir si debe reanudarla.",
+  "Cola cargada",
   "Registros exactos de respuesta a incidentes",
   "Ver estado exacto de la respuesta",
   "Cronología de eventos",

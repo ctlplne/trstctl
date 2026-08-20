@@ -357,6 +357,10 @@ export const messages = {
     defaultMessage: "Review the fleet halt or rollback evidence before deciding whether to resume.",
     description: "Containment guidance for a failed, halted, or rolled-back fleet response.",
   },
+  "incidents.ownerRemediation.queueLoaded": {
+    defaultMessage: "Queue loaded",
+    description: "Plain evidence-state label replacing the internal served API status on the owner remediation queue.",
+  },
   "incidents.proof.listLabel": {
     defaultMessage: "Exact incident response records",
     description: "Accessible label for collapsed exact response records.",

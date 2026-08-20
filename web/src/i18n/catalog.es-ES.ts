@@ -137,6 +137,7 @@ const esESCatalog = {
   "incidents.situation.fleetAffectedMany": "El plan de flota nombra {count} credenciales afectadas.",
   "incidents.situation.containmentContinueFleet": "Continúe las puertas firmadas de la flota y verifique cada cohorte antes de revocar.",
   "incidents.situation.containmentFleetStopped": "Revise la evidencia de detención o reversión de la flota antes de decidir si debe reanudarla.",
+  "incidents.ownerRemediation.queueLoaded": "Cola cargada",
   "incidents.proof.listLabel": "Registros exactos de respuesta a incidentes",
   "incidents.proof.open": "Ver estado exacto de la respuesta",
   "incidents.proof.timeline": "Cronología de eventos",

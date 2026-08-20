@@ -43,7 +43,7 @@ import { IncidentExecutionProof, IncidentSeverityBadge, IncidentSituationSummary
 import { FleetReissuanceTable } from "./incidents/FleetReissuanceParts";
 import { OutboxRecoveryPanel } from "./incidents/OutboxRecoveryPanel";
 import { formatDateTime } from "@/i18n/format";
-import { describeStatus, type StatusTone } from "@/lib/statusVocab";
+import { describeStatus, humanizeStatus, type StatusTone } from "@/lib/statusVocab";
 
 const defaultExecution: IncidentExecutionRequest = {
   identity_id: "",
@@ -1751,11 +1751,12 @@ function connectorDeliveryTone(status: NonNullable<RemediationPlaybookRun["conne
 
 function OwnerRemediationQueuePanel({ queue }: { queue: OwnerRemediationQueue }) {
   const { t } = useTranslation();
+  const queueStatusLabel = queue.status === "served" ? t("incidents.ownerRemediation.queueLoaded") : humanizeStatus(queue.status ?? "queued");
   return (
     <div className="grid content-start gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-body font-semibold">{t("parity.ownerRemediationQueue_610e16")}</h3>
-        <StatusBadge value={queue.status ?? "queued"} label={queue.status ?? "queued"} tone={remediationRunTone(queue.status)} />
+        <StatusBadge value={queue.status ?? "queued"} label={queueStatusLabel} tone={remediationRunTone(queue.status)} />
       </div>
       <p className="text-xs text-muted-foreground">
         {translateNow("source.generated.827ec8d9f9")} {formatDateTime(queue.generated_at)} · {queue.capability}

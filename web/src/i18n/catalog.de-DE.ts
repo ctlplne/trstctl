@@ -143,6 +143,7 @@ const deDECatalog = {
   "incidents.situation.fleetAffectedMany": "Der Flottenplan nennt {count} betroffene Zugangsdaten-Einträge.",
   "incidents.situation.containmentContinueFleet": "Setzen Sie die signierten Flottenprüfungen fort und prüfen Sie jede Kohorte vor dem Widerruf.",
   "incidents.situation.containmentFleetStopped": "Prüfen Sie die Nachweise für Flottenstopp oder Rollback, bevor Sie über eine Fortsetzung entscheiden.",
+  "incidents.ownerRemediation.queueLoaded": "Warteschlange geladen",
   "incidents.proof.listLabel": "Exakte Vorfallreaktionsdatensätze",
   "incidents.proof.open": "Exakten Reaktionsstatus anzeigen",
   "incidents.proof.timeline": "Ereigniszeitverlauf",

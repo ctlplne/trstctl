@@ -17,6 +17,7 @@ const { apiMock } = vi.hoisted(() => ({
     remediationPlaybookRuns: vi.fn(),
     runRemediationPlaybook: vi.fn(),
     ownerRemediationActions: vi.fn(),
+    remediationOwnerActions: vi.fn(),
     acceptOwnerRemediationAction: vi.fn(),
     fleetReissuanceRuns: vi.fn(),
     startFleetReissuance: vi.fn(),
@@ -46,6 +47,7 @@ vi.mock("@/lib/api", async (orig) => {
       remediationPlaybookRuns: apiMock.remediationPlaybookRuns,
       runRemediationPlaybook: apiMock.runRemediationPlaybook,
       ownerRemediationActions: apiMock.ownerRemediationActions,
+      remediationOwnerActions: apiMock.remediationOwnerActions,
       acceptOwnerRemediationAction: apiMock.acceptOwnerRemediationAction,
       fleetReissuanceRuns: apiMock.fleetReissuanceRuns,
       startFleetReissuance: apiMock.startFleetReissuance,
@@ -360,6 +362,14 @@ describe("incident response served execution surface", () => {
       items: [ownerAction],
       evidence_refs: ["GET /api/v1/nhi/posture/overprivilege", "remediation.playbook_run.recorded"],
     });
+    apiMock.remediationOwnerActions.mockReset().mockResolvedValue({
+      capability: "CAP-REM-02",
+      status: "served",
+      generated_at: "2026-06-20T12:25:00Z",
+      summary: { total: 1, open: 1, accepted: 0, critical: 0, high: 1, medium: 0, low: 0 },
+      items: [ownerAction],
+      evidence_refs: ["GET /api/v1/nhi/posture/overprivilege", "remediation.playbook_run.recorded"],
+    });
     apiMock.acceptOwnerRemediationAction.mockReset().mockResolvedValue(ownerRemediationRun);
     apiMock.dispatchResponseIntegrations.mockReset().mockResolvedValue(responseDispatch);
     apiMock.fleetReissuanceRuns.mockReset().mockResolvedValue({ items: [fleetRun] });
@@ -410,6 +420,8 @@ describe("incident response served execution surface", () => {
     expect(screen.getByRole("heading", { name: "What is happening" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "What is affected" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "How to contain it" })).toBeInTheDocument();
+    expect(await screen.findByText("Queue loaded", { exact: true })).toBeInTheDocument();
+    expect(screen.queryByText("served", { exact: true })).not.toBeInTheDocument();
     expect(screen.getByText(/event timeline, blast-radius evidence, approval records, replacement and recovery state/i)).toBeInTheDocument();
 
     await user.click(actions[0]);
@@ -590,9 +602,12 @@ describe("incident response served execution surface", () => {
     const user = userEvent.setup();
     renderIncidents();
 
-    expect(await screen.findByRole("heading", { name: "Owner self-remediation" })).toBeInTheDocument();
-    expect(screen.getByText("payments-owner-bot")).toBeInTheDocument();
-    expect(screen.getByText("1 open / 0 accepted")).toBeInTheDocument();
+    const ownerHeading = await screen.findByRole("heading", { name: "Owner self-remediation" });
+    const ownerSection = ownerHeading.closest("section");
+    expect(ownerSection).not.toBeNull();
+    const ownerWorkspace = within(ownerSection as HTMLElement);
+    expect(ownerWorkspace.getByText("payments-owner-bot")).toBeInTheDocument();
+    expect(ownerWorkspace.getByText("1 open / 0 accepted")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Accept" }));
 
