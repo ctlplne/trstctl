@@ -6,7 +6,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@pulumi/pulumi": "^3.120.0"
+    "@pulumi/pulumi": "^3.257.0"
   },
   "devDependencies": {
     "typescript": "^5.5.0"
