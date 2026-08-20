@@ -238,7 +238,7 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 	case "dynsecret.lease.revoked":
 		return shape(`{"lease":"","provider":"","role":"","backend_ref":"","state":""}`), true
 	case "ephemeral.issued":
-		return shape(`{"subject":"","method":"","ttl_seconds":1,"not_after":""}`), true
+		return shape(`{"subject":"","method":"","ttl_seconds":1,"not_after":"","recovered":true}`), true
 	case "history.tenant_data_rewrite.continuity":
 		return shape(`{"jws":""}`), true
 	case "issuance.host_renewal_dispatched":
@@ -366,6 +366,14 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 			catalogPrivacyShapeOptions{DynamicObject: []string{"/critical_options"}, Nullable: []string{"/critical_options"}}), true
 	case "ssh.cert.issued":
 		return shape(`{"type":"","key_id":"","serial":1,"principals":1,"profile":""}`), true
+	case "ssh.cert.revoked":
+		return shape(`{"serial":1,"key_id":"","reason":""}`,
+			catalogPrivacyShapeOptions{Optional: []string{"/serial", "/key_id", "/reason"}}), true
+	case "ssh.host.retired":
+		return shape(`{"id":"","tenant_id":"","host":"","source_id":"","run_id":"","identity_id":"","reason":"","status":"","recorded_at":""}`,
+			catalogPrivacyShapeOptions{Optional: []string{"/source_id", "/run_id", "/identity_id", "/reason"}}), true
+	case "ssh.trust_rollout.recorded":
+		return shape(`{"id":"","tenant_id":"","source_id":"","target_hosts":[""],"candidate_ca_fingerprint":"","reload_command":"","health_command":"","rollback_plan":"","status":"","confirmed":true,"recorded_at":""}`), true
 	case "ssh.trust.added", "ssh.trust.removed", "ssh.trust.rollback_failed", "ssh.trust.rolled_back":
 		return shape(`{"detail":""}`), true
 	case "transit.decrypt", "transit.encrypt", "transit.hmac", "transit.key.created",

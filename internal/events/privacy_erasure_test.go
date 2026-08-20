@@ -432,6 +432,27 @@ func TestCoreProductionPrivacyCatalogExercisesEverySubjectBearingPath(t *testing
 	}
 }
 
+func TestLiveWorkloadAndSSHProducerPayloadsFitTheClosedPrivacyCatalog(t *testing.T) {
+	valid := map[string]string{
+		"ephemeral.issued":           `{"subject":"ns/qa/sa/web","method":"k8s_sat","ttl_seconds":600,"not_after":"2026-08-20T10:34:00Z","recovered":false}`,
+		"ssh.cert.revoked":           `{"serial":119376402773978,"key_id":"jit-deployer","reason":"operator requested revocation"}`,
+		"ssh.host.retired":           `{"id":"","tenant_id":"11111111-1111-4111-8111-111111111111","host":"edge-1.internal","status":"retired","recorded_at":"2026-08-20T10:34:00Z"}`,
+		"ssh.trust_rollout.recorded": `{"id":"","tenant_id":"11111111-1111-4111-8111-111111111111","source_id":"","target_hosts":["edge-1.internal"],"candidate_ca_fingerprint":"SHA256:qa","reload_command":"systemctl reload sshd","health_command":"ssh localhost true","rollback_plan":"restore backup","status":"planned","confirmed":true,"recorded_at":"2026-08-20T10:34:00Z"}`,
+	}
+	for eventType, payload := range valid {
+		t.Run(eventType, func(t *testing.T) {
+			if err := validateRegisteredPrivacyEventPayload([]byte(payload), eventType, 1); err != nil {
+				t.Fatalf("live producer payload rejected by the production privacy gate: %v", err)
+			}
+			if err := validateRegisteredPrivacyEventPayload(
+				[]byte(strings.TrimSuffix(payload, "}")+`,"undeclared":"field"}`), eventType, 1,
+			); err == nil {
+				t.Fatal("closed production privacy gate accepted an undeclared field")
+			}
+		})
+	}
+}
+
 func TestCoreProductionPrivacyCatalogCoversCertificateExpiring(t *testing.T) {
 	const eventType = "certificate.expiring"
 	if !HasPrivacyEventPolicy(eventType, DefaultSchemaVersion) {

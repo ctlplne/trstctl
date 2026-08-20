@@ -15,6 +15,12 @@ import (
 // workload attester trust source does not exist.
 var ErrWorkloadAttesterTrustSourceNotFound = errors.New("store: workload attester trust source not found")
 
+// ErrWorkloadAttesterTrustSourceTenantCollision means a globally unique source
+// ID already belongs to a different tenant. A projector retry may safely update
+// the same tenant's row, but must never turn an ID collision into a cross-tenant
+// write.
+var ErrWorkloadAttesterTrustSourceTenantCollision = errors.New("store: workload attester trust source id belongs to another tenant")
+
 // WorkloadAttesterTrustSource is the tenant-owned read model for workload
 // attestation trust material. It stores public roots/JWKS and policy metadata,
 // never private keys or bearer tokens.
@@ -55,13 +61,25 @@ func (s *Store) ApplyWorkloadAttesterTrustSourceUpsertedTx(ctx context.Context, 
 	if ts.UpdatedAt.IsZero() {
 		ts.UpdatedAt = ts.CreatedAt
 	}
-	_, err := tx.Exec(ctx,
+	// This legacy table has both a global id primary key and a redundant
+	// (tenant_id, id) unique constraint. PostgreSQL can choose either index first
+	// while the synchronous request projector races the durable tail projector;
+	// an ON CONFLICT target for one index can therefore still lose on the other.
+	// Serialize only this source ID, then let the global primary-key arbiter make
+	// same-tenant replay idempotent and the tenant WHERE clause fail collisions
+	// closed. The transaction-scoped lock is released on commit or rollback.
+	if _, err := tx.Exec(ctx,
+		`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+		"workload-attester-trust-source:"+ts.ID); err != nil {
+		return err
+	}
+	tag, err := tx.Exec(ctx,
 		`INSERT INTO workload_attester_trust_sources
 		    (id, tenant_id, name, method, issuer, audience, jwks, root_certs_pem,
 		     expected_nonce_base64, enabled, rotation_version, created_at, updated_at)
 		 VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7::jsonb, $8,
 		         $9, $10, $11, $12, $13)
-		 ON CONFLICT (tenant_id, id) DO UPDATE SET
+		 ON CONFLICT (id) DO UPDATE SET
 		     name = EXCLUDED.name,
 		     method = EXCLUDED.method,
 		     issuer = EXCLUDED.issuer,
@@ -74,10 +92,17 @@ func (s *Store) ApplyWorkloadAttesterTrustSourceUpsertedTx(ctx context.Context, 
 		     revoked_reason = '',
 		     rotation_version = GREATEST(workload_attester_trust_sources.rotation_version, EXCLUDED.rotation_version),
 		     created_at = workload_attester_trust_sources.created_at,
-		     updated_at = EXCLUDED.updated_at`,
+		     updated_at = EXCLUDED.updated_at
+		 WHERE workload_attester_trust_sources.tenant_id = EXCLUDED.tenant_id`,
 		ts.ID, ts.TenantID, ts.Name, ts.Method, ts.Issuer, ts.Audience, jsonbOrEmpty(ts.JWKS),
 		ts.RootCertsPEM, ts.ExpectedNonceBase64, ts.Enabled, ts.RotationVersion, ts.CreatedAt, ts.UpdatedAt)
-	return err
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrWorkloadAttesterTrustSourceTenantCollision
+	}
+	return nil
 }
 
 // ApplyWorkloadAttesterTrustSourceRotatedTx projects a
