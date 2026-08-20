@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 /* Product controls use the shared 6px radius. Gold remains the single action
  * channel, but marketing-style pills and hover lifts stay out of dense
  * operator workflows. */
-const buttonVariants = cva(
+export const buttonVariants = cva(
   "inline-flex items-center justify-center gap-2 rounded-control text-sm font-medium transition-[color,background-color,border-color,box-shadow,filter] duration-fast disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background",
   {
     variants: {

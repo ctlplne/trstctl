@@ -148,7 +148,7 @@ not this file.
 | `internal/config/audit_test.go:66` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/audit_test.go:79` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config.go:2186` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/config/config.go:2851` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:2863` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/config/config_test.go:64` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config_test.go:173` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config_test.go:357` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -307,8 +307,8 @@ not this file.
 | `internal/server/secret_integrations.go:919` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/secret_third_party_scan_served_test.go:22` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secrets_scan_served_test.go:125` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/secrets_served_test.go:527` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/secrets_served_test.go:2422` | fabricated STS exchange fixture; no real credential (CWE-798) |
+| `internal/server/secrets_served_test.go:577` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/secrets_served_test.go:2472` | fabricated STS exchange fixture; no real credential (CWE-798) |
 | `internal/server/secrets_sync_served_test.go:400` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secrets_sync_served_test.go:411` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secrets_sync_served_test.go:421` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -324,7 +324,7 @@ not this file.
 | `internal/store/dynamic_secret_lease.go:579` | sealed_credential is a SQL column name, not a hardcoded credential (CWE-798). |
 | `internal/store/privacy_erasure_preparation.go:153` | SQL column identifiers only; this constant contains no credential material. |
 | `internal/store/secret_rotation_schedule_privacy.go:694` | SQL authority columns are names, not embedded credentials (CWE-798). |
-| `internal/store/secret_store.go:321` | SQL column identifiers only; this constant contains no credential material. |
+| `internal/store/secret_store.go:325` | SQL column identifiers only; this constant contains no credential material. |
 | `internal/store/secret_sync_workload_identity.go:202` | SQL column list matching the secret-name heuristic; a query, not a credential (CWE-798) |
 | `internal/ticketintake/intake_test.go:103` | TokenRef is a non-secret locator in a deterministic fixture (CWE-798). |
 | `internal/ticketintake/intake_test.go:150` | TokenRef is a non-secret locator in a deterministic fixture (CWE-798). |
@@ -368,7 +368,7 @@ not this file.
 | `ee/silo/lanedrill_test.go:96` | bounds-checked to [1, MaxUint16] above (CWE-190) |
 | `internal/agent/relay/adcsscan_wire_test.go:217` | this fixed fixture is 40 bytes, below MaxUint16 (CWE-190). |
 | `internal/agent/relay/adcsscan_wire_test.go:229` | this fixed fixture is below MaxUint16 (CWE-190). |
-| `internal/api/application_secret_approval.go:410` | ApplicationSecretApprovalBinding just proved the version is positive (CWE-190). |
+| `internal/api/application_secret_approval.go:412` | ApplicationSecretApprovalBinding just proved the version is positive (CWE-190). |
 | `internal/api/machine_sessions_served_test.go:61` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/api/notifications_helpers_test.go:187` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/api/secretjson.go:173` | rune already range-checked below 0x20 before hex packing (CWE-190) |
@@ -521,10 +521,10 @@ not this file.
 | `internal/store/ownership_readiness.go:226` | event sequences fit PostgreSQL bigint |
 | `internal/store/ownership_readiness.go:286` | database constraint/event writer keeps sequence non-negative |
 | `internal/store/pam.go:73` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:605` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:660` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:804` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:818` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:632` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:687` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:831` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:845` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:136` | event sequence fits the PostgreSQL bigint used by the event log (CWE-190) |
 | `internal/store/projection_checkpoint.go:192` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:213` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
@@ -575,7 +575,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/events/privacy_erasure_test.go:1358` | test goroutine lifecycle is managed by the test (CWE-664) |
+| `internal/events/privacy_erasure_test.go:1379` | test goroutine lifecycle is managed by the test (CWE-664) |
 | `internal/server/agenthttprenewal.go:64` | shutdown grace period must outlive the already-canceled parent context (CWE-664) |
 
 ### G122 — CWE-367 Time-of-check time-of-use race (walk callback) (24 sites)
@@ -1337,7 +1337,7 @@ not this file.
 | `internal/server/server.go:2153` | served CA certificate PEM is public material (CWE-276) |
 | `internal/server/signer_authorization_test.go:132` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
-| `internal/server/ssh_journey_served_test.go:172` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/ssh_journey_served_test.go:196` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/signing/keystore_test.go:242` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/signing/signauth_secret_test.go:47` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/testutil/openssltest/openssltest_test.go:14` | fake openssl shim must be executable; 0700 is the minimum that runs (CWE-276) |

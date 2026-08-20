@@ -2375,6 +2375,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_CA_GOVERNANCE_MODE", &c.CA.GovernanceMode)
 	setBool(getenv, "TRSTCTL_CA_REQUIRE_FIPS", &c.CA.RequireFIPS)
 	applyAgentChannelEnv(getenv, &c.AgentChannel)
+	applyWorkloadIdentityEnv(getenv, &c.AttestedIssuance)
 	// Served issuance protocols (EXC-WIRE-02): per-protocol enable + tenant binding.
 	applyProtocolsEnv(getenv, &c.Protocols)
 	applyAuthEnv(getenv, &c.Auth)
@@ -2411,6 +2412,17 @@ func (c *Config) applyEnv(getenv func(string) string) {
 		c.Federation.Peers = []FederationPeer{peer}
 	}
 	applyPCASEnv(getenv, &c.PCAS)
+}
+
+// applyWorkloadIdentityEnv exposes the attestation-gated SVID mint to the same
+// container-first deployment model as the served protocol endpoints. The mint
+// remains off by default; operators must opt in and name the trust domain and
+// lifetime boundaries explicitly.
+func applyWorkloadIdentityEnv(getenv func(string) string, a *AttestedIssuance) {
+	setBool(getenv, "TRSTCTL_ATTESTED_ISSUANCE_ENABLED", &a.Enabled)
+	setString(getenv, "TRSTCTL_ATTESTED_ISSUANCE_TRUST_DOMAIN", &a.TrustDomain)
+	setString(getenv, "TRSTCTL_ATTESTED_ISSUANCE_DEFAULT_TTL", &a.DefaultTTL)
+	setString(getenv, "TRSTCTL_ATTESTED_ISSUANCE_MAX_TTL", &a.MaxTTL)
 }
 
 func applyLifecycleEnv(getenv func(string) string, lifecycle *Lifecycle) {

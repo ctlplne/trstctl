@@ -222,6 +222,20 @@ Attested X.509-SVID issuance needs an enabled trust source first
 JWKS), then:
 
 ```sh
+TRSTCTL_ATTESTED_ISSUANCE_ENABLED=true
+TRSTCTL_ATTESTED_ISSUANCE_TRUST_DOMAIN=example.org
+TRSTCTL_ATTESTED_ISSUANCE_DEFAULT_TTL=10m
+TRSTCTL_ATTESTED_ISSUANCE_MAX_TTL=1h
+```
+
+These environment variables are the container equivalent of the
+`attested_issuance` JSON/YAML block. Turning the mint on does not trust any
+platform by itself: issuance remains disabled for a method until that tenant
+adds an enabled public trust source. Never put an attestation token or private
+key in an environment variable; send the proof and public key only in the
+single issuance request.
+
+```sh
 curl -sS -X POST https://localhost:8443/api/v1/workloads/attested-issuance \
   -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   -H "Idempotency-Key: k8s-web-1" -H "Content-Type: application/json" \

@@ -3,7 +3,7 @@ import { Ban, Plus, RefreshCw, RotateCw, Trash2 } from "lucide-react";
 import { ErrorState, UnavailableState } from "@/components/StatePrimitives";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Num } from "@/components/typography";
 import {
   api,
@@ -84,6 +84,7 @@ export function Workloads() {
   const [attestedSVIDs, setAttestedSVIDs] = useState<AttestedSVIDRow[]>([]);
   const [attesterTrustSources, setAttesterTrustSources] = useState<WorkloadAttesterTrustSource[]>([]);
   const [trustSourceMethod, setTrustSourceMethod] = useState<TrustSourceMethod>("k8s_sat");
+  const [issueAttestationMethod, setIssueAttestationMethod] = useState<TrustSourceMethod>("k8s_sat");
   const [rotateTrustSourceID, setRotateTrustSourceID] = useState("");
   const [csrSupport, setCSRSupport] = useState<KubernetesCSRSupport | null>(null);
   const [trustBundleSupport, setTrustBundleSupport] = useState<KubernetesTrustBundleDistribution | null>(null);
@@ -99,6 +100,10 @@ export function Workloads() {
   const [csrSupportError, setCSRSupportError] = useState<string | null>(null);
   const [trustBundleError, setTrustBundleError] = useState<string | null>(null);
   const trustSourceLoadErrorFallback = t("workloads.attestation.loadErrorFallback");
+  const enabledTrustSources = attesterTrustSources.filter((source) => source.enabled && !source.revoked_at);
+  const enabledAttesterMethods = new Set(enabledTrustSources.map((source) => source.method));
+  const hasEnabledTrustSource = enabledTrustSources.length > 0;
+  const canIssueSelectedMethod = enabledAttesterMethods.has(issueAttestationMethod);
 
   useEffect(() => {
     let active = true;
@@ -165,6 +170,12 @@ export function Workloads() {
     };
   }, [trustSourceLoadErrorFallback]);
 
+  useEffect(() => {
+    if (!canIssueSelectedMethod && enabledTrustSources[0]) {
+      setIssueAttestationMethod(enabledTrustSources[0].method);
+    }
+  }, [canIssueSelectedMethod, enabledTrustSources]);
+
   function upsertLease(lease: DynamicLease) {
     const metadata = leaseMetadataOnly(lease);
     setLeases((current) => [metadata, ...current.filter((item) => item.id !== metadata.id)]);
@@ -183,6 +194,7 @@ export function Workloads() {
   function upsertTrustSource(source: WorkloadAttesterTrustSource) {
     setAttesterTrustSources((current) => [source, ...current.filter((item) => item.id !== source.id)]);
     setRotateTrustSourceID((current) => current || source.id);
+    if (source.enabled && !source.revoked_at) setIssueAttestationMethod(source.method);
   }
 
   async function issueLease(event: FormEvent<HTMLFormElement>) {
@@ -350,8 +362,23 @@ export function Workloads() {
       <PageHeader
         titleId="workload-heading"
         title={t("nav.item.workloads")}
-        description="Short-lived identities for software workloads (services, pods, jobs): SPIFFE/SVID workload certificates, just-in-time (JIT) leases, and broker identities. Raw key material stays out of the browser — you see lease metadata here."
+        description={t(hasEnabledTrustSource ? "workloads.page.answerReady" : "workloads.page.answerNeedsTrust")}
+        technicalDetails={t("workloads.page.details")}
+        actions={
+          <a className={buttonVariants()} href="#attestation-heading">
+            {t("workloads.page.setupAction")}
+          </a>
+        }
       />
+
+      <section aria-labelledby="workload-readiness-heading" className="ui-panel grid gap-2 p-comfortable">
+        <h2 id="workload-readiness-heading" className="text-title font-semibold">
+          {t(hasEnabledTrustSource ? "workloads.readiness.readyHeading" : "workloads.readiness.needsTrustHeading")}
+        </h2>
+        <p className="max-w-3xl text-sm text-muted-foreground">
+          {t(hasEnabledTrustSource ? "workloads.readiness.readyBody" : "workloads.readiness.needsTrustBody")}
+        </p>
+      </section>
 
       {/* B3: where each host's workloads get their SVIDs. Rendered whenever any
           agent is enrolled, including when none serve the socket yet — an
@@ -411,277 +438,287 @@ export function Workloads() {
         </section>
       ) : null}
 
-      <section aria-labelledby="kubernetes-csr-heading" className="grid gap-3 border-y border-border py-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 id="kubernetes-csr-heading" className="text-title font-semibold">
-              {t("workloads.kubernetesCSR.heading")}
-            </h2>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("workloads.kubernetesCSR.description")}</p>
-          </div>
-          <StatusBadge vocabulary="certificate" value={csrSupport?.served ? "active" : "pending"} />
-        </div>
-        {csrSupportError && <ErrorState title={t("workloads.kubernetesCSR.errorTitle")}>{csrSupportError}</ErrorState>}
-        <div className="ui-panel grid gap-4 p-comfortable">
-          <div className="grid gap-3 md:grid-cols-4">
-            <div>
-              <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.kubernetesCSR.capability")}</p>
-              <p className="mt-1 font-mono text-sm">{csrSupport?.capability ?? translateNow("source.cap.k8s.04.8591b21c0c")}</p>
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.kubernetesCSR.apiGroup")}</p>
-              <p className="mt-1 font-mono text-sm">{csrSupport?.api_version ?? translateNow("source.certificates.k8s.io.v1.0828361139")}</p>
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.kubernetesCSR.resource")}</p>
-              <p className="mt-1 font-mono text-sm">{csrSupport?.resource ?? translateNow("source.certificatesigningrequests.cb597b34bc")}</p>
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.kubernetesCSR.generated")}</p>
-              <p className="mt-1 text-sm">{csrSupport ? formatDate(csrSupport.generated_at) : t("workloads.kubernetesCSR.loading")}</p>
-            </div>
-          </div>
-          <div className="grid gap-3 lg:grid-cols-3">
-            <div>
-              <h3 className="text-sm font-semibold">{t("workloads.kubernetesCSR.signerNames")}</h3>
-              <ul className="mt-2 grid gap-1 text-sm text-muted-foreground">
-                {(csrSupport?.signer_names ?? []).map((name) => (
-                  <li key={name} className="font-mono text-xs">
-                    {name}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold">{t("workloads.kubernetesCSR.controllerControls")}</h3>
-              <ul className="mt-2 grid gap-1 text-sm text-muted-foreground">
-                {(csrSupport?.architecture_controls ?? []).slice(0, 4).map((control) => (
-                  <li key={control}>{control}</li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold">{t("workloads.kubernetesCSR.rbac")}</h3>
-              <ul className="mt-2 grid gap-1 text-sm text-muted-foreground">
-                {(csrSupport?.rbac_rules ?? []).map((rule) => (
-                  <li key={`${rule.api_group}:${rule.resource}`} className="font-mono text-xs">
-                    {rule.resource}: {rule.verbs.join(", ")}
-                  </li>
-                ))}
-                {!csrSupport && <li className="font-mono text-xs">{t("workloads.kubernetesCSR.statusFallback")}</li>}
-              </ul>
-            </div>
-          </div>
-          {csrSupport?.residuals?.length ? (
-            <div className="rounded-md border border-border p-3 text-sm">
-              <p className="font-semibold">{t("workloads.kubernetesCSR.residuals")}</p>
-              <p className="mt-1 text-muted-foreground">{csrSupport.residuals.join("; ")}</p>
-            </div>
-          ) : null}
-        </div>
-      </section>
-
-      <section aria-labelledby="kubernetes-trust-bundle-heading" className="grid gap-3 border-y border-border py-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 id="kubernetes-trust-bundle-heading" className="text-title font-semibold">
-              {t("workloads.trustBundles.heading")}
-            </h2>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("workloads.trustBundles.description")}</p>
-          </div>
-          <StatusBadge vocabulary="certificate" value={trustBundleSupport?.served ? "active" : "pending"} />
-        </div>
-        {trustBundleError && <ErrorState title={t("workloads.trustBundles.errorTitle")}>{trustBundleError}</ErrorState>}
-        <div className="ui-panel grid gap-4 p-comfortable">
-          <div className="grid gap-3 md:grid-cols-4">
-            <div>
-              <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.trustBundles.capability")}</p>
-              <p className="mt-1 font-mono text-sm">{trustBundleSupport?.capability ?? translateNow("source.cap.k8s.07.5ce4e8b7f7")}</p>
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.trustBundles.apiGroup")}</p>
-              <p className="mt-1 font-mono text-sm">{trustBundleSupport?.api_version ?? translateNow("source.trstctl.com.v1alpha1.01c465ebb8")}</p>
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.trustBundles.resource")}</p>
-              <p className="mt-1 font-mono text-sm">{trustBundleSupport?.resource ?? translateNow("source.trustbundles.6a2792b01d")}</p>
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.trustBundles.generated")}</p>
-              <p className="mt-1 text-sm">{trustBundleSupport ? formatDate(trustBundleSupport.generated_at) : t("workloads.trustBundles.loading")}</p>
-            </div>
-          </div>
-          <div className="grid gap-3 lg:grid-cols-3">
-            <div>
-              <h3 className="text-sm font-semibold">{t("workloads.trustBundles.targets")}</h3>
-              <ul className="mt-2 grid gap-1 text-sm text-muted-foreground">
-                {(trustBundleSupport?.distribution_targets ?? []).map((target) => (
-                  <li key={target}>{target}</li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold">{t("workloads.trustBundles.controllerControls")}</h3>
-              <ul className="mt-2 grid gap-1 text-sm text-muted-foreground">
-                {(trustBundleSupport?.architecture_controls ?? []).slice(0, 4).map((control) => (
-                  <li key={control}>{control}</li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold">{t("workloads.trustBundles.rbac")}</h3>
-              <ul className="mt-2 grid gap-1 text-sm text-muted-foreground">
-                {(trustBundleSupport?.rbac_rules ?? []).map((rule) => (
-                  <li key={`${rule.api_group}:${rule.resource}`} className="font-mono text-xs">
-                    {rule.resource}: {rule.verbs.join(", ")}
-                  </li>
-                ))}
-                {!trustBundleSupport && <li className="font-mono text-xs">{t("workloads.trustBundles.statusFallback")}</li>}
-              </ul>
-            </div>
-          </div>
-          <div className="grid gap-3 lg:grid-cols-2">
-            <div>
-              <h3 className="text-sm font-semibold">{t("workloads.trustBundles.statusFields")}</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {(trustBundleSupport?.status_fields ?? ["status.targets", "status.bundleSHA256"]).join(", ")}
-              </p>
-            </div>
-            {trustBundleSupport?.residuals?.length ? (
-              <div className="rounded-md border border-border p-3 text-sm">
-                <p className="font-semibold">{t("workloads.trustBundles.residuals")}</p>
-                <p className="mt-1 text-muted-foreground">{trustBundleSupport.residuals.join("; ")}</p>
+      <details className="group border-y border-border py-3">
+        <summary className="cursor-pointer font-semibold text-foreground marker:text-muted-foreground">{t("workloads.advanced.kubernetesSummary")}</summary>
+        <div className="mt-3 grid gap-4">
+          <section aria-labelledby="kubernetes-csr-heading" className="grid gap-3 border-y border-border py-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 id="kubernetes-csr-heading" className="text-title font-semibold">
+                  {t("workloads.kubernetesCSR.heading")}
+                </h2>
+                <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("workloads.kubernetesCSR.description")}</p>
               </div>
-            ) : null}
-          </div>
+              <StatusBadge vocabulary="certificate" value={csrSupport?.served ? "active" : "pending"} />
+            </div>
+            {csrSupportError && <ErrorState title={t("workloads.kubernetesCSR.errorTitle")}>{csrSupportError}</ErrorState>}
+            <div className="ui-panel grid gap-4 p-comfortable">
+              <div className="grid gap-3 md:grid-cols-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.kubernetesCSR.capability")}</p>
+                  <p className="mt-1 font-mono text-sm">{csrSupport?.capability ?? translateNow("source.cap.k8s.04.8591b21c0c")}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.kubernetesCSR.apiGroup")}</p>
+                  <p className="mt-1 font-mono text-sm">{csrSupport?.api_version ?? translateNow("source.certificates.k8s.io.v1.0828361139")}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.kubernetesCSR.resource")}</p>
+                  <p className="mt-1 font-mono text-sm">{csrSupport?.resource ?? translateNow("source.certificatesigningrequests.cb597b34bc")}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.kubernetesCSR.generated")}</p>
+                  <p className="mt-1 text-sm">{csrSupport ? formatDate(csrSupport.generated_at) : t("workloads.kubernetesCSR.loading")}</p>
+                </div>
+              </div>
+              <div className="grid gap-3 lg:grid-cols-3">
+                <div>
+                  <h3 className="text-sm font-semibold">{t("workloads.kubernetesCSR.signerNames")}</h3>
+                  <ul className="mt-2 grid gap-1 text-sm text-muted-foreground">
+                    {(csrSupport?.signer_names ?? []).map((name) => (
+                      <li key={name} className="font-mono text-xs">
+                        {name}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold">{t("workloads.kubernetesCSR.controllerControls")}</h3>
+                  <ul className="mt-2 grid gap-1 text-sm text-muted-foreground">
+                    {(csrSupport?.architecture_controls ?? []).slice(0, 4).map((control) => (
+                      <li key={control}>{control}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold">{t("workloads.kubernetesCSR.rbac")}</h3>
+                  <ul className="mt-2 grid gap-1 text-sm text-muted-foreground">
+                    {(csrSupport?.rbac_rules ?? []).map((rule) => (
+                      <li key={`${rule.api_group}:${rule.resource}`} className="font-mono text-xs">
+                        {rule.resource}: {rule.verbs.join(", ")}
+                      </li>
+                    ))}
+                    {!csrSupport && <li className="font-mono text-xs">{t("workloads.kubernetesCSR.statusFallback")}</li>}
+                  </ul>
+                </div>
+              </div>
+              {csrSupport?.residuals?.length ? (
+                <div className="rounded-md border border-border p-3 text-sm">
+                  <p className="font-semibold">{t("workloads.kubernetesCSR.residuals")}</p>
+                  <p className="mt-1 text-muted-foreground">{csrSupport.residuals.join("; ")}</p>
+                </div>
+              ) : null}
+            </div>
+          </section>
+
+          <section aria-labelledby="kubernetes-trust-bundle-heading" className="grid gap-3 border-y border-border py-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 id="kubernetes-trust-bundle-heading" className="text-title font-semibold">
+                  {t("workloads.trustBundles.heading")}
+                </h2>
+                <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("workloads.trustBundles.description")}</p>
+              </div>
+              <StatusBadge vocabulary="certificate" value={trustBundleSupport?.served ? "active" : "pending"} />
+            </div>
+            {trustBundleError && <ErrorState title={t("workloads.trustBundles.errorTitle")}>{trustBundleError}</ErrorState>}
+            <div className="ui-panel grid gap-4 p-comfortable">
+              <div className="grid gap-3 md:grid-cols-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.trustBundles.capability")}</p>
+                  <p className="mt-1 font-mono text-sm">{trustBundleSupport?.capability ?? translateNow("source.cap.k8s.07.5ce4e8b7f7")}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.trustBundles.apiGroup")}</p>
+                  <p className="mt-1 font-mono text-sm">{trustBundleSupport?.api_version ?? translateNow("source.trstctl.com.v1alpha1.01c465ebb8")}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.trustBundles.resource")}</p>
+                  <p className="mt-1 font-mono text-sm">{trustBundleSupport?.resource ?? translateNow("source.trustbundles.6a2792b01d")}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.trustBundles.generated")}</p>
+                  <p className="mt-1 text-sm">{trustBundleSupport ? formatDate(trustBundleSupport.generated_at) : t("workloads.trustBundles.loading")}</p>
+                </div>
+              </div>
+              <div className="grid gap-3 lg:grid-cols-3">
+                <div>
+                  <h3 className="text-sm font-semibold">{t("workloads.trustBundles.targets")}</h3>
+                  <ul className="mt-2 grid gap-1 text-sm text-muted-foreground">
+                    {(trustBundleSupport?.distribution_targets ?? []).map((target) => (
+                      <li key={target}>{target}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold">{t("workloads.trustBundles.controllerControls")}</h3>
+                  <ul className="mt-2 grid gap-1 text-sm text-muted-foreground">
+                    {(trustBundleSupport?.architecture_controls ?? []).slice(0, 4).map((control) => (
+                      <li key={control}>{control}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold">{t("workloads.trustBundles.rbac")}</h3>
+                  <ul className="mt-2 grid gap-1 text-sm text-muted-foreground">
+                    {(trustBundleSupport?.rbac_rules ?? []).map((rule) => (
+                      <li key={`${rule.api_group}:${rule.resource}`} className="font-mono text-xs">
+                        {rule.resource}: {rule.verbs.join(", ")}
+                      </li>
+                    ))}
+                    {!trustBundleSupport && <li className="font-mono text-xs">{t("workloads.trustBundles.statusFallback")}</li>}
+                  </ul>
+                </div>
+              </div>
+              <div className="grid gap-3 lg:grid-cols-2">
+                <div>
+                  <h3 className="text-sm font-semibold">{t("workloads.trustBundles.statusFields")}</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {(trustBundleSupport?.status_fields ?? ["status.targets", "status.bundleSHA256"]).join(", ")}
+                  </p>
+                </div>
+                {trustBundleSupport?.residuals?.length ? (
+                  <div className="rounded-md border border-border p-3 text-sm">
+                    <p className="font-semibold">{t("workloads.trustBundles.residuals")}</p>
+                    <p className="mt-1 text-muted-foreground">{trustBundleSupport.residuals.join("; ")}</p>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </section>
         </div>
-      </section>
+      </details>
 
-      <section aria-labelledby="lease-heading" className="grid gap-3 border-y border-border py-4">
-        <div>
-          <h2 id="lease-heading" className="text-title font-semibold">
-            {t("workloads.leases.heading")}
-          </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("workloads.leases.description")}</p>
-        </div>
-        <ol className="grid gap-2 rounded-md border border-border p-3 text-sm md:grid-cols-3">
-          <li>
-            <p className="font-medium">{t("workloads.leases.timelineIssued")}</p>
-            <p className="text-muted-foreground">{t("workloads.leases.timelineIssuedDescription")}</p>
-          </li>
-          <li>
-            <p className="font-medium">{t("workloads.leases.timelineRenew")}</p>
-            <p className="text-muted-foreground">{t("workloads.leases.timelineRenewDescription")}</p>
-          </li>
-          <li>
-            <p className="font-medium">{t("workloads.leases.timelineExpires")}</p>
-            <p className="text-muted-foreground">{t("workloads.leases.timelineExpiresDescription")}</p>
-          </li>
-        </ol>
+      <details className="group border-y border-border py-3">
+        <summary className="cursor-pointer font-semibold text-foreground marker:text-muted-foreground">{t("workloads.advanced.leasesSummary")}</summary>
+        <div className="mt-3">
+          <section aria-labelledby="lease-heading" className="grid gap-3 border-y border-border py-4">
+            <div>
+              <h2 id="lease-heading" className="text-title font-semibold">
+                {t("workloads.leases.heading")}
+              </h2>
+              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("workloads.leases.description")}</p>
+            </div>
+            <ol className="grid gap-2 rounded-md border border-border p-3 text-sm md:grid-cols-3">
+              <li>
+                <p className="font-medium">{t("workloads.leases.timelineIssued")}</p>
+                <p className="text-muted-foreground">{t("workloads.leases.timelineIssuedDescription")}</p>
+              </li>
+              <li>
+                <p className="font-medium">{t("workloads.leases.timelineRenew")}</p>
+                <p className="text-muted-foreground">{t("workloads.leases.timelineRenewDescription")}</p>
+              </li>
+              <li>
+                <p className="font-medium">{t("workloads.leases.timelineExpires")}</p>
+                <p className="text-muted-foreground">{t("workloads.leases.timelineExpiresDescription")}</p>
+              </li>
+            </ol>
 
-        <form aria-labelledby="lease-issue-heading" className="ui-panel grid gap-3 p-comfortable" onSubmit={issueLease}>
-          <div>
-            <h3 id="lease-issue-heading" className="text-title font-semibold">
-              {t("workloads.leases.issueHeading")}
-            </h3>
-            <p className="mt-1 text-sm text-muted-foreground">{t("workloads.leases.issueDescription")}</p>
-          </div>
-          <div className="grid gap-3 md:grid-cols-[1fr_1fr_10rem_auto]">
-            <label className="grid gap-1 text-sm font-medium">
-              {t("workloads.leases.provider")}
-              <input className="ui-input" value={provider} onChange={(event) => setProvider(event.target.value)} required />
-            </label>
-            <label className="grid gap-1 text-sm font-medium">
-              {t("workloads.leases.role")}
-              <input className="ui-input" value={role} onChange={(event) => setRole(event.target.value)} required />
-            </label>
-            <label className="grid gap-1 text-sm font-medium">
-              {t("workloads.leases.ttlSeconds")}
-              <input
-                className="ui-input"
-                type="number"
-                min={60}
-                max={86400}
-                value={ttlSeconds}
-                onChange={(event) => setTtlSeconds(Number(event.target.value))}
-                required
-              />
-            </label>
-            <Button type="submit" className="self-end" disabled={busy === "issue"}>
-              {busy === "issue" ? <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
-              {t("workloads.leases.issueButton")}
-            </Button>
-          </div>
-        </form>
+            <form aria-labelledby="lease-issue-heading" className="ui-panel grid gap-3 p-comfortable" onSubmit={issueLease}>
+              <div>
+                <h3 id="lease-issue-heading" className="text-title font-semibold">
+                  {t("workloads.leases.issueHeading")}
+                </h3>
+                <p className="mt-1 text-sm text-muted-foreground">{t("workloads.leases.issueDescription")}</p>
+              </div>
+              <div className="grid gap-3 md:grid-cols-[1fr_1fr_10rem_auto]">
+                <label className="grid gap-1 text-sm font-medium">
+                  {t("workloads.leases.provider")}
+                  <input className="ui-input" value={provider} onChange={(event) => setProvider(event.target.value)} required />
+                </label>
+                <label className="grid gap-1 text-sm font-medium">
+                  {t("workloads.leases.role")}
+                  <input className="ui-input" value={role} onChange={(event) => setRole(event.target.value)} required />
+                </label>
+                <label className="grid gap-1 text-sm font-medium">
+                  {t("workloads.leases.ttlSeconds")}
+                  <input
+                    className="ui-input"
+                    type="number"
+                    min={60}
+                    max={86400}
+                    value={ttlSeconds}
+                    onChange={(event) => setTtlSeconds(Number(event.target.value))}
+                    required
+                  />
+                </label>
+                <Button type="submit" className="self-end" disabled={busy === "issue"}>
+                  {busy === "issue" ? <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
+                  {t("workloads.leases.issueButton")}
+                </Button>
+              </div>
+            </form>
 
-        {leaseError && <ErrorState title={t("workloads.leases.errorTitle")}>{leaseError}</ErrorState>}
+            {leaseError && <ErrorState title={t("workloads.leases.errorTitle")}>{leaseError}</ErrorState>}
 
-        <div className="ui-panel overflow-x-auto">
-          <table className="ui-table min-w-[58rem]">
-            <caption className="sr-only">{t("workloads.leases.heading")}</caption>
-            <thead>
-              <tr>
-                <th scope="col">{t("workloads.leases.leaseColumn")}</th>
-                <th scope="col">{t("workloads.leases.provider")}</th>
-                <th scope="col">{t("workloads.leases.role")}</th>
-                <th scope="col">{t("workloads.leases.stateColumn")}</th>
-                <th scope="col">{t("workloads.leases.issuedColumn")}</th>
-                <th scope="col">{t("workloads.leases.expiresColumn")}</th>
-                <th scope="col">{t("workloads.leases.actionsColumn")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {leases.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="text-muted-foreground">
-                    {t("workloads.leases.empty")}
-                  </td>
-                </tr>
-              ) : (
-                leases.map((lease) => (
-                  <tr key={lease.id} className="align-top">
-                    <td className="font-mono text-xs">{lease.id}</td>
-                    <td>{lease.provider}</td>
-                    <td>{lease.role}</td>
-                    <td>
-                      <StatusBadge vocabulary="certificate" value={lease.state} />
-                    </td>
-                    <td>{formatDate(lease.issued_at)}</td>
-                    <td>{formatDate(lease.expires_at)}</td>
-                    <td>
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          disabled={busy === `renew:${lease.id}` || lease.state === "revoked"}
-                          onClick={() => void renewLease(lease.id)}
-                        >
-                          <RefreshCw className={busy === `renew:${lease.id}` ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
-                          {t("workloads.leases.renewButton")}
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          disabled={busy === `revoke:${lease.id}` || lease.state === "revoked"}
-                          aria-label={t("workloads.leases.revokeAria", { id: lease.id })}
-                          onClick={() => void revokeLease(lease.id)}
-                        >
-                          <Ban className="h-4 w-4" aria-hidden="true" />
-                          {t("workloads.leases.revokeButton")}
-                        </Button>
-                      </div>
-                    </td>
+            <div className="ui-panel overflow-x-auto">
+              <table className="ui-table min-w-[58rem]">
+                <caption className="sr-only">{t("workloads.leases.heading")}</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">{t("workloads.leases.leaseColumn")}</th>
+                    <th scope="col">{t("workloads.leases.provider")}</th>
+                    <th scope="col">{t("workloads.leases.role")}</th>
+                    <th scope="col">{t("workloads.leases.stateColumn")}</th>
+                    <th scope="col">{t("workloads.leases.issuedColumn")}</th>
+                    <th scope="col">{t("workloads.leases.expiresColumn")}</th>
+                    <th scope="col">{t("workloads.leases.actionsColumn")}</th>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {leases.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="text-muted-foreground">
+                        {t("workloads.leases.empty")}
+                      </td>
+                    </tr>
+                  ) : (
+                    leases.map((lease) => (
+                      <tr key={lease.id} className="align-top">
+                        <td className="font-mono text-xs">{lease.id}</td>
+                        <td>{lease.provider}</td>
+                        <td>{lease.role}</td>
+                        <td>
+                          <StatusBadge vocabulary="certificate" value={lease.state} />
+                        </td>
+                        <td>{formatDate(lease.issued_at)}</td>
+                        <td>{formatDate(lease.expires_at)}</td>
+                        <td>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={busy === `renew:${lease.id}` || lease.state === "revoked"}
+                              onClick={() => void renewLease(lease.id)}
+                            >
+                              <RefreshCw className={busy === `renew:${lease.id}` ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
+                              {t("workloads.leases.renewButton")}
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={busy === `revoke:${lease.id}` || lease.state === "revoked"}
+                              aria-label={t("workloads.leases.revokeAria", { id: lease.id })}
+                              onClick={() => void revokeLease(lease.id)}
+                            >
+                              <Ban className="h-4 w-4" aria-hidden="true" />
+                              {t("workloads.leases.revokeButton")}
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <UnavailableState title={t("workloads.leases.historyUnavailableTitle")}>{t("workloads.leases.historyUnavailableDescription")}</UnavailableState>
+            <UnavailableState title={t("workloads.leases.jitUnavailableTitle")}>{t("workloads.leases.jitUnavailableDescription")}</UnavailableState>
+          </section>
         </div>
-        <UnavailableState title={t("workloads.leases.historyUnavailableTitle")}>{t("workloads.leases.historyUnavailableDescription")}</UnavailableState>
-        <UnavailableState title={t("workloads.leases.jitUnavailableTitle")}>{t("workloads.leases.jitUnavailableDescription")}</UnavailableState>
-      </section>
+      </details>
 
       <section aria-labelledby="attestation-heading" className="grid gap-3 border-y border-border py-4">
         <div>
@@ -895,7 +932,12 @@ export function Workloads() {
           <div className="grid gap-3 md:grid-cols-[12rem_1fr_1fr_10rem_auto]">
             <label className="grid gap-1 text-sm font-medium">
               {t("workloads.attestation.method")}
-              <select className="ui-input" name="method" defaultValue="k8s_sat">
+              <select
+                className="ui-input"
+                name="method"
+                value={issueAttestationMethod}
+                onChange={(event) => setIssueAttestationMethod(event.target.value as TrustSourceMethod)}
+              >
                 {attesterMethods.map((method) => (
                   <option key={method.value} value={method.value}>
                     {t(method.labelKey)}
@@ -915,11 +957,12 @@ export function Workloads() {
               {t("workloads.attestation.svidTTL")}
               <input className="ui-input" type="number" min={60} max={86400} name="ttl_seconds" defaultValue={600} />
             </label>
-            <Button type="submit" className="self-end" disabled={busy === "attested-svid"}>
+            <Button type="submit" className="self-end" disabled={busy === "attested-svid" || !canIssueSelectedMethod}>
               {busy === "attested-svid" ? <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
               {t("workloads.attestation.issueButton")}
             </Button>
           </div>
+          {!canIssueSelectedMethod ? <p className="text-sm text-muted-foreground">{t("workloads.attestation.addTrustBeforeIssue")}</p> : null}
         </form>
         {attestationError && <ErrorState title={t("workloads.attestation.issueErrorTitle")}>{attestationError}</ErrorState>}
         <AttesterBreakdown rows={attestedSVIDs} failures={attestationFailures} />
@@ -963,97 +1006,102 @@ export function Workloads() {
         </UnavailableState>
       </section>
 
-      <section aria-labelledby="broker-heading" className="grid gap-3 border-y border-border py-4">
-        <div>
-          <h2 id="broker-heading" className="text-title font-semibold">
-            {translateNow("source.ai.agent.nhi.broker.3c610aca90")}
-          </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.a.broker.turns.an.agent.identity.plus.poli.5efe1642ad")}</p>
-        </div>
-        <form aria-labelledby="broker-issue-heading" className="ui-panel grid gap-3 p-comfortable" onSubmit={issueBrokerIdentity}>
-          <div>
-            <h3 id="broker-issue-heading" className="text-title font-semibold">
-              {translateNow("source.issue.broker.identity.a95ac0066b")}
-            </h3>
-            <p className="mt-1 text-sm text-muted-foreground">{translateNow("source.proof.payloads.are.submitted.directly.and.893894a52b")}</p>
-          </div>
-          <div className="grid gap-3 md:grid-cols-[1fr_12rem_1fr_8rem]">
-            <label className="grid gap-1 text-sm font-medium">
-              {translateNow("source.agent.id.510bce732d")}
-              <input className="ui-input" name="agent_id" defaultValue="agent-build-1" required />
-            </label>
-            <label className="grid gap-1 text-sm font-medium">
-              {translateNow("source.broker.method.86e0708911")}
-              <input className="ui-input" name="method" defaultValue="github_oidc" required />
-            </label>
-            <label className="grid gap-1 text-sm font-medium">
-              {translateNow("source.broker.scopes.60ad7540e2")}
-              <input className="ui-input" name="scopes" defaultValue="mcp:read-only, secrets:read:ci" required />
-            </label>
-            <label className="grid gap-1 text-sm font-medium">
-              {translateNow("source.broker.ttl.seconds.7112a719ce")}
-              <input className="ui-input" type="number" min={60} max={86400} name="ttl_seconds" defaultValue={900} />
-            </label>
-          </div>
-          <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
-            <label className="grid gap-1 text-sm font-medium">
-              {translateNow("source.broker.proof.payload.base64.caf8633720")}
-              <textarea className="ui-input min-h-20 font-mono text-xs" name="payload_base64" required />
-            </label>
-            <label className="grid gap-1 text-sm font-medium">
-              {translateNow("source.broker.public.key.a2341b0f4e")}
-              <textarea className="ui-input min-h-20 font-mono text-xs" name="public_key_pem" required />
-            </label>
-            <Button type="submit" className="self-end" disabled={busy === "broker"}>
-              {busy === "broker" ? <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
-              {translateNow("source.issue.broker.identity.a95ac0066b")}
-            </Button>
-          </div>
-        </form>
-        {brokerError && <ErrorState title={translateNow("source.broker.identity.failed.90cf96d503")}>{brokerError}</ErrorState>}
-        <div className="ui-panel overflow-x-auto">
-          <table className="ui-table min-w-[58rem]">
-            <caption className="sr-only">{translateNow("source.ai.agent.broker.identities.6ec86399a3")}</caption>
-            <thead>
-              <tr>
-                <th scope="col">{translateNow("source.agent.11b39c9377")}</th>
-                <th scope="col">{translateNow("source.subject.6897128384")}</th>
-                <th scope="col">{translateNow("source.scopes.0d5644ff52")}</th>
-                <th scope="col">{translateNow("source.method.52a0f9b65b")}</th>
-                <th scope="col">{translateNow("source.verified.4f7838402f")}</th>
-                <th scope="col">{translateNow("source.expires.f6725f3af0")}</th>
-                <th scope="col">{translateNow("source.audit.ids.e1133f2a79")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {brokerIdentities.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="text-muted-foreground">
-                    {translateNow("source.no.broker.identity.has.been.issued.in.this.7bb702b9db")}
-                  </td>
-                </tr>
-              ) : (
-                brokerIdentities.map((identity) => (
-                  <tr key={identity.credential_id} className="align-top">
-                    <td className="font-medium">{identity.agent_id}</td>
-                    <td>{identity.subject}</td>
-                    <td>{identity.scopes.join(", ")}</td>
-                    <td>{identity.attestation.method}</td>
-                    <td>{formatDate(identity.attestation.verified_at)}</td>
-                    <td>{formatDate(identity.not_after)}</td>
-                    <td className="font-mono text-xs">
-                      {identity.certificate_id} / {identity.credential_id} / {identity.node_id}
-                    </td>
+      <details className="group border-y border-border py-3">
+        <summary className="cursor-pointer font-semibold text-foreground marker:text-muted-foreground">{t("workloads.advanced.brokerSummary")}</summary>
+        <div className="mt-3">
+          <section aria-labelledby="broker-heading" className="grid gap-3 border-y border-border py-4">
+            <div>
+              <h2 id="broker-heading" className="text-title font-semibold">
+                {translateNow("source.ai.agent.nhi.broker.3c610aca90")}
+              </h2>
+              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.a.broker.turns.an.agent.identity.plus.poli.5efe1642ad")}</p>
+            </div>
+            <form aria-labelledby="broker-issue-heading" className="ui-panel grid gap-3 p-comfortable" onSubmit={issueBrokerIdentity}>
+              <div>
+                <h3 id="broker-issue-heading" className="text-title font-semibold">
+                  {translateNow("source.issue.broker.identity.a95ac0066b")}
+                </h3>
+                <p className="mt-1 text-sm text-muted-foreground">{translateNow("source.proof.payloads.are.submitted.directly.and.893894a52b")}</p>
+              </div>
+              <div className="grid gap-3 md:grid-cols-[1fr_12rem_1fr_8rem]">
+                <label className="grid gap-1 text-sm font-medium">
+                  {translateNow("source.agent.id.510bce732d")}
+                  <input className="ui-input" name="agent_id" defaultValue="agent-build-1" required />
+                </label>
+                <label className="grid gap-1 text-sm font-medium">
+                  {translateNow("source.broker.method.86e0708911")}
+                  <input className="ui-input" name="method" defaultValue="github_oidc" required />
+                </label>
+                <label className="grid gap-1 text-sm font-medium">
+                  {translateNow("source.broker.scopes.60ad7540e2")}
+                  <input className="ui-input" name="scopes" defaultValue="mcp:read-only, secrets:read:ci" required />
+                </label>
+                <label className="grid gap-1 text-sm font-medium">
+                  {translateNow("source.broker.ttl.seconds.7112a719ce")}
+                  <input className="ui-input" type="number" min={60} max={86400} name="ttl_seconds" defaultValue={900} />
+                </label>
+              </div>
+              <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+                <label className="grid gap-1 text-sm font-medium">
+                  {translateNow("source.broker.proof.payload.base64.caf8633720")}
+                  <textarea className="ui-input min-h-20 font-mono text-xs" name="payload_base64" required />
+                </label>
+                <label className="grid gap-1 text-sm font-medium">
+                  {translateNow("source.broker.public.key.a2341b0f4e")}
+                  <textarea className="ui-input min-h-20 font-mono text-xs" name="public_key_pem" required />
+                </label>
+                <Button type="submit" className="self-end" disabled={busy === "broker"}>
+                  {busy === "broker" ? <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
+                  {translateNow("source.issue.broker.identity.a95ac0066b")}
+                </Button>
+              </div>
+            </form>
+            {brokerError && <ErrorState title={translateNow("source.broker.identity.failed.90cf96d503")}>{brokerError}</ErrorState>}
+            <div className="ui-panel overflow-x-auto">
+              <table className="ui-table min-w-[58rem]">
+                <caption className="sr-only">{translateNow("source.ai.agent.broker.identities.6ec86399a3")}</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">{translateNow("source.agent.11b39c9377")}</th>
+                    <th scope="col">{translateNow("source.subject.6897128384")}</th>
+                    <th scope="col">{translateNow("source.scopes.0d5644ff52")}</th>
+                    <th scope="col">{translateNow("source.method.52a0f9b65b")}</th>
+                    <th scope="col">{translateNow("source.verified.4f7838402f")}</th>
+                    <th scope="col">{translateNow("source.expires.f6725f3af0")}</th>
+                    <th scope="col">{translateNow("source.audit.ids.e1133f2a79")}</th>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {brokerIdentities.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="text-muted-foreground">
+                        {translateNow("source.no.broker.identity.has.been.issued.in.this.7bb702b9db")}
+                      </td>
+                    </tr>
+                  ) : (
+                    brokerIdentities.map((identity) => (
+                      <tr key={identity.credential_id} className="align-top">
+                        <td className="font-medium">{identity.agent_id}</td>
+                        <td>{identity.subject}</td>
+                        <td>{identity.scopes.join(", ")}</td>
+                        <td>{identity.attestation.method}</td>
+                        <td>{formatDate(identity.attestation.verified_at)}</td>
+                        <td>{formatDate(identity.not_after)}</td>
+                        <td className="font-mono text-xs">
+                          {identity.certificate_id} / {identity.credential_id} / {identity.node_id}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <UnavailableState title={translateNow("source.broker.history.isn.t.in.the.console.yet.7fc4ef9d7d")}>
+              {translateNow("source.the.broker.api.issues.a.single.identity.pe.7e53bfbe2b")}
+            </UnavailableState>
+          </section>
         </div>
-        <UnavailableState title={translateNow("source.broker.history.isn.t.in.the.console.yet.7fc4ef9d7d")}>
-          {translateNow("source.the.broker.api.issues.a.single.identity.pe.7e53bfbe2b")}
-        </UnavailableState>
-      </section>
+      </details>
     </section>
   );
 }

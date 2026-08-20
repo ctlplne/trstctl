@@ -136,8 +136,9 @@ type servedWorkloadTrustSourceResponse struct {
 }
 
 type servedDynamicK8sTrust struct {
-	JWKS map[string]any
-	SAT  string
+	JWKS       map[string]any
+	SAT        string
+	ExpiredSAT string
 }
 
 func servedDynamicK8sTrustFixture(t *testing.T, kid string) servedDynamicK8sTrust {
@@ -159,7 +160,10 @@ func servedDynamicK8sTrustFixture(t *testing.T, kid string) servedDynamicK8sTrus
 	if err := json.Unmarshal(doc, &jwks); err != nil {
 		t.Fatalf("decode dynamic trust jwks: %v", err)
 	}
-	return servedDynamicK8sTrust{JWKS: jwks, SAT: servedK8sSAT(t, signer, kid)}
+	return servedDynamicK8sTrust{
+		JWKS: jwks, SAT: servedK8sSAT(t, signer, kid),
+		ExpiredSAT: servedK8sSATWithExpiry(t, signer, kid, time.Now().Add(-time.Minute)),
+	}
 }
 
 func jsonContainsPrivateMaterial(body []byte) bool {

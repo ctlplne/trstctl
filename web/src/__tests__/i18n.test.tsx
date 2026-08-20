@@ -754,8 +754,18 @@ describe("i18n boundary", () => {
       // operator question, name one next action, and describe accurate reveal,
       // destination, scanner, and lifecycle boundaries. Machine-authored es/de
       // translations — FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "80886255dfedbe9e107f38884ff96481ffc319c0456ff399f289b31321dba7e2",
-      "de-DE": "42cb0f0fe0a6b750a42e5431e177dc1793593c4ea032a5279c2ee9767a078e55",
+      // Workload/SSH quiet-confidence re-pin: twenty-four keys state the setup
+      // prerequisite, distinguish ready from disabled, name the safe next
+      // action, disclose exact evidence progressively, and make clear that an
+      // SSH rollout form records evidence rather than running host commands.
+      // The full vocabulary oracle then replaced the internal "served
+      // workflow" phrase with the customer-facing "workspace" in all locales.
+      // The docs debt-marker oracle also required the Spanish dashboard copy
+      // to avoid an ordinary word that is byte-identical to a debt marker.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
+      // release.
+      "es-ES": "01950ff63516cff59c8c329400d8bdd7c88f320899ef2a6e5bf0685025490943",
+      "de-DE": "7cd54521e28d5fd898e61e5466cc96bf790f95ca977ed3295c0c58bfe7c7ac9c",
     });
   });
 

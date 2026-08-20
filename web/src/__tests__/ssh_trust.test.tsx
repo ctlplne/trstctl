@@ -69,7 +69,7 @@ describe("SSH trust served workflow surface", () => {
       reload_command: "systemctl reload sshd",
       health_command: "ssh -o BatchMode=yes localhost true",
       rollback_plan: "restore trusted_user_ca_keys backup and reload sshd",
-      status: "health_passed",
+      status: "planned",
       confirmed: true,
       recorded_at: "2026-06-27T10:00:00Z",
     });
@@ -114,13 +114,15 @@ describe("SSH trust served workflow surface", () => {
     expect(screen.getByRole("button", { name: "Record trust rollout" })).toBeDisabled();
 
     await user.click(screen.getByLabelText("Confirm high-blast-radius SSH trust rollout evidence"));
+    expect(screen.getByRole("button", { name: "Record trust rollout" })).toBeDisabled();
+    await user.type(screen.getByLabelText("Candidate CA fingerprint"), "SHA256:reviewed-canary-ca");
     await user.click(screen.getByRole("button", { name: "Record trust rollout" }));
 
     await waitFor(() =>
       expect(apiMock.recordSSHTrustRollout).toHaveBeenCalledWith(
         expect.objectContaining({
           target_hosts: ["edge-1.internal"],
-          status: "health_passed",
+          status: "planned",
           confirmed: true,
         }),
       ),
@@ -152,6 +154,9 @@ describe("SSH trust served workflow surface", () => {
 
     expect(await screen.findByText("SSH workflow failed")).toBeInTheDocument();
     expect(screen.getByText("ssh workflow is not enabled")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "SSH trust is not configured yet" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open setup guidance" })).toHaveAttribute("href", "/protocols");
+    expect(screen.queryByRole("form", { name: "Record SSH trust rollout" })).not.toBeInTheDocument();
   });
 
   it("keeps the workflow reason when secondary fleet inventory is rate limited", async () => {
@@ -191,6 +196,8 @@ describe("SSH trust served workflow surface", () => {
         }),
       ),
     );
+    expect(screen.getByLabelText("Attestation payload base64")).toHaveValue("");
+    expect(screen.getByLabelText("SSH public key")).toHaveValue("");
     expect(await screen.findByLabelText("Issued SSH certificate")).toHaveValue("ssh-rsa-cert-v01@openssh.com AAAA");
     expect(screen.getByText(/approver ssh-approver/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Revoke and publish KRL" }));

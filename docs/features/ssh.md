@@ -99,6 +99,25 @@ Stand up the SSH CA, distribute its public key to hosts via the agent, then issu
 short-lived user certificates. The CA's public key goes into a host's trust config like
 this (what the agent writes, additively):
 
+For a container deployment, bind the served SSH workflow and the shared
+attestation mint to one tenant. This exposes the workflow; it does not invent a
+trusted identity source:
+
+```sh
+TRSTCTL_PROTOCOLS_SSH_ENABLED=true
+TRSTCTL_PROTOCOLS_SSH_TENANT_ID=11111111-1111-4111-8111-111111111111
+TRSTCTL_ATTESTED_ISSUANCE_ENABLED=true
+TRSTCTL_ATTESTED_ISSUANCE_TRUST_DOMAIN=example.org
+TRSTCTL_ATTESTED_ISSUANCE_DEFAULT_TTL=10m
+TRSTCTL_ATTESTED_ISSUANCE_MAX_TTL=1h
+```
+
+Add an enabled, tenant-scoped public trust source through
+`/api/v1/workloads/attester-trust-sources`. The same source gates both workload
+SVIDs and attested SSH user certificates. If no matching source exists, both
+mints fail closed; the console does not show a fake list of available
+attestors.
+
 ```text
 # /etc/ssh/sshd_config
 TrustedUserCAKeys /etc/ssh/trusted_user_ca_keys

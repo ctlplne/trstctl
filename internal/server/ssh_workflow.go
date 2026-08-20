@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -30,13 +31,17 @@ func (s *Server) SSHStatus(ctx context.Context, tenantID string) (api.SSHStatus,
 	if err != nil {
 		return api.SSHStatus{}, fmt.Errorf("%w: authority key unavailable: %v", api.ErrSSHWorkflowUnavailable, err)
 	}
+	attestors, err := s.sshWorkflowAttestorMethods(ctx, tenantID)
+	if err != nil {
+		return api.SSHStatus{}, fmt.Errorf("%w: list attester trust sources: %v", api.ErrSSHWorkflowUnavailable, err)
+	}
 	return api.SSHStatus{
 		Served:       true,
 		TenantID:     tenantID,
 		AuthorityKey: string(key),
 		KRLVersion:   sp.KRLVersion(),
 		RevokedCount: sp.RevokedCount(),
-		Attestors:    s.sshWorkflowAttestorMethods(),
+		Attestors:    attestors,
 	}, nil
 }
 
@@ -57,6 +62,20 @@ func (s *Server) RecordSSHTrustRollout(ctx context.Context, tenantID, idempotenc
 	hosts := compactStrings(req.TargetHosts)
 	if len(hosts) == 0 {
 		return api.SSHTrustRollout{}, fmt.Errorf("%w: target_hosts is required", api.ErrSSHWorkflowInvalid)
+	}
+	requiredEvidence := []struct {
+		name  string
+		value string
+	}{
+		{name: "candidate_ca_fingerprint", value: req.CandidateCAFingerprint},
+		{name: "reload_command", value: req.ReloadCommand},
+		{name: "health_command", value: req.HealthCommand},
+		{name: "rollback_plan", value: req.RollbackPlan},
+	}
+	for _, field := range requiredEvidence {
+		if strings.TrimSpace(field.value) == "" {
+			return api.SSHTrustRollout{}, fmt.Errorf("%w: %s is required", api.ErrSSHWorkflowInvalid, field.name)
+		}
 	}
 	if !req.Confirmed {
 		return api.SSHTrustRollout{}, fmt.Errorf("%w: confirmed must be true for SSH trust rollout evidence", api.ErrSSHWorkflowRejected)
@@ -91,8 +110,15 @@ func (s *Server) IssueAttestedSSHUserCert(ctx context.Context, tenantID, idempot
 	if method == "" {
 		return api.SSHAttestedUserCert{}, fmt.Errorf("%w: method is required", api.ErrSSHWorkflowInvalid)
 	}
-	if s.attestedIssuance == nil || len(s.attestedIssuance.attestors) == 0 {
+	if s.attestedIssuance == nil {
 		return api.SSHAttestedUserCert{}, fmt.Errorf("%w: attestors are not configured", api.ErrSSHWorkflowUnavailable)
+	}
+	attestors, err := s.attestedIssuance.attestorsForMethod(ctx, tenantID, method)
+	if err != nil {
+		return api.SSHAttestedUserCert{}, fmt.Errorf("%w: list attester trust sources: %v", api.ErrSSHWorkflowInvalid, err)
+	}
+	if len(attestors) == 0 {
+		return api.SSHAttestedUserCert{}, fmt.Errorf("%w: no enabled trust source for attestation method %q", api.ErrSSHWorkflowInvalid, method)
 	}
 	if strings.TrimSpace(req.PublicKey) == "" {
 		return api.SSHAttestedUserCert{}, fmt.Errorf("%w: public_key is required", api.ErrSSHWorkflowInvalid)
@@ -113,7 +139,7 @@ func (s *Server) IssueAttestedSSHUserCert(ctx context.Context, tenantID, idempot
 	}
 	verifier, err := attest.NewVerifier(attest.Config{
 		TenantID:  tenantID,
-		Attestors: s.attestedIssuance.attestors,
+		Attestors: attestors,
 		Audit:     attestedIssuanceAuditor(s.eventLogForSSHWorkflow()),
 	})
 	if err != nil {
@@ -242,17 +268,33 @@ func (s *Server) eventLogForSSHWorkflow() *events.Log {
 	return s.log
 }
 
-func (s *Server) sshWorkflowAttestorMethods() []string {
-	if s == nil || s.attestedIssuance == nil || len(s.attestedIssuance.attestors) == 0 {
-		return nil
+func (s *Server) sshWorkflowAttestorMethods(ctx context.Context, tenantID string) ([]string, error) {
+	if s == nil || s.attestedIssuance == nil {
+		return nil, nil
 	}
-	out := make([]string, 0, len(s.attestedIssuance.attestors))
+	methods := make(map[string]struct{}, len(s.attestedIssuance.attestors))
 	for _, a := range s.attestedIssuance.attestors {
 		if a != nil && a.Method() != "" {
-			out = append(out, a.Method())
+			methods[a.Method()] = struct{}{}
 		}
 	}
-	return out
+	if s.attestedIssuance.store != nil {
+		sources, err := s.attestedIssuance.store.ListWorkloadAttesterTrustSources(ctx, tenantID)
+		if err != nil {
+			return nil, err
+		}
+		for _, source := range sources {
+			if source.Enabled && strings.TrimSpace(source.Method) != "" {
+				methods[source.Method] = struct{}{}
+			}
+		}
+	}
+	out := make([]string, 0, len(methods))
+	for method := range methods {
+		out = append(out, method)
+	}
+	sort.Strings(out)
+	return out, nil
 }
 
 func validSSHTrustRolloutStatus(status string) bool {

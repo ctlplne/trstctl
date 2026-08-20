@@ -38,7 +38,22 @@ describe("WIRE-02 Workloads broker and attestation wiring", () => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
     apiMock.kubernetesCSRSupport.mockResolvedValue(kubernetesCSRSupportFixture());
     apiMock.kubernetesTrustBundles.mockResolvedValue(kubernetesTrustBundleFixture());
-    apiMock.workloadAttesterTrustSources.mockResolvedValue({ items: [] });
+    apiMock.workloadAttesterTrustSources.mockResolvedValue({
+      items: [
+        {
+          id: "trust-k8s-1",
+          tenant_id: "tenant-1",
+          name: "Kubernetes production",
+          method: "k8s_sat",
+          issuer: "https://kubernetes.default.svc",
+          audience: "trstctl",
+          enabled: true,
+          rotation_version: 1,
+          created_at: "2026-06-20T09:00:00Z",
+          updated_at: "2026-06-20T09:00:00Z",
+        },
+      ],
+    });
     apiMock.issueBrokerAgentIdentity.mockResolvedValue({
       agent_id: "agent-build-1",
       subject: "spiffe://tenant/ai/build-agent",

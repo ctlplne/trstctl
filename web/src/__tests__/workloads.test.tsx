@@ -35,6 +35,8 @@ describe("workload identity disclosure surface", () => {
     renderWorkloads();
 
     expect(screen.getByRole("heading", { name: "Workloads" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Workload identity needs a trust source" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Set up workload identity" })).toHaveAttribute("href", "#attestation-heading");
     expect(await screen.findByText("CAP-K8S-04")).toBeInTheDocument();
     expect(await screen.findByText("CAP-K8S-07")).toBeInTheDocument();
     expect(screen.getByText("trustbundles/status: update, patch")).toBeInTheDocument();
@@ -68,6 +70,8 @@ describe("workload identity disclosure surface", () => {
     expect(screen.getByRole("button", { name: "Create trust source" })).toBeInTheDocument();
     expect(screen.getByText("No attester trust source has been configured.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Issue attested SVID" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Issue attested SVID" })).toBeDisabled();
+    expect(screen.getByText("Add a trusted attester before issuing a workload identity.")).toBeInTheDocument();
     expect(screen.getByLabelText("Attestation method")).toHaveValue("k8s_sat");
     expect(screen.getByLabelText("Attestation proof payload (base64)")).toBeInTheDocument();
     expect(screen.getByLabelText("Workload public key")).toBeInTheDocument();

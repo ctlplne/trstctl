@@ -32,6 +32,35 @@ const esESCatalog = {
   "pageHeader.closeDetails": "Ocultar evidencia exacta",
   "pageHeader.proveFallback":
     "Los identificadores exactos, los hechos de política, el historial de eventos y la evidencia de recuperación siguen disponibles en este espacio de trabajo.",
+  "sshTrust.page.answerReady": "Vea qué máquinas aún usan claves SSH permanentes y reemplácelas por certificados SSH de corta duración aprobados.",
+  "sshTrust.page.answerUnavailable": "La confianza SSH aún no está configurada. Abra la guía antes de cambiar cualquier host.",
+  "sshTrust.page.details":
+    "Este espacio de trabajo publica la CA SSH del inquilino, la versión KRL, los verificadores habilitados, la evidencia del despliegue, las restricciones del certificado, la revocación y los registros de retiro de hosts.",
+  "sshTrust.page.setupAction": "Abrir guía de configuración",
+  "sshTrust.page.rolloutAction": "Planificar despliegue de confianza SSH",
+  "sshTrust.readiness.unavailableHeading": "La confianza SSH aún no está configurada",
+  "sshTrust.readiness.unavailableBody":
+    "No se puede enviar ningún cambio de confianza SSH desde esta página. Primero habilite y vincule el protocolo SSH a este inquilino.",
+  "sshTrust.readiness.readyHeading": "La confianza SSH está lista",
+  "sshTrust.readiness.readyBody": "La CA y la lista de revocación están disponibles. Registre un plan canario antes de cambiar la confianza de los hosts.",
+  "sshTrust.rollout.recordOnly": "Este formulario registra la evidencia revisada del despliegue. No ejecuta comandos ni cambia sshd en ningún host.",
+  "workloads.page.answerReady":
+    "Las cargas de trabajo pueden demostrar dónde se ejecutan y recibir identidades de corta duración de una fuente de confianza habilitada.",
+  "workloads.page.answerNeedsTrust": "Primero elija qué puede demostrar una carga de trabajo. Después podrá recibir una identidad de corta duración.",
+  "workloads.page.details":
+    "Las fuentes de confianza de verificadores por inquilino validan evidencia de Kubernetes, nube, GitHub o TPM antes de que el servidor emita un X.509-SVID. Las pruebas y claves privadas no se conservan como evidencia del navegador.",
+  "workloads.page.setupAction": "Configurar identidad de carga de trabajo",
+  "workloads.readiness.needsTrustHeading": "La identidad de carga de trabajo necesita una fuente de confianza",
+  "workloads.readiness.needsTrustBody":
+    "Añada un verificador de confianza para la plataforma donde se ejecuta la carga. La emisión permanece deshabilitada hasta entonces.",
+  "workloads.readiness.readyHeading": "La identidad de carga de trabajo está lista para emitirse",
+  "workloads.readiness.readyBody": "Un verificador habilitado puede validar la evidencia. Seleccione su método abajo para emitir un SVID de corta duración.",
+  "workloads.attestation.addTrustBeforeIssue": "Añada un verificador de confianza antes de emitir una identidad de carga de trabajo.",
+  "sshTrust.advanced.revocationSummary": "Revocación y retiro de hosts",
+  "sshTrust.advanced.authorityKeySummary": "Mostrar clave pública de la CA SSH",
+  "workloads.advanced.kubernetesSummary": "Evidencia de controladores de Kubernetes",
+  "workloads.advanced.leasesSummary": "Arrendamientos de secretos dinámicos",
+  "workloads.advanced.brokerSummary": "Intermediario de identidad para agentes de IA",
   "shell.accountMenu": "Cuenta y preferencias",
   "credentialChip.copy": "Copiar {label}",
   "credentialChip.copied": "Copiado al portapapeles",
@@ -164,7 +193,7 @@ const esESCatalog = {
   "dashboard.attention.healthy": "No se informa de ningún riesgo urgente de credenciales.",
   "dashboard.attention.unavailable": "El resumen de atención no está disponible.",
   "dashboard.attention.breakdown": "{critical} elementos críticos y {high} de alta prioridad. Revise la credencial afectada antes de cambiarla.",
-  "dashboard.attention.healthyHelp": "Todo lo demás sigue disponible abajo; cero elementos urgentes no significa que se haya analizado todo el entorno.",
+  "dashboard.attention.healthyHelp": "El resto sigue disponible abajo; cero elementos urgentes no significa que se haya analizado el entorno completo.",
   "dashboard.attention.unavailableHelp":
     "No se puede mostrar un total seguro. Abra la lista de riesgos o vuelva a intentarlo cuando se recuperen las proyecciones.",
   "dashboard.attention.listLabel": "Credenciales de mayor prioridad",

@@ -3850,6 +3850,55 @@ export const messages = {
       "Short-lived SSH user certs require attestation evidence, an approver, principal constraints, TTL, source-address, and force-command policy. Self-approval blocked is a hard rule, not a UI hint.",
     description: "Description for the attestation-gated SSH user certificate form.",
   },
+  "sshTrust.page.answerReady": {
+    defaultMessage: "See which machines still use standing SSH keys, then replace them with short-lived, approved SSH certificates.",
+    description: "Plain-language answer shown when the SSH trust workflow is ready.",
+  },
+  "sshTrust.page.answerUnavailable": {
+    defaultMessage: "SSH trust is not configured yet. Open setup guidance before changing any host.",
+    description: "Plain-language answer shown when the SSH trust workflow is disabled.",
+  },
+  "sshTrust.page.details": {
+    defaultMessage:
+      "This workspace publishes the tenant SSH CA, KRL version, enabled attesters, rollout evidence, certificate constraints, revocation, and host-retirement records.",
+    description: "Technical proof summary for the SSH trust page.",
+  },
+  "sshTrust.page.setupAction": {
+    defaultMessage: "Open setup guidance",
+    description: "Primary action when SSH trust is disabled.",
+  },
+  "sshTrust.page.rolloutAction": {
+    defaultMessage: "Plan SSH trust rollout",
+    description: "Primary action when SSH trust is ready.",
+  },
+  "sshTrust.readiness.unavailableHeading": {
+    defaultMessage: "SSH trust is not configured yet",
+    description: "Calm readiness heading when the SSH workflow is disabled.",
+  },
+  "sshTrust.readiness.unavailableBody": {
+    defaultMessage: "No SSH trust change can be submitted from this page. Enable and bind the SSH protocol to this tenant first.",
+    description: "Explanation of the disabled SSH workflow.",
+  },
+  "sshTrust.readiness.readyHeading": {
+    defaultMessage: "SSH trust is ready",
+    description: "Readiness heading when the served SSH workflow is available.",
+  },
+  "sshTrust.readiness.readyBody": {
+    defaultMessage: "The CA and revocation list are available. Record a canary plan before changing host trust.",
+    description: "Explanation of the available SSH workflow.",
+  },
+  "sshTrust.rollout.recordOnly": {
+    defaultMessage: "This form records your reviewed rollout evidence. It does not run commands or change sshd on any host.",
+    description: "Safety boundary for the SSH rollout evidence form.",
+  },
+  "sshTrust.advanced.revocationSummary": {
+    defaultMessage: "Revocation and host retirement",
+    description: "Disclosure label for advanced SSH revocation and retirement controls.",
+  },
+  "sshTrust.advanced.authorityKeySummary": {
+    defaultMessage: "Show SSH CA public key",
+    description: "Disclosure label for the exact SSH CA public key.",
+  },
   "sshTrust.attested.approver": {
     defaultMessage: "Approver",
     description: "Field label for the distinct approver required for attested SSH user certificate issuance.",
@@ -8685,6 +8734,55 @@ export const messages = {
   "workloads.attestation.heading": {
     defaultMessage: "Workload attestation chain",
     description: "Heading for workload attestation and trust-source controls.",
+  },
+  "workloads.page.answerReady": {
+    defaultMessage: "Workloads can prove where they run and receive short-lived identities from an enabled trust source.",
+    description: "Plain-language workload identity answer when an attester is enabled.",
+  },
+  "workloads.page.answerNeedsTrust": {
+    defaultMessage: "Choose what may prove a workload first. After that, the workload can receive a short-lived identity.",
+    description: "Plain-language workload identity answer when no attester is enabled.",
+  },
+  "workloads.page.details": {
+    defaultMessage:
+      "Tenant-scoped attester trust sources verify Kubernetes, cloud, GitHub, or TPM evidence before the server mints an X.509-SVID. Proof payloads and private keys are not retained in browser evidence.",
+    description: "Technical proof summary for the workload identity page.",
+  },
+  "workloads.page.setupAction": {
+    defaultMessage: "Set up workload identity",
+    description: "Primary action that jumps to workload attester setup.",
+  },
+  "workloads.readiness.needsTrustHeading": {
+    defaultMessage: "Workload identity needs a trust source",
+    description: "Readiness heading when no workload attester trust source is enabled.",
+  },
+  "workloads.readiness.needsTrustBody": {
+    defaultMessage: "Add one trusted attester for the platform your workload runs on. Issuance stays disabled until then.",
+    description: "Explanation of the workload identity setup prerequisite.",
+  },
+  "workloads.readiness.readyHeading": {
+    defaultMessage: "Workload identity is ready to issue",
+    description: "Readiness heading when at least one workload attester is enabled.",
+  },
+  "workloads.readiness.readyBody": {
+    defaultMessage: "An enabled attester can verify workload evidence. Select its method below to issue a short-lived SVID.",
+    description: "Explanation of workload identity readiness.",
+  },
+  "workloads.attestation.addTrustBeforeIssue": {
+    defaultMessage: "Add a trusted attester before issuing a workload identity.",
+    description: "Inline explanation for a disabled workload identity issuance button.",
+  },
+  "workloads.advanced.kubernetesSummary": {
+    defaultMessage: "Kubernetes controller evidence",
+    description: "Disclosure label for Kubernetes CSR and trust-bundle controller diagnostics.",
+  },
+  "workloads.advanced.leasesSummary": {
+    defaultMessage: "Dynamic secret leases",
+    description: "Disclosure label for just-in-time dynamic secret lease controls.",
+  },
+  "workloads.advanced.brokerSummary": {
+    defaultMessage: "AI-agent identity broker",
+    description: "Disclosure label for advanced brokered agent identity controls.",
   },
   "workloads.attestation.description": {
     defaultMessage:

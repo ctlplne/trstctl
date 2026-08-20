@@ -36,6 +36,36 @@ const deDECatalog = {
   "pageHeader.closeDetails": "Exakte Nachweise ausblenden",
   "pageHeader.proveFallback":
     "Exakte Kennungen, Richtlinienfakten, Ereignisverlauf und Wiederherstellungsnachweise bleiben in diesem Arbeitsbereich verfügbar.",
+  "sshTrust.page.answerReady":
+    "Sehen Sie, welche Maschinen noch dauerhafte SSH-Schlüssel verwenden, und ersetzen Sie sie durch genehmigte kurzlebige SSH-Zertifikate.",
+  "sshTrust.page.answerUnavailable": "SSH-Vertrauen ist noch nicht eingerichtet. Öffnen Sie die Anleitung, bevor Sie einen Host ändern.",
+  "sshTrust.page.details":
+    "Dieser Arbeitsbereich zeigt die Mandanten-SSH-CA, KRL-Version, aktivierten Prüfer, Rollout-Nachweise, Zertifikatsgrenzen, Sperrungen und Host-Ausmusterungen.",
+  "sshTrust.page.setupAction": "Einrichtungsanleitung öffnen",
+  "sshTrust.page.rolloutAction": "SSH-Vertrauensrollout planen",
+  "sshTrust.readiness.unavailableHeading": "SSH-Vertrauen ist noch nicht eingerichtet",
+  "sshTrust.readiness.unavailableBody":
+    "Auf dieser Seite kann keine SSH-Vertrauensänderung gesendet werden. Aktivieren Sie zuerst das SSH-Protokoll und binden Sie es an diesen Mandanten.",
+  "sshTrust.readiness.readyHeading": "SSH-Vertrauen ist bereit",
+  "sshTrust.readiness.readyBody": "CA und Sperrliste sind verfügbar. Erfassen Sie einen Canary-Plan, bevor Sie das Host-Vertrauen ändern.",
+  "sshTrust.rollout.recordOnly": "Dieses Formular erfasst den geprüften Rollout-Nachweis. Es führt keine Befehle aus und ändert sshd auf keinem Host.",
+  "workloads.page.answerReady": "Workloads können ihren Ausführungsort belegen und kurzlebige Identitäten aus einer aktivierten Vertrauensquelle erhalten.",
+  "workloads.page.answerNeedsTrust": "Wählen Sie zuerst, was einen Workload belegen darf. Danach kann er eine kurzlebige Identität erhalten.",
+  "workloads.page.details":
+    "Mandantenbezogene Prüfer-Vertrauensquellen validieren Kubernetes-, Cloud-, GitHub- oder TPM-Nachweise, bevor der Server ein X.509-SVID ausstellt. Nachweise und private Schlüssel werden nicht als Browser-Belege gespeichert.",
+  "workloads.page.setupAction": "Workload-Identität einrichten",
+  "workloads.readiness.needsTrustHeading": "Workload-Identität benötigt eine Vertrauensquelle",
+  "workloads.readiness.needsTrustBody":
+    "Fügen Sie einen vertrauenswürdigen Prüfer für die Plattform des Workloads hinzu. Die Ausstellung bleibt bis dahin deaktiviert.",
+  "workloads.readiness.readyHeading": "Workload-Identität ist ausstellungsbereit",
+  "workloads.readiness.readyBody":
+    "Ein aktivierter Prüfer kann Workload-Nachweise validieren. Wählen Sie unten seine Methode, um ein kurzlebiges SVID auszustellen.",
+  "workloads.attestation.addTrustBeforeIssue": "Fügen Sie einen vertrauenswürdigen Prüfer hinzu, bevor Sie eine Workload-Identität ausstellen.",
+  "sshTrust.advanced.revocationSummary": "Sperrung und Host-Ausmusterung",
+  "sshTrust.advanced.authorityKeySummary": "Öffentlichen SSH-CA-Schlüssel anzeigen",
+  "workloads.advanced.kubernetesSummary": "Kubernetes-Controller-Nachweise",
+  "workloads.advanced.leasesSummary": "Dynamische Secret-Leases",
+  "workloads.advanced.brokerSummary": "Identitätsbroker für KI-Agenten",
   "shell.accountMenu": "Konto und Einstellungen",
   "credentialChip.copy": "{label} kopieren",
   "credentialChip.copied": "In die Zwischenablage kopiert",

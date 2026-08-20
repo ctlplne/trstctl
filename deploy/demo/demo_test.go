@@ -93,6 +93,12 @@ func TestDemoComposeIsSeparatePrepopulatedStack(t *testing.T) {
 		"TRSTCTL_LIFECYCLE_RENEW_BEFORE":                   "5m",
 		"TRSTCTL_PROTOCOLS_ACME_TENANT_ID":                 "11111111-1111-4111-8111-111111111111",
 		"TRSTCTL_PROTOCOLS_EST_TENANT_ID":                  "11111111-1111-4111-8111-111111111111",
+		"TRSTCTL_ATTESTED_ISSUANCE_ENABLED":                "true",
+		"TRSTCTL_ATTESTED_ISSUANCE_TRUST_DOMAIN":           "demo.trstctl.local",
+		"TRSTCTL_ATTESTED_ISSUANCE_DEFAULT_TTL":            "10m",
+		"TRSTCTL_ATTESTED_ISSUANCE_MAX_TTL":                "1h",
+		"TRSTCTL_PROTOCOLS_SSH_ENABLED":                    "true",
+		"TRSTCTL_PROTOCOLS_SSH_TENANT_ID":                  "11111111-1111-4111-8111-111111111111",
 		"TRSTCTL_SERVER_TLS_INTERNAL_TRUST_FILE":           "/public-trust/control-plane.crt",
 	} {
 		if got := stringValue(cp.Environment[k]); got != want {

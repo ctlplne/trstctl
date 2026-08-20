@@ -608,15 +608,17 @@ func TestJourney005IssueFlowAndRouteParityStayWired(t *testing.T) {
 		"issueCertificate",
 		"api.createOwner(",
 		"api.createIdentity(",
-		// B1 split this call across lines to pass the requester's own CSR, so the
-		// anchor is the call and its arguments rather than one formatted line.
-		// The chained flow the guard exists to protect is unchanged: the button
-		// still creates the owner, creates the identity, and transitions it to
-		// issued.
+		// B1 passes the requester's own CSR and idempotency key. Keep independent
+		// anchors for the typed mutation, exact route, CSR field, and key because
+		// Prettier intentionally places each argument on its own line.
 		"api.transitionIdentity(",
 		"identity.id,",
 		`"issued",`,
-		`mutate<Identity>("POST", `+"`/api/v1/identities/${encodeURIComponent(id)}/transitions`",
+		"transitionIdentity: (id, to, reason, subjectCSRPEM, idempotencyKey) =>",
+		"mutate<Identity>(",
+		"`/api/v1/identities/${encodeURIComponent(id)}/transitions`",
+		"...(subjectCSRPEM ? { subject_csr_pem: subjectCSRPEM } : {}),",
+		"idempotencyKey,",
 	)
 
 	// Route-parity proof must still exist (the docs-side parity test that binds web

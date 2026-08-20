@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	xssh "golang.org/x/crypto/ssh"
 
@@ -22,10 +23,14 @@ import (
 // attestation-gated SSH user cert, revoke it into the served KRL, and retire a
 // host from the journey evidence.
 func TestServedSSHAtScaleJourneyJOURNEY002EndToEnd(t *testing.T) {
-	fixtures := servedAttestedIssuanceFixtures(t)
+	trust := servedDynamicK8sTrustFixture(t, "journey-ssh-k1")
 	h := newServedHarness(t,
 		config.Protocols{SSH: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}},
-		func(d *Deps) { d.AttestedIssuance = fixtures.Config },
+		func(d *Deps) {
+			d.AttestedIssuance = AttestedIssuanceConfig{
+				Enabled: true, TrustDomain: "served.test", DefaultTTL: 10 * time.Minute, MaxTTL: time.Hour,
+			}
+		},
 	)
 	token := seedScopedToken(t, h.store, h.tenant,
 		"discovery:write", "discovery:read",
@@ -34,9 +39,25 @@ func TestServedSSHAtScaleJourneyJOURNEY002EndToEnd(t *testing.T) {
 		"identities:write", "identities:read",
 	)
 
+	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/workloads/attester-trust-sources",
+		token, "journey-002-trust-create", map[string]any{
+			"name": "ssh-canary-k8s", "method": "k8s_sat",
+			"issuer": "https://kubernetes.default.svc", "audience": "trstctl", "jwks": trust.JWKS,
+		})
+	if status != http.StatusCreated {
+		t.Fatalf("create SSH workload trust source: status %d body %s", status, body)
+	}
+
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/ssh/trust-rollouts", token, "journey-002-incomplete-rollout", map[string]any{
+		"target_hosts": []string{"edge-1.internal"}, "status": "planned", "confirmed": true,
+	})
+	if status != http.StatusUnprocessableEntity || !bytes.Contains(body, []byte("candidate_ca_fingerprint")) {
+		t.Fatalf("incomplete SSH rollout evidence should fail closed: status %d body %s", status, body)
+	}
+
 	sourceID, runID := createSSHDiscoverySourceAndRun(t, h, token)
 
-	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/ssh/trust-rollouts", token, "journey-002-rollout", map[string]any{
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/ssh/trust-rollouts", token, "journey-002-rollout", map[string]any{
 		"source_id":                sourceID,
 		"target_hosts":             []string{"edge-1.internal"},
 		"candidate_ca_fingerprint": "SHA256:served-ssh-ca",
@@ -67,7 +88,7 @@ func TestServedSSHAtScaleJourneyJOURNEY002EndToEnd(t *testing.T) {
 	pubAuthorizedKeys := genSSHKey(t, keyPath)
 	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/ssh/attested-user-certs", token, "journey-002-issue", map[string]any{
 		"method":           "k8s_sat",
-		"payload_base64":   base64.StdEncoding.EncodeToString(fixtures.K8sSAT),
+		"payload_base64":   base64.StdEncoding.EncodeToString([]byte(trust.SAT)),
 		"public_key":       string(pubAuthorizedKeys),
 		"key_id":           "deployer@edge-1",
 		"ttl_seconds":      600,
@@ -121,7 +142,7 @@ func TestServedSSHAtScaleJourneyJOURNEY002EndToEnd(t *testing.T) {
 
 	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/ssh/attested-user-certs", token, "journey-002-expired-attestation", map[string]any{
 		"method":         "k8s_sat",
-		"payload_base64": base64.StdEncoding.EncodeToString(fixtures.ExpiredK8sSAT),
+		"payload_base64": base64.StdEncoding.EncodeToString([]byte(trust.ExpiredSAT)),
 		"public_key":     string(pubAuthorizedKeys),
 		"key_id":         "deployer@edge-1-expired",
 		"approver":       "ssh-approver",
@@ -132,7 +153,7 @@ func TestServedSSHAtScaleJourneyJOURNEY002EndToEnd(t *testing.T) {
 
 	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/ssh/attested-user-certs", token, "journey-002-self-approval", map[string]any{
 		"method":         "k8s_sat",
-		"payload_base64": base64.StdEncoding.EncodeToString(fixtures.K8sSAT),
+		"payload_base64": base64.StdEncoding.EncodeToString([]byte(trust.SAT)),
 		"public_key":     string(pubAuthorizedKeys),
 		"key_id":         "deployer@edge-1-self",
 		"approver":       issued.Subject,
@@ -147,6 +168,9 @@ func TestServedSSHAtScaleJourneyJOURNEY002EndToEnd(t *testing.T) {
 	}
 	if !bytes.Contains(body, []byte(`"krl_version":0`)) {
 		t.Fatalf("initial KRL status should be version 0: %s", body)
+	}
+	if !bytes.Contains(body, []byte(`"attestors":["k8s_sat"]`)) {
+		t.Fatalf("SSH status should publish the enabled tenant trust-source method: %s", body)
 	}
 
 	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/ssh/certificates/revoke", token, "journey-002-revoke", map[string]any{
