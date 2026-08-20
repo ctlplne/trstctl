@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, type Ref } from "react";
 import type { Identity } from "@/lib/api";
 
 /** IdentityPicker — DESIGN rule 13 made concrete for identity fields (DA-10):
@@ -17,6 +17,7 @@ export function IdentityPicker({
   placeholder,
   filterKinds,
   className,
+  inputRef,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -26,12 +27,14 @@ export function IdentityPicker({
   /** Restrict suggestions to these identity kinds (submission stays free-form). */
   filterKinds?: string[];
   className?: string;
+  inputRef?: Ref<HTMLInputElement>;
 }) {
   const listId = useId();
   const options = filterKinds?.length ? identities.filter((identity) => filterKinds.includes(identity.kind)) : identities;
   return (
     <>
       <input
+        ref={inputRef}
         id={id}
         className={className ?? "ui-input font-mono"}
         value={value}

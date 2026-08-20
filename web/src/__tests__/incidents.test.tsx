@@ -395,12 +395,34 @@ describe("incident response served execution surface", () => {
     });
   });
 
+  it("opens with the decision-first Security incidents contract", async () => {
+    const user = userEvent.setup();
+    renderIncidents();
+
+    expect(screen.getByRole("heading", { name: "Security incidents" })).toBeInTheDocument();
+    expect(screen.getByText("What is happening, what is affected, and how to contain it.")).toBeInTheDocument();
+
+    const operate = screen.getByTestId("page-depth-operate");
+    const actions = within(operate).getAllByRole("button");
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toHaveAccessibleName("Continue response");
+
+    expect(screen.getByRole("heading", { name: "What is happening" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "What is affected" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "How to contain it" })).toBeInTheDocument();
+    expect(screen.getByText(/event timeline, blast-radius evidence, approval records, replacement and recovery state/i)).toBeInTheDocument();
+
+    await user.click(actions[0]);
+    expect(screen.getByRole("tab", { name: "Execute response" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByLabelText("Affected identity")).toHaveFocus();
+  });
+
   it("opens on execution evidence and gives every response workflow a stable tab", async () => {
     const user = userEvent.setup();
     renderIncidents();
 
-    expect(await screen.findByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("heading", { name: "Active incidents and evidence" })).toBeInTheDocument();
+    expect(await screen.findByRole("tab", { name: "Timeline & evidence" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("heading", { name: "Situation now" })).toBeInTheDocument();
     expect(document.getElementById("incidents-panel-overview")).not.toHaveClass("hidden");
     expect(document.getElementById("incidents-panel-integrations")).toHaveClass("hidden");
 
@@ -436,9 +458,15 @@ describe("incident response served execution surface", () => {
     const user = userEvent.setup();
     renderIncidents();
 
-    expect(screen.getByRole("heading", { name: "Incidents" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Security incidents" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Execution evidence" })).toBeInTheDocument();
-    expect(await screen.findByText("22222222-2222-2222-2222-222222222222")).toBeInTheDocument();
+    expect((await screen.findAllByText("22222222-2222-2222-2222-222222222222")).length).toBeGreaterThanOrEqual(2);
+    await user.click(screen.getByText("View exact response state"));
+    expect(screen.getByRole("heading", { name: "Event timeline" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Evidence and approvals" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Replacement and recovery" })).toBeInTheDocument();
+    expect(screen.getByText("No approval record is attached. Response actor: incident-commander.")).toBeInTheDocument();
+    expect(screen.getByText(/restore previous fullchain/)).toBeInTheDocument();
     expect(screen.getByText(/Direct single-identity mutation is retired/i)).toBeInTheDocument();
 
     await user.type(screen.getByLabelText("Affected identity"), "11111111-1111-1111-1111-111111111111");
@@ -453,7 +481,7 @@ describe("incident response served execution surface", () => {
     expect(apiMock.executeIncident).not.toHaveBeenCalled();
     expect((await screen.findAllByText("queued")).length).toBeGreaterThan(0);
     expect(screen.getAllByText("jws").length).toBeGreaterThan(0);
-    expect(screen.getByText("sealed.audit.bundle")).toBeInTheDocument();
+    expect(screen.getAllByText("sealed.audit.bundle").length).toBeGreaterThanOrEqual(2);
 
     await user.type(screen.getAllByLabelText("ServiceNow instance")[1], "http://servicenow.test");
     await user.type(screen.getByLabelText("Ticket summary"), "Rotate exposed TLS private key");

@@ -36,7 +36,7 @@ describe("U7-1 incident response console", () => {
         <Incidents />
       </MemoryRouter>,
     );
-    expect(screen.getByRole("heading", { name: "Incidents" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Security incidents" })).toBeInTheDocument();
     await user.type(screen.getByLabelText("Affected identity"), "11111111-1111-1111-1111-111111111111");
     await user.click(screen.getByRole("button", { name: "Preview blast radius" }));
 

@@ -784,8 +784,19 @@ describe("i18n boundary", () => {
       // to avoid an ordinary word that is byte-identical to a debt marker.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
       // release.
-      "es-ES": "b58ffcbf1e17303e0d97efc21092157548111a2f8460f1f59d62755f34cbd701",
-      "de-DE": "a84ed01a7ed3b2410e47dd04594c7de86e9240a61368f149441141f0966355c5",
+      // QA design g18 Security-incidents re-pin: new keys name the
+      // responder's three immediate questions, distinguish loading, failed,
+      // empty, individual, and fleet evidence without guessing, pluralize
+      // affected credentials and failed targets, and focus the translated
+      // Continue-response action. The navigation label changes with the route.
+      // A collapsed exact-state proof now names the event timeline, missing
+      // approval record, idempotency key, evidence bundle, replacement,
+      // revocation, delivery, failed targets, and rollback references without
+      // turning absent evidence into a success claim.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
+      // release.
+      "es-ES": "f0f7880649ec9687d64b869677fb4473cd7735bb67fb6486b52eddb5ab144092",
+      "de-DE": "8eb1a7436b3f239190c0af256a41f4085861cef7743d514012d558242ece7fca",
     });
   });
 

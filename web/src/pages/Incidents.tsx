@@ -1,6 +1,6 @@
 import { FormEvent, ReactNode, useEffect, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import { Activity, Bell, CheckCircle, Play, RotateCcw, Send } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
+import { CheckCircle, Play, RotateCcw, Send } from "lucide-react";
 import {
   api,
   type ConnectorCatalogItem,
@@ -39,7 +39,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { BreakGlassReconcile } from "@/components/breakglass";
 import { useTranslation, type I18nContextValue, translateNow } from "@/i18n/I18nProvider";
-import { IncidentSeverityBadge } from "./incidents/IncidentsPageParts";
+import { IncidentExecutionProof, IncidentSeverityBadge, IncidentSituationSummary } from "./incidents/IncidentsPageParts";
 import { FleetReissuanceTable } from "./incidents/FleetReissuanceParts";
 import { OutboxRecoveryPanel } from "./incidents/OutboxRecoveryPanel";
 import { formatDateTime } from "@/i18n/format";
@@ -214,6 +214,15 @@ export function Incidents() {
   const [identityRoster, setIdentityRoster] = useState<Identity[]>([]);
   const [connectorRoster, setConnectorRoster] = useState<ConnectorCatalogItem[]>([]);
   const [inventoryRoster, setInventoryRoster] = useState<NHIInventoryItem[]>([]);
+  const incidentIdentityRef = useRef<HTMLInputElement>(null);
+  const [focusResponseIntake, setFocusResponseIntake] = useState(false);
+
+  useEffect(() => {
+    if (tab !== "execute" || !focusResponseIntake) return;
+    incidentIdentityRef.current?.scrollIntoView?.({ block: "center" });
+    incidentIdentityRef.current?.focus();
+    setFocusResponseIntake(false);
+  }, [focusResponseIntake, tab]);
 
   useEffect(() => {
     let active = true;
@@ -590,31 +599,26 @@ export function Incidents() {
     );
   }
 
+  function continueResponse() {
+    setFocusResponseIntake(true);
+    selectTab("execute");
+  }
+
   return (
     <section aria-labelledby="incidents-heading" className="grid gap-6">
       <PageHeader
         titleId="incidents-heading"
-        title={translateNow("source.incidents.bfe8689315")}
-        description="Respond to a compromised credential: see what it can reach (blast radius), issue a replacement before revoking, push it out through connectors, roll back failed targets, and capture a tamper-evident audit bundle."
+        title={t("incidents.page.title")}
+        description={t("incidents.page.answer")}
+        technicalDetails={t("incidents.page.details")}
         actions={
-          <>
-            <Link
-              to="/operations"
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:border-brand-accent/40 hover:bg-muted/60"
-            >
-              <Activity className="h-4 w-4" aria-hidden="true" />
-              {t("nav.item.operations")}
-            </Link>
-            <Link
-              to="/notifications"
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:border-brand-accent/40 hover:bg-muted/60"
-            >
-              <Bell className="h-4 w-4" aria-hidden="true" />
-              {t("nav.item.notifications")}
-            </Link>
-          </>
+          <Button type="button" onClick={continueResponse}>
+            {t("incidents.action.continue")}
+          </Button>
         }
       />
+
+      <IncidentSituationSummary executions={executions} fleetRuns={fleetRuns} loading={loading} error={loadError} />
 
       <PageTabs
         tabs={[
@@ -643,6 +647,7 @@ export function Incidents() {
           <label className="grid gap-1 text-sm font-medium" htmlFor="incident-affected-identity">
             {translateNow("source.affected.identity.031ba2eb6f")}
             <IdentityPicker
+              inputRef={incidentIdentityRef}
               id="incident-affected-identity"
               value={form.identity_id}
               onChange={(identityId) => setForm({ ...form, identity_id: identityId })}
@@ -1175,15 +1180,7 @@ export function Incidents() {
         )}
       </section>
 
-      <section {...tabPanelProps("incidents", "overview")} className={tab === "overview" ? "ui-panel p-comfortable" : "hidden"}>
-        <h2 id="incidents-overview-heading" className="text-title font-semibold">
-          {t("incidents.workspace.overviewHeading")}
-        </h2>
-        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-          {t("incidents.workspace.overviewSummary", { executions: executions.length, runs: playbookRuns.length })}
-        </p>
-      </section>
-      <section aria-labelledby="evidence-heading" className={tab === "overview" ? "grid gap-3 border-y border-border py-4" : "hidden"}>
+      <section {...tabPanelProps("incidents", "overview")} className={tab === "overview" ? "grid gap-3 border-y border-border py-4" : "hidden"}>
         <div>
           <h2 id="evidence-heading" className="text-title font-semibold">
             {translateNow("source.execution.evidence.81ad27c5fa")}
@@ -1576,45 +1573,52 @@ function IncidentExecutionTable({ executions }: { executions: IncidentExecution[
     return <p className="text-sm text-muted-foreground">{translateNow("source.no.incident.executions.have.been.recorded.b14b9f6701")}</p>;
   }
   return (
-    <div className="overflow-x-auto rounded-panel border border-border">
-      <table className="ui-table min-w-[68rem]">
-        <caption className="sr-only">{translateNow("source.incident.execution.evidence.ed369964a3")}</caption>
-        <thead>
-          <tr>
-            <th scope="col">{translateNow("source.execution.a45cd4bd09")}</th>
-            <th scope="col">{translateNow("source.compromised.05ab8ef2cf")}</th>
-            <th scope="col">{translateNow("source.replacement.cefd665229")}</th>
-            <th scope="col">{translateNow("source.status.920e413c7d")}</th>
-            <th scope="col">{translateNow("source.delivery.52bfe584a5")}</th>
-            <th scope="col">{translateNow("source.failed.targets.4ffa850540")}</th>
-            <th scope="col">{translateNow("source.evidence.03867aea70")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {executions.map((item) => (
-            <tr key={item.id} className="align-top">
-              <td className="font-mono text-xs">{item.id}</td>
-              <td className="font-mono text-xs">{item.compromised_identity_id}</td>
-              <td className="font-mono text-xs">{item.replacement_identity_id ?? "-"}</td>
-              <td>
-                <p className="font-medium">{item.status}</p>
-                <p className="text-xs text-muted-foreground">{item.phase}</p>
-              </td>
-              <td>
-                <p className="font-medium">{item.connector_delivery?.status ?? item.connector_delivery_id ?? "-"}</p>
-                <p className="text-xs text-muted-foreground">
-                  {item.connector_delivery?.connector ?? ""} {item.connector_delivery?.target ?? ""}
-                </p>
-              </td>
-              <td>{item.failed_targets.length ? item.failed_targets.join(", ") : translateNow("source.none.140bedbf9c")}</td>
-              <td>
-                <p className="font-medium">{item.evidence_bundle_format || translateNow("source.unavailable.ba691ba042")}</p>
-                <p className="max-w-[18rem] truncate font-mono text-xs text-muted-foreground">{item.evidence_bundle || "-"}</p>
-              </td>
+    <div className="grid gap-3">
+      <div className="overflow-x-auto rounded-panel border border-border">
+        <table className="ui-table min-w-[68rem]">
+          <caption className="sr-only">{translateNow("source.incident.execution.evidence.ed369964a3")}</caption>
+          <thead>
+            <tr>
+              <th scope="col">{translateNow("source.execution.a45cd4bd09")}</th>
+              <th scope="col">{translateNow("source.compromised.05ab8ef2cf")}</th>
+              <th scope="col">{translateNow("source.replacement.cefd665229")}</th>
+              <th scope="col">{translateNow("source.status.920e413c7d")}</th>
+              <th scope="col">{translateNow("source.delivery.52bfe584a5")}</th>
+              <th scope="col">{translateNow("source.failed.targets.4ffa850540")}</th>
+              <th scope="col">{translateNow("source.evidence.03867aea70")}</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {executions.map((item) => (
+              <tr key={item.id} className="align-top">
+                <td className="font-mono text-xs">{item.id}</td>
+                <td className="font-mono text-xs">{item.compromised_identity_id}</td>
+                <td className="font-mono text-xs">{item.replacement_identity_id ?? "-"}</td>
+                <td>
+                  <p className="font-medium">{item.status}</p>
+                  <p className="text-xs text-muted-foreground">{item.phase}</p>
+                </td>
+                <td>
+                  <p className="font-medium">{item.connector_delivery?.status ?? item.connector_delivery_id ?? "-"}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {item.connector_delivery?.connector ?? ""} {item.connector_delivery?.target ?? ""}
+                  </p>
+                </td>
+                <td>{item.failed_targets.length ? item.failed_targets.join(", ") : translateNow("source.none.140bedbf9c")}</td>
+                <td>
+                  <p className="font-medium">{item.evidence_bundle_format || translateNow("source.unavailable.ba691ba042")}</p>
+                  <p className="max-w-[18rem] truncate font-mono text-xs text-muted-foreground">{item.evidence_bundle || "-"}</p>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="grid gap-2" aria-label={translateNow("incidents.proof.listLabel")}>
+        {executions.map((execution) => (
+          <IncidentExecutionProof key={execution.id} execution={execution} />
+        ))}
+      </div>
     </div>
   );
 }

@@ -42,7 +42,7 @@ const routeCatalog = {
   graph: { path: "/graph", heading: "Credential graph" },
   identities: { path: "/identities", heading: "Machine identities" },
   migration: { path: "/migration", heading: "Migration" },
-  incidents: { path: "/incidents", heading: "Incidents" },
+  incidents: { path: "/incidents", heading: "Security incidents" },
   integrate: { path: "/integrate", heading: "Integrate" },
   operations: { path: "/operations", heading: "Operations queue" },
   platform: { path: "/platform", heading: "Access administration" },

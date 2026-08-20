@@ -153,7 +153,7 @@ describe("POL-02 incident polish", () => {
     const user = userEvent.setup();
     renderIncidents();
 
-    expect(await screen.findByRole("heading", { name: "Incidents" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Security incidents" })).toBeInTheDocument();
     expect(screen.getByLabelText("Affected identity")).toBeInTheDocument();
     expect(screen.getAllByLabelText("What happened")[0]).toBeInTheDocument();
     expect(screen.getByText(/Direct single-identity mutation is retired/i)).toBeInTheDocument();

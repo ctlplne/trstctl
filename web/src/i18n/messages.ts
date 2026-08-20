@@ -177,8 +177,8 @@ export const messages = {
     description: "Accessible label for the task-oriented incident response workspace tabs.",
   },
   "incidents.workspace.tabs.overview": {
-    defaultMessage: "Overview",
-    description: "Incident workspace tab showing active incidents and execution evidence.",
+    defaultMessage: "Timeline & evidence",
+    description: "Incident workspace tab showing the exact response timeline and evidence.",
   },
   "incidents.workspace.tabs.execute": {
     defaultMessage: "Execute response",
@@ -204,6 +204,203 @@ export const messages = {
     defaultMessage: "Review {executions} incident executions and {runs} remediation runs before starting a new action.",
     description: "Incident overview summary of the evidence records already served.",
   },
+  "incidents.page.title": {
+    defaultMessage: "Security incidents",
+    description: "Calm, task-first title for the credential incident response route.",
+  },
+  "incidents.page.answer": {
+    defaultMessage: "What is happening, what is affected, and how to contain it.",
+    description: "Plain-language opening answer for the incident response route.",
+  },
+  "incidents.page.details": {
+    defaultMessage:
+      "Exact response detail includes the event timeline, blast-radius evidence, approval records, replacement and recovery state, rollback references, connector receipts, idempotency records, and tamper-evident audit bundles.",
+    description: "Expert incident evidence kept behind the shared technical-details disclosure.",
+  },
+  "incidents.action.continue": {
+    defaultMessage: "Continue response",
+    description: "Primary incident action that opens and focuses the response intake.",
+  },
+  "incidents.situation.title": {
+    defaultMessage: "Situation now",
+    description: "Heading for the decision-first incident situation summary.",
+  },
+  "incidents.situation.description": {
+    defaultMessage: "A plain summary of incident evidence from trstctl. Unknowns stay unknown until evidence arrives.",
+    description: "Trustworthy scope note for the incident situation summary.",
+  },
+  "incidents.situation.happening": {
+    defaultMessage: "What is happening",
+    description: "First incident situation question.",
+  },
+  "incidents.situation.affected": {
+    defaultMessage: "What is affected",
+    description: "Second incident situation question.",
+  },
+  "incidents.situation.containment": {
+    defaultMessage: "How to contain it",
+    description: "Third incident situation question.",
+  },
+  "incidents.situation.loading": {
+    defaultMessage: "Checking the incident record now.",
+    description: "Incident situation loading state.",
+  },
+  "incidents.situation.waitingForEvidence": {
+    defaultMessage: "Waiting for evidence before making a claim.",
+    description: "Incident situation loading state for affected scope and next action.",
+  },
+  "incidents.situation.loadFailed": {
+    defaultMessage: "Incident evidence could not be loaded.",
+    description: "Incident situation error state.",
+  },
+  "incidents.situation.evidenceUnavailable": {
+    defaultMessage: "The affected scope is unknown because the evidence read failed.",
+    description: "Fail-closed affected-scope copy.",
+  },
+  "incidents.situation.retryBeforeActing": {
+    defaultMessage: "Retry the evidence read before changing a credential.",
+    description: "Fail-closed containment guidance.",
+  },
+  "incidents.situation.happeningEmpty": {
+    defaultMessage: "No incident response is active.",
+    description: "Incident situation empty state.",
+  },
+  "incidents.situation.affectedEmpty": {
+    defaultMessage: "Nothing is currently marked affected.",
+    description: "Incident affected-scope empty state.",
+  },
+  "incidents.situation.containmentEmpty": {
+    defaultMessage: "Identify the affected credential, preview its reach, then plan replacement before revocation.",
+    description: "Safe first response step when no incident is active.",
+  },
+  "incidents.situation.compromisedCredential": {
+    defaultMessage: "The compromised credential",
+    description: "Plain fallback when an affected graph node has no human-readable name.",
+  },
+  "incidents.situation.happeningFailedOne": {
+    defaultMessage: "The response for {credential} needs attention; one delivery target failed.",
+    description: "Plain incident summary when one response delivery failed.",
+  },
+  "incidents.situation.happeningFailedMany": {
+    defaultMessage: "The response for {credential} needs attention; {count} delivery targets failed.",
+    description: "Plain incident summary when multiple response deliveries failed.",
+  },
+  "incidents.situation.happeningFailedStatus": {
+    defaultMessage: "The response for {credential} failed; no failed delivery target was recorded.",
+    description: "Fail-closed summary when the execution failed without target-level evidence.",
+  },
+  "incidents.situation.happeningRecorded": {
+    defaultMessage: "The latest response for {credential} is {status}.",
+    description: "Plain summary of a served incident execution.",
+  },
+  "incidents.situation.affectedRecordedOne": {
+    defaultMessage: "{credential} has one connected item in the recorded affected scope.",
+    description: "Plain affected-scope summary for one connected item.",
+  },
+  "incidents.situation.affectedRecordedMany": {
+    defaultMessage: "{credential} has {count} connected items in the recorded affected scope.",
+    description: "Plain affected-scope summary for multiple connected items.",
+  },
+  "incidents.situation.containmentFailedTargetOne": {
+    defaultMessage: "Review and recover the failed delivery target before continuing.",
+    description: "Containment guidance when one delivery target failed.",
+  },
+  "incidents.situation.containmentFailedTargetMany": {
+    defaultMessage: "Review and recover the {count} failed delivery targets before continuing.",
+    description: "Containment guidance when multiple delivery targets failed.",
+  },
+  "incidents.situation.containmentReviewFailure": {
+    defaultMessage: "Review the failure evidence and recovery state before changing another credential.",
+    description: "Containment guidance for a failed execution without target-level evidence.",
+  },
+  "incidents.situation.containmentPlanReplacement": {
+    defaultMessage: "Plan a replacement and verify the affected scope before revocation.",
+    description: "Containment guidance before replacement issuance.",
+  },
+  "incidents.situation.containmentDeployReplacement": {
+    defaultMessage: "Deploy and verify the replacement before revoking the compromised credential.",
+    description: "Containment guidance after replacement issuance.",
+  },
+  "incidents.situation.containmentRevokeCompromised": {
+    defaultMessage: "The replacement is deployed; verify it, then revoke the compromised credential.",
+    description: "Containment guidance after replacement deployment.",
+  },
+  "incidents.situation.containmentSealEvidence": {
+    defaultMessage: "The credential was replaced and revoked; seal the response evidence.",
+    description: "Containment guidance before evidence sealing.",
+  },
+  "incidents.situation.containmentVerifyRecovery": {
+    defaultMessage: "Replacement, revocation, and evidence are recorded; verify recovery and close temporary access.",
+    description: "Containment guidance after the core response completes.",
+  },
+  "incidents.situation.fleetRecordedOne": {
+    defaultMessage: "The latest fleet response has status {status} and covers one credential.",
+    description: "Plain summary for a one-credential fleet response.",
+  },
+  "incidents.situation.fleetRecordedMany": {
+    defaultMessage: "The latest fleet response has status {status} and covers {count} credentials.",
+    description: "Plain summary for a multiple-credential fleet response.",
+  },
+  "incidents.situation.fleetAffectedOne": {
+    defaultMessage: "The fleet plan names one affected credential.",
+    description: "Plain affected scope for a one-credential fleet response.",
+  },
+  "incidents.situation.fleetAffectedMany": {
+    defaultMessage: "The fleet plan names {count} affected credentials.",
+    description: "Plain affected scope for a multiple-credential fleet response.",
+  },
+  "incidents.situation.containmentContinueFleet": {
+    defaultMessage: "Continue the signed fleet gates and verify each cohort before revocation.",
+    description: "Containment guidance for a healthy fleet response.",
+  },
+  "incidents.situation.containmentFleetStopped": {
+    defaultMessage: "Review the fleet halt or rollback evidence before deciding whether to resume.",
+    description: "Containment guidance for a failed, halted, or rolled-back fleet response.",
+  },
+  "incidents.proof.listLabel": {
+    defaultMessage: "Exact incident response records",
+    description: "Accessible label for collapsed exact response records.",
+  },
+  "incidents.proof.open": {
+    defaultMessage: "View exact response state",
+    description: "Disclosure label for one incident execution's expert evidence.",
+  },
+  "incidents.proof.timeline": {
+    defaultMessage: "Event timeline",
+    description: "Heading for exact response timestamps and state transitions.",
+  },
+  "incidents.proof.evidenceApprovals": {
+    defaultMessage: "Evidence and approvals",
+    description: "Heading for exact audit and approval evidence.",
+  },
+  "incidents.proof.replacementRecovery": {
+    defaultMessage: "Replacement and recovery",
+    description: "Heading for exact replacement, revocation, delivery, and rollback state.",
+  },
+  "incidents.proof.created": { defaultMessage: "Response started", description: "Incident response start timestamp." },
+  "incidents.proof.updated": { defaultMessage: "Latest recorded update", description: "Incident response update timestamp." },
+  "incidents.proof.status": { defaultMessage: "Exact status", description: "Incident response status field." },
+  "incidents.proof.phase": { defaultMessage: "Exact phase", description: "Incident response phase field." },
+  "incidents.proof.executionID": { defaultMessage: "Execution ID", description: "Exact incident execution identifier." },
+  "incidents.proof.idempotencyKey": { defaultMessage: "Idempotency key", description: "Exact incident idempotency record." },
+  "incidents.proof.evidenceFormat": { defaultMessage: "Evidence format", description: "Incident evidence bundle format." },
+  "incidents.proof.evidenceBundle": { defaultMessage: "Evidence bundle", description: "Incident evidence bundle value." },
+  "incidents.proof.approvals": { defaultMessage: "Approval record", description: "Incident approval evidence field." },
+  "incidents.proof.approvalMissing": {
+    defaultMessage: "No approval record is attached to this response.",
+    description: "Honest approval state when no actor or approval evidence is attached.",
+  },
+  "incidents.proof.approvalMissingWithActor": {
+    defaultMessage: "No approval record is attached. Response actor: {actor}.",
+    description: "Honest approval state that distinguishes the response actor from an approval.",
+  },
+  "incidents.proof.replacementIdentity": { defaultMessage: "Replacement identity", description: "Replacement identity identifier." },
+  "incidents.proof.revocation": { defaultMessage: "Revocation state", description: "Compromised credential revocation state." },
+  "incidents.proof.delivery": { defaultMessage: "Replacement delivery", description: "Replacement connector delivery state." },
+  "incidents.proof.failedTargets": { defaultMessage: "Failed delivery targets", description: "Targets where replacement delivery failed." },
+  "incidents.proof.rollbackReferences": { defaultMessage: "Rollback references", description: "Exact response rollback references." },
+  "incidents.proof.notRecorded": { defaultMessage: "Not recorded", description: "Honest missing-field label for exact response evidence." },
+  "incidents.proof.none": { defaultMessage: "None recorded", description: "Honest empty-list label for exact response evidence." },
   "incidents.fleet.retiredDirectNotice": {
     defaultMessage:
       "Direct single-identity mutation is retired because it could revoke before exact trust and live-serving proof. Preview the identity, then freeze H1 consumers, ordered H2 cohorts, rollback, and replacement CA in the fleet plan.",
@@ -4145,7 +4342,7 @@ export const messages = {
     description: "Assistant runtime diagnostics detail for an unrecognized personal-data egress mode.",
   },
   "nav.item.incidents": {
-    defaultMessage: "Incidents",
+    defaultMessage: "Security incidents",
     description: "Primary navigation item.",
   },
   "nav.item.approvals": {
