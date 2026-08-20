@@ -44,14 +44,18 @@ describe("JOURNEY-002 discovery-to-action handoff", () => {
     seedDiscoveryMocks();
   });
 
-  it("runs revoke, decommission, and remediation from a finding row with IDs prefilled", async () => {
+  it("runs revoke, decommission, and remediation from a reviewed finding with IDs prefilled", async () => {
     const user = userEvent.setup();
     renderDiscovery();
 
     const findingRow = (await screen.findByText("github:user/payments-ci/pat")).closest("tr");
     expect(findingRow).toBeTruthy();
 
-    await user.click(within(findingRow as HTMLTableRowElement).getByRole("button", { name: "Revoke" }));
+    await user.click(within(findingRow as HTMLTableRowElement).getByRole("button", { name: "Review finding" }));
+    const findingDetail = screen.getByRole("heading", { name: "Finding detail" }).closest("aside") as HTMLElement;
+    await user.click(within(findingDetail).getByText("More actions"));
+
+    await user.click(within(findingDetail).getByRole("button", { name: "Revoke" }));
     await waitFor(() =>
       expect(apiMock.transitionIdentity).toHaveBeenCalledWith(
         "identity-api-key-1",
@@ -60,7 +64,7 @@ describe("JOURNEY-002 discovery-to-action handoff", () => {
       ),
     );
 
-    await user.click(within(findingRow as HTMLTableRowElement).getByRole("button", { name: "Decommission" }));
+    await user.click(within(findingDetail).getByRole("button", { name: "Decommission" }));
     await waitFor(() =>
       expect(apiMock.decommissionNHI).toHaveBeenCalledWith({
         reason: "Discovery finding finding-api-key: github:user/payments-ci/pat",
@@ -76,7 +80,7 @@ describe("JOURNEY-002 discovery-to-action handoff", () => {
       }),
     );
 
-    await user.click(within(findingRow as HTMLTableRowElement).getByRole("button", { name: "Remediate" }));
+    await user.click(within(findingDetail).getByRole("button", { name: "Remediate" }));
     await waitFor(() =>
       expect(apiMock.runRemediationPlaybook).toHaveBeenCalledWith("identity-revoke", {
         inventory_id: "identity/identity-api-key-1",

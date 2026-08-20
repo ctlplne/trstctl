@@ -33,8 +33,8 @@ const findings = [
 describe("U4-1 discovery hero", () => {
   it("summarizes shadow findings by count, risk, and type", () => {
     render(<DiscoveryHero findings={findings} />);
-    expect(screen.getByText("Shadow inventory")).toBeInTheDocument();
-    expect(screen.getByText("Shadow findings")).toBeInTheDocument();
-    expect(screen.getByText("Finding types")).toBeInTheDocument();
+    expect(screen.getByText("What needs attention")).toBeInTheDocument();
+    expect(screen.getByText("Unmanaged")).toBeInTheDocument();
+    expect(screen.getByText("Credential types")).toBeInTheDocument();
   });
 });

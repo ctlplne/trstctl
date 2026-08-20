@@ -11,6 +11,10 @@ Think of it like a building's master key register: someone has to walk every flo
 write down every lock and every key, and keep that register current as locks change.
 trstctl is that walker and that register, for machines.
 
+In the console, open **Posture & response → Find unmanaged credentials**. The page
+starts with the credentials that need a decision. Choose **Run scan** to use an
+existing discovery source or add your first one.
+
 trstctl discovers credentials five ways, and each suits a different corner of your
 estate: scanning the network from outside, asking an agent what a host can see from
 inside, pulling inventory straight from cloud provider APIs, reading SSH key files and
@@ -85,9 +89,10 @@ findings, and certificate inventory — it creates no new state, just joins the 
 `discovery.*` and `certificate.recorded` projections other endpoints already read. Each
 source row shows whether it's scheduled, the monitoring interval, the latest run
 status, finding counts, and pointers to `/api/v1/certificates` and
-`/api/v1/discovery/findings`. The Discovery console renders this rollup above the raw
-source, schedule, run, and finding tables so operators see both the summary and the
-underlying evidence.
+`/api/v1/discovery/findings`. The console keeps this exact rollup under
+**Monitoring and exact scan evidence**. The credentials needing a decision appear
+first; operators can still expand the underlying CT, drift, coverage, source,
+schedule, run, and repository-path proof when they need to verify or troubleshoot it.
 
 ### Agent-based discovery (F3) — what each host can see from the inside
 
@@ -327,11 +332,19 @@ returns recommendation/evidence refs only — never credential values.
 
 ### In the console
 
-The `/discovery` screen is the discovery front door: a **shadow NHI posture** summary
-of unmanaged and unregistered NHIs found across your environments, and a **CT-log &
-drift** panel that counts certificate-transparency and configuration-drift findings —
-both projected over the served sources, schedules, runs, and findings. See [The web
-console](../web-console.md).
+The `/discovery` screen is named **Find unmanaged credentials** because that is the
+operator's job, not the database feature underneath it. Its default reading order is:
+
+1. **What needs attention** — unmanaged count, high-risk count, and credential types.
+2. **Credentials to review** — one plain-language row action opens the finding.
+3. **Claim** — the main next step turns a reviewed finding into managed inventory.
+
+Less-common rotate, revoke, decommission, remediate, and dismiss actions are grouped
+under **More actions**. Exact fingerprints, internal finding/source/run IDs,
+provenance, evidence references, raw kinds, the shadow-NHI projection, CT monitoring,
+and drift details remain available through explicit evidence disclosures. This keeps
+the first decision understandable while preserving the technical proof needed for an
+audit or investigation. See [The web console](../web-console.md).
 
 ## Use it
 

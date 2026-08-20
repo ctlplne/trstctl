@@ -355,15 +355,85 @@ describe("discovery control-plane surface", () => {
     seedDiscoveryMocks();
   });
 
+  it("implements the quiet Find unmanaged credentials contract while retaining exact evidence", async () => {
+    const user = userEvent.setup();
+    renderDiscovery();
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Find unmanaged credentials" })).toBeInTheDocument();
+    expect(screen.getByText("What was found, why it matters, and the next valid action.")).toBeInTheDocument();
+    expect(screen.getByText("What needs attention")).toBeInTheDocument();
+
+    const runScan = screen.getByRole("button", { name: "Run scan" });
+    expect(runScan).toBeInTheDocument();
+    const exactMonitoring = screen.getByText("Monitoring and exact scan evidence").closest("details");
+    expect(exactMonitoring).toBeTruthy();
+    expect(exactMonitoring).not.toHaveAttribute("open");
+
+    const findingsSection = screen.getByRole("heading", { name: "Credentials to review" }).closest("section");
+    expect(findingsSection).toBeTruthy();
+    expect(Boolean((findingsSection as HTMLElement).compareDocumentPosition(exactMonitoring as HTMLElement) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+
+    const certRow = screen.getByText("10.0.0.10:443").closest("tr");
+    expect(certRow).toBeTruthy();
+    expect(within(certRow as HTMLTableRowElement).getByText("TLS certificate")).toBeInTheDocument();
+    expect(within(certRow as HTMLTableRowElement).queryByText("x509_certificate")).not.toBeInTheDocument();
+    expect(within(certRow as HTMLTableRowElement).getByRole("button", { name: "Review finding" })).toBeInTheDocument();
+    expect(within(certRow as HTMLTableRowElement).queryByRole("button", { name: "Claim" })).not.toBeInTheDocument();
+
+    await user.click(within(certRow as HTMLTableRowElement).getByRole("button", { name: "Review finding" }));
+    const detail = screen.getByRole("heading", { name: "Finding detail" }).closest("aside");
+    expect(detail).toBeTruthy();
+    expect(within(detail as HTMLElement).getByRole("button", { name: "Claim" })).toBeInTheDocument();
+    const exactFinding = within(detail as HTMLElement)
+      .getByText("Exact finding evidence")
+      .closest("details");
+    expect(exactFinding).toBeTruthy();
+    expect(exactFinding).not.toHaveAttribute("open");
+    await user.click(within(exactFinding as HTMLElement).getByText("Exact finding evidence"));
+    expect(exactFinding).toHaveAttribute("open");
+    expect(within(exactFinding as HTMLElement).getByText("finding-1")).toBeInTheDocument();
+    expect(within(exactFinding as HTMLElement).getByText("x509_certificate")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Run scan" }));
+    expect(screen.getByRole("tab", { name: "Sources" })).toHaveAttribute("aria-selected", "true");
+    expect((await screen.findAllByRole("button", { name: "Run" }))[0]).toHaveFocus();
+  });
+
+  it("keeps an unavailable source ID in exact evidence instead of leaking it into the default decision path", async () => {
+    const seededSources = await apiMock.discoverySources();
+    apiMock.discoverySources.mockResolvedValue({
+      items: seededSources.items.filter((source: { id: string }) => source.id !== "source-cloud-secrets"),
+    });
+    const user = userEvent.setup();
+    renderDiscovery();
+
+    const findingRow = (await screen.findByText("vault://vault.example/secret/tls/web")).closest("tr");
+    expect(findingRow).toBeTruthy();
+    expect(within(findingRow as HTMLTableRowElement).getByText("Unknown source")).toBeInTheDocument();
+    expect(within(findingRow as HTMLTableRowElement).queryByText("source-cloud-secrets")).not.toBeInTheDocument();
+
+    await user.click(within(findingRow as HTMLTableRowElement).getByRole("button", { name: "Review finding" }));
+    const detail = screen.getByRole("heading", { name: "Finding detail" }).closest("aside");
+    expect(detail).toBeTruthy();
+    expect(within(detail as HTMLElement).getByText("Unknown source")).toBeInTheDocument();
+    const exactFinding = within(detail as HTMLElement)
+      .getByText("Exact finding evidence")
+      .closest("details") as HTMLDetailsElement;
+    await user.click(within(exactFinding).getByText("Exact finding evidence"));
+    expect(within(exactFinding).getByText("source-cloud-secrets")).toBeInTheDocument();
+  });
+
   it("renders served sources, schedules, runs, and findings without the old blocked disclosure", async () => {
     const storageSpy = vi.spyOn(Storage.prototype, "setItem");
     const user = userEvent.setup();
     renderDiscovery();
 
-    expect(await screen.findByRole("heading", { name: "Discovery" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Find unmanaged credentials" })).toBeInTheDocument();
     expect(screen.queryByText("Discovery scan API not served yet")).not.toBeInTheDocument();
 
-    // Findings tab (default): monitoring/shadow posture plus the findings table.
+    // Findings are the default reading path; exact monitoring/shadow posture is
+    // still reachable through one deliberate evidence disclosure.
+    await user.click(screen.getByText("Monitoring and exact scan evidence"));
     const monitoring = screen.getByRole("heading", { name: "Continuous monitoring" }).closest("section");
     expect(monitoring).toBeTruthy();
     expect(within(monitoring as HTMLElement).getByText("Scheduled")).toBeInTheDocument();
@@ -375,11 +445,15 @@ describe("discovery control-plane surface", () => {
     expect(within(shadow as HTMLElement).getByText("CAP-NHI-05")).toBeInTheDocument();
     expect(within(shadow as HTMLElement).getByText("Unregistered")).toBeInTheDocument();
     expect(within(shadow as HTMLElement).getByText("github:user/payments-ci/pat")).toBeInTheDocument();
-    expect(screen.getAllByText("x509_certificate").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("abcdef1234...567890")).toBeInTheDocument();
     expect(screen.queryByText("RAW-TOKEN-VALUE")).not.toBeInTheDocument();
-    expect(screen.getByText("fedcba9876...543210")).toBeInTheDocument();
     expect(screen.queryByText("VAULT-RAW-SECRET")).not.toBeInTheDocument();
+
+    const certRow = screen.getByText("10.0.0.10:443").closest("tr") as HTMLTableRowElement;
+    await user.click(within(certRow).getByRole("button", { name: "Review finding" }));
+    const exactFinding = screen.getByText("Exact finding evidence").closest("details") as HTMLDetailsElement;
+    await user.click(within(exactFinding).getByText("Exact finding evidence"));
+    expect(within(exactFinding).getByText("abcdef1234567890abcdef1234567890")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Close" }));
 
     await user.click(screen.getByRole("tab", { name: "Sources" }));
     expect((await screen.findAllByText("edge")).length).toBeGreaterThanOrEqual(1);
@@ -440,12 +514,13 @@ describe("discovery control-plane surface", () => {
     const certRow = (await screen.findByText("10.0.0.10:443")).closest("tr");
     expect(certRow).toBeTruthy();
     expect(within(certRow as HTMLTableRowElement).getByText("platform")).toBeInTheDocument();
-    expect(within(certRow as HTMLTableRowElement).getByText("certops")).toBeInTheDocument();
-    expect(within(certRow as HTMLTableRowElement).getByText("internet")).toBeInTheDocument();
 
-    await user.click(within(certRow as HTMLTableRowElement).getByRole("button", { name: "Claim" }));
+    await user.click(within(certRow as HTMLTableRowElement).getByRole("button", { name: "Review finding" }));
     const claimPanel = screen.getByRole("heading", { name: "Finding detail" }).closest("aside");
     expect(claimPanel).toBeTruthy();
+    expect(within(claimPanel as HTMLElement).getByText("certops")).toBeInTheDocument();
+    expect(within(claimPanel as HTMLElement).getByText("internet")).toBeInTheDocument();
+    await user.click(within(claimPanel as HTMLElement).getByRole("button", { name: "Claim" }));
     await user.type(screen.getByLabelText("Managed identity"), "identity-1");
     await user.type(screen.getByLabelText("Reason"), "matched managed certificate");
     await user.clear(within(claimPanel as HTMLElement).getByLabelText("Tags"));
@@ -460,14 +535,18 @@ describe("discovery control-plane surface", () => {
       tags: ["internet", "tls", "follow-up"],
     });
     expect(await within(certRow as HTMLTableRowElement).findByText("Managed")).toBeInTheDocument();
-    expect(await within(certRow as HTMLTableRowElement).findByText("follow-up")).toBeInTheDocument();
+    expect(await within(claimPanel as HTMLElement).findByText("follow-up")).toBeInTheDocument();
+    await user.click(within(claimPanel as HTMLElement).getByRole("button", { name: "Close" }));
 
     const tokenRow = screen
       .getAllByText("github:user/payments-ci/pat")
       .map((node) => node.closest("tr"))
-      .find((row) => row && within(row as HTMLTableRowElement).queryByRole("button", { name: "Dismiss" }));
+      .find((row) => row && within(row as HTMLTableRowElement).queryByRole("button", { name: "Review finding" }));
     expect(tokenRow).toBeTruthy();
-    await user.click(within(tokenRow as HTMLTableRowElement).getByRole("button", { name: "Dismiss" }));
+    await user.click(within(tokenRow as HTMLTableRowElement).getByRole("button", { name: "Review finding" }));
+    const tokenPanel = screen.getByRole("heading", { name: "Finding detail" }).closest("aside") as HTMLElement;
+    await user.click(within(tokenPanel).getByText("More actions"));
+    await user.click(within(tokenPanel).getByRole("button", { name: "Dismiss" }));
     await user.clear(screen.getByLabelText("Reason"));
     await user.type(screen.getByLabelText("Reason"), "duplicate scanner evidence");
     await user.click(screen.getByRole("button", { name: "Dismiss finding" }));
@@ -492,7 +571,7 @@ describe("discovery control-plane surface", () => {
     expect(params.get("tag")).toBe("follow-up");
     expect(params.get("triage")).toBe("managed");
     expect(screen.getByText("10.0.0.10:443")).toBeInTheDocument();
-    const findingsSection = screen.getByRole("heading", { name: "Findings" }).closest("section");
+    const findingsSection = screen.getByRole("heading", { name: "Credentials to review" }).closest("section");
     expect(findingsSection).toBeTruthy();
     expect(within(findingsSection as HTMLElement).queryByText("github:user/payments-ci/pat")).not.toBeInTheDocument();
   });
@@ -941,7 +1020,7 @@ describe("discovery control-plane surface", () => {
     renderDiscovery(["/discovery?tab=runs"]);
 
     expect(await screen.findByText("ctmonitor: GET /ct/v1/get-sth: 404 Not Found")).toBeInTheDocument();
-    await user.click(screen.getByRole("tab", { name: "Findings" }));
+    await user.click(screen.getByRole("tab", { name: "What was found" }));
     await waitFor(() => expect(apiMock.ctMonitoring).toHaveBeenCalledTimes(1));
     await user.click(screen.getByRole("button", { name: "Refresh" }));
     await waitFor(() => expect(apiMock.ctMonitoring).toHaveBeenCalledTimes(2));

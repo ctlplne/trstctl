@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ChangeEvent, FormEvent } from "react";
-import { CheckCircle2, Activity, ClipboardList, Code2, Eye, Play, Plus, RefreshCw, Search, Sparkles, Tag, Trash2, Upload, XCircle } from "lucide-react";
+import type { ChangeEvent, FormEvent, RefObject } from "react";
+import { CheckCircle2, Activity, ClipboardList, Code2, Play, Plus, RefreshCw, Search, Sparkles, Tag, Trash2, Upload, XCircle } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { EmptyState } from "@/components/EmptyState";
 import { PageTabs, tabPanelProps } from "@/components/PageTabs";
@@ -558,7 +558,7 @@ export function Discovery() {
   const { formatDateTime, t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<DiscoveryTab>(() => discoveryTabFromSearchParam(searchParams.get("tab")));
-  const [pendingFocus, setPendingFocus] = useState<"source" | "schedule" | null>(null);
+  const [pendingFocus, setPendingFocus] = useState<"source" | "schedule" | "run" | null>(null);
   const [sources, setSources] = useState<DiscoverySource[]>([]);
   const [schedules, setSchedules] = useState<DiscoverySchedule[]>([]);
   const [runs, setRuns] = useState<DiscoveryRun[]>([]);
@@ -591,6 +591,7 @@ export function Discovery() {
   const [scheduleInterval, setScheduleInterval] = useState(3600);
   const sourceNameRef = useRef<HTMLInputElement>(null);
   const scheduleNameRef = useRef<HTMLInputElement>(null);
+  const firstRunButtonRef = useRef<HTMLButtonElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -795,7 +796,7 @@ export function Discovery() {
   // first switch tabs and then focus once the form has mounted.
   useEffect(() => {
     if (!pendingFocus) return;
-    const ref = pendingFocus === "source" ? sourceNameRef : scheduleNameRef;
+    const ref = pendingFocus === "source" ? sourceNameRef : pendingFocus === "schedule" ? scheduleNameRef : firstRunButtonRef;
     ref.current?.scrollIntoView?.({ block: "center" });
     ref.current?.focus();
     setPendingFocus(null);
@@ -811,17 +812,29 @@ export function Discovery() {
     setPendingFocus("schedule");
   }
 
+  function focusRunAction() {
+    selectTab("sources");
+    setPendingFocus(sources.length === 0 ? "source" : "run");
+  }
+
   return (
     <section aria-labelledby="discovery-heading" className="grid gap-6">
       <PageHeader
         titleId="discovery-heading"
-        title={translateNow("source.discovery.80fc402133")}
-        description="Manage tenant discovery sources, schedules, runs, and findings."
+        title={t("discovery.page.title")}
+        description={t("discovery.page.answer")}
+        technicalDetails={t("discovery.page.details")}
         actions={
-          <Button type="button" variant="outline" onClick={() => void refreshAll()} disabled={loading}>
-            <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
-            {translateNow("source.refresh.0e91610117")}
-          </Button>
+          <>
+            <Button type="button" onClick={focusRunAction}>
+              <Play className="h-4 w-4" aria-hidden="true" />
+              {t("discovery.action.runScan")}
+            </Button>
+            <Button type="button" variant="outline" onClick={() => void refreshAll()} disabled={loading}>
+              <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
+              {translateNow("source.refresh.0e91610117")}
+            </Button>
+          </>
         }
       />
 
@@ -846,10 +859,48 @@ export function Discovery() {
 
       {tab === "findings" && (
         <>
-          <CTMonitoringPanel refreshToken={ctRefreshToken} onRunTerminal={load} />
-          <DriftPanel findings={findings} sources={sources} />
-          <MonitoringPanel monitoring={monitoring} onCreateSource={focusSourceForm} />
-          <ShadowPosturePanel posture={shadowPosture} />
+          <section {...tabPanelProps("discovery", "findings")} aria-labelledby="findings-heading" className="grid gap-3 border-y border-border py-4">
+            <h2 id="findings-heading" className="text-title font-semibold">
+              {t("discovery.findings.heading")}
+            </h2>
+            {!loading && findings.length === 0 ? (
+              <EmptyState
+                icon={<Search className="h-5 w-5" aria-hidden="true" />}
+                title={translateNow("source.no.discovery.findings.7c8b4f0e23")}
+                primaryAction={{ label: t("discovery.action.runScan"), onClick: focusRunAction, icon: <Play className="h-4 w-4" /> }}
+                secondaryAction={{ label: translateNow("source.open.posture.71199986c4"), to: "/posture", icon: <Search className="h-4 w-4" /> }}
+              >
+                {translateNow("source.findings.populate.after.discovery.observes.9d8596dcef")}
+              </EmptyState>
+            ) : (
+              <FindingTable
+                findings={filteredFindings}
+                allFindings={findings}
+                sourceByID={sourceByID}
+                filters={findingFilters}
+                facetOptions={findingFacetOptions}
+                onFilterChange={setFindingFilter}
+                onFiltersRestore={restoreFindingFilters}
+                onFindingUpdated={replaceFinding}
+                onNotice={setNotice}
+              />
+            )}
+          </section>
+
+          <details className="group overflow-hidden rounded-panel border border-border bg-card">
+            <summary className="cursor-pointer list-none px-4 py-3 marker:hidden hover:bg-muted/40">
+              <span className="block text-sm font-semibold">{t("discovery.evidence.title")}</span>
+              <span className="mt-0.5 block text-caption text-muted-foreground">{t("discovery.evidence.description")}</span>
+              <span className="mt-2 block text-xs text-muted-foreground group-open:hidden">{t("discovery.evidence.open")}</span>
+              <span className="mt-2 hidden text-xs text-muted-foreground group-open:block">{t("discovery.evidence.close")}</span>
+            </summary>
+            <div className="grid gap-6 border-t border-border p-4">
+              <CTMonitoringPanel refreshToken={ctRefreshToken} onRunTerminal={load} />
+              <DriftPanel findings={findings} sources={sources} />
+              <MonitoringPanel monitoring={monitoring} onCreateSource={focusSourceForm} />
+              <ShadowPosturePanel posture={shadowPosture} />
+            </div>
+          </details>
         </>
       )}
 
@@ -1019,7 +1070,7 @@ export function Discovery() {
               {translateNow("source.add.a.network.cloud.ct.log.nhi.oauth.servi.1798feb274")}
             </EmptyState>
           ) : (
-            <SourceTable sources={sources} busy={busy} onStart={startRun} activity={sourceActivity} />
+            <SourceTable sources={sources} busy={busy} onStart={startRun} activity={sourceActivity} firstRunButtonRef={firstRunButtonRef} />
           )}
           <section aria-labelledby="coverage-heading" className="grid gap-3">
             <h3 id="coverage-heading" className="text-title font-semibold">
@@ -1184,36 +1235,6 @@ export function Discovery() {
             </EmptyState>
           ) : (
             <RunTable runs={runs} sourceByID={sourceByID} />
-          )}
-        </section>
-      )}
-
-      {tab === "findings" && (
-        <section {...tabPanelProps("discovery", "findings")} aria-labelledby="findings-heading" className="grid gap-3 border-y border-border py-4">
-          <h2 id="findings-heading" className="text-title font-semibold">
-            {translateNow("source.findings.e171c2ff25")}
-          </h2>
-          {!loading && findings.length === 0 ? (
-            <EmptyState
-              icon={<Search className="h-5 w-5" aria-hidden="true" />}
-              title={translateNow("source.no.discovery.findings.7c8b4f0e23")}
-              primaryAction={{ label: translateNow("source.create.discovery.source.0371fe8d52"), onClick: focusSourceForm, icon: <Plus className="h-4 w-4" /> }}
-              secondaryAction={{ label: translateNow("source.open.posture.71199986c4"), to: "/posture", icon: <Search className="h-4 w-4" /> }}
-            >
-              {translateNow("source.findings.populate.after.discovery.observes.9d8596dcef")}
-            </EmptyState>
-          ) : (
-            <FindingTable
-              findings={filteredFindings}
-              allFindings={findings}
-              sourceByID={sourceByID}
-              filters={findingFilters}
-              facetOptions={findingFacetOptions}
-              onFilterChange={setFindingFilter}
-              onFiltersRestore={restoreFindingFilters}
-              onFindingUpdated={replaceFinding}
-              onNotice={setNotice}
-            />
           )}
         </section>
       )}
@@ -1658,11 +1679,13 @@ function SourceTable({
   busy,
   onStart,
   activity,
+  firstRunButtonRef,
 }: {
   sources: DiscoverySource[];
   busy: string | null;
   onStart: (sourceID: string, dryRun?: boolean) => void;
   activity: Map<string, SourceActivity>;
+  firstRunButtonRef?: RefObject<HTMLButtonElement>;
 }) {
   const columns: Array<DataGridColumn<DiscoverySource>> = [
     {
@@ -1711,7 +1734,13 @@ function SourceTable({
       header: "Actions",
       cell: (source) => (
         <div className="flex flex-wrap gap-2">
-          <Button type="button" size="sm" onClick={() => onStart(source.id, false)} disabled={busy?.startsWith(`run:${source.id}`)}>
+          <Button
+            ref={source.id === sources[0]?.id ? firstRunButtonRef : undefined}
+            type="button"
+            size="sm"
+            onClick={() => onStart(source.id, false)}
+            disabled={busy?.startsWith(`run:${source.id}`)}
+          >
             <Play className="h-4 w-4" aria-hidden="true" />
             {translateNow("source.run.00d60e31a4")}
           </Button>
@@ -2057,7 +2086,7 @@ function FindingTable({
     {
       id: "kind",
       header: t("discovery.findings.columnKind"),
-      cell: (finding) => finding.kind,
+      cell: (finding) => discoveryFindingKindLabel(t, finding.kind),
     },
     {
       id: "reference",
@@ -2069,6 +2098,7 @@ function FindingTable({
       header: t("discovery.findings.columnFingerprint"),
       className: "font-mono text-xs",
       cell: (finding) => maskFingerprint(finding.fingerprint),
+      hiddenByDefault: true,
     },
     {
       id: "owner",
@@ -2079,16 +2109,18 @@ function FindingTable({
       id: "team",
       header: t("discovery.findings.columnTeam"),
       cell: (finding) => findingTeam(finding) || "-",
+      hiddenByDefault: true,
     },
     {
       id: "tags",
       header: t("discovery.findings.columnTags"),
       cell: (finding) => <TagList tags={findingTags(finding)} />,
+      hiddenByDefault: true,
     },
     {
       id: "source",
       header: t("discovery.findings.columnSource"),
-      cell: (finding) => sourceByID.get(finding.source_id)?.name ?? <span className="font-mono text-xs">{finding.source_id}</span>,
+      cell: (finding) => sourceByID.get(finding.source_id)?.name ?? t("discovery.findings.unknownSource"),
     },
     {
       id: "risk",
@@ -2099,69 +2131,6 @@ function FindingTable({
       id: "discovered",
       header: t("discovery.findings.columnDiscovered"),
       cell: (finding) => formatDateTime(finding.discovered_at),
-    },
-    {
-      id: "actions",
-      header: t("discovery.findings.columnActions"),
-      cell: (finding) => {
-        const hasIdentity = Boolean(findingActionIdentityID(finding));
-        return (
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" size="sm" variant="outline" onClick={() => openDetail(finding)}>
-              <Eye className="h-4 w-4" aria-hidden="true" />
-              {t("discovery.findings.details")}
-            </Button>
-            <Button type="button" size="sm" onClick={() => openAction(finding, "claim")} disabled={actionBusy}>
-              <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-              {t("discovery.findings.claim")}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => void runFindingLifecycleAction(finding, "rotate")}
-              disabled={actionBusy || !hasIdentity}
-            >
-              <RefreshCw className="h-4 w-4" aria-hidden="true" />
-              {t("discovery.findings.rotate")}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => void runFindingLifecycleAction(finding, "revoke")}
-              disabled={actionBusy || !hasIdentity}
-            >
-              <XCircle className="h-4 w-4" aria-hidden="true" />
-              {t("discovery.findings.revoke")}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => void runFindingLifecycleAction(finding, "decommission")}
-              disabled={actionBusy || !hasIdentity}
-            >
-              <Activity className="h-4 w-4" aria-hidden="true" />
-              {t("discovery.findings.decommission")}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => void runFindingLifecycleAction(finding, "remediate")}
-              disabled={actionBusy || !hasIdentity}
-            >
-              <ClipboardList className="h-4 w-4" aria-hidden="true" />
-              {t("discovery.findings.remediate")}
-            </Button>
-            <Button type="button" size="sm" variant="outline" onClick={() => openAction(finding, "dismiss")} disabled={actionBusy}>
-              <XCircle className="h-4 w-4" aria-hidden="true" />
-              {t("discovery.findings.dismiss")}
-            </Button>
-          </div>
-        );
-      },
     },
   ];
 
@@ -2178,6 +2147,8 @@ function FindingTable({
         viewStorageKey="discovery-findings"
         viewMetadata={{ triage: filters.triage, owner: filters.owner, team: filters.team, tag: filters.tag }}
         onViewRestore={restoreGridView}
+        onRowOpen={openDetail}
+        rowActionLabel={() => t("discovery.findings.review")}
         toolbar={({ columnChooser, savedViews }) => <DataGridToolbar filters={filterControls} columnChooser={columnChooser} savedViews={savedViews} />}
       />
 
@@ -2188,7 +2159,7 @@ function FindingTable({
               <h3 id="finding-detail-heading" className="text-title font-semibold">
                 {t("discovery.findings.detailHeading")}
               </h3>
-              <p className="font-mono text-xs text-muted-foreground">{selected.id}</p>
+              <p className="text-sm text-muted-foreground">{discoveryFindingKindLabel(t, selected.kind)}</p>
             </div>
             <Button type="button" variant="ghost" onClick={() => setSelectedID(null)}>
               {t("discovery.findings.close")}
@@ -2200,16 +2171,92 @@ function FindingTable({
             <FindingDetail label={t("discovery.findings.columnStatus")} value={triageStatusLabel(t, findingTriageStatus(selected))} />
             <FindingDetail label={t("discovery.findings.columnOwner")} value={findingOwner(selected) || "-"} />
             <FindingDetail label={t("discovery.findings.columnTeam")} value={findingTeam(selected) || "-"} />
-            <FindingDetail label={t("discovery.findings.columnSource")} value={sourceByID.get(selected.source_id)?.name ?? selected.source_id} />
-            <FindingDetail label={t("discovery.findings.columnFingerprint")} value={maskFingerprint(selected.fingerprint)} />
+            <FindingDetail
+              label={t("discovery.findings.columnSource")}
+              value={sourceByID.get(selected.source_id)?.name ?? t("discovery.findings.unknownSource")}
+            />
             <FindingDetail label={t("discovery.findings.triageReason")} value={selected.triage_reason || "-"} />
-            <FindingDetail label={t("discovery.findings.managedIdentity")} value={selected.managed_identity_id || "-"} />
+            <FindingDetail label={t("discovery.findings.columnRisk")} value={String(selected.risk_score ?? 0)} />
           </dl>
 
           <div className="flex flex-wrap items-center gap-2">
             <Tag className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             <TagList tags={findingTags(selected)} />
           </div>
+
+          {!action && (
+            <div className="flex flex-wrap items-start gap-2 border-t border-border pt-4">
+              <Button type="button" size="sm" onClick={() => openAction(selected, "claim")} disabled={actionBusy}>
+                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                {t("discovery.findings.claim")}
+              </Button>
+              <details className="group min-w-52">
+                <summary className="inline-flex min-h-9 cursor-pointer list-none items-center rounded-control border border-border bg-background px-3 text-sm font-medium marker:hidden hover:bg-muted/60">
+                  {t("discovery.findings.moreActions")}
+                </summary>
+                <div className="mt-2 flex flex-wrap gap-2 rounded-control border border-border bg-muted/20 p-3">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void runFindingLifecycleAction(selected, "rotate")}
+                    disabled={actionBusy || !findingActionIdentityID(selected)}
+                  >
+                    <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                    {t("discovery.findings.rotate")}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void runFindingLifecycleAction(selected, "revoke")}
+                    disabled={actionBusy || !findingActionIdentityID(selected)}
+                  >
+                    <XCircle className="h-4 w-4" aria-hidden="true" />
+                    {t("discovery.findings.revoke")}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void runFindingLifecycleAction(selected, "decommission")}
+                    disabled={actionBusy || !findingActionIdentityID(selected)}
+                  >
+                    <Activity className="h-4 w-4" aria-hidden="true" />
+                    {t("discovery.findings.decommission")}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void runFindingLifecycleAction(selected, "remediate")}
+                    disabled={actionBusy || !findingActionIdentityID(selected)}
+                  >
+                    <ClipboardList className="h-4 w-4" aria-hidden="true" />
+                    {t("discovery.findings.remediate")}
+                  </Button>
+                  <Button type="button" size="sm" variant="outline" onClick={() => openAction(selected, "dismiss")} disabled={actionBusy}>
+                    <XCircle className="h-4 w-4" aria-hidden="true" />
+                    {t("discovery.findings.dismiss")}
+                  </Button>
+                </div>
+              </details>
+            </div>
+          )}
+
+          <details className="group border-t border-border pt-4">
+            <summary className="cursor-pointer text-sm font-medium">{t("discovery.findings.exactEvidence")}</summary>
+            <dl className="mt-3 grid gap-3 rounded-control bg-muted/30 p-3 md:grid-cols-2 xl:grid-cols-4">
+              <FindingDetail label={t("discovery.findings.exactId")} value={selected.id} />
+              <FindingDetail label={t("discovery.findings.exactKind")} value={selected.kind} />
+              <FindingDetail label={t("discovery.findings.columnFingerprint")} value={selected.fingerprint} />
+              <FindingDetail label={t("discovery.findings.managedIdentity")} value={selected.managed_identity_id || "-"} />
+              <FindingDetail label={t("discovery.findings.exactSourceId")} value={selected.source_id} />
+              <FindingDetail label={t("discovery.findings.exactRunId")} value={selected.run_id} />
+              <FindingDetail label={t("discovery.findings.exactProvenance")} value={selected.provenance} />
+              <FindingDetail label={t("discovery.findings.exactEvidenceRefs")} value={findingEvidenceRefs(selected).join(", ") || "-"} />
+            </dl>
+          </details>
 
           {action && (
             <form
@@ -2299,6 +2346,35 @@ function TagList({ tags }: { tags: string[] }) {
 
 function findingTriageStatus(finding: DiscoveryFinding): FindingTriageStatus {
   return finding.triage_status ?? "unmanaged";
+}
+
+function discoveryFindingKindLabel(t: (key: MessageKey) => string, kind: string): string {
+  switch (kind.toLowerCase().replaceAll("-", "_")) {
+    case "certificate":
+    case "tls_certificate":
+    case "x509_certificate":
+      return t("discovery.kind.tlsCertificate");
+    case "api_key":
+    case "api_token":
+    case "personal_access_token":
+      return t("discovery.kind.apiKey");
+    case "secret":
+      return t("discovery.kind.secret");
+    case "ssh_certificate":
+      return t("discovery.kind.sshCertificate");
+    case "ssh_key":
+      return t("discovery.kind.sshKey");
+    case "oauth_grant":
+      return t("discovery.kind.oauthGrant");
+    case "service_account":
+      return t("discovery.kind.serviceAccount");
+    case "spiffe":
+    case "spiffe_svid":
+    case "workload_identity":
+      return t("discovery.kind.workloadIdentity");
+    default:
+      return t("discovery.kind.unknown");
+  }
 }
 
 function triageFilterFromSearchParam(value: string | null): FindingTriageFilter {

@@ -1193,9 +1193,47 @@ export const messages = {
     defaultMessage: "Watched domains",
     description: "C5: label for the domains CT monitoring watches.",
   },
+  "discovery.page.title": {
+    defaultMessage: "Find unmanaged credentials",
+    description: "Quiet route title that describes the operator's discovery goal in plain language.",
+  },
+  "discovery.page.answer": {
+    defaultMessage: "What was found, why it matters, and the next valid action.",
+    description: "ELI5 opening answer for the discovery route.",
+  },
+  "discovery.page.details": {
+    defaultMessage:
+      "Exact sources, schedules, run receipts, coverage gaps, Certificate Transparency checkpoints, drift evidence, raw finding kinds, IDs, fingerprints, and provenance remain available in this workspace.",
+    description: "Progressive expert detail for the discovery route.",
+  },
+  "discovery.action.runScan": {
+    defaultMessage: "Run scan",
+    description: "Primary action that moves to the source whose scan should run.",
+  },
+  "discovery.attention.title": {
+    defaultMessage: "What needs attention",
+    description: "Human heading for the compact unmanaged-credential summary.",
+  },
+  "discovery.attention.description": {
+    defaultMessage: "Credentials found outside normal management, summarized before the exact scan evidence.",
+    description: "Plain-language boundary for the discovery summary.",
+  },
+  "discovery.attention.unmanaged": { defaultMessage: "Unmanaged", description: "Count of credentials not yet managed by trstctl." },
+  "discovery.attention.highRisk": { defaultMessage: "High risk", description: "Count of unmanaged credentials with a high risk score." },
+  "discovery.attention.types": { defaultMessage: "Credential types", description: "Count of human credential categories in discovery results." },
+  "discovery.evidence.title": {
+    defaultMessage: "Monitoring and exact scan evidence",
+    description: "Collapsed expert section containing CT, drift, monitoring, and raw posture data.",
+  },
+  "discovery.evidence.description": {
+    defaultMessage: "Open this when you need coverage, checkpoints, repository paths, or raw posture breakdowns.",
+    description: "Explains what the collapsed discovery evidence contains.",
+  },
+  "discovery.evidence.open": { defaultMessage: "Show monitoring evidence", description: "Opens the exact discovery evidence section." },
+  "discovery.evidence.close": { defaultMessage: "Hide monitoring evidence", description: "Closes the exact discovery evidence section." },
   "discovery.tabs.findings": {
-    defaultMessage: "Findings",
-    description: "Discovery page tab: findings table plus CT/drift/monitoring posture.",
+    defaultMessage: "What was found",
+    description: "Discovery page tab: the credentials that need review.",
   },
   "discovery.tabs.sources": {
     defaultMessage: "Sources",
@@ -3053,7 +3091,7 @@ export const messages = {
     description: "Primary navigation item.",
   },
   "nav.item.discovery": {
-    defaultMessage: "Discovery",
+    defaultMessage: "Find unmanaged credentials",
     description: "Primary navigation item.",
   },
   "nav.item.workloads": {
@@ -3469,13 +3507,17 @@ export const messages = {
     defaultMessage: "Discovery findings",
     description: "Accessible table caption for discovery findings.",
   },
+  "discovery.findings.heading": {
+    defaultMessage: "Credentials to review",
+    description: "Plain-language heading above the findings that need an operator decision.",
+  },
   "discovery.findings.columnStatus": {
     defaultMessage: "Status",
     description: "Column header for discovery finding triage status.",
   },
   "discovery.findings.columnKind": {
-    defaultMessage: "Kind",
-    description: "Column header for discovery finding kind.",
+    defaultMessage: "Credential type",
+    description: "Human-facing column header for a discovery finding credential category.",
   },
   "discovery.findings.columnReference": {
     defaultMessage: "Reference",
@@ -3521,6 +3563,10 @@ export const messages = {
     defaultMessage: "Details",
     description: "Button label to open discovery finding details.",
   },
+  "discovery.findings.review": {
+    defaultMessage: "Review finding",
+    description: "The single default row action that opens a discovery finding for a decision.",
+  },
   "discovery.findings.claim": {
     defaultMessage: "Claim",
     description: "Button label to claim a discovery finding as managed.",
@@ -3552,6 +3598,24 @@ export const messages = {
   "discovery.findings.close": {
     defaultMessage: "Close",
     description: "Button label to close the discovery finding detail panel.",
+  },
+  "discovery.findings.moreActions": {
+    defaultMessage: "More actions",
+    description: "Disclosure that contains lifecycle and dismissal actions after a finding is reviewed.",
+  },
+  "discovery.findings.exactEvidence": {
+    defaultMessage: "Exact finding evidence",
+    description: "Collapsed disclosure for raw finding identifiers, kinds, fingerprints, and provenance.",
+  },
+  "discovery.findings.exactId": { defaultMessage: "Finding ID", description: "Exact immutable discovery finding identifier." },
+  "discovery.findings.exactKind": { defaultMessage: "Raw kind", description: "Exact machine-readable discovery finding kind." },
+  "discovery.findings.exactSourceId": { defaultMessage: "Source ID", description: "Exact discovery source identifier." },
+  "discovery.findings.exactRunId": { defaultMessage: "Run ID", description: "Exact discovery run identifier." },
+  "discovery.findings.exactProvenance": { defaultMessage: "Provenance", description: "Exact discovery evidence provenance." },
+  "discovery.findings.exactEvidenceRefs": { defaultMessage: "Evidence references", description: "Exact evidence references retained for expert review." },
+  "discovery.findings.unknownSource": {
+    defaultMessage: "Unknown source",
+    description: "Human fallback when a finding's source is no longer available; the exact source ID remains in evidence.",
   },
   "discovery.findings.triageReason": {
     defaultMessage: "Reason",
@@ -3601,6 +3665,15 @@ export const messages = {
     defaultMessage: "Remediation playbook started for {ref}.",
     description: "Success text after starting a discovery finding remediation playbook.",
   },
+  "discovery.kind.tlsCertificate": { defaultMessage: "TLS certificate", description: "Human label for certificate discovery findings." },
+  "discovery.kind.apiKey": { defaultMessage: "API key", description: "Human label for API key or token discovery findings." },
+  "discovery.kind.secret": { defaultMessage: "Secret", description: "Human label for secret discovery findings." },
+  "discovery.kind.sshCertificate": { defaultMessage: "SSH certificate", description: "Human label for SSH certificate discovery findings." },
+  "discovery.kind.sshKey": { defaultMessage: "SSH key", description: "Human label for SSH public-key discovery findings." },
+  "discovery.kind.oauthGrant": { defaultMessage: "OAuth grant", description: "Human label for OAuth grant discovery findings." },
+  "discovery.kind.serviceAccount": { defaultMessage: "Service account", description: "Human label for service-account discovery findings." },
+  "discovery.kind.workloadIdentity": { defaultMessage: "Workload identity", description: "Human label for SPIFFE or workload identity discovery findings." },
+  "discovery.kind.unknown": { defaultMessage: "Other credential", description: "Defensive human label for an unknown discovery kind." },
   "discovery.findings.statusUnmanaged": {
     defaultMessage: "Unmanaged",
     description: "Triage status label for an unmanaged discovery finding.",

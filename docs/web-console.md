@@ -18,7 +18,8 @@ Journeys sit above a few quick tasks (for example *Expiring ≤30 days*) that
 deep-link into a pre-filtered worklist. Each space owns every surface of one
 concern: *Certificates & PKI* (certificates, request, profiles, CA hierarchy,
 protocols, code signing), *Secrets* (the secrets workspace), *Workload & SSH*
-(workloads, identities, SSH trust), *Posture & response* (discovery, crypto
+(workloads, identities, SSH trust), *Posture & response* (find unmanaged
+credentials, crypto
 posture, risk, credential graph, incidents, operations — the Detect & respond
 group), and *Platform* (policy, approvals, audit, owners, privacy under Govern &
 administer; agents, connectors, notifications under Infrastructure; integrations
@@ -139,13 +140,23 @@ browse prior versions — issuance keeps the version it evaluated against, and a
 view compares any two versions field by field. Backed by `/api/v1/profiles` and
 `/api/v1/profiles/{name}/versions/{version}`.
 
-### Discovery (`/discovery`)
+### Find unmanaged credentials (`/discovery`)
 
-The discovery front door: a shadow-inventory summary of unmanaged credentials found
-across your environments, and a CT-log & drift panel that counts
-certificate-transparency and configuration-drift findings from the served sources,
-schedules, and runs. See [Discovery & inventory](features/discovery-and-inventory.md).
-Backed by `/api/v1/discovery/sources`, `/schedules`, `/runs`, and `/findings`.
+This screen answers three questions in reading order: what trstctl found, why it
+matters, and what you can safely do next. The default view puts a short attention
+summary and **Credentials to review** first. Choose **Review finding** to see the
+human explanation and claim it into managed inventory; less-common lifecycle actions
+and raw evidence stay behind clearly named disclosures.
+
+**Run scan** takes you to the real discovery sources so you can run an existing source
+or add the first one. Sources, schedules, and run history remain one tab away. Exact
+CT-log monitoring, drift, coverage, fingerprints, source/run IDs, and repository API
+paths are available under **Monitoring and exact scan evidence** or **Exact finding
+evidence**. They are hidden at first so an operator can make a sound decision without
+decoding implementation details, not because the proof is missing. See
+[Discovery & inventory](features/discovery-and-inventory.md). Backed by
+`/api/v1/discovery/sources`, `/schedules`, `/runs`, `/findings`, `/monitoring`,
+`/ct-monitoring`, `/drift`, and `/nhi/posture/shadow`.
 
 ### Posture — crypto-agility & PQC (`/posture`)
 
@@ -475,7 +486,7 @@ grounded and sufficient. Backed by `/api/v1/ai/status`, `/api/v1/mcp/tools`, `/a
 | `/secrets/sync` | Send secrets to systems |
 | `/agents` | Agents |
 | `/workloads` | Workloads |
-| `/discovery` | Discovery |
+| `/discovery` | Find unmanaged credentials |
 | `/risk` | Risk |
 | `/posture` | Posture |
 | `/graph` | Graph |

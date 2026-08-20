@@ -92,11 +92,11 @@ describe("DESIGN-002 dense grid and toolbar consistency", () => {
     const user = userEvent.setup();
     renderDiscovery();
 
-    expect(await screen.findByRole("heading", { name: "Discovery" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Find unmanaged credentials" })).toBeInTheDocument();
     // Each surface lives on its workspace tab; monitoring + findings share the default tab.
     const surfaces: Array<{ heading: string; tab?: string }> = [
       { heading: "Continuous monitoring" },
-      { heading: "Findings" },
+      { heading: "Credentials to review" },
       { heading: "Sources", tab: "Sources" },
       { heading: "Schedules", tab: "Schedules" },
       { heading: "Runs", tab: "Runs" },
@@ -109,9 +109,12 @@ describe("DESIGN-002 dense grid and toolbar consistency", () => {
       expect(within(section as HTMLElement).getByRole("button", { name: "Save view" })).toBeInTheDocument();
     }
 
-    await user.click(screen.getByRole("tab", { name: "Findings" }));
-    const findings = screen.getByRole("heading", { name: "Findings" }).closest("section") as HTMLElement;
+    await user.click(screen.getByRole("tab", { name: "What was found" }));
+    const findings = screen.getByRole("heading", { name: "Credentials to review" }).closest("section") as HTMLElement;
     expect(within(findings).getByLabelText("Triage status")).toBeInTheDocument();
+    expect(within(findings).queryByText("abcdef1234...567890")).not.toBeInTheDocument();
+    await user.click(within(findings).getByRole("button", { name: "Columns" }));
+    await user.click(within(findings).getByRole("checkbox", { name: /Fingerprint/ }));
     expect(within(findings).getByText("abcdef1234...567890")).toBeInTheDocument();
     expect(within(findings).queryByText("RAW-TOKEN-VALUE")).not.toBeInTheDocument();
   });

@@ -304,6 +304,11 @@ describe("i18n boundary", () => {
       // labels, calm delivery summaries, and progressive exact evidence.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
       // release.
+      // QA design g16 re-pin: the discovery journey now names the operator goal,
+      // puts findings before scan machinery, translates human credential kinds,
+      // and keeps raw monitoring and finding evidence behind named disclosures.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
+      // release.
       // AUD-58 Provider workforce re-pin: twenty-two keys label SAML sign-in,
       // SCIM lifecycle, exact customer/operation grants, expiry, last use, and
       // retained revocation evidence. Machine-authored es/de — FLAGGED FOR
@@ -769,8 +774,8 @@ describe("i18n boundary", () => {
       // to avoid an ordinary word that is byte-identical to a debt marker.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
       // release.
-      "es-ES": "53456d2ccc2d7d881082de38155e1e37627f6f889d2afbe04212d021698af0b9",
-      "de-DE": "6c69902cbbcb9713fa717b3bf7608f802621e97d4ea359c995fc9153107d0fb5",
+      "es-ES": "cbbd03ebf52d9d786dfe8e91df90d633b7049a1bf8ad719c885ecaeb9a573f94",
+      "de-DE": "e527e10c768c955fc177211df21e08be2fbe768d607c7e59e8965816bbee49a7",
     });
   });
 

@@ -422,7 +422,7 @@ describe("auth + dashboards", () => {
     const nav = screen.getByRole("navigation", { name: "Primary" });
     expect(within(nav).getByRole("link", { name: /^Audit$/i })).toHaveAttribute("href", "/audit");
     expect(within(nav).queryByRole("link", { name: /Certificates/i })).not.toBeInTheDocument();
-    expect(within(nav).queryByRole("link", { name: /Discovery/i })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole("link", { name: /unmanaged credentials/i })).not.toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: /Request a certificate/i })).not.toBeInTheDocument();
   });
 
@@ -437,7 +437,7 @@ describe("auth + dashboards", () => {
     const nav = screen.getByRole("navigation", { name: "Primary" });
     expect(within(nav).getByRole("link", { name: /Request a certificate/i })).toHaveAttribute("href", "/request");
     expect(within(nav).getByRole("link", { name: /Certificates/i })).toHaveAttribute("href", "/certificates");
-    expect(within(nav).queryByRole("link", { name: /Discovery/i })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole("link", { name: /unmanaged credentials/i })).not.toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: /^Audit$/i })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /Open command palette/i }));

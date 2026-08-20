@@ -610,7 +610,7 @@ describe("app shell accessibility and theme", () => {
     }
 
     // Other spaces' routes stay out of the sidebar until their space is active.
-    expect(within(nav).queryByRole("link", { name: /Discovery/i })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole("link", { name: /unmanaged credentials/i })).not.toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: /Deployment connectors/i })).not.toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: /Credential graph/i })).not.toBeInTheDocument();
 

@@ -1,7 +1,7 @@
 import { SectionCard, DashboardGrid } from "@/components/dashboard";
 import { StatTile } from "@/components/charts";
 import type { DiscoveryFinding, DiscoverySource } from "@/lib/api";
-import { translateNow } from "@/i18n/I18nProvider";
+import { translateNow, useTranslation } from "@/i18n/I18nProvider";
 
 function kindCounts(findings: DiscoveryFinding[]): Array<[string, number]> {
   const map = new Map<string, number>();
@@ -10,14 +10,15 @@ function kindCounts(findings: DiscoveryFinding[]): Array<[string, number]> {
 }
 
 export function DiscoveryHero({ findings }: { findings: DiscoveryFinding[] }) {
+  const { t } = useTranslation();
   const kinds = kindCounts(findings);
   const highRisk = findings.filter((finding) => (finding.risk_score ?? 0) >= 70).length;
   return (
-    <SectionCard title={translateNow("source.shadow.inventory.fd12d94cc1")} description="unmanaged credentials discovered across your environments">
+    <SectionCard title={t("discovery.attention.title")} description={t("discovery.attention.description")}>
       <DashboardGrid>
-        <StatTile label="Shadow findings" value={findings.length} />
-        <StatTile label="High risk" value={highRisk} tone={highRisk ? "high" : undefined} />
-        <StatTile label="Finding types" value={kinds.length} />
+        <StatTile label={t("discovery.attention.unmanaged")} value={findings.length} />
+        <StatTile label={t("discovery.attention.highRisk")} value={highRisk} tone={highRisk ? "high" : undefined} />
+        <StatTile label={t("discovery.attention.types")} value={kinds.length} />
       </DashboardGrid>
     </SectionCard>
   );
