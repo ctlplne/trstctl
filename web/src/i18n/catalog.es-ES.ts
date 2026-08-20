@@ -3685,6 +3685,12 @@ const esESCatalog = {
   "source.issuance.requests.denialfailed.i3req00019": "El rechazo fall\u00f3",
   "source.issuance.requests.withdrawalfailed.i3req00020": "La retirada fall\u00f3",
   "source.issuance.requests.readonly.i3req00021": "Puedes ver esta solicitud, pero esta sesi\u00f3n no puede aprobar ni rechazar certificados.",
+  "source.issuance.requests.issue.i3req00022": "Emitir certificado para {value1}",
+  "source.issuance.requests.issued.i3req00023":
+    "Certificado emitido para {value1}. La solicitud ahora est\u00e1 vinculada a evidencia de inventario respaldada por el firmante.",
+  "source.issuance.requests.issuefailed.i3req00024": "La emisi\u00f3n del certificado no termin\u00f3",
+  "source.issuance.requests.awaitingissuance.i3req00025": "Aprobada. Ahora debe emitirla un operador de certificados con acceso de escritura de identidades.",
+  "source.issuance.requests.issuedevidence.i3req00026": "Emitido por {value1}; la evidencia del certificado correspondiente est\u00e1 en el inventario.",
   "source.issuance.requests.counts.i3req00002": "{value1} esperando una decisi\u00f3n, de {value2} en total.",
   "source.issuance.requests.decidedby.i3req00004": "{value1}, decidido por {value2}",
   "source.issuance.requests.expired.i3req00003": "caducada: nadie decidi\u00f3",

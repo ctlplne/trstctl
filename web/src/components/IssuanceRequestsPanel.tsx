@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { api, type IssuanceRequest, type IssuanceRequestList, type TicketIntakeSchedule } from "@/lib/api";
+import { api, ApiError, type IssuanceRequest, type IssuanceRequestList, type TicketIntakeSchedule } from "@/lib/api";
 import { useApiQuery, useQueryClient } from "@/lib/query";
 import { optionalApiCall } from "@/lib/optionalApi";
 import { hasPermission } from "@/lib/access";
@@ -55,6 +55,7 @@ export function IssuanceRequestsPanel({ currentPrincipal }: IssuanceRequestsPane
   const [decisionError, setDecisionError] = useState<string | null>(null);
   const canDecideRequests = hasPermission(currentPrincipal, "certs:issue");
   const canRequestCertificates = hasPermission(currentPrincipal, "certs:request");
+  const canFulfillRequests = canDecideRequests && hasPermission(currentPrincipal, "identities:write");
   const items = requests.data?.items ?? [];
   const schedules = [serviceNowSchedule.data, jiraSchedule.data].filter((schedule): schedule is TicketIntakeSchedule => Boolean(schedule?.configured));
   if (items.length === 0 && schedules.length === 0) return null;
@@ -107,6 +108,43 @@ export function IssuanceRequestsPanel({ currentPrincipal }: IssuanceRequestsPane
       setDecisionNotice(translateNow("source.issuance.requests.withdrawalrecorded.i3req00017", { value1: item.subject }));
     } catch (err) {
       setDecisionError(apiProblemMessage(err, translateNow("source.issuance.requests.withdrawalfailed.i3req00020")));
+    } finally {
+      setBusyRequestID(null);
+    }
+  }
+
+  async function fulfill(item: IssuanceRequest) {
+    setBusyRequestID(item.id);
+    setDecisionError(null);
+    setDecisionNotice(null);
+    try {
+      const prepared = await api.prepareIssuanceRequest(item.id);
+      if (prepared.identity.status !== "issued") {
+        await api.transitionIdentity(
+          prepared.identity.id,
+          "issued",
+          `fulfill approved issuance request ${item.id}`,
+          prepared.csr_pem,
+          prepared.issue_idempotency_key,
+        );
+      }
+
+      let completed: IssuanceRequest | null = null;
+      let lastError: unknown = null;
+      for (let attempt = 0; attempt < 8 && !completed; attempt += 1) {
+        try {
+          completed = await api.completeIssuanceRequest(item.id);
+        } catch (err) {
+          lastError = err;
+          if (!(err instanceof ApiError) || err.status !== 409 || attempt === 7) throw err;
+          await new Promise<void>((resolve) => window.setTimeout(resolve, 350));
+        }
+      }
+      if (!completed) throw lastError ?? new Error("certificate evidence did not arrive");
+      retainDecision(completed);
+      setDecisionNotice(translateNow("source.issuance.requests.issued.i3req00023", { value1: item.subject }));
+    } catch (err) {
+      setDecisionError(apiProblemMessage(err, translateNow("source.issuance.requests.issuefailed.i3req00024")));
     } finally {
       setBusyRequestID(null);
     }
@@ -236,6 +274,21 @@ export function IssuanceRequestsPanel({ currentPrincipal }: IssuanceRequestsPane
                   ) : null}
                   {item.status === "requested" && !ownRequest && currentPrincipal && !canDecideRequests ? (
                     <p className="mt-2 text-caption text-muted-foreground">{translateNow("source.issuance.requests.readonly.i3req00021")}</p>
+                  ) : null}
+                  {item.status === "approved" && canFulfillRequests ? (
+                    <div className="mt-2">
+                      <Button type="button" size="sm" disabled={busyRequestID === item.id} onClick={() => void fulfill(item)}>
+                        {translateNow("source.issuance.requests.issue.i3req00022", { value1: item.subject })}
+                      </Button>
+                    </div>
+                  ) : null}
+                  {item.status === "approved" && currentPrincipal && !canFulfillRequests ? (
+                    <p className="mt-2 text-caption text-muted-foreground">{translateNow("source.issuance.requests.awaitingissuance.i3req00025")}</p>
+                  ) : null}
+                  {item.status === "issued" && item.issued_by ? (
+                    <p className="mt-2 text-caption text-muted-foreground">
+                      {translateNow("source.issuance.requests.issuedevidence.i3req00026", { value1: item.issued_by })}
+                    </p>
                   ) : null}
                   {denyRequestID === item.id ? (
                     <form

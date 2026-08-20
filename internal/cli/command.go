@@ -348,6 +348,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"issuance-requests", "intake-schedule", "set"}, Method: "PUT", Path: "/api/v1/issuance-requests/intake-schedule", Body: bodyFile, Summary: "Configure bounded ServiceNow or Jira ticket intake with durable relay paging"},
 	{Name: []string{"issuance-requests", "intake-schedule", "show"}, Method: "GET", Path: "/api/v1/issuance-requests/intake-schedule", Query: []string{"system"}, Summary: "Show one provider's durable ticket-intake cursor, coverage, terminal run, and last failure"},
 	{Name: []string{"issuance-requests", "cancel"}, Method: "POST", Path: "/api/v1/issuance-requests/{id}/cancel", Summary: "Withdraw your own request; only the requester may"},
+	{Name: []string{"issuance-requests", "prepare"}, Method: "POST", Path: "/api/v1/issuance-requests/{id}/prepare", Summary: "Create or recover the exact requested identity without claiming it is issued"},
+	{Name: []string{"issuance-requests", "complete"}, Method: "POST", Path: "/api/v1/issuance-requests/{id}/complete", Summary: "Close only after matching signer-backed certificate evidence exists"},
 	{Name: []string{"mdm", "devices"}, Method: "GET", Path: "/api/v1/mdm/devices", Summary: "List MDM devices correlated to SCEP transactions (read-only)"},
 	{Name: []string{"mdm", "trace"}, Method: "GET", Path: "/api/v1/mdm/{mdm}/devices/{id}/trace", Summary: "Show which step a device's certificate enrollment broke at"},
 	{Name: []string{"mdm", "poll-schedule", "set"}, Method: "PUT", Path: "/api/v1/mdm/poll-schedule", Body: bodyFile, Summary: "Configure the per-MDM read schedule; relay execution requires a secret:// token reference"},

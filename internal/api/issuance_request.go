@@ -4,12 +4,14 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/issuancerequest"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -47,8 +49,17 @@ type issuanceRequestResponse struct {
 	DecisionReason string `json:"decision_reason,omitempty"`
 	DecidedAt      string `json:"decided_at,omitempty"`
 	IdentityID     string `json:"identity_id,omitempty"`
+	IssuedBy       string `json:"issued_by,omitempty"`
+	IssuedAt       string `json:"issued_at,omitempty"`
 	ExpiresAt      string `json:"expires_at"`
 	CreatedAt      string `json:"created_at"`
+}
+
+type issuanceRequestPreparationResponse struct {
+	Request             issuanceRequestResponse `json:"request"`
+	Identity            identityResponse        `json:"identity"`
+	CSRPEM              string                  `json:"csr_pem,omitempty"`
+	IssueIdempotencyKey string                  `json:"issue_idempotency_key"`
 }
 
 type issuanceRequestList struct {
@@ -75,11 +86,15 @@ func toIssuanceRequestResponse(r store.IssuanceRequest) issuanceRequestResponse 
 		Requester: r.Requester, Justification: r.Justification, Origin: r.Origin,
 		TicketRef: r.TicketRef, Status: r.Status, DecidedBy: r.DecidedBy,
 		DecisionReason: r.DecisionReason, IdentityID: r.IdentityID,
+		IssuedBy:  r.IssuedBy,
 		ExpiresAt: r.ExpiresAt.UTC().Format(time.RFC3339),
 		CreatedAt: r.CreatedAt.UTC().Format(time.RFC3339),
 	}
 	if r.DecidedAt != nil {
 		out.DecidedAt = r.DecidedAt.UTC().Format(time.RFC3339)
+	}
+	if r.IssuedAt != nil {
+		out.IssuedAt = r.IssuedAt.UTC().Format(time.RFC3339)
 	}
 	return out
 }
@@ -199,4 +214,36 @@ func (a *API) decideIssuanceRequest(to string) http.HandlerFunc {
 			return http.StatusOK, toIssuanceRequestResponse(out), nil
 		})
 	}
+}
+
+func (a *API) prepareIssuanceRequest(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		request, identity, err := a.orch.PrepareIssuanceRequest(ctx, tenantID, r.PathValue("id"), principalSubject(ctx))
+		if err != nil {
+			if errors.Is(err, orchestrator.ErrIssuanceRequestNotReady) {
+				return 0, nil, errStatus(http.StatusConflict, err.Error())
+			}
+			return 0, nil, err
+		}
+		return http.StatusOK, issuanceRequestPreparationResponse{
+			Request: toIssuanceRequestResponse(request), Identity: toIdentityResponse(identity),
+			CSRPEM:              request.CSRPEM,
+			IssueIdempotencyKey: orchestrator.IssuanceRequestIssueIdempotencyKey(request.ID),
+		}, nil
+	})
+}
+
+func (a *API) completeIssuanceRequest(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		request, err := a.orch.CompleteIssuanceRequest(ctx, tenantID, r.PathValue("id"), principalSubject(ctx))
+		if err != nil {
+			if errors.Is(err, orchestrator.ErrIssuanceRequestNotReady) {
+				return 0, nil, errStatus(http.StatusConflict, err.Error())
+			}
+			return 0, nil, err
+		}
+		return http.StatusOK, toIssuanceRequestResponse(request), nil
+	})
 }

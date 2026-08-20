@@ -2680,6 +2680,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/issuance-requests/{id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark a request issued only after its matching signer-backed certificate exists */
+        post: operations["completeIssuanceRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/issuance-requests/{id}/deny": {
         parameters: {
             query?: never;
@@ -2691,6 +2708,23 @@ export interface paths {
         put?: never;
         /** Deny a request with a reason the requester can act on */
         post: operations["denyIssuanceRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/issuance-requests/{id}/prepare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create or recover the exact requested identity and return its public CSR for guarded issuance */
+        post: operations["prepareIssuanceRequest"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8592,6 +8626,8 @@ export interface components {
             id: string;
             /** Format: uuid */
             identity_id?: string;
+            issued_at?: string;
+            issued_by?: string;
             justification?: string;
             origin?: string;
             /** Format: uuid */
@@ -8619,6 +8655,12 @@ export interface components {
             guidance: string;
             items: components["schemas"]["IssuanceRequest"][];
             open: number;
+        };
+        IssuanceRequestPreparation: {
+            csr_pem?: string;
+            identity: components["schemas"]["Identity"];
+            issue_idempotency_key: string;
+            request: components["schemas"]["IssuanceRequest"];
         };
         Issuer: {
             chain?: string[];
@@ -19819,6 +19861,49 @@ export interface operations {
             };
         };
     };
+    completeIssuanceRequest: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssuanceRequest"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     denyIssuanceRequest: {
         parameters: {
             query?: never;
@@ -19844,6 +19929,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IssuanceRequest"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    prepareIssuanceRequest: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssuanceRequestPreparation"];
                 };
             };
             /** @description client error */

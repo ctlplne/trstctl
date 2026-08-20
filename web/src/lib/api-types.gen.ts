@@ -3040,6 +3040,8 @@ export interface IssuanceRequest {
   expires_at: string;
   id: string;
   identity_id?: string;
+  issued_at?: string;
+  issued_by?: string;
   justification?: string;
   origin?: string;
   owner_id?: string;
@@ -3065,6 +3067,13 @@ export interface IssuanceRequestList {
   guidance: string;
   items: IssuanceRequest[];
   open: number;
+}
+
+export interface IssuanceRequestPreparation {
+  csr_pem?: string;
+  identity: Identity;
+  issue_idempotency_key: string;
+  request: IssuanceRequest;
 }
 
 export interface Issuer {

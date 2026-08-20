@@ -249,6 +249,33 @@ func (s *Store) ApplyIssuanceRequestDecidedTx(ctx context.Context, tx pgx.Tx, te
 	return err
 }
 
+// ApplyIssuanceRequestPreparedTx links one approved request to the deterministic
+// requested identity that will travel through the ordinary guarded mint path.
+// The status remains approved: preparation is not issuance.
+func (s *Store) ApplyIssuanceRequestPreparedTx(ctx context.Context, tx pgx.Tx, tenantID, id, identityID string) error {
+	_, err := tx.Exec(ctx,
+		`UPDATE issuance_requests
+		    SET identity_id = $3::uuid, updated_at = now()
+		  WHERE tenant_id = $1 AND id = $2 AND status = 'approved'
+		    AND (identity_id IS NULL OR identity_id = $3::uuid)`,
+		tenantID, id, identityID)
+	return err
+}
+
+// ApplyIssuanceRequestIssuedTx closes a prepared request only after the caller
+// proved that its linked identity reached issued. Reviewer and issuance actor
+// are separate columns because they are separate security facts.
+func (s *Store) ApplyIssuanceRequestIssuedTx(ctx context.Context, tx pgx.Tx, tenantID, id, identityID, issuedBy string, at time.Time) error {
+	_, err := tx.Exec(ctx,
+		`UPDATE issuance_requests
+		    SET status = 'issued', identity_id = $3::uuid,
+		        issued_by = $4, issued_at = $5, updated_at = now()
+		  WHERE tenant_id = $1 AND id = $2 AND status = 'approved'
+		    AND identity_id = $3::uuid`,
+		tenantID, id, identityID, issuedBy, at)
+	return err
+}
+
 // ApplyOwnershipConflictResolvedTx closes an ownership disagreement (I2).
 //
 // The WHERE pins resolved_at IS NULL, so a second operator resolving the same

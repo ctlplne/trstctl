@@ -10,6 +10,9 @@ const { apiMock } = vi.hoisted(() => ({
     approveIssuanceRequest: vi.fn(),
     denyIssuanceRequest: vi.fn(),
     cancelIssuanceRequest: vi.fn(),
+    prepareIssuanceRequest: vi.fn(),
+    transitionIdentity: vi.fn(),
+    completeIssuanceRequest: vi.fn(),
     ticketIntakeSchedule: vi.fn(),
   },
 }));
@@ -25,6 +28,9 @@ describe("ticket-intake relay visibility", () => {
     apiMock.approveIssuanceRequest.mockReset();
     apiMock.denyIssuanceRequest.mockReset();
     apiMock.cancelIssuanceRequest.mockReset();
+    apiMock.prepareIssuanceRequest.mockReset();
+    apiMock.transitionIdentity.mockReset();
+    apiMock.completeIssuanceRequest.mockReset();
     apiMock.ticketIntakeSchedule.mockReset().mockImplementation(async (system: "servicenow" | "jira") =>
       system === "servicenow"
         ? {
@@ -109,6 +115,65 @@ describe("ticket-intake relay visibility", () => {
     await user.click(screen.getByRole("button", { name: "Withdraw own-request" }));
     expect(apiMock.cancelIssuanceRequest).toHaveBeenCalledWith("request-2");
     expect(await screen.findByRole("status")).toHaveTextContent("Request withdrawn for own-request");
+  });
+
+  it("turns an approved request into signer-backed issued evidence through the guarded identity path", async () => {
+    const request = {
+      id: "request-issued",
+      tenant_id: "tenant-1",
+      subject: "qa-design-partner-mtls",
+      owner_id: "owner-1",
+      profile: "service-mtls-30d:1",
+      requester: "demo-admin",
+      decided_by: "security-reviewer",
+      status: "approved" as const,
+      expires_at: "2026-08-21T00:00:00Z",
+      created_at: "2026-08-20T00:00:00Z",
+    };
+    apiMock.issuanceRequests.mockResolvedValue({ items: [request], open: 0, guidance: "Approval is not issuance." });
+    apiMock.prepareIssuanceRequest.mockResolvedValue({
+      request: { ...request, identity_id: "identity-issued" },
+      identity: {
+        id: "identity-issued",
+        tenant_id: "tenant-1",
+        kind: "x509_certificate",
+        name: request.subject,
+        owner_id: request.owner_id,
+        status: "requested",
+        attributes: {},
+      },
+      csr_pem: "-----BEGIN CERTIFICATE REQUEST-----\npublic-csr\n-----END CERTIFICATE REQUEST-----",
+      issue_idempotency_key: "issuance-request-issue:request-issued",
+    });
+    apiMock.transitionIdentity.mockResolvedValue({ id: "identity-issued", status: "issued" });
+    apiMock.completeIssuanceRequest.mockResolvedValue({
+      ...request,
+      identity_id: "identity-issued",
+      status: "issued",
+      issued_by: "se-demo-operator",
+      issued_at: "2026-08-20T01:00:00Z",
+    });
+    const user = userEvent.setup();
+
+    render(
+      <AppQueryProvider>
+        <IssuanceRequestsPanel currentPrincipal={{ subject: "se-demo-operator", permissions: ["certs:issue", "identities:write"] }} />
+      </AppQueryProvider>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Issue certificate for qa-design-partner-mtls" }));
+
+    expect(apiMock.prepareIssuanceRequest).toHaveBeenCalledWith("request-issued");
+    expect(apiMock.transitionIdentity).toHaveBeenCalledWith(
+      "identity-issued",
+      "issued",
+      "fulfill approved issuance request request-issued",
+      expect.stringContaining("CERTIFICATE REQUEST"),
+      "issuance-request-issue:request-issued",
+    );
+    expect(apiMock.completeIssuanceRequest).toHaveBeenCalledWith("request-issued");
+    expect(await screen.findByRole("status")).toHaveTextContent("Certificate issued for qa-design-partner-mtls");
+    expect(screen.getByText(/Issued by se-demo-operator/)).toBeInTheDocument();
   });
 
   it("does not offer certificate decisions to a read-only requester role", async () => {

@@ -194,6 +194,14 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/decided_by", exact), privacyRule("/reason", clear),
 		privacyRule("/identity_id", opaque), privacyRule("/decided_at", opaque),
 	)
+	issuanceRequestPrepared := privacyRules(
+		privacyRule("/id", opaque), privacyRule("/identity_id", opaque),
+		privacyRule("/prepared_by", exact), privacyRule("/prepared_at", opaque),
+	)
+	issuanceRequestIssued := privacyRules(
+		privacyRule("/id", opaque), privacyRule("/identity_id", opaque),
+		privacyRule("/issued_by", exact), privacyRule("/issued_at", opaque),
+	)
 	identityCreated := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/kind", opaque),
 		privacyRule("/name", token), privacyRule("/owner_id", opaque),
@@ -617,6 +625,8 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		{EventApprovalStatusChanged, 1}:                   approvalStatus,
 		{EventIssuanceRequestOpened, 1}:                   issuanceRequestOpened,
 		{EventIssuanceRequestDecided, 1}:                  issuanceRequestDecided,
+		{EventIssuanceRequestPrepared, 1}:                 issuanceRequestPrepared,
+		{EventIssuanceRequestIssued, 1}:                   issuanceRequestIssued,
 		{EventIdentityCreated, 1}:                         identityCreated,
 		{EventTenantMemberUpserted, 1}:                    tenantMember,
 		{EventTenantMemberOffboarded, 1}: privacyRules(
@@ -1164,6 +1174,8 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventApprovalStatusChanged, 1}:                                              privacyPayloadShape[ApprovalStatusChanged](),
 		{EventIssuanceRequestOpened, 1}:                                              privacyPayloadShape[IssuanceRequestOpened](),
 		{EventIssuanceRequestDecided, 1}:                                             privacyPayloadShape[IssuanceRequestDecided](),
+		{EventIssuanceRequestPrepared, 1}:                                            privacyPayloadShape[IssuanceRequestPrepared](),
+		{EventIssuanceRequestIssued, 1}:                                              privacyPayloadShape[IssuanceRequestIssued](),
 		{EventIdentityCreated, 1}:                                                    privacyPayloadShape[IdentityCreated](),
 		{EventTenantMemberUpserted, 1}:                                               privacyPayloadShape[TenantMemberUpserted](),
 		{EventTenantMemberOffboarded, 1}:                                             privacyPayloadShape[TenantMemberOffboarded](),

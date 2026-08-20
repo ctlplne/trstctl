@@ -3700,6 +3700,13 @@ const deDECatalog = {
   "source.issuance.requests.denialfailed.i3req00019": "Ablehnung fehlgeschlagen",
   "source.issuance.requests.withdrawalfailed.i3req00020": "Zur\u00fcckziehen fehlgeschlagen",
   "source.issuance.requests.readonly.i3req00021": "Sie k\u00f6nnen diese Anfrage sehen, aber diese Sitzung darf Zertifikate weder genehmigen noch ablehnen.",
+  "source.issuance.requests.issue.i3req00022": "Zertifikat f\u00fcr {value1} ausstellen",
+  "source.issuance.requests.issued.i3req00023":
+    "Zertifikat f\u00fcr {value1} ausgestellt. Die Anfrage ist jetzt mit signergest\u00fctztem Inventarnachweis verkn\u00fcpft.",
+  "source.issuance.requests.issuefailed.i3req00024": "Die Zertifikatsausstellung wurde nicht abgeschlossen",
+  "source.issuance.requests.awaitingissuance.i3req00025":
+    "Genehmigt. Ein Zertifikatsoperator mit Schreibzugriff auf Identit\u00e4ten muss es jetzt ausstellen.",
+  "source.issuance.requests.issuedevidence.i3req00026": "Ausgestellt von {value1}; der passende Zertifikatsnachweis befindet sich im Inventar.",
   "source.issuance.requests.counts.i3req00002": "{value1} warten auf eine Entscheidung, von {value2} insgesamt.",
   "source.issuance.requests.decidedby.i3req00004": "{value1}, entschieden von {value2}",
   "source.issuance.requests.expired.i3req00003": "abgelaufen \u2014 niemand hat entschieden",

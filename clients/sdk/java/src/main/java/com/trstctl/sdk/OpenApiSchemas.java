@@ -329,6 +329,7 @@ public final class OpenApiSchemas {
       "IssuanceRequest",
       "IssuanceRequestInput",
       "IssuanceRequestList",
+      "IssuanceRequestPreparation",
       "Issuer",
       "IssuerCapability",
       "IssuerCapabilityMatrix",

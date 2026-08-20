@@ -4296,6 +4296,8 @@ IssuanceRequest = TypedDict(
         'expires_at': str,
         'id': str,
         'identity_id': str,
+        'issued_at': str,
+        'issued_by': str,
         'justification': str,
         'origin': str,
         'owner_id': str,
@@ -4329,6 +4331,17 @@ IssuanceRequestList = TypedDict(
         'guidance': str,
         'items': list[dict[str, Any]],
         'open': int,
+    },
+    total=False,
+)
+
+IssuanceRequestPreparation = TypedDict(
+    'IssuanceRequestPreparation',
+    {
+        'csr_pem': str,
+        'identity': dict[str, Any],
+        'issue_idempotency_key': str,
+        'request': dict[str, Any],
     },
     total=False,
 )

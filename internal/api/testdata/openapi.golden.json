@@ -11951,6 +11951,12 @@
             "format": "uuid",
             "type": "string"
           },
+          "issued_at": {
+            "type": "string"
+          },
+          "issued_by": {
+            "type": "string"
+          },
           "justification": {
             "type": "string"
           },
@@ -12050,6 +12056,28 @@
           "items",
           "open",
           "guidance"
+        ],
+        "type": "object"
+      },
+      "IssuanceRequestPreparation": {
+        "properties": {
+          "csr_pem": {
+            "type": "string"
+          },
+          "identity": {
+            "$ref": "#/components/schemas/Identity"
+          },
+          "issue_idempotency_key": {
+            "type": "string"
+          },
+          "request": {
+            "$ref": "#/components/schemas/IssuanceRequest"
+          }
+        },
+        "required": [
+          "request",
+          "identity",
+          "issue_idempotency_key"
         ],
         "type": "object"
       },
@@ -36422,6 +36450,73 @@
         "x-trstctl-permission": "certs:request"
       }
     },
+    "/api/v1/issuance-requests/{id}/complete": {
+      "post": {
+        "operationId": "completeIssuanceRequest",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssuanceRequest"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Mark a request issued only after its matching signer-backed certificate exists",
+        "x-trstctl-permission": "certs:issue"
+      }
+    },
     "/api/v1/issuance-requests/{id}/deny": {
       "post": {
         "operationId": "denyIssuanceRequest",
@@ -36497,6 +36592,74 @@
         ],
         "summary": "Deny a request with a reason the requester can act on",
         "x-trstctl-permission": "certs:issue"
+      }
+    },
+    "/api/v1/issuance-requests/{id}/prepare": {
+      "post": {
+        "operationId": "prepareIssuanceRequest",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssuanceRequestPreparation"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Create or recover the exact requested identity and return its public CSR for guarded issuance",
+        "x-trstctl-permission": "identities:write",
+        "x-trstctl-sensitive-response": true
       }
     },
     "/api/v1/issuers": {

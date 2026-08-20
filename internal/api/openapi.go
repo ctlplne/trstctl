@@ -3962,7 +3962,8 @@ func componentSchemas() map[string]*Schema {
 		// one that drifts accepts a state the other rejects.
 		"status":     {Type: "string", Enum: append([]string(nil), issuancerequest.States...)},
 		"decided_by": str(), "decision_reason": str(), "decided_at": str(),
-		"identity_id": uuid(), "expires_at": str(), "created_at": str(),
+		"identity_id": uuid(), "issued_by": str(), "issued_at": str(),
+		"expires_at": str(), "created_at": str(),
 	}, "id", "tenant_id", "subject", "requester", "status", "expires_at", "created_at")
 	issuanceRequestInput := object(map[string]*Schema{
 		"subject": str(), "owner_id": uuid(), "profile": str(), "csr_pem": str(), "justification": str(),
@@ -3977,6 +3978,10 @@ func componentSchemas() map[string]*Schema {
 		// queue needs attention or is merely long with history.
 		"open": {Type: "integer"}, "guidance": str(),
 	}, "items", "open", "guidance")
+	issuanceRequestPreparation := object(map[string]*Schema{
+		"request": ref("IssuanceRequest"), "identity": ref("Identity"),
+		"csr_pem": str(), "issue_idempotency_key": str(),
+	}, "request", "identity", "issue_idempotency_key")
 	cmdbReconcileSchedule := object(map[string]*Schema{
 		// configured is separate from enabled: "never set up" and "set up and
 		// paused" are different operator states, and one flag merges them.
@@ -5314,6 +5319,7 @@ func componentSchemas() map[string]*Schema {
 		"IssuanceRequestInput":                     issuanceRequestInput,
 		"IssuanceDecisionInput":                    issuanceDecisionInput,
 		"IssuanceRequestList":                      issuanceRequestListSchema,
+		"IssuanceRequestPreparation":               issuanceRequestPreparation,
 		"OwnershipConflict":                        ownershipConflictSchema,
 		"CryptoReadiness":                          cryptoReadiness,
 		"CryptoReadinessRow":                       cryptoReadinessRow,

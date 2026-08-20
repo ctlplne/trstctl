@@ -14205,6 +14205,26 @@ export const messages = {
     defaultMessage: "You can view this request, but this session cannot approve or deny certificates.",
     description: "I3: explains why a readable request has no decision controls for a non-issuer session.",
   },
+  "source.issuance.requests.issue.i3req00022": {
+    defaultMessage: "Issue certificate for {value1}",
+    description: "I3: starts the normal guarded signer path for an independently approved request.",
+  },
+  "source.issuance.requests.issued.i3req00023": {
+    defaultMessage: "Certificate issued for {value1}. The request is now linked to signer-backed inventory evidence.",
+    description: "I3: confirms issuance only after matching certificate evidence exists.",
+  },
+  "source.issuance.requests.issuefailed.i3req00024": {
+    defaultMessage: "Certificate issuance did not finish",
+    description: "I3: fallback when preparation, guarded issuance, or evidence-backed completion fails.",
+  },
+  "source.issuance.requests.awaitingissuance.i3req00025": {
+    defaultMessage: "Approved. A certificate operator with identity-write access must now issue it.",
+    description: "I3: explains why approval is visible but no issue control is available in this session.",
+  },
+  "source.issuance.requests.issuedevidence.i3req00026": {
+    defaultMessage: "Issued by {value1}; matching certificate evidence is in inventory.",
+    description: "I3: names the issuance actor separately from the independent reviewer.",
+  },
   "source.ownership.conflicts.resolve.i2own00009": {
     defaultMessage: "Resolve",
     description: "I2: closes an ownership disagreement. Requires a reason.",

@@ -116,6 +116,42 @@ describe("first-class issuance requests (AUD-78)", () => {
       origin: "console",
     });
   });
+
+  it("uses one stable request-derived key across prepare, guarded issue, and completion", async () => {
+    mockFetchSequence([
+      {
+        status: 200,
+        body: JSON.stringify({
+          request: { id: "request-1", status: "approved" },
+          identity: { id: "identity-1", status: "requested" },
+          csr_pem: "public-csr",
+          issue_idempotency_key: "issuance-request-issue:request-1",
+        }),
+      },
+      { status: 200, body: JSON.stringify({ id: "identity-1", status: "issued" }) },
+      { status: 200, body: JSON.stringify({ id: "request-1", status: "issued" }) },
+    ]);
+
+    const prepared = await api.prepareIssuanceRequest("request-1");
+    await api.transitionIdentity(
+      prepared.identity.id,
+      "issued",
+      "fulfill approved issuance request request-1",
+      prepared.csr_pem,
+      prepared.issue_idempotency_key,
+    );
+    await api.completeIssuanceRequest("request-1");
+
+    const calls = vi.mocked(fetch).mock.calls;
+    expect(calls.map((call) => call[0])).toEqual([
+      "/api/v1/issuance-requests/request-1/prepare",
+      "/api/v1/identities/identity-1/transitions",
+      "/api/v1/issuance-requests/request-1/complete",
+    ]);
+    expect((calls[0][1]?.headers as Record<string, string>)["Idempotency-Key"]).toBe("issuance-request-prepare:request-1");
+    expect((calls[1][1]?.headers as Record<string, string>)["Idempotency-Key"]).toBe("issuance-request-issue:request-1");
+    expect((calls[2][1]?.headers as Record<string, string>)["Idempotency-Key"]).toBe("issuance-request-complete:request-1");
+  });
 });
 
 describe("enrollment diagnostic verification (AUD-49)", () => {

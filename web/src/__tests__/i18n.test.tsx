@@ -745,8 +745,13 @@ describe("i18n boundary", () => {
       // distinction that an approval has been recorded but no certificate has
       // been minted yet. Machine-authored es/de — FLAGGED FOR HUMAN
       // TRANSLATION REVIEW before release.
-      "es-ES": "38fd7016a6370ea4d799422837828e07d69dec0065bcdaace860706556ab5398",
-      "de-DE": "ccb0a8adf63ceff65245020b0e271b41441bc1d396a1cbcd1337311de97e8867",
+      // Checkpoint 9 issuance-fulfillment re-pin: five keys explain the secure
+      // approved-to-issued bridge, its required permissions, signer-backed
+      // evidence, and a retryable not-ready state without claiming that an
+      // approval itself minted a certificate. Machine-authored es/de — FLAGGED
+      // FOR HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "d0d6dbc5df70ffd8b6f45ca011ed1a51ff6389ae94e2fb420b3acdceefb0e2df",
+      "de-DE": "3ae0d3db8fae6c990bec917f872913ff35e7748de35c130ea3eaea7df5eb0948",
     });
   });
 

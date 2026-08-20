@@ -72,8 +72,10 @@ const (
 	// point of the object is that a denial and an expiry are DIFFERENT and both
 	// visible, so the decision is an event rather than a column somebody
 	// overwrote.
-	EventIssuanceRequestOpened  = "issuance.request.opened"
-	EventIssuanceRequestDecided = "issuance.request.decided"
+	EventIssuanceRequestOpened   = "issuance.request.opened"
+	EventIssuanceRequestDecided  = "issuance.request.decided"
+	EventIssuanceRequestPrepared = "issuance.request.prepared"
+	EventIssuanceRequestIssued   = "issuance.request.issued"
 	// I3: a tenant's standing instruction to read its ITSM for
 	// certificate-request tickets.
 	EventTicketIntakeConfigured = "ticket.intake.configured"
@@ -703,6 +705,24 @@ type IssuanceRequestDecided struct {
 	Reason     string    `json:"reason,omitempty"`
 	IdentityID string    `json:"identity_id,omitempty"`
 	DecidedAt  time.Time `json:"decided_at"`
+}
+
+// IssuanceRequestPrepared links an approved business request to the exact
+// requested identity that will enter the existing guarded issuance path.
+type IssuanceRequestPrepared struct {
+	ID         string    `json:"id"`
+	IdentityID string    `json:"identity_id"`
+	PreparedBy string    `json:"prepared_by"`
+	PreparedAt time.Time `json:"prepared_at"`
+}
+
+// IssuanceRequestIssued records fulfillment only after signer-backed
+// certificate evidence exists for the linked identity and stable issue key.
+type IssuanceRequestIssued struct {
+	ID         string    `json:"id"`
+	IdentityID string    `json:"identity_id"`
+	IssuedBy   string    `json:"issued_by"`
+	IssuedAt   time.Time `json:"issued_at"`
 }
 
 // EnrollmentDiagnosticObserved is the immutable, secret-free diagnosis emitted
@@ -3193,6 +3213,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCMDBSweepFailed:                          {1: true},
 	EventIssuanceRequestOpened:                    {1: true},
 	EventIssuanceRequestDecided:                   {1: true},
+	EventIssuanceRequestPrepared:                  {1: true},
+	EventIssuanceRequestIssued:                    {1: true},
 	EventApprovalRequested:                        {1: true},
 	EventApprovalDecisionRecorded:                 {1: true},
 	EventApprovalStatusChanged:                    {1: true},
@@ -3788,6 +3810,18 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		}
 		return p.store.ApplyIssuanceRequestDecidedTx(ctx, tx, e.TenantID, pl.ID, pl.Status,
 			pl.DecidedBy, pl.Reason, pl.IdentityID, pl.DecidedAt)
+	case EventIssuanceRequestPrepared:
+		var pl IssuanceRequestPrepared
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyIssuanceRequestPreparedTx(ctx, tx, e.TenantID, pl.ID, pl.IdentityID)
+	case EventIssuanceRequestIssued:
+		var pl IssuanceRequestIssued
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyIssuanceRequestIssuedTx(ctx, tx, e.TenantID, pl.ID, pl.IdentityID, pl.IssuedBy, pl.IssuedAt)
 	case EventOwnershipReconciled:
 		var pl OwnershipReconciled
 		if err := decode(e, &pl); err != nil {

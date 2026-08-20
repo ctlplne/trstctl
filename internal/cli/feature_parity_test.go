@@ -160,7 +160,7 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// I2's `owners import`, `owners ownership-conflicts`, and the two
 	// `owners cmdb-schedule` commands raised it to 329, mapped onto the same
 	// owners row as the rest of the ownership surface.
-	// I3's five `issuance-requests` commands raised it to 334, mapped onto the
+	// I3's five original `issuance-requests` commands raised it to 334, mapped onto the
 	// same certificates row as the rest of the issuance surface.
 	// I5's `mdm devices` and `mdm trace` raised it to 336, on the same
 	// certificates row as the rest of the issuance-to-endpoint surface.
@@ -203,8 +203,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// 380. AUD-53 adds the served verification-key download and the server-free
 	// offline verifier, yielding 382. AUD-65 adds graph-bound readiness action
 	// creation plus the signed canonical JSON/CSV/NDJSON export, yielding 384.
-	if len(out) != 384 {
-		t.Fatalf("CLI commands = %d, want 384", len(out))
+	// The approved-request prepare and evidence-backed complete commands close
+	// I3's missing issuance bridge, yielding 386.
+	if len(out) != 386 {
+		t.Fatalf("CLI commands = %d, want 386", len(out))
 	}
 	return out
 }

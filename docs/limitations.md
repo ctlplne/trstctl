@@ -2427,8 +2427,20 @@ than sending an operator looking for a credential that was never there.
   maintainer pushes the reviewed commits and creates the tag; the current
   local remediation does neither. The Action still requires an API token
   scoped to `certs:issue` alongside the OIDC attestation. Approving a request
-  does not itself mint: `issued` is set by the caller that performs issuance
-  and links the identity, so an approved request remains outstanding work.
+  does not itself mint. The served
+  `POST /api/v1/issuance-requests/{id}/prepare` command creates or recovers one
+  deterministic requested identity, keeps the request at `approved`, and
+  returns only the stored public CSR plus a stable request-derived issue key.
+  The console sends that identity through the ordinary guarded
+  `requested -> issued` transition, so RA separation, policy, optional dual
+  control, profile binding, signer isolation, outbox delivery, and idempotency
+  are not bypassed by the convenience journey. Finally,
+  `POST /api/v1/issuance-requests/{id}/complete` moves the request to `issued`
+  only when its linked identity is issued AND active inventory contains a real
+  certificate recorded under the exact canonical issue key. Reviewer
+  (`decided_by`) and issuance actor (`issued_by`) remain separate facts. A
+  signer or outbox failure therefore leaves an honest, retryable `approved`
+  request instead of producing a false green status.
 - Attested issuance is reachable (AUD-10, I3 prerequisite): `attested_issuance`
   in the config file turns on `POST /api/v1/workloads/attested-issuance` and
   `POST /api/v1/ssh/attested-user-certs`. Before this there was NO config key at

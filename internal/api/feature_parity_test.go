@@ -161,9 +161,11 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// 370 with the public-only audit verification-key bootstrap. AUD-65 adds the
 	// graph-bound readiness action and signed multi-format export, raising it to
 	// 372; both map beside graphCryptoReadiness because they complete that same
-	// CBOM/graph workflow rather than creating a parallel product feature.
-	if len(out) != 372 {
-		t.Fatalf("OpenAPI operationIds = %d, want 372", len(out))
+	// CBOM/graph workflow rather than creating a parallel product feature. The
+	// request prepare and evidence-backed completion operations close I3's
+	// approved-to-issued bridge, raising the ratchet to 374.
+	if len(out) != 374 {
+		t.Fatalf("OpenAPI operationIds = %d, want 374", len(out))
 	}
 	return out
 }

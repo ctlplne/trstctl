@@ -19,6 +19,7 @@ import type {
   IssuanceRequest,
   IssuanceRequestInput,
   IssuanceRequestList,
+  IssuanceRequestPreparation,
   MDMDeviceList,
   MDMDeviceTrace,
   MDMPollScheduleList,
@@ -489,7 +490,7 @@ export type { DRPosture, DRDrill } from "./api-types.gen";
 export type { CryptoReadiness, CryptoReadinessAction, CryptoReadinessExport, CryptoReadinessRow, CryptoDependent } from "./api-types.gen";
 export type { OwnershipConflictList, OwnershipConflict, OwnershipImportResult } from "./api-types.gen";
 export type { CMDBReconcileSchedule } from "./api-types.gen";
-export type { IssuanceRequestList, IssuanceRequest } from "./api-types.gen";
+export type { IssuanceRequestList, IssuanceRequest, IssuanceRequestPreparation } from "./api-types.gen";
 export type { TicketIntakeSchedule } from "./api-types.gen";
 export type { MDMDeviceList, MDMDevice, MDMDeviceTrace, MDMPollScheduleList } from "./api-types.gen";
 export type { AgentUpgradeCampaign } from "./api-types.gen";
@@ -1392,10 +1393,10 @@ function newIdempotencyKey(): string {
 
 /** mutate issues a state-changing request with an optional JSON body and an
  * Idempotency-Key. */
-export function mutate<T>(method: string, path: string, body?: unknown): Promise<T> {
+export function mutate<T>(method: string, path: string, body?: unknown, idempotencyKey = newIdempotencyKey()): Promise<T> {
   return req<T>(path, {
     method,
-    headers: { "Content-Type": "application/json", "Idempotency-Key": newIdempotencyKey() },
+    headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 }
@@ -1512,6 +1513,10 @@ export interface Api {
   denyIssuanceRequest(id: string, reason: string): Promise<IssuanceRequest>;
   /** I3: let the original requester withdraw a request they no longer need. */
   cancelIssuanceRequest(id: string): Promise<IssuanceRequest>;
+  /** I3: create or recover the exact requested identity without claiming it is issued. */
+  prepareIssuanceRequest(id: string): Promise<IssuanceRequestPreparation>;
+  /** I3: close only after matching signer-backed certificate evidence exists. */
+  completeIssuanceRequest(id: string): Promise<IssuanceRequest>;
   /** I3/AUD-47: one provider's durable relay cursor, coverage, terminal run, and failure. */
   ticketIntakeSchedule(system?: "servicenow" | "jira"): Promise<TicketIntakeSchedule>;
   /** I5: read-only MDM device correlation; unobserved is counted apart from failed. */
@@ -1570,7 +1575,7 @@ export interface Api {
   ownershipAttribution(): Promise<OwnershipAttribution>;
   getIdentity(id: string): Promise<Identity>;
   createIdentity(input: IdentityRequest): Promise<Identity>;
-  transitionIdentity(id: string, to: TransitionRequest["to"], reason?: string, subjectCSRPEM?: string): Promise<Identity>;
+  transitionIdentity(id: string, to: TransitionRequest["to"], reason?: string, subjectCSRPEM?: string, idempotencyKey?: string): Promise<Identity>;
   /** Compatibility route for identity decisions; the complete immutable request
    * binding is mandatory, just like the canonical approval-request route. */
   approveIdentityAction(id: string, input: ApprovalRequest): Promise<Approval>;
@@ -1912,6 +1917,10 @@ const liveApi: Api = {
   approveIssuanceRequest: (id) => mutate<IssuanceRequest>("POST", `/api/v1/issuance-requests/${encodeURIComponent(id)}/approve`),
   denyIssuanceRequest: (id, reason) => mutate<IssuanceRequest>("POST", `/api/v1/issuance-requests/${encodeURIComponent(id)}/deny`, { reason }),
   cancelIssuanceRequest: (id) => mutate<IssuanceRequest>("POST", `/api/v1/issuance-requests/${encodeURIComponent(id)}/cancel`),
+  prepareIssuanceRequest: (id) =>
+    mutate<IssuanceRequestPreparation>("POST", `/api/v1/issuance-requests/${encodeURIComponent(id)}/prepare`, undefined, `issuance-request-prepare:${id}`),
+  completeIssuanceRequest: (id) =>
+    mutate<IssuanceRequest>("POST", `/api/v1/issuance-requests/${encodeURIComponent(id)}/complete`, undefined, `issuance-request-complete:${id}`),
   ticketIntakeSchedule: (system = "servicenow") => req<TicketIntakeSchedule>(`/api/v1/issuance-requests/intake-schedule?system=${encodeURIComponent(system)}`),
   mdmDevices: () => req<MDMDeviceList>("/api/v1/mdm/devices"),
   mdmPollSchedules: () => req<MDMPollScheduleList>("/api/v1/mdm/poll-schedule"),
@@ -2003,12 +2012,17 @@ const liveApi: Api = {
   ownershipAttribution: () => req<OwnershipAttribution>("/api/v1/ownership/attribution"),
   getIdentity: (id) => req<Identity>(`/api/v1/identities/${encodeURIComponent(id)}`),
   createIdentity: (input) => mutate<Identity>("POST", "/api/v1/identities", input),
-  transitionIdentity: (id, to, reason, subjectCSRPEM) =>
-    mutate<Identity>("POST", `/api/v1/identities/${encodeURIComponent(id)}/transitions`, {
-      to,
-      reason,
-      ...(subjectCSRPEM ? { subject_csr_pem: subjectCSRPEM } : {}),
-    }),
+  transitionIdentity: (id, to, reason, subjectCSRPEM, idempotencyKey) =>
+    mutate<Identity>(
+      "POST",
+      `/api/v1/identities/${encodeURIComponent(id)}/transitions`,
+      {
+        to,
+        reason,
+        ...(subjectCSRPEM ? { subject_csr_pem: subjectCSRPEM } : {}),
+      },
+      idempotencyKey,
+    ),
   approveIdentityAction: (id, input) => mutate<Approval>("POST", `/api/v1/identities/${encodeURIComponent(id)}/approvals`, input),
   issueCertificate: async (input) => {
     let ownerId = input.ownerId;
