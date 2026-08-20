@@ -490,13 +490,7 @@ function ContextualRiskPanel({
                         ))}
                       </div>
                     </td>
-                    <td>
-                      {t("risk.contextual.blastValue", {
-                        total: priority.blast_radius,
-                        resources: priority.resource_blast_radius,
-                        cryptoAssets: priority.crypto_asset_blast_radius,
-                      })}
-                    </td>
+                    <td>{priority.blast_radius}</td>
                     <td>
                       <Button
                         ref={index === 0 ? topReviewRef : undefined}
@@ -556,6 +550,11 @@ function ContextualRiskReview({ priority, context }: { priority: ContextualRiskP
             <RiskFact label={t("risk.review.includedProjections")} value={context.urgent_summary.included_projections.join(", ")} mono />
             <RiskFact label={t("risk.review.rawReasons")} value={priority.priority_reasons.join(", ")} mono />
             <RiskFact
+              label={t("risk.review.impactBreakdown")}
+              value={`resources=${priority.resource_blast_radius}, workloads=${priority.workload_blast_radius}, credentials=${priority.credential_blast_radius}, cryptography=${priority.crypto_asset_blast_radius}`}
+              mono
+            />
+            <RiskFact
               label={t("risk.review.scoreInputs")}
               value={factorKeys.map((factor) => `${factor}=${factorPercent(priority.components[factor])}`).join(", ")}
               mono
@@ -585,7 +584,7 @@ function RiskFact({ label, value, mono = false }: { label: string; value: string
 }
 
 function riskPrioritySubject(priority: ContextualRiskPriority): string {
-  return priority.subject.trim() || `${translateNow("risk.review.unnamed")} ${humanCredentialKind(priority.kind)}`;
+  return priority.subject.trim() || `${translateNow("risk.review.unnamed")} ${humanCredentialKind(priority.kind)} #${priority.rank}`;
 }
 
 function humanCredentialKind(kind: string): string {

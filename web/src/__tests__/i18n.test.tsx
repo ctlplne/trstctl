@@ -314,6 +314,10 @@ describe("i18n boundary", () => {
       // review action, and separate exact/supporting evidence disclosures.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
       // release.
+      // QA design g17 live-polish re-pin: operator-facing impact language now
+      // uses a simple known-item count and moves the exact component breakdown
+      // behind the evidence disclosure. Machine-authored es/de — FLAGGED FOR
+      // HUMAN TRANSLATION REVIEW before release.
       // AUD-58 Provider workforce re-pin: twenty-two keys label SAML sign-in,
       // SCIM lifecycle, exact customer/operation grants, expiry, last use, and
       // retained revocation evidence. Machine-authored es/de — FLAGGED FOR
@@ -779,8 +783,8 @@ describe("i18n boundary", () => {
       // to avoid an ordinary word that is byte-identical to a debt marker.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
       // release.
-      "es-ES": "10189f7ebd003b103556f95f77e5229a138b0f60e06e9ea631d6a711bd071e6e",
-      "de-DE": "bbae3a9230274c11662aaf964193b8458e20d7f64c376636f5770087400339c1",
+      "es-ES": "33837804051e498c0e0795c658c72f8e861f9f882b589ddd7d25a0700e89881c",
+      "de-DE": "ae2ace9369904858b5998d8354f9ed1f8ae3f0c1c9a4f8c8f0e17abe6b9fd9fe",
     });
   });
 

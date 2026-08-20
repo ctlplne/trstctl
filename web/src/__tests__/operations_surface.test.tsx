@@ -652,8 +652,8 @@ describe("operational console surface", () => {
       coverage: ["credential_risk_scores", "graph_blast_radius", "cbom_crypto_context"],
       summary: {
         ...emptyContextualRiskPriorities().summary,
-        total_analyzed: 1,
-        priorities: 1,
+        total_analyzed: 2,
+        priorities: 2,
         critical: 1,
         high_blast_radius: 1,
         weak_crypto_context: 1,
@@ -663,12 +663,12 @@ describe("operational console surface", () => {
         status: "complete",
         scope: "All served risk projections for this tenant.",
         included_projections: ["credential_risk_scores", "contextual_priorities"],
-        unique_analyzed: 1,
-        urgent: 1,
+        unique_analyzed: 2,
+        urgent: 2,
         critical: 1,
-        high: 0,
+        high: 1,
         credential_risk: { analyzed: 1, critical: 0, high: 0 },
-        contextual_priorities: { analyzed: 1, critical: 1, high: 0 },
+        contextual_priorities: { analyzed: 2, critical: 1, high: 1 },
       },
       priorities: [
         {
@@ -694,6 +694,29 @@ describe("operational console surface", () => {
           evidence_refs: ["credential:cert-payments", "graph:blast-radius:cert:cert-payments"],
           recommended_action: "Rotate and redeploy before lower-blast-radius work.",
         },
+        {
+          rank: 2,
+          credential_id: "cert-unnamed",
+          subject: "",
+          kind: "certificate",
+          severity: "high",
+          contextual_score: 81.2,
+          base_score: 58.1,
+          blast_radius: 1,
+          resource_blast_radius: 1,
+          workload_blast_radius: 0,
+          credential_blast_radius: 0,
+          crypto_asset_blast_radius: 0,
+          weak_crypto_context: 0,
+          privilege: 1,
+          sensitivity: 1,
+          owner_active: false,
+          expires_at: "2026-09-02T00:00:00Z",
+          components: { age: 0.5, rotation: 0.6, privilege: 0.4, exposure: 0.2, owner: 1, sensitivity: 0.5 },
+          priority_reasons: ["orphaned_owner"],
+          evidence_refs: ["credential:cert-unnamed"],
+          recommended_action: "Assign an active owner before the next rotation.",
+        },
       ],
     });
     const user = userEvent.setup();
@@ -705,6 +728,10 @@ describe("operational console surface", () => {
     const pageAction = screen.getByRole("button", { name: "Review top risk" });
     const topReview = await screen.findByRole("button", { name: "Review payments-api.prod" });
     expect(screen.getByRole("heading", { name: "Highest-risk credentials" })).toBeInTheDocument();
+    expect(screen.getByText("Showing the top 2 with a concrete next action.")).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Known affected items" })).toBeInTheDocument();
+    expect(within(topReview.closest("tr") as HTMLElement).getByText("4")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Review Unnamed TLS certificate #2" })).toBeInTheDocument();
     expect(screen.getByText("Wide impact")).toBeInTheDocument();
     expect(screen.getByText("Outdated cryptography")).toBeInTheDocument();
     expect(screen.queryByText("high_blast_radius, weak_crypto_context")).not.toBeInTheDocument();
@@ -722,6 +749,8 @@ describe("operational console surface", () => {
     await user.click(screen.getByText("Exact score and evidence"));
     expect(screen.getByText("cert-payments")).toBeVisible();
     expect(screen.getByText("CAP-POST-05")).toBeVisible();
+    expect(screen.getByText("Impact breakdown")).toBeVisible();
+    expect(screen.getByText("resources=1, workloads=0, credentials=0, cryptography=3")).toBeVisible();
     expect(screen.getByText("graph:blast-radius:cert:cert-payments")).toBeVisible();
     expect(screen.getByText("credential_risk_scores, graph_blast_radius, cbom_crypto_context")).toBeVisible();
 
@@ -968,7 +997,8 @@ describe("operational console surface", () => {
     expect(screen.getByText("payments-api.prod")).toBeInTheDocument();
     expect(screen.getByText("Wide impact")).toBeInTheDocument();
     expect(screen.getByText("Outdated cryptography")).toBeInTheDocument();
-    expect(screen.getByText("4 affected; 1 resources, 3 crypto assets")).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Known affected items" })).toBeInTheDocument();
+    expect(within(screen.getByRole("button", { name: "Review payments-api.prod" }).closest("tr") as HTMLElement).getByText("4")).toBeInTheDocument();
     await user.click(screen.getByText("Score inputs and supporting projections"));
     expect(screen.getByRole("heading", { name: "NHI policy compliance" })).toBeInTheDocument();
     expect(screen.getByText(/CAP-GOV-03: 2 policy violations across 3 governed NHIs/)).toBeInTheDocument();

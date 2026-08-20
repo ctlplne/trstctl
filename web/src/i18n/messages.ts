@@ -5305,7 +5305,7 @@ export const messages = {
     description: "ELI5 description for the certificate score projection.",
   },
   "risk.contextual.decisionSummary": {
-    defaultMessage: "The first {count} items with a concrete next action.",
+    defaultMessage: "Showing the top {count} with a concrete next action.",
     description: "Compact summary above the contextual risk worklist.",
   },
   "risk.contextual.analyzedSummary": {
@@ -5395,6 +5395,10 @@ export const messages = {
   "risk.review.scoreInputs": {
     defaultMessage: "Score inputs",
     description: "Exact risk evidence label for the six normalized score factors.",
+  },
+  "risk.review.impactBreakdown": {
+    defaultMessage: "Impact breakdown",
+    description: "Exact risk evidence label for the component counts behind the known affected-item total.",
   },
   "risk.review.evidenceIds": {
     defaultMessage: "Evidence IDs",
@@ -5529,8 +5533,8 @@ export const messages = {
     description: "Contextual risk table column for priority score and reasons.",
   },
   "risk.contextual.blastRadius": {
-    defaultMessage: "Blast radius",
-    description: "Contextual risk table column for graph blast-radius counts.",
+    defaultMessage: "Known affected items",
+    description: "Contextual risk table column for the number of items known to be affected.",
   },
   "risk.contextual.action": {
     defaultMessage: "Action",
