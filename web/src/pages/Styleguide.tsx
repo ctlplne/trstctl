@@ -212,7 +212,7 @@ export function Styleguide() {
                 <p className="mt-1 text-body text-muted-foreground">1 critical and 2 high. Everything else is healthy.</p>
                 <ul className="mt-4 divide-y divide-border text-body">
                   <li className="flex justify-between gap-4 py-2">
-                    <span>api.preview-lab.example</span>
+                    <span>api.example.test</span>
                     <span className="text-risk-critical">Critical</span>
                   </li>
                   <li className="flex justify-between gap-4 py-2">

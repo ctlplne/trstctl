@@ -1506,6 +1506,12 @@ export interface Api {
   issuanceRequests(): Promise<IssuanceRequestList>;
   /** I3/AUD-78: open a request without pretending it is already an identity. */
   createIssuanceRequest(input: IssuanceRequestInput): Promise<IssuanceRequest>;
+  /** I3: record an independent approval. Approval is a decision, not issuance. */
+  approveIssuanceRequest(id: string): Promise<IssuanceRequest>;
+  /** I3: deny one exact request with a reason the requester can act on. */
+  denyIssuanceRequest(id: string, reason: string): Promise<IssuanceRequest>;
+  /** I3: let the original requester withdraw a request they no longer need. */
+  cancelIssuanceRequest(id: string): Promise<IssuanceRequest>;
   /** I3/AUD-47: one provider's durable relay cursor, coverage, terminal run, and failure. */
   ticketIntakeSchedule(system?: "servicenow" | "jira"): Promise<TicketIntakeSchedule>;
   /** I5: read-only MDM device correlation; unobserved is counted apart from failed. */
@@ -1903,6 +1909,9 @@ const liveApi: Api = {
   cmdbSchedule: () => req<CMDBReconcileSchedule>("/api/v1/owners/cmdb-schedule"),
   issuanceRequests: () => req<IssuanceRequestList>("/api/v1/issuance-requests"),
   createIssuanceRequest: (input) => mutate<IssuanceRequest>("POST", "/api/v1/issuance-requests", input),
+  approveIssuanceRequest: (id) => mutate<IssuanceRequest>("POST", `/api/v1/issuance-requests/${encodeURIComponent(id)}/approve`),
+  denyIssuanceRequest: (id, reason) => mutate<IssuanceRequest>("POST", `/api/v1/issuance-requests/${encodeURIComponent(id)}/deny`, { reason }),
+  cancelIssuanceRequest: (id) => mutate<IssuanceRequest>("POST", `/api/v1/issuance-requests/${encodeURIComponent(id)}/cancel`),
   ticketIntakeSchedule: (system = "servicenow") => req<TicketIntakeSchedule>(`/api/v1/issuance-requests/intake-schedule?system=${encodeURIComponent(system)}`),
   mdmDevices: () => req<MDMDeviceList>("/api/v1/mdm/devices"),
   mdmPollSchedules: () => req<MDMPollScheduleList>("/api/v1/mdm/poll-schedule"),

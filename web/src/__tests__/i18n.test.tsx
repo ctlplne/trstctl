@@ -739,8 +739,14 @@ describe("i18n boundary", () => {
       // HUMAN TRANSLATION REVIEW before release. The live-browser follow-up
       // also distinguishes an empty DNS-01 or MDM policy list from a failed
       // load and gives the operator the next safe setup step.
-      "es-ES": "237a4c45e86e2b966fda6e44882ea9922f6460a4b2329afd62d4a06760033621",
-      "de-DE": "d6970c07342eb00078a1d949de7d363b0a38714c054e1655dfb9ace4d5f43cac",
+      // Checkpoint 7 issuance-decision re-pin: seventeen keys turn the visible
+      // request queue into an actionable, permission-aware approval, denial,
+      // and withdrawal workflow. Every locale preserves the load-bearing
+      // distinction that an approval has been recorded but no certificate has
+      // been minted yet. Machine-authored es/de — FLAGGED FOR HUMAN
+      // TRANSLATION REVIEW before release.
+      "es-ES": "38fd7016a6370ea4d799422837828e07d69dec0065bcdaace860706556ab5398",
+      "de-DE": "ccb0a8adf63ceff65245020b0e271b41441bc1d396a1cbcd1337311de97e8867",
     });
   });
 

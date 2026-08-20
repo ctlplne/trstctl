@@ -14137,6 +14137,74 @@ export const messages = {
     defaultMessage: "expired — nobody decided",
     description: "I3: an expiry is deliberately not attributed to a person, because no human made that decision.",
   },
+  "source.issuance.requests.purpose.i3req00005": {
+    defaultMessage: "Purpose: {value1}",
+    description: "I3: the requester's stated reason, shown beside the decision controls.",
+  },
+  "source.issuance.requests.decisionreason.i3req00006": {
+    defaultMessage: "Decision reason: {value1}",
+    description: "I3: the human-readable reason recorded with a denial.",
+  },
+  "source.issuance.requests.selfapproval.i3req00007": {
+    defaultMessage: "You opened this request, so a different person must approve or deny it.",
+    description: "I3: plain-language separation-of-duties explanation for the requester.",
+  },
+  "source.issuance.requests.decisiongroup.i3req00008": {
+    defaultMessage: "Decide {value1}",
+    description: "I3: accessible name for one request's independent decision controls.",
+  },
+  "source.issuance.requests.approve.i3req00009": {
+    defaultMessage: "Approve {value1}",
+    description: "I3: approves one exact issuance request without claiming the certificate is already minted.",
+  },
+  "source.issuance.requests.deny.i3req00010": {
+    defaultMessage: "Deny {value1}",
+    description: "I3: opens a reason-required denial form for one exact request.",
+  },
+  "source.issuance.requests.denyprompt.i3req00011": {
+    defaultMessage: "Why is this request denied?",
+    description: "I3: asks for an actionable denial reason rather than a bare no.",
+  },
+  "source.issuance.requests.recorddenial.i3req00012": {
+    defaultMessage: "Record denial",
+    description: "I3: records the reason-required denial as the final decision.",
+  },
+  "source.issuance.requests.keepopen.i3req00013": {
+    defaultMessage: "Keep request open",
+    description: "I3: leaves the request undecided and closes the denial form.",
+  },
+  "source.issuance.requests.withdraw.i3req00014": {
+    defaultMessage: "Withdraw {value1}",
+    description: "I3: lets only the original requester cancel an open or approved request.",
+  },
+  "source.issuance.requests.approvalrecorded.i3req00015": {
+    defaultMessage: "Approval recorded for {value1}. No certificate has been minted yet.",
+    description: "I3: keeps the approval decision distinct from the later issuance outcome.",
+  },
+  "source.issuance.requests.denialrecorded.i3req00016": {
+    defaultMessage: "Request denied for {value1}. The reason is recorded for the requester.",
+    description: "I3: confirms both the denial and the durable human-readable reason.",
+  },
+  "source.issuance.requests.withdrawalrecorded.i3req00017": {
+    defaultMessage: "Request withdrawn for {value1}. It cannot be approved or issued now.",
+    description: "I3: confirms that cancellation closed the request lifecycle.",
+  },
+  "source.issuance.requests.approvalfailed.i3req00018": {
+    defaultMessage: "Approval failed",
+    description: "I3: fallback shown when the server did not return a more exact approval problem.",
+  },
+  "source.issuance.requests.denialfailed.i3req00019": {
+    defaultMessage: "Denial failed",
+    description: "I3: fallback shown when the server did not return a more exact denial problem.",
+  },
+  "source.issuance.requests.withdrawalfailed.i3req00020": {
+    defaultMessage: "Withdrawal failed",
+    description: "I3: fallback shown when the server did not return a more exact cancellation problem.",
+  },
+  "source.issuance.requests.readonly.i3req00021": {
+    defaultMessage: "You can view this request, but this session cannot approve or deny certificates.",
+    description: "I3: explains why a readable request has no decision controls for a non-issuer session.",
+  },
   "source.ownership.conflicts.resolve.i2own00009": {
     defaultMessage: "Resolve",
     description: "I2: closes an ownership disagreement. Requires a reason.",

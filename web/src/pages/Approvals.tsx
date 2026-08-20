@@ -212,7 +212,7 @@ export function Approvals() {
   return (
     <section aria-labelledby="approvals-heading" className="space-y-6">
       <PageHeader title={translateNow("source.approvals.2bfc347157")} titleId="approvals-heading" />
-      <IssuanceRequestsPanel />
+      <IssuanceRequestsPanel currentPrincipal={user} />
 
       {notice && (
         <p role="status" className="text-body text-status-success">
