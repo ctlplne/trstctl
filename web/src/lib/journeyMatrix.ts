@@ -40,7 +40,7 @@ const routeCatalog = {
   certificates: { path: "/certificates", heading: "Certificates" },
   discovery: { path: "/discovery", heading: "Discovery" },
   graph: { path: "/graph", heading: "Credential graph" },
-  identities: { path: "/identities", heading: "Identities" },
+  identities: { path: "/identities", heading: "Machine identities" },
   migration: { path: "/migration", heading: "Migration" },
   incidents: { path: "/incidents", heading: "Incidents" },
   integrate: { path: "/integrate", heading: "Integrate" },

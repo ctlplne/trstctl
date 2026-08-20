@@ -299,6 +299,11 @@ describe("i18n boundary", () => {
       "es-ES": digest("es-ES"),
       "de-DE": digest("de-DE"),
     }).toEqual({
+      // QA design g15 re-pin: the machine-identity journey now uses a
+      // search-first operator answer, translated human credential and owner
+      // labels, calm delivery summaries, and progressive exact evidence.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
+      // release.
       // AUD-58 Provider workforce re-pin: twenty-two keys label SAML sign-in,
       // SCIM lifecycle, exact customer/operation grants, expiry, last use, and
       // retained revocation evidence. Machine-authored es/de — FLAGGED FOR
@@ -764,8 +769,8 @@ describe("i18n boundary", () => {
       // to avoid an ordinary word that is byte-identical to a debt marker.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
       // release.
-      "es-ES": "01950ff63516cff59c8c329400d8bdd7c88f320899ef2a6e5bf0685025490943",
-      "de-DE": "7cd54521e28d5fd898e61e5466cc96bf790f95ca977ed3295c0c58bfe7c7ac9c",
+      "es-ES": "53456d2ccc2d7d881082de38155e1e37627f6f889d2afbe04212d021698af0b9",
+      "de-DE": "6c69902cbbcb9713fa717b3bf7608f802621e97d4ea359c995fc9153107d0fb5",
     });
   });
 

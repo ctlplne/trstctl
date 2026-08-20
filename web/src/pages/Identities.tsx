@@ -10,6 +10,7 @@ import {
   type Identity,
   type NHIDecommissionRequest,
   type NHIDecommissionResponse,
+  type Owner,
   type RotationRun,
   type TransitionTo,
 } from "@/lib/api";
@@ -19,7 +20,7 @@ import { IssuancePipeline } from "@/components/issuance";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DetailDrawer } from "@/components/DetailDrawer";
 import { CredentialActivityTimeline } from "@/components/CredentialActivityTimeline";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -91,6 +92,39 @@ const kindCopy: Record<Identity["kind"], { title: string; description: string }>
     description: translateNow("source.a.service.job.agent.or.workload.identity.t.dcc4188b56"),
   },
 };
+
+function identityKindLabel(kind?: Identity["kind"]): string {
+  switch (kind) {
+    case "x509_certificate":
+      return translateNow("identities.kind.x509");
+    case "ssh_certificate":
+      return translateNow("identities.kind.sshCertificate");
+    case "ssh_key":
+      return translateNow("identities.kind.sshKey");
+    case "secret":
+      return translateNow("identities.kind.secret");
+    case "api_key":
+      return translateNow("identities.kind.apiKey");
+    case "workload_identity":
+      return translateNow("identities.kind.workload");
+    default:
+      return translateNow("identities.kind.unknown");
+  }
+}
+
+function titleCaseMachineValue(value?: string): string | null {
+  const normalized = value?.trim().replace(/[_-]+/g, " ");
+  if (!normalized) return null;
+  return normalized.replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function ownerLabel(owner?: Owner): string {
+  return owner?.name?.trim() || translateNow("identities.owner.unavailable");
+}
+
+function ownerEnvironment(owner?: Owner): string | null {
+  return titleCaseMachineValue(owner?.environment);
+}
 
 /** isDestructive reports whether a target state is a destructive transition that must
  * be confirmed before it runs — revoke permanently invalidates the credential, and
@@ -177,40 +211,38 @@ function shortFingerprint(value?: string): string {
   return value.length <= 16 ? value : `${value.slice(0, 12)}...${value.slice(-8)}`;
 }
 
-function deliveryEvidence(identity: Identity, delivery?: ConnectorDelivery, rotation?: RotationRun): string {
+function deliverySummary(identity: Identity, delivery?: ConnectorDelivery, rotation?: RotationRun): string {
   const state = identityState(identity);
-  if (rotation?.status === "running") {
-    return `Rotation running (${rotation.trigger}); predecessor ${shortFingerprint(rotation.predecessor_fingerprint)}.`;
+  if (rotation?.status === "running") return translateNow("identities.delivery.rotating");
+  if (rotation?.status === "failed") return translateNow("identities.delivery.rotationFailed");
+  if (rotation?.status === "succeeded" && !delivery) return translateNow("identities.delivery.rotationSucceeded");
+  if (delivery?.status === "delivered") return translateNow("identities.delivery.delivered");
+  if (delivery?.status === "failed" && delivery.reason === "plugin_surface_unconfigured") {
+    return translateNow("identities.delivery.connectorSetup");
   }
-  if (rotation?.status === "failed") {
-    return `Rotation failed (${rotation.trigger}): ${rotation.error || rotation.reason || "worker error"}.`;
-  }
-  if (rotation?.status === "succeeded" && !delivery) {
-    return `Rotation succeeded (${rotation.trigger}); successor ${shortFingerprint(rotation.successor_fingerprint)}.`;
-  }
-  if (delivery) {
-    const target = `${delivery.connector}/${delivery.target}`;
-    const fp = shortFingerprint(delivery.fingerprint);
-    if (delivery.status === "delivered") return `Delivered to ${target}; fingerprint ${fp}.`;
-    if (delivery.status === "failed") return `Delivery failed for ${target}: ${delivery.reason || delivery.detail || "worker error"}.`;
-    return `Delivery receipt ${delivery.status} for ${target}; ${delivery.reason || delivery.detail || "awaiting plugin"}.`;
-  }
+  if (delivery?.status === "failed") return translateNow("identities.delivery.failed");
+  if (delivery) return translateNow("identities.delivery.waiting");
   switch (state) {
     case "requested":
-      return "Awaiting issue approval or issue request; no downstream delivery yet.";
+      return translateNow("identities.delivery.awaitingIssue");
     case "issued":
-      return "Issued. Deploy can be requested; no connector delivery receipt yet.";
+      return translateNow("identities.delivery.readyToDeploy");
     case "deployed":
-      return "Backend state says deployed; no connector delivery receipt has been projected yet.";
+      return translateNow("identities.delivery.noReceipt");
     case "renewing":
-      return "Renewal in progress; waiting for a rotation-run receipt.";
+      return translateNow("identities.delivery.rotating");
     case "revoked":
-      return "Revoked. Delivery and rotation receipts remain available as evidence.";
+      return translateNow("identities.delivery.revoked");
     case "retired":
-      return "Terminal retired state; no next lifecycle action.";
+      return translateNow("identities.delivery.retired");
     default:
-      return "Lifecycle state is known; no downstream delivery receipt yet.";
+      return translateNow("identities.delivery.noReceipt");
   }
+}
+
+function connectorReasonSummary(reason?: string, detail?: string): string {
+  if (reason === "plugin_surface_unconfigured") return translateNow("identities.delivery.connectorSetupShort");
+  return titleCaseMachineValue(reason || detail) || translateNow("identities.delivery.noReason");
 }
 
 function transitionNotice(to: TransitionTo): string {
@@ -277,6 +309,7 @@ function attributeRows(identity: Identity): Array<[string, string]> {
 export function Identities() {
   const { t } = useTranslation();
   const [items, setItems] = useState<Identity[] | null>(null);
+  const [owners, setOwners] = useState<Owner[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deliveryReceipts, setDeliveryReceipts] = useState<ConnectorDelivery[] | null>(null);
   const [rotationRuns, setRotationRuns] = useState<RotationRun[] | null>(null);
@@ -295,6 +328,7 @@ export function Identities() {
   const [pending, setPending] = useState<{ id: string; name: string; to: TransitionTo; label: string; reason?: string } | null>(null);
   const [pendingConfirmName, setPendingConfirmName] = useState("");
   const [pendingReason, setPendingReason] = useState("");
+  const [query, setQuery] = useState("");
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
@@ -311,14 +345,27 @@ export function Identities() {
   const pendingConfirmRef = useRef<HTMLInputElement>(null);
   const bulkConfirmRef = useRef<HTMLButtonElement>(null);
   const impactRequestRef = useRef(0);
-  const filteredItems = useMemo(() => (items ?? []).filter((identity) => kindFilter === "all" || identity.kind === kindFilter), [items, kindFilter]);
+  const ownerByID = useMemo(() => new Map((owners ?? []).map((owner) => [owner.id, owner])), [owners]);
+  const filteredItems = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase();
+    return (items ?? []).filter((identity) => {
+      if (kindFilter !== "all" && identity.kind !== kindFilter) return false;
+      if (!normalizedQuery) return true;
+      const owner = ownerByID.get(identity.owner_id);
+      return [identity.name, identity.id, identity.kind, identityKindLabel(identity.kind), identityState(identity), owner?.name, owner?.environment].some(
+        (value) => value?.toLocaleLowerCase().includes(normalizedQuery),
+      );
+    });
+  }, [items, kindFilter, ownerByID, query]);
   const selectedRows = useMemo(() => filteredItems.filter((identity) => selectedIds.has(identity.id)), [filteredItems, selectedIds]);
   const latestDelivery = useMemo(() => latestDeliveryByIdentity(deliveryReceipts), [deliveryReceipts]);
   const latestRotation = useMemo(() => latestRotationByIdentity(rotationRuns), [rotationRuns]);
 
   const load = useCallback(async () => {
     try {
-      setItems(await api.identities());
+      const [identityRows, ownerRows] = await Promise.all([api.identities(), api.owners().catch(() => null)]);
+      setItems(identityRows);
+      setOwners(ownerRows);
       setError(null);
     } catch (err) {
       setError(String(err));
@@ -516,13 +563,22 @@ export function Identities() {
       },
       {
         id: "kind",
-        header: "Kind",
-        cell: (identity) => identity.kind ?? "unknown",
+        header: translateNow("identities.column.type"),
+        cell: (identity) => identityKindLabel(identity.kind),
       },
       {
         id: "owner",
         header: "Owner",
-        cell: (identity) => identity.owner_id || "—",
+        cell: (identity) => {
+          const owner = ownerByID.get(identity.owner_id);
+          const environment = ownerEnvironment(owner);
+          return (
+            <span className="grid gap-0.5">
+              <span className="font-medium">{identity.owner_id ? ownerLabel(owner) : translateNow("identities.owner.unassigned")}</span>
+              {environment && <span className="text-xs text-muted-foreground">{environment}</span>}
+            </span>
+          );
+        },
       },
       {
         id: "state",
@@ -533,7 +589,7 @@ export function Identities() {
         id: "delivery",
         header: "Delivery evidence",
         cell: (identity) => (
-          <span className="text-muted-foreground">{deliveryEvidence(identity, latestDelivery.get(identity.id), latestRotation.get(identity.id))}</span>
+          <span className="text-muted-foreground">{deliverySummary(identity, latestDelivery.get(identity.id), latestRotation.get(identity.id))}</span>
         ),
       },
       {
@@ -571,19 +627,25 @@ export function Identities() {
         },
       },
     ],
-    [busyId, deniedTransitions, latestDelivery, latestRotation, openDetail, request],
+    [busyId, deniedTransitions, latestDelivery, latestRotation, openDetail, ownerByID, request],
   );
 
   return (
     <section aria-labelledby="identities-heading">
       <PageHeader
         titleId="identities-heading"
-        title={translateNow("source.identities.8d4d8fef65")}
-        description="The non-human identities trstctl manages — services, agents, and workloads — and their lifecycle: issue, deploy, renew, revoke, retire. Each can hold certificates (see Certificates) and secrets (see Secrets)."
+        title={t("identities.page.title")}
+        description={t("identities.page.answer")}
+        technicalDetails={t("identities.page.details")}
         actions={
-          <Button type="button" onClick={() => setShowForm((s) => !s)}>
-            {translateNow("source.new.identity.51c2e7c139")}
-          </Button>
+          <>
+            <a className={buttonVariants()} href="#identity-search">
+              {t("identities.find.action")}
+            </a>
+            <Button type="button" variant="outline" onClick={() => setShowForm((visible) => !visible)}>
+              {t("identities.add.action")}
+            </Button>
+          </>
         }
       />
 
@@ -774,40 +836,62 @@ export function Identities() {
 
       {items && items.length > 0 && (
         <div id="manual-lifecycle-transitions" className="space-y-3">
-          <label className="grid max-w-xs gap-1 text-sm font-medium" htmlFor="identity-kind-filter">
-            {translateNow("source.kind.f5387f9bb6")}
-            <select
-              id="identity-kind-filter"
-              value={kindFilter}
-              onChange={(event) => setKindFilter(event.target.value as KindFilter)}
-              className="rounded-md border border-border bg-background px-3 py-2"
-            >
-              <option value="all">{translateNow("source.all.kinds.ddd0c2108e")}</option>
-              {identityKinds.map((kind) => (
-                <option key={kind} value={kind}>
-                  {kind}
-                </option>
-              ))}
-            </select>
-          </label>
           <DataGrid
             ariaLabel="Credential identities and their lifecycle state"
             rows={filteredItems}
             columns={identityColumns}
             getRowId={(identity) => identity.id}
+            toolbar={
+              <div id="identity-search" className="grid w-full gap-3 sm:grid-cols-[minmax(14rem,1fr)_minmax(11rem,14rem)] sm:items-end">
+                <label className="grid gap-1 text-sm font-medium" htmlFor="identity-search-input">
+                  {t("identities.search.label")}
+                  <input
+                    id="identity-search-input"
+                    type="search"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    className="ui-input"
+                    placeholder={t("identities.search.placeholder")}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm font-medium" htmlFor="identity-kind-filter">
+                  {t("identities.filter.type")}
+                  <select
+                    id="identity-kind-filter"
+                    value={kindFilter}
+                    onChange={(event) => setKindFilter(event.target.value as KindFilter)}
+                    className="ui-input"
+                  >
+                    <option value="all">{t("identities.filter.allTypes")}</option>
+                    {identityKinds.map((kind) => (
+                      <option key={kind} value={kind}>
+                        {identityKindLabel(kind)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            }
             selection={{
               selectedIds,
               onSelectedIdsChange: setSelectedIds,
               getRowLabel: (identity) => identity.name,
             }}
             state={filteredItems.length === 0 ? "empty" : "ready"}
-            stateTitle="No identities match this kind"
-            stateMessage="Choose another identity kind or clear the filter."
+            stateTitle={t("identities.search.emptyTitle")}
+            stateMessage={t("identities.search.emptyBody")}
           />
         </div>
       )}
 
-      <DeliveryEvidencePanel deliveries={deliveryReceipts} rotations={rotationRuns} error={evidenceError} />
+      <details className="group mb-4 border-y border-border py-4">
+        <summary className="cursor-pointer list-none font-medium text-foreground marker:hidden">
+          {t("identities.evidence.open")}
+          <span className="ms-2 text-xs font-normal text-muted-foreground group-open:hidden">{t("identities.evidence.openHint")}</span>
+          <span className="ms-2 hidden text-xs font-normal text-muted-foreground group-open:inline">{t("identities.evidence.closeHint")}</span>
+        </summary>
+        <DeliveryEvidencePanel deliveries={deliveryReceipts} rotations={rotationRuns} error={evidenceError} />
+      </details>
 
       <section aria-labelledby="decommission-heading" className="mb-3 grid gap-3 rounded-md border border-border p-3">
         <div>
@@ -898,6 +982,7 @@ export function Identities() {
       >
         <IdentityDetailPanel
           identity={detail}
+          owner={detail ? ownerByID.get(detail.owner_id) : undefined}
           loading={detailLoading}
           error={detailError}
           busy={busyId === selectedId}
@@ -933,8 +1018,8 @@ function DeliveryEvidencePanel({
   const recentRotations = (rotations ?? []).slice(0, 5);
 
   return (
-    <section aria-labelledby="delivery-evidence-heading" className="mb-4 border-y border-border py-4">
-      <div className="mb-3">
+    <section aria-labelledby="delivery-evidence-heading" className="pt-4">
+      <div className="mb-3 max-w-3xl">
         <h2 id="delivery-evidence-heading" className="text-title font-semibold">
           {translateNow("source.delivery.and.rotation.evidence.1fc4ef65bb")}
         </h2>
@@ -975,7 +1060,15 @@ function DeliveryEvidencePanel({
                       <td>{receipt.connector}</td>
                       <td>{receipt.target}</td>
                       <td className="break-all font-mono text-xs">{shortFingerprint(receipt.fingerprint)}</td>
-                      <td>{receipt.reason || receipt.detail || "-"}</td>
+                      <td>
+                        <span>{connectorReasonSummary(receipt.reason, receipt.detail)}</span>
+                        {(receipt.reason || receipt.detail) && (
+                          <details className="mt-1 text-xs text-muted-foreground">
+                            <summary className="cursor-pointer">{translateNow("identities.evidence.showExactReason")}</summary>
+                            <code className="break-all">{receipt.reason || receipt.detail}</code>
+                          </details>
+                        )}
+                      </td>
                     </tr>
                   ))
                 )}
@@ -1067,6 +1160,7 @@ function BlastRadiusImpactPanel({ state }: { state: BlastRadiusState }) {
 
 function IdentityDetailPanel({
   identity,
+  owner,
   loading,
   error,
   busy,
@@ -1078,6 +1172,7 @@ function IdentityDetailPanel({
   onTransition,
 }: {
   identity: Identity | null;
+  owner?: Owner;
   loading: boolean;
   error: string | null;
   busy: boolean;
@@ -1132,7 +1227,13 @@ function IdentityDetailPanel({
             </div>
             <div>
               <dt className="font-medium text-muted-foreground">{translateNow("source.kind.f5387f9bb6")}</dt>
-              <dd>{identity.kind}</dd>
+              <dd>
+                <span>{identityKindLabel(identity.kind)}</span>
+                <details className="mt-1 text-xs text-muted-foreground">
+                  <summary className="cursor-pointer">{translateNow("identities.kind.showExact")}</summary>
+                  <code>{identity.kind}</code>
+                </details>
+              </dd>
             </div>
             <div>
               <dt className="font-medium text-muted-foreground">{translateNow("source.not.after.577c1c7930")}</dt>
@@ -1146,8 +1247,13 @@ function IdentityDetailPanel({
               <dt className="font-medium text-muted-foreground">{translateNow("source.owner.4b1b8aa360")}</dt>
               <dd>
                 <a className="text-primary underline" href={`/owners?owner=${encodeURIComponent(identity.owner_id)}`}>
-                  {translateNow("source.owner.4b1b8aa360")} {identity.owner_id}
+                  {ownerLabel(owner)}
                 </a>
+                {ownerEnvironment(owner) && <span className="ms-2 text-xs text-muted-foreground">{ownerEnvironment(owner)}</span>}
+                <details className="mt-1 text-xs text-muted-foreground">
+                  <summary className="cursor-pointer">{translateNow("identities.owner.showId")}</summary>
+                  <code className="break-all">{identity.owner_id}</code>
+                </details>
               </dd>
             </div>
             <div>
@@ -1266,8 +1372,8 @@ function NewIdentityForm({ onDone }: { onDone: () => void }) {
   }
 
   return (
-    <form onSubmit={submit} className="mb-4 flex items-end gap-3 rounded-md border border-border p-4">
-      <div className="flex-1 space-y-1">
+    <form onSubmit={submit} className="mb-4 grid gap-3 rounded-md border border-border p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+      <div className="min-w-0 space-y-1">
         <label htmlFor="new-identity-name" className="block text-sm font-medium">
           {translateNow("source.service.name.1bb8870cc0")}
         </label>
@@ -1297,11 +1403,11 @@ function NewIdentityForm({ onDone }: { onDone: () => void }) {
           </label>
         )}
       </div>
-      <Button type="submit" disabled={busy || (isWildcard && !wildcardAck)}>
+      <Button type="submit" className="w-full md:w-auto" disabled={busy || (isWildcard && !wildcardAck)}>
         {translateNow("source.issue.48dc76dfa2")}
       </Button>
       {error && (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="text-sm text-destructive md:col-span-2">
           {error}
         </p>
       )}

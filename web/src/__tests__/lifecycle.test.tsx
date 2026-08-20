@@ -147,19 +147,76 @@ describe("lifecycle actions from the UI", () => {
     const table = await screen.findByRole("table", { name: /credential identities/i });
     expect(table).toBeInTheDocument();
     expect(screen.getByText("issued")).toHaveAttribute("data-status-badge", "lifecycle");
-    expect(screen.getByText("owner-x")).toBeInTheDocument();
+    expect(screen.getAllByText("Owner record unavailable").length).toBeGreaterThan(0);
 
     for (const identity of fixtures) {
-      await user.selectOptions(screen.getByLabelText("Kind"), identity.kind);
+      await user.selectOptions(screen.getByLabelText("Credential type"), identity.kind);
       expect(await screen.findByText(identity.name)).toBeInTheDocument();
       for (const other of fixtures.filter((fixture) => fixture.id !== identity.id)) {
         expect(screen.queryByText(other.name)).not.toBeInTheDocument();
       }
     }
 
-    await user.selectOptions(screen.getByLabelText("Kind"), "all");
+    await user.selectOptions(screen.getByLabelText("Credential type"), "all");
     expect(await screen.findByText("tls-api")).toBeInTheDocument();
     expect(screen.getByText("payments-worker")).toBeInTheDocument();
+  });
+
+  it("makes the identity journey search-first and translates owner, kind, and delivery internals into operator language", async () => {
+    apiMock.owners.mockResolvedValue([
+      {
+        id: "owner-payments",
+        tenant_id: "tenant-1",
+        kind: "team",
+        name: "Payments API",
+        environment: "production",
+        escalation_chain: [],
+        ownership_attested: true,
+        ownership_complete: true,
+        ownership_current: true,
+      },
+    ]);
+    apiMock.identities.mockResolvedValue([
+      { id: "payments-1", name: "payments-api", kind: "x509_certificate", owner_id: "owner-payments", status: "deployed" },
+      { id: "deploy-1", name: "release-deploy", kind: "ssh_key", owner_id: "owner-missing", status: "deployed" },
+    ]);
+    apiMock.connectorDeliveries.mockResolvedValue({
+      items: [
+        {
+          id: "delivery-1",
+          identity_id: "payments-1",
+          connector: "api-token",
+          target: "github-actions/release",
+          status: "failed",
+          reason: "plugin_surface_unconfigured",
+          fingerprint: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          created_at: "2026-08-20T00:00:00Z",
+          updated_at: "2026-08-20T00:00:00Z",
+        },
+      ],
+    });
+    const user = userEvent.setup();
+
+    renderIdentities();
+
+    expect(await screen.findByRole("heading", { name: "Machine identities" })).toBeInTheDocument();
+    expect(screen.getByText("Which machines and services have identities, and whether they are healthy.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Find identities" })).toHaveAttribute("href", "#identity-search");
+    expect(screen.getByRole("button", { name: "Add identity" })).toBeInTheDocument();
+
+    const paymentsRow = screen.getByText("payments-api").closest("tr")!;
+    expect(paymentsRow).toHaveTextContent("TLS certificate");
+    expect(paymentsRow).toHaveTextContent("Payments API");
+    expect(paymentsRow).toHaveTextContent("Production");
+    expect(paymentsRow).toHaveTextContent("Not delivered yet — this connector still needs setup.");
+    expect(paymentsRow).not.toHaveTextContent("owner-payments");
+    expect(paymentsRow).not.toHaveTextContent("plugin_surface_unconfigured");
+
+    await user.type(screen.getByRole("searchbox", { name: "Find identities" }), "release");
+    expect(screen.queryByText("payments-api")).not.toBeInTheDocument();
+    const releaseRow = screen.getByText("release-deploy").closest("tr")!;
+    expect(within(releaseRow).getByText("SSH key")).toBeInTheDocument();
+    expect(within(releaseRow).getByText("Owner record unavailable")).toBeInTheDocument();
   });
 
   it("loads kind-specific identity details and links owner plus issuer", async () => {
@@ -204,7 +261,9 @@ describe("lifecycle actions from the UI", () => {
     expect(await screen.findByRole("dialog", { name: "Identity detail" })).toBeInTheDocument();
     expect(await screen.findByText("X.509 certificate identity")).toBeInTheDocument();
     expect(screen.getByText("Not after")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Owner owner-x" })).toHaveAttribute("href", "/owners?owner=owner-x");
+    expect(screen.getByRole("link", { name: "Owner record unavailable" })).toHaveAttribute("href", "/owners?owner=owner-x");
+    await user.click(screen.getByText("Show owner ID"));
+    expect(screen.getByText("owner-x")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Issuer issuer-x" })).toHaveAttribute("href", "/protocols?issuer=issuer-x");
     expect(screen.getByText(/api.example.test/)).toBeInTheDocument();
     await user.click(within(screen.getByRole("dialog", { name: "Identity detail" })).getByRole("button", { name: "Close" }));
@@ -218,7 +277,7 @@ describe("lifecycle actions from the UI", () => {
 
     const workloadRow = screen.getByText("payments-worker").closest("tr")!;
     await user.click(within(workloadRow).getByRole("button", { name: /view details/i }));
-    expect(await screen.findByText("Workload identity")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Workload identity" })).toBeInTheDocument();
     expect(screen.getByText(/spiffe:\/\/example.test\/payments/)).toBeInTheDocument();
   });
 
@@ -598,7 +657,7 @@ describe("lifecycle actions from the UI", () => {
     expect(screen.queryByRole("button", { name: /approve issue for jit-db/i })).not.toBeInTheDocument();
   });
 
-  it("labels served connector receipts instead of claiming synchronous deploy", async () => {
+  it("summarizes connector failures for operators and preserves exact receipt evidence behind disclosure", async () => {
     apiMock.identities.mockResolvedValue([{ id: "iss-1", name: "issued-svc", kind: "x509_certificate", status: "issued" }]);
     apiMock.connectorDeliveries.mockResolvedValue({
       items: [
@@ -621,12 +680,15 @@ describe("lifecycle actions from the UI", () => {
         },
       ],
     });
+    const user = userEvent.setup();
     renderIdentities();
 
-    expect(await screen.findByText(/Delivery and rotation evidence/i)).toBeInTheDocument();
+    await user.click((await screen.findAllByText("Delivery and rotation evidence"))[0]);
+    await user.click(screen.getByText("Show exact reason"));
     expect(screen.getByText("plugin_not_loaded")).toBeInTheDocument();
     const row = screen.getByText("issued-svc").closest("tr")!;
-    expect(row).toHaveTextContent(/Delivery failed for nginx\/edge-1/i);
+    expect(row).toHaveTextContent("Delivery needs attention.");
+    expect(row).not.toHaveTextContent("plugin_not_loaded");
   });
 
   it("renders scheduler-backed rotation evidence without the automation preview", async () => {
@@ -650,9 +712,10 @@ describe("lifecycle actions from the UI", () => {
         },
       ],
     });
+    const user = userEvent.setup();
     renderIdentities();
 
-    expect(await screen.findByText("Delivery and rotation evidence")).toBeInTheDocument();
+    await user.click((await screen.findAllByText("Delivery and rotation evidence"))[0]);
     expect(screen.getAllByText("succeeded").length).toBeGreaterThan(0);
     expect(screen.getAllByText("scheduler").length).toBeGreaterThan(0);
     expect(screen.getByText("restore certificate fingerprint old")).toBeInTheDocument();
@@ -682,7 +745,7 @@ describe("lifecycle actions from the UI", () => {
     const user = userEvent.setup();
     renderIdentities();
 
-    await user.click(await screen.findByRole("button", { name: /issue certificate|new identity/i }));
+    await user.click(await screen.findByRole("button", { name: /add identity/i }));
     await user.type(screen.getByLabelText(/name/i), "svc");
     await user.click(screen.getByRole("button", { name: /create|issue/i }));
     await waitFor(() => expect(apiMock.issueCertificate).toHaveBeenCalledWith(expect.objectContaining({ name: "svc" })));
@@ -693,7 +756,7 @@ describe("lifecycle actions from the UI", () => {
     const user = userEvent.setup();
     renderIdentities();
 
-    await user.click(await screen.findByRole("button", { name: /issue certificate|new identity/i }));
+    await user.click(await screen.findByRole("button", { name: /add identity/i }));
     await user.type(screen.getByLabelText(/name/i), "*.payments.example");
     const issue = screen.getByRole("button", { name: /create|issue/i });
     expect(issue).toBeDisabled();

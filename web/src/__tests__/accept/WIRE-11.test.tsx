@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Identities } from "@/pages/Identities";
 
@@ -94,20 +95,23 @@ describe("WIRE-11 identity delivery and rotation evidence", () => {
   });
 
   it("renders served delivery and rotation evidence while removing unserved preview panels", async () => {
+    const user = userEvent.setup();
     renderIdentities();
 
     await waitFor(() => expect(apiMock.connectorDeliveries).toHaveBeenCalledWith({ limit: 50 }));
     expect(apiMock.rotationRuns).toHaveBeenCalledWith({ limit: 50 });
-    expect(await screen.findByText("Delivery and rotation evidence")).toBeInTheDocument();
+    await user.click((await screen.findAllByText("Delivery and rotation evidence"))[0]);
     expect(screen.getAllByText("kubernetes").length).toBeGreaterThan(0);
     expect(screen.getAllByText("prod/payments-tls").length).toBeGreaterThan(0);
+    await user.click(screen.getByText("Show exact reason"));
     expect(screen.getByText("outbox_delivered")).toBeInTheDocument();
     expect(screen.getAllByText("succeeded").length).toBeGreaterThan(0);
     expect(screen.getAllByText("scheduler").length).toBeGreaterThan(0);
     expect(screen.getByText("restore sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")).toBeInTheDocument();
 
     const identityRow = screen.getByText("payments-tls").closest("tr")!;
-    expect(identityRow).toHaveTextContent(/Delivered to kubernetes\/prod\/payments-tls/i);
+    expect(identityRow).toHaveTextContent("Delivered successfully.");
+    expect(identityRow).not.toHaveTextContent("outbox_delivered");
 
     expect(screen.queryByText("Lifecycle automation")).not.toBeInTheDocument();
     expect(screen.queryByText("Automation layout preview")).not.toBeInTheDocument();

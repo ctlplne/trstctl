@@ -28,7 +28,7 @@ export function IssuancePipeline({ identities }: { identities: Identity[] }) {
   const stages = pipelineStages(identities);
   if (stages.length === 0) return null;
   return (
-    <SectionCard title={translateNow("source.issuance.pipeline.83471535a2")} description="non-human identities by lifecycle stage" className="mb-4">
+    <SectionCard title={translateNow("identities.health.title")} description={translateNow("identities.health.description")} className="mb-4">
       <DashboardGrid>
         {stages.map(({ stage, count }) => (
           <StatTile key={stage} label={stageLabel(stage)} value={count} />
