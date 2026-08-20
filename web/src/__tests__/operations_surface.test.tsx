@@ -692,7 +692,8 @@ describe("operational console surface", () => {
           components: { age: 0.8, rotation: 0.7, privilege: 0.7, exposure: 0.2, owner: 0, sensitivity: 0.5 },
           priority_reasons: ["high_blast_radius", "weak_crypto_context"],
           evidence_refs: ["credential:cert-payments", "graph:blast-radius:cert:cert-payments"],
-          recommended_action: "Rotate and redeploy before lower-blast-radius work.",
+          recommended_action:
+            "Rotate and redeploy this credential before lower-impact work. Check every known affected item and replace outdated cryptography first.",
         },
         {
           rank: 2,
@@ -742,7 +743,11 @@ describe("operational console surface", () => {
     expect(topReview).toHaveFocus();
     await user.click(topReview);
     expect(screen.getByRole("heading", { name: "Review payments-api.prod" })).toBeInTheDocument();
-    expect(screen.getByText("Rotate and redeploy before lower-blast-radius work.")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Rotate and redeploy this credential before lower-impact work. Check every known affected item and replace outdated cryptography first.",
+      ),
+    ).toBeInTheDocument();
 
     const exactEvidence = screen.getByText("Exact score and evidence").closest("details");
     expect(exactEvidence).not.toHaveAttribute("open");
@@ -978,7 +983,8 @@ describe("operational console surface", () => {
           components: { age: 0.8, rotation: 0.7, privilege: 0.7, exposure: 0.2, owner: 0, sensitivity: 0.5 },
           priority_reasons: ["high_blast_radius", "weak_crypto_context"],
           evidence_refs: ["credential:cert-payments", "graph:blast-radius:cert:cert-payments"],
-          recommended_action: "Rotate and redeploy before lower-blast-radius work; review affected resources and weak crypto assets first.",
+          recommended_action:
+            "Rotate and redeploy this credential before lower-impact work. Check every known affected item and replace outdated cryptography first.",
         },
       ],
     });
@@ -1125,7 +1131,7 @@ describe("operational console surface", () => {
           components: { age: 1, rotation: 1, privilege: 1, exposure: 1, owner: 1, sensitivity: 1 },
           priority_reasons: ["high_blast_radius", "orphaned_owner"],
           evidence_refs: ["credential:ssh-1", "graph:blast-radius:ssh:ssh-1"],
-          recommended_action: "Assign an owner, then rotate or revoke according to the credential graph blast radius.",
+          recommended_action: "Assign an owner, then use the known affected-item list to decide whether to rotate or revoke.",
         },
       ],
     });

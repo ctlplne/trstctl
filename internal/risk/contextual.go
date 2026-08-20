@@ -386,13 +386,13 @@ func contextualSeverity(score float64) string {
 func contextualAction(score float64, blastRadius, weakCrypto int, ownerActive bool) string {
 	switch {
 	case score >= 85 || (blastRadius >= highBlastRadiusThreshold && weakCrypto > 0):
-		return "Rotate and redeploy before lower-blast-radius work; review affected resources and weak crypto assets first."
+		return "Rotate and redeploy this credential before lower-impact work. Check every known affected item and replace outdated cryptography first."
 	case !ownerActive:
-		return "Assign an owner, then rotate or revoke according to the credential graph blast radius."
+		return "Assign an owner, then use the known affected-item list to decide whether to rotate or revoke."
 	case blastRadius >= highBlastRadiusThreshold:
-		return "Schedule priority rotation and validate every affected graph node after deployment."
+		return "Schedule this rotation first, then verify every known affected item after deployment."
 	default:
-		return "Track in normal rotation order and keep graph evidence attached to the work item."
+		return "Keep this in the normal rotation order and attach the evidence to the work item."
 	}
 }
 

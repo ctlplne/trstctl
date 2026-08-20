@@ -5,12 +5,67 @@ package risk
 import (
 	"encoding/json"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
 	"trstctl.com/trstctl/internal/graph"
 	"trstctl.com/trstctl/internal/store"
 )
+
+func TestContextualActionsUsePlainOperatorLanguage(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		score       float64
+		impact      int
+		weakCrypto  int
+		ownerActive bool
+		want        string
+	}{
+		{
+			name:        "urgent impact and outdated cryptography",
+			score:       90,
+			impact:      4,
+			weakCrypto:  2,
+			ownerActive: true,
+			want:        "Rotate and redeploy this credential before lower-impact work. Check every known affected item and replace outdated cryptography first.",
+		},
+		{
+			name:        "missing owner",
+			score:       60,
+			impact:      1,
+			ownerActive: false,
+			want:        "Assign an owner, then use the known affected-item list to decide whether to rotate or revoke.",
+		},
+		{
+			name:        "wide impact",
+			score:       60,
+			impact:      highBlastRadiusThreshold,
+			ownerActive: true,
+			want:        "Schedule this rotation first, then verify every known affected item after deployment.",
+		},
+		{
+			name:        "normal order",
+			score:       20,
+			ownerActive: true,
+			want:        "Keep this in the normal rotation order and attach the evidence to the work item.",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := contextualAction(tt.score, tt.impact, tt.weakCrypto, tt.ownerActive)
+			if got != tt.want {
+				t.Fatalf("contextualAction() = %q, want %q", got, tt.want)
+			}
+			if strings.Contains(strings.ToLower(got), "blast radius") {
+				t.Fatalf("contextualAction() exposed internal graph jargon: %q", got)
+			}
+		})
+	}
+}
 
 func TestContextualPriorityRaisesBlastRadiusWeakCryptoAndOwnershipReasons(t *testing.T) {
 	now := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
