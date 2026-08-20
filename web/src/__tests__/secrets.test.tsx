@@ -679,12 +679,64 @@ function unvaultedSecretPostureFixture() {
 describe("secrets surface", () => {
   beforeEach(() => primeSecretsMocks());
 
+  it("gives every secrets workspace one plain-language answer and one honest next action", async () => {
+    const routes = [
+      ["/secrets", "Secret store", "Which secrets exist, who owns them, and which need rotation.", "Add secret"],
+      ["/secrets/access", "Machine access", "Which machine can use which secret, and why.", "Grant access"],
+      ["/secrets/sharing", "One-time secret links", "What can be viewed once, by whom, and until when.", "Create one-time link"],
+      ["/secrets/engines", "Automatic secret sources", "Which systems can create short-lived credentials on demand.", "Add source"],
+      ["/secrets/scanning", "Find leaked secrets in code", "Which repositories were checked and what needs removal.", "Connect repository"],
+      ["/secrets/sync", "Send secrets to systems", "Where secrets are copied and whether each destination is current.", "Add destination"],
+    ] as const;
+
+    for (const [path, title, answer, action] of routes) {
+      renderSecrets(path);
+      expect(await screen.findByRole("heading", { name: title })).toBeInTheDocument();
+      expect(screen.getByText(answer)).toBeInTheDocument();
+      expect(within(screen.getByRole("group", { name: "Do next" })).getByRole("button", { name: action })).toBeInTheDocument();
+      cleanup();
+    }
+  });
+
+  it("moves the three direct secrets jobs to their first safe field", async () => {
+    const user = userEvent.setup();
+
+    renderSecrets();
+    await user.click(within(await screen.findByRole("group", { name: "Do next" })).getByRole("button", { name: "Add secret" }));
+    expect(document.getElementById("secret-create-name")).toHaveFocus();
+
+    cleanup();
+    renderSecrets("/secrets/access");
+    await user.click(within(await screen.findByRole("group", { name: "Do next" })).getByRole("button", { name: "Grant access" }));
+    expect(screen.getByLabelText("Workload / subject")).toHaveFocus();
+
+    cleanup();
+    renderSecrets("/secrets/sharing");
+    await user.click(within(await screen.findByRole("group", { name: "Do next" })).getByRole("button", { name: "Create one-time link" }));
+    expect(screen.getByLabelText("Value to share")).toHaveFocus();
+  });
+
+  it("refuses to imply delivery when no secret destination is configured", async () => {
+    const catalog = syncTargetCatalogFixture();
+    apiMock.secretSyncTargets.mockResolvedValueOnce({
+      ...catalog,
+      configured_targets: [],
+      targets: catalog.targets.map((target) => ({ ...target, configured: false })),
+    });
+
+    renderSecrets("/secrets/sync");
+
+    expect(await screen.findByText("No destination is set up yet")).toBeInTheDocument();
+    expect(screen.getByText(/will not accept a made-up target name/i)).toBeInTheDocument();
+    expect(screen.queryByRole("form", { name: "Sync stored secret" })).not.toBeInTheDocument();
+  });
+
   it("lists metadata, creates, reveals, rotates, and deletes native secrets without storage writes", async () => {
     const storageSpy = vi.spyOn(Storage.prototype, "setItem");
     const user = userEvent.setup();
     renderSecrets();
 
-    expect(await screen.findByRole("heading", { name: "Secrets" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Secret store" })).toBeInTheDocument();
     expect(await screen.findByRole("table", { name: "Native secret metadata" })).toBeInTheDocument();
     expect(screen.getByRole("searchbox", { name: "Search native secret metadata" })).toBeInTheDocument();
     expect(screen.getByText("app/db/password")).toBeInTheDocument();
@@ -756,7 +808,7 @@ describe("secrets surface", () => {
     expect(screen.queryByText("new-secret-value")).not.toBeInTheDocument();
 
     const row = screen.getAllByRole("row", { name: /app\/db\/password/i })[0];
-    await user.click(within(row).getByRole("button", { name: /reveal once/i }));
+    await user.click(within(row).getByRole("button", { name: /reveal value/i }));
     expect(await screen.findByText("SUPER-SECRET")).toBeInTheDocument();
 
     await user.click(within(row).getByRole("button", { name: /prepare rotate/i }));

@@ -750,8 +750,12 @@ describe("i18n boundary", () => {
       // evidence, and a retryable not-ready state without claiming that an
       // approval itself minted a certificate. Machine-authored es/de — FLAGGED
       // FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "d0d6dbc5df70ffd8b6f45ca011ed1a51ff6389ae94e2fb420b3acdceefb0e2df",
-      "de-DE": "3ae0d3db8fae6c990bec917f872913ff35e7748de35c130ea3eaea7df5eb0948",
+      // Secrets quiet-confidence re-pin: the six workspaces now ask one plain
+      // operator question, name one next action, and describe accurate reveal,
+      // destination, scanner, and lifecycle boundaries. Machine-authored es/de
+      // translations — FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "80886255dfedbe9e107f38884ff96481ffc319c0456ff399f289b31321dba7e2",
+      "de-DE": "42cb0f0fe0a6b750a42e5431e177dc1793593c4ea032a5279c2ee9767a078e55",
     });
   });
 

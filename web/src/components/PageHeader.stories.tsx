@@ -19,7 +19,7 @@ export const Standard: Story = {
 
 export const WithEyebrowAndActions: Story = {
   args: {
-    title: "Secret engines",
+    title: "Automatic secret sources",
     eyebrow: "Secrets",
     description: "Dynamic leases, PKI-as-secrets, and transit/KMIP cryptographic operations.",
     actions: <Button>New lease</Button>,

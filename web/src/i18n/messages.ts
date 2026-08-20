@@ -515,12 +515,12 @@ export const messages = {
     description: "Secrets module KPI: number of stored secrets in the native store.",
   },
   "moduleKpi.secrets.engines": {
-    defaultMessage: "Engines",
-    description: "Secrets module KPI: link to the dynamic/transit engines surface.",
+    defaultMessage: "Automatic sources",
+    description: "Secrets module KPI: link to short-lived credential and transit sources.",
   },
   "moduleKpi.secrets.sync": {
-    defaultMessage: "Sync targets",
-    description: "Secrets module KPI: link to the outbound sync surface.",
+    defaultMessage: "Destinations",
+    description: "Secrets module KPI: link to configured outbound secret destinations.",
   },
   "certificates.lifecycle.notManaged": {
     defaultMessage: "Not identity-managed — replace via request →",
@@ -934,28 +934,150 @@ export const messages = {
     description: "Secrets page tab: PKI, dynamic secrets, and transit/KMIP engines.",
   },
   "secrets.tabs.scanning": {
-    defaultMessage: "CI scanning",
-    description: "Secrets page tab: code and CI secret scanning bridge.",
+    defaultMessage: "Find leaked secrets in code",
+    description: "Secrets route: repository and build-artifact secret checks, named for the operator outcome.",
   },
   "secrets.tabs.sync": {
     defaultMessage: "Sync",
     description: "Secrets page tab: secret sync and platform integrations.",
   },
   "secrets.route.engines": {
-    defaultMessage: "Secret engines",
-    description: "Secrets space route (S-C2): dynamic secrets, PKI-as-secrets, and transit/KMIP cryptographic operations. Nav label, H1, and title.",
+    defaultMessage: "Automatic secret sources",
+    description: "Secrets route: systems that issue short-lived credentials on demand. Nav label, H1, and title.",
+  },
+  "secrets.route.store": {
+    defaultMessage: "Secret store",
+    description: "Secrets route: native secret inventory and lifecycle. Nav label, H1, and title.",
   },
   "secrets.route.access": {
     defaultMessage: "Machine access",
     description: "Secrets space route (S-C2): the machine-auth console — workload credentials, auth methods, issued sessions. Nav label, H1, and title.",
   },
   "secrets.route.sharing": {
-    defaultMessage: "One-time shares",
-    description: "Secrets space route (S-C2): reveal-once secret shares. Nav label, H1, and title.",
+    defaultMessage: "One-time secret links",
+    description: "Secrets route: links that reveal one value once before expiry. Nav label, H1, and title.",
   },
   "secrets.route.sync": {
-    defaultMessage: "Sync targets",
-    description: "Secrets space route (S-C2): outbound secret synchronization targets. Nav label, H1, and title.",
+    defaultMessage: "Send secrets to systems",
+    description: "Secrets route: outbound destinations and their current delivery state. Nav label, H1, and title.",
+  },
+  "secrets.route.storeAnswer": {
+    defaultMessage: "Which secrets exist, who owns them, and which need rotation.",
+    description: "Secret store opening answer.",
+  },
+  "secrets.route.storeDetails": {
+    defaultMessage: "Versions, explicit value reveals, references, metadata, rotation receipts, and the immutable event trail remain available below.",
+    description: "Secret store technical-details summary.",
+  },
+  "secrets.route.storeAction": { defaultMessage: "Add secret", description: "Secret store primary action." },
+  "secrets.store.exploreTools": {
+    defaultMessage: "Browse folders and references",
+    description: "Collapsed secret-store tools summary.",
+  },
+  "secrets.store.exploreToolsHelp": {
+    defaultMessage: "Organization, environment differences, references, and import status",
+    description: "Short help beside the collapsed secret-store tools summary.",
+  },
+  "secrets.store.valueHelp": {
+    defaultMessage: "Sent once over this request, then cleared from the form. It never appears in the metadata table.",
+    description: "Secret creation value-handling help.",
+  },
+  "secrets.store.lifecycleSummary": {
+    defaultMessage: "Rotate, schedule, or delete",
+    description: "Collapsed secret lifecycle controls summary.",
+  },
+  "secrets.store.lifecycleSummaryHelp": {
+    defaultMessage: "Advanced lifecycle controls with approval and rollback evidence",
+    description: "Short help beside the collapsed secret lifecycle controls summary.",
+  },
+  "secrets.store.revealValue": {
+    defaultMessage: "Reveal value",
+    description: "Explicit native-secret read action; the stored secret may be read again if authorization still allows it.",
+  },
+  "secrets.store.revealTitle": {
+    defaultMessage: "Revealed value for {name}",
+    description: "Native secret reveal panel title.",
+  },
+  "secrets.store.revealHelp": {
+    defaultMessage:
+      "Version {version} was returned for this explicit read. Dismiss to clear this browser copy; authorized users can request the stored value again.",
+    description: "Accurate native-secret reveal behavior, distinct from self-destructing one-time shares.",
+  },
+  "secrets.store.metadataValueHandling": {
+    defaultMessage: "Values never appear in this drawer, browser storage, or the URL. An authorized explicit reveal is required for every read.",
+    description: "Native secret metadata drawer value-handling explanation.",
+  },
+  "secrets.route.accessAnswer": {
+    defaultMessage: "Which machine can use which secret, and why.",
+    description: "Machine access opening answer.",
+  },
+  "secrets.route.accessDetails": {
+    defaultMessage: "Policy bindings, workload identity, scopes, lease expiry, authentication methods, sessions, and audit receipts remain available below.",
+    description: "Machine access technical-details summary.",
+  },
+  "secrets.route.accessAction": { defaultMessage: "Grant access", description: "Machine access primary action." },
+  "secrets.route.sharingAnswer": {
+    defaultMessage: "What can be viewed once, by whom, and until when.",
+    description: "One-time secret links opening answer.",
+  },
+  "secrets.route.sharingDetails": {
+    defaultMessage:
+      "Expiry, bearer-token handling, one-time redemption, access events, revocation behavior, and ephemeral machine credentials remain available below.",
+    description: "One-time secret links technical-details summary.",
+  },
+  "secrets.route.sharingAction": { defaultMessage: "Create one-time link", description: "One-time secret link primary action." },
+  "secrets.route.enginesAnswer": {
+    defaultMessage: "Which systems can create short-lived credentials on demand.",
+    description: "Automatic secret sources opening answer.",
+  },
+  "secrets.route.enginesDetails": {
+    defaultMessage:
+      "Provider configuration, certificate key custody, lease TTL, renewal, revocation, transit encryption, HMAC, and signing remain available below.",
+    description: "Automatic secret sources technical-details summary.",
+  },
+  "secrets.route.enginesAction": { defaultMessage: "Add source", description: "Automatic secret sources primary action." },
+  "secrets.route.scanningAnswer": {
+    defaultMessage: "Which repositories were checked and what needs removal.",
+    description: "Secret scanning opening answer.",
+  },
+  "secrets.route.scanningDetails": {
+    defaultMessage: "Scanner rules, redacted evidence locations, provider webhooks, artifact ingestion, suppressions, and run history remain available below.",
+    description: "Secret scanning technical-details summary.",
+  },
+  "secrets.route.scanningAction": { defaultMessage: "Connect repository", description: "Secret scanning primary action." },
+  "secrets.scan.advancedSummary": {
+    defaultMessage: "Scanner setup and exact evidence",
+    description: "Collapsed secret-scanning provider and artifact controls summary.",
+  },
+  "secrets.scan.advancedSummaryHelp": {
+    defaultMessage: "Webhooks, artifact imports, capability IDs, rules, and release gates",
+    description: "Short help beside the collapsed scanning details.",
+  },
+  "secrets.route.syncAnswer": {
+    defaultMessage: "Where secrets are copied and whether each destination is current.",
+    description: "Secret delivery opening answer.",
+  },
+  "secrets.route.syncDetails": {
+    defaultMessage:
+      "Connector configuration, queue attempts, version mapping, workload delivery, retries, rollback, and value-zeroization controls remain available below.",
+    description: "Secret delivery technical-details summary.",
+  },
+  "secrets.route.syncAction": { defaultMessage: "Add destination", description: "Secret delivery primary action." },
+  "secrets.sync.evidenceSummary": {
+    defaultMessage: "Destination coverage and delivery evidence",
+    description: "Collapsed secret-delivery provider and workload evidence summary.",
+  },
+  "secrets.sync.evidenceSummaryHelp": {
+    defaultMessage: "Provider capabilities, queue behavior, Kubernetes delivery, and value handling",
+    description: "Short help beside the collapsed secret-delivery details.",
+  },
+  "secrets.sync.noDestinationTitle": {
+    defaultMessage: "No destination is set up yet",
+    description: "Secret delivery empty state when no configured target can safely accept a value.",
+  },
+  "secrets.sync.noDestinationBody": {
+    defaultMessage: "Add a destination first. trstctl will not accept a made-up target name or pretend a delivery was queued.",
+    description: "Secret delivery empty-state guidance and honesty boundary.",
   },
   "nav.group.secretsAccess": {
     defaultMessage: "Access & sharing",
@@ -3789,8 +3911,8 @@ export const messages = {
     description: "Primary navigation item.",
   },
   "nav.item.secrets": {
-    defaultMessage: "Secrets",
-    description: "Primary navigation item.",
+    defaultMessage: "Secret store",
+    description: "Primary navigation item for native secret inventory and lifecycle.",
   },
   "nav.item.nativeSecrets": {
     defaultMessage: "Native secrets",

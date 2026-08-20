@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Eyebrow } from "@/components/typography";
-import { Link, Navigate, useLocation, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Copy, Eye, KeyRound, Loader2, LogIn, RefreshCw, RotateCw, Share2, Trash2 } from "lucide-react";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DataGridToolbar } from "@/components/DataGridToolbar";
@@ -97,14 +97,52 @@ function secretsTabFromPath(pathname: string): SecretsTab {
   return segment !== "store" && secretsTabIds.includes(segment as SecretsTab) ? (segment as SecretsTab) : "store";
 }
 
-/** One name per surface (S-A2): the route's nav label, H1, and title all
- * resolve from this map, so naming parity holds for every sub-route. */
-const secretsRouteTitleKeys = {
-  access: "secrets.route.access",
-  sharing: "secrets.route.sharing",
-  engines: "secrets.route.engines",
-  scanning: "secrets.tabs.scanning",
-  sync: "secrets.route.sync",
+/** One plain-language question and one next action per workspace. The action
+ * either focuses the first safe field on this page or opens the existing setup
+ * surface that owns the required configuration. */
+const secretsRouteUX = {
+  store: {
+    titleKey: "secrets.route.store",
+    answerKey: "secrets.route.storeAnswer",
+    detailKey: "secrets.route.storeDetails",
+    actionKey: "secrets.route.storeAction",
+    focusID: "secret-create-name",
+  },
+  access: {
+    titleKey: "secrets.route.access",
+    answerKey: "secrets.route.accessAnswer",
+    detailKey: "secrets.route.accessDetails",
+    actionKey: "secrets.route.accessAction",
+    focusID: "grant-subject",
+  },
+  sharing: {
+    titleKey: "secrets.route.sharing",
+    answerKey: "secrets.route.sharingAnswer",
+    detailKey: "secrets.route.sharingDetails",
+    actionKey: "secrets.route.sharingAction",
+    focusID: "share-value",
+  },
+  engines: {
+    titleKey: "secrets.route.engines",
+    answerKey: "secrets.route.enginesAnswer",
+    detailKey: "secrets.route.enginesDetails",
+    actionKey: "secrets.route.enginesAction",
+    destination: "/integrate",
+  },
+  scanning: {
+    titleKey: "secrets.tabs.scanning",
+    answerKey: "secrets.route.scanningAnswer",
+    detailKey: "secrets.route.scanningDetails",
+    actionKey: "secrets.route.scanningAction",
+    destination: "/discovery?kind=secret_repo",
+  },
+  sync: {
+    titleKey: "secrets.route.sync",
+    answerKey: "secrets.route.syncAnswer",
+    detailKey: "secrets.route.syncDetails",
+    actionKey: "secrets.route.syncAction",
+    destination: "/connectors",
+  },
 } as const;
 
 // The served schema exposes queued connector delivery. Keep this guard while
@@ -116,9 +154,11 @@ function secretRotationQueued(rotation: SecretRotation): boolean {
 export function Secrets() {
   const { t } = useTranslation();
   const location = useLocation();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   // S-C2: the route decides the workspace; ?tab= is legacy-redirect input only.
   const tab = secretsTabFromPath(location.pathname);
+  const routeUX = secretsRouteUX[tab];
   const legacyTab = location.pathname === "/secrets" ? secretsTabFromSearchParam(searchParams.get("tab")) : "store";
   const [items, setItems] = useState<SecretMeta[]>([]);
   const [nextCursor, setNextCursor] = useState<string | undefined>();
@@ -401,7 +441,7 @@ export function Secrets() {
           <div className="flex flex-wrap gap-2">
             <Button type="button" size="sm" variant="outline" onClick={() => void revealSecret(item.name)} disabled={revealBusy === item.name}>
               {revealBusy === item.name ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
-              {translateNow("source.reveal.once.81d2e1991a")}
+              {t("secrets.store.revealValue")}
             </Button>
             <Button type="button" size="sm" variant="outline" onClick={() => setRotateName(item.name)}>
               <RotateCw className="h-4 w-4" aria-hidden="true" />
@@ -415,7 +455,7 @@ export function Secrets() {
         ),
       },
     ],
-    [revealBusy],
+    [revealBusy, t],
   );
 
   const scheduleColumns = useMemo<Array<DataGridColumn<SecretRotationSchedule>>>(
@@ -1257,13 +1297,28 @@ export function Secrets() {
     <section aria-labelledby="secrets-heading" className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
       <PageHeader
         titleId="secrets-heading"
-        title={tab === "store" ? translateNow("source.secrets.d8707d411d") : t(secretsRouteTitleKeys[tab])}
-        description="Stored secrets, API keys, tokens, machine logins, PKI secrets, and one-time shares — distinct from the X.509 certificates in Certificates. Metadata is durable; returned values, keys, and tokens are reveal-once material."
+        title={t(routeUX.titleKey)}
+        description={t(routeUX.answerKey)}
+        technicalDetails={t(routeUX.detailKey)}
         actions={
-          <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
-            {translateNow("source.refresh.0e91610117")}
-          </Button>
+          <>
+            <Button
+              type="button"
+              onClick={() => {
+                if ("destination" in routeUX) {
+                  navigate(routeUX.destination);
+                  return;
+                }
+                document.getElementById(routeUX.focusID)?.focus();
+              }}
+            >
+              {t(routeUX.actionKey)}
+            </Button>
+            <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
+              {translateNow("source.refresh.0e91610117")}
+            </Button>
+          </>
         }
       />
 
@@ -1290,14 +1345,20 @@ export function Secrets() {
               { id: "sync", label: t("moduleKpi.secrets.sync"), value: t("moduleKpi.view"), to: "/secrets/sync" },
             ]}
           />
-          <SecretTree secrets={items} />
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <ReferenceResolver />
-            <EnvDiffPanel secrets={items} />
-          </div>
-
-          <SecretImport />
+          <details className="ui-panel group p-comfortable">
+            <summary className="cursor-pointer font-medium text-foreground">
+              {t("secrets.store.exploreTools")}
+              <span className="ms-2 text-sm font-normal text-muted-foreground">{t("secrets.store.exploreToolsHelp")}</span>
+            </summary>
+            <div className="mt-4 grid gap-4">
+              <SecretTree secrets={items} />
+              <div className="grid gap-4 lg:grid-cols-2">
+                <ReferenceResolver />
+                <EnvDiffPanel secrets={items} />
+              </div>
+              <SecretImport />
+            </div>
+          </details>
 
           <section aria-labelledby="store-heading" className="grid gap-4 border-y border-border py-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1317,6 +1378,7 @@ export function Secrets() {
               <label className="grid gap-1 text-sm">
                 <span className="font-medium">{translateNow("source.secret.name.5cdf573b89")}</span>
                 <input
+                  id="secret-create-name"
                   className="rounded-md border border-border bg-background px-3 py-2"
                   value={createName}
                   onChange={(event) => setCreateName(event.target.value)}
@@ -1327,12 +1389,18 @@ export function Secrets() {
               <label className="grid gap-1 text-sm">
                 <span className="font-medium">{translateNow("source.secret.value.6ef47d9880")}</span>
                 <input
+                  id="secret-create-value"
+                  aria-label={translateNow("source.secret.value.6ef47d9880")}
+                  aria-describedby="secret-create-value-help"
                   className="rounded-md border border-border bg-background px-3 py-2"
                   type="password"
                   value={createValue}
                   onChange={(event) => setCreateValue(event.target.value)}
                   required
                 />
+                <span id="secret-create-value-help" className="text-xs text-muted-foreground">
+                  {t("secrets.store.valueHelp")}
+                </span>
               </label>
               <Button type="submit" className="self-end" disabled={createBusy || Boolean(loadError)}>
                 {createBusy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
@@ -1380,13 +1448,8 @@ export function Secrets() {
             )}
             {revealError && <ErrorState title={translateNow("source.reveal.failed.f00b1b5ba6")}>{revealError}</ErrorState>}
             {revealed && (
-              <RevealPanel
-                title={translateNow("source.reveal.once.value.for.value1.72f4f14f8d", { value1: revealed.name })}
-                onDismiss={() => setRevealed(null)}
-                value={revealed.value}
-              >
-                {translateNow("source.version.dd167905de")} {revealed.version ?? translateNow("source.latest.5e1e2bcac3")}{" "}
-                {translateNow("source.was.returned.for.this.secret.dismiss.clear.67402c3c18")}
+              <RevealPanel title={t("secrets.store.revealTitle", { name: revealed.name })} onDismiss={() => setRevealed(null)} value={revealed.value}>
+                {t("secrets.store.revealHelp", { version: String(revealed.version ?? translateNow("source.latest.5e1e2bcac3")) })}
               </RevealPanel>
             )}
             <DetailDrawer
@@ -1419,7 +1482,7 @@ export function Secrets() {
                   </div>
                   <div>
                     <dt className="font-medium text-muted-foreground">{translateNow("source.value.handling.f20f0a6806")}</dt>
-                    <dd>Reveal-once only; no value is stored in this drawer, browser storage, or the URL.</dd>
+                    <dd>{t("secrets.store.metadataValueHandling")}</dd>
                   </div>
                 </dl>
               )}
@@ -1427,290 +1490,296 @@ export function Secrets() {
             </DetailDrawer>
           </section>
 
-          <section aria-labelledby="rotate-heading" className="grid gap-4 border-y border-border py-4">
-            <div>
-              <h2 id="rotate-heading" className="text-title font-semibold">
-                {translateNow("source.manual.rotation.and.delete.1aee4da261")}
-              </h2>
-              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("secrets.rotation.scopeDescription")}</p>
-            </div>
-            <div className="ui-panel grid gap-3 p-comfortable">
+          <details className="group border-y border-border py-4">
+            <summary className="cursor-pointer text-title font-semibold text-foreground">
+              {t("secrets.store.lifecycleSummary")}
+              <span className="ms-2 text-sm font-normal text-muted-foreground">{t("secrets.store.lifecycleSummaryHelp")}</span>
+            </summary>
+            <section aria-labelledby="rotate-heading" className="mt-4 grid gap-4">
               <div>
-                <h3 className="text-title font-semibold">{t("parity.rollbackSafeRotation_267d4a")}</h3>
-                <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("parity.rotateAProviderBackedCredentialBy_ec7a8f")}</p>
+                <h2 id="rotate-heading" className="text-title font-semibold">
+                  {translateNow("source.manual.rotation.and.delete.1aee4da261")}
+                </h2>
+                <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("secrets.rotation.scopeDescription")}</p>
               </div>
-              <form
-                aria-label={t("parity.runRollbackSafeRotation_5a7f2d")}
-                onSubmit={(event) => void submitRollbackRotation(event)}
-                className="grid gap-3 md:grid-cols-2 xl:grid-cols-3"
-              >
-                <label className="grid gap-1 text-body font-medium">
-                  {translateNow("source.key.99a52df3ff")}
-                  <input
-                    className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
-                    value={rotationRunKey}
-                    onChange={(event) => setRotationRunKey(event.target.value)}
-                    placeholder={t("parity.paymentsDbPassword_50e8d6")}
-                    required
-                  />
-                </label>
-                <label className="grid gap-1 text-body font-medium">
-                  {t("parity.oldReference_69d1f6")}
-                  <input
-                    className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
-                    value={rotationRunOldRef}
-                    onChange={(event) => setRotationRunOldRef(event.target.value)}
-                    placeholder="ref:v3"
-                    required
-                  />
-                </label>
-                <label className="grid gap-1 text-body font-medium">
-                  {translateNow("source.provider.472590ae97")}
-                  <input
-                    className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
-                    value={rotationRunProvider}
-                    onChange={(event) => setRotationRunProvider(event.target.value)}
-                    placeholder={t("secrets.rotation.scheduleProviderPlaceholder")}
-                    required
-                  />
-                </label>
-                <label className="grid gap-1 text-body font-medium">
-                  {t("parity.syncTargetOptional_189fc7")}
-                  <input
-                    className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
-                    value={rotationRunTarget}
-                    onChange={(event) => setRotationRunTarget(event.target.value)}
-                    placeholder={translateNow("source.kubernetes.prod.16a7f7e17a")}
-                  />
-                </label>
-                <label className="grid gap-1 text-body font-medium">
-                  {t("parity.remoteKeyOptional_b6dff8")}
-                  <input
-                    className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
-                    value={rotationRunRemoteKey}
-                    onChange={(event) => setRotationRunRemoteKey(event.target.value)}
-                    placeholder={translateNow("source.secret.payments.db.password.cf46ca15a9")}
-                  />
-                </label>
-                <div className="md:col-span-2 xl:col-span-3">
-                  <Button type="submit" disabled={rotationRunBusy || Boolean(loadError)}>
-                    {rotationRunBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RotateCw className="h-4 w-4" aria-hidden="true" />}
-                    {translateNow("source.run.rotation.399dcb292b")}
-                  </Button>
-                </div>
-              </form>
-              {rotationRunError && <ErrorState title={t("parity.rollbackSafeRotationFailed_5f1a57")}>{rotationRunError}</ErrorState>}
-              {rotationRun && (
-                <div role="status" className="grid gap-2 rounded-control border border-border bg-background p-3 text-sm">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <StatusBadge
-                      vocabulary="lifecycle"
-                      value={secretRotationQueued(rotationRun) ? "pending" : rotationRun.completed ? "completed" : "failed"}
-                      label={
-                        secretRotationQueued(rotationRun)
-                          ? t("secrets.rotation.queued")
-                          : rotationRun.completed
-                            ? t("secrets.rotation.completed")
-                            : t("secrets.rotation.failed")
-                      }
-                      tone={secretRotationQueued(rotationRun) ? "warning" : rotationRun.completed ? "success" : "critical"}
-                    />
-                    <span className="break-all font-mono text-xs">{rotationRun.key}</span>
-                  </div>
-                  {rotationRun.completed || secretRotationQueued(rotationRun) ? (
-                    <p className="break-all font-mono text-xs">
-                      {rotationRun.old_ref} → {rotationRun.new_ref}
-                    </p>
-                  ) : (
-                    <div className="grid gap-2">
-                      <p>
-                        {t("parity.failedPhase_49b14a")}{" "}
-                        <span className="font-mono text-xs">{rotationRun.failed_phase ?? translateNow("source.unknown.b23a6a8439")}</span>
-                        {rotationRun.error ? translateNow("source.value1.ed27296cce", { value1: rotationRun.error }) : ""}
-                      </p>
-                      {rotationRun.rollback_failed ? (
-                        <p className="rounded-control border border-risk-critical/30 bg-risk-critical/10 px-3 py-2 text-risk-critical">
-                          {translateNow("source.rollback.failed.manual.intervention.requir.113a558395")}
-                          {rotationRun.rollback_error ? translateNow("source.value1.eff53e36f5", { value1: rotationRun.rollback_error }) : ""}
-                        </p>
-                      ) : rotationRun.rolled_back ? (
-                        <p className="rounded-control border border-status-info/30 bg-status-info/10 px-3 py-2 text-status-info">
-                          {t("parity.theProviderWasRolledBackCleanly_3c888a")} <span className="font-mono text-xs">{rotationRun.old_ref}</span>.
-                        </p>
-                      ) : rotationRun.rollback_attempted ? (
-                        <p className="text-muted-foreground">Rollback was attempted; check the provider state before retrying.</p>
-                      ) : null}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-            <div className="ui-panel grid gap-3 p-comfortable">
-              <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="ui-panel grid gap-3 p-comfortable">
                 <div>
-                  <h3 className="text-title font-semibold">{t("parity.scheduledRotations_1a0452")}</h3>
-                  <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("parity.recurringRollbackSafeRotationsRunBy_06c343")}</p>
+                  <h3 className="text-title font-semibold">{t("parity.rollbackSafeRotation_267d4a")}</h3>
+                  <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("parity.rotateAProviderBackedCredentialBy_ec7a8f")}</p>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    onClick={() => {
-                      setScheduleError(null);
-                      setScheduleDialogOpen(true);
-                    }}
-                  >
-                    {t("parity.newSchedule_729465")}
-                  </Button>
-                  <Button type="button" variant="outline" onClick={() => void runDueRotationsNow()} disabled={runDueBusy}>
-                    {runDueBusy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-                    {translateNow("source.run.due.now.06b5403e4c")}
-                  </Button>
-                </div>
+                <form
+                  aria-label={t("parity.runRollbackSafeRotation_5a7f2d")}
+                  onSubmit={(event) => void submitRollbackRotation(event)}
+                  className="grid gap-3 md:grid-cols-2 xl:grid-cols-3"
+                >
+                  <label className="grid gap-1 text-body font-medium">
+                    {translateNow("source.key.99a52df3ff")}
+                    <input
+                      className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                      value={rotationRunKey}
+                      onChange={(event) => setRotationRunKey(event.target.value)}
+                      placeholder={t("parity.paymentsDbPassword_50e8d6")}
+                      required
+                    />
+                  </label>
+                  <label className="grid gap-1 text-body font-medium">
+                    {t("parity.oldReference_69d1f6")}
+                    <input
+                      className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                      value={rotationRunOldRef}
+                      onChange={(event) => setRotationRunOldRef(event.target.value)}
+                      placeholder="ref:v3"
+                      required
+                    />
+                  </label>
+                  <label className="grid gap-1 text-body font-medium">
+                    {translateNow("source.provider.472590ae97")}
+                    <input
+                      className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                      value={rotationRunProvider}
+                      onChange={(event) => setRotationRunProvider(event.target.value)}
+                      placeholder={t("secrets.rotation.scheduleProviderPlaceholder")}
+                      required
+                    />
+                  </label>
+                  <label className="grid gap-1 text-body font-medium">
+                    {t("parity.syncTargetOptional_189fc7")}
+                    <input
+                      className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                      value={rotationRunTarget}
+                      onChange={(event) => setRotationRunTarget(event.target.value)}
+                      placeholder={translateNow("source.kubernetes.prod.16a7f7e17a")}
+                    />
+                  </label>
+                  <label className="grid gap-1 text-body font-medium">
+                    {t("parity.remoteKeyOptional_b6dff8")}
+                    <input
+                      className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                      value={rotationRunRemoteKey}
+                      onChange={(event) => setRotationRunRemoteKey(event.target.value)}
+                      placeholder={translateNow("source.secret.payments.db.password.cf46ca15a9")}
+                    />
+                  </label>
+                  <div className="md:col-span-2 xl:col-span-3">
+                    <Button type="submit" disabled={rotationRunBusy || Boolean(loadError)}>
+                      {rotationRunBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RotateCw className="h-4 w-4" aria-hidden="true" />}
+                      {translateNow("source.run.rotation.399dcb292b")}
+                    </Button>
+                  </div>
+                </form>
+                {rotationRunError && <ErrorState title={t("parity.rollbackSafeRotationFailed_5f1a57")}>{rotationRunError}</ErrorState>}
+                {rotationRun && (
+                  <div role="status" className="grid gap-2 rounded-control border border-border bg-background p-3 text-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <StatusBadge
+                        vocabulary="lifecycle"
+                        value={secretRotationQueued(rotationRun) ? "pending" : rotationRun.completed ? "completed" : "failed"}
+                        label={
+                          secretRotationQueued(rotationRun)
+                            ? t("secrets.rotation.queued")
+                            : rotationRun.completed
+                              ? t("secrets.rotation.completed")
+                              : t("secrets.rotation.failed")
+                        }
+                        tone={secretRotationQueued(rotationRun) ? "warning" : rotationRun.completed ? "success" : "critical"}
+                      />
+                      <span className="break-all font-mono text-xs">{rotationRun.key}</span>
+                    </div>
+                    {rotationRun.completed || secretRotationQueued(rotationRun) ? (
+                      <p className="break-all font-mono text-xs">
+                        {rotationRun.old_ref} → {rotationRun.new_ref}
+                      </p>
+                    ) : (
+                      <div className="grid gap-2">
+                        <p>
+                          {t("parity.failedPhase_49b14a")}{" "}
+                          <span className="font-mono text-xs">{rotationRun.failed_phase ?? translateNow("source.unknown.b23a6a8439")}</span>
+                          {rotationRun.error ? translateNow("source.value1.ed27296cce", { value1: rotationRun.error }) : ""}
+                        </p>
+                        {rotationRun.rollback_failed ? (
+                          <p className="rounded-control border border-risk-critical/30 bg-risk-critical/10 px-3 py-2 text-risk-critical">
+                            {translateNow("source.rollback.failed.manual.intervention.requir.113a558395")}
+                            {rotationRun.rollback_error ? translateNow("source.value1.eff53e36f5", { value1: rotationRun.rollback_error }) : ""}
+                          </p>
+                        ) : rotationRun.rolled_back ? (
+                          <p className="rounded-control border border-status-info/30 bg-status-info/10 px-3 py-2 text-status-info">
+                            {t("parity.theProviderWasRolledBackCleanly_3c888a")} <span className="font-mono text-xs">{rotationRun.old_ref}</span>.
+                          </p>
+                        ) : rotationRun.rollback_attempted ? (
+                          <p className="text-muted-foreground">Rollback was attempted; check the provider state before retrying.</p>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-              {runDueError && <ErrorState title={t("parity.runDueRotationsFailed_b9c511")}>{runDueError}</ErrorState>}
-              {dueLimits && (dueLimits.run || dueLimits.scan) && (
-                <div
-                  role="status"
-                  aria-label={t("secrets.rotation.limitNoticeLabel")}
-                  className="grid gap-1 rounded-control border border-status-warning/30 bg-status-warning/10 px-3 py-2 text-sm text-status-warning"
-                >
-                  {dueLimits.run && <p>{t("secrets.rotation.runLimitNotice")}</p>}
-                  {dueLimits.scan && <p>{t("secrets.rotation.scanLimitNotice")}</p>}
+              <div className="ui-panel grid gap-3 p-comfortable">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-title font-semibold">{t("parity.scheduledRotations_1a0452")}</h3>
+                    <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("parity.recurringRollbackSafeRotationsRunBy_06c343")}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        setScheduleError(null);
+                        setScheduleDialogOpen(true);
+                      }}
+                    >
+                      {t("parity.newSchedule_729465")}
+                    </Button>
+                    <Button type="button" variant="outline" onClick={() => void runDueRotationsNow()} disabled={runDueBusy}>
+                      {runDueBusy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                      {translateNow("source.run.due.now.06b5403e4c")}
+                    </Button>
+                  </div>
                 </div>
-              )}
-              {rotationSchedules && (
-                <DataGrid
-                  ariaLabel="Scheduled secret rotations"
-                  rows={rotationSchedules}
-                  columns={scheduleColumns}
-                  getRowId={(item) => item.id}
-                  state={rotationSchedules.length === 0 ? "empty" : "ready"}
-                  stateTitle="No rotation schedules"
-                  stateMessage={t("secrets.rotation.scheduleStateMessage")}
-                />
-              )}
-              {dueDeferred.length > 0 && (
-                <div
-                  role="status"
-                  className="grid gap-2 rounded-control border border-status-warning/30 bg-status-warning/10 px-3 py-2 text-sm text-status-warning"
-                >
-                  <p>{t("secrets.rotation.deferredSummary", { count: String(dueDeferred.length) })}</p>
-                  <ul aria-label={t("secrets.rotation.deferredListLabel")} className="grid gap-1">
-                    {dueDeferred.map((deferred) => (
-                      <li
-                        key={`${deferred.schedule_id}:${deferred.due_at}`}
-                        className="grid gap-1 rounded-control border border-status-warning/20 px-2 py-1 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center md:gap-3"
-                      >
-                        <span className="break-all font-mono text-xs">{deferred.schedule_id}</span>
-                        <span>{t(secretRotationDeferredReasonKeys[deferred.reason])}</span>
-                        <span>{t("secrets.rotation.deferredDueAt", { time: formatDate(deferred.due_at) })}</span>
-                        {deferred.error && <span className="md:col-span-3 text-xs">{deferred.error}</span>}
+                {runDueError && <ErrorState title={t("parity.runDueRotationsFailed_b9c511")}>{runDueError}</ErrorState>}
+                {dueLimits && (dueLimits.run || dueLimits.scan) && (
+                  <div
+                    role="status"
+                    aria-label={t("secrets.rotation.limitNoticeLabel")}
+                    className="grid gap-1 rounded-control border border-status-warning/30 bg-status-warning/10 px-3 py-2 text-sm text-status-warning"
+                  >
+                    {dueLimits.run && <p>{t("secrets.rotation.runLimitNotice")}</p>}
+                    {dueLimits.scan && <p>{t("secrets.rotation.scanLimitNotice")}</p>}
+                  </div>
+                )}
+                {rotationSchedules && (
+                  <DataGrid
+                    ariaLabel="Scheduled secret rotations"
+                    rows={rotationSchedules}
+                    columns={scheduleColumns}
+                    getRowId={(item) => item.id}
+                    state={rotationSchedules.length === 0 ? "empty" : "ready"}
+                    stateTitle="No rotation schedules"
+                    stateMessage={t("secrets.rotation.scheduleStateMessage")}
+                  />
+                )}
+                {dueDeferred.length > 0 && (
+                  <div
+                    role="status"
+                    className="grid gap-2 rounded-control border border-status-warning/30 bg-status-warning/10 px-3 py-2 text-sm text-status-warning"
+                  >
+                    <p>{t("secrets.rotation.deferredSummary", { count: String(dueDeferred.length) })}</p>
+                    <ul aria-label={t("secrets.rotation.deferredListLabel")} className="grid gap-1">
+                      {dueDeferred.map((deferred) => (
+                        <li
+                          key={`${deferred.schedule_id}:${deferred.due_at}`}
+                          className="grid gap-1 rounded-control border border-status-warning/20 px-2 py-1 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center md:gap-3"
+                        >
+                          <span className="break-all font-mono text-xs">{deferred.schedule_id}</span>
+                          <span>{t(secretRotationDeferredReasonKeys[deferred.reason])}</span>
+                          <span>{t("secrets.rotation.deferredDueAt", { time: formatDate(deferred.due_at) })}</span>
+                          {deferred.error && <span className="md:col-span-3 text-xs">{deferred.error}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {dueRuns && dueRuns.length > 0 && (
+                  <ul aria-label={t("parity.latestDueRotationRuns_ac4710")} className="grid gap-2">
+                    {dueRuns.map((run) => (
+                      <li key={run.run_id} className="flex flex-wrap items-center gap-2 rounded-control border border-border px-3 py-2 text-sm">
+                        <StatusBadge vocabulary="lifecycle" value={run.status} />
+                        <span className="break-all font-mono text-xs">{run.rotation.key}</span>
+                        <span className="text-muted-foreground">{formatDate(run.ran_at)}</span>
+                        {run.error && <span className="text-destructive">{run.error}</span>}
                       </li>
                     ))}
                   </ul>
-                </div>
-              )}
-              {dueRuns && dueRuns.length > 0 && (
-                <ul aria-label={t("parity.latestDueRotationRuns_ac4710")} className="grid gap-2">
-                  {dueRuns.map((run) => (
-                    <li key={run.run_id} className="flex flex-wrap items-center gap-2 rounded-control border border-border px-3 py-2 text-sm">
-                      <StatusBadge vocabulary="lifecycle" value={run.status} />
-                      <span className="break-all font-mono text-xs">{run.rotation.key}</span>
-                      <span className="text-muted-foreground">{formatDate(run.ran_at)}</span>
-                      {run.error && <span className="text-destructive">{run.error}</span>}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            {/* Known names autocomplete from the loaded store — no copy-pasting
+                )}
+              </div>
+              {/* Known names autocomplete from the loaded store — no copy-pasting
             out of the metadata table above. */}
-            <datalist id="secret-name-options">
-              {items.map((item) => (
-                <option key={item.name} value={item.name} />
-              ))}
-            </datalist>
-            <form
-              aria-label={translateNow("source.rotate.secret.4405518d27")}
-              onSubmit={(event) => void submitRotate(event)}
-              className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
-            >
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium">{translateNow("source.secret.to.rotate.4e6aab975e")}</span>
-                <input
-                  className="rounded-md border border-border bg-background px-3 py-2"
-                  value={rotateName}
-                  onChange={(event) => setRotateName(event.target.value)}
-                  placeholder={selectedMeta?.name ?? translateNow("source.app.db.password.917cb98f9d")}
-                  list="secret-name-options"
-                  required
-                />
-              </label>
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium">{translateNow("source.replacement.value.81858184c6")}</span>
-                <input
-                  className="rounded-md border border-border bg-background px-3 py-2"
-                  type="password"
-                  value={rotateValue}
-                  onChange={(event) => setRotateValue(event.target.value)}
-                  required
-                />
-              </label>
-              <Button type="submit" className="self-end" loading={rotateBusy} disabled={Boolean(loadError)}>
-                {translateNow("source.rotate.secret.4405518d27")}
-              </Button>
-            </form>
-            {rotateError && <ErrorState title={translateNow("source.rotation.failed.2d3e7bd0f1")}>{rotateError}</ErrorState>}
-
-            <form
-              aria-label={translateNow("source.delete.secret.1a48c8c830")}
-              onSubmit={(event) => void submitDelete(event)}
-              className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
-            >
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium">{translateNow("source.secret.to.delete.6abd642165")}</span>
-                <input
-                  className="rounded-md border border-border bg-background px-3 py-2"
-                  value={deleteName}
-                  onChange={(event) => setDeleteName(event.target.value)}
-                  placeholder={selectedMeta?.name ?? translateNow("source.app.db.password.917cb98f9d")}
-                  list="secret-name-options"
-                  required
-                />
-              </label>
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium">{translateNow("source.type.the.exact.secret.name.8106c6efde")}</span>
-                <input
-                  className="rounded-md border border-border bg-background px-3 py-2"
-                  value={deleteConfirm}
-                  onChange={(event) => setDeleteConfirm(event.target.value)}
-                  required
-                />
-              </label>
-              <Button
-                type="submit"
-                variant="destructive"
-                className="self-end"
-                loading={deleteBusy}
-                disabled={!deleteName || deleteConfirm !== deleteName || Boolean(loadError)}
+              <datalist id="secret-name-options">
+                {items.map((item) => (
+                  <option key={item.name} value={item.name} />
+                ))}
+              </datalist>
+              <form
+                aria-label={translateNow("source.rotate.secret.4405518d27")}
+                onSubmit={(event) => void submitRotate(event)}
+                className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
               >
-                {translateNow("source.delete.secret.1a48c8c830")}
-              </Button>
-            </form>
-            {deleteError && <ErrorState title={translateNow("source.delete.failed.8727e2ba36")}>{deleteError}</ErrorState>}
-            <SecretApprovalQueue
-              items={approvalQueue}
-              busyKey={approvalBusy}
-              canRetry={canRetryApproval}
-              onApprove={(item) => void approveSecretApproval(item)}
-              onRetry={(item) => void retrySecretApproval(item)}
-            />
-          </section>
+                <label className="grid gap-1 text-sm">
+                  <span className="font-medium">{translateNow("source.secret.to.rotate.4e6aab975e")}</span>
+                  <input
+                    className="rounded-md border border-border bg-background px-3 py-2"
+                    value={rotateName}
+                    onChange={(event) => setRotateName(event.target.value)}
+                    placeholder={selectedMeta?.name ?? translateNow("source.app.db.password.917cb98f9d")}
+                    list="secret-name-options"
+                    required
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="font-medium">{translateNow("source.replacement.value.81858184c6")}</span>
+                  <input
+                    className="rounded-md border border-border bg-background px-3 py-2"
+                    type="password"
+                    value={rotateValue}
+                    onChange={(event) => setRotateValue(event.target.value)}
+                    required
+                  />
+                </label>
+                <Button type="submit" className="self-end" loading={rotateBusy} disabled={Boolean(loadError)}>
+                  {translateNow("source.rotate.secret.4405518d27")}
+                </Button>
+              </form>
+              {rotateError && <ErrorState title={translateNow("source.rotation.failed.2d3e7bd0f1")}>{rotateError}</ErrorState>}
+
+              <form
+                aria-label={translateNow("source.delete.secret.1a48c8c830")}
+                onSubmit={(event) => void submitDelete(event)}
+                className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
+              >
+                <label className="grid gap-1 text-sm">
+                  <span className="font-medium">{translateNow("source.secret.to.delete.6abd642165")}</span>
+                  <input
+                    className="rounded-md border border-border bg-background px-3 py-2"
+                    value={deleteName}
+                    onChange={(event) => setDeleteName(event.target.value)}
+                    placeholder={selectedMeta?.name ?? translateNow("source.app.db.password.917cb98f9d")}
+                    list="secret-name-options"
+                    required
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="font-medium">{translateNow("source.type.the.exact.secret.name.8106c6efde")}</span>
+                  <input
+                    className="rounded-md border border-border bg-background px-3 py-2"
+                    value={deleteConfirm}
+                    onChange={(event) => setDeleteConfirm(event.target.value)}
+                    required
+                  />
+                </label>
+                <Button
+                  type="submit"
+                  variant="destructive"
+                  className="self-end"
+                  loading={deleteBusy}
+                  disabled={!deleteName || deleteConfirm !== deleteName || Boolean(loadError)}
+                >
+                  {translateNow("source.delete.secret.1a48c8c830")}
+                </Button>
+              </form>
+              {deleteError && <ErrorState title={translateNow("source.delete.failed.8727e2ba36")}>{deleteError}</ErrorState>}
+              <SecretApprovalQueue
+                items={approvalQueue}
+                busyKey={approvalBusy}
+                canRetry={canRetryApproval}
+                onApprove={(item) => void approveSecretApproval(item)}
+                onRetry={(item) => void retrySecretApproval(item)}
+              />
+            </section>
+          </details>
         </div>
       )}
 
       {tab === "access" && (
-        <div className="grid gap-6">
+        <div className="order-1 grid gap-6">
           <section aria-labelledby="developer-heading" className="grid gap-4 border-y border-border py-4">
             <div>
               <h2 id="developer-heading" className="text-title font-semibold">
@@ -1761,7 +1830,7 @@ export function Secrets() {
       )}
 
       {tab === "engines" && (
-        <div className="grid gap-6">
+        <div className="order-1 grid gap-6">
           <section aria-labelledby="pki-heading" className="grid gap-4 border-y border-border py-4">
             <div>
               <h2 id="pki-heading" className="text-title font-semibold">
@@ -1848,7 +1917,7 @@ export function Secrets() {
       )}
 
       {tab === "access" && (
-        <div className="grid gap-6">
+        <div className="-order-1 grid gap-6">
           {/* C-S1 (DA-02 interim): Job 2's grant step, in-console, over the
               existing idempotent /access/api-tokens and /ephemeral/api-keys
               mutations. Create (Store tab) → grant (here) → verify the
@@ -2182,6 +2251,7 @@ export function Secrets() {
                 <label className="grid gap-1 text-sm">
                   <span className="font-medium">{translateNow("source.value.to.share.fa56b0a913")}</span>
                   <input
+                    id="share-value"
                     className="rounded-md border border-border bg-background px-3 py-2"
                     type="password"
                     value={shareValueInput}
@@ -2429,84 +2499,93 @@ export function Secrets() {
       {tab === "scanning" && (
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
           <section aria-labelledby="secret-scanning-heading" className="grid min-w-0 gap-4 border-y border-border py-4">
-            <div>
+            <div className="-order-2">
               <h2 id="secret-scanning-heading" className="text-title font-semibold">
                 {translateNow("source.code.and.ci.secret.scanning.bridge.27c18d763b")}
               </h2>
               <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("secrets.scan.description")}</p>
               {/* CAP-SCAN-01 source anchor: repository secret scanning is served by REST, CLI, outbox, and Gitleaks worker paths */}
             </div>
-            {repoScanPosture && <RepositoryScanPosture posture={repoScanPosture} />}
-            {thirdPartyPosture && <ThirdPartyScanPosture posture={thirdPartyPosture} />}
-            <form
-              aria-label={t("secrets.thirdPartyScan.form")}
-              onSubmit={(event) => void submitThirdPartySecretScan(event)}
-              className="grid gap-3 md:grid-cols-[12rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"
-            >
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium">{t("secrets.thirdPartyScan.provider")}</span>
-                <select
-                  className="rounded-md border border-border bg-background px-3 py-2"
-                  value={thirdPartyProvider}
-                  onChange={(event) => setThirdPartyProvider(event.target.value)}
+            <details className="ui-panel group order-1 p-comfortable">
+              <summary className="cursor-pointer font-medium text-foreground">
+                {t("secrets.scan.advancedSummary")}
+                <span className="ms-2 text-sm font-normal text-muted-foreground">{t("secrets.scan.advancedSummaryHelp")}</span>
+              </summary>
+              <div className="mt-4 grid gap-4">
+                {repoScanPosture && <RepositoryScanPosture posture={repoScanPosture} />}
+                {thirdPartyPosture && <ThirdPartyScanPosture posture={thirdPartyPosture} />}
+                <form
+                  aria-label={t("secrets.thirdPartyScan.form")}
+                  onSubmit={(event) => void submitThirdPartySecretScan(event)}
+                  className="grid gap-3 md:grid-cols-[12rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"
                 >
-                  {(thirdPartyPosture?.providers ?? defaultThirdPartyProviders()).map((provider) => (
-                    <option key={provider.id} value={provider.id}>
-                      {provider.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium">{t("secrets.thirdPartyScan.source")}</span>
-                <input
-                  className="rounded-md border border-border bg-background px-3 py-2"
-                  value={thirdPartySource}
-                  onChange={(event) => setThirdPartySource(event.target.value)}
-                  placeholder={t("secrets.thirdPartyScan.sourcePlaceholder")}
-                  required
-                />
-              </label>
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium">{t("secrets.thirdPartyScan.artifactPath")}</span>
-                <input
-                  className="rounded-md border border-border bg-background px-3 py-2"
-                  value={thirdPartyArtifactPath}
-                  onChange={(event) => setThirdPartyArtifactPath(event.target.value)}
-                  placeholder={t("secrets.thirdPartyScan.artifactPlaceholder")}
-                  required
-                />
-              </label>
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium">{t("secrets.thirdPartyScan.event")}</span>
-                <input
-                  className="rounded-md border border-border bg-background px-3 py-2"
-                  value={thirdPartyEvent}
-                  onChange={(event) => setThirdPartyEvent(event.target.value)}
-                  placeholder={t("secrets.thirdPartyScan.eventPlaceholder")}
-                />
-              </label>
-              <Button type="submit" className="self-end" disabled={thirdPartyBusy || Boolean(loadError)}>
-                {thirdPartyBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
-                {thirdPartyBusy ? t("secrets.thirdPartyScan.queueing") : t("secrets.thirdPartyScan.queue")}
-              </Button>
-            </form>
-            {thirdPartyError && <ErrorState title={t("secrets.thirdPartyScan.errorTitle")}>{thirdPartyError}</ErrorState>}
-            {thirdPartyReceipt && (
-              <p role="status" className="rounded-control border border-status-success/30 bg-status-success/10 px-3 py-2 text-sm text-status-success">
-                {t("secrets.thirdPartyScan.accepted", { provider: thirdPartyReceipt.provider, run: thirdPartyReceipt.run_id })}
-              </p>
-            )}
-            {/* TRACE-005 source anchor: secret-scanning triage is library-only while repository ingestion and scan execution are served */}
-            <UnavailableState title={t("secrets.scan.triageLibraryOnlyTitle")}>{t("secrets.scan.triageLibraryOnlyBody")}</UnavailableState>
+                  <label className="grid gap-1 text-sm">
+                    <span className="font-medium">{t("secrets.thirdPartyScan.provider")}</span>
+                    <select
+                      className="rounded-md border border-border bg-background px-3 py-2"
+                      value={thirdPartyProvider}
+                      onChange={(event) => setThirdPartyProvider(event.target.value)}
+                    >
+                      {(thirdPartyPosture?.providers ?? defaultThirdPartyProviders()).map((provider) => (
+                        <option key={provider.id} value={provider.id}>
+                          {provider.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="grid gap-1 text-sm">
+                    <span className="font-medium">{t("secrets.thirdPartyScan.source")}</span>
+                    <input
+                      className="rounded-md border border-border bg-background px-3 py-2"
+                      value={thirdPartySource}
+                      onChange={(event) => setThirdPartySource(event.target.value)}
+                      placeholder={t("secrets.thirdPartyScan.sourcePlaceholder")}
+                      required
+                    />
+                  </label>
+                  <label className="grid gap-1 text-sm">
+                    <span className="font-medium">{t("secrets.thirdPartyScan.artifactPath")}</span>
+                    <input
+                      className="rounded-md border border-border bg-background px-3 py-2"
+                      value={thirdPartyArtifactPath}
+                      onChange={(event) => setThirdPartyArtifactPath(event.target.value)}
+                      placeholder={t("secrets.thirdPartyScan.artifactPlaceholder")}
+                      required
+                    />
+                  </label>
+                  <label className="grid gap-1 text-sm">
+                    <span className="font-medium">{t("secrets.thirdPartyScan.event")}</span>
+                    <input
+                      className="rounded-md border border-border bg-background px-3 py-2"
+                      value={thirdPartyEvent}
+                      onChange={(event) => setThirdPartyEvent(event.target.value)}
+                      placeholder={t("secrets.thirdPartyScan.eventPlaceholder")}
+                    />
+                  </label>
+                  <Button type="submit" className="self-end" disabled={thirdPartyBusy || Boolean(loadError)}>
+                    {thirdPartyBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
+                    {thirdPartyBusy ? t("secrets.thirdPartyScan.queueing") : t("secrets.thirdPartyScan.queue")}
+                  </Button>
+                </form>
+                {thirdPartyError && <ErrorState title={t("secrets.thirdPartyScan.errorTitle")}>{thirdPartyError}</ErrorState>}
+                {thirdPartyReceipt && (
+                  <p role="status" className="rounded-control border border-status-success/30 bg-status-success/10 px-3 py-2 text-sm text-status-success">
+                    {t("secrets.thirdPartyScan.accepted", { provider: thirdPartyReceipt.provider, run: thirdPartyReceipt.run_id })}
+                  </p>
+                )}
+                {/* TRACE-005 source anchor: secret-scanning triage is library-only while repository ingestion and scan execution are served */}
+                <UnavailableState title={t("secrets.scan.triageLibraryOnlyTitle")}>{t("secrets.scan.triageLibraryOnlyBody")}</UnavailableState>
+              </div>
+            </details>
             <form
               aria-label={translateNow("source.run.secret.scan.89f2ed7a1b")}
               onSubmit={(event) => void submitSecretScan(event)}
-              className="grid gap-3 md:grid-cols-[minmax(0,1fr)_12rem_minmax(0,1fr)_auto]"
+              className="-order-1 grid gap-3 md:grid-cols-[minmax(0,1fr)_12rem_minmax(0,1fr)_auto]"
             >
               <label className="grid gap-1 text-sm">
                 <span className="font-medium">{translateNow("source.path.62fa5a5b0d")}</span>
                 <input
+                  id="secret-scan-path"
                   className="rounded-md border border-border bg-background px-3 py-2"
                   value={scanPath}
                   onChange={(event) => setScanPath(event.target.value)}
@@ -2607,7 +2686,7 @@ export function Secrets() {
       )}
 
       {tab === "engines" && (
-        <div className="grid gap-6">
+        <div className="-order-1 grid gap-6">
           <section aria-labelledby="dynamic-secrets-heading" className="grid gap-4 border-y border-border py-4">
             <div>
               <h2 id="dynamic-secrets-heading" className="text-title font-semibold">
@@ -2899,282 +2978,300 @@ export function Secrets() {
                 Push a stored secret to a configured target. The browser sends the secret name and remote key only; the stored value is never rendered here.
               </p>
             </div>
-            {cloudManagers && (
-              <div className="ui-panel grid gap-3 p-comfortable text-sm">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-control border border-border px-2 py-1 font-mono text-xs text-muted-foreground">{cloudManagers.capability}</span>
-                  <span className="text-muted-foreground">
-                    {t("secrets.cloudManagers.coverage", {
-                      discovery: cloudManagers.summary.discovery_configured,
-                      sync: cloudManagers.summary.sync_configured,
-                    })}
-                  </span>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="ui-table min-w-[58rem]">
-                    <caption className="sr-only">{t("secrets.cloudManagers.caption")}</caption>
-                    <thead>
-                      <tr>
-                        <th scope="col">{t("secrets.cloudManagers.provider")}</th>
-                        <th scope="col">{t("secrets.cloudManagers.discovery")}</th>
-                        <th scope="col">{t("secrets.cloudManagers.sync")}</th>
-                        <th scope="col">{t("secrets.cloudManagers.handling")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {cloudManagers.providers.map((provider) => (
-                        <tr key={provider.id}>
-                          <td>
-                            <span className="font-medium">{provider.name}</span>
-                            <span className="block font-mono text-xs text-muted-foreground">{provider.id}</span>
-                          </td>
-                          <td>
-                            {provider.discovery_configured
-                              ? t("secrets.cloudManagers.discoveryConfigured", { count: provider.discovery_source_count })
-                              : provider.discovery_supported
-                                ? t("secrets.cloudManagers.discoveryAvailable")
-                                : t("secrets.cloudManagers.notSupported")}
-                          </td>
-                          <td>
-                            {provider.sync_configured
-                              ? t("secrets.cloudManagers.syncConfigured")
-                              : provider.sync_supported
-                                ? t("secrets.cloudManagers.syncAvailable")
-                                : t("secrets.cloudManagers.notSupported")}
-                          </td>
-                          <td>{provider.secret_handling}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {cloudManagers.residuals.length > 0 && (
-                  <ul className="grid gap-1 text-xs text-muted-foreground">
-                    {cloudManagers.residuals.slice(0, 2).map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-            {syncCatalog && (
-              <div className="ui-panel grid gap-3 p-comfortable text-sm">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-control border border-border px-2 py-1 font-mono text-xs text-muted-foreground">{syncCatalog.capability}</span>
-                  <span className="text-muted-foreground">{t("secrets.sync.configuredCount", { count: syncCatalog.configured_targets.length })}</span>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="ui-table min-w-[54rem]">
-                    <caption className="sr-only">{t("secrets.sync.catalogCaption")}</caption>
-                    <thead>
-                      <tr>
-                        <th scope="col">{t("secrets.sync.target")}</th>
-                        <th scope="col">{t("secrets.sync.platform")}</th>
-                        <th scope="col">{t("secrets.sync.status")}</th>
-                        <th scope="col">{t("secrets.sync.delivery")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {syncCatalog.targets.map((target) => (
-                        <tr key={target.id}>
-                          <td>
-                            <span className="font-medium">{target.name}</span>
-                            <span className="block font-mono text-xs text-muted-foreground">{target.id}</span>
-                          </td>
-                          <td>{target.platform}</td>
-                          <td>{target.configured ? t("secrets.sync.configured") : t("secrets.sync.available")}</td>
-                          <td>{target.delivery_mode}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-            {operatorPosture && (
-              <div className="ui-panel grid gap-3 p-comfortable text-sm">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-control border border-border px-2 py-1 font-mono text-xs text-muted-foreground">{operatorPosture.capability}</span>
-                  <span className="text-muted-foreground">{t("secrets.sync.operatorCoverage")}</span>
-                </div>
-                <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                  <div className="grid gap-2">
-                    <Eyebrow>{t("secrets.sync.operatorCRDs")}</Eyebrow>
-                    <div className="flex flex-wrap gap-2">
-                      {operatorPosture.crds.map((crd) => (
-                        <span key={crd.kind} className="rounded-control border border-border px-2 py-1 font-mono text-xs">
-                          {crd.kind} - {crd.status}
-                        </span>
-                      ))}
+            <details className="ui-panel group order-1 p-comfortable">
+              <summary className="cursor-pointer font-medium text-foreground">
+                {t("secrets.sync.evidenceSummary")}
+                <span className="ms-2 text-sm font-normal text-muted-foreground">{t("secrets.sync.evidenceSummaryHelp")}</span>
+              </summary>
+              <div className="mt-4 grid gap-4">
+                {cloudManagers && (
+                  <div className="ui-panel grid gap-3 p-comfortable text-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-control border border-border px-2 py-1 font-mono text-xs text-muted-foreground">{cloudManagers.capability}</span>
+                      <span className="text-muted-foreground">
+                        {t("secrets.cloudManagers.coverage", {
+                          discovery: cloudManagers.summary.discovery_configured,
+                          sync: cloudManagers.summary.sync_configured,
+                        })}
+                      </span>
                     </div>
-                  </div>
-                  <div className="grid gap-2">
-                    <Eyebrow>{t("secrets.sync.operatorReloadWorkloads")}</Eyebrow>
-                    <div className="flex flex-wrap gap-2">
-                      {operatorPosture.reload_workloads.map((kind) => (
-                        <span key={kind} className="rounded-control border border-border px-2 py-1 text-xs">
-                          {kind}
-                        </span>
-                      ))}
+                    <div className="overflow-x-auto">
+                      <table className="ui-table min-w-[58rem]">
+                        <caption className="sr-only">{t("secrets.cloudManagers.caption")}</caption>
+                        <thead>
+                          <tr>
+                            <th scope="col">{t("secrets.cloudManagers.provider")}</th>
+                            <th scope="col">{t("secrets.cloudManagers.discovery")}</th>
+                            <th scope="col">{t("secrets.cloudManagers.sync")}</th>
+                            <th scope="col">{t("secrets.cloudManagers.handling")}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {cloudManagers.providers.map((provider) => (
+                            <tr key={provider.id}>
+                              <td>
+                                <span className="font-medium">{provider.name}</span>
+                                <span className="block font-mono text-xs text-muted-foreground">{provider.id}</span>
+                              </td>
+                              <td>
+                                {provider.discovery_configured
+                                  ? t("secrets.cloudManagers.discoveryConfigured", { count: provider.discovery_source_count })
+                                  : provider.discovery_supported
+                                    ? t("secrets.cloudManagers.discoveryAvailable")
+                                    : t("secrets.cloudManagers.notSupported")}
+                              </td>
+                              <td>
+                                {provider.sync_configured
+                                  ? t("secrets.cloudManagers.syncConfigured")
+                                  : provider.sync_supported
+                                    ? t("secrets.cloudManagers.syncAvailable")
+                                    : t("secrets.cloudManagers.notSupported")}
+                              </td>
+                              <td>{provider.secret_handling}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-                  </div>
-                </div>
-                <p className="max-w-3xl text-sm text-muted-foreground">{operatorPosture.secret_handling}</p>
-                {operatorPosture.residuals.length > 0 && (
-                  <ul className="grid gap-1 text-xs text-muted-foreground">
-                    {operatorPosture.residuals.slice(0, 2).map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-            {workloadInjection && (
-              <div className="ui-panel grid gap-3 p-comfortable text-sm">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-control border border-border px-2 py-1 font-mono text-xs text-muted-foreground">{workloadInjection.capability}</span>
-                  <span className="text-muted-foreground">{t("secrets.sync.injectionCoverage")}</span>
-                </div>
-                <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
-                  <div className="grid gap-2">
-                    <Eyebrow>{t("secrets.sync.injectionCRD")}</Eyebrow>
-                    <span className="rounded-control border border-border px-2 py-1 font-mono text-xs">
-                      {workloadInjection.crd.kind} - {workloadInjection.crd.status}
-                    </span>
-                  </div>
-                  <div className="grid gap-2">
-                    <Eyebrow>{t("secrets.sync.injectionModes")}</Eyebrow>
-                    <div className="flex flex-wrap gap-2">
-                      {workloadInjection.modes.map((mode) => (
-                        <span key={mode.id} className="rounded-control border border-border px-2 py-1 text-xs">
-                          {mode.name}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="grid gap-2">
-                    <Eyebrow>{t("secrets.sync.injectionWorkloads")}</Eyebrow>
-                    <div className="flex flex-wrap gap-2">
-                      {workloadInjection.workload_kinds.map((kind) => (
-                        <span key={kind} className="rounded-control border border-border px-2 py-1 text-xs">
-                          {kind}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <p className="max-w-3xl text-sm text-muted-foreground">{workloadInjection.secret_handling}</p>
-                {workloadInjection.residuals.length > 0 && (
-                  <ul className="grid gap-1 text-xs text-muted-foreground">
-                    {workloadInjection.residuals.slice(0, 2).map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-            {unvaultedPosture && (
-              <div className="ui-panel grid gap-3 p-comfortable text-sm">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-control border border-border px-2 py-1 font-mono text-xs text-muted-foreground">{unvaultedPosture.capability}</span>
-                  <span className="text-muted-foreground">
-                    {t("secrets.sync.unvaultedCoverage", {
-                      findings: unvaultedPosture.summary.leaked_secret_findings,
-                      vaults: unvaultedPosture.summary.vault_providers_visible,
-                      sync: unvaultedPosture.summary.sync_targets_configured,
-                    })}
-                  </span>
-                </div>
-                <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
-                  <div className="grid gap-2">
-                    <Eyebrow>{t("secrets.sync.unvaultedDetection")}</Eyebrow>
-                    <div className="flex flex-wrap gap-2">
-                      {unvaultedPosture.detection_sources.map((source) => (
-                        <span key={source.id} className="rounded-control border border-border px-2 py-1 text-xs">
-                          {source.name}: {source.configured_count}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="grid gap-2">
-                    <Eyebrow>{t("secrets.sync.unvaultedVaults")}</Eyebrow>
-                    <div className="flex flex-wrap gap-2">
-                      {unvaultedPosture.vault_providers
-                        .filter((provider) => provider.discovery_configured)
-                        .map((provider) => (
-                          <span key={provider.id} className="rounded-control border border-border px-2 py-1 text-xs">
-                            {provider.name}
-                          </span>
+                    {cloudManagers.residuals.length > 0 && (
+                      <ul className="grid gap-1 text-xs text-muted-foreground">
+                        {cloudManagers.residuals.slice(0, 2).map((item) => (
+                          <li key={item}>{item}</li>
                         ))}
-                    </div>
+                      </ul>
+                    )}
                   </div>
-                  <div className="grid gap-2">
-                    <Eyebrow>{t("secrets.sync.unvaultedSyncTargets")}</Eyebrow>
-                    <div className="flex flex-wrap gap-2">
-                      {unvaultedPosture.configured_sync_targets.map((target) => (
-                        <span key={target} className="rounded-control border border-border px-2 py-1 font-mono text-xs">
-                          {target}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <p className="max-w-3xl text-sm text-muted-foreground">{unvaultedPosture.secret_handling}</p>
-                {unvaultedPosture.residuals.length > 0 && (
-                  <ul className="grid gap-1 text-xs text-muted-foreground">
-                    {unvaultedPosture.residuals.slice(0, 2).map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
                 )}
+                {syncCatalog && (
+                  <div className="ui-panel grid gap-3 p-comfortable text-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-control border border-border px-2 py-1 font-mono text-xs text-muted-foreground">{syncCatalog.capability}</span>
+                      <span className="text-muted-foreground">{t("secrets.sync.configuredCount", { count: syncCatalog.configured_targets.length })}</span>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="ui-table min-w-[54rem]">
+                        <caption className="sr-only">{t("secrets.sync.catalogCaption")}</caption>
+                        <thead>
+                          <tr>
+                            <th scope="col">{t("secrets.sync.target")}</th>
+                            <th scope="col">{t("secrets.sync.platform")}</th>
+                            <th scope="col">{t("secrets.sync.status")}</th>
+                            <th scope="col">{t("secrets.sync.delivery")}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {syncCatalog.targets.map((target) => (
+                            <tr key={target.id}>
+                              <td>
+                                <span className="font-medium">{target.name}</span>
+                                <span className="block font-mono text-xs text-muted-foreground">{target.id}</span>
+                              </td>
+                              <td>{target.platform}</td>
+                              <td>{target.configured ? t("secrets.sync.configured") : t("secrets.sync.available")}</td>
+                              <td>{target.delivery_mode}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+                {operatorPosture && (
+                  <div className="ui-panel grid gap-3 p-comfortable text-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-control border border-border px-2 py-1 font-mono text-xs text-muted-foreground">
+                        {operatorPosture.capability}
+                      </span>
+                      <span className="text-muted-foreground">{t("secrets.sync.operatorCoverage")}</span>
+                    </div>
+                    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                      <div className="grid gap-2">
+                        <Eyebrow>{t("secrets.sync.operatorCRDs")}</Eyebrow>
+                        <div className="flex flex-wrap gap-2">
+                          {operatorPosture.crds.map((crd) => (
+                            <span key={crd.kind} className="rounded-control border border-border px-2 py-1 font-mono text-xs">
+                              {crd.kind} - {crd.status}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="grid gap-2">
+                        <Eyebrow>{t("secrets.sync.operatorReloadWorkloads")}</Eyebrow>
+                        <div className="flex flex-wrap gap-2">
+                          {operatorPosture.reload_workloads.map((kind) => (
+                            <span key={kind} className="rounded-control border border-border px-2 py-1 text-xs">
+                              {kind}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <p className="max-w-3xl text-sm text-muted-foreground">{operatorPosture.secret_handling}</p>
+                    {operatorPosture.residuals.length > 0 && (
+                      <ul className="grid gap-1 text-xs text-muted-foreground">
+                        {operatorPosture.residuals.slice(0, 2).map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+                {workloadInjection && (
+                  <div className="ui-panel grid gap-3 p-comfortable text-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-control border border-border px-2 py-1 font-mono text-xs text-muted-foreground">
+                        {workloadInjection.capability}
+                      </span>
+                      <span className="text-muted-foreground">{t("secrets.sync.injectionCoverage")}</span>
+                    </div>
+                    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
+                      <div className="grid gap-2">
+                        <Eyebrow>{t("secrets.sync.injectionCRD")}</Eyebrow>
+                        <span className="rounded-control border border-border px-2 py-1 font-mono text-xs">
+                          {workloadInjection.crd.kind} - {workloadInjection.crd.status}
+                        </span>
+                      </div>
+                      <div className="grid gap-2">
+                        <Eyebrow>{t("secrets.sync.injectionModes")}</Eyebrow>
+                        <div className="flex flex-wrap gap-2">
+                          {workloadInjection.modes.map((mode) => (
+                            <span key={mode.id} className="rounded-control border border-border px-2 py-1 text-xs">
+                              {mode.name}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="grid gap-2">
+                        <Eyebrow>{t("secrets.sync.injectionWorkloads")}</Eyebrow>
+                        <div className="flex flex-wrap gap-2">
+                          {workloadInjection.workload_kinds.map((kind) => (
+                            <span key={kind} className="rounded-control border border-border px-2 py-1 text-xs">
+                              {kind}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <p className="max-w-3xl text-sm text-muted-foreground">{workloadInjection.secret_handling}</p>
+                    {workloadInjection.residuals.length > 0 && (
+                      <ul className="grid gap-1 text-xs text-muted-foreground">
+                        {workloadInjection.residuals.slice(0, 2).map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+                {unvaultedPosture && (
+                  <div className="ui-panel grid gap-3 p-comfortable text-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-control border border-border px-2 py-1 font-mono text-xs text-muted-foreground">
+                        {unvaultedPosture.capability}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {t("secrets.sync.unvaultedCoverage", {
+                          findings: unvaultedPosture.summary.leaked_secret_findings,
+                          vaults: unvaultedPosture.summary.vault_providers_visible,
+                          sync: unvaultedPosture.summary.sync_targets_configured,
+                        })}
+                      </span>
+                    </div>
+                    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
+                      <div className="grid gap-2">
+                        <Eyebrow>{t("secrets.sync.unvaultedDetection")}</Eyebrow>
+                        <div className="flex flex-wrap gap-2">
+                          {unvaultedPosture.detection_sources.map((source) => (
+                            <span key={source.id} className="rounded-control border border-border px-2 py-1 text-xs">
+                              {source.name}: {source.configured_count}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="grid gap-2">
+                        <Eyebrow>{t("secrets.sync.unvaultedVaults")}</Eyebrow>
+                        <div className="flex flex-wrap gap-2">
+                          {unvaultedPosture.vault_providers
+                            .filter((provider) => provider.discovery_configured)
+                            .map((provider) => (
+                              <span key={provider.id} className="rounded-control border border-border px-2 py-1 text-xs">
+                                {provider.name}
+                              </span>
+                            ))}
+                        </div>
+                      </div>
+                      <div className="grid gap-2">
+                        <Eyebrow>{t("secrets.sync.unvaultedSyncTargets")}</Eyebrow>
+                        <div className="flex flex-wrap gap-2">
+                          {unvaultedPosture.configured_sync_targets.map((target) => (
+                            <span key={target} className="rounded-control border border-border px-2 py-1 font-mono text-xs">
+                              {target}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <p className="max-w-3xl text-sm text-muted-foreground">{unvaultedPosture.secret_handling}</p>
+                    {unvaultedPosture.residuals.length > 0 && (
+                      <ul className="grid gap-1 text-xs text-muted-foreground">
+                        {unvaultedPosture.residuals.slice(0, 2).map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+                <SecretSyncWorkloadIdentityPanel />
               </div>
+            </details>
+            {syncCatalog && configuredSyncTargets.length === 0 ? (
+              <UnavailableState title={t("secrets.sync.noDestinationTitle")}>{t("secrets.sync.noDestinationBody")}</UnavailableState>
+            ) : (
+              <form
+                aria-label={translateNow("source.sync.stored.secret.b83b2d0767")}
+                onSubmit={(event) => void submitSecretSync(event)}
+                className="-order-1 grid gap-3 xl:grid-cols-[minmax(0,1fr)_14rem_minmax(0,1fr)_auto]"
+              >
+                <label className="grid gap-1 text-sm">
+                  <span className="font-medium">{translateNow("source.secret.name.5cdf573b89")}</span>
+                  <input
+                    className="rounded-md border border-border bg-background px-3 py-2"
+                    value={syncName}
+                    onChange={(event) => setSyncName(event.target.value)}
+                    placeholder={selectedMeta?.name ?? translateNow("source.app.db.password.917cb98f9d")}
+                    required
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="font-medium">{translateNow("source.target.978354db0c")}</span>
+                  <input
+                    className="rounded-md border border-border bg-background px-3 py-2"
+                    list="secret-sync-target-options"
+                    value={syncTarget}
+                    onChange={(event) => setSyncTarget(event.target.value)}
+                    placeholder={translateNow("source.kubernetes.prod.16a7f7e17a")}
+                    required
+                  />
+                </label>
+                <datalist id="secret-sync-target-options">
+                  {configuredSyncTargets.map((target) => (
+                    <option key={target.id} value={target.id} label={target.name} />
+                  ))}
+                </datalist>
+                <label className="grid gap-1 text-sm">
+                  <span className="font-medium">{translateNow("source.remote.key.b698762058")}</span>
+                  <input
+                    className="rounded-md border border-border bg-background px-3 py-2"
+                    value={syncRemoteKey}
+                    onChange={(event) => setSyncRemoteKey(event.target.value)}
+                    placeholder={translateNow("source.secret.payments.db.password.cf46ca15a9")}
+                  />
+                </label>
+                <Button type="submit" className="self-end" disabled={syncBusy || Boolean(loadError)}>
+                  {syncBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Share2 className="h-4 w-4" aria-hidden="true" />}
+                  {translateNow("source.sync.secret.4d3ab1c075")}
+                </Button>
+              </form>
             )}
-            <SecretSyncWorkloadIdentityPanel />
-            <form
-              aria-label={translateNow("source.sync.stored.secret.b83b2d0767")}
-              onSubmit={(event) => void submitSecretSync(event)}
-              className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_14rem_minmax(0,1fr)_auto]"
-            >
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium">{translateNow("source.secret.name.5cdf573b89")}</span>
-                <input
-                  className="rounded-md border border-border bg-background px-3 py-2"
-                  value={syncName}
-                  onChange={(event) => setSyncName(event.target.value)}
-                  placeholder={selectedMeta?.name ?? translateNow("source.app.db.password.917cb98f9d")}
-                  required
-                />
-              </label>
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium">{translateNow("source.target.978354db0c")}</span>
-                <input
-                  className="rounded-md border border-border bg-background px-3 py-2"
-                  list="secret-sync-target-options"
-                  value={syncTarget}
-                  onChange={(event) => setSyncTarget(event.target.value)}
-                  placeholder={translateNow("source.kubernetes.prod.16a7f7e17a")}
-                  required
-                />
-              </label>
-              <datalist id="secret-sync-target-options">
-                {configuredSyncTargets.map((target) => (
-                  <option key={target.id} value={target.id} label={target.name} />
-                ))}
-              </datalist>
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium">{translateNow("source.remote.key.b698762058")}</span>
-                <input
-                  className="rounded-md border border-border bg-background px-3 py-2"
-                  value={syncRemoteKey}
-                  onChange={(event) => setSyncRemoteKey(event.target.value)}
-                  placeholder={translateNow("source.secret.payments.db.password.cf46ca15a9")}
-                />
-              </label>
-              <Button type="submit" className="self-end" disabled={syncBusy || Boolean(loadError)}>
-                {syncBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Share2 className="h-4 w-4" aria-hidden="true" />}
-                {translateNow("source.sync.secret.4d3ab1c075")}
-              </Button>
-            </form>
             {syncError && <ErrorState title={translateNow("source.secret.sync.failed.b901ae57d8")}>{syncError}</ErrorState>}
             {syncResult && (
               <dl className="ui-panel grid gap-3 p-comfortable text-sm md:grid-cols-2 xl:grid-cols-5">

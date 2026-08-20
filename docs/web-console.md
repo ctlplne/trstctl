@@ -206,13 +206,14 @@ store, a reference resolver that expands `${secret.path}` chains, an environment
 diff, a version-history selector, and an explicit disabled bulk-import disclosure
 (the server route returns `501` until atomic event-sourced batch commands exist). See
 [Secrets](features/secrets.md). Backed by `/api/v1/secrets/store` and
-`/api/v1/secrets/store/{name}`. **Secret engines** (`/secrets/engines`) holds
+`/api/v1/secrets/store/{name}`. **Automatic secret sources** (`/secrets/engines`) holds
 dynamic leases, CSR-first PKI-as-a-secrets-engine (the default; certificate-only),
 an explicit deprecated key-returning mode linked to its Audit receipts, and the transit console for
 encrypt/decrypt/HMAC against a managed key (`/api/v1/transit/*`).
-**One-time shares** (`/secrets/sharing`) covers reveal-once shares and ephemeral
-API keys, and **CI scanning** (`/secrets/scanning`) the pipeline secret-detection
-bridge; **Sync targets** (`/secrets/sync`) shows outbound synchronization posture.
+**One-time secret links** (`/secrets/sharing`) covers self-destructing shares and
+separate ephemeral API keys. **Find leaked secrets in code** (`/secrets/scanning`)
+covers repository and pipeline checks; **Send secrets to systems** (`/secrets/sync`)
+shows configured destinations and refuses a delivery when none is configured.
 The store's scheduled-rotation panel renders one tick's exact run and deferred-row
 receipt. Deferred rows use only the served `approval_pending`,
 `command_in_flight`, and `command_claimed` states, including schedule ID, due time,
@@ -466,12 +467,12 @@ grounded and sufficient. Backed by `/api/v1/ai/status`, `/api/v1/mcp/tools`, `/a
 | `/protocols` | Protocols |
 | `/ssh` | SSH trust |
 | `/codesign` | Code signing |
-| `/secrets` | Secrets (store) |
-| `/secrets/engines` | Secret engines |
+| `/secrets` | Secret store |
+| `/secrets/engines` | Automatic secret sources |
 | `/secrets/access` | Machine access |
-| `/secrets/sharing` | One-time shares |
-| `/secrets/scanning` | CI scanning |
-| `/secrets/sync` | Sync targets |
+| `/secrets/sharing` | One-time secret links |
+| `/secrets/scanning` | Find leaked secrets in code |
+| `/secrets/sync` | Send secrets to systems |
 | `/agents` | Agents |
 | `/workloads` | Workloads |
 | `/discovery` | Discovery |

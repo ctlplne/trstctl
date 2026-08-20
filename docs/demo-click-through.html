@@ -581,14 +581,14 @@
         <div class="tour-body">
           <ol>
             <li>In the space rail select <strong>Secrets</strong> — it lands on the store. Each workspace is its own sidebar row now (S-C2), not an in-page tab.</li>
-            <li>On <strong>Secrets</strong> (the store), expand the demo folders. Notice familiar path-like organization such as <code>demo/github/actions</code>.</li>
+            <li>On <strong>Secret store</strong>, use <strong>Add secret</strong> for the direct path. Expand <strong>Browse folders and references</strong> only when you need path-like organization such as <code>demo/github/actions</code>.</li>
             <li>Click <strong>Machine access</strong>: the machine-auth console. Grant a workload a scoped credential (reveal-once, then a list+revoke ledger), review the configured auth methods with their per-tenant disable overlay, and read the event-sourced issued-session ledger. Read-only during the tour.</li>
-            <li>Click <strong>One-time shares</strong>. Shares (and reveal-once ephemeral API keys) expose material once and then expire.</li>
-            <li>Click <strong>Secret engines</strong> for dynamic credentials, PKI, and transit-style cryptographic operations.</li>
-            <li>Click <strong>CI scanning</strong> for secret detection in delivery pipelines.</li>
-            <li>Click <strong>Sync targets</strong> to see outbound synchronization targets.</li>
+            <li>Click <strong>One-time secret links</strong>. A link exposes its value once and then self-destructs; ephemeral API keys are separate short-lived machine credentials.</li>
+            <li>Click <strong>Automatic secret sources</strong> for dynamic credentials, PKI, and transit-style cryptographic operations.</li>
+            <li>Click <strong>Find leaked secrets in code</strong> for repository and delivery-pipeline checks. Exact provider evidence stays collapsed until requested.</li>
+            <li>Click <strong>Send secrets to systems</strong> to see outbound destinations. With no destination configured, the console says so and refuses to pretend a delivery can be queued.</li>
           </ol>
-          <div class="expected"><strong>Expected:</strong> Stored secret metadata, with sidebar rows for machine access, one-time shares, secret engines, CI scanning, and sync targets.</div>
+          <div class="expected"><strong>Expected:</strong> One plain-language question and one primary action per route: secret store, machine access, one-time secret links, automatic secret sources, leaked-secret checks, and destination delivery.</div>
           <div class="meaning"><strong>Capability:</strong> Encrypted secret storage, reveal-once credentials, dynamic backends, and outbound sync—all behind the same tenant and audit boundary.</div>
         </div>
       </article>
