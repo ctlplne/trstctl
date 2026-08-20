@@ -982,6 +982,26 @@ export const messages = {
     defaultMessage: "Sent once over this request, then cleared from the form. It never appears in the metadata table.",
     description: "Secret creation value-handling help.",
   },
+  "secrets.store.chooseOwner": {
+    defaultMessage: "Choose an owner",
+    description: "Placeholder for the owner of a newly stored secret.",
+  },
+  "secrets.store.ownerHelp": {
+    defaultMessage: "The responsible service, workload, person, or team. Its environment is shown beside the secret.",
+    description: "ELI5 explanation of secret ownership metadata.",
+  },
+  "secrets.store.ownerOption": {
+    defaultMessage: "{name} · {environment}",
+    description: "Owner picker option with the owner name and its environment.",
+  },
+  "secrets.store.noOwnersHelp": {
+    defaultMessage: "No owner records are available. This secret will be marked Unassigned so the ownership gap stays visible.",
+    description: "Honest fallback when a tenant has no owner record available.",
+  },
+  "secrets.store.unassignedOwner": {
+    defaultMessage: "Unassigned",
+    description: "Visible state for a secret whose historical create event did not name an owner.",
+  },
   "secrets.store.lifecycleSummary": {
     defaultMessage: "Rotate, schedule, or delete",
     description: "Collapsed secret lifecycle controls summary.",

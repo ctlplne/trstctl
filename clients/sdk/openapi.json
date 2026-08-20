@@ -21983,6 +21983,25 @@
         ],
         "type": "object"
       },
+      "SecretCreateRequest": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "value"
+        ],
+        "type": "object"
+      },
       "SecretImportRequest": {
         "properties": {
           "prefix": {
@@ -22004,6 +22023,10 @@
             "type": "string"
           },
           "name": {
+            "type": "string"
+          },
+          "owner_id": {
+            "format": "uuid",
             "type": "string"
           },
           "updated_at": {
@@ -22286,17 +22309,13 @@
         ],
         "type": "object"
       },
-      "SecretRequest": {
+      "SecretRotateRequest": {
         "properties": {
-          "name": {
-            "type": "string"
-          },
           "value": {
             "type": "string"
           }
         },
         "required": [
-          "name",
           "value"
         ],
         "type": "object"
@@ -45656,7 +45675,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SecretRequest"
+                "$ref": "#/components/schemas/SecretCreateRequest"
               }
             }
           },
@@ -46148,7 +46167,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SecretRequest"
+                "$ref": "#/components/schemas/SecretRotateRequest"
               }
             }
           },

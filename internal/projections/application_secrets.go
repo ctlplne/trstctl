@@ -42,6 +42,7 @@ type ApplicationSecretMutation struct {
 	TenantEpoch          string                      `json:"tenant_epoch,omitempty"`
 	Action               string                      `json:"action"`
 	Name                 string                      `json:"name"`
+	OwnerID              string                      `json:"owner_id,omitempty"`
 	ExpectedVersion      int                         `json:"expected_version"`
 	ResultVersion        int                         `json:"result_version"`
 	Sealed               []byte                      `json:"sealed,omitempty"`
@@ -117,6 +118,7 @@ func ApplicationSecretMutationSemanticDigest(event events.Event, payload Applica
 		TenantEpoch   string                             `json:"tenant_epoch,omitempty"`
 		Action        string                             `json:"action"`
 		Name          string                             `json:"name"`
+		OwnerID       string                             `json:"owner_id,omitempty"`
 		Expected      int                                `json:"expected_version"`
 		Result        int                                `json:"result_version"`
 		Sealed        []byte                             `json:"sealed,omitempty"`
@@ -132,7 +134,7 @@ func ApplicationSecretMutationSemanticDigest(event events.Event, payload Applica
 		Domain:  "trstctl.application-secret-mutation-receipt.v1",
 		EventID: event.ID, EventType: event.Type, TenantID: event.TenantID,
 		EventTime: event.Time.UTC(), SchemaVersion: schemaVersionOf(event), TenantEpoch: payload.TenantEpoch,
-		Action: payload.Action, Name: payload.Name, Expected: payload.ExpectedVersion,
+		Action: payload.Action, Name: payload.Name, OwnerID: payload.OwnerID, Expected: payload.ExpectedVersion,
 		Result: payload.ResultVersion, Sealed: payload.Sealed,
 		SourceVersion: payload.SourceVersion, SourceTime: payload.SourceWrittenAt.UTC(),
 		KeyDigest: payload.IdempotencyKeyDigest, Binding: payload.RequestBinding,
@@ -321,7 +323,7 @@ func (p *Projector) applyApplicationSecretTx(ctx context.Context, tx pgx.Tx, eve
 		TenantID: event.TenantID, TenantEpoch: payload.TenantEpoch,
 		EventID: event.ID, SemanticDigest: digest,
 		RequestBinding: payload.RequestBinding, Action: payload.Action,
-		Name: payload.Name, ExpectedVersion: payload.ExpectedVersion,
+		Name: payload.Name, OwnerID: payload.OwnerID, ExpectedVersion: payload.ExpectedVersion,
 		ResultVersion: payload.ResultVersion, Sealed: payload.Sealed,
 		SourceVersion: payload.SourceVersion, SourceWrittenAt: payload.SourceWrittenAt,
 		OccurredAt: event.Time, ApprovalFrom: from, ApprovalTo: to, Approval: payload.Approval,

@@ -31,6 +31,7 @@ import {
   type MachineAuthMethod,
   type MachineLoginResponse,
   type MachineSession as MachineSessionRecord,
+  type Owner,
   type PKISecret,
   type SecretApprovalAction,
   type SecretMeta,
@@ -170,6 +171,8 @@ export function Secrets() {
 
   const [createName, setCreateName] = useState("");
   const [createValue, setCreateValue] = useState("");
+  const [createOwnerID, setCreateOwnerID] = useState("");
+  const [owners, setOwners] = useState<Owner[]>([]);
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -364,7 +367,8 @@ export function Secrets() {
           : Promise.resolve<SecretWorkloadInjection | null>(null);
       const unvaultedPosturePromise =
         typeof api.unvaultedSecrets === "function" ? api.unvaultedSecrets().catch(() => null) : Promise.resolve<UnvaultedSecretPosture | null>(null);
-      const [page, posture, thirdParty, catalog, cloudManagerPosture, operator, injection, unvaulted] = await Promise.all([
+      const ownersPromise = typeof api.owners === "function" ? api.owners().catch(() => null) : Promise.resolve<Owner[] | null>(null);
+      const [page, posture, thirdParty, catalog, cloudManagerPosture, operator, injection, unvaulted, ownerRows] = await Promise.all([
         api.secretPage({ limit: 20, cursor }),
         posturePromise,
         thirdPartyPosturePromise,
@@ -373,6 +377,7 @@ export function Secrets() {
         operatorPosturePromise,
         workloadInjectionPromise,
         unvaultedPosturePromise,
+        ownersPromise,
       ]);
       setItems((current) => (cursor ? mergeMeta(current, page.items) : page.items));
       setNextCursor(page.next_cursor);
@@ -394,6 +399,10 @@ export function Secrets() {
       }
       if (unvaulted) {
         setUnvaultedPosture(unvaulted);
+      }
+      if (ownerRows) {
+        const orderedOwners = [...ownerRows].sort((left, right) => left.name.localeCompare(right.name));
+        setOwners(orderedOwners);
       }
     } catch (err) {
       setLoadError(apiProblemMessage(err, "Secrets API unavailable or disabled"));
@@ -417,19 +426,41 @@ export function Secrets() {
   }, []);
 
   const selectedMeta = useMemo(() => items.find((item) => item.name === accessName) ?? items[0] ?? null, [items, accessName]);
+  const ownerByID = useMemo(() => new Map(owners.map((owner) => [owner.id, owner])), [owners]);
   const filteredItems = useMemo(() => {
     const needle = secretSearch.trim().toLowerCase();
     if (!needle) return items;
     return items.filter((item) =>
-      [item.name, String(item.version ?? ""), item.created_at ?? "", item.updated_at ?? "", "native store"].join(" ").toLowerCase().includes(needle),
+      [
+        item.name,
+        ownerByID.get(item.owner_id ?? "")?.name ?? "unassigned",
+        ownerByID.get(item.owner_id ?? "")?.environment ?? "",
+        String(item.version ?? ""),
+        item.created_at ?? "",
+        item.updated_at ?? "",
+        "native store",
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(needle),
     );
-  }, [items, secretSearch]);
+  }, [items, ownerByID, secretSearch]);
   const detailSecret = useMemo(() => items.find((item) => item.name === detailSecretName) ?? null, [detailSecretName, items]);
   const configuredSyncTargets = useMemo(() => syncCatalog?.targets.filter((target) => target.configured) ?? [], [syncCatalog]);
 
   const secretColumns = useMemo<Array<DataGridColumn<SecretMeta>>>(
     () => [
       { id: "name", header: "Name", sortable: true, cell: (item) => <span className="font-medium">{item.name}</span> },
+      {
+        id: "owner",
+        header: translateNow("source.owner.4b1b8aa360"),
+        cell: (item) => ownerByID.get(item.owner_id ?? "")?.name ?? t("secrets.store.unassignedOwner"),
+      },
+      {
+        id: "environment",
+        header: t("owners.readiness.environment"),
+        cell: (item) => ownerByID.get(item.owner_id ?? "")?.environment || "—",
+      },
       { id: "engine", header: "Engine", cell: () => "native store" },
       { id: "version", header: "Version", cell: (item) => <span className="font-mono text-xs">v{item.version}</span> },
       { id: "updated", header: "Updated", cell: (item) => formatDate(item.updated_at) },
@@ -455,7 +486,7 @@ export function Secrets() {
         ),
       },
     ],
-    [revealBusy, t],
+    [ownerByID, revealBusy, t],
   );
 
   const scheduleColumns = useMemo<Array<DataGridColumn<SecretRotationSchedule>>>(
@@ -562,7 +593,7 @@ export function Secrets() {
         if (rotateName !== item.name || rotateValue.trim() === "") {
           throw new Error(t("secrets.approvals.rotateRetryNeedsForm", { name: item.name }));
         }
-        const meta = await api.rotateSecret(item.name, { name: item.name, value: rotateValue });
+        const meta = await api.rotateSecret(item.name, { value: rotateValue });
         setItems((current) => mergeMeta(current, [meta]));
         setRotateName("");
         setRotateValue("");
@@ -600,10 +631,11 @@ export function Secrets() {
     setNotice(null);
     setCreateBusy(true);
     try {
-      const meta = await api.createSecret({ name: createName, value: createValue });
+      const meta = await api.createSecret({ name: createName, owner_id: createOwnerID || undefined, value: createValue });
       setItems((current) => mergeMeta(current, [meta]));
       setCreateName("");
       setCreateValue("");
+      setCreateOwnerID("");
       setNotice(`Secret ${meta.name} stored as version ${meta.version}. The value was sealed and is not shown after submit.`);
     } catch (err) {
       setCreateError(apiProblemMessage(err, "Could not create secret"));
@@ -632,7 +664,7 @@ export function Secrets() {
     setRotateBusy(true);
     const pendingName = rotateName;
     try {
-      const meta = await api.rotateSecret(pendingName, { name: pendingName, value: rotateValue });
+      const meta = await api.rotateSecret(pendingName, { value: rotateValue });
       setItems((current) => mergeMeta(current, [meta]));
       setRotateName("");
       setRotateValue("");
@@ -1373,7 +1405,7 @@ export function Secrets() {
             <form
               aria-label={translateNow("source.create.secret.b72a982613")}
               onSubmit={(event) => void submitCreate(event)}
-              className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
+              className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"
             >
               <label className="grid gap-1 text-sm">
                 <span className="font-medium">{translateNow("source.secret.name.5cdf573b89")}</span>
@@ -1386,6 +1418,28 @@ export function Secrets() {
                   required
                 />
               </label>
+              <div className="grid gap-1 text-sm">
+                <label className="font-medium" htmlFor="secret-create-owner">
+                  {translateNow("source.owner.4b1b8aa360")}
+                </label>
+                <Select
+                  id="secret-create-owner"
+                  aria-describedby="secret-create-owner-help"
+                  value={createOwnerID}
+                  onChange={(event) => setCreateOwnerID(event.target.value)}
+                  required={owners.length > 0}
+                >
+                  <option value="">{owners.length > 0 ? t("secrets.store.chooseOwner") : t("secrets.store.unassignedOwner")}</option>
+                  {owners.map((owner) => (
+                    <option key={owner.id} value={owner.id}>
+                      {owner.environment ? t("secrets.store.ownerOption", { name: owner.name, environment: owner.environment }) : owner.name}
+                    </option>
+                  ))}
+                </Select>
+                <span id="secret-create-owner-help" className="text-xs text-muted-foreground">
+                  {owners.length > 0 ? t("secrets.store.ownerHelp") : t("secrets.store.noOwnersHelp")}
+                </span>
+              </div>
               <label className="grid gap-1 text-sm">
                 <span className="font-medium">{translateNow("source.secret.value.6ef47d9880")}</span>
                 <input
@@ -1402,7 +1456,7 @@ export function Secrets() {
                   {t("secrets.store.valueHelp")}
                 </span>
               </label>
-              <Button type="submit" className="self-end" disabled={createBusy || Boolean(loadError)}>
+              <Button type="submit" className="self-end" disabled={createBusy || Boolean(loadError) || (owners.length > 0 && !createOwnerID)}>
                 {createBusy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
                 {translateNow("source.create.secret.b72a982613")}
               </Button>
@@ -1471,6 +1525,14 @@ export function Secrets() {
                   <div>
                     <dt className="font-medium text-muted-foreground">{translateNow("source.version.dd167905de")}</dt>
                     <dd className="font-mono text-xs">v{detailSecret.version}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.owner.4b1b8aa360")}</dt>
+                    <dd>{ownerByID.get(detailSecret.owner_id ?? "")?.name ?? t("secrets.store.unassignedOwner")}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{t("owners.readiness.environment")}</dt>
+                    <dd>{ownerByID.get(detailSecret.owner_id ?? "")?.environment || "—"}</dd>
                   </div>
                   <div>
                     <dt className="font-medium text-muted-foreground">{translateNow("source.updated.3a5ecca188")}</dt>
@@ -1779,145 +1841,7 @@ export function Secrets() {
       )}
 
       {tab === "access" && (
-        <div className="order-1 grid gap-6">
-          <section aria-labelledby="developer-heading" className="grid gap-4 border-y border-border py-4">
-            <div>
-              <h2 id="developer-heading" className="text-title font-semibold">
-                {translateNow("source.developer.access.e62e23a3a2")}
-              </h2>
-              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.sdk.and.cli.examples.contain.only.names.te.f056ba97a8")}</p>
-            </div>
-            <div className="grid gap-3 lg:grid-cols-2">
-              <Snippet
-                title={translateNow("source.cli.injector.1f36b02aea")}
-                text={`trstctl secrets get ${selectedMeta?.name ?? "app/db/password"} --tenant current --format env --exec ./service`}
-              />
-              <Snippet
-                title={translateNow("source.typescript.sdk.40e0532135")}
-                text={`const secret = await client.secrets.get("${selectedMeta?.name ?? "app/db/password"}");\nprocess.env.DB_PASSWORD = secret.value; // keep in process memory only`}
-              />
-            </div>
-            <form
-              aria-label={translateNow("source.secret.access.test.e467205dc5")}
-              onSubmit={(event) => void runAccessTest(event)}
-              className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]"
-            >
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium">{translateNow("source.secret.name.5cdf573b89")}</span>
-                <input
-                  className="rounded-md border border-border bg-background px-3 py-2"
-                  value={accessName}
-                  onChange={(event) => setAccessName(event.target.value)}
-                  placeholder={translateNow("source.app.db.password.917cb98f9d")}
-                  required
-                />
-              </label>
-              <Button type="submit" className="self-end" variant="outline" disabled={accessBusy || Boolean(loadError)}>
-                {accessBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
-                {translateNow("source.run.access.test.0a1ca1e976")}
-              </Button>
-            </form>
-            {accessError && <ErrorState title={translateNow("source.access.test.failed.e280577658")}>{accessError}</ErrorState>}
-            {accessResult && (
-              <p role="status" className="rounded-control border border-status-success/30 bg-status-success/10 px-3 py-2 text-sm text-status-success">
-                {translateNow("source.access.test.passed.for.e4a15ad68a")} {accessResult.name}; version{" "}
-                {accessResult.version ?? translateNow("source.latest.5e1e2bcac3")}{" "}
-                {translateNow("source.was.reachable.and.the.value.was.not.render.830c77edbc")}
-              </p>
-            )}
-          </section>
-        </div>
-      )}
-
-      {tab === "engines" && (
-        <div className="order-1 grid gap-6">
-          <section aria-labelledby="pki-heading" className="grid gap-4 border-y border-border py-4">
-            <div>
-              <h2 id="pki-heading" className="text-title font-semibold">
-                {translateNow("source.pki.as.a.secret.e349ae9d0f")}
-              </h2>
-              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.issue.a.short.lived.certificate.bundle.and.68b22cee4d")}</p>
-            </div>
-            <form
-              aria-label={translateNow("source.issue.pki.secret.692ee4b6e2")}
-              onSubmit={(event) => void submitPKI(event)}
-              className="grid gap-3 md:grid-cols-2"
-            >
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium">{t("secrets.pki.custodyLabel")}</span>
-                <Select
-                  className="rounded-md border border-border bg-background px-3 py-2"
-                  value={pkiMode}
-                  onChange={(event) => setPkiMode(event.target.value as "csr" | "legacy")}
-                >
-                  <option value="csr">{t("secrets.pki.csrMode")}</option>
-                  <option value="legacy">{t("secrets.pki.legacyMode")}</option>
-                </Select>
-              </label>
-              {pkiMode === "csr" ? (
-                <label className="grid gap-1 text-sm md:col-span-2">
-                  <span className="font-medium">{t("request.csr.label")}</span>
-                  <Textarea
-                    className="min-h-36 rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-                    aria-label={t("request.csr.label")}
-                    value={pkiCSR}
-                    onChange={(event) => setPkiCSR(event.target.value)}
-                    placeholder={t("secrets.pki.csrPlaceholder")}
-                    required
-                  />
-                  <span className="text-xs text-muted-foreground">{t("secrets.pki.csrHelp")}</span>
-                </label>
-              ) : (
-                <label className="grid gap-1 text-sm">
-                  <span className="font-medium">{translateNow("source.common.name.2d129020eb")}</span>
-                  <input
-                    className="rounded-md border border-border bg-background px-3 py-2"
-                    value={pkiName}
-                    onChange={(event) => setPkiName(event.target.value)}
-                    placeholder={translateNow("source.svc.internal.e50a91019d")}
-                    required
-                  />
-                </label>
-              )}
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium">{translateNow("source.ttl.seconds.862d08de5a")}</span>
-                <input
-                  className="rounded-md border border-border bg-background px-3 py-2"
-                  type="number"
-                  min="60"
-                  value={pkiTTL}
-                  onChange={(event) => setPkiTTL(event.target.value)}
-                />
-              </label>
-              <Button type="submit" className="self-end md:justify-self-start" disabled={pkiBusy || Boolean(loadError)}>
-                {pkiBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
-                {translateNow("source.issue.pki.secret.692ee4b6e2")}
-              </Button>
-              {pkiMode === "legacy" && (
-                <p className="text-xs text-status-warning md:col-span-2">
-                  {t("secrets.pki.legacyWarning")}{" "}
-                  <Link className="underline" to="/audit?type=issuance.server_side_keygen">
-                    {t("secrets.pki.auditLink")}
-                  </Link>
-                </p>
-              )}
-            </form>
-            {pkiError && <ErrorState title={translateNow("source.pki.issue.failed.cb50a25278")}>{pkiError}</ErrorState>}
-            {pkiBundle && (
-              <RevealPanel
-                title={translateNow("source.pki.bundle.value1.18184942ea", { value1: pkiBundle.serial })}
-                onDismiss={() => setPkiBundle(null)}
-                value={pkiBundle.private_key ? `${pkiBundle.certificate}\n${pkiBundle.private_key}` : pkiBundle.certificate}
-              >
-                {pkiBundle.private_key ? t("secrets.pki.legacyResult") : t("secrets.pki.csrResult")}
-              </RevealPanel>
-            )}
-          </section>
-        </div>
-      )}
-
-      {tab === "access" && (
-        <div className="-order-1 grid gap-6">
+        <div className="grid gap-6">
           {/* C-S1 (DA-02 interim): Job 2's grant step, in-console, over the
               existing idempotent /access/api-tokens and /ephemeral/api-keys
               mutations. Create (Store tab) → grant (here) → verify the
@@ -2226,6 +2150,57 @@ export function Secrets() {
                   </tbody>
                 </table>
               </div>
+            )}
+          </section>
+        </div>
+      )}
+
+      {tab === "access" && (
+        <div className="grid gap-6">
+          <section aria-labelledby="developer-heading" className="grid gap-4 border-y border-border py-4">
+            <div>
+              <h2 id="developer-heading" className="text-title font-semibold">
+                {translateNow("source.developer.access.e62e23a3a2")}
+              </h2>
+              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.sdk.and.cli.examples.contain.only.names.te.f056ba97a8")}</p>
+            </div>
+            <div className="grid gap-3 lg:grid-cols-2">
+              <Snippet
+                title={translateNow("source.cli.injector.1f36b02aea")}
+                text={`trstctl secrets get ${selectedMeta?.name ?? "app/db/password"} --tenant current --format env --exec ./service`}
+              />
+              <Snippet
+                title={translateNow("source.typescript.sdk.40e0532135")}
+                text={`const secret = await client.secrets.get("${selectedMeta?.name ?? "app/db/password"}");\nprocess.env.DB_PASSWORD = secret.value; // keep in process memory only`}
+              />
+            </div>
+            <form
+              aria-label={translateNow("source.secret.access.test.e467205dc5")}
+              onSubmit={(event) => void runAccessTest(event)}
+              className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]"
+            >
+              <label className="grid gap-1 text-sm">
+                <span className="font-medium">{translateNow("source.secret.name.5cdf573b89")}</span>
+                <input
+                  className="rounded-md border border-border bg-background px-3 py-2"
+                  value={accessName}
+                  onChange={(event) => setAccessName(event.target.value)}
+                  placeholder={translateNow("source.app.db.password.917cb98f9d")}
+                  required
+                />
+              </label>
+              <Button type="submit" className="self-end" variant="outline" disabled={accessBusy || Boolean(loadError)}>
+                {accessBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
+                {translateNow("source.run.access.test.0a1ca1e976")}
+              </Button>
+            </form>
+            {accessError && <ErrorState title={translateNow("source.access.test.failed.e280577658")}>{accessError}</ErrorState>}
+            {accessResult && (
+              <p role="status" className="rounded-control border border-status-success/30 bg-status-success/10 px-3 py-2 text-sm text-status-success">
+                {translateNow("source.access.test.passed.for.e4a15ad68a")} {accessResult.name}; version{" "}
+                {accessResult.version ?? translateNow("source.latest.5e1e2bcac3")}{" "}
+                {translateNow("source.was.reachable.and.the.value.was.not.render.830c77edbc")}
+              </p>
             )}
           </section>
         </div>
@@ -2686,7 +2661,7 @@ export function Secrets() {
       )}
 
       {tab === "engines" && (
-        <div className="-order-1 grid gap-6">
+        <div className="grid gap-6">
           <section aria-labelledby="dynamic-secrets-heading" className="grid gap-4 border-y border-border py-4">
             <div>
               <h2 id="dynamic-secrets-heading" className="text-title font-semibold">
@@ -2961,6 +2936,89 @@ export function Secrets() {
                 value={transitPlaintextResult}
               >
                 {translateNow("source.this.plaintext.was.decoded.locally.from.th.fbd3275222")}
+              </RevealPanel>
+            )}
+          </section>
+
+          <section aria-labelledby="pki-heading" className="grid gap-4 border-y border-border py-4">
+            <div>
+              <h2 id="pki-heading" className="text-title font-semibold">
+                {translateNow("source.pki.as.a.secret.e349ae9d0f")}
+              </h2>
+              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.issue.a.short.lived.certificate.bundle.and.68b22cee4d")}</p>
+            </div>
+            <form
+              aria-label={translateNow("source.issue.pki.secret.692ee4b6e2")}
+              onSubmit={(event) => void submitPKI(event)}
+              className="grid gap-3 md:grid-cols-2"
+            >
+              <label className="grid gap-1 text-sm">
+                <span className="font-medium">{t("secrets.pki.custodyLabel")}</span>
+                <Select
+                  className="rounded-md border border-border bg-background px-3 py-2"
+                  value={pkiMode}
+                  onChange={(event) => setPkiMode(event.target.value as "csr" | "legacy")}
+                >
+                  <option value="csr">{t("secrets.pki.csrMode")}</option>
+                  <option value="legacy">{t("secrets.pki.legacyMode")}</option>
+                </Select>
+              </label>
+              {pkiMode === "csr" ? (
+                <label className="grid gap-1 text-sm md:col-span-2">
+                  <span className="font-medium">{t("request.csr.label")}</span>
+                  <Textarea
+                    className="min-h-36 rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+                    aria-label={t("request.csr.label")}
+                    value={pkiCSR}
+                    onChange={(event) => setPkiCSR(event.target.value)}
+                    placeholder={t("secrets.pki.csrPlaceholder")}
+                    required
+                  />
+                  <span className="text-xs text-muted-foreground">{t("secrets.pki.csrHelp")}</span>
+                </label>
+              ) : (
+                <label className="grid gap-1 text-sm">
+                  <span className="font-medium">{translateNow("source.common.name.2d129020eb")}</span>
+                  <input
+                    className="rounded-md border border-border bg-background px-3 py-2"
+                    value={pkiName}
+                    onChange={(event) => setPkiName(event.target.value)}
+                    placeholder={translateNow("source.svc.internal.e50a91019d")}
+                    required
+                  />
+                </label>
+              )}
+              <label className="grid gap-1 text-sm">
+                <span className="font-medium">{translateNow("source.ttl.seconds.862d08de5a")}</span>
+                <input
+                  className="rounded-md border border-border bg-background px-3 py-2"
+                  type="number"
+                  min="60"
+                  value={pkiTTL}
+                  onChange={(event) => setPkiTTL(event.target.value)}
+                />
+              </label>
+              <Button type="submit" className="self-end md:justify-self-start" disabled={pkiBusy || Boolean(loadError)}>
+                {pkiBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
+                {translateNow("source.issue.pki.secret.692ee4b6e2")}
+              </Button>
+              {pkiMode === "legacy" && (
+                <p className="text-xs text-status-warning md:col-span-2">
+                  {t("secrets.pki.legacyWarning")}{" "}
+                  <Link className="underline" to="/audit?type=issuance.server_side_keygen">
+                    {t("secrets.pki.auditLink")}
+                  </Link>
+                </p>
+              )}
+            </form>
+            {pkiError && <ErrorState title={translateNow("source.pki.issue.failed.cb50a25278")}>{pkiError}</ErrorState>}
+            {pkiBundle && (
+              <RevealPanel
+                title={translateNow("source.pki.bundle.value1.18184942ea", { value1: pkiBundle.serial })}
+                onDismiss={() => setPkiBundle(null)}
+                value={pkiBundle.private_key ? `${pkiBundle.certificate}\n${pkiBundle.private_key}` : pkiBundle.certificate}
+              >
+                {pkiBundle.private_key ? t("secrets.pki.legacyResult") : t("secrets.pki.csrResult")}
               </RevealPanel>
             )}
           </section>

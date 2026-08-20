@@ -842,9 +842,10 @@ func TestDemoSeedUsesOnlyEventSourcedSingleSecretWrites(t *testing.T) {
 		t.Fatal("demo seed invokes the intentionally unavailable non-event-sourced bulk import route")
 	}
 	for _, want := range []string{
-		`ensureSecret("demo/stripe/api-key", "demo-stripe-api-key", 1, secretItems)`,
-		`ensureSecret("demo/github/actions/deploy-token", "demo-github-actions-deploy-token", 1, secretItems)`,
-		`ensureSecret("demo/aws/iam/rotator", "demo-aws-iam-rotator", 1, secretItems)`,
+		`ensureSecret("demo/stripe/api-key", "demo-stripe-api-key", 1, owners.payments.id, secretItems)`,
+		`ensureSecret("demo/github/actions/deploy-token", "demo-github-actions-deploy-token", 1, owners.release.id, secretItems)`,
+		`ensureSecret("demo/aws/iam/rotator", "demo-aws-iam-rotator", 1, owners.platform.id, secretItems)`,
+		`owner_id: ownerID`,
 		"stableKey(`secret-${valueLabel}`)",
 	} {
 		if !strings.Contains(body, want) {

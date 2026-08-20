@@ -325,8 +325,9 @@ func sealAAD(tenantID, name string) []byte {
 // ---- secret store: CRUD + rotation -----------------------------------------
 
 type secretWriteRequest struct {
-	Name  string          `json:"name"`
-	Value secretJSONBytes `json:"value"`
+	Name    string          `json:"name"`
+	OwnerID string          `json:"owner_id,omitempty"`
+	Value   secretJSONBytes `json:"value"`
 }
 
 type secretImportRequest struct {
@@ -339,13 +340,14 @@ type secretImportRequest struct {
 // value is returned exclusively by an explicit read (AN-8).
 type secretMetaResponse struct {
 	Name      string    `json:"name"`
+	OwnerID   string    `json:"owner_id,omitempty"`
 	Version   int       `json:"version"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
 func toSecretMeta(s store.Secret) secretMetaResponse {
-	return secretMetaResponse{Name: s.Name, Version: s.Version, CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt}
+	return secretMetaResponse{Name: s.Name, OwnerID: s.OwnerID, Version: s.Version, CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt}
 }
 
 // secretValueResponse is the read view: the value is returned only here, only to the
@@ -475,6 +477,14 @@ func (a *API) createSecret(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusBadRequest, "value is required"))
 		return
 	}
+	if req.OwnerID != "" {
+		ownerID, ownerErr := validateOwnerID(req.OwnerID)
+		if ownerErr != nil {
+			a.writeError(w, ownerErr)
+			return
+		}
+		req.OwnerID = ownerID
+	}
 	principal, err := requestPrincipalSubject(r.Context())
 	if err != nil {
 		a.writeError(w, err)
@@ -484,6 +494,16 @@ func (a *API) createSecret(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		a.writeProblem(w, problemUnauthorized())
 		return
+	}
+	if req.OwnerID != "" {
+		if _, ownerErr := a.store.GetOwner(r.Context(), bindingTenantID, req.OwnerID); ownerErr != nil {
+			if store.IsNotFound(ownerErr) {
+				a.writeError(w, errStatus(http.StatusBadRequest, "owner_id must identify an owner in this tenant"))
+				return
+			}
+			a.writeError(w, ownerErr)
+			return
+		}
 	}
 	keyDigest, requestBinding, err := a.applicationSecretRequestBinding(
 		bindingTenantID, idempotencyKey, principal, r.Method, r.URL.EscapedPath(), "create", "native", req.Name, req)
@@ -520,7 +540,7 @@ func (a *API) createSecret(w http.ResponseWriter, r *http.Request) {
 			}
 			commandKeyDigest, commandEvidence, commandErr := a.applicationSecretCommandEvidence(tenantID, idempotencyKey, canonicalApplicationSecretCommand{
 				Domain: "trstctl.api.application-secret-command.v2", TenantEpoch: tenantEpoch, Action: "create",
-				Name: req.Name, Surface: "native", ResultVersion: 1, Value: []byte(req.Value),
+				Name: req.Name, OwnerID: req.OwnerID, Surface: "native", ResultVersion: 1, Value: []byte(req.Value),
 			})
 			if commandErr != nil {
 				return 0, nil, commandErr
@@ -533,7 +553,7 @@ func (a *API) createSecret(w http.ResponseWriter, r *http.Request) {
 				return 0, nil, sealErr
 			}
 			payload = projections.ApplicationSecretMutation{
-				TenantEpoch: tenantEpoch, Action: "create", Name: req.Name, ResultVersion: 1, Sealed: sealed,
+				TenantEpoch: tenantEpoch, Action: "create", Name: req.Name, OwnerID: req.OwnerID, ResultVersion: 1, Sealed: sealed,
 				IdempotencyKeyDigest: keyDigest, RequestBinding: requestBinding,
 				CommandEvidence: commandEvidence, Surface: "native",
 			}

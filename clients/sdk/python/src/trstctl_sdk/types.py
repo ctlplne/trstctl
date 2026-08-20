@@ -7834,6 +7834,16 @@ SecretApprovalRequest = TypedDict(
     total=False,
 )
 
+SecretCreateRequest = TypedDict(
+    'SecretCreateRequest',
+    {
+        'name': str,
+        'owner_id': str,
+        'value': str,
+    },
+    total=False,
+)
+
 SecretImportRequest = TypedDict(
     'SecretImportRequest',
     {
@@ -7848,6 +7858,7 @@ SecretMeta = TypedDict(
     {
         'created_at': str,
         'name': str,
+        'owner_id': str,
         'updated_at': str,
         'version': int,
     },
@@ -7950,10 +7961,9 @@ SecretRepositoryWebhookRequest = TypedDict(
     total=False,
 )
 
-SecretRequest = TypedDict(
-    'SecretRequest',
+SecretRotateRequest = TypedDict(
+    'SecretRotateRequest',
     {
-        'name': str,
         'value': str,
     },
     total=False,

@@ -1,1 +1,0 @@
-import{B as e}from"./index-BLFa4_dj.js";function t(t,n,...r){let i=e[t];return typeof i==`function`?i(...r):Promise.resolve(n)}export{t};

@@ -51,6 +51,7 @@ type Secret struct {
 	ID        string
 	TenantID  string
 	Name      string
+	OwnerID   string
 	Sealed    []byte // envelope-encrypted ciphertext; never plaintext
 	Version   int
 	CreatedAt time.Time
@@ -150,6 +151,7 @@ type ApplicationSecretMutation struct {
 	RequestBinding  string
 	Action          string
 	Name            string
+	OwnerID         string
 	ExpectedVersion int
 	ResultVersion   int
 	Sealed          []byte
@@ -174,6 +176,7 @@ type ApplicationSecretMutationReceipt struct {
 	Name            string
 	Action          string
 	ResultVersion   int
+	ResultOwnerID   string
 	ResultCreatedAt time.Time
 	ResultUpdatedAt time.Time
 }
@@ -185,12 +188,13 @@ func (s *Store) GetApplicationSecretMutationReceipt(ctx context.Context, tenantI
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
 			`SELECT tenant_id::text, event_id::text, semantic_sha256, request_binding,
-			        secret_name, action, result_version, result_created_at, result_updated_at
+			        secret_name, action, result_version, coalesce(result_owner_id::text, ''),
+			        result_created_at, result_updated_at
 			   FROM application_secret_mutation_receipts
 			  WHERE tenant_id = $1 AND event_id = $2`, tenantID, eventID).
 			Scan(&receipt.TenantID, &receipt.EventID, &receipt.SemanticDigest,
 				&receipt.RequestBinding, &receipt.Name, &receipt.Action,
-				&receipt.ResultVersion, &receipt.ResultCreatedAt, &receipt.ResultUpdatedAt)
+				&receipt.ResultVersion, &receipt.ResultOwnerID, &receipt.ResultCreatedAt, &receipt.ResultUpdatedAt)
 	})
 	return receipt, err
 }
@@ -971,11 +975,11 @@ func (s *Store) GetSecret(ctx context.Context, tenantID, name string) (Secret, e
 	var out Secret
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
-			`SELECT id::text, tenant_id::text, name, sealed, version, created_at, updated_at
+			`SELECT id::text, tenant_id::text, name, coalesce(owner_id::text, ''), sealed, version, created_at, updated_at
 			   FROM secret_store
 			  WHERE tenant_id = $1 AND name = $2`,
 			tenantID, name).
-			Scan(&out.ID, &out.TenantID, &out.Name, &out.Sealed, &out.Version, &out.CreatedAt, &out.UpdatedAt)
+			Scan(&out.ID, &out.TenantID, &out.Name, &out.OwnerID, &out.Sealed, &out.Version, &out.CreatedAt, &out.UpdatedAt)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Secret{}, ErrSecretNotFound
@@ -1134,12 +1138,12 @@ func (s *Store) ApplyApplicationSecretMutationTx(ctx context.Context, tx pgx.Tx,
 	if mutation.Action == "create" {
 		var created Secret
 		if err := tx.QueryRow(ctx,
-			`INSERT INTO secret_store (tenant_id, name, sealed, version, created_at, updated_at)
-			 VALUES ($1, $2, $3, 1, $4, $4)
+			`INSERT INTO secret_store (tenant_id, name, owner_id, sealed, version, created_at, updated_at)
+			 VALUES ($1, $2, NULLIF($3, '')::uuid, $4, 1, $5, $5)
 			 ON CONFLICT (tenant_id, name) DO NOTHING
-			 RETURNING id::text, tenant_id::text, name, sealed, version, created_at, updated_at`,
-			mutation.TenantID, mutation.Name, mutation.Sealed, mutation.OccurredAt.UTC()).
-			Scan(&created.ID, &created.TenantID, &created.Name, &created.Sealed,
+			 RETURNING id::text, tenant_id::text, name, coalesce(owner_id::text, ''), sealed, version, created_at, updated_at`,
+			mutation.TenantID, mutation.Name, mutation.OwnerID, mutation.Sealed, mutation.OccurredAt.UTC()).
+			Scan(&created.ID, &created.TenantID, &created.Name, &created.OwnerID, &created.Sealed,
 				&created.Version, &created.CreatedAt, &created.UpdatedAt); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return ErrApprovalDrifted
@@ -1172,11 +1176,11 @@ func (s *Store) ApplyApplicationSecretMutationTx(ctx context.Context, tx pgx.Tx,
 
 	var current Secret
 	err := tx.QueryRow(ctx,
-		`SELECT id::text, tenant_id::text, name, sealed, version, created_at, updated_at
+		`SELECT id::text, tenant_id::text, name, coalesce(owner_id::text, ''), sealed, version, created_at, updated_at
 		   FROM secret_store
 		  WHERE tenant_id = $1 AND name = $2
 		  FOR UPDATE`, mutation.TenantID, mutation.Name).
-		Scan(&current.ID, &current.TenantID, &current.Name, &current.Sealed,
+		Scan(&current.ID, &current.TenantID, &current.Name, &current.OwnerID, &current.Sealed,
 			&current.Version, &current.CreatedAt, &current.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrSecretNotFound
@@ -1212,6 +1216,7 @@ func (s *Store) ApplyApplicationSecretMutationTx(ctx context.Context, tx pgx.Tx,
 		recoveredFrom = &source
 	}
 	if mutation.Action == "delete" {
+		mutation.OwnerID = current.OwnerID
 		if _, err := tx.Exec(ctx,
 			`DELETE FROM secret_store WHERE tenant_id = $1 AND name = $2 AND version = $3`,
 			mutation.TenantID, mutation.Name, mutation.ExpectedVersion); err != nil {
@@ -1243,6 +1248,7 @@ func (s *Store) ApplyApplicationSecretMutationTx(ctx context.Context, tx pgx.Tx,
 		mutation.ResultVersion, mutation.Sealed, mutation.OccurredAt, recoveredFrom); err != nil {
 		return err
 	}
+	mutation.OwnerID = current.OwnerID
 	if err := insertApplicationSecretMutationReceiptTx(ctx, tx, mutation, current.CreatedAt); err != nil {
 		return err
 	}
@@ -1262,10 +1268,10 @@ func insertApplicationSecretMutationReceiptTx(
 	_, err := tx.Exec(ctx,
 		`INSERT INTO application_secret_mutation_receipts
 		       (tenant_id, event_id, semantic_sha256, request_binding, secret_name, action,
-		        result_version, result_created_at, result_updated_at, applied_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)`,
+		        result_version, result_owner_id, result_created_at, result_updated_at, applied_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, NULLIF($8, '')::uuid, $9, $10, $10)`,
 		mutation.TenantID, mutation.EventID, mutation.SemanticDigest, mutation.RequestBinding,
-		mutation.Name, mutation.Action, mutation.ResultVersion, resultCreatedAt.UTC(), mutation.OccurredAt.UTC())
+		mutation.Name, mutation.Action, mutation.ResultVersion, mutation.OwnerID, resultCreatedAt.UTC(), mutation.OccurredAt.UTC())
 	return err
 }
 
@@ -1285,7 +1291,7 @@ func (s *Store) ListSecretNames(ctx context.Context, tenantID string, limit int)
 	var out []Secret
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
-			`SELECT id::text, tenant_id::text, name, version, created_at, updated_at
+			`SELECT id::text, tenant_id::text, name, coalesce(owner_id::text, ''), version, created_at, updated_at
 			   FROM secret_store
 			  WHERE tenant_id = $1
 			  ORDER BY name
@@ -1297,7 +1303,7 @@ func (s *Store) ListSecretNames(ctx context.Context, tenantID string, limit int)
 		defer rows.Close()
 		for rows.Next() {
 			var m Secret
-			if err := rows.Scan(&m.ID, &m.TenantID, &m.Name, &m.Version, &m.CreatedAt, &m.UpdatedAt); err != nil {
+			if err := rows.Scan(&m.ID, &m.TenantID, &m.Name, &m.OwnerID, &m.Version, &m.CreatedAt, &m.UpdatedAt); err != nil {
 				return err
 			}
 			out = append(out, m)

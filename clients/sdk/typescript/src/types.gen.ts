@@ -11295,6 +11295,12 @@ export interface components {
             /** Format: uuid */
             request_id: string;
         };
+        SecretCreateRequest: {
+            name: string;
+            /** Format: uuid */
+            owner_id?: string;
+            value: string;
+        };
         SecretImportRequest: {
             prefix?: string;
             values: Record<string, never>;
@@ -11303,6 +11309,8 @@ export interface components {
             /** Format: date-time */
             created_at?: string;
             name: string;
+            /** Format: uuid */
+            owner_id?: string;
             /** Format: date-time */
             updated_at?: string;
             version: number;
@@ -11371,8 +11379,7 @@ export interface components {
             ref?: string;
             repository: string;
         };
-        SecretRequest: {
-            name: string;
+        SecretRotateRequest: {
             value: string;
         };
         SecretRotation: {
@@ -26291,7 +26298,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SecretRequest"];
+                "application/json": components["schemas"]["SecretCreateRequest"];
             };
         };
         responses: {
@@ -26568,7 +26575,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SecretRequest"];
+                "application/json": components["schemas"]["SecretRotateRequest"];
             };
         };
         responses: {

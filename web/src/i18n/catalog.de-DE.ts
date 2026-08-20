@@ -308,6 +308,12 @@ const deDECatalog = {
   "secrets.store.exploreTools": "Ordner und Referenzen durchsuchen",
   "secrets.store.exploreToolsHelp": "Organisation, Umgebungsunterschiede, Referenzen und Importstatus",
   "secrets.store.valueHelp": "Wird einmal mit dieser Anfrage gesendet und danach aus dem Formular gelöscht. Der Wert erscheint nie in der Metadatentabelle.",
+  "secrets.store.chooseOwner": "Verantwortlichen auswählen",
+  "secrets.store.ownerHelp": "Der verantwortliche Dienst, Workload, Mensch oder das Team. Dessen Umgebung wird neben dem Secret angezeigt.",
+  "secrets.store.ownerOption": "{name} · {environment}",
+  "secrets.store.noOwnersHelp":
+    "Es sind keine Verantwortlichen verfügbar. Dieses Secret wird als Nicht zugewiesen markiert, damit die Eigentumslücke sichtbar bleibt.",
+  "secrets.store.unassignedOwner": "Nicht zugewiesen",
   "secrets.store.lifecycleSummary": "Rotieren, planen oder löschen",
   "secrets.store.lifecycleSummaryHelp": "Erweiterte Lebenszyklussteuerung mit Genehmigungs- und Rollback-Nachweisen",
   "secrets.store.revealValue": "Wert anzeigen",

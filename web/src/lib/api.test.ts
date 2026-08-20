@@ -1244,7 +1244,7 @@ describe("secrets contract", () => {
     document.cookie = "trstctl_csrf=csrf-secret-rotate; path=/";
     mockFetch(200, JSON.stringify({ name: "app/db/password", version: 4 }));
 
-    await api.rotateSecret("app/db/password", { name: "app/db/password", value: "new-value" });
+    await api.rotateSecret("app/db/password", { value: "new-value" });
 
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/store/app%2Fdb%2Fpassword");
     expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe("PUT");

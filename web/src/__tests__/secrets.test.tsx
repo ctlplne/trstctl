@@ -52,6 +52,7 @@ const { apiMock } = vi.hoisted(() => ({
     revokeMachineSession: vi.fn(),
     disableMachineAuthMethod: vi.fn(),
     enableMachineAuthMethod: vi.fn(),
+    owners: vi.fn(),
   },
 }));
 
@@ -107,13 +108,33 @@ function primeSecretsMocks() {
     items: [
       {
         name: "app/db/password",
+        owner_id: "11111111-1111-4111-8111-111111111111",
         version: 3,
         created_at: "2026-06-18T10:00:00Z",
         updated_at: "2026-06-19T10:00:00Z",
       },
     ],
   });
-  apiMock.createSecret.mockResolvedValue({ name: "app/cache/token", version: 1 });
+  apiMock.createSecret.mockResolvedValue({
+    name: "app/cache/token",
+    owner_id: "11111111-1111-4111-8111-111111111111",
+    version: 1,
+  });
+  apiMock.owners.mockResolvedValue([
+    {
+      id: "11111111-1111-4111-8111-111111111111",
+      tenant_id: "t1",
+      kind: "service",
+      name: "Payments platform",
+      environment: "production",
+      email: "",
+      created_at: "2026-06-01T00:00:00Z",
+      escalation_chain: [],
+      ownership_complete: true,
+      ownership_attested: true,
+      ownership_current: true,
+    },
+  ]);
   apiMock.getSecret.mockResolvedValue({ name: "app/db/password", value: "SUPER-SECRET", version: 3 });
   apiMock.getSecretWithToken.mockResolvedValue({ name: "app/db/password", value: "WORKLOAD-SECRET", version: 3 });
   apiMock.rotateSecret.mockResolvedValue({ name: "app/db/password", version: 4, updated_at: "2026-06-19T11:00:00Z" });
@@ -716,6 +737,19 @@ describe("secrets surface", () => {
     expect(screen.getByLabelText("Value to share")).toHaveFocus();
   });
 
+  it("keeps the primary access and engine jobs first in DOM order for assistive technology", async () => {
+    renderSecrets("/secrets/access");
+    const grant = await screen.findByRole("heading", { name: "Grant workload access" });
+    const developer = screen.getByRole("heading", { name: "Developer access" });
+    expect(grant.compareDocumentPosition(developer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    cleanup();
+    renderSecrets("/secrets/engines");
+    const dynamic = await screen.findByRole("heading", { name: "Dynamic secrets" });
+    const pki = screen.getByRole("heading", { name: "PKI as a secret" });
+    expect(dynamic.compareDocumentPosition(pki) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("refuses to imply delivery when no secret destination is configured", async () => {
     const catalog = syncTargetCatalogFixture();
     apiMock.secretSyncTargets.mockResolvedValueOnce({
@@ -740,6 +774,8 @@ describe("secrets surface", () => {
     expect(await screen.findByRole("table", { name: "Native secret metadata" })).toBeInTheDocument();
     expect(screen.getByRole("searchbox", { name: "Search native secret metadata" })).toBeInTheDocument();
     expect(screen.getByText("app/db/password")).toBeInTheDocument();
+    expect(screen.getByText("Payments platform")).toBeInTheDocument();
+    expect(screen.getByText("production")).toBeInTheDocument();
     expect(screen.getByText("native store")).toBeInTheDocument();
     expect(screen.getByText("v3")).toBeInTheDocument();
     expect(screen.getByRole("form", { name: "Run connector rotation" })).toBeInTheDocument();
@@ -801,9 +837,16 @@ describe("secrets surface", () => {
     const createForm = within(screen.getByRole("form", { name: "Create secret" }));
     await user.type(createForm.getByLabelText("Secret name"), "app/cache/token");
     await user.type(createForm.getByLabelText("Secret value"), "new-secret-value");
+    await user.selectOptions(createForm.getByLabelText("Owner"), "11111111-1111-4111-8111-111111111111");
     await user.click(createForm.getByRole("button", { name: /create secret/i }));
 
-    await waitFor(() => expect(apiMock.createSecret).toHaveBeenCalledWith({ name: "app/cache/token", value: "new-secret-value" }));
+    await waitFor(() =>
+      expect(apiMock.createSecret).toHaveBeenCalledWith({
+        name: "app/cache/token",
+        owner_id: "11111111-1111-4111-8111-111111111111",
+        value: "new-secret-value",
+      }),
+    );
     expect(await screen.findByText(/stored as version 1/i)).toBeInTheDocument();
     expect(screen.queryByText("new-secret-value")).not.toBeInTheDocument();
 
@@ -817,7 +860,6 @@ describe("secrets surface", () => {
     await user.click(rotateForm.getByRole("button", { name: /rotate secret/i }));
     await waitFor(() =>
       expect(apiMock.rotateSecret).toHaveBeenCalledWith("app/db/password", {
-        name: "app/db/password",
         value: "rotated-secret",
       }),
     );
@@ -1066,7 +1108,6 @@ describe("secrets surface", () => {
 
     await waitFor(() =>
       expect(apiMock.rotateSecret).toHaveBeenNthCalledWith(1, "app/db/password", {
-        name: "app/db/password",
         value: "approval-rotate-value",
       }),
     );
@@ -1088,7 +1129,6 @@ describe("secrets surface", () => {
     await user.click(within(approvalList).getByRole("button", { name: /retry rotate\/update for app\/db\/password/i }));
     await waitFor(() => expect(apiMock.rotateSecret).toHaveBeenCalledTimes(2));
     expect(apiMock.rotateSecret).toHaveBeenLastCalledWith("app/db/password", {
-      name: "app/db/password",
       value: "approval-rotate-value",
     });
     expect(await screen.findByText(/rotated to version 4 after approval/i)).toBeInTheDocument();

@@ -74,6 +74,7 @@ type canonicalApplicationSecretCommand struct {
 	TenantEpoch     string    `json:"tenant_epoch"`
 	Action          string    `json:"action"`
 	Name            string    `json:"name"`
+	OwnerID         string    `json:"owner_id,omitempty"`
 	Surface         string    `json:"surface"`
 	Provider        string    `json:"provider,omitempty"`
 	Target          string    `json:"target,omitempty"`
@@ -160,6 +161,7 @@ func (a *API) applicationSecretMaterializedResult(
 func applicationSecretReceiptMeta(receipt store.ApplicationSecretMutationReceipt) secretMetaResponse {
 	return secretMetaResponse{
 		Name: receipt.Name, Version: receipt.ResultVersion,
+		OwnerID:   receipt.ResultOwnerID,
 		CreatedAt: receipt.ResultCreatedAt, UpdatedAt: receipt.ResultUpdatedAt,
 	}
 }
@@ -643,7 +645,7 @@ func applicationSecretRecoveryActorsEqual(left, right *events.Actor) bool {
 
 func applicationSecretResultMeta(current store.Secret, event events.Event, payload projections.ApplicationSecretMutation) store.Secret {
 	return store.Secret{
-		ID: current.ID, TenantID: current.TenantID, Name: current.Name,
+		ID: current.ID, TenantID: current.TenantID, Name: current.Name, OwnerID: current.OwnerID,
 		Sealed: payload.Sealed, Version: payload.ResultVersion,
 		CreatedAt: current.CreatedAt, UpdatedAt: event.Time,
 	}

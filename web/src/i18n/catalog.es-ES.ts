@@ -299,6 +299,12 @@ const esESCatalog = {
   "secrets.store.exploreTools": "Explorar carpetas y referencias",
   "secrets.store.exploreToolsHelp": "Organización, diferencias entre entornos, referencias y estado de importación",
   "secrets.store.valueHelp": "Se envía una vez en esta solicitud y después se borra del formulario. Nunca aparece en la tabla de metadatos.",
+  "secrets.store.chooseOwner": "Elige un responsable",
+  "secrets.store.ownerHelp": "El servicio, la carga de trabajo, la persona o el equipo responsable. Su entorno aparece junto al secreto.",
+  "secrets.store.ownerOption": "{name} · {environment}",
+  "secrets.store.noOwnersHelp":
+    "No hay registros de responsables disponibles. Este secreto se marcará como Sin asignar para que la brecha de propiedad siga visible.",
+  "secrets.store.unassignedOwner": "Sin asignar",
   "secrets.store.lifecycleSummary": "Rotar, programar o eliminar",
   "secrets.store.lifecycleSummaryHelp": "Controles avanzados del ciclo de vida con evidencia de aprobación y reversión",
   "secrets.store.revealValue": "Revelar valor",

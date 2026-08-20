@@ -304,20 +304,58 @@ func secretsReqKey(t *testing.T, h *servedHarness, method, path, token, idemKey 
 func TestServedSecretStoreCreateReadRotate(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
 	registerServedTenant(t, h, "served secret create/read/rotate tenant")
+	owner, err := h.store.CreateOwner(t.Context(), store.Owner{
+		TenantID: h.tenant, Kind: store.OwnerService, Name: "Payments platform", Environment: "production",
+	})
+	if err != nil {
+		t.Fatalf("create secret owner: %v", err)
+	}
 	if !h.srv.handlerServesSecrets() {
 		t.Fatal("served handler does not mount the secrets surface — GAP-006 wiring missing")
 	}
 	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
+	const otherTenant = "22222222-2222-4222-8222-222222222222"
+	otherOwner, err := h.store.CreateOwner(t.Context(), store.Owner{
+		TenantID: otherTenant, Kind: store.OwnerService, Name: "Other tenant payments", Environment: "production",
+	})
+	if err != nil {
+		t.Fatalf("create cross-tenant secret owner: %v", err)
+	}
+	err = h.store.WithTenant(t.Context(), h.tenant, func(tx pgx.Tx) error {
+		_, insertErr := tx.Exec(t.Context(), `
+			INSERT INTO secret_store (tenant_id, name, owner_id, sealed, version)
+			VALUES ($1, 'db/storage-guard-probe', $2, $3, 1)`,
+			h.tenant, otherOwner.ID, []byte("sealed-probe"))
+		return insertErr
+	})
+	if err == nil {
+		t.Fatal("storage layer accepted a secret owner from another tenant (AN-1)")
+	}
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok,
+		map[string]any{"name": "db/cross-tenant", "owner_id": otherOwner.ID, "value": "must-not-store"})
+	if status != http.StatusBadRequest || !strings.Contains(string(body), "owner_id must identify an owner in this tenant") {
+		t.Fatalf("cross-tenant owner binding: status %d body %s", status, body)
+	}
 
 	// CREATE.
-	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok,
-		map[string]any{"name": "db/password", "value": "s3cr3t-v1"})
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok,
+		map[string]any{"name": "db/password", "owner_id": owner.ID, "value": "s3cr3t-v1"})
 	if status != http.StatusCreated {
 		t.Fatalf("create secret: status %d body %s", status, body)
 	}
 	// The create reply is metadata only — it must NOT carry the value (AN-8).
 	if strings.Contains(string(body), "s3cr3t-v1") {
 		t.Fatalf("create reply leaked the secret value (AN-8): %s", body)
+	}
+	var createdMeta struct {
+		OwnerID string `json:"owner_id"`
+	}
+	if err := json.Unmarshal(body, &createdMeta); err != nil || createdMeta.OwnerID != owner.ID {
+		t.Fatalf("create metadata owner = %q, want %q (decode error %v, body %s)", createdMeta.OwnerID, owner.ID, err, body)
+	}
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/secrets/store", tok, nil)
+	if status != http.StatusOK || !strings.Contains(string(body), `"owner_id":"`+owner.ID+`"`) {
+		t.Fatalf("list metadata omitted tenant-local owner: status %d body %s", status, body)
 	}
 
 	// READ — the value comes back exactly here, to the authorized caller.
@@ -348,6 +386,12 @@ func TestServedSecretStoreCreateReadRotate(t *testing.T) {
 	if strings.Contains(string(body), "s3cr3t-v2") {
 		t.Fatalf("rotate reply leaked the new value (AN-8): %s", body)
 	}
+	var rotatedMeta struct {
+		OwnerID string `json:"owner_id"`
+	}
+	if err := json.Unmarshal(body, &rotatedMeta); err != nil || rotatedMeta.OwnerID != owner.ID {
+		t.Fatalf("rotation did not preserve owner = %q, want %q (decode error %v, body %s)", rotatedMeta.OwnerID, owner.ID, err, body)
+	}
 
 	// READ AGAIN — rotated value, version 2.
 	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/secrets/store/db/password", tok, nil)
@@ -374,12 +418,18 @@ func TestServedSecretStoreCreateReadRotate(t *testing.T) {
 	// AN-5: a rotate replayed with the SAME Idempotency-Key returns the original result
 	// and does NOT bump the version a second time.
 	idem := "rotate-once"
-	s1, _ := secretsReqKey(t, h, http.MethodPut, "/api/v1/secrets/store/db/password", tok, idem,
+	s1, firstReplayBody := secretsReqKey(t, h, http.MethodPut, "/api/v1/secrets/store/db/password", tok, idem,
 		map[string]any{"value": "s3cr3t-v3"})
-	s2, _ := secretsReqKey(t, h, http.MethodPut, "/api/v1/secrets/store/db/password", tok, idem,
+	s2, secondReplayBody := secretsReqKey(t, h, http.MethodPut, "/api/v1/secrets/store/db/password", tok, idem,
 		map[string]any{"value": "s3cr3t-v3"})
 	if s1 != http.StatusOK || s2 != http.StatusOK {
 		t.Fatalf("idempotent rotate statuses = %d, %d", s1, s2)
+	}
+	for attempt, replayBody := range [][]byte{firstReplayBody, secondReplayBody} {
+		if err := json.Unmarshal(replayBody, &rotatedMeta); err != nil || rotatedMeta.OwnerID != owner.ID {
+			t.Fatalf("idempotent rotate attempt %d lost owner = %q, want %q (decode error %v, body %s)",
+				attempt+1, rotatedMeta.OwnerID, owner.ID, err, replayBody)
+		}
 	}
 	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/secrets/store/db/password", tok, nil)
 	if status != http.StatusOK {

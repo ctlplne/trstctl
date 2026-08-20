@@ -93,7 +93,7 @@ func appendApplicationSecretCreate(
 	t *testing.T,
 	s *store.Store,
 	log *events.Log,
-	id, name string,
+	id, name, ownerID string,
 	sealed []byte,
 	keyDigest, binding, evidence, surface string,
 	at time.Time,
@@ -104,7 +104,7 @@ func appendApplicationSecretCreate(
 		t.Fatalf("application-secret test tenant epoch: %v", err)
 	}
 	payload := projections.ApplicationSecretMutation{
-		TenantEpoch: epoch, Action: "create", Name: name, ResultVersion: 1, Sealed: sealed,
+		TenantEpoch: epoch, Action: "create", Name: name, OwnerID: ownerID, ResultVersion: 1, Sealed: sealed,
 		IdempotencyKeyDigest: keyDigest, RequestBinding: binding,
 		CommandEvidence: evidence, Surface: surface,
 	}
@@ -546,11 +546,18 @@ func TestApplicationSecretCreateColdRebuildsNativeAndVaultFromZeroPrimary(t *tes
 	if err := projections.New(s).Apply(ctx, registered); err != nil {
 		t.Fatalf("project application-secret tenant lifecycle root: %v", err)
 	}
+	const ownerID = "77600000-0000-4000-8000-000000000099"
+	if _, err := log.Append(ctx, events.Event{
+		Type: projections.EventOwnerCreated, TenantID: tenantA, Time: base.Add(30 * time.Second),
+		Data: ownerCreated(ownerID, "Cold rebuild owner"),
+	}); err != nil {
+		t.Fatalf("append cold rebuild owner: %v", err)
+	}
 	appendApplicationSecretCreate(t, s, log,
-		"77600000-0000-4000-8000-000000000001", "cold/native", []byte("sealed-native-v1"),
+		"77600000-0000-4000-8000-000000000001", "cold/native", ownerID, []byte("sealed-native-v1"),
 		hex64('1'), hex64('2'), hex64('3'), "native", base.Add(time.Minute))
 	appendApplicationSecretCreate(t, s, log,
-		"77600000-0000-4000-8000-000000000002", "cold/vault", []byte("sealed-vault-v1"),
+		"77600000-0000-4000-8000-000000000002", "cold/vault", "", []byte("sealed-vault-v1"),
 		hex64('4'), hex64('5'), hex64('6'), "vault", base.Add(2*time.Minute))
 	projector := projections.New(s)
 	if err := projector.Project(ctx, log); err != nil {
@@ -564,12 +571,15 @@ func TestApplicationSecretCreateColdRebuildsNativeAndVaultFromZeroPrimary(t *tes
 	if err := projector.Rebuild(ctx, log); err != nil {
 		t.Fatalf("zero-primary/zero-receipt cold rebuild: %v", err)
 	}
-	for name, sealed := range map[string][]byte{
-		"cold/native": []byte("sealed-native-v1"),
-		"cold/vault":  []byte("sealed-vault-v1"),
+	for name, want := range map[string]struct {
+		sealed  []byte
+		ownerID string
+	}{
+		"cold/native": {sealed: []byte("sealed-native-v1"), ownerID: ownerID},
+		"cold/vault":  {sealed: []byte("sealed-vault-v1")},
 	} {
 		current, err := s.GetSecret(ctx, tenantA, name)
-		if err != nil || current.Version != 1 || !bytes.Equal(current.Sealed, sealed) {
+		if err != nil || current.Version != 1 || current.OwnerID != want.ownerID || !bytes.Equal(current.Sealed, want.sealed) {
 			t.Fatalf("cold rebuild %s=%+v err=%v", name, current, err)
 		}
 	}
@@ -603,7 +613,7 @@ func TestApplicationSecretPrivacyRewritePreservesExactReceiptAndAuthority(t *tes
 		t.Fatalf("project application-secret tenant lifecycle root: %v", err)
 	}
 	appendApplicationSecretCreate(t, s, log,
-		"77700000-0000-4000-8000-000000000001", "privacy/secret", []byte("sealed-privacy-v1"),
+		"77700000-0000-4000-8000-000000000001", "privacy/secret", "", []byte("sealed-privacy-v1"),
 		hex64('1'), hex64('2'), hex64('3'), "native", base.Add(time.Minute))
 	appendApprovedApplicationSecretMutation(t, s, log, projections.ApplicationSecretMutation{
 		Action: "rotate", Name: "privacy/secret", ExpectedVersion: 1, ResultVersion: 2,
@@ -710,6 +720,7 @@ func TestApplicationSecretSemanticDigestNormalizesOnlyRequester(t *testing.T) {
 
 	for name, mutate := range map[string]func(*projections.ApplicationSecretMutation){
 		"sealed":   func(p *projections.ApplicationSecretMutation) { p.Sealed = []byte("different-ciphertext") },
+		"owner":    func(p *projections.ApplicationSecretMutation) { p.OwnerID = "77300000-0000-4000-8000-000000000099" },
 		"resource": func(p *projections.ApplicationSecretMutation) { p.Approval.ResourceID = "secret:other" },
 		"action":   func(p *projections.ApplicationSecretMutation) { p.Action = "recover" },
 	} {

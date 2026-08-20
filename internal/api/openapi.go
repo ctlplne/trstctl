@@ -4317,14 +4317,17 @@ func componentSchemas() map[string]*Schema {
 	// Served secrets/identity surface (GAP-006). The metadata view never carries a
 	// value; the value/share/key views are the only places a secret leaves the
 	// boundary, returned solely to the authorized caller (AN-8).
-	secretReq := object(map[string]*Schema{
-		"name": str(), "value": str(),
+	secretCreateReq := object(map[string]*Schema{
+		"name": str(), "owner_id": uuid(), "value": str(),
 	}, "name", "value")
+	secretRotateReq := object(map[string]*Schema{
+		"value": str(),
+	}, "value")
 	secretImportReq := object(map[string]*Schema{
 		"prefix": str(), "values": {Type: "object"},
 	}, "values")
 	secretMeta := object(map[string]*Schema{
-		"name": str(), "version": {Type: "integer"}, "created_at": timestamp(), "updated_at": timestamp(),
+		"name": str(), "owner_id": uuid(), "version": {Type: "integer"}, "created_at": timestamp(), "updated_at": timestamp(),
 	}, "name", "version")
 	dynamicLeaseReq := object(map[string]*Schema{
 		"provider": str(), "role": str(), "ttl_seconds": {Type: "integer"},
@@ -5449,7 +5452,8 @@ func componentSchemas() map[string]*Schema {
 		"BreakglassCrossSign":                      breakglassCrossSign,
 		"BreakglassReconcileRequest":               breakglassReconcileReq,
 		"BreakglassReconcileResponse":              breakglassReconcileResp,
-		"SecretRequest":                            secretReq,
+		"SecretCreateRequest":                      secretCreateReq,
+		"SecretRotateRequest":                      secretRotateReq,
 		"SecretImportRequest":                      secretImportReq,
 		"SecretRecoverRequest":                     secretRecoverReq,
 		"SecretMeta":                               secretMeta,

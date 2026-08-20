@@ -720,7 +720,7 @@ async function ensureImportedCertificate(cert, ownerID, certificateItems) {
   return created;
 }
 
-async function ensureSecret(name, valueLabel, wantedVersion, secretItems) {
+async function ensureSecret(name, valueLabel, wantedVersion, ownerID, secretItems) {
   let existing = findUniqueLogicalRecord(
     secretItems,
     (candidate) => candidate.name === name,
@@ -729,6 +729,7 @@ async function ensureSecret(name, valueLabel, wantedVersion, secretItems) {
   if (!existing) {
     existing = await api("POST", "/api/v1/secrets/store", {
       name,
+      owner_id: ownerID,
       value: stableDemoValue(valueLabel),
     }, stableKey(`secret-${valueLabel}`));
     secretItems.push(existing);
@@ -1060,10 +1061,10 @@ async function main() {
 
   const secretResponse = await api("GET", "/api/v1/secrets/store?limit=100");
   const secretItems = Array.isArray(secretResponse?.items) ? secretResponse.items : [];
-  await ensureSecret("payments/db/password", "payments-db", 2, secretItems);
-  await ensureSecret("demo/stripe/api-key", "demo-stripe-api-key", 1, secretItems);
-  await ensureSecret("demo/github/actions/deploy-token", "demo-github-actions-deploy-token", 1, secretItems);
-  await ensureSecret("demo/aws/iam/rotator", "demo-aws-iam-rotator", 1, secretItems);
+  await ensureSecret("payments/db/password", "payments-db", 2, owners.payments.id, secretItems);
+  await ensureSecret("demo/stripe/api-key", "demo-stripe-api-key", 1, owners.payments.id, secretItems);
+  await ensureSecret("demo/github/actions/deploy-token", "demo-github-actions-deploy-token", 1, owners.release.id, secretItems);
+  await ensureSecret("demo/aws/iam/rotator", "demo-aws-iam-rotator", 1, owners.platform.id, secretItems);
   await api("POST", "/api/v1/secrets/shares", {
     value: stableDemoValue("breakglass-share"),
     ttl_seconds: 86400,

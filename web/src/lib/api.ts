@@ -340,7 +340,8 @@ import type {
   SecretRepositoryScanPosture,
   SecretRepositoryWebhookReceipt,
   SecretRepositoryWebhookRequest,
-  SecretRequest,
+  SecretCreateRequest,
+  SecretRotateRequest,
   SecretRotation,
   SecretRotationDueRun,
   SecretRotationRequest,
@@ -883,7 +884,8 @@ export type {
   SecretRepositoryScanPosture,
   SecretRepositoryWebhookReceipt,
   SecretRepositoryWebhookRequest,
-  SecretRequest,
+  SecretCreateRequest,
+  SecretRotateRequest,
   SecretRotation,
   SecretRotationDueRun,
   SecretRotationRequest,
@@ -1796,14 +1798,14 @@ export interface Api {
   mdmSCEPStatus(): Promise<MDMSCEPStatus>;
   mdmSCEPPolicies(): Promise<MDMSCEPPolicyList>;
   secretPage(options?: { limit?: number; cursor?: string }): Promise<SecretMetaList>;
-  createSecret(input: SecretRequest): Promise<SecretMeta>;
+  createSecret(input: SecretCreateRequest): Promise<SecretMeta>;
   getSecret(name: string, options?: { resolve?: boolean }): Promise<SecretValue>;
   /** Read one secret as the granted workload credential, without falling back
    * to the browser's human session cookie. The caller must discard the value. */
   getSecretWithToken(name: string, token: string): Promise<SecretValue>;
   getSecretVersion(name: string, version: number): Promise<SecretValue>;
   recoverSecret(name: string, input: SecretRecoverRequest): Promise<SecretMeta>;
-  rotateSecret(name: string, input: SecretRequest): Promise<SecretMeta>;
+  rotateSecret(name: string, input: SecretRotateRequest): Promise<SecretMeta>;
   deleteSecret(name: string): Promise<void>;
   approveSecretChange(name: string, input: SecretApprovalRequest): Promise<SecretApproval>;
   secretRepositoryScanning(): Promise<SecretRepositoryScanPosture>;

@@ -5596,6 +5596,12 @@ export interface SecretApprovalRequest {
   request_id: string;
 }
 
+export interface SecretCreateRequest {
+  name: string;
+  owner_id?: string;
+  value: string;
+}
+
 export interface SecretImportRequest {
   prefix?: string;
   values: Record<string, unknown>;
@@ -5604,6 +5610,7 @@ export interface SecretImportRequest {
 export interface SecretMeta {
   created_at?: string;
   name: string;
+  owner_id?: string;
   updated_at?: string;
   version: number;
 }
@@ -5676,8 +5683,7 @@ export interface SecretRepositoryWebhookRequest {
   repository: string;
 }
 
-export interface SecretRequest {
-  name: string;
+export interface SecretRotateRequest {
   value: string;
 }
 

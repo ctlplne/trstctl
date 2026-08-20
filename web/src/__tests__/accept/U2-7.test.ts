@@ -11,7 +11,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("U2-7 secret rotation served wiring", () => {
   it("rotates a secret via PUT against the served store path", async () => {
-    await api.rotateSecret("prod/db/password", { name: "prod/db/password", value: "new-value" });
+    await api.rotateSecret("prod/db/password", { value: "new-value" });
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toContain("/api/v1/secrets/store/");
     expect((init as RequestInit).method).toBe("PUT");
