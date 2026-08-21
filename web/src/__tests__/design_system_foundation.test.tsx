@@ -23,6 +23,7 @@ const buttonSource = readFileSync(path.join(webRoot, "src/components/ui/button.t
 const cardSource = readFileSync(path.join(webRoot, "src/components/ui/card.tsx"), "utf8");
 const pageHeaderSource = readFileSync(path.join(webRoot, "src/components/PageHeader.tsx"), "utf8");
 const themeProviderSource = readFileSync(path.join(webRoot, "src/components/ThemeProvider.tsx"), "utf8");
+const appShellSource = readFileSync(path.join(webRoot, "src/components/AppShell.tsx"), "utf8");
 
 type Row = { id: string; name: string; status: string; owner: string };
 type HslToken = { h: number; s: number; l: number };
@@ -96,16 +97,29 @@ function hslToRgb({ h, s, l }: HslToken) {
   return [red, green, blue].map((channel) => channel + match);
 }
 
-function relativeLuminance(hsl: HslToken) {
-  const [red, green, blue] = hslToRgb(hsl).map((channel) => {
+function relativeLuminanceRgb(rgb: number[]) {
+  const [red, green, blue] = rgb.map((channel) => {
     return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
   });
   return red * 0.2126 + green * 0.7152 + blue * 0.0722;
 }
 
+function relativeLuminance(hsl: HslToken) {
+  return relativeLuminanceRgb(hslToRgb(hsl));
+}
+
 function contrastRatio(foreground: HslToken, background: HslToken) {
   const foregroundLuminance = relativeLuminance(foreground);
   const backgroundLuminance = relativeLuminance(background);
+  return (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) / (Math.min(foregroundLuminance, backgroundLuminance) + 0.05);
+}
+
+function contrastRatioOnTint(foreground: HslToken, underlay: HslToken, alpha: number) {
+  const foregroundRgb = hslToRgb(foreground);
+  const underlayRgb = hslToRgb(underlay);
+  const tintedBackground = foregroundRgb.map((channel, index) => channel * alpha + underlayRgb[index] * (1 - alpha));
+  const foregroundLuminance = relativeLuminanceRgb(foregroundRgb);
+  const backgroundLuminance = relativeLuminanceRgb(tintedBackground);
   return (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) / (Math.min(foregroundLuminance, backgroundLuminance) + 0.05);
 }
 
@@ -270,7 +284,21 @@ describe("Clarity/Console design-system foundation", () => {
       const focusHue = requireToken(tokens, "focus").h;
       expect(focusHue, `${themeName} --focus stays in the mint family`).toBeGreaterThanOrEqual(160);
       expect(focusHue, `${themeName} --focus stays in the mint family`).toBeLessThanOrEqual(185);
+
+      // Live axe found the light warning orange readable-looking but below AA,
+      // especially when used on its own 10% status tint. Guard the exact token
+      // combinations used by StatusBadge, Toast, and route warning copy.
+      const warning = requireToken(tokens, "status-warning");
+      const card = requireToken(tokens, "card");
+      expect(contrastRatio(warning, card), `${themeName} warning text on card`).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatioOnTint(warning, card, 0.1), `${themeName} warning text on 10% warning tint`).toBeGreaterThanOrEqual(4.5);
     }
+  });
+
+  it("keeps tiny shell labels on live-audited contrast classes", () => {
+    expect(appShellSource).not.toContain("text-sidebar-foreground/60");
+    expect(appShellSource).toContain("text-sidebar-foreground/80");
+    expect(appShellSource).toContain("tracking-wider text-muted-foreground sm:block");
   });
 
   it("uses type, density, and elevation tokens in representative card primitives", () => {

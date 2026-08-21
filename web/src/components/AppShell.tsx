@@ -288,7 +288,7 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
         )}
         {!activeSpace && visibleTaskItems.length > 0 && (
           <li>
-            <Eyebrow as="p" className="px-3 pb-1 text-sidebar-foreground/60">
+            <Eyebrow as="p" className="px-3 pb-1 text-sidebar-foreground/80">
               {t("nav.section.needsAction")}
             </Eyebrow>
             <ul aria-label={t("nav.section.needsActionWorklists")} className="space-y-1">
@@ -306,7 +306,7 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
                       <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate">{label}</span>
-                        <span className="block truncate text-xs font-normal text-sidebar-foreground/60">{description}</span>
+                        <span className="block truncate text-xs font-normal text-sidebar-foreground/80">{description}</span>
                       </span>
                     </NavLink>
                   </li>
@@ -331,7 +331,7 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
                 aria-expanded={!collapsed}
                 aria-controls={contentId}
                 onClick={() => toggleGroup(group.labelKey)}
-                className="flex w-full items-center justify-between gap-2 rounded-control px-3 pb-1 pt-0.5 text-sidebar-foreground/60 transition-colors duration-fast hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                className="flex w-full items-center justify-between gap-2 rounded-control px-3 pb-1 pt-0.5 text-sidebar-foreground/80 transition-colors duration-fast hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
               >
                 <Eyebrow className="text-inherit">{t(group.labelKey)}</Eyebrow>
                 <ChevronDown aria-hidden="true" className={cn("h-3.5 w-3.5 transition-transform duration-fast", collapsed && "-rotate-90")} />
@@ -549,7 +549,9 @@ export function AppShell() {
           </span>
           <span className="min-w-0 leading-tight">
             <span className="block truncate font-display text-sm font-bold tracking-tight">{t("app.brand.name")}</span>
-            <Eyebrow className="hidden truncate font-mono text-2xs font-medium tracking-wider text-brand-accent sm:block">{t("app.brand.subtitle")}</Eyebrow>
+            <Eyebrow className="hidden truncate font-mono text-2xs font-medium tracking-wider text-muted-foreground sm:block">
+              {t("app.brand.subtitle")}
+            </Eyebrow>
           </span>
         </div>
         <div className="flex min-w-0 items-center gap-2">
