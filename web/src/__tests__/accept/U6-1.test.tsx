@@ -18,6 +18,7 @@ const { apiMock } = vi.hoisted(() => ({
     getAccessChangeRequest: vi.fn(),
     getNHIReviewCampaign: vi.fn(),
     nhiReviewCampaigns: vi.fn(),
+    policyVersions: vi.fn(),
     startNHIReviewCampaign: vi.fn(),
   },
 }));
@@ -52,6 +53,11 @@ beforeEach(() => {
   apiMock.exportAudit.mockReset().mockResolvedValue({ format: "json", bundle: "BASE64BUNDLE" });
   apiMock.getAccessChangeRequest.mockReset().mockResolvedValue(accessChangeRequest());
   apiMock.nhiReviewCampaigns.mockReset().mockResolvedValue({ items: [nhiReviewCampaign()] });
+  apiMock.policyVersions.mockReset().mockResolvedValue({
+    items: [],
+    active: null,
+    counts: { total: 0, active: 0, draft: 0, inactive: 0, rolled_back: 0 },
+  });
   apiMock.getNHIReviewCampaign.mockReset().mockResolvedValue(nhiReviewCampaign());
   apiMock.startNHIReviewCampaign.mockReset().mockResolvedValue(nhiReviewCampaign());
   apiMock.decideNHIReviewItem.mockReset().mockResolvedValue(nhiReviewCampaign("certified"));
@@ -180,6 +186,7 @@ describe("U6-1 compliance evidence-pack dashboard", () => {
         <Policy />
       </MemoryRouter>,
     );
+    await user.click(await screen.findByText("Framework evidence and reports", { exact: true }));
     await waitFor(() => expect(apiMock.complianceEvidencePack).toHaveBeenCalledWith("soc2"));
     expect(await screen.findByText("SOC 2 evidence pack")).toBeInTheDocument();
     expect(screen.getByText("Download signed bundle")).toBeInTheDocument();

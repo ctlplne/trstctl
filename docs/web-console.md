@@ -332,12 +332,16 @@ never inflate authoritative trust or automation. Backed by `/api/v1/graph`,
 
 ### Compliance, audit & policy (`/policy`, `/audit`)
 
-Policy renders the policy gate, a compliance evidence-pack dashboard (pick a
-framework — PCI-DSS, HIPAA, SOC 2, FedRAMP, FIPS 140, CA/B Forum BR, and more — and
-inspect the signed tenant/window, exact event/object references, and missing
-prerequisites before exporting the pack). It also shows signed certificate-custody
-totals and the exact fingerprint/fields for every incomplete custody row, the
-CAP-OBS-02 inventory report, report schedules, and the dry-run workbench. The audit
+**Rules and approvals** opens with the decision an operator needs: whether fail-closed
+protection is on, whether a custom rule is active, what changed, and what needs
+approval. **Create rule** creates a draft only. Rule versions, safe testing, framework
+evidence, reports, and access reviews stay in four closed sections until requested;
+this keeps the default screen calm without removing exact evidence. Framework evidence
+includes PCI-DSS, HIPAA, SOC 2, FedRAMP, FIPS 140, CA/B Forum BR, and more, with the
+signed tenant/window, exact event/object references, and missing prerequisites. It
+also shows signed certificate-custody totals and the exact fingerprint/fields for
+every incomplete custody row, the CAP-OBS-02 inventory report, report schedules, and
+the dry-run workbench. The audit
 explorer filters the tamper-evident event stream and exports a signed evidence
 bundle. The evidence panel names the exact chain head, RFC 3161 kind, authority
 time, and whether the full token is present. Its download is the canonical JSON
@@ -504,7 +508,7 @@ the notification outbox; toasts report success and failure.
   never guessed to be an owner UUID. Submission opens the first-class
   `issuance.request.opened` lifecycle object, so the requester and approver read the
   same event-projected request instead of two independently inferred views.
-- Policy (`/policy`) includes access-change approvals for NHI entitlement changes: a
+- Rules and approvals (`/policy`) includes access-change approvals for NHI entitlement changes: a
   PR/ticket/CAB-backed request, evidence refs, and approve/deny by a distinct
   reviewer. The panel stores metadata and evidence references only, never credential
   values.
@@ -588,7 +592,7 @@ grounded and sufficient. Backed by `/api/v1/ai/status`, `/api/v1/mcp/tools`, `/a
 | `/approvals` | Approvals |
 | `/operations` | Operations |
 | `/notifications` | Notifications |
-| `/policy` | Policy |
+| `/policy` | Rules and approvals |
 | `/audit` | Audit |
 | `/privacy` | Privacy |
 | `/connectors` | Where credentials are installed |

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Policy } from "@/pages/Policy";
@@ -628,12 +628,100 @@ describe("policy governance surface", () => {
     );
   });
 
+  it("answers protection, change, and approval state before revealing policy machinery", async () => {
+    const user = userEvent.setup();
+    renderPolicy();
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Rules and approvals" })).toBeInTheDocument();
+    expect(screen.getByText("Whether protection is on, what changed, and what needs approval.", { exact: true })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 2, name: "Protection is on" })).toBeInTheDocument();
+    expect(screen.getByText('Custom rule "Default lifecycle gate" is active.', { exact: true })).toBeInTheDocument();
+    expect(screen.getByText("1 request needs approval", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText("2 rule versions recorded", { exact: true })).toBeInTheDocument();
+
+    const actions = screen.getByTestId("page-depth-operate");
+    expect(within(actions).getAllByRole("button")).toHaveLength(1);
+    const create = within(actions).getByRole("button", { name: "Create rule" });
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(document.querySelectorAll("main input, main select, main textarea")).toHaveLength(0);
+    expect(apiMock.complianceEvidencePack).not.toHaveBeenCalled();
+    expect(apiMock.complianceInventoryReport).not.toHaveBeenCalled();
+    expect(apiMock.nhiComplianceReport).not.toHaveBeenCalled();
+    expect(apiMock.nhiReviewCampaigns).not.toHaveBeenCalled();
+    expect(apiMock.getAccessChangeRequest).not.toHaveBeenCalled();
+
+    const disclosureTitles = ["Rule versions and change history", "Test a rule safely", "Framework evidence and reports", "Approval and access reviews"];
+    for (const title of disclosureTitles) {
+      const details = screen.getByText(title, { exact: true }).closest("details");
+      expect(details).not.toHaveAttribute("open");
+    }
+
+    await user.click(create);
+    const dialog = screen.getByRole("dialog", { name: "Create rule" });
+    expect(within(dialog).getByText(/Creating a draft does not activate it/, { exact: false })).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Description", { exact: true })).toHaveFocus();
+    expect(dialog).toHaveClass("max-h-[calc(100dvh-2rem)]", "overflow-y-auto", "overscroll-contain");
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(apiMock.createPolicyVersion).not.toHaveBeenCalled();
+
+    await user.click(screen.getByText("Rule versions and change history", { exact: true }));
+    expect(await screen.findByRole("table", { name: "Policy versions" })).toBeInTheDocument();
+    expect(screen.getByText("Emergency issuance guard", { exact: true })).toBeInTheDocument();
+
+    await user.click(screen.getByText("Test a rule safely", { exact: true }));
+    expect(screen.getByRole("form", { name: "Policy dry run" })).toBeInTheDocument();
+
+    await user.click(screen.getByText("Framework evidence and reports", { exact: true }));
+    await waitFor(() => expect(apiMock.complianceEvidencePack).toHaveBeenCalledWith("soc2"));
+    expect(await screen.findByRole("heading", { name: "SOC 2 evidence pack" })).toBeInTheDocument();
+
+    await user.click(screen.getByText("Approval and access reviews", { exact: true }));
+    await waitFor(() => expect(apiMock.nhiReviewCampaigns).toHaveBeenCalledWith({ limit: 5 }));
+    expect(await screen.findByRole("heading", { name: "Access-change approvals" })).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/BEGIN .* PRIVATE KEY|raw token hidden/i);
+  });
+
+  it("explains built-in fail-closed protection without claiming a custom rule exists", async () => {
+    apiMock.policyVersions.mockResolvedValue({
+      items: [],
+      active: null,
+      counts: { total: 0, active: 0, draft: 0, inactive: 0, rolled_back: 0 },
+    });
+    apiMock.accessChangeRequests.mockResolvedValue({ items: [] });
+
+    renderPolicy();
+
+    expect(await screen.findByRole("heading", { level: 2, name: "Protection is on; no custom rule is active" })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "The built-in default-deny gate still checks every issue, deploy, and revoke request. Create and activate a rule before relying on custom allow logic.",
+        { exact: true },
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("0 requests need approval", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText("0 rule versions recorded", { exact: true })).toBeInTheDocument();
+  });
+
+  it("reports an unknown protection state when the opening APIs cannot be verified", async () => {
+    apiMock.policyVersions.mockRejectedValue(new Error("policy versions API unavailable"));
+
+    renderPolicy();
+
+    const alert = await screen.findByRole("alert");
+    expect(within(alert).getByText("Protection state is unknown", { exact: true })).toBeInTheDocument();
+    expect(within(alert).getByText(/does not assume that protection is healthy/, { exact: false })).toBeInTheDocument();
+    expect(within(alert).getByText("policy versions API unavailable", { exact: true })).toBeInTheDocument();
+    expect(screen.queryByText("Protection is on", { exact: true })).not.toBeInTheDocument();
+  });
+
   it("routes policy decisions to Audit and serves policy dry-run traces", async () => {
     const user = userEvent.setup();
     renderPolicy();
-    await screen.findByRole("heading", { name: "SOC 2 evidence pack" });
 
-    expect(screen.getByRole("heading", { name: "Policy" })).toBeInTheDocument();
+    await user.click(await screen.findByText("Rule versions and change history", { exact: true }));
+    await user.click(screen.getByText("Test a rule safely", { exact: true }));
+
+    expect(screen.getByRole("heading", { level: 1, name: "Rules and approvals" })).toBeInTheDocument();
     expect(screen.getByText(/Decisions are evidence events/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Open policy decisions in Audit/i })).toHaveAttribute("href", "/audit?type=policy.decision");
     expect(screen.getByRole("link", { name: /Open profile evaluations in Audit/i })).toHaveAttribute("href", "/audit?type=issuance.profile_evaluated");
@@ -661,13 +749,17 @@ describe("policy governance surface", () => {
   it("serves policy version authoring, activation, and rollback controls", async () => {
     const user = userEvent.setup();
     renderPolicy();
+
+    await user.click(await screen.findByText("Rule versions and change history", { exact: true }));
     await screen.findByRole("heading", { name: "Active policy" });
 
     expect(screen.getByRole("table", { name: "Policy versions" })).toBeInTheDocument();
     expect(screen.getByText("Emergency issuance guard")).toBeInTheDocument();
     expect(screen.getByText("sha256-active-policy-module")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Author version" }));
+    await user.click(within(screen.getByTestId("page-depth-operate")).getByRole("button", { name: "Create rule" }));
+    const dialog = screen.getByRole("dialog", { name: "Create rule" });
+    await user.click(within(dialog).getByRole("button", { name: "Create rule" }));
     await waitFor(() =>
       expect(apiMock.createPolicyVersion).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -688,7 +780,10 @@ describe("policy governance surface", () => {
   });
 
   it("removes notification-channel fixtures and live channel controls", async () => {
+    const user = userEvent.setup();
     renderPolicy();
+
+    await user.click(await screen.findByText("Framework evidence and reports", { exact: true }));
     await screen.findByRole("heading", { name: "SOC 2 evidence pack" });
 
     expect(screen.queryByRole("heading", { name: "Notification integrations" })).not.toBeInTheDocument();
@@ -706,6 +801,7 @@ describe("policy governance surface", () => {
     const user = userEvent.setup();
     renderPolicy();
 
+    await user.click(await screen.findByText("Framework evidence and reports", { exact: true }));
     expect(screen.getByRole("heading", { name: "Compliance posture and reports" })).toBeInTheDocument();
     await waitFor(() => expect(apiMock.complianceEvidencePack).toHaveBeenCalledWith("soc2"));
     await waitFor(() => expect(apiMock.complianceInventoryReport).toHaveBeenCalled());
@@ -819,6 +915,7 @@ describe("policy governance surface", () => {
     const user = userEvent.setup();
     renderPolicy();
 
+    await user.click(await screen.findByText("Approval and access reviews", { exact: true }));
     expect(await screen.findByRole("heading", { name: "NHI access certification" })).toBeInTheDocument();
     expect(await screen.findByText("Payments API workload")).toBeInTheDocument();
     expect(screen.getByText("secret:payments/db/read")).toBeInTheDocument();
@@ -842,6 +939,7 @@ describe("policy governance surface", () => {
     const user = userEvent.setup();
     renderPolicy();
 
+    await user.click(await screen.findByText("Approval and access reviews", { exact: true }));
     expect(await screen.findByRole("heading", { name: "Access-change approvals" })).toBeInTheDocument();
     expect((await screen.findAllByText("Prod deployer GitHub App")).length).toBeGreaterThan(0);
     expect(screen.getByText("repo:contents:write")).toBeInTheDocument();
@@ -866,8 +964,10 @@ describe("policy governance surface", () => {
   });
 
   it("renders access-change links only when the URL is safe", async () => {
+    const user = userEvent.setup();
     renderPolicy();
 
+    await user.click(await screen.findByText("Approval and access reviews", { exact: true }));
     const link = await screen.findByRole("link", { name: "https://github.com/org/prod-infra/pull/4821" });
     expect(link).toHaveAttribute("href", "https://github.com/org/prod-infra/pull/4821");
     expect(link).toHaveAttribute("target", "_blank");
@@ -879,8 +979,10 @@ describe("policy governance surface", () => {
     apiMock.accessChangeRequests.mockResolvedValue({ items: [unsafeRequest] });
     apiMock.getAccessChangeRequest.mockResolvedValue(unsafeRequest);
 
+    const user = userEvent.setup();
     renderPolicy();
 
+    await user.click(await screen.findByText("Approval and access reviews", { exact: true }));
     expect(await screen.findByText("Scoped deployment automation access")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "javascript:alert(1)" })).not.toBeInTheDocument();
     expect(screen.queryByText("javascript:alert(1)")).not.toBeInTheDocument();

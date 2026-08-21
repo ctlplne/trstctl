@@ -849,8 +849,14 @@ describe("i18n boundary", () => {
       // and unused connector capabilities cannot inflate the opening claim.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
       // release.
-      "es-ES": "67b8735837ea9a08dc28bf85a3cb446ba9574879f85d0da9ef9f56d4699bf50b",
-      "de-DE": "7a1acb4274ed75fde22e3829cbecd8dc1148ab787728a65a3419ba2fe27e7e05",
+      // QA design g32 re-pin: Rules and approvals now answers verified
+      // fail-closed protection, custom-rule state, recorded changes, and
+      // pending access decisions before exposing rule history, safe testing,
+      // framework evidence, and review machinery. Failed opening APIs render
+      // unknown rather than healthy. Machine-authored es/de — FLAGGED FOR
+      // HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "706f6ab8f01e39aac174fa91912da158436584491c5ebc37d6da1dd494b7b44c",
+      "de-DE": "cdd1b3008aa437918be2eb629086e2b2ea02323ab48faad1ff94624e0c46015f",
     });
   });
 

@@ -4816,8 +4816,89 @@ export const messages = {
     description: "Primary navigation item.",
   },
   "nav.item.policy": {
-    defaultMessage: "Policy",
+    defaultMessage: "Rules and approvals",
     description: "Primary navigation item.",
+  },
+  "policy.design.title": {
+    defaultMessage: "Rules and approvals",
+    description: "Decision-first title for policy enforcement, versioning, and approval evidence.",
+  },
+  "policy.design.answer": {
+    defaultMessage: "Whether protection is on, what changed, and what needs approval.",
+    description: "Decision-first answer at the top of the rules and approvals route.",
+  },
+  "policy.design.technicalDetails": {
+    defaultMessage: "Raw Rego, versions, tests, framework mappings, decisions.",
+    description: "Exact expert evidence retained on the rules and approvals route.",
+  },
+  "policy.design.create": { defaultMessage: "Create rule", description: "Primary rules-route action and draft-rule dialog title." },
+  "policy.design.createHelp": {
+    defaultMessage:
+      "Create a reviewed draft with its change and evidence references. Creating a draft does not activate it; activation and rollback remain separate recorded actions.",
+    description: "Safety boundary in the Create rule dialog.",
+  },
+  "policy.design.moduleHelp": {
+    defaultMessage: "The server validates the Rego package and query before saving. A draft cannot allow anything until a separate activation succeeds.",
+    description: "Fail-closed rule validation guidance.",
+  },
+  "policy.design.checking": { defaultMessage: "Checking protection and approval state…", description: "Opening summary loading state." },
+  "policy.design.summaryUnavailable": {
+    defaultMessage: "Protection state is unknown",
+    description: "Fail-closed opening status when the rules or approvals API cannot be verified.",
+  },
+  "policy.design.summaryUnavailableHelp": {
+    defaultMessage:
+      "trstctl could not verify the rule or approval state, so this page does not assume that protection is healthy. Check the exact error and restore the API before making a policy decision.",
+    description: "Technical ELI5 explanation for an unavailable policy summary.",
+  },
+  "policy.design.protected": { defaultMessage: "Protection is on", description: "Opening status when the fail-closed gate and a custom rule are active." },
+  "policy.design.protectedNoCustom": {
+    defaultMessage: "Protection is on; no custom rule is active",
+    description: "Opening status when built-in fail-closed enforcement remains on without an active custom lifecycle rule.",
+  },
+  "policy.design.activeRule": { defaultMessage: 'Custom rule "{rule}" is active.', description: "Active custom lifecycle rule summary." },
+  "policy.design.defaultDeny": {
+    defaultMessage:
+      "The built-in default-deny gate still checks every issue, deploy, and revoke request. Create and activate a rule before relying on custom allow logic.",
+    description: "Truth boundary when no custom lifecycle policy version is active.",
+  },
+  "policy.design.approvalsLabel": { defaultMessage: "Waiting for approval", description: "Approval summary label." },
+  "policy.design.oneApproval": { defaultMessage: "1 request needs approval", description: "Pending approval summary for one request." },
+  "policy.design.manyApprovals": { defaultMessage: "{count} requests need approval", description: "Pending approval summary for zero or multiple requests." },
+  "policy.design.changesLabel": { defaultMessage: "Recorded rule changes", description: "Policy version summary label." },
+  "policy.design.oneVersion": { defaultMessage: "1 rule version recorded", description: "Policy version summary for one version." },
+  "policy.design.manyVersions": { defaultMessage: "{count} rule versions recorded", description: "Policy version summary for zero or multiple versions." },
+  "policy.design.disclosure.rules": {
+    defaultMessage: "Rule versions and change history",
+    description: "Progressive disclosure for enforcement, active policy, versions, activation, rollback, and audit links.",
+  },
+  "policy.design.disclosure.test": { defaultMessage: "Test a rule safely", description: "Progressive disclosure for tenant-bound Rego dry runs." },
+  "policy.design.disclosure.compliance": {
+    defaultMessage: "Framework evidence and reports",
+    description: "Progressive disclosure for signed compliance packs, mappings, schedules, and exports.",
+  },
+  "policy.design.disclosure.approvals": {
+    defaultMessage: "Approval and access reviews",
+    description: "Progressive disclosure for access-change requests, decisions, and NHI certification.",
+  },
+  "policy.design.rulesHelp": {
+    defaultMessage:
+      "The built-in gate fails closed. A custom rule becomes effective only after its draft, validation, activation, and audit event succeed; rollback is another recorded action.",
+    description: "Technical ELI5 policy-version boundary.",
+  },
+  "policy.design.testHelp": {
+    defaultMessage: "A dry run evaluates candidate Rego against this tenant and records the decision. It does not activate the rule or change a credential.",
+    description: "Technical ELI5 dry-run mutation boundary.",
+  },
+  "policy.design.complianceHelp": {
+    defaultMessage:
+      "Framework mappings show evidence trstctl can prove and gaps the operator must attest. A signed export is evidence, never a claim that an organization is certified.",
+    description: "Technical ELI5 compliance-claim boundary.",
+  },
+  "policy.design.approvalsHelp": {
+    defaultMessage:
+      "Requests bind a proposed access change to evidence. A different reviewer decides it; access reviews certify existing machine access without accepting credential values.",
+    description: "Technical ELI5 dual-control and secret-value boundary.",
   },
   "policy.overview.description": {
     defaultMessage:

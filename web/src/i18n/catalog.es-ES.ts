@@ -1259,7 +1259,7 @@ const esESCatalog = {
   "nav.item.audit": "Auditoría",
   "nav.item.ownership": "Propiedad",
   "nav.item.rbac": "RBAC",
-  "nav.item.policy": "Política",
+  "nav.item.policy": "Reglas y aprobaciones",
   "policy.overview.description":
     "Las mutaciones de emision, despliegue y revocacion pasan por la compuerta OPA/Rego de denegacion predeterminada, separacion RA, aprobacion de doble control y comprobaciones de perfil vinculado antes de emitir cambios de estado.",
   "policy.enforcement.heading": "Ruta de aplicacion",
@@ -1955,6 +1955,41 @@ const esESCatalog = {
   "incidents.response.splunkPlaceholder": "https://splunk.example/services/collector",
   "incidents.response.jiraPlaceholder": "https://jira.example",
   "incidents.response.servicenowPlaceholder": "https://example.service-now.com",
+  // QA-G32 machine-authored translations; human review required before release.
+  "policy.design.title": "Reglas y aprobaciones",
+  "policy.design.answer": "Si la protección está activa, qué cambió y qué necesita aprobación.",
+  "policy.design.technicalDetails": "Rego sin procesar, versiones, pruebas, mapeos de marcos y decisiones.",
+  "policy.design.create": "Crear regla",
+  "policy.design.createHelp":
+    "Cree un borrador revisado con sus referencias de cambio y evidencia. Crear un borrador no lo activa; la activación y la reversión siguen siendo acciones separadas y registradas.",
+  "policy.design.moduleHelp":
+    "El servidor valida el paquete y la consulta Rego antes de guardar. Un borrador no puede permitir nada hasta que una activación separada tenga éxito.",
+  "policy.design.checking": "Comprobando la protección y las aprobaciones…",
+  "policy.design.summaryUnavailable": "Se desconoce el estado de protección",
+  "policy.design.summaryUnavailableHelp":
+    "trstctl no pudo verificar el estado de las reglas o aprobaciones, por lo que esta página no supone que la protección esté en buen estado. Revisa el error exacto y restaura la API antes de tomar una decisión de política.",
+  "policy.design.protected": "La protección está activa",
+  "policy.design.protectedNoCustom": "La protección está activa; no hay una regla personalizada activa",
+  "policy.design.activeRule": 'La regla personalizada "{rule}" está activa.',
+  "policy.design.defaultDeny":
+    "La protección integrada de denegación predeterminada sigue comprobando cada solicitud de emisión, despliegue y revocación. Cree y active una regla antes de depender de una autorización personalizada.",
+  "policy.design.approvalsLabel": "En espera de aprobación",
+  "policy.design.oneApproval": "1 solicitud necesita aprobación",
+  "policy.design.manyApprovals": "{count} solicitudes necesitan aprobación",
+  "policy.design.changesLabel": "Cambios de reglas registrados",
+  "policy.design.oneVersion": "1 versión de regla registrada",
+  "policy.design.manyVersions": "{count} versiones de reglas registradas",
+  "policy.design.disclosure.rules": "Versiones de reglas e historial de cambios",
+  "policy.design.disclosure.test": "Probar una regla de forma segura",
+  "policy.design.disclosure.compliance": "Evidencia de marcos e informes",
+  "policy.design.disclosure.approvals": "Aprobaciones y revisiones de acceso",
+  "policy.design.rulesHelp":
+    "La protección integrada falla de forma cerrada. Una regla personalizada solo entra en vigor cuando su borrador, validación, activación y evento de auditoría tienen éxito; la reversión es otra acción registrada.",
+  "policy.design.testHelp": "Una prueba evalúa Rego candidato con este inquilino y registra la decisión. No activa la regla ni cambia una credencial.",
+  "policy.design.complianceHelp":
+    "Los mapeos de marcos muestran la evidencia que trstctl puede probar y las brechas que debe atestiguar el operador. Una exportación firmada es evidencia, nunca una afirmación de certificación.",
+  "policy.design.approvalsHelp":
+    "Las solicitudes vinculan un cambio de acceso propuesto con evidencia. Otra persona lo decide; las revisiones certifican el acceso de máquinas sin aceptar valores de credenciales.",
   // QA-G31 machine-authored translations; human review required before release.
   "connectors.design.title": "Dónde se instalan las credenciales",
   "connectors.design.answer": "Qué destinos puede actualizar trstctl y si están en buen estado.",

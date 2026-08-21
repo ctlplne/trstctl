@@ -1,7 +1,9 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ComplianceEvidencePackPanel } from "@/components/ComplianceEvidencePackPanel";
+import { Dialog } from "@/components/Dialog";
 import { PageHeader } from "@/components/PageHeader";
+import { ScrollableTableRegion } from "@/components/ScrollableTableRegion";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
@@ -153,11 +155,11 @@ export function Policy() {
   const [selectedFramework, setSelectedFramework] = useState<ComplianceFramework>("soc2");
   const [evidencePack, setEvidencePack] = useState<ComplianceEvidencePack | null>(null);
   const [evidencePackError, setEvidencePackError] = useState<string | null>(null);
-  const [evidencePackLoading, setEvidencePackLoading] = useState(true);
+  const [evidencePackLoading, setEvidencePackLoading] = useState(false);
   const [inventoryReport, setInventoryReport] = useState<ComplianceInventoryReport | null>(null);
   const [nhiComplianceReport, setNHIComplianceReport] = useState<NHIComplianceReport | null>(null);
   const [reportSchedules, setReportSchedules] = useState<ComplianceReportSchedule[]>([]);
-  const [reportLoading, setReportLoading] = useState(true);
+  const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportNotice, setReportNotice] = useState<string | null>(null);
   const [scheduleAction, setScheduleAction] = useState(false);
@@ -168,7 +170,7 @@ export function Policy() {
   const [activeReview, setActiveReview] = useState<NHIReviewCampaign | null>(null);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [reviewNotice, setReviewNotice] = useState<string | null>(null);
-  const [reviewLoading, setReviewLoading] = useState(true);
+  const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewAction, setReviewAction] = useState<string | null>(null);
   const [decisionReasons, setDecisionReasons] = useState<Record<string, string>>({});
   const [accessRequests, setAccessRequests] = useState<AccessChangeRequest[]>([]);
@@ -227,8 +229,12 @@ export function Policy() {
     evidenceRefs: "pr:policy-42, cab:2026-07-02",
     module: lifecycleDryRunModule,
   });
+  const [ruleDialogOpen, setRuleDialogOpen] = useState(false);
+  const [open, setOpen] = useState({ rules: false, test: false, compliance: false, approvals: false });
+  const ruleDescriptionRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    if (!open.compliance) return undefined;
     let active = true;
     setEvidencePackLoading(true);
     setEvidencePackError(null);
@@ -247,9 +253,10 @@ export function Policy() {
     return () => {
       active = false;
     };
-  }, [selectedFramework]);
+  }, [open.compliance, selectedFramework]);
 
   useEffect(() => {
+    if (!open.compliance) return undefined;
     let active = true;
     setReportLoading(true);
     setReportError(null);
@@ -269,9 +276,10 @@ export function Policy() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [open.compliance]);
 
   useEffect(() => {
+    if (!open.approvals) return undefined;
     let active = true;
     setReviewLoading(true);
     setReviewError(null);
@@ -297,7 +305,7 @@ export function Policy() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [open.approvals]);
 
   useEffect(() => {
     let active = true;
@@ -309,7 +317,7 @@ export function Policy() {
         if (!active) return;
         const requests = page.items ?? [];
         setAccessRequests(requests);
-        if (requests.length === 0) {
+        if (!open.approvals || requests.length === 0) {
           setActiveAccessRequest(null);
           return;
         }
@@ -325,7 +333,7 @@ export function Policy() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [open.approvals]);
 
   useEffect(() => {
     let active = true;
@@ -620,6 +628,8 @@ export function Policy() {
       });
       setPolicyVersionNotice(`Policy version ${created.module_sha256.slice(0, 12)} authored.`);
       await refreshPolicyVersions(created.id);
+      setRuleDialogOpen(false);
+      setOpen((current) => ({ ...current, rules: true }));
     } catch (err) {
       setPolicyVersionError(describePolicyError(err, "policy version create failed"));
     } finally {
@@ -697,654 +707,767 @@ export function Policy() {
 
   return (
     <section aria-labelledby="policy-heading" className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
-      <PageHeader titleId="policy-heading" title={t("nav.item.policy")} description={t("policy.overview.description")} />
-
-      <section aria-labelledby="policy-gate-heading" className="grid min-w-0 gap-4 border-y border-border py-4">
-        <div>
-          <h2 id="policy-gate-heading" className="text-title font-semibold">
-            {t("policy.enforcement.heading")}
-          </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("policy.enforcement.description")}</p>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          {t("policy.enforcement.auditPrefix")}{" "}
-          <Link className="underline" to="/identities">
-            {t("policy.enforcement.identitiesLink")}
-          </Link>{" "}
-          {t("policy.enforcement.auditSuffix")}
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <Link className="underline" to="/audit?type=policy.decision">
-            {t("policy.enforcement.policyDecisionsLink")}
-          </Link>
-          <Link className="underline" to="/audit?type=issuance.profile_evaluated">
-            {t("policy.enforcement.profileEvaluationsLink")}
-          </Link>
-        </div>
-      </section>
-
-      <section aria-labelledby="policy-version-heading" className="grid min-w-0 gap-4 border-y border-border py-4">
-        <div>
-          <h2 id="policy-version-heading" className="text-title font-semibold">
-            {t("policy.versions.heading")}
-          </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("policy.versions.description")}</p>
-        </div>
-
-        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
-          <form className="grid min-w-0 gap-3 rounded-md border border-border p-4 text-sm" onSubmit={(event) => void createPolicyVersion(event)}>
-            <div className="grid min-w-0 gap-3 md:grid-cols-2">
-              <label className="grid min-w-0 gap-1">
-                <span className="font-medium">{t("policy.versions.descriptionLabel")}</span>
-                <input
-                  className="min-h-10 min-w-0 w-full rounded-md border border-border bg-background px-3 py-2"
-                  value={policyVersionForm.description}
-                  onChange={(event) => setPolicyVersionForm((current) => ({ ...current, description: event.target.value }))}
-                />
-              </label>
-              <label className="grid min-w-0 gap-1">
-                <span className="font-medium">{t("policy.versions.changeRef")}</span>
-                <input
-                  className="min-h-10 min-w-0 w-full rounded-md border border-border bg-background px-3 py-2"
-                  value={policyVersionForm.changeRef}
-                  onChange={(event) => setPolicyVersionForm((current) => ({ ...current, changeRef: event.target.value }))}
-                />
-              </label>
-            </div>
-            <label className="grid min-w-0 gap-1">
-              <span className="font-medium">{t("policy.versions.evidenceRefs")}</span>
-              <input
-                className="min-h-10 min-w-0 w-full rounded-md border border-border bg-background px-3 py-2"
-                value={policyVersionForm.evidenceRefs}
-                onChange={(event) => setPolicyVersionForm((current) => ({ ...current, evidenceRefs: event.target.value }))}
-              />
-            </label>
-            <label className="grid min-w-0 gap-1">
-              <span className="font-medium">{t("policy.versions.lifecycleModule")}</span>
-              <textarea
-                className="min-h-64 min-w-0 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-                spellCheck={false}
-                value={policyVersionForm.module}
-                onChange={(event) => setPolicyVersionForm((current) => ({ ...current, module: event.target.value }))}
-              />
-            </label>
-            <div>
-              <Button type="submit" disabled={policyVersionAction === "create" || !policyVersionForm.module.trim()}>
-                {policyVersionAction === "create" ? t("policy.versions.authoring") : t("policy.versions.authorVersion")}
-              </Button>
-            </div>
-          </form>
-
-          <section aria-labelledby="policy-active-version-heading" className="min-w-0 rounded-md border border-border p-4 text-sm">
-            <h3 id="policy-active-version-heading" className="text-sm font-semibold">
-              {t("policy.versions.activePolicy")}
-            </h3>
-            {activePolicyVersion ? (
-              <dl className="mt-3 grid gap-2">
-                <div>
-                  <dt className="text-xs font-medium text-muted-foreground">{t("policy.versions.status")}</dt>
-                  <dd>{activePolicyVersion.status}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-medium text-muted-foreground">{t("policy.versions.moduleHash")}</dt>
-                  <dd className="break-all font-mono text-xs">{activePolicyVersion.module_sha256}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-medium text-muted-foreground">{t("policy.versions.activated")}</dt>
-                  <dd>{activePolicyVersion.activated_at ? formatDate(activePolicyVersion.activated_at) : t("policy.versions.notActivated")}</dd>
-                </div>
-              </dl>
-            ) : (
-              <p className="mt-3 text-muted-foreground">{t("policy.versions.noActive")}</p>
-            )}
-          </section>
-        </div>
-
-        {policyVersionLoading && <LoadingState>{t("policy.versions.loading")}</LoadingState>}
-        {policyVersionError && <ErrorState title={t("policy.versions.unavailableTitle")}>{policyVersionError}</ErrorState>}
-        {policyVersionNotice && (
-          <p className="rounded-md border border-border bg-muted p-3 text-sm" role="status">
-            {policyVersionNotice}
-          </p>
-        )}
-
-        <div className="min-w-0 max-w-full overflow-x-auto rounded-md border border-border">
-          <table className="min-w-full text-left text-sm" aria-label={t("policy.versions.tableLabel")}>
-            <thead className="border-b border-border text-xs uppercase text-muted-foreground">
-              <tr>
-                <th className="px-3 py-2">{t("policy.versions.descriptionLabel")}</th>
-                <th className="px-3 py-2">{t("policy.versions.status")}</th>
-                <th className="px-3 py-2">{t("policy.versions.hash")}</th>
-                <th className="px-3 py-2">{t("policy.versions.change")}</th>
-                <th className="px-3 py-2">{t("policy.versions.actions")}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {policyVersions.map((version) => (
-                <tr key={version.id}>
-                  <td className="max-w-sm px-3 py-2">{version.description || version.id}</td>
-                  <td className="px-3 py-2">{version.status}</td>
-                  <td className="px-3 py-2 font-mono text-xs">{version.module_sha256.slice(0, 12)}</td>
-                  <td className="px-3 py-2">{version.change_ref || "-"}</td>
-                  <td className="px-3 py-2">
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => void activatePolicyVersion(version)}
-                        disabled={version.active || policyVersionAction === `activate:${version.id}`}
-                      >
-                        {policyVersionAction === `activate:${version.id}` ? t("policy.versions.activating") : t("policy.versions.activate")}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => void rollbackPolicyVersion(version)}
-                        disabled={!version.active || policyVersionAction === `rollback:${version.id}`}
-                      >
-                        {policyVersionAction === `rollback:${version.id}` ? t("policy.versions.rollingBack") : t("policy.versions.rollback")}
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {policyVersions.length === 0 && (
-                <tr>
-                  <td className="px-3 py-4 text-muted-foreground" colSpan={5}>
-                    {t("policy.versions.empty")}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section aria-labelledby="compliance-heading" className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 border-y border-border py-4">
-        <div>
-          <h2 id="compliance-heading" className="text-title font-semibold">
-            {t("policy.compliance.heading")}
-          </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("policy.compliance.description")}</p>
-        </div>
-        <div className="flex flex-wrap gap-2" aria-label={t("policy.compliance.frameworkGroup")}>
-          {complianceFrameworks.map((framework) => (
-            <Button
-              key={framework.id}
-              type="button"
-              variant={framework.id === selectedFramework ? "default" : "outline"}
-              aria-pressed={framework.id === selectedFramework}
-              onClick={() => setSelectedFramework(framework.id)}
-            >
-              {frameworkLabel(framework.id, t)}
-            </Button>
-          ))}
-        </div>
-
-        {evidencePackLoading && <LoadingState>{t("policy.compliance.loadingEvidencePack")}</LoadingState>}
-        {evidencePackError && <ErrorState title={t("policy.compliance.evidencePackUnavailable")}>{evidencePackError}</ErrorState>}
-        {evidencePack && <ComplianceEvidencePackPanel pack={evidencePack} label={frameworkLabel(evidencePack.framework, t)} />}
-
-        {reportLoading && <LoadingState>{t("policy.reporting.loading")}</LoadingState>}
-        {reportError && <ErrorState title={t("policy.reporting.unavailableTitle")}>{reportError}</ErrorState>}
-        {inventoryReport && <ComplianceInventoryReportPanel report={inventoryReport} schedules={reportSchedules} />}
-        {nhiComplianceReport && <NHIComplianceReportPanel report={nhiComplianceReport} />}
-
-        <form
-          className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 rounded-md border border-border p-4 text-sm lg:grid-cols-6"
-          onSubmit={(event) => void createReportSchedule(event)}
-        >
-          <label className="grid gap-1 lg:col-span-2">
-            <span className="font-medium">{t("policy.reporting.schedule")}</span>
-            <input
-              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
-              value={scheduleForm.name}
-              onChange={(event) => setScheduleForm((current) => ({ ...current, name: event.target.value }))}
-            />
-          </label>
-          <label className="grid gap-1">
-            <span className="font-medium">{t("policy.reporting.framework")}</span>
-            <select
-              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
-              value={scheduleForm.framework}
-              onChange={(event) => setScheduleForm((current) => ({ ...current, framework: event.target.value as ComplianceFramework }))}
-            >
-              {complianceFrameworks.map((framework) => (
-                <option key={framework.id} value={framework.id}>
-                  {frameworkLabel(framework.id, t)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-1">
-            <span className="font-medium">{t("policy.reporting.reportType")}</span>
-            <select
-              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
-              value={scheduleForm.reportType}
-              onChange={(event) => setScheduleForm((current) => ({ ...current, reportType: event.target.value as ComplianceReportType }))}
-            >
-              {complianceReportTypes.map((reportType) => (
-                <option key={reportType.id} value={reportType.id}>
-                  {t(reportType.labelKey)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-1">
-            <span className="font-medium">{t("policy.reporting.cadenceDays")}</span>
-            <input
-              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={scheduleForm.intervalDays}
-              onChange={(event) => setScheduleForm((current) => ({ ...current, intervalDays: event.target.value }))}
-            />
-          </label>
-          <label className="grid gap-1">
-            <span className="font-medium">{t("policy.reporting.recipientRef")}</span>
-            <input
-              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
-              value={scheduleForm.recipientRef}
-              onChange={(event) => setScheduleForm((current) => ({ ...current, recipientRef: event.target.value }))}
-            />
-          </label>
-          <div className="flex items-end lg:col-span-6">
-            <Button type="submit" disabled={scheduleAction}>
-              {scheduleAction ? t("policy.reporting.scheduling") : t("policy.reporting.createSchedule")}
-            </Button>
-          </div>
-        </form>
-        {reportNotice && (
-          <p className="rounded-md border border-border bg-muted p-3 text-sm" role="status">
-            {reportNotice}
-          </p>
-        )}
-
-        <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
-          <Button type="button" onClick={() => void exportComplianceEvidence()} disabled={exporting}>
-            {exporting ? translateNow("source.exporting.639e45361b") : translateNow("source.export.audit.evidence.c3f3b4ad52")}
+      <PageHeader
+        titleId="policy-heading"
+        title={t("policy.design.title")}
+        description={t("policy.design.answer")}
+        technicalDetails={t("policy.design.technicalDetails")}
+        actions={
+          <Button type="button" onClick={() => setRuleDialogOpen(true)}>
+            {t("policy.design.create")}
           </Button>
-          <Link className="text-sm underline" to="/audit">
-            {translateNow("source.open.audit.explorer.e155d6131a")}
-          </Link>
-        </div>
-        {evidenceBundle && (
-          <p className="rounded-md border border-border bg-muted p-3 font-mono text-xs" role="status">
-            {evidenceBundle}
-          </p>
-        )}
-        {evidenceError && (
-          <p className="rounded-md border border-destructive/40 p-3 text-sm text-destructive" role="alert">
-            {evidenceError}
-          </p>
-        )}
-      </section>
+        }
+      />
 
-      <section aria-labelledby="nhi-access-review-heading" className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 border-y border-border py-4">
-        <div>
-          <h2 id="nhi-access-review-heading" className="text-title font-semibold">
-            {translateNow("source.nhi.access.certification.3fd94ffdff")}
-          </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.campaigns.certify.non.human.identity.acces.5d99189fbe")}</p>
-        </div>
-
-        <form className="grid gap-3 rounded-md border border-border p-4 text-sm lg:grid-cols-6" onSubmit={(event) => void startNHIReviewCampaign(event)}>
-          <label className="grid gap-1 lg:col-span-2">
-            <span className="font-medium">{translateNow("source.campaign.268286d2ef")}</span>
-            <input
-              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
-              value={reviewForm.name}
-              onChange={(event) => setReviewForm((current) => ({ ...current, name: event.target.value }))}
-            />
-          </label>
-          <label className="grid gap-1 lg:col-span-2">
-            <span className="font-medium">{translateNow("source.reviewer.d29f46772c")}</span>
-            <input
-              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
-              placeholder={translateNow("source.current.session.subject.1f6510ea4d")}
-              value={reviewForm.reviewer}
-              onChange={(event) => setReviewForm((current) => ({ ...current, reviewer: event.target.value }))}
-            />
-          </label>
-          <label className="grid gap-1">
-            <span className="font-medium">{translateNow("source.risk.0711a8d636")}</span>
-            <select
-              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
-              value={reviewForm.risk}
-              onChange={(event) => setReviewForm((current) => ({ ...current, risk: event.target.value }))}
-            >
-              <option value="low">{translateNow("source.low.f793de205e")}</option>
-              <option value="medium">{translateNow("source.medium.8e588cd187")}</option>
-              <option value="high">{translateNow("source.high.c4ebc6d4a5")}</option>
-              <option value="critical">{translateNow("source.critical.427dd2969b")}</option>
-            </select>
-          </label>
-          <div className="flex items-end">
-            <Button className="w-full" type="submit" disabled={reviewAction === "start" || !reviewForm.name.trim() || !reviewForm.nhiId.trim()}>
-              {reviewAction === "start" ? translateNow("source.starting.82b93630a9") : translateNow("source.start.campaign.bfdb5d43fb")}
-            </Button>
+      {policyVersionLoading || accessLoading ? (
+        <LoadingState>{t("policy.design.checking")}</LoadingState>
+      ) : policyVersionError || accessError ? (
+        <ErrorState title={t("policy.design.summaryUnavailable")}>
+          <p>{t("policy.design.summaryUnavailableHelp")}</p>
+          <ul className="mt-2 list-disc ps-5">
+            {policyVersionError && <li>{policyVersionError}</li>}
+            {accessError && <li>{accessError}</li>}
+          </ul>
+        </ErrorState>
+      ) : (
+        <div className="ui-panel grid gap-3 p-comfortable" role="status" aria-live="polite">
+          <div>
+            <h2 className="text-title font-semibold">{activePolicyVersion ? t("policy.design.protected") : t("policy.design.protectedNoCustom")}</h2>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+              {activePolicyVersion
+                ? t("policy.design.activeRule", { rule: activePolicyVersion.description || activePolicyVersion.id })
+                : t("policy.design.defaultDeny")}
+            </p>
           </div>
-          <label className="grid gap-1 lg:col-span-2">
-            <span className="font-medium">{translateNow("source.nhi.id.52919bf0d5")}</span>
-            <input
-              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
-              value={reviewForm.nhiId}
-              onChange={(event) => setReviewForm((current) => ({ ...current, nhiId: event.target.value }))}
+          <dl className="grid gap-3 text-sm sm:grid-cols-2">
+            <Metric
+              label={t("policy.design.approvalsLabel")}
+              value={
+                accessRequests.filter((request) => request.status === "pending").length === 1
+                  ? t("policy.design.oneApproval")
+                  : t("policy.design.manyApprovals", {
+                      count: String(accessRequests.filter((request) => request.status === "pending").length),
+                    })
+              }
             />
-          </label>
-          <label className="grid gap-1 lg:col-span-2">
-            <span className="font-medium">{translateNow("source.display.name.2b7f6a84de")}</span>
-            <input
-              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
-              value={reviewForm.displayName}
-              onChange={(event) => setReviewForm((current) => ({ ...current, displayName: event.target.value }))}
+            <Metric
+              label={t("policy.design.changesLabel")}
+              value={policyVersions.length === 1 ? t("policy.design.oneVersion") : t("policy.design.manyVersions", { count: String(policyVersions.length) })}
             />
-          </label>
-          <label className="grid gap-1 lg:col-span-2">
-            <span className="font-medium">{translateNow("source.evidence.refs.edfa905c2f")}</span>
-            <input
-              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
-              value={reviewForm.evidenceRefs}
-              onChange={(event) => setReviewForm((current) => ({ ...current, evidenceRefs: event.target.value }))}
-            />
-          </label>
-          <label className="grid gap-1 lg:col-span-3">
-            <span className="font-medium">{translateNow("source.resource.eb7a842ff9")}</span>
-            <input
-              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
-              value={reviewForm.resource}
-              onChange={(event) => setReviewForm((current) => ({ ...current, resource: event.target.value }))}
-            />
-          </label>
-          <label className="grid gap-1 lg:col-span-3">
-            <span className="font-medium">{translateNow("source.entitlement.0d8f0b2d3a")}</span>
-            <input
-              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
-              value={reviewForm.entitlement}
-              onChange={(event) => setReviewForm((current) => ({ ...current, entitlement: event.target.value }))}
-            />
-          </label>
-        </form>
+          </dl>
+        </div>
+      )}
 
-        {reviewLoading && <LoadingState>{translateNow("source.loading.nhi.access.reviews.cd87c4f77e")}</LoadingState>}
-        {reviewError && <ErrorState title={translateNow("source.nhi.access.review.unavailable.7f4d6bdefd")}>{reviewError}</ErrorState>}
-        {reviewNotice && (
-          <p className="rounded-md border border-border bg-muted p-3 text-sm" role="status">
-            {reviewNotice}
-          </p>
-        )}
+      <PolicyDetails title={t("policy.design.disclosure.rules")} open={open.rules} onToggle={(value) => setOpen((current) => ({ ...current, rules: value }))}>
+        <div className="grid min-w-0 gap-6">
+          <p className="max-w-3xl text-sm text-muted-foreground">{t("policy.design.rulesHelp")}</p>
 
-        <div className="grid gap-4 xl:grid-cols-[18rem_minmax(0,1fr)]">
-          <section aria-label={translateNow("source.nhi.access.review.campaigns.873389dac9")} className="rounded-md border border-border">
-            {reviewCampaigns.length > 0 ? (
-              <div className="divide-y divide-border">
-                {reviewCampaigns.map((campaign) => (
-                  <button
-                    key={campaign.id}
-                    className={`grid w-full gap-1 px-3 py-3 text-left hover:bg-muted ${activeReview?.id === campaign.id ? "bg-muted" : ""}`}
-                    type="button"
-                    onClick={() => void selectNHIReviewCampaign(campaign.id)}
-                  >
-                    <span className="font-medium">{campaign.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {campaign.status} · {campaign.pending_count} {translateNow("source.pending.64e6bbf0cf")} {campaign.certified_count}{" "}
-                      {translateNow("source.certified.3d4b25dc0b")} {campaign.revoked_count} {translateNow("source.revoked.4bb47f186d")}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="p-3 text-sm text-muted-foreground">{translateNow("source.no.access.review.campaigns.5e5e0fbd56")}</p>
-            )}
+          <section aria-labelledby="policy-gate-heading" className="grid min-w-0 gap-4 border-y border-border py-4">
+            <div>
+              <h2 id="policy-gate-heading" className="text-title font-semibold">
+                {t("policy.enforcement.heading")}
+              </h2>
+              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("policy.enforcement.description")}</p>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {t("policy.enforcement.auditPrefix")}{" "}
+              <Link className="underline" to="/identities">
+                {t("policy.enforcement.identitiesLink")}
+              </Link>{" "}
+              {t("policy.enforcement.auditSuffix")}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Link className="underline" to="/audit?type=policy.decision">
+                {t("policy.enforcement.policyDecisionsLink")}
+              </Link>
+              <Link className="underline" to="/audit?type=issuance.profile_evaluated">
+                {t("policy.enforcement.profileEvaluationsLink")}
+              </Link>
+            </div>
           </section>
 
-          {activeReview && (
-            <NHIReviewCampaignPanel
-              campaign={activeReview}
-              decisionReasons={decisionReasons}
-              reviewAction={reviewAction}
-              onDecision={decideNHIReviewItem}
-              onReasonChange={setDecisionReasons}
-            />
-          )}
-        </div>
-      </section>
+          <section aria-labelledby="policy-version-heading" className="grid min-w-0 gap-4 border-y border-border py-4">
+            <div>
+              <h2 id="policy-version-heading" className="text-title font-semibold">
+                {t("policy.versions.heading")}
+              </h2>
+              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("policy.versions.description")}</p>
+            </div>
 
-      <section aria-labelledby="access-change-heading" className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 border-y border-border py-4">
-        <div>
-          <h2 id="access-change-heading" className="text-title font-semibold">
-            {t("policy.accessChange.heading")}
-          </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("policy.accessChange.description")}</p>
-        </div>
+            <div className="grid min-w-0 gap-4">
+              <section aria-labelledby="policy-active-version-heading" className="min-w-0 rounded-md border border-border p-4 text-sm">
+                <h3 id="policy-active-version-heading" className="text-sm font-semibold">
+                  {t("policy.versions.activePolicy")}
+                </h3>
+                {activePolicyVersion ? (
+                  <dl className="mt-3 grid gap-2">
+                    <div>
+                      <dt className="text-xs font-medium text-muted-foreground">{t("policy.versions.status")}</dt>
+                      <dd>{activePolicyVersion.status}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs font-medium text-muted-foreground">{t("policy.versions.moduleHash")}</dt>
+                      <dd className="break-all font-mono text-xs">{activePolicyVersion.module_sha256}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs font-medium text-muted-foreground">{t("policy.versions.activated")}</dt>
+                      <dd>{activePolicyVersion.activated_at ? formatDate(activePolicyVersion.activated_at) : t("policy.versions.notActivated")}</dd>
+                    </div>
+                  </dl>
+                ) : (
+                  <p className="mt-3 text-muted-foreground">{t("policy.versions.noActive")}</p>
+                )}
+              </section>
+            </div>
 
-        <form className="grid gap-3 rounded-md border border-border p-4 text-sm lg:grid-cols-6" onSubmit={(event) => void createAccessChangeRequest(event)}>
-          <label className="grid gap-1">
-            <span className="font-medium">{t("policy.accessChange.action")}</span>
-            <select
-              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
-              value={accessForm.requestedAction}
-              onChange={(event) => setAccessForm((current) => ({ ...current, requestedAction: event.target.value as AccessChangeRequest["requested_action"] }))}
-            >
-              {["grant", "modify", "revoke", "rotate", "deploy", "break_glass"].map((action) => (
-                <option key={action} value={action}>
-                  {action}
-                </option>
+            {policyVersionLoading && <LoadingState>{t("policy.versions.loading")}</LoadingState>}
+            {policyVersionError && <ErrorState title={t("policy.versions.unavailableTitle")}>{policyVersionError}</ErrorState>}
+            {policyVersionNotice && (
+              <p className="rounded-md border border-border bg-muted p-3 text-sm" role="status">
+                {policyVersionNotice}
+              </p>
+            )}
+
+            <ScrollableTableRegion label={t("policy.versions.tableLabel")}>
+              <table className="min-w-full text-left text-sm" aria-label={t("policy.versions.tableLabel")}>
+                <thead className="border-b border-border text-xs uppercase text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2">{t("policy.versions.descriptionLabel")}</th>
+                    <th className="px-3 py-2">{t("policy.versions.status")}</th>
+                    <th className="px-3 py-2">{t("policy.versions.hash")}</th>
+                    <th className="px-3 py-2">{t("policy.versions.change")}</th>
+                    <th className="px-3 py-2">{t("policy.versions.actions")}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {policyVersions.map((version) => (
+                    <tr key={version.id}>
+                      <td className="max-w-sm px-3 py-2">{version.description || version.id}</td>
+                      <td className="px-3 py-2">{version.status}</td>
+                      <td className="px-3 py-2 font-mono text-xs">{version.module_sha256.slice(0, 12)}</td>
+                      <td className="px-3 py-2">{version.change_ref || "-"}</td>
+                      <td className="px-3 py-2">
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => void activatePolicyVersion(version)}
+                            disabled={version.active || policyVersionAction === `activate:${version.id}`}
+                          >
+                            {policyVersionAction === `activate:${version.id}` ? t("policy.versions.activating") : t("policy.versions.activate")}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => void rollbackPolicyVersion(version)}
+                            disabled={!version.active || policyVersionAction === `rollback:${version.id}`}
+                          >
+                            {policyVersionAction === `rollback:${version.id}` ? t("policy.versions.rollingBack") : t("policy.versions.rollback")}
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {policyVersions.length === 0 && (
+                    <tr>
+                      <td className="px-3 py-4 text-muted-foreground" colSpan={5}>
+                        {t("policy.versions.empty")}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </ScrollableTableRegion>
+          </section>
+        </div>
+      </PolicyDetails>
+
+      <PolicyDetails
+        title={t("policy.design.disclosure.compliance")}
+        open={open.compliance}
+        onToggle={(value) => setOpen((current) => ({ ...current, compliance: value }))}
+      >
+        <div className="grid min-w-0 gap-6">
+          <p className="max-w-3xl text-sm text-muted-foreground">{t("policy.design.complianceHelp")}</p>
+          <section aria-labelledby="compliance-heading" className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 border-y border-border py-4">
+            <div>
+              <h2 id="compliance-heading" className="text-title font-semibold">
+                {t("policy.compliance.heading")}
+              </h2>
+              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("policy.compliance.description")}</p>
+            </div>
+            <div className="flex flex-wrap gap-2" aria-label={t("policy.compliance.frameworkGroup")}>
+              {complianceFrameworks.map((framework) => (
+                <Button
+                  key={framework.id}
+                  type="button"
+                  variant={framework.id === selectedFramework ? "default" : "outline"}
+                  aria-pressed={framework.id === selectedFramework}
+                  onClick={() => setSelectedFramework(framework.id)}
+                >
+                  {frameworkLabel(framework.id, t)}
+                </Button>
               ))}
-            </select>
-          </label>
-          <label className="grid gap-1">
-            <span className="font-medium">{t("policy.accessChange.risk")}</span>
-            <select
-              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
-              value={accessForm.risk}
-              onChange={(event) => setAccessForm((current) => ({ ...current, risk: event.target.value }))}
-            >
-              <option value="low">{translateNow("source.low.f793de205e")}</option>
-              <option value="medium">{translateNow("source.medium.8e588cd187")}</option>
-              <option value="high">{translateNow("source.high.c4ebc6d4a5")}</option>
-              <option value="critical">{translateNow("source.critical.427dd2969b")}</option>
-            </select>
-          </label>
-          <label className="grid gap-1">
-            <span className="font-medium">{t("policy.accessChange.approvals")}</span>
-            <input
-              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={accessForm.requiredApprovals}
-              onChange={(event) => setAccessForm((current) => ({ ...current, requiredApprovals: event.target.value }))}
-            />
-          </label>
-          <label className="grid gap-1 lg:col-span-3">
-            <span className="font-medium">{t("policy.accessChange.changeRef")}</span>
-            <input
-              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
-              value={accessForm.changeRef}
-              onChange={(event) => setAccessForm((current) => ({ ...current, changeRef: event.target.value }))}
-            />
-          </label>
-          <label className="grid gap-1 lg:col-span-2">
-            <span className="font-medium">{t("policy.accessChange.nhiId")}</span>
-            <input
-              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
-              value={accessForm.nhiId}
-              onChange={(event) => setAccessForm((current) => ({ ...current, nhiId: event.target.value }))}
-            />
-          </label>
-          <label className="grid gap-1 lg:col-span-2">
-            <span className="font-medium">{t("policy.accessChange.nhiKind")}</span>
-            <input
-              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
-              value={accessForm.nhiKind}
-              onChange={(event) => setAccessForm((current) => ({ ...current, nhiKind: event.target.value }))}
-            />
-          </label>
-          <label className="grid gap-1 lg:col-span-2">
-            <span className="font-medium">{t("policy.accessChange.displayName")}</span>
-            <input
-              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
-              value={accessForm.displayName}
-              onChange={(event) => setAccessForm((current) => ({ ...current, displayName: event.target.value }))}
-            />
-          </label>
-          <label className="grid gap-1 lg:col-span-3">
-            <span className="font-medium">{t("policy.accessChange.resource")}</span>
-            <input
-              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
-              value={accessForm.resource}
-              onChange={(event) => setAccessForm((current) => ({ ...current, resource: event.target.value }))}
-            />
-          </label>
-          <label className="grid gap-1 lg:col-span-3">
-            <span className="font-medium">{t("policy.accessChange.entitlement")}</span>
-            <input
-              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
-              value={accessForm.entitlement}
-              onChange={(event) => setAccessForm((current) => ({ ...current, entitlement: event.target.value }))}
-            />
-          </label>
-          <label className="grid gap-1 lg:col-span-3">
-            <span className="font-medium">{t("policy.accessChange.changeUrl")}</span>
-            <input
-              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
-              value={accessForm.changeUrl}
-              onChange={(event) => setAccessForm((current) => ({ ...current, changeUrl: event.target.value }))}
-            />
-          </label>
-          <label className="grid gap-1 lg:col-span-3">
-            <span className="font-medium">{t("policy.accessChange.evidenceRefs")}</span>
-            <input
-              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
-              value={accessForm.evidenceRefs}
-              onChange={(event) => setAccessForm((current) => ({ ...current, evidenceRefs: event.target.value }))}
-            />
-          </label>
-          <label className="grid gap-1 lg:col-span-5">
-            <span className="font-medium">{t("policy.accessChange.reason")}</span>
-            <input
-              className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
-              value={accessForm.reason}
-              onChange={(event) => setAccessForm((current) => ({ ...current, reason: event.target.value }))}
-            />
-          </label>
-          <div className="flex items-end">
-            <Button
-              className="w-full"
-              type="submit"
-              disabled={accessAction === "create" || !accessForm.nhiId.trim() || !accessForm.changeRef.trim() || !accessForm.reason.trim()}
-            >
-              {accessAction === "create" ? t("policy.accessChange.opening") : t("policy.accessChange.openRequest")}
-            </Button>
-          </div>
-        </form>
+            </div>
 
-        {accessLoading && <LoadingState>{t("policy.accessChange.loading")}</LoadingState>}
-        {accessError && <ErrorState title={t("policy.accessChange.unavailableTitle")}>{accessError}</ErrorState>}
-        {accessNotice && (
-          <p className="rounded-md border border-border bg-muted p-3 text-sm" role="status">
-            {accessNotice}
-          </p>
-        )}
+            {evidencePackLoading && <LoadingState>{t("policy.compliance.loadingEvidencePack")}</LoadingState>}
+            {evidencePackError && <ErrorState title={t("policy.compliance.evidencePackUnavailable")}>{evidencePackError}</ErrorState>}
+            {evidencePack && <ComplianceEvidencePackPanel pack={evidencePack} label={frameworkLabel(evidencePack.framework, t)} />}
 
-        <div className="grid gap-4 xl:grid-cols-[18rem_minmax(0,1fr)]">
-          <section aria-label={t("policy.accessChange.listLabel")} className="rounded-md border border-border">
-            {accessRequests.length > 0 ? (
-              <div className="divide-y divide-border">
-                {accessRequests.map((request) => (
-                  <button
-                    key={request.id}
-                    className={`grid w-full gap-1 px-3 py-3 text-left hover:bg-muted ${activeAccessRequest?.id === request.id ? "bg-muted" : ""}`}
-                    type="button"
-                    onClick={() => void selectAccessChangeRequest(request.id)}
-                  >
-                    <span className="font-medium">{request.display_name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {request.status} · {request.approval_count}/{request.required_approvals} · {request.change_system}
-                    </span>
-                  </button>
-                ))}
+            {reportLoading && <LoadingState>{t("policy.reporting.loading")}</LoadingState>}
+            {reportError && <ErrorState title={t("policy.reporting.unavailableTitle")}>{reportError}</ErrorState>}
+            {inventoryReport && <ComplianceInventoryReportPanel report={inventoryReport} schedules={reportSchedules} />}
+            {nhiComplianceReport && <NHIComplianceReportPanel report={nhiComplianceReport} />}
+
+            <form
+              className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 rounded-md border border-border p-4 text-sm lg:grid-cols-6"
+              onSubmit={(event) => void createReportSchedule(event)}
+            >
+              <label className="grid gap-1 lg:col-span-2">
+                <span className="font-medium">{t("policy.reporting.schedule")}</span>
+                <input
+                  className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
+                  value={scheduleForm.name}
+                  onChange={(event) => setScheduleForm((current) => ({ ...current, name: event.target.value }))}
+                />
+              </label>
+              <label className="grid gap-1">
+                <span className="font-medium">{t("policy.reporting.framework")}</span>
+                <select
+                  className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
+                  value={scheduleForm.framework}
+                  onChange={(event) => setScheduleForm((current) => ({ ...current, framework: event.target.value as ComplianceFramework }))}
+                >
+                  {complianceFrameworks.map((framework) => (
+                    <option key={framework.id} value={framework.id}>
+                      {frameworkLabel(framework.id, t)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-1">
+                <span className="font-medium">{t("policy.reporting.reportType")}</span>
+                <select
+                  className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
+                  value={scheduleForm.reportType}
+                  onChange={(event) => setScheduleForm((current) => ({ ...current, reportType: event.target.value as ComplianceReportType }))}
+                >
+                  {complianceReportTypes.map((reportType) => (
+                    <option key={reportType.id} value={reportType.id}>
+                      {t(reportType.labelKey)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-1">
+                <span className="font-medium">{t("policy.reporting.cadenceDays")}</span>
+                <input
+                  className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={scheduleForm.intervalDays}
+                  onChange={(event) => setScheduleForm((current) => ({ ...current, intervalDays: event.target.value }))}
+                />
+              </label>
+              <label className="grid gap-1">
+                <span className="font-medium">{t("policy.reporting.recipientRef")}</span>
+                <input
+                  className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
+                  value={scheduleForm.recipientRef}
+                  onChange={(event) => setScheduleForm((current) => ({ ...current, recipientRef: event.target.value }))}
+                />
+              </label>
+              <div className="flex items-end lg:col-span-6">
+                <Button type="submit" disabled={scheduleAction}>
+                  {scheduleAction ? t("policy.reporting.scheduling") : t("policy.reporting.createSchedule")}
+                </Button>
               </div>
-            ) : (
-              <p className="p-3 text-sm text-muted-foreground">{t("policy.accessChange.empty")}</p>
+            </form>
+            {reportNotice && (
+              <p className="rounded-md border border-border bg-muted p-3 text-sm" role="status">
+                {reportNotice}
+              </p>
+            )}
+
+            <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
+              <Button type="button" onClick={() => void exportComplianceEvidence()} disabled={exporting}>
+                {exporting ? translateNow("source.exporting.639e45361b") : translateNow("source.export.audit.evidence.c3f3b4ad52")}
+              </Button>
+              <Link className="text-sm underline" to="/audit">
+                {translateNow("source.open.audit.explorer.e155d6131a")}
+              </Link>
+            </div>
+            {evidenceBundle && (
+              <p className="rounded-md border border-border bg-muted p-3 font-mono text-xs" role="status">
+                {evidenceBundle}
+              </p>
+            )}
+            {evidenceError && (
+              <p className="rounded-md border border-destructive/40 p-3 text-sm text-destructive" role="alert">
+                {evidenceError}
+              </p>
             )}
           </section>
+        </div>
+      </PolicyDetails>
 
-          {activeAccessRequest && (
-            <AccessChangeRequestPanel
-              request={activeAccessRequest}
-              accessAction={accessAction}
-              decisionReasons={accessDecisionReasons}
-              onDecision={decideAccessChangeRequest}
-              onReasonChange={setAccessDecisionReasons}
+      <PolicyDetails
+        title={t("policy.design.disclosure.approvals")}
+        open={open.approvals}
+        onToggle={(value) => setOpen((current) => ({ ...current, approvals: value }))}
+      >
+        <div className="grid min-w-0 gap-6">
+          <p className="max-w-3xl text-sm text-muted-foreground">{t("policy.design.approvalsHelp")}</p>
+          <section aria-labelledby="nhi-access-review-heading" className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 border-y border-border py-4">
+            <div>
+              <h2 id="nhi-access-review-heading" className="text-title font-semibold">
+                {translateNow("source.nhi.access.certification.3fd94ffdff")}
+              </h2>
+              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.campaigns.certify.non.human.identity.acces.5d99189fbe")}</p>
+            </div>
+
+            <form className="grid gap-3 rounded-md border border-border p-4 text-sm lg:grid-cols-6" onSubmit={(event) => void startNHIReviewCampaign(event)}>
+              <label className="grid gap-1 lg:col-span-2">
+                <span className="font-medium">{translateNow("source.campaign.268286d2ef")}</span>
+                <input
+                  className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
+                  value={reviewForm.name}
+                  onChange={(event) => setReviewForm((current) => ({ ...current, name: event.target.value }))}
+                />
+              </label>
+              <label className="grid gap-1 lg:col-span-2">
+                <span className="font-medium">{translateNow("source.reviewer.d29f46772c")}</span>
+                <input
+                  className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
+                  placeholder={translateNow("source.current.session.subject.1f6510ea4d")}
+                  value={reviewForm.reviewer}
+                  onChange={(event) => setReviewForm((current) => ({ ...current, reviewer: event.target.value }))}
+                />
+              </label>
+              <label className="grid gap-1">
+                <span className="font-medium">{translateNow("source.risk.0711a8d636")}</span>
+                <select
+                  className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
+                  value={reviewForm.risk}
+                  onChange={(event) => setReviewForm((current) => ({ ...current, risk: event.target.value }))}
+                >
+                  <option value="low">{translateNow("source.low.f793de205e")}</option>
+                  <option value="medium">{translateNow("source.medium.8e588cd187")}</option>
+                  <option value="high">{translateNow("source.high.c4ebc6d4a5")}</option>
+                  <option value="critical">{translateNow("source.critical.427dd2969b")}</option>
+                </select>
+              </label>
+              <div className="flex items-end">
+                <Button className="w-full" type="submit" disabled={reviewAction === "start" || !reviewForm.name.trim() || !reviewForm.nhiId.trim()}>
+                  {reviewAction === "start" ? translateNow("source.starting.82b93630a9") : translateNow("source.start.campaign.bfdb5d43fb")}
+                </Button>
+              </div>
+              <label className="grid gap-1 lg:col-span-2">
+                <span className="font-medium">{translateNow("source.nhi.id.52919bf0d5")}</span>
+                <input
+                  className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
+                  value={reviewForm.nhiId}
+                  onChange={(event) => setReviewForm((current) => ({ ...current, nhiId: event.target.value }))}
+                />
+              </label>
+              <label className="grid gap-1 lg:col-span-2">
+                <span className="font-medium">{translateNow("source.display.name.2b7f6a84de")}</span>
+                <input
+                  className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
+                  value={reviewForm.displayName}
+                  onChange={(event) => setReviewForm((current) => ({ ...current, displayName: event.target.value }))}
+                />
+              </label>
+              <label className="grid gap-1 lg:col-span-2">
+                <span className="font-medium">{translateNow("source.evidence.refs.edfa905c2f")}</span>
+                <input
+                  className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
+                  value={reviewForm.evidenceRefs}
+                  onChange={(event) => setReviewForm((current) => ({ ...current, evidenceRefs: event.target.value }))}
+                />
+              </label>
+              <label className="grid gap-1 lg:col-span-3">
+                <span className="font-medium">{translateNow("source.resource.eb7a842ff9")}</span>
+                <input
+                  className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
+                  value={reviewForm.resource}
+                  onChange={(event) => setReviewForm((current) => ({ ...current, resource: event.target.value }))}
+                />
+              </label>
+              <label className="grid gap-1 lg:col-span-3">
+                <span className="font-medium">{translateNow("source.entitlement.0d8f0b2d3a")}</span>
+                <input
+                  className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
+                  value={reviewForm.entitlement}
+                  onChange={(event) => setReviewForm((current) => ({ ...current, entitlement: event.target.value }))}
+                />
+              </label>
+            </form>
+
+            {reviewLoading && <LoadingState>{translateNow("source.loading.nhi.access.reviews.cd87c4f77e")}</LoadingState>}
+            {reviewError && <ErrorState title={translateNow("source.nhi.access.review.unavailable.7f4d6bdefd")}>{reviewError}</ErrorState>}
+            {reviewNotice && (
+              <p className="rounded-md border border-border bg-muted p-3 text-sm" role="status">
+                {reviewNotice}
+              </p>
+            )}
+
+            <div className="grid gap-4 xl:grid-cols-[18rem_minmax(0,1fr)]">
+              <section aria-label={translateNow("source.nhi.access.review.campaigns.873389dac9")} className="rounded-md border border-border">
+                {reviewCampaigns.length > 0 ? (
+                  <div className="divide-y divide-border">
+                    {reviewCampaigns.map((campaign) => (
+                      <button
+                        key={campaign.id}
+                        className={`grid w-full gap-1 px-3 py-3 text-left hover:bg-muted ${activeReview?.id === campaign.id ? "bg-muted" : ""}`}
+                        type="button"
+                        onClick={() => void selectNHIReviewCampaign(campaign.id)}
+                      >
+                        <span className="font-medium">{campaign.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {campaign.status} · {campaign.pending_count} {translateNow("source.pending.64e6bbf0cf")} {campaign.certified_count}{" "}
+                          {translateNow("source.certified.3d4b25dc0b")} {campaign.revoked_count} {translateNow("source.revoked.4bb47f186d")}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="p-3 text-sm text-muted-foreground">{translateNow("source.no.access.review.campaigns.5e5e0fbd56")}</p>
+                )}
+              </section>
+
+              {activeReview && (
+                <NHIReviewCampaignPanel
+                  campaign={activeReview}
+                  decisionReasons={decisionReasons}
+                  reviewAction={reviewAction}
+                  onDecision={decideNHIReviewItem}
+                  onReasonChange={setDecisionReasons}
+                />
+              )}
+            </div>
+          </section>
+
+          <section aria-labelledby="access-change-heading" className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 border-y border-border py-4">
+            <div>
+              <h2 id="access-change-heading" className="text-title font-semibold">
+                {t("policy.accessChange.heading")}
+              </h2>
+              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("policy.accessChange.description")}</p>
+            </div>
+
+            <form className="grid gap-3 rounded-md border border-border p-4 text-sm lg:grid-cols-6" onSubmit={(event) => void createAccessChangeRequest(event)}>
+              <label className="grid gap-1">
+                <span className="font-medium">{t("policy.accessChange.action")}</span>
+                <select
+                  className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
+                  value={accessForm.requestedAction}
+                  onChange={(event) =>
+                    setAccessForm((current) => ({ ...current, requestedAction: event.target.value as AccessChangeRequest["requested_action"] }))
+                  }
+                >
+                  {["grant", "modify", "revoke", "rotate", "deploy", "break_glass"].map((action) => (
+                    <option key={action} value={action}>
+                      {action}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-1">
+                <span className="font-medium">{t("policy.accessChange.risk")}</span>
+                <select
+                  className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
+                  value={accessForm.risk}
+                  onChange={(event) => setAccessForm((current) => ({ ...current, risk: event.target.value }))}
+                >
+                  <option value="low">{translateNow("source.low.f793de205e")}</option>
+                  <option value="medium">{translateNow("source.medium.8e588cd187")}</option>
+                  <option value="high">{translateNow("source.high.c4ebc6d4a5")}</option>
+                  <option value="critical">{translateNow("source.critical.427dd2969b")}</option>
+                </select>
+              </label>
+              <label className="grid gap-1">
+                <span className="font-medium">{t("policy.accessChange.approvals")}</span>
+                <input
+                  className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={accessForm.requiredApprovals}
+                  onChange={(event) => setAccessForm((current) => ({ ...current, requiredApprovals: event.target.value }))}
+                />
+              </label>
+              <label className="grid gap-1 lg:col-span-3">
+                <span className="font-medium">{t("policy.accessChange.changeRef")}</span>
+                <input
+                  className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
+                  value={accessForm.changeRef}
+                  onChange={(event) => setAccessForm((current) => ({ ...current, changeRef: event.target.value }))}
+                />
+              </label>
+              <label className="grid gap-1 lg:col-span-2">
+                <span className="font-medium">{t("policy.accessChange.nhiId")}</span>
+                <input
+                  className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
+                  value={accessForm.nhiId}
+                  onChange={(event) => setAccessForm((current) => ({ ...current, nhiId: event.target.value }))}
+                />
+              </label>
+              <label className="grid gap-1 lg:col-span-2">
+                <span className="font-medium">{t("policy.accessChange.nhiKind")}</span>
+                <input
+                  className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
+                  value={accessForm.nhiKind}
+                  onChange={(event) => setAccessForm((current) => ({ ...current, nhiKind: event.target.value }))}
+                />
+              </label>
+              <label className="grid gap-1 lg:col-span-2">
+                <span className="font-medium">{t("policy.accessChange.displayName")}</span>
+                <input
+                  className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
+                  value={accessForm.displayName}
+                  onChange={(event) => setAccessForm((current) => ({ ...current, displayName: event.target.value }))}
+                />
+              </label>
+              <label className="grid gap-1 lg:col-span-3">
+                <span className="font-medium">{t("policy.accessChange.resource")}</span>
+                <input
+                  className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
+                  value={accessForm.resource}
+                  onChange={(event) => setAccessForm((current) => ({ ...current, resource: event.target.value }))}
+                />
+              </label>
+              <label className="grid gap-1 lg:col-span-3">
+                <span className="font-medium">{t("policy.accessChange.entitlement")}</span>
+                <input
+                  className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
+                  value={accessForm.entitlement}
+                  onChange={(event) => setAccessForm((current) => ({ ...current, entitlement: event.target.value }))}
+                />
+              </label>
+              <label className="grid gap-1 lg:col-span-3">
+                <span className="font-medium">{t("policy.accessChange.changeUrl")}</span>
+                <input
+                  className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
+                  value={accessForm.changeUrl}
+                  onChange={(event) => setAccessForm((current) => ({ ...current, changeUrl: event.target.value }))}
+                />
+              </label>
+              <label className="grid gap-1 lg:col-span-3">
+                <span className="font-medium">{t("policy.accessChange.evidenceRefs")}</span>
+                <input
+                  className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
+                  value={accessForm.evidenceRefs}
+                  onChange={(event) => setAccessForm((current) => ({ ...current, evidenceRefs: event.target.value }))}
+                />
+              </label>
+              <label className="grid gap-1 lg:col-span-5">
+                <span className="font-medium">{t("policy.accessChange.reason")}</span>
+                <input
+                  className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
+                  value={accessForm.reason}
+                  onChange={(event) => setAccessForm((current) => ({ ...current, reason: event.target.value }))}
+                />
+              </label>
+              <div className="flex items-end">
+                <Button
+                  className="w-full"
+                  type="submit"
+                  disabled={accessAction === "create" || !accessForm.nhiId.trim() || !accessForm.changeRef.trim() || !accessForm.reason.trim()}
+                >
+                  {accessAction === "create" ? t("policy.accessChange.opening") : t("policy.accessChange.openRequest")}
+                </Button>
+              </div>
+            </form>
+
+            {accessLoading && <LoadingState>{t("policy.accessChange.loading")}</LoadingState>}
+            {accessError && <ErrorState title={t("policy.accessChange.unavailableTitle")}>{accessError}</ErrorState>}
+            {accessNotice && (
+              <p className="rounded-md border border-border bg-muted p-3 text-sm" role="status">
+                {accessNotice}
+              </p>
+            )}
+
+            <div className="grid gap-4 xl:grid-cols-[18rem_minmax(0,1fr)]">
+              <section aria-label={t("policy.accessChange.listLabel")} className="rounded-md border border-border">
+                {accessRequests.length > 0 ? (
+                  <div className="divide-y divide-border">
+                    {accessRequests.map((request) => (
+                      <button
+                        key={request.id}
+                        className={`grid w-full gap-1 px-3 py-3 text-left hover:bg-muted ${activeAccessRequest?.id === request.id ? "bg-muted" : ""}`}
+                        type="button"
+                        onClick={() => void selectAccessChangeRequest(request.id)}
+                      >
+                        <span className="font-medium">{request.display_name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {request.status} · {request.approval_count}/{request.required_approvals} · {request.change_system}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="p-3 text-sm text-muted-foreground">{t("policy.accessChange.empty")}</p>
+                )}
+              </section>
+
+              {activeAccessRequest && (
+                <AccessChangeRequestPanel
+                  request={activeAccessRequest}
+                  accessAction={accessAction}
+                  decisionReasons={accessDecisionReasons}
+                  onDecision={decideAccessChangeRequest}
+                  onReasonChange={setAccessDecisionReasons}
+                />
+              )}
+            </div>
+          </section>
+        </div>
+      </PolicyDetails>
+
+      <PolicyDetails title={t("policy.design.disclosure.test")} open={open.test} onToggle={(value) => setOpen((current) => ({ ...current, test: value }))}>
+        <div className="grid min-w-0 gap-6">
+          <p className="max-w-3xl text-sm text-muted-foreground">{t("policy.design.testHelp")}</p>
+          <section aria-labelledby="policy-dry-run-heading" className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 border-y border-border py-4">
+            <div>
+              <h2 id="policy-dry-run-heading" className="text-title font-semibold">
+                {t("policy.dryRun.heading")}
+              </h2>
+              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("policy.dryRun.description")}</p>
+            </div>
+            <form
+              aria-label={t("policy.dryRun.formLabel")}
+              className="grid gap-4 rounded-md border border-border p-4"
+              onSubmit={(event) => void runPolicyDryRun(event)}
+            >
+              <div className="flex flex-wrap gap-2" role="group" aria-label={t("policy.dryRun.kindLabel")}>
+                <Button
+                  type="button"
+                  variant={dryRunKind === "lifecycle" ? "default" : "outline"}
+                  aria-pressed={dryRunKind === "lifecycle"}
+                  onClick={() => selectDryRunKind("lifecycle")}
+                >
+                  {t("policy.dryRun.lifecycle")}
+                </Button>
+                <Button
+                  type="button"
+                  variant={dryRunKind === "abac" ? "default" : "outline"}
+                  aria-pressed={dryRunKind === "abac"}
+                  onClick={() => selectDryRunKind("abac")}
+                >
+                  {t("policy.dryRun.abac")}
+                </Button>
+              </div>
+              <div className="grid gap-4 xl:grid-cols-2">
+                <label className="grid gap-1 text-sm">
+                  <span className="font-medium">{t("policy.dryRun.moduleLabel")}</span>
+                  <textarea
+                    className="min-h-80 resize-y rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+                    spellCheck={false}
+                    value={dryRunModule}
+                    onChange={(event) => setDryRunModule(event.target.value)}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="font-medium">{t("policy.dryRun.inputLabel")}</span>
+                  <textarea
+                    className="min-h-80 resize-y rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+                    spellCheck={false}
+                    value={dryRunInput}
+                    onChange={(event) => setDryRunInput(event.target.value)}
+                  />
+                </label>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button type="submit" disabled={dryRunBusy || !dryRunModule.trim() || !dryRunInput.trim()}>
+                  {dryRunBusy ? t("policy.dryRun.running") : t("policy.dryRun.run")}
+                </Button>
+                <Link className="text-sm underline" to="/audit?type=policy.dry_run.evaluated">
+                  {t("policy.dryRun.auditLink")}
+                </Link>
+              </div>
+            </form>
+            {dryRunError && <ErrorState title={t("policy.dryRun.errorTitle")}>{dryRunError}</ErrorState>}
+            {dryRunResult && <PolicyDryRunResultPanel result={dryRunResult} />}
+          </section>
+        </div>
+      </PolicyDetails>
+
+      <Dialog
+        open={ruleDialogOpen}
+        onClose={() => setRuleDialogOpen(false)}
+        titleId="create-rule-heading"
+        descriptionId="create-rule-description"
+        initialFocusRef={ruleDescriptionRef}
+        panelAnimation="none"
+        panelClassName="fixed left-1/2 top-1/2 grid max-h-[calc(100dvh-2rem)] w-[min(94vw,48rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain rounded-panel border border-border bg-card p-5 shadow-elevation3"
+      >
+        <form className="grid min-w-0 gap-4 text-sm" onSubmit={(event) => void createPolicyVersion(event)}>
+          <div>
+            <h2 id="create-rule-heading" className="text-title font-semibold">
+              {t("policy.design.create")}
+            </h2>
+            <p id="create-rule-description" className="mt-1 max-w-3xl text-sm text-muted-foreground">
+              {t("policy.design.createHelp")}
+            </p>
+          </div>
+          <div className="grid min-w-0 gap-3 md:grid-cols-2">
+            <label className="grid min-w-0 gap-1 font-medium">
+              {t("policy.versions.descriptionLabel")}
+              <input
+                ref={ruleDescriptionRef}
+                className="ui-input font-normal"
+                value={policyVersionForm.description}
+                onChange={(event) => setPolicyVersionForm((current) => ({ ...current, description: event.target.value }))}
+                required
+              />
+            </label>
+            <label className="grid min-w-0 gap-1 font-medium">
+              {t("policy.versions.changeRef")}
+              <input
+                className="ui-input font-mono text-xs font-normal"
+                value={policyVersionForm.changeRef}
+                onChange={(event) => setPolicyVersionForm((current) => ({ ...current, changeRef: event.target.value }))}
+              />
+            </label>
+          </div>
+          <label className="grid min-w-0 gap-1 font-medium">
+            {t("policy.versions.evidenceRefs")}
+            <input
+              className="ui-input font-mono text-xs font-normal"
+              value={policyVersionForm.evidenceRefs}
+              onChange={(event) => setPolicyVersionForm((current) => ({ ...current, evidenceRefs: event.target.value }))}
             />
-          )}
-        </div>
-      </section>
-
-      <section aria-labelledby="policy-dry-run-heading" className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 border-y border-border py-4">
-        <div>
-          <h2 id="policy-dry-run-heading" className="text-title font-semibold">
-            {t("policy.dryRun.heading")}
-          </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("policy.dryRun.description")}</p>
-        </div>
-        <form
-          aria-label={t("policy.dryRun.formLabel")}
-          className="grid gap-4 rounded-md border border-border p-4"
-          onSubmit={(event) => void runPolicyDryRun(event)}
-        >
-          <div className="flex flex-wrap gap-2" role="group" aria-label={t("policy.dryRun.kindLabel")}>
-            <Button
-              type="button"
-              variant={dryRunKind === "lifecycle" ? "default" : "outline"}
-              aria-pressed={dryRunKind === "lifecycle"}
-              onClick={() => selectDryRunKind("lifecycle")}
-            >
-              {t("policy.dryRun.lifecycle")}
+          </label>
+          <label className="grid min-w-0 gap-1 font-medium">
+            {t("policy.versions.lifecycleModule")}
+            <textarea
+              className="ui-input min-h-64 font-mono text-xs font-normal"
+              spellCheck={false}
+              value={policyVersionForm.module}
+              onChange={(event) => setPolicyVersionForm((current) => ({ ...current, module: event.target.value }))}
+            />
+          </label>
+          <p className="text-sm text-muted-foreground">{t("policy.design.moduleHelp")}</p>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={() => setRuleDialogOpen(false)}>
+              {translateNow("source.cancel.19766ed6cc")}
             </Button>
-            <Button
-              type="button"
-              variant={dryRunKind === "abac" ? "default" : "outline"}
-              aria-pressed={dryRunKind === "abac"}
-              onClick={() => selectDryRunKind("abac")}
-            >
-              {t("policy.dryRun.abac")}
+            <Button type="submit" disabled={policyVersionAction === "create" || !policyVersionForm.module.trim()}>
+              {policyVersionAction === "create" ? t("policy.versions.authoring") : t("policy.design.create")}
             </Button>
-          </div>
-          <div className="grid gap-4 xl:grid-cols-2">
-            <label className="grid gap-1 text-sm">
-              <span className="font-medium">{t("policy.dryRun.moduleLabel")}</span>
-              <textarea
-                className="min-h-80 resize-y rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-                spellCheck={false}
-                value={dryRunModule}
-                onChange={(event) => setDryRunModule(event.target.value)}
-              />
-            </label>
-            <label className="grid gap-1 text-sm">
-              <span className="font-medium">{t("policy.dryRun.inputLabel")}</span>
-              <textarea
-                className="min-h-80 resize-y rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-                spellCheck={false}
-                value={dryRunInput}
-                onChange={(event) => setDryRunInput(event.target.value)}
-              />
-            </label>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button type="submit" disabled={dryRunBusy || !dryRunModule.trim() || !dryRunInput.trim()}>
-              {dryRunBusy ? t("policy.dryRun.running") : t("policy.dryRun.run")}
-            </Button>
-            <Link className="text-sm underline" to="/audit?type=policy.dry_run.evaluated">
-              {t("policy.dryRun.auditLink")}
-            </Link>
           </div>
         </form>
-        {dryRunError && <ErrorState title={t("policy.dryRun.errorTitle")}>{dryRunError}</ErrorState>}
-        {dryRunResult && <PolicyDryRunResultPanel result={dryRunResult} />}
-      </section>
+      </Dialog>
     </section>
+  );
+}
+
+function PolicyDetails({ title, open, onToggle, children }: { title: string; open: boolean; onToggle: (open: boolean) => void; children: ReactNode }) {
+  return (
+    <details className="rounded-panel border border-border bg-card shadow-elevation1" open={open} onToggle={(event) => onToggle(event.currentTarget.open)}>
+      <summary className="cursor-pointer px-4 py-3 font-semibold text-foreground">{title}</summary>
+      <div className="border-t border-border p-4">{open ? children : null}</div>
+    </details>
   );
 }
 
@@ -1385,7 +1508,7 @@ function PolicyDryRunResultPanel({ result }: { result: PolicyDryRun }) {
         <Metric label={t("policy.dryRun.metricIdempotency")} value={result.idempotency_key} mono />
       </dl>
       {trace.length > 0 && (
-        <div className="mt-4 min-w-0 max-w-full overflow-x-auto rounded-md border border-border">
+        <ScrollableTableRegion className="mt-4" label={t("policy.dryRun.traceCaption")}>
           <table className="ui-table min-w-[64rem]">
             <caption className="sr-only">{t("policy.dryRun.traceCaption")}</caption>
             <thead>
@@ -1407,7 +1530,7 @@ function PolicyDryRunResultPanel({ result }: { result: PolicyDryRun }) {
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollableTableRegion>
       )}
     </section>
   );
@@ -1448,7 +1571,7 @@ function ComplianceInventoryReportPanel({ report, schedules }: { report: Complia
       </div>
 
       {rows.length > 0 ? (
-        <div className="mt-4 min-w-0 max-w-full overflow-x-auto rounded-md border border-border">
+        <ScrollableTableRegion className="mt-4" label={t("policy.reporting.tableCaption")}>
           <table className="ui-table min-w-[48rem]">
             <caption className="sr-only">{t("policy.reporting.tableCaption")}</caption>
             <thead>
@@ -1475,7 +1598,7 @@ function ComplianceInventoryReportPanel({ report, schedules }: { report: Complia
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollableTableRegion>
       ) : (
         <p className="mt-4 rounded-md border border-border p-3 text-muted-foreground">{t("policy.reporting.empty")}</p>
       )}
@@ -1522,7 +1645,7 @@ function NHIComplianceReportPanel({ report }: { report: NHIComplianceReport }) {
       </div>
 
       {controlRows.length > 0 && (
-        <div className="mt-4 min-w-0 max-w-full overflow-x-auto rounded-md border border-border">
+        <ScrollableTableRegion className="mt-4" label={t("policy.nhiCompliance.tableCaption")}>
           <table className="ui-table min-w-[58rem]">
             <caption className="sr-only">{t("policy.nhiCompliance.tableCaption")}</caption>
             <thead>
@@ -1550,7 +1673,7 @@ function NHIComplianceReportPanel({ report }: { report: NHIComplianceReport }) {
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollableTableRegion>
       )}
 
       <div className="mt-4 grid gap-3 lg:grid-cols-2">
@@ -1600,7 +1723,7 @@ function NHIReviewCampaignPanel({
       </dl>
 
       {items.length > 0 ? (
-        <div className="mt-4 min-w-0 max-w-full overflow-x-auto rounded-md border border-border">
+        <ScrollableTableRegion className="mt-4" label={translateNow("source.nhi.access.review.items.d360cac314")}>
           <table className="ui-table min-w-[64rem]">
             <caption className="sr-only">{translateNow("source.nhi.access.review.items.d360cac314")}</caption>
             <thead>
@@ -1661,7 +1784,7 @@ function NHIReviewCampaignPanel({
               })}
             </tbody>
           </table>
-        </div>
+        </ScrollableTableRegion>
       ) : (
         <p className="mt-4 rounded-md border border-border p-3 text-muted-foreground">{translateNow("source.no.item.details.loaded.e93e8c8e0d")}</p>
       )}
@@ -1762,7 +1885,7 @@ function AccessChangeRequestPanel({
       )}
 
       {decisions.length > 0 && (
-        <div className="mt-4 min-w-0 max-w-full overflow-x-auto rounded-md border border-border">
+        <ScrollableTableRegion className="mt-4" label={t("policy.accessChange.decisionsCaption")}>
           <table className="ui-table min-w-[48rem]">
             <caption className="sr-only">{t("policy.accessChange.decisionsCaption")}</caption>
             <thead>
@@ -1784,7 +1907,7 @@ function AccessChangeRequestPanel({
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollableTableRegion>
       )}
     </section>
   );

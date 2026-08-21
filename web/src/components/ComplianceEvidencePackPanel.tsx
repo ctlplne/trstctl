@@ -1,3 +1,4 @@
+import { ScrollableTableRegion } from "@/components/ScrollableTableRegion";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import type { ComplianceEvidencePack } from "@/lib/api";
 
@@ -128,7 +129,7 @@ export function ComplianceEvidencePackPanel({ label, pack }: { label: string; pa
       ) : null}
 
       {custody && custody.unrecorded_certificates.length > 0 && (
-        <div className="mt-4 min-w-0 max-w-full overflow-x-auto rounded-md border border-border">
+        <ScrollableTableRegion className="mt-4" label={t("policy.compliance.custodyGaps")}>
           <table className="ui-table min-w-[48rem]">
             <caption className="text-left font-medium">{t("policy.compliance.custodyGaps")}</caption>
             <thead>
@@ -151,11 +152,11 @@ export function ComplianceEvidencePackPanel({ label, pack }: { label: string; pa
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollableTableRegion>
       )}
 
       {controls.length > 0 && (
-        <div className="mt-4 min-w-0 max-w-full overflow-x-auto rounded-md border border-border">
+        <ScrollableTableRegion className="mt-4" label={`${label} ${translateNow("source.controls.1e2135d1b5")}`}>
           <table className="ui-table min-w-[72rem]">
             <caption className="sr-only">
               {label} {translateNow("source.controls.1e2135d1b5")}
@@ -207,7 +208,7 @@ export function ComplianceEvidencePackPanel({ label, pack }: { label: string; pa
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollableTableRegion>
       )}
 
       <div className="mt-4 grid gap-3 md:grid-cols-2">

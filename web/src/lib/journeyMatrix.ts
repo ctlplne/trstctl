@@ -46,7 +46,7 @@ const routeCatalog = {
   integrate: { path: "/integrate", heading: "Integrate" },
   operations: { path: "/operations", heading: "Jobs and queues" },
   platform: { path: "/platform", heading: "Access administration" },
-  policy: { path: "/policy", heading: "Policy" },
+  policy: { path: "/policy", heading: "Rules and approvals" },
   privacy: { path: "/privacy", heading: "Privacy & data governance" },
   profiles: { path: "/profiles", heading: "Certificate rules" },
   request: { path: "/request", heading: "Request a certificate" },

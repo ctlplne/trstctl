@@ -1272,7 +1272,7 @@ const deDECatalog = {
   "nav.item.audit": "Audit",
   "nav.item.ownership": "Verantwortung",
   "nav.item.rbac": "RBAC",
-  "nav.item.policy": "Richtlinie",
+  "nav.item.policy": "Regeln und Genehmigungen",
   "policy.overview.description":
     "Ausstellungs-, Ausroll- und Widerrufsmutationen durchlaufen das OPA/Rego-Default-Deny-Gate, RA-Trennung, Vier-Augen-Freigabe und Bound-Profile-Prüfungen, bevor Zustandsänderungen emittiert werden.",
   "policy.enforcement.heading": "Durchsetzungspfad",
@@ -1967,6 +1967,42 @@ const deDECatalog = {
   "incidents.response.splunkPlaceholder": "https://splunk.example/services/collector",
   "incidents.response.jiraPlaceholder": "https://jira.example",
   "incidents.response.servicenowPlaceholder": "https://example.service-now.com",
+  // QA-G32 machine-authored translations; human review required before release.
+  "policy.design.title": "Regeln und Genehmigungen",
+  "policy.design.answer": "Ob der Schutz aktiv ist, was sich geändert hat und was genehmigt werden muss.",
+  "policy.design.technicalDetails": "Rohes Rego, Versionen, Tests, Framework-Zuordnungen und Entscheidungen.",
+  "policy.design.create": "Regel erstellen",
+  "policy.design.createHelp":
+    "Erstellen Sie einen geprüften Entwurf mit Änderungs- und Nachweisreferenzen. Ein Entwurf wird dadurch nicht aktiviert; Aktivierung und Rollback bleiben getrennte, aufgezeichnete Aktionen.",
+  "policy.design.moduleHelp":
+    "Der Server validiert Rego-Paket und Abfrage vor dem Speichern. Ein Entwurf kann nichts erlauben, bis eine getrennte Aktivierung erfolgreich ist.",
+  "policy.design.checking": "Schutz- und Genehmigungsstatus werden geprüft…",
+  "policy.design.summaryUnavailable": "Der Schutzstatus ist unbekannt",
+  "policy.design.summaryUnavailableHelp":
+    "trstctl konnte den Regel- oder Genehmigungsstatus nicht prüfen. Deshalb nimmt diese Seite nicht an, dass der Schutz funktioniert. Prüfen Sie den genauen Fehler und stellen Sie die API wieder her, bevor Sie eine Richtlinienentscheidung treffen.",
+  "policy.design.protected": "Der Schutz ist aktiv",
+  "policy.design.protectedNoCustom": "Der Schutz ist aktiv; keine benutzerdefinierte Regel ist aktiv",
+  "policy.design.activeRule": 'Die benutzerdefinierte Regel "{rule}" ist aktiv.',
+  "policy.design.defaultDeny":
+    "Die integrierte Standardverweigerung prüft weiterhin jede Ausstellungs-, Bereitstellungs- und Widerrufsanfrage. Erstellen und aktivieren Sie eine Regel, bevor Sie sich auf eigene Erlaubnislogik verlassen.",
+  "policy.design.approvalsLabel": "Wartet auf Genehmigung",
+  "policy.design.oneApproval": "1 Anfrage muss genehmigt werden",
+  "policy.design.manyApprovals": "{count} Anfragen müssen genehmigt werden",
+  "policy.design.changesLabel": "Aufgezeichnete Regeländerungen",
+  "policy.design.oneVersion": "1 Regelversion aufgezeichnet",
+  "policy.design.manyVersions": "{count} Regelversionen aufgezeichnet",
+  "policy.design.disclosure.rules": "Regelversionen und Änderungsverlauf",
+  "policy.design.disclosure.test": "Eine Regel sicher testen",
+  "policy.design.disclosure.compliance": "Framework-Nachweise und Berichte",
+  "policy.design.disclosure.approvals": "Genehmigungen und Zugriffsprüfungen",
+  "policy.design.rulesHelp":
+    "Die integrierte Schranke fällt geschlossen aus. Eine benutzerdefinierte Regel wird erst wirksam, wenn Entwurf, Validierung, Aktivierung und Audit-Ereignis erfolgreich sind; Rollback ist eine weitere aufgezeichnete Aktion.",
+  "policy.design.testHelp":
+    "Ein Test wertet Rego für diesen Mandanten aus und zeichnet die Entscheidung auf. Er aktiviert die Regel nicht und ändert kein Credential.",
+  "policy.design.complianceHelp":
+    "Framework-Zuordnungen zeigen beweisbare Nachweise und vom Betreiber zu attestierende Lücken. Ein signierter Export ist ein Nachweis, niemals eine Zertifizierungsbehauptung.",
+  "policy.design.approvalsHelp":
+    "Anfragen binden eine geplante Zugriffsänderung an Nachweise. Eine andere Person entscheidet; Zugriffsprüfungen bestätigen Maschinenzugriff, ohne Credential-Werte anzunehmen.",
   // QA-G31 machine-authored translations; human review required before release.
   "connectors.design.title": "Wo Credentials installiert sind",
   "connectors.design.answer": "Welche Ziele trstctl aktualisieren kann und ob sie gesund sind.",

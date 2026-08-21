@@ -25,6 +25,7 @@ const { apiMock } = vi.hoisted(() => ({
     getAccessChangeRequest: vi.fn(),
     getNHIReviewCampaign: vi.fn(),
     nhiReviewCampaigns: vi.fn(),
+    policyVersions: vi.fn(),
     startNHIReviewCampaign: vi.fn(),
   },
 }));
@@ -310,6 +311,11 @@ describe("SIMP-03 policy, audit, and compliance remediation", () => {
     apiMock.getAccessChangeRequest.mockReset().mockResolvedValue(accessChangeRequest());
     apiMock.getNHIReviewCampaign.mockReset().mockResolvedValue(nhiReviewCampaign());
     apiMock.nhiReviewCampaigns.mockReset().mockResolvedValue({ items: [nhiReviewCampaign()] });
+    apiMock.policyVersions.mockReset().mockResolvedValue({
+      items: [],
+      active: null,
+      counts: { total: 0, active: 0, draft: 0, inactive: 0, rolled_back: 0 },
+    });
     apiMock.startNHIReviewCampaign.mockReset().mockResolvedValue(nhiReviewCampaign());
     apiMock.complianceEvidencePack.mockImplementation((framework: "soc2" | "cnsa-2.0") => Promise.resolve(evidencePack(framework)));
   });
@@ -318,6 +324,7 @@ describe("SIMP-03 policy, audit, and compliance remediation", () => {
     const user = userEvent.setup();
     renderPolicy();
 
+    await user.click(await screen.findByText("Framework evidence and reports", { exact: true }));
     await waitFor(() => expect(apiMock.complianceEvidencePack).toHaveBeenCalledWith("soc2"));
     expect(await screen.findByRole("heading", { name: "SOC 2 evidence pack" })).toBeInTheDocument();
     expect(screen.getByText("trstctl.compliance.evidence-pack.v4")).toBeInTheDocument();
@@ -339,6 +346,7 @@ describe("SIMP-03 policy, audit, and compliance remediation", () => {
     expect(await screen.findByRole("heading", { name: "CNSA 2.0 evidence pack" })).toBeInTheDocument();
     expect(screen.getByText("1 quantum vulnerable")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Download signed bundle" })).toHaveAttribute("download", "cnsa-2.0-evidence-pack.json");
+    await user.click(screen.getByText("Approval and access reviews", { exact: true }));
     expect(screen.getByRole("heading", { name: "NHI access certification" })).toBeInTheDocument();
     expect(await screen.findByText("Payments API workload")).toBeInTheDocument();
   });
@@ -372,7 +380,9 @@ describe("SIMP-03 policy, audit, and compliance remediation", () => {
   });
 
   it("removes notification-channel fixtures from Policy", async () => {
+    const user = userEvent.setup();
     renderPolicy();
+    await user.click(await screen.findByText("Framework evidence and reports", { exact: true }));
     await waitFor(() => expect(apiMock.complianceEvidencePack).toHaveBeenCalled());
 
     expect(screen.queryByRole("heading", { name: "Notification integrations" })).not.toBeInTheDocument();
