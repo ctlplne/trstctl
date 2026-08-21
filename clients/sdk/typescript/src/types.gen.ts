@@ -14175,7 +14175,7 @@ export interface operations {
                 until?: string;
                 /** @description point-in-time: only tenant-local audit events with sequence <= this */
                 as_of?: number;
-                /** @description substring match on event type or data */
+                /** @description case-insensitive substring match on event type, privacy-filtered actor subject or role, or event data */
                 q?: string;
                 /** @description maximum records to return */
                 limit?: number;
@@ -14232,7 +14232,7 @@ export interface operations {
                 until?: string;
                 /** @description point-in-time: only tenant-local audit events with sequence <= this */
                 as_of?: number;
-                /** @description substring match on event type or data */
+                /** @description case-insensitive substring match on event type, privacy-filtered actor subject or role, or event data */
                 q?: string;
                 /** @description maximum records to return */
                 limit?: number;

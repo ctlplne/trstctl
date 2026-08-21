@@ -188,7 +188,8 @@ surface is `GET /api/v1/audit/events` for tenant-scoped replay and `GET
 The console names this surface **Change history** and starts with a bounded event
 summary rather than raw event machinery. It does not call that window the newest or
 complete history. **Search activity** opens filters, rows, and
-event detail. Hash-chain status and signed or ingestible exports live under
+event detail. The plain search is case-insensitive across event type,
+privacy-filtered actor subject and roles, and event data. Hash-chain status and signed or ingestible exports live under
 **Signatures and evidence export**; scheduled SIEM feeds live under **Collector
 delivery**. All three sections preserve the same served endpoints and tenant scope,
 and explicit query links open the search layer automatically.

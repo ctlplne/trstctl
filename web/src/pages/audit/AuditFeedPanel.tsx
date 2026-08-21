@@ -235,7 +235,7 @@ export function AuditFeedPanel() {
       />
 
       {canWrite ? (
-        <form className="grid gap-4 rounded-control border border-border p-3" onSubmit={save}>
+        <form aria-label={t("audit.feeds.configure")} className="grid gap-4 rounded-control border border-border p-3" onSubmit={save}>
           <h3 className="font-medium">{t("audit.feeds.configure")}</h3>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             <Field label={t("audit.feeds.id")} error={form.formState.errors.id?.message} required>

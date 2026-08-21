@@ -351,7 +351,10 @@ separate closed sections until requested. This keeps the default page calm witho
 removing tenant-scoped evidence or operational controls.
 
 The event explorer filters the tamper-evident stream and exports a signed evidence
-bundle. The evidence section names the exact chain head, RFC 3161 kind, authority
+bundle. Its plain search is case-insensitive across event type, privacy-filtered
+actor subject and roles, and event data, so copying the visible actor into the box
+returns that actor's matching rows without weakening tenant scope or erasure. The
+evidence section names the exact chain head, RFC 3161 kind, authority
 time, and whether the full token is present. Its download is the canonical JSON
 envelope from the served contract—not a display string—so the compact JWS and
 complete external timestamp remain together for offline verification against the

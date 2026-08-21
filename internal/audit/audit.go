@@ -52,7 +52,7 @@ type Query struct {
 	Until               time.Time `json:"until,omitempty"`                 // inclusive upper time bound
 	AsOfSequence        uint64    `json:"as_of_sequence,omitempty"`        // point-in-time over tenant-local Sequence
 	AfterSequence       uint64    `json:"after_sequence,omitempty"`        // exclusive tenant-local cursor for durable stream consumers
-	Contains            string    `json:"contains,omitempty"`              // substring match on type or data
+	Contains            string    `json:"contains,omitempty"`              // case-insensitive substring match on type, redacted actor, or data
 	Limit               int       `json:"limit,omitempty"`                 // cap on records returned (0 = all)
 }
 
@@ -279,8 +279,18 @@ func (q Query) matches(e events.Event, tenantSequence uint64) bool {
 	if ftypes, set := q.featureActionTypes(); set && !contains(ftypes, e.Type) {
 		return false
 	}
-	if q.Contains != "" && !strings.Contains(e.Type, q.Contains) && !strings.Contains(string(e.Data), q.Contains) {
-		return false
+	if q.Contains != "" {
+		needle := strings.ToLower(q.Contains)
+		matches := strings.Contains(strings.ToLower(e.Type), needle) || strings.Contains(strings.ToLower(string(e.Data)), needle)
+		if e.Actor != nil {
+			matches = matches || strings.Contains(strings.ToLower(e.Actor.Subject), needle)
+			for _, role := range e.Actor.Roles {
+				matches = matches || strings.Contains(strings.ToLower(role), needle)
+			}
+		}
+		if !matches {
+			return false
+		}
 	}
 	return true
 }

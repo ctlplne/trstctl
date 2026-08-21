@@ -94,6 +94,7 @@ describe("Route 035 change-history hierarchy", () => {
     await user.click(screen.getByText("Collector delivery", { exact: true }));
     await waitFor(() => expect(apiMock.auditFeeds).toHaveBeenCalledTimes(1));
     expect(await screen.findByRole("heading", { name: "Scheduled collector feeds" })).toBeInTheDocument();
+    expect(screen.getByRole("form", { name: "Configure a collector feed" })).toBeInTheDocument();
   });
 
   it("says when the recent window is empty without inventing product activity", async () => {

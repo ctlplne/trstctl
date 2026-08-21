@@ -28018,7 +28018,7 @@
             }
           },
           {
-            "description": "substring match on event type or data",
+            "description": "case-insensitive substring match on event type, privacy-filtered actor subject or role, or event data",
             "in": "query",
             "name": "q",
             "schema": {
@@ -28139,7 +28139,7 @@
             }
           },
           {
-            "description": "substring match on event type or data",
+            "description": "case-insensitive substring match on event type, privacy-filtered actor subject or role, or event data",
             "in": "query",
             "name": "q",
             "schema": {

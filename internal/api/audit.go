@@ -45,7 +45,7 @@ func auditQueryParams() []param {
 		{name: "since", typ: "string", desc: "RFC3339 inclusive lower time bound"},
 		{name: "until", typ: "string", desc: "RFC3339 inclusive upper time bound"},
 		{name: "as_of", typ: "integer", desc: "point-in-time: only tenant-local audit events with sequence <= this"},
-		{name: "q", typ: "string", desc: "substring match on event type or data"},
+		{name: "q", typ: "string", desc: "case-insensitive substring match on event type, privacy-filtered actor subject or role, or event data"},
 		{name: "limit", typ: "integer", desc: "maximum records to return"},
 		{name: "format", typ: "string", desc: "export encoding: jws (default, signed bundle), ndjson, csv, splunk-hec, sentinel"},
 	}

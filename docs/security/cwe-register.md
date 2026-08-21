@@ -127,8 +127,8 @@ not this file.
 | `internal/api/secrets_scanning.go:503` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_scanning.go:513` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_scanning.go:523` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/audit/audit_test.go:114` | deliberately toxic non-routable fixture proves redaction (CWE-798). |
-| `internal/audit/audit_test.go:146` | deliberately toxic fixture proves retained-prefix redaction (CWE-798). |
+| `internal/audit/audit_test.go:146` | deliberately toxic non-routable fixture proves redaction (CWE-798). |
+| `internal/audit/audit_test.go:178` | deliberately toxic fixture proves retained-prefix redaction (CWE-798). |
 | `internal/auth/oidc_client_secret.go:15` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/authmethod/aws_iam_http_test.go:16` | fabricated signed-request fixture (CWE-798) |
 | `internal/authmethod/aws_iam_http_test.go:37` | fabricated signed-request fixture (CWE-798) |

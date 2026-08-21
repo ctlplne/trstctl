@@ -109,6 +109,38 @@ func TestSearchFiltersByTenantAndType(t *testing.T) {
 	}
 }
 
+// TestSearchContainsMatchesVisibleActor is the Change history search contract:
+// an operator who copies the visible actor or one of its authorization roles
+// into the search box must get that event back. The actor has already passed
+// through the tenant's privacy redactor before matches runs, so this broadens
+// discovery without bypassing erasure or tenant isolation.
+func TestSearchContainsMatchesVisibleActor(t *testing.T) {
+	log := openLog(t)
+	ctx := context.Background()
+	_, err := log.Append(ctx, events.Event{
+		Type:     "identity.issued",
+		TenantID: tenantA,
+		Actor:    &events.Actor{Subject: "demo-seeder", Roles: []string{"tenant-admin", "audit-reader"}},
+		Data:     []byte(`{"resource":"certificate-17"}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	appendEvent(t, log, tenantA, "identity.deployed")
+	appendEvent(t, log, tenantB, "identity.issued")
+
+	svc := newService(t, log)
+	for _, search := range []string{"demo-seeder", "tenant-admin", "AUDIT-READER"} {
+		recs, searchErr := svc.Search(ctx, audit.Query{TenantID: tenantA, Contains: search})
+		if searchErr != nil {
+			t.Fatalf("search %q: %v", search, searchErr)
+		}
+		if len(recs) != 1 || recs[0].Actor == nil || recs[0].Actor.Subject != "demo-seeder" {
+			t.Fatalf("search %q returned %#v, want only the visible demo-seeder event", search, recs)
+		}
+	}
+}
+
 func TestSearchFailsClosedBeforeFilteringUnsafeLegacySchedulerHistory(t *testing.T) {
 	log := openLog(t)
 	secret := "postgres://audit-user:credential@provider.internal/db" // #nosec G101 -- deliberately toxic non-routable fixture proves redaction (CWE-798).
