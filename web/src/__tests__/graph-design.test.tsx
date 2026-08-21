@@ -78,7 +78,7 @@ describe("route 027 impact-first graph design", () => {
     expect(screen.getByText("Which systems depend on a selected credential.", { exact: true })).toBeInTheDocument();
     const credentialSelector = screen.getByLabelText("Credential to explore");
     await waitFor(() => expect(credentialSelector).toHaveValue("cert:payments"));
-    expect(credentialSelector).toHaveClass("min-w-0", "max-w-full");
+    expect(credentialSelector).toHaveClass("min-w-0", "max-w-full", "overflow-hidden", "text-ellipsis");
     expect(credentialSelector.closest("label")).toHaveClass("min-w-0", "max-w-full");
     expect(credentialSelector.closest("label")?.parentElement).toHaveClass("grid-cols-[minmax(0,1fr)]");
     expect(within(credentialSelector).getAllByRole("option")).toHaveLength(1);

@@ -207,7 +207,7 @@ export function Graph() {
               <label className="grid min-w-0 max-w-full gap-1 text-sm font-medium" htmlFor="impact-credential">
                 {t("graph.design.credentialLabel")}
                 <Select
-                  className="min-w-0 max-w-full"
+                  className="min-w-0 max-w-full overflow-hidden text-ellipsis"
                   id="impact-credential"
                   value={selected}
                   disabled={credentialNodes.length === 0}
