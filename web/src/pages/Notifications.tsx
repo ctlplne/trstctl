@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { RefreshCw, Save, Send } from "lucide-react";
 import { Dialog } from "@/components/Dialog";
 import { EmptyState } from "@/components/EmptyState";
@@ -18,6 +18,7 @@ type ActiveTab = "all" | "dead";
 type NotificationStatus = Notification["status"];
 type TestSeverity = "low" | "informational" | "warning" | "critical";
 type Notice = { title: string; detail?: string };
+type OpenSections = { channels: boolean; routing: boolean; delivery: boolean };
 type PolicyFormState = {
   name: string;
   ownerRef: string;
@@ -111,10 +112,15 @@ export function Notifications() {
   const [testBusy, setTestBusy] = useState(false);
   const [testResult, setTestResult] = useState<NotificationChannelTest | null>(null);
   const [detail, setDetail] = useState<Notification | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [channelDialogOpen, setChannelDialogOpen] = useState(false);
+  const [open, setOpen] = useState<OpenSections>({ channels: false, routing: false, delivery: false });
+  const channelDialogHeadingRef = useRef<HTMLHeadingElement>(null);
 
   const load = useCallback(async () => {
     setError(null);
     setChannelError(null);
+    setLoadFailed(false);
     try {
       const [result, channelResult, policyResult] = await Promise.all([
         api.notifications(activeTab === "dead" ? { limit: 100, status: "dead" } : { limit: 100 }),
@@ -126,7 +132,9 @@ export function Notifications() {
       setPolicies(policyResult.items ?? []);
     } catch (err) {
       setNotifications([]);
+      setChannels([]);
       setPolicies([]);
+      setLoadFailed(true);
       setError({ title: notificationUnavailable, detail: errorText(err, notificationLoadError) });
       setChannelError(errorText(err, channelLoadError));
     } finally {
@@ -246,6 +254,7 @@ export function Notifications() {
       });
       setChannels((current) => upsertChannel(current, saved));
       setChannelForm((current) => ({ ...current, credentialRef: "" }));
+      setChannelDialogOpen(false);
       toast({ kind: "success", title: t("notifications.channels.saved"), description: saved.label });
     } catch (err) {
       const detail = errorText(err, t("notifications.channels.saveError"));
@@ -255,6 +264,43 @@ export function Notifications() {
       setChannelBusy(false);
     }
   }
+
+  const configuredChannels = channels.filter(channelReady);
+  const routablePolicies = policies.filter((policy) => policyHasReadyChannel(policy, channels));
+  const deadDeliveries = notifications.filter((notification) => notification.status === "dead");
+  const summaryTitle = loading
+    ? t("notifications.design.checking")
+    : loadFailed
+      ? t("notifications.design.unavailable")
+      : deadDeliveries.length === 1
+        ? t("notifications.design.oneFailedTitle")
+        : deadDeliveries.length > 1
+          ? t("notifications.design.manyFailedTitle", { count: String(deadDeliveries.length) })
+          : configuredChannels.length === 0
+            ? t("notifications.design.noChannelTitle")
+            : policies.length === 0
+              ? t("notifications.design.noRuleTitle")
+              : routablePolicies.length === 0
+                ? t("notifications.design.unroutedTitle")
+                : t("notifications.design.readyTitle");
+  const summaryBody = loading
+    ? t("notifications.design.checkingBody")
+    : loadFailed
+      ? t("notifications.design.unavailableBody")
+      : deadDeliveries.length > 0
+        ? t("notifications.design.failedBody")
+        : configuredChannels.length === 0
+          ? t("notifications.design.noChannelBody")
+          : policies.length === 0
+            ? t("notifications.design.noRuleBody")
+            : routablePolicies.length === 0
+              ? t("notifications.design.unroutedBody")
+              : t("notifications.design.readyBody");
+  const actionHelp = loading
+    ? t("notifications.design.addChecking")
+    : loadFailed
+      ? t("notifications.design.addUnavailable")
+      : t("notifications.design.addHelp");
 
   async function testChannel(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -280,102 +326,197 @@ export function Notifications() {
   }
 
   return (
-    <section aria-labelledby="notifications-heading" className="grid gap-6">
+    <section aria-labelledby="notifications-heading" className="space-y-4">
       <PageHeader
-        title={translateNow("source.notifications.788011833a")}
+        title={t("notifications.design.title")}
         titleId="notifications-heading"
-        description="Inbox for operator alerts, delivery failures, and dead-letter triage."
+        description={t("notifications.design.answer")}
+        technicalDetails={t("notifications.design.technicalDetails")}
         actions={
-          <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
-            <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
-            {translateNow("source.refresh.0e91610117")}
+          <Button type="button" aria-describedby="add-channel-action-help" disabled={loading || loadFailed} onClick={() => setChannelDialogOpen(true)}>
+            {t("notifications.design.addChannel")}
           </Button>
         }
       />
 
+      <section aria-labelledby="delivery-summary-heading" className="ui-panel grid gap-4 p-comfortable">
+        <div className="grid gap-1">
+          <h2 id="delivery-summary-heading" className="text-title font-semibold">
+            {summaryTitle}
+          </h2>
+          <p className="max-w-3xl text-body">{summaryBody}</p>
+          <p id="add-channel-action-help" className="max-w-3xl text-caption text-muted-foreground">
+            {actionHelp}
+          </p>
+        </div>
+
+        {!loading && !loadFailed ? (
+          <dl className="grid gap-3 sm:grid-cols-3">
+            <DeliveryCount label={channelCountLabel(t, configuredChannels.length)} />
+            <DeliveryCount label={ruleCountLabel(t, policies.length)} />
+            <DeliveryCount label={failedCountLabel(t, deadDeliveries.length)} tone={deadDeliveries.length > 0 ? "critical" : "neutral"} />
+          </dl>
+        ) : null}
+
+        {!loading && !loadFailed && policies.length > 0 ? <RoutingPreview policies={policies} channels={channels} /> : null}
+      </section>
+
       {error && <ErrorState title={error.title}>{error.detail}</ErrorState>}
 
-      <ChannelCatalog channels={channels} error={channelError} />
-
-      <ChannelAuthoring form={channelForm} busy={channelBusy} onFormChange={setChannelForm} onSaveChannel={(event) => void saveChannel(event)} />
-
-      <RoutingPolicyAuthoring
-        channels={channels}
-        policies={policies}
-        policyForm={policyForm}
-        testForm={testForm}
-        policyBusy={policyBusy}
-        testBusy={testBusy}
-        testResult={testResult}
-        onPolicyFormChange={setPolicyForm}
-        onTestFormChange={setTestForm}
-        onSavePolicy={(event) => void savePolicy(event)}
-        onTestChannel={(event) => void testChannel(event)}
-      />
-
-      <div className="ui-panel grid gap-3 p-comfortable lg:grid-cols-[auto_minmax(12rem,16rem)_minmax(12rem,16rem)_1fr]">
-        <div
-          role="tablist"
-          aria-label={t("notifications.queue.tablist")}
-          className="inline-flex h-10 w-fit overflow-hidden rounded-control border border-border"
-        >
-          <button type="button" role="tab" aria-selected={activeTab === "all"} className={tabClass(activeTab === "all")} onClick={() => setActiveTab("all")}>
-            {t("notifications.queue.all")}
-          </button>
-          <button type="button" role="tab" aria-selected={activeTab === "dead"} className={tabClass(activeTab === "dead")} onClick={() => setActiveTab("dead")}>
-            {t("notifications.queue.deadLetter")}
-          </button>
+      <NotificationDetails
+        title={t("notifications.design.disclosure.channels")}
+        open={open.channels}
+        onToggle={(value) => setOpen((current) => ({ ...current, channels: value }))}
+      >
+        <div className="grid gap-4">
+          <p className="max-w-3xl text-sm text-muted-foreground">{t("notifications.design.channelsHelp")}</p>
+          <ChannelCatalog channels={channels} error={channelError} />
         </div>
-        <label className="grid gap-2 text-sm font-medium">
-          {t("notifications.filter.type")}
-          <select
-            aria-label={t("notifications.filter.type")}
-            value={typeFilter}
-            onChange={(event) => setTypeFilter(event.target.value)}
-            className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-focus focus:ring-2 focus:ring-focus/20"
-          >
-            <option value="">{t("notifications.filter.typeAll")}</option>
-            {typeOptions.map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="grid gap-2 text-sm font-medium">
-          {t("notifications.filter.status")}
-          <select
-            aria-label={t("notifications.filter.status")}
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value as "" | NotificationStatus)}
-            className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-focus focus:ring-2 focus:ring-focus/20"
-          >
-            {statusOptions.map((option) => (
-              <option key={option.value || "all"} value={option.value}>
-                {t(option.labelKey)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="flex items-end justify-between gap-3 text-sm text-muted-foreground">
-          <span>{t("notifications.count.total", { count: filteredNotifications.length })}</span>
-          <span>{t("notifications.count.unread", { count: unreadCount })}</span>
-        </div>
-      </div>
+      </NotificationDetails>
 
-      {loading ? (
-        <LoadingState>{t("notifications.loading")}</LoadingState>
-      ) : filteredNotifications.length === 0 ? (
-        <EmptyState title={t("notifications.emptyTitle")}>{t("notifications.emptyBody")}</EmptyState>
-      ) : (
-        <NotificationsTable
-          notifications={filteredNotifications}
-          busyId={busyId}
-          onMarkRead={(notification) => void markRead(notification)}
-          onRequeue={(notification) => void requeue(notification)}
-          onDetails={(notification) => void openDetails(notification)}
-        />
-      )}
+      <NotificationDetails
+        title={t("notifications.design.disclosure.routing")}
+        open={open.routing}
+        onToggle={(value) => setOpen((current) => ({ ...current, routing: value }))}
+      >
+        <div className="grid gap-4">
+          <p className="max-w-3xl text-sm text-muted-foreground">{t("notifications.design.routingHelp")}</p>
+          <RoutingPolicyAuthoring
+            channels={channels}
+            policies={policies}
+            policyForm={policyForm}
+            testForm={testForm}
+            policyBusy={policyBusy}
+            testBusy={testBusy}
+            testResult={testResult}
+            onPolicyFormChange={setPolicyForm}
+            onTestFormChange={setTestForm}
+            onSavePolicy={(event) => void savePolicy(event)}
+            onTestChannel={(event) => void testChannel(event)}
+          />
+        </div>
+      </NotificationDetails>
+
+      <NotificationDetails
+        title={t("notifications.design.disclosure.delivery")}
+        open={open.delivery}
+        onToggle={(value) => setOpen((current) => ({ ...current, delivery: value }))}
+      >
+        <div className="grid gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <p className="max-w-3xl text-sm text-muted-foreground">{t("notifications.design.deliveryHelp")}</p>
+            <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
+              <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
+              {translateNow("source.refresh.0e91610117")}
+            </Button>
+          </div>
+
+          <div className="grid gap-3 rounded-control border border-border bg-muted/20 p-3 lg:grid-cols-[auto_minmax(12rem,16rem)_minmax(12rem,16rem)_1fr]">
+            <div
+              role="tablist"
+              aria-label={t("notifications.queue.tablist")}
+              className="inline-flex h-10 w-fit overflow-hidden rounded-control border border-border"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === "all"}
+                className={tabClass(activeTab === "all")}
+                onClick={() => setActiveTab("all")}
+              >
+                {t("notifications.queue.all")}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === "dead"}
+                className={tabClass(activeTab === "dead")}
+                onClick={() => setActiveTab("dead")}
+              >
+                {t("notifications.queue.deadLetter")}
+              </button>
+            </div>
+            <label className="grid gap-2 text-sm font-medium">
+              {t("notifications.filter.type")}
+              <select
+                aria-label={t("notifications.filter.type")}
+                value={typeFilter}
+                onChange={(event) => setTypeFilter(event.target.value)}
+                className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-focus focus:ring-2 focus:ring-focus/20"
+              >
+                <option value="">{t("notifications.filter.typeAll")}</option>
+                {typeOptions.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-2 text-sm font-medium">
+              {t("notifications.filter.status")}
+              <select
+                aria-label={t("notifications.filter.status")}
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value as "" | NotificationStatus)}
+                className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-focus focus:ring-2 focus:ring-focus/20"
+              >
+                {statusOptions.map((option) => (
+                  <option key={option.value || "all"} value={option.value}>
+                    {t(option.labelKey)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="flex items-end justify-between gap-3 text-sm text-muted-foreground">
+              <span>{t("notifications.count.total", { count: filteredNotifications.length })}</span>
+              <span>{t("notifications.count.unread", { count: unreadCount })}</span>
+            </div>
+          </div>
+
+          {loading ? (
+            <LoadingState>{t("notifications.loading")}</LoadingState>
+          ) : filteredNotifications.length === 0 ? (
+            <EmptyState title={t("notifications.design.emptyDeliveryTitle")}>{t("notifications.design.emptyDeliveryBody")}</EmptyState>
+          ) : (
+            <NotificationsTable
+              notifications={filteredNotifications}
+              busyId={busyId}
+              onMarkRead={(notification) => void markRead(notification)}
+              onRequeue={(notification) => void requeue(notification)}
+              onDetails={(notification) => void openDetails(notification)}
+            />
+          )}
+        </div>
+      </NotificationDetails>
+
+      <Dialog
+        open={channelDialogOpen}
+        onClose={() => setChannelDialogOpen(false)}
+        titleId="add-notification-channel-heading"
+        descriptionId="add-notification-channel-description"
+        initialFocusRef={channelDialogHeadingRef}
+        panelAnimation="none"
+        panelClassName="fixed left-1/2 top-1/2 grid max-h-[calc(100dvh-2rem)] w-[min(94vw,48rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain rounded-panel border border-border bg-card p-5 shadow-elevation3"
+      >
+        <div className="grid min-w-0 gap-4">
+          <div>
+            <h2 ref={channelDialogHeadingRef} id="add-notification-channel-heading" className="text-title font-semibold" tabIndex={-1}>
+              {t("notifications.design.addChannel")}
+            </h2>
+            <p id="add-notification-channel-description" className="mt-1 max-w-3xl text-sm text-muted-foreground">
+              {t("notifications.design.addDialogHelp")}
+            </p>
+          </div>
+          <ChannelAuthoring
+            form={channelForm}
+            busy={channelBusy}
+            embedded
+            onCancel={() => setChannelDialogOpen(false)}
+            onFormChange={setChannelForm}
+            onSaveChannel={(event) => void saveChannel(event)}
+          />
+        </div>
+      </Dialog>
 
       {detail && (
         <Dialog
@@ -494,54 +635,144 @@ function ChannelCatalog({ channels, error }: { channels: NotificationChannel[]; 
   if (channels.length === 0) return null;
   const configuredLabel = t("notifications.channels.configured");
   const unconfiguredLabel = t("notifications.channels.unconfigured");
+  const disabledLabel = t("notifications.channels.disabled");
   return (
-    <div className="ui-panel grid gap-3 p-comfortable">
+    <div className="grid gap-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-base font-semibold">{t("notifications.channels.heading")}</h2>
-        <span className="text-sm text-muted-foreground">
-          {t("notifications.channels.configuredCount", { count: channels.filter((channel) => channel.configured).length })}
-        </span>
+        <span className="text-sm text-muted-foreground">{t("notifications.channels.configuredCount", { count: channels.filter(channelReady).length })}</span>
       </div>
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        {channels.map((channel) => (
-          <div key={channel.id} className="rounded-control border border-border bg-background p-3">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{channel.label}</p>
-                <p className="truncate text-xs text-muted-foreground">{channel.category}</p>
+        {channels.map((channel) => {
+          const ready = channelReady(channel);
+          const status = ready ? "configured" : channel.configured ? "disabled" : "unconfigured";
+          const label = ready ? configuredLabel : channel.configured ? disabledLabel : unconfiguredLabel;
+          return (
+            <div key={channel.id} className="rounded-control border border-border bg-background p-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{channel.label}</p>
+                  <p className="truncate text-xs text-muted-foreground">{channel.category}</p>
+                </div>
+                <StatusBadge value={status} label={label} tone={ready ? "success" : "neutral"} />
               </div>
-              <StatusBadge
-                value={channel.configured ? "configured" : "unconfigured"}
-                label={channel.configured ? configuredLabel : unconfiguredLabel}
-                tone={channel.configured ? "success" : "neutral"}
-              />
+              <p className="mt-2 truncate text-xs text-muted-foreground" title={channel.delivery}>
+                {channel.delivery}
+              </p>
             </div>
-            <p className="mt-2 truncate text-xs text-muted-foreground" title={channel.delivery}>
-              {channel.delivery}
-            </p>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
 }
 
+function NotificationDetails({ title, open, onToggle, children }: { title: string; open: boolean; onToggle: (open: boolean) => void; children: ReactNode }) {
+  return (
+    <details className="rounded-panel border border-border bg-card shadow-elevation1" open={open} onToggle={(event) => onToggle(event.currentTarget.open)}>
+      <summary className="cursor-pointer px-4 py-3 font-semibold text-foreground">{title}</summary>
+      <div className="border-t border-border p-4">{open ? children : null}</div>
+    </details>
+  );
+}
+
+function DeliveryCount({ label, tone = "neutral" }: { label: string; tone?: "neutral" | "critical" }) {
+  const { t } = useTranslation();
+  return (
+    <div className={`rounded-control border p-3 ${tone === "critical" ? "border-status-critical/30 bg-status-critical/10" : "border-border bg-muted/20"}`}>
+      <dt className="sr-only">{t("notifications.design.deliveryStatusCount")}</dt>
+      <dd className={`text-body font-semibold ${tone === "critical" ? "text-status-critical" : "text-foreground"}`}>{label}</dd>
+    </div>
+  );
+}
+
+function RoutingPreview({ policies, channels }: { policies: NotificationRoutingPolicy[]; channels: NotificationChannel[] }) {
+  const { t } = useTranslation();
+  return (
+    <section aria-label={t("notifications.design.routingPreview")} className="grid gap-2 rounded-control border border-border bg-muted/20 p-4">
+      <p className="text-caption font-semibold text-muted-foreground">{t("notifications.design.routingPreview")}</p>
+      <ul className="grid gap-2">
+        {policies.slice(0, 3).map((policy) => (
+          <li key={policy.id} className="grid gap-1 text-sm sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-center sm:gap-4">
+            <span className="font-medium">
+              {policy.name} → {previewChannels(policy, channels)}
+            </span>
+            <span className="text-muted-foreground">
+              {t("notifications.routing.owner")}: {policy.owner_email || policy.owner_ref || t("notifications.design.ownerMissing")}
+            </span>
+            <StatusBadge
+              value={policyHasReadyChannel(policy, channels) ? "ready" : "unrouted"}
+              label={t(policyHasReadyChannel(policy, channels) ? "notifications.design.routeReady" : "notifications.design.routeNotReady")}
+              tone={policyHasReadyChannel(policy, channels) ? "success" : "critical"}
+            />
+          </li>
+        ))}
+      </ul>
+      {policies.length > 3 ? (
+        <p className="text-caption text-muted-foreground">{t("notifications.design.moreRules", { count: String(policies.length - 3) })}</p>
+      ) : null}
+    </section>
+  );
+}
+
+function previewChannels(policy: NotificationRoutingPolicy, channels: NotificationChannel[]): string {
+  const unique = policyChannelIDs(policy);
+  if (unique.length === 0) return "—";
+  return unique.map((id) => channels.find((channel) => channel.id === id)?.label || id).join(", ");
+}
+
+function policyChannelIDs(policy: NotificationRoutingPolicy): string[] {
+  const severityChannels = Object.values(policy.channels_by_severity ?? {}).flatMap((value) =>
+    Array.isArray(value) ? value.filter((channelID): channelID is string => typeof channelID === "string") : [],
+  );
+  return Array.from(new Set([...policy.default_channels, ...severityChannels]));
+}
+
+function policyHasReadyChannel(policy: NotificationRoutingPolicy, channels: NotificationChannel[]): boolean {
+  const ready = new Set(channels.filter(channelReady).map((channel) => channel.id));
+  return policyChannelIDs(policy).some((id) => ready.has(id));
+}
+
+function channelReady(channel: NotificationChannel): boolean {
+  return channel.configured && channel.enabled !== false;
+}
+
+function channelCountLabel(t: (key: MessageKey, values?: Record<string, string | number>) => string, count: number): string {
+  return count === 1 ? t("notifications.design.oneChannel") : t("notifications.design.manyChannels", { count });
+}
+
+function ruleCountLabel(t: (key: MessageKey, values?: Record<string, string | number>) => string, count: number): string {
+  return count === 1 ? t("notifications.design.oneRule") : t("notifications.design.manyRules", { count });
+}
+
+function failedCountLabel(t: (key: MessageKey, values?: Record<string, string | number>) => string, count: number): string {
+  return count === 1 ? t("notifications.design.oneFailed") : t("notifications.design.manyFailed", { count });
+}
+
 function ChannelAuthoring({
   form,
   busy,
+  embedded = false,
+  onCancel,
   onFormChange,
   onSaveChannel,
 }: {
   form: ChannelFormState;
   busy: boolean;
+  embedded?: boolean;
+  onCancel?: () => void;
   onFormChange: (next: ChannelFormState) => void;
   onSaveChannel: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const { t } = useTranslation();
   return (
-    <form className="ui-panel grid gap-4 p-comfortable" onSubmit={onSaveChannel}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-base font-semibold">{t("notifications.channels.authoringHeading")}</h2>
+    <form
+      aria-label={t("notifications.design.addFormLabel")}
+      className={embedded ? "grid gap-4" : "ui-panel grid gap-4 p-comfortable"}
+      onSubmit={onSaveChannel}
+    >
+      <div className={`flex flex-wrap items-center gap-3 ${embedded ? "justify-end" : "justify-between"}`}>
+        {!embedded ? <h2 className="text-base font-semibold">{t("notifications.channels.authoringHeading")}</h2> : null}
         <StatusBadge
           value={form.enabled ? "enabled" : "disabled"}
           label={form.enabled ? t("notifications.channels.enabled") : t("notifications.channels.disabled")}
@@ -587,6 +818,11 @@ function ChannelAuthoring({
           />
           {t("notifications.channels.enabled")}
         </label>
+        {onCancel ? (
+          <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
+            {t("notifications.design.cancel")}
+          </Button>
+        ) : null}
         <Button type="submit" className="w-fit" disabled={busy}>
           <Save className="h-4 w-4" aria-hidden="true" />
           {busy ? t("notifications.channels.saving") : t("notifications.channels.save")}
@@ -622,10 +858,10 @@ function RoutingPolicyAuthoring({
   onTestChannel: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const { t } = useTranslation();
-  const configured = channels.filter((channel) => channel.configured);
+  const configured = channels.filter(channelReady);
   const selectedChannel = testForm.channelId || firstConfiguredChannel(channels)?.id || "";
   return (
-    <div className="ui-panel grid gap-5 p-comfortable">
+    <div className="grid gap-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="grid gap-1">
           <h2 className="text-base font-semibold">{t("notifications.routing.heading")}</h2>
@@ -634,7 +870,7 @@ function RoutingPolicyAuthoring({
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">
-        <form className="grid gap-4" onSubmit={onSavePolicy}>
+        <form aria-label={t("notifications.design.routingFormLabel")} className="grid gap-4" onSubmit={onSavePolicy}>
           <div className="grid gap-3 md:grid-cols-2">
             <TextInput
               label={t("notifications.routing.name")}
@@ -701,7 +937,11 @@ function RoutingPolicyAuthoring({
           </Button>
         </form>
 
-        <form className="grid content-start gap-4 rounded-control border border-border bg-background p-4" onSubmit={onTestChannel}>
+        <form
+          aria-label={t("notifications.design.testFormLabel")}
+          className="grid content-start gap-4 rounded-control border border-border bg-background p-4"
+          onSubmit={onTestChannel}
+        >
           <h3 className="text-sm font-semibold">{t("notifications.routing.testHeading")}</h3>
           <label className="grid gap-2 text-sm font-medium">
             {t("notifications.routing.channel")}
@@ -979,7 +1219,7 @@ function upsertChannel(current: NotificationChannel[], next: NotificationChannel
 }
 
 function firstConfiguredChannel(channels: NotificationChannel[]): NotificationChannel | undefined {
-  return channels.find((channel) => channel.configured);
+  return channels.find(channelReady);
 }
 
 function policyChannels(policy: NotificationRoutingPolicy, severity: string): string[] {

@@ -492,12 +492,24 @@ Approval work is loaded through every cursor page instead of stopping at the fir
 `certs:issue` for certificate actions, `secrets:write` for secret actions, or
 `keys:approve` for managed-key actions. Reject records an immutable denial of that
 exact request and does not retire, revoke, delete, or otherwise mutate the target
-resource. The Notifications inbox lists all notification rows and dead letters, filters by
-type/status, marks unread rows read, requeues failed delivery, and shows the
-configured channel families from `GET /api/v1/notification-channels` (email, Slack,
-Teams, SMS, SIEM, and more). The page also creates tenant notification channels with
-endpoint metadata and secret references, then queues redacted channel tests through
-the notification outbox; toasts report success and failure.
+resource.
+
+Alerts and delivery answers one question first: which events currently reach which
+people or systems. The opening summary reports ready channels, routing rules, and
+failed deliveries without claiming that an unavailable read model is empty. It also
+shows a compact event-to-destination path and flags rules that reference only missing
+or disabled channels. **Add channel** is the one primary action. Its bounded dialog
+requires a public HTTPS destination and a credential reference, never a secret value.
+
+Three closed evidence sections keep the default page calm. **Channels and webhooks**
+shows every supported family from `GET /api/v1/notification-channels` (email, Slack,
+Teams, SMS, SIEM, and more) and whether each is ready. **Routing rules and templates**
+maps event severity to ready destinations, records an accountable owner, and queues a
+redacted test through durable outbox work. trstctl currently uses one fixed server
+alert envelope across channels; this build does not pretend to offer a tenant-editable
+template library. **Delivery attempts and dead letters** filters the durable inbox,
+marks unread rows read, shows retry/error/idempotency/owner/recipient evidence, and
+offers requeue only for failed delivery. Toasts report real success and failure.
 
 ### Approvals, self-service & administration
 
@@ -603,7 +615,7 @@ grounded and sufficient. Backed by `/api/v1/ai/status`, `/api/v1/mcp/tools`, `/a
 | `/incidents` | Incidents |
 | `/approvals` | Requests waiting for approval |
 | `/operations` | Operations |
-| `/notifications` | Notifications |
+| `/notifications` | Alerts and delivery |
 | `/policy` | Rules and approvals |
 | `/audit` | Audit |
 | `/privacy` | Privacy |

@@ -1,1 +1,0 @@
-import{f as e,t}from"./utils-B2H3b7Au.js";var n=e();function r({className:e}){return(0,n.jsx)(`div`,{"aria-hidden":`true`,className:t(`rounded-control bg-foreground/[0.07] motion-safe:animate-pulse`,e)})}export{r as t};

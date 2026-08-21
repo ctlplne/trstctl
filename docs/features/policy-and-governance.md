@@ -210,6 +210,15 @@ HTTP-based channels default to the shared SSRF-safe client and accept only publi
 endpoints, so an operator callback can't turn the control plane into a request to
 loopback, RFC1918, or cloud-metadata addresses.
 
+The `/notifications` console names this journey **Alerts and delivery**. Its opening
+summary says whether any ready channel and routing rule actually connect an event to a
+person or system, and it separates failed-delivery evidence from configuration. One
+**Add channel** action opens a bounded form; channel coverage, routing, and delivery
+attempts remain in three closed detail sections until needed. The server applies one
+fixed alert envelope across channel providers. There is no tenant-editable template
+library in this build, and the console states that limitation instead of presenting a
+false template editor.
+
 **Status:** served. When the lifecycle alert window is set, the leader scheduler writes
 `notification.expiry` outbox work, stamps the certificate alerted, and includes the
 owner/contact plus active approver recipients. Tenants manage channels at

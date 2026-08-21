@@ -5852,7 +5852,7 @@ export const messages = {
     description: "Primary navigation item.",
   },
   "nav.item.notifications": {
-    defaultMessage: "Notifications",
+    defaultMessage: "Alerts and delivery",
     description: "Primary navigation item.",
   },
   "nav.item.sso": {
@@ -6880,6 +6880,197 @@ export const messages = {
   "owners.attribution.orphaned": {
     defaultMessage: "orphaned",
     description: "Fallback owner-kind label for an unattributed NHI.",
+  },
+  "notifications.design.title": {
+    defaultMessage: "Alerts and delivery",
+    description: "Calm Route 034 page title for alert destinations, routing, and delivery evidence.",
+  },
+  "notifications.design.answer": {
+    defaultMessage: "Which events notify which people or systems.",
+    description: "One-sentence opening answer for the Alerts and delivery route.",
+  },
+  "notifications.design.technicalDetails": {
+    defaultMessage: "Routing rules, templates, delivery attempts, webhooks.",
+    description: "Compact expert-detail inventory for the Alerts and delivery route.",
+  },
+  "notifications.design.addChannel": {
+    defaultMessage: "Add channel",
+    description: "Single primary action that opens bounded notification channel authoring.",
+  },
+  "notifications.design.checking": {
+    defaultMessage: "Checking alert delivery",
+    description: "Summary title while channel, routing, and delivery state loads.",
+  },
+  "notifications.design.unavailable": {
+    defaultMessage: "Alert delivery state is unavailable",
+    description: "Truthful summary title when alert delivery state cannot be read.",
+  },
+  "notifications.design.oneFailedTitle": {
+    defaultMessage: "1 failed delivery needs attention",
+    description: "Summary title when exactly one delivery is dead-lettered.",
+  },
+  "notifications.design.manyFailedTitle": {
+    defaultMessage: "{count} failed deliveries need attention",
+    description: "Summary title when multiple deliveries are dead-lettered.",
+  },
+  "notifications.design.noChannelTitle": {
+    defaultMessage: "No alert channel is ready",
+    description: "Summary title when no external alert channel is configured.",
+  },
+  "notifications.design.noRuleTitle": {
+    defaultMessage: "Alert channels exist, but no routing rule is active",
+    description: "Summary title when destinations exist without an event-to-recipient rule.",
+  },
+  "notifications.design.readyTitle": {
+    defaultMessage: "Alerts have a delivery path",
+    description: "Summary title when configured channels and routing rules exist without a dead letter.",
+  },
+  "notifications.design.unroutedTitle": {
+    defaultMessage: "Routing rules do not reach a ready channel",
+    description: "Summary title when rules exist but none targets an enabled configured destination.",
+  },
+  "notifications.design.checkingBody": {
+    defaultMessage: "Reading configured destinations, routing rules, and failed delivery attempts.",
+    description: "Loading explanation for the alert-delivery summary.",
+  },
+  "notifications.design.unavailableBody": {
+    defaultMessage: "trstctl cannot safely say who will be notified until this tenant-scoped read model loads.",
+    description: "Fail-honest explanation when alert delivery state is unavailable.",
+  },
+  "notifications.design.failedBody": {
+    defaultMessage: "A delivery exhausted its retries. Review the attempt and dead-letter evidence before assuming the recipient was notified.",
+    description: "Consequence-first explanation for failed alert delivery.",
+  },
+  "notifications.design.noChannelBody": {
+    defaultMessage: "Events can still be recorded in trstctl, but no external person or system will receive them until you add a channel.",
+    description: "Truthful explanation when no external alert destination is configured.",
+  },
+  "notifications.design.noRuleBody": {
+    defaultMessage: "A destination is ready, but no rule maps alert severity to that destination yet.",
+    description: "Truthful explanation when channels exist without routing rules.",
+  },
+  "notifications.design.readyBody": {
+    defaultMessage: "Configured rules map alert events to external destinations. Open exact details to verify each path and its evidence.",
+    description: "Ready-state explanation for configured alert delivery.",
+  },
+  "notifications.design.unroutedBody": {
+    defaultMessage: "Rules exist, but every referenced channel is missing or disabled. Events do not have a working external path yet.",
+    description: "Fail-honest explanation for routing rules with no ready destination.",
+  },
+  "notifications.design.addChecking": {
+    defaultMessage: "Wait for current delivery state before adding a destination.",
+    description: "Accessible action help while alert delivery state loads.",
+  },
+  "notifications.design.addUnavailable": {
+    defaultMessage: "Reload delivery state before adding a channel so an existing destination is not replaced by mistake.",
+    description: "Accessible action help when channel creation is disabled after a read failure.",
+  },
+  "notifications.design.addHelp": {
+    defaultMessage: "Adds one external destination. Routing it to events is a separate rule.",
+    description: "Boundary explanation for the Add channel action.",
+  },
+  "notifications.design.oneChannel": {
+    defaultMessage: "1 channel ready",
+    description: "Summary count for one configured alert channel.",
+  },
+  "notifications.design.manyChannels": {
+    defaultMessage: "{count} channels ready",
+    description: "Summary count for configured alert channels.",
+  },
+  "notifications.design.oneRule": {
+    defaultMessage: "1 routing rule",
+    description: "Summary count for one notification routing rule.",
+  },
+  "notifications.design.manyRules": {
+    defaultMessage: "{count} routing rules",
+    description: "Summary count for notification routing rules.",
+  },
+  "notifications.design.oneFailed": {
+    defaultMessage: "1 failed delivery",
+    description: "Summary count for one dead-lettered delivery.",
+  },
+  "notifications.design.manyFailed": {
+    defaultMessage: "{count} failed deliveries",
+    description: "Summary count for dead-lettered deliveries.",
+  },
+  "notifications.design.routingPreview": {
+    defaultMessage: "Event-to-recipient preview",
+    description: "Accessible title for the compact routing summary.",
+  },
+  "notifications.design.deliveryStatusCount": {
+    defaultMessage: "Delivery status count",
+    description: "Visually hidden term for the three alert-delivery summary counts.",
+  },
+  "notifications.design.routeReady": {
+    defaultMessage: "Ready destination",
+    description: "Status for a routing rule that reaches an enabled configured channel.",
+  },
+  "notifications.design.routeNotReady": {
+    defaultMessage: "No ready destination",
+    description: "Status for a routing rule whose referenced channels are missing or disabled.",
+  },
+  "notifications.design.ownerMissing": {
+    defaultMessage: "No owner recorded",
+    description: "Fail-honest routing owner fallback.",
+  },
+  "notifications.design.moreRules": {
+    defaultMessage: "+{count} more rules in exact details",
+    description: "Count of routing rules beyond the compact opening preview.",
+  },
+  "notifications.design.disclosure.channels": {
+    defaultMessage: "Channels and webhooks",
+    description: "Closed expert disclosure for supported and configured destinations.",
+  },
+  "notifications.design.disclosure.routing": {
+    defaultMessage: "Routing rules and templates",
+    description: "Closed expert disclosure for routing authoring, templates, and tests.",
+  },
+  "notifications.design.disclosure.delivery": {
+    defaultMessage: "Delivery attempts and dead letters",
+    description: "Closed expert disclosure for notification delivery evidence.",
+  },
+  "notifications.design.channelsHelp": {
+    defaultMessage: "A channel is one external destination. Webhook URLs and provider credentials stay behind server validation and secret references.",
+    description: "Technical ELI5 help for notification channels and webhooks.",
+  },
+  "notifications.design.routingHelp": {
+    defaultMessage:
+      "A routing rule maps event severity to one or more channels. trstctl uses one fixed alert envelope across channels; this build has no tenant-editable template library. A test writes durable outbox work first; it does not call the destination from the browser.",
+    description: "Technical ELI5 help for routing rules, templates, and safe tests.",
+  },
+  "notifications.design.deliveryHelp": {
+    defaultMessage:
+      "Each attempt keeps status, retry count, last error, idempotency key, owner, and recipients. Requeue is available only after a delivery reaches the dead-letter state.",
+    description: "Technical ELI5 help for delivery attempts and dead letters.",
+  },
+  "notifications.design.emptyDeliveryTitle": {
+    defaultMessage: "No delivery attempts match",
+    description: "Empty state title within exact delivery evidence.",
+  },
+  "notifications.design.emptyDeliveryBody": {
+    defaultMessage: "Change the filters or refresh. An empty list means no matching attempt was returned, not that alert routing is configured.",
+    description: "Fail-honest empty state body for delivery evidence.",
+  },
+  "notifications.design.addDialogHelp": {
+    defaultMessage:
+      "Choose one public HTTPS destination. trstctl stores a credential reference, not the secret value, and routing events to this channel remains a separate step.",
+    description: "Security and consequence boundary shown in the Add channel dialog.",
+  },
+  "notifications.design.addFormLabel": {
+    defaultMessage: "Add notification channel",
+    description: "Accessible name for the bounded channel creation form.",
+  },
+  "notifications.design.cancel": {
+    defaultMessage: "Cancel",
+    description: "Dismiss the Add channel dialog without mutation.",
+  },
+  "notifications.design.routingFormLabel": {
+    defaultMessage: "Create routing rule",
+    description: "Accessible name for notification routing authoring.",
+  },
+  "notifications.design.testFormLabel": {
+    defaultMessage: "Queue a safe delivery test",
+    description: "Accessible name for the outbox-backed channel test form.",
   },
   "notifications.channels.heading": {
     defaultMessage: "Channel coverage",

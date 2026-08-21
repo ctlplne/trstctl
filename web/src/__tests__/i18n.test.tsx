@@ -861,8 +861,13 @@ describe("i18n boundary", () => {
       // named disclosures; and gives wide data-grid viewports their own
       // localized keyboard-scroll label. Machine-authored es/de — FLAGGED FOR
       // HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "5bbc361f78f9aa963958531fb660db1f4c5fdbc342310d5053f4f11a50c5151b",
-      "de-DE": "8b3ae6b2aa2232c87b5bc7c91ad13c046293b5653066f843de493590d67ac341",
+      // QA design g34 re-pin: Alerts and delivery now explains the
+      // event-to-recipient path, safe channel boundary, routing/outbox model,
+      // dead-letter evidence, and the honest fixed-template limitation in
+      // every production locale. Machine-authored Spanish and German remain
+      // flagged for human language review.
+      "es-ES": "c6e91752fd5190fc8f88c9aab463ba9716d0d232e5fcbd4519f233013ee56b7b",
+      "de-DE": "65cc9342734beb91441d24f01b2bd5121bfd282eb1489a36ad9fc467c2846faf",
     });
   });
 

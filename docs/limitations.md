@@ -1256,7 +1256,7 @@ never live in the API process. What you can do end to end against the running bi
   fails when a served REST route is missing both an MCP mapping and an explicit
   allowlist.
 - Cert-ops console parity: issuer catalog and Test connection, operations queue,
-  Notifications inbox, richer certificate filters, dashboard charts, CTA empty
+  Alerts and delivery, richer certificate filters, dashboard charts, CTA empty
   states, onboarding carousel, and server-side command-palette search are in the
   served console.
 

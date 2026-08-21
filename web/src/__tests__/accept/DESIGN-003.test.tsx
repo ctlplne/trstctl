@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { ToastProvider } from "@/components/ToastProvider";
@@ -103,10 +103,12 @@ describe("DESIGN-003 notification routing authoring", () => {
     const user = userEvent.setup();
     renderNotifications();
 
-    expect(await screen.findByRole("heading", { name: "Channel authoring" })).toBeInTheDocument();
-    await user.type(screen.getByLabelText("Endpoint URL"), "https://hooks.example.test/trstctl");
-    await user.type(screen.getByLabelText("Channel credential reference"), "secret://notifications/webhook/hmac-key");
-    await user.click(screen.getByRole("button", { name: /Save channel/ }));
+    expect(await screen.findByRole("heading", { name: "Alerts and delivery" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Add channel" }));
+    const channelForm = screen.getByRole("form", { name: "Add notification channel" });
+    await user.type(within(channelForm).getByLabelText("Endpoint URL"), "https://hooks.example.test/trstctl");
+    await user.type(within(channelForm).getByLabelText("Channel credential reference"), "secret://notifications/webhook/hmac-key");
+    await user.click(within(channelForm).getByRole("button", { name: /Save channel/ }));
     await waitFor(() => expect(apiMock.createNotificationChannel).toHaveBeenCalled());
     expect(apiMock.createNotificationChannel).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -119,6 +121,7 @@ describe("DESIGN-003 notification routing authoring", () => {
     );
     expect(screen.queryByText("secret://notifications/webhook/hmac-key")).not.toBeInTheDocument();
 
+    await user.click(screen.getByText("Routing rules and templates", { exact: true }));
     expect(await screen.findByRole("heading", { name: "Routing policies" })).toBeInTheDocument();
     await user.clear(screen.getByLabelText("Owner email"));
     await user.type(screen.getByLabelText("Owner email"), "platform-security@example.test");
@@ -137,8 +140,8 @@ describe("DESIGN-003 notification routing authoring", () => {
         channels_by_severity: expect.objectContaining({ critical: ["slack", "webhook"], warning: ["slack"] }),
       }),
     );
-    expect(await screen.findByText(/platform-security@example\.test/)).toBeInTheDocument();
-    expect(screen.getByText(/slack, webhook/)).toBeInTheDocument();
+    expect((await screen.findAllByText(/platform-security@example\.test/)).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/slack, webhook/).length).toBeGreaterThan(0);
 
     const credential = screen.getByLabelText("Credential reference");
     await user.selectOptions(screen.getByLabelText("Channel"), "slack");

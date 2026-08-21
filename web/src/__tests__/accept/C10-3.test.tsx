@@ -115,15 +115,17 @@ describe("C10-3 notifications inbox", () => {
     const user = userEvent.setup();
     renderNotifications();
 
-    expect(await screen.findByRole("heading", { name: "Notifications" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Alerts and delivery" })).toBeInTheDocument();
     await waitFor(() => expect(apiMock.notifications).toHaveBeenCalledWith({ limit: 100 }));
     await waitFor(() => expect(apiMock.notificationChannels).toHaveBeenCalled());
+    await user.click(screen.getByText("Channels and webhooks", { exact: true }));
     expect(screen.getByText("Channel coverage")).toBeInTheDocument();
     expect(screen.getByText("5 configured")).toBeInTheDocument();
     for (const label of ["Email", "Slack", "Microsoft Teams", "SMS", "SIEM"]) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0);
     }
 
+    await user.click(screen.getByText("Delivery attempts and dead letters", { exact: true }));
     expect(screen.getByText("1 unread")).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Type filter" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Status filter" })).toBeInTheDocument();
