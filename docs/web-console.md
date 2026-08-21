@@ -508,6 +508,18 @@ the notification outbox; toasts report success and failure.
   never guessed to be an owner UUID. Submission opens the first-class
   `issuance.request.opened` lifecycle object, so the requester and approver read the
   same event-projected request instead of two independently inferred views.
+- **Requests waiting for approval** opens with the complete pending count and the
+  next independently reviewable change. It states the reason, consequence,
+  requester, and decision expiry before offering one **Review request** action. The
+  bounded review shows the server-owned policy result, immutable request ID, bound
+  target version and intent digest, evidence references, approval threshold, and
+  audit history. Approve and reject record decisions only; neither performs the
+  requested issue, rotate, revoke, create, sign, recovery, or delete operation.
+  Rejection requires a reason, and self-approval stays disabled with an explicit
+  dual-control explanation. The complete generic queue, issuance-request lifecycle,
+  and exact-ID ephemeral tool remain available in three closed sections; ticket
+  intake and specialized controls are not loaded or rendered until their section is
+  opened. Credential values and private keys never enter the review.
 - Rules and approvals (`/policy`) includes access-change approvals for NHI entitlement changes: a
   PR/ticket/CAB-backed request, evidence refs, and approve/deny by a distinct
   reviewer. The panel stores metadata and evidence references only, never credential
@@ -589,7 +601,7 @@ grounded and sufficient. Backed by `/api/v1/ai/status`, `/api/v1/mcp/tools`, `/a
 | `/posture` | Algorithms and future readiness |
 | `/graph` | Graph |
 | `/incidents` | Incidents |
-| `/approvals` | Approvals |
+| `/approvals` | Requests waiting for approval |
 | `/operations` | Operations |
 | `/notifications` | Notifications |
 | `/policy` | Rules and approvals |

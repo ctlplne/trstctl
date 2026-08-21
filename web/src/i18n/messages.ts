@@ -2950,6 +2950,10 @@ export const messages = {
     defaultMessage: "No rows",
     description: "Shared data-grid empty state title.",
   },
+  "grid.scrollableColumns": {
+    defaultMessage: "Scrollable columns for {label}",
+    description: "Accessible name for a focusable wide data-grid viewport.",
+  },
   "shell.primaryNavigation": {
     defaultMessage: "Primary",
     description: "Accessible label for the primary navigation landmark.",
@@ -4800,8 +4804,166 @@ export const messages = {
     description: "Primary navigation item.",
   },
   "nav.item.approvals": {
-    defaultMessage: "Approvals",
+    defaultMessage: "Requests waiting for approval",
     description: "Primary navigation item.",
+  },
+  "approvals.design.title": {
+    defaultMessage: "Requests waiting for approval",
+    description: "Decision-first title for approval requests that still need an independent reviewer.",
+  },
+  "approvals.design.answer": {
+    defaultMessage: "What change is requested, why, and its consequence.",
+    description: "Decision-first answer at the top of the approvals route.",
+  },
+  "approvals.design.technicalDetails": {
+    defaultMessage: "Policy result, requester, evidence, dual-control history.",
+    description: "Exact expert evidence retained on the approvals route.",
+  },
+  "approvals.design.review": { defaultMessage: "Review request", description: "Primary approvals-route action and review dialog title." },
+  "approvals.design.checking": { defaultMessage: "Checking what needs approval…", description: "Opening approval summary loading state." },
+  "approvals.design.unknown": { defaultMessage: "Approval state is unknown", description: "Fail-closed summary when an approval queue cannot be read." },
+  "approvals.design.emptyTitle": { defaultMessage: "Nothing needs approval right now", description: "Opening status when both approval queues are empty." },
+  "approvals.design.oneWaitingTitle": { defaultMessage: "1 request is waiting", description: "Opening status when one request needs a decision." },
+  "approvals.design.manyWaitingTitle": { defaultMessage: "{count} requests are waiting", description: "Opening status when multiple requests need decisions." },
+  "approvals.design.oneWaiting": { defaultMessage: "1 request is waiting for a decision", description: "Pending request count for one request." },
+  "approvals.design.manyWaiting": {
+    defaultMessage: "{count} requests are waiting for a decision",
+    description: "Pending request count for zero or multiple requests.",
+  },
+  "approvals.design.reviewChecking": {
+    defaultMessage: "Review becomes available after both queues finish loading.",
+    description: "Reason the primary review action is disabled while loading.",
+  },
+  "approvals.design.reviewUnknown": {
+    defaultMessage: "Review stays disabled because trstctl could not verify the complete queue.",
+    description: "Fail-closed disabled-action explanation.",
+  },
+  "approvals.design.reviewEmpty": {
+    defaultMessage: "Review becomes available when a request enters either protected queue. Completed requests remain in history.",
+    description: "Empty approval action explanation.",
+  },
+  "approvals.design.reviewOwn": {
+    defaultMessage: "You requested every waiting change, so a different person must decide it.",
+    description: "Self-approval boundary at the opening action.",
+  },
+  "approvals.design.reviewHelp": {
+    defaultMessage: "Review the next independent decision. Approval records a decision; it does not perform the requested change.",
+    description: "Primary approval action safety boundary.",
+  },
+  "approvals.design.nextRequest": { defaultMessage: "Next request to review", description: "Accessible label for the recommended pending request summary." },
+  "approvals.design.change": { defaultMessage: "Requested change", description: "Approval request change label." },
+  "approvals.design.why": { defaultMessage: "Why", description: "Approval request purpose label." },
+  "approvals.design.noReason": {
+    defaultMessage: "No reason was provided. Ask the requester before deciding.",
+    description: "Fail-safe approval guidance when purpose is missing.",
+  },
+  "approvals.design.consequence": { defaultMessage: "If approved", description: "Approval request consequence label." },
+  "approvals.design.requester": { defaultMessage: "Requested by", description: "Approval request principal label." },
+  "approvals.design.expires": { defaultMessage: "Decision expires", description: "Approval expiry label." },
+  "approvals.design.expiresOn": { defaultMessage: "Decision window ends {date}.", description: "Human-readable pending approval expiry." },
+  "approvals.design.evidence": { defaultMessage: "Evidence and history", description: "Approval evidence section and table label." },
+  "approvals.design.evidenceCount": { defaultMessage: "{count} evidence references", description: "Count of secret-free evidence references." },
+  "approvals.design.noEvidence": { defaultMessage: "No evidence reference was attached.", description: "Approval request evidence empty state." },
+  "approvals.design.policyRequiredShort": { defaultMessage: "Approval required", description: "Short policy-gate result for a queued request." },
+  "approvals.design.policyResult": { defaultMessage: "Policy result", description: "Approval request policy decision label." },
+  "approvals.design.policyRequired": {
+    defaultMessage: "Approval required. The server placed this exact intent in the protected queue.",
+    description: "Truthful policy result derived from a pending queue record.",
+  },
+  "approvals.design.approvalProgress": { defaultMessage: "Independent decisions", description: "Recorded-versus-required approval count label." },
+  "approvals.design.requestId": { defaultMessage: "Immutable request ID", description: "Exact approval queue identifier label." },
+  "approvals.design.targetVersion": { defaultMessage: "Bound target version", description: "Exact target version label." },
+  "approvals.design.intentDigest": { defaultMessage: "Bound intent digest", description: "Exact approval intent digest label." },
+  "approvals.design.dialogHelp": {
+    defaultMessage: "Check the change, purpose, consequence, requester, expiry, and immutable evidence before recording an independent decision.",
+    description: "Review dialog technical ELI5 guidance.",
+  },
+  "approvals.design.evidenceBoundary": {
+    defaultMessage: "Only references and the immutable digest are shown here. Credential values and private keys never enter this review.",
+    description: "Secret-value boundary in approval review.",
+  },
+  "approvals.design.selfApproval": {
+    defaultMessage: "You requested this change. A different person must approve or reject it so the audit record proves an independent review.",
+    description: "Self-approval refusal explanation.",
+  },
+  "approvals.design.approve": { defaultMessage: "Approve request", description: "Approval review confirmation action." },
+  "approvals.design.reject": { defaultMessage: "Reject request", description: "Approval review rejection action." },
+  "approvals.design.rejectionReason": { defaultMessage: "Why is this request being rejected?", description: "Required approval rejection reason prompt." },
+  "approvals.design.confirmRejection": { defaultMessage: "Record rejection", description: "Final approval rejection action." },
+  "approvals.design.keepOpen": { defaultMessage: "Keep request open", description: "Cancel rejection without deciding the request." },
+  "approvals.design.approvalRecorded": {
+    defaultMessage: "{action} approval recorded for {resource}. The requested change has not run here.",
+    description: "Successful approval decision notice.",
+  },
+  "approvals.design.denialRecorded": {
+    defaultMessage: "{action} request rejected for {resource}. The reason is recorded for the requester.",
+    description: "Successful approval rejection notice.",
+  },
+  "approvals.design.disclosure.queue": {
+    defaultMessage: "All pending requests and evidence",
+    description: "Progressive disclosure for the complete generic approval queue.",
+  },
+  "approvals.design.disclosure.history": {
+    defaultMessage: "Issuance request lifecycle and history",
+    description: "Progressive disclosure for issuance decisions and outcomes.",
+  },
+  "approvals.design.disclosure.specialized": {
+    defaultMessage: "Specialized approval tools",
+    description: "Progressive disclosure for exact-ID approval tools.",
+  },
+  "approvals.design.queueHelp": {
+    defaultMessage:
+      "Every row is a real immutable queue record. Open Review request to see its consequence, exact binding, evidence, and independent-decision state before acting.",
+    description: "Technical ELI5 generic approval queue boundary.",
+  },
+  "approvals.design.historyHelp": {
+    defaultMessage:
+      "Issuance history keeps approval and certificate issuance separate. Approved does not mean issued, and a denied request is different from one that expired without a decision.",
+    description: "Technical ELI5 issuance lifecycle boundary.",
+  },
+  "approvals.design.specializedHelp": {
+    defaultMessage:
+      "Use this only when an ephemeral requester gives you its client request ID. trstctl binds that ID to the exact immutable queue record and digest before recording approval.",
+    description: "Technical ELI5 specialized approval tool boundary.",
+  },
+  "approvals.design.emptyQueue": { defaultMessage: "No general approval requests are waiting", description: "Empty generic approval queue state." },
+  "approvals.design.emptyHistory": { defaultMessage: "No issuance request history is recorded", description: "Empty issuance history state." },
+  "approvals.design.queueLabel": { defaultMessage: "Pending approval requests", description: "Accessible label for the generic approval table." },
+  "approvals.design.issueSubject": { defaultMessage: "Issue a credential for {subject}", description: "Human-readable issuance request change." },
+  "approvals.design.action.issue": { defaultMessage: "Issue a credential for {resource}", description: "Human-readable generic issue action." },
+  "approvals.design.action.create": { defaultMessage: "Create {resource}", description: "Human-readable generic create action." },
+  "approvals.design.action.rotate": { defaultMessage: "Rotate {resource}", description: "Human-readable generic rotate action." },
+  "approvals.design.action.revoke": { defaultMessage: "Revoke {resource}", description: "Human-readable generic revoke action." },
+  "approvals.design.action.sign": { defaultMessage: "Sign the bound artifact with {resource}", description: "Human-readable code-signing action." },
+  "approvals.design.action.recover": { defaultMessage: "Recover {resource}", description: "Human-readable recovery action." },
+  "approvals.design.action.delete": { defaultMessage: "Permanently remove {resource}", description: "Human-readable destructive action." },
+  "approvals.design.consequence.issue": {
+    defaultMessage: "This permits a separate issuance step. It does not mint a credential by itself.",
+    description: "Issue approval consequence.",
+  },
+  "approvals.design.consequence.create": {
+    defaultMessage: "This permits a separate create step. It does not create or reveal a credential by itself.",
+    description: "Create approval consequence.",
+  },
+  "approvals.design.consequence.rotate": {
+    defaultMessage: "This permits a separate rotation. The current credential stays unchanged until execution.",
+    description: "Rotate approval consequence.",
+  },
+  "approvals.design.consequence.revoke": {
+    defaultMessage: "This permits a separate revocation, which can interrupt systems still using the credential.",
+    description: "Revoke approval consequence.",
+  },
+  "approvals.design.consequence.sign": {
+    defaultMessage: "This permits one separate signing operation for the bound intent.",
+    description: "Signing approval consequence.",
+  },
+  "approvals.design.consequence.recover": {
+    defaultMessage: "This permits the bound recovery operation. This screen never exposes stored key material.",
+    description: "Recovery approval consequence.",
+  },
+  "approvals.design.consequence.delete": {
+    defaultMessage: "This permits a separate permanent removal. Review dependency and recovery evidence first.",
+    description: "Delete approval consequence.",
   },
   "nav.item.audit": {
     defaultMessage: "Audit",

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/auth/AuthProvider";
@@ -204,8 +205,11 @@ describe("POL-03 polish fixes", () => {
         expires_at: "2026-06-19T18:00:00Z",
       },
     ]);
+    const user = userEvent.setup();
     renderAt("/approvals");
 
+    await screen.findByRole("heading", { name: "Issue a credential for jit-db" });
+    await user.click(screen.getByText("All pending requests and evidence", { exact: true }));
     const row = await screen.findByRole("row", { name: /jit-db/i });
     expect(screen.getByRole("columnheader", { name: "Approvals" })).toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "Quorum" })).not.toBeInTheDocument();

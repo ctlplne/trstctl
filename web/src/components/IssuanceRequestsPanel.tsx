@@ -7,7 +7,7 @@ import { apiProblemMessage } from "@/lib/apiProblem";
 import { translateNow } from "@/i18n/I18nProvider";
 import { Button } from "@/components/ui/button";
 
-function readIssuanceRequests(): Promise<IssuanceRequestList> {
+export function readIssuanceRequests(): Promise<IssuanceRequestList> {
   return optionalApiCall<IssuanceRequestList>("issuanceRequests", { items: [], open: 0, guidance: "" });
 }
 
@@ -41,7 +41,7 @@ export interface IssuanceRequestsPanelProps {
   currentPrincipal?: { subject?: string; email?: string; permissions?: string[] } | null;
 }
 
-const issuanceRequestsQueryKey = ["issuance-requests"] as const;
+export const issuanceRequestsQueryKey = ["issuance-requests"] as const;
 
 export function IssuanceRequestsPanel({ currentPrincipal }: IssuanceRequestsPanelProps = {}) {
   const queryClient = useQueryClient();

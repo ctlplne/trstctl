@@ -34,7 +34,7 @@ export interface JourneySmokeCell {
 
 const routeCatalog = {
   agents: { path: "/agents", heading: "Agents" },
-  approvals: { path: "/approvals", heading: "Approvals" },
+  approvals: { path: "/approvals", heading: "Requests waiting for approval" },
   audit: { path: "/audit", heading: "Audit" },
   caHierarchy: { path: "/ca-hierarchy", heading: "Certificate authorities" },
   certificates: { path: "/certificates", heading: "Certificates" },

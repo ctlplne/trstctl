@@ -855,8 +855,14 @@ describe("i18n boundary", () => {
       // framework evidence, and review machinery. Failed opening APIs render
       // unknown rather than healthy. Machine-authored es/de — FLAGGED FOR
       // HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "706f6ab8f01e39aac174fa91912da158436584491c5ebc37d6da1dd494b7b44c",
-      "de-DE": "cdd1b3008aa437918be2eb629086e2b2ea02323ab48faad1ff94624e0c46015f",
+      // QA design g33 re-pin: Requests waiting for approval now leads with the
+      // requested change, reason, and consequence; keeps immutable evidence,
+      // policy result, dual-control history, and specialized tools behind
+      // named disclosures; and gives wide data-grid viewports their own
+      // localized keyboard-scroll label. Machine-authored es/de — FLAGGED FOR
+      // HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "5bbc361f78f9aa963958531fb660db1f4c5fdbc342310d5053f4f11a50c5151b",
+      "de-DE": "8b3ae6b2aa2232c87b5bc7c91ad13c046293b5653066f843de493590d67ac341",
     });
   });
 

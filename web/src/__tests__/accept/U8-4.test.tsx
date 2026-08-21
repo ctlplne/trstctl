@@ -11,6 +11,7 @@ const { apiMock } = vi.hoisted(() => ({
     me: vi.fn(),
     authMethods: vi.fn().mockResolvedValue({ oidc: true, saml: false, ldap: false }),
     approvalRequests: vi.fn(),
+    issuanceRequests: vi.fn(),
     approveApprovalRequest: vi.fn(),
     auditEvents: vi.fn(),
     exportAudit: vi.fn(),
@@ -54,6 +55,7 @@ const pending = {
 beforeEach(() => {
   for (const mock of Object.values(apiMock)) mock.mockReset();
   apiMock.authMethods.mockResolvedValue({ oidc: true, saml: false, ldap: false });
+  apiMock.issuanceRequests.mockResolvedValue({ items: [], open: 0, guidance: "" });
   apiMock.approveApprovalRequest.mockResolvedValue({
     id: pending.id,
     intent_digest: pending.intent_digest,
@@ -76,8 +78,9 @@ describe("U8-4 self-service approvals inbox", () => {
     const user = userEvent.setup();
     renderAt("/approvals");
 
-    const row = (await screen.findByText("jit-db")).closest("tr")!;
-    await user.click(within(row).getByRole("button", { name: /approve issue for jit-db/i }));
+    await screen.findByRole("heading", { name: "Issue a credential for jit-db" });
+    await user.click(screen.getByRole("button", { name: "Review request" }));
+    await user.click(within(screen.getByRole("dialog", { name: "Review request" })).getByRole("button", { name: "Approve request" }));
     await waitFor(() => expect(apiMock.approveApprovalRequest).toHaveBeenCalledWith(pending.id, pending.intent_digest));
   });
 
@@ -86,7 +89,7 @@ describe("U8-4 self-service approvals inbox", () => {
     apiMock.approvalRequests.mockResolvedValue([{ ...pending, resource_name: "own-request" }]);
     renderAt("/approvals");
 
-    const row = (await screen.findByText("own-request")).closest("tr")!;
-    expect(within(row).getByRole("button", { name: /approve issue for own-request/i })).toBeDisabled();
+    await screen.findByRole("heading", { name: "1 request is waiting" });
+    expect(screen.getByRole("button", { name: "Review request" })).toBeDisabled();
   });
 });

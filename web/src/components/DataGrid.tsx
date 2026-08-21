@@ -1,3 +1,4 @@
+/* eslint-disable jsx-a11y/no-noninteractive-tabindex -- The overflow viewport must be keyboard-focusable so clipped columns can be scrolled without a pointer. */
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronsUpDown, ChevronUp, Columns3 } from "lucide-react";
 import { EmptyState, type EmptyStateHeadingTag } from "@/components/EmptyState";
@@ -332,11 +333,14 @@ export function DataGrid<Row>({
         </GridState>
       ) : (
         <div
-          className="overflow-auto rounded-panel border border-border bg-card shadow-elevation1 [contain:paint]"
+          aria-label={translateNow("grid.scrollableColumns", { label: ariaLabel })}
+          className="overflow-auto rounded-panel border border-border bg-card shadow-elevation1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 [contain:paint]"
           data-testid="data-grid-scroll-viewport"
           data-virtualized={virtualized ? "true" : "false"}
           data-total-rows={rows.length}
+          role="group"
           style={virtualized ? { maxHeight: viewportHeight } : undefined}
+          tabIndex={0}
           onScroll={virtualized ? (event) => setVirtualScrollTop(event.currentTarget.scrollTop) : undefined}
         >
           <table className="w-full min-w-[40rem] text-start text-body" aria-rowcount={rows.length + 1}>

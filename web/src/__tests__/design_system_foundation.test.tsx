@@ -371,6 +371,8 @@ describe("shared DataGrid", () => {
     );
 
     expect(screen.getByRole("table", { name: "Credential rows" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Scrollable columns for Credential rows" })).toHaveAttribute("tabindex", "0");
+    expect(screen.getByRole("group", { name: "Scrollable columns for Credential rows" })).toHaveClass("focus-visible:ring-focus");
     expect(screen.getByRole("columnheader", { name: /name/i })).toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: /owner/i })).not.toBeInTheDocument();
     expect(screen.getByText("revoked")).toHaveAttribute("data-status-badge", "certificate");

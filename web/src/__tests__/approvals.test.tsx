@@ -13,7 +13,10 @@ const { apiMock } = vi.hoisted(() => ({
     authMethods: vi.fn().mockResolvedValue({ oidc: true, saml: false, ldap: false }),
     identities: vi.fn(),
     approvalRequests: vi.fn(),
+    issuanceRequests: vi.fn(),
+    ticketIntakeSchedule: vi.fn(),
     approveApprovalRequest: vi.fn(),
+    denyApprovalRequest: vi.fn(),
     approveEphemeralCredential: vi.fn(),
     approveIdentityAction: vi.fn(),
     auditEvents: vi.fn(),
@@ -65,10 +68,28 @@ describe("dedicated approvals inbox", () => {
     apiMock.authMethods.mockResolvedValue({ oidc: true, saml: false, ldap: false });
     apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "ra-1", tenant_id: "t1", email: "ra@example.test" });
     apiMock.approvalRequests.mockResolvedValue([]);
+    apiMock.issuanceRequests.mockResolvedValue({ items: [], open: 0, guidance: "" });
+    apiMock.ticketIntakeSchedule.mockImplementation(async (system: "servicenow" | "jira") => ({
+      configured: false,
+      system,
+      enabled: false,
+      read_count: 0,
+      pages_completed: 0,
+      coverage_complete: false,
+      eligible_count: 0,
+      skipped_count: 0,
+      guidance: "",
+    }));
     apiMock.approveApprovalRequest.mockResolvedValue({
       id: "approval-request-1",
       status: "approved",
       approval_count: 2,
+      required_approvals: 2,
+    });
+    apiMock.denyApprovalRequest.mockResolvedValue({
+      id: "approval-request-1",
+      status: "denied",
+      approval_count: 1,
       required_approvals: 2,
     });
     apiMock.approveEphemeralCredential.mockResolvedValue({
@@ -85,6 +106,55 @@ describe("dedicated approvals inbox", () => {
     apiMock.approveIdentityAction.mockResolvedValue({ resource: "jit-1", action: "issue", approver: "ra", approvals: 2 });
     apiMock.auditEvents.mockResolvedValue([]);
     apiMock.exportAudit.mockResolvedValue({ format: "jws", bundle: "sealed" });
+  });
+
+  it("answers what needs approval before revealing request history and specialized tools", async () => {
+    apiMock.issuanceRequests.mockResolvedValue({
+      items: [
+        {
+          id: "issuance-request-issued-1",
+          tenant_id: "t1",
+          subject: "qa-design-partner-mtls",
+          requester: "demo-admin",
+          status: "issued",
+          created_at: "2026-06-19T17:00:00Z",
+          expires_at: "2026-06-19T18:00:00Z",
+          issued_by: "se-demo-operator",
+          justification: "Design-partner QA proof for a service mTLS certificate",
+        },
+      ],
+      open: 0,
+      guidance: "",
+    });
+    const user = userEvent.setup();
+    renderAt("/approvals");
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Requests waiting for approval" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Requests waiting for approval" })).toHaveAttribute("href", "/approvals");
+    expect(screen.getByText("What change is requested, why, and its consequence.", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText("Policy result, requester, evidence, dual-control history.", { exact: true })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 2, name: "Nothing needs approval right now" })).toBeInTheDocument();
+    expect(screen.getByText("0 requests are waiting for a decision", { exact: true })).toBeInTheDocument();
+
+    const actions = screen.getByTestId("page-depth-operate");
+    expect(within(actions).getAllByRole("button")).toHaveLength(1);
+    expect(within(actions).getByRole("button", { name: "Review request" })).toBeDisabled();
+    expect(screen.queryByRole("form")).not.toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(document.querySelectorAll("main input, main select, main textarea")).toHaveLength(0);
+    expect(apiMock.ticketIntakeSchedule).not.toHaveBeenCalled();
+
+    for (const title of ["All pending requests and evidence", "Issuance request lifecycle and history", "Specialized approval tools"]) {
+      expect(screen.getByText(title, { exact: true }).closest("details")).not.toHaveAttribute("open");
+    }
+
+    await user.click(screen.getByText("Issuance request lifecycle and history", { exact: true }));
+    expect(await screen.findByRole("heading", { name: "Issuance requests" })).toBeInTheDocument();
+    expect(screen.getByText("qa-design-partner-mtls", { exact: true })).toBeInTheDocument();
+    await waitFor(() => expect(apiMock.ticketIntakeSchedule).toHaveBeenCalledTimes(2));
+
+    await user.click(screen.getByText("Specialized approval tools", { exact: true }));
+    expect(screen.getByRole("form", { name: "Approve ephemeral credential" })).toBeInTheDocument();
   });
 
   it("AUD-77 does not invent approval rows from issued or deployed identities", async () => {
@@ -108,8 +178,8 @@ describe("dedicated approvals inbox", () => {
 
     renderAt("/approvals");
 
-    expect(await screen.findByText("No pending approvals")).toBeInTheDocument();
-    expect(screen.queryByRole("table", { name: "Pending approvals" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Nothing needs approval right now" })).toBeInTheDocument();
+    expect(screen.queryByRole("table", { name: "Pending approval requests" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /approve revoke for/i })).not.toBeInTheDocument();
     expect(apiMock.approvalRequests).toHaveBeenCalledTimes(1);
     expect(apiMock.identities).not.toHaveBeenCalled();
@@ -122,16 +192,43 @@ describe("dedicated approvals inbox", () => {
 
     renderAt("/approvals");
 
-    const row = (await screen.findByText("jit-db")).closest("tr")!;
-    expect(within(row).getByText("approval-request-1")).toBeInTheDocument();
-    expect(within(row).getByText("transition:0")).toBeInTheDocument();
-    expect(within(row).getByText("issue the requested workload credential")).toBeInTheDocument();
-    expect(within(row).getByText("ticket:SEC-77")).toBeInTheDocument();
-    expect(within(row).getByText("sha256:8ec59a9c")).toBeInTheDocument();
-    await user.click(within(row).getByRole("button", { name: /approve issue for jit-db/i }));
+    expect(await screen.findByRole("heading", { name: "Issue a credential for jit-db" })).toBeInTheDocument();
+    expect(screen.getByText("This permits a separate issuance step. It does not mint a credential by itself.")).toBeInTheDocument();
+    await user.click(screen.getByTestId("page-depth-operate").querySelector("button")!);
+    const dialog = screen.getByRole("dialog", { name: "Review request" });
+    await waitFor(() => expect(within(dialog).getByRole("heading", { name: "Review request" })).toHaveFocus());
+    expect(within(dialog).getByText("approval-request-1")).toBeInTheDocument();
+    expect(within(dialog).getByText("transition:0")).toBeInTheDocument();
+    expect(within(dialog).getAllByText("issue the requested workload credential").length).toBeGreaterThan(0);
+    expect(within(dialog).getByText("ticket:SEC-77")).toBeInTheDocument();
+    expect(within(dialog).getByText("sha256:8ec59a9c")).toBeInTheDocument();
+    expect(within(dialog).getByText(/does not mint a credential by itself/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/server placed this exact intent in the protected queue/i)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Approve request" }));
 
     await waitFor(() => expect(apiMock.approveApprovalRequest).toHaveBeenCalledWith("approval-request-1", "sha256:8ec59a9c"));
     expect(apiMock.approveIdentityAction).not.toHaveBeenCalled();
+  });
+
+  it("reviews consequence and records a reasoned rejection against the immutable intent", async () => {
+    apiMock.approvalRequests.mockResolvedValue([approvalRequest({ action: "revoke", reason: "credential confirmed compromised" })]);
+    const user = userEvent.setup();
+    renderAt("/approvals");
+
+    expect(await screen.findByText(/can interrupt systems still using the credential/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Review request" }));
+    const dialog = screen.getByRole("dialog", { name: "Review request" });
+    expect(dialog).toHaveClass("max-h-[calc(100dvh-2rem)]", "overflow-y-auto", "overscroll-contain");
+    expect(within(dialog).getByText(/credential values and private keys never enter this review/i)).toBeInTheDocument();
+    expect(dialog.textContent).not.toMatch(/BEGIN .* PRIVATE KEY|raw token/i);
+    await user.click(within(dialog).getByRole("button", { name: "Reject request" }));
+    await user.type(within(dialog).getByRole("textbox", { name: "Why is this request being rejected?" }), "Evidence does not justify the outage");
+    await user.click(within(dialog).getByRole("button", { name: "Record rejection" }));
+
+    await waitFor(() =>
+      expect(apiMock.denyApprovalRequest).toHaveBeenCalledWith("approval-request-1", "sha256:8ec59a9c", "Evidence does not justify the outage"),
+    );
+    expect(apiMock.approveApprovalRequest).not.toHaveBeenCalled();
   });
 
   it("binds an ephemeral client request id to the genuine queue UUID and digest", async () => {
@@ -148,7 +245,8 @@ describe("dedicated approvals inbox", () => {
 
     renderAt("/approvals");
 
-    const form = await screen.findByRole("form", { name: "Approve ephemeral credential" });
+    await user.click(await screen.findByText("Specialized approval tools", { exact: true }));
+    const form = screen.getByRole("form", { name: "Approve ephemeral credential" });
     await user.type(within(form).getByRole("textbox", { name: "Request ID" }), "jit-client-7");
     await user.click(within(form).getByRole("button", { name: "Approve issue" }));
 
@@ -166,21 +264,19 @@ describe("dedicated approvals inbox", () => {
     const user = userEvent.setup();
     renderAt("/approvals");
 
-    expect(await screen.findByRole("heading", { name: "Approvals" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Requests waiting for approval" })).toBeInTheDocument();
     // S-C1: the Platform space's sidebar row points here; the "Pending
     // approvals" urgency worklist lives on the Home plane's sidebar.
-    expect(screen.getByRole("link", { name: /^Approvals$/i })).toHaveAttribute("href", "/approvals");
-    const row = (await screen.findByText("jit-db")).closest("tr")!;
-    expect(within(row).getByText("dev@example.test")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^Requests waiting for approval$/i })).toHaveAttribute("href", "/approvals");
+    expect(await screen.findByText("dev@example.test")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Review request" }));
+    const dialog = screen.getByRole("dialog", { name: "Review request" });
     // S-C18: the quorum renders structured have/need plus what is still
     // outstanding, so the raw "1/2" string is now split across elements.
-    expect(within(row).getByText("1")).toBeInTheDocument();
-    expect(within(row).getByText("2")).toBeInTheDocument();
-    expect(within(row).getByText("1 more needed")).toBeInTheDocument();
-    expect(within(row).getByText("2026-06-19T18:00:00Z")).toBeInTheDocument();
-    expect(within(row).getByRole("link", { name: /audit trail/i })).toHaveAttribute("href", "/audit?q=approval-request-1+sha256%3A8ec59a9c");
+    expect(within(dialog).getByText("1/2")).toBeInTheDocument();
+    expect(within(dialog).getByRole("link", { name: /audit trail/i })).toHaveAttribute("href", "/audit?q=approval-request-1+sha256%3A8ec59a9c");
 
-    await user.click(within(row).getByRole("button", { name: /approve issue for jit-db/i }));
+    await user.click(within(dialog).getByRole("button", { name: "Approve request" }));
 
     await waitFor(() => expect(apiMock.approveApprovalRequest).toHaveBeenCalledWith("approval-request-1", "sha256:8ec59a9c"));
     expect(apiMock.approveIdentityAction).not.toHaveBeenCalled();
@@ -203,11 +299,13 @@ describe("dedicated approvals inbox", () => {
     const user = userEvent.setup();
     renderAt("/approvals");
 
-    const row = (await screen.findByText("rotating-db")).closest("tr")!;
-    expect(within(row).getByRole("button", { name: /approve rotate for rotating-db/i })).toBeInTheDocument();
-    expect(within(row).getByRole("link", { name: /audit trail/i })).toHaveAttribute("href", "/audit?q=rotation-request-1+sha256%3Arotate");
+    expect(await screen.findByRole("heading", { name: "Rotate rotating-db" })).toBeInTheDocument();
+    expect(screen.getByText(/current credential stays unchanged until execution/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Review request" }));
+    const dialog = screen.getByRole("dialog", { name: "Review request" });
+    expect(within(dialog).getByRole("link", { name: /audit trail/i })).toHaveAttribute("href", "/audit?q=rotation-request-1+sha256%3Arotate");
 
-    await user.click(within(row).getByRole("button", { name: /approve rotate for rotating-db/i }));
+    await user.click(within(dialog).getByRole("button", { name: "Approve request" }));
 
     await waitFor(() => expect(apiMock.approveApprovalRequest).toHaveBeenCalledWith("rotation-request-1", "sha256:rotate"));
     expect(apiMock.approveIdentityAction).not.toHaveBeenCalled();
@@ -230,8 +328,9 @@ describe("dedicated approvals inbox", () => {
     const user = userEvent.setup();
     renderAt("/approvals");
 
-    const row = (await screen.findByText("payments/database")).closest("tr")!;
-    await user.click(within(row).getByRole("button", { name: /approve create for payments\/database/i }));
+    expect(await screen.findByRole("heading", { name: "Create payments/database" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Review request" }));
+    await user.click(within(screen.getByRole("dialog", { name: "Review request" })).getByRole("button", { name: "Approve request" }));
 
     await waitFor(() => expect(apiMock.approveApprovalRequest).toHaveBeenCalledWith("secret-create-request-1", "sha256:secret-create"));
     expect(apiMock.approveIdentityAction).not.toHaveBeenCalled();
@@ -242,23 +341,34 @@ describe("dedicated approvals inbox", () => {
     apiMock.approvalRequests.mockResolvedValue([approvalRequest({ resource_name: "own-request", requester: "dev@example.test", approval_count: 0 })]);
     renderAt("/approvals");
 
+    await screen.findByRole("heading", { name: "1 request is waiting" });
+    const primaryReview = screen.getByRole("button", { name: "Review request" });
+    expect(primaryReview).toBeDisabled();
+    expect(primaryReview).toHaveAccessibleDescription(/different person must decide/i);
+    const user = userEvent.setup();
+    await user.click(screen.getByText("All pending requests and evidence", { exact: true }));
+    expect(await screen.findByRole("group", { name: "Scrollable columns for Pending approval requests" })).toHaveAttribute("tabindex", "0");
     const row = await screen.findByRole("row", { name: /own-request/i });
-    const approve = within(row).getByRole("button", { name: /approve issue for own-request/i });
+    await user.click(within(row).getByRole("button", { name: "Review request" }));
+    const dialog = screen.getByRole("dialog", { name: "Review request" });
+    const approve = within(dialog).getByRole("button", { name: "Approve request" });
     expect(approve).toBeDisabled();
-    expect(approve).toHaveAccessibleDescription(/requesters cannot approve their own request/i);
-    expect(screen.getByText(/use a distinct approver/i)).toBeInTheDocument();
+    expect(approve).toHaveAccessibleDescription(/different person must approve or reject/i);
+    expect(within(dialog).getByText(/audit record proves an independent review/i)).toBeInTheDocument();
   });
 
   it("renders empty, loading, permission-denied, and problem states", async () => {
     apiMock.approvalRequests.mockResolvedValueOnce([]);
     const empty = renderAt("/approvals");
-    expect(await screen.findByText("No pending approvals")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Nothing needs approval right now" })).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByText("All pending requests and evidence", { exact: true }));
     expect(empty.container.querySelector('[data-state-primitive="empty"]')).toBeInTheDocument();
     empty.unmount();
 
     apiMock.approvalRequests.mockReturnValueOnce(new Promise(() => undefined));
     const loading = renderAt("/approvals");
-    expect(await screen.findByText(/loading approvals/i)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /checking what needs approval/i })).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByText("All pending requests and evidence", { exact: true }));
     expect(loading.container.querySelector('[data-state-primitive="loading"]')).toBeInTheDocument();
     loading.unmount();
 
