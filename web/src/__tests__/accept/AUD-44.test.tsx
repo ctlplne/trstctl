@@ -88,8 +88,9 @@ describe("AUD-44 ownership readiness console", () => {
     });
     renderOwners();
 
+    expect(await screen.findByText("0 of 0 known identities and credentials have an owner record. Current owner records: 0 of 1.")).toBeInTheDocument();
+    await user.click(screen.getByText("Owner records, inheritance, and attestations"));
     const table = await screen.findByRole("table", { name: "Credential owners" });
-    expect(screen.getByText("Current owner records").closest(".rounded-panel")).toHaveTextContent("0/1");
     expect(screen.queryByText("Ownership coverage")).not.toBeInTheDocument();
     const row = within(table).getByRole("row", { name: /Payments team/ });
     expect(row).toHaveTextContent("APP-0044");
@@ -151,6 +152,7 @@ describe("AUD-44 ownership readiness console", () => {
     });
     renderOwners();
 
+    await user.click(await screen.findByText("Coverage gaps and temporary exceptions"));
     const exceptionButton = await screen.findByRole("button", { name: "Grant temporary exception" });
     expect(exceptionButton.closest("section")).toHaveTextContent("Stale attestations: 1.");
     await user.click(exceptionButton);

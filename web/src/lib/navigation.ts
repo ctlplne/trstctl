@@ -211,7 +211,7 @@ export const navSpaces: NavSpace[] = [
           { to: "/policy", labelKey: "nav.item.policy", icon: "policy", mode: "real", featureIds: ["F28", "F29", "F62"] },
           { to: "/approvals", labelKey: "nav.item.approvals", icon: "approval", mode: "real", featureIds: ["F33"] },
           { to: "/audit", labelKey: "nav.item.audit", icon: "audit", mode: "real", featureIds: ["F9"] },
-          { to: "/owners", labelKey: "nav.item.owners", icon: "owner", mode: "real", featureIds: ["F59"] },
+          { to: "/owners", labelKey: "nav.item.ownership", icon: "owner", mode: "real", featureIds: ["F59"] },
           { to: "/privacy", labelKey: "nav.item.privacy", icon: "policy", mode: "real", featureIds: ["F79"] },
         ],
       },

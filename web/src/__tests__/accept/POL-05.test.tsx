@@ -73,18 +73,17 @@ describe("POL-05 Owners route polish", () => {
     });
   });
 
-  it("keeps Owners as a standalone served route with interactive search and filtering", async () => {
+  it("keeps Ownership as a standalone served route with interactive search and filtering", async () => {
     const user = userEvent.setup();
     renderAt("/owners");
 
-    expect(await screen.findByRole("heading", { name: "Owners" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Ownership" })).toBeInTheDocument();
+
+    await user.click(screen.getByText("Owner records, inheritance, and attestations"));
 
     const search = await screen.findByRole("searchbox", { name: "Search owners" });
     expect(apiMock.owners).toHaveBeenCalledTimes(1);
     expect(apiMock.ownershipAttribution).toHaveBeenCalledTimes(1);
-    const attributionTable = screen.getByRole("table", { name: "NHI ownership attribution" });
-    expect(await within(attributionTable).findByRole("row", { name: /payments-api-key/ })).toBeInTheDocument();
-    expect(within(attributionTable).getByRole("row", { name: /orphaned-ci-token/ })).toBeInTheDocument();
     await user.type(search, "payments");
     const ownersTable = screen.getByRole("table", { name: "Credential owners" });
     expect(within(ownersTable).getByRole("row", { name: /Payments team/ })).toBeInTheDocument();
@@ -94,5 +93,10 @@ describe("POL-05 Owners route polish", () => {
     await user.selectOptions(screen.getByLabelText("Owner kind"), "workload");
     expect(within(ownersTable).getByRole("row", { name: /Platform service/ })).toBeInTheDocument();
     expect(within(ownersTable).queryByRole("row", { name: /Payments team/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByText("Sources, disagreements, and review history"));
+    const attributionTable = await screen.findByRole("table", { name: "NHI ownership attribution" });
+    expect(within(attributionTable).getByRole("row", { name: /payments-api-key/ })).toBeInTheDocument();
+    expect(within(attributionTable).getByRole("row", { name: /orphaned-ci-token/ })).toBeInTheDocument();
   });
 });

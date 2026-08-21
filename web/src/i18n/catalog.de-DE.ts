@@ -1663,6 +1663,33 @@ const deDECatalog = {
   "identities.decommission.inactivity": "Inaktivität",
   "identities.decommission.submit": "Stilllegen",
   "identities.decommission.reasonPlaceholder": "CAB-1234",
+  // DESIGN-ROUTE-029 machine-authored translations — FLAGGED FOR HUMAN REVIEW BEFORE RELEASE.
+  "owners.design.answer": "Welches Team für jede Identität und jedes Credential verantwortlich ist.",
+  "owners.design.technicalDetails": "Regeln, Vererbung, Ausnahmen und Prüfverlauf.",
+  "owners.design.assign": "Verantwortung zuweisen",
+  "owners.design.assignHelp":
+    "Erstellen Sie zuerst den verantwortlichen Datensatz. Credentials ordnen ihn über die exakte Verantwortlichen-ID oder freigegebene Quelldaten zu; bestehende Zuordnungen werden nicht stillschweigend überschrieben.",
+  "owners.design.checkingCoverage": "Verantwortungsabdeckung wird geprüft…",
+  "owners.design.coverageError": "Verantwortungsabdeckung konnte nicht bestätigt werden",
+  "owners.design.statusEmpty": "Noch sind keine Identitäten oder Credentials bekannt",
+  "owners.design.statusComplete": "Jede bekannte Identität und jedes bekannte Credential hat eine verantwortliche Stelle",
+  "owners.design.statusNeedsOne": "1 bekannte Identität oder 1 bekanntes Credential braucht eine verantwortliche Stelle",
+  "owners.design.statusNeedsMany": "{count} bekannte Identitäten oder Credentials brauchen eine verantwortliche Stelle",
+  "owners.design.statusBody":
+    "{assigned} von {known} bekannten Identitäten und Credentials haben einen Verantwortungsdatensatz. Aktuelle Verantwortungsdatensätze: {current} von {owners}.",
+  "owners.design.disclosure.directory": "Verantwortungsdatensätze, Vererbung und Bestätigungen",
+  "owners.design.disclosure.gaps": "Abdeckungslücken und befristete Ausnahmen",
+  "owners.design.disclosure.evidence": "Quellen, Widersprüche und Prüfverlauf",
+  "owners.design.directoryHelp":
+    "Suchen Sie verantwortliche Personen, Teams, Workloads, Dienste und Anbieter. Bestätigen Sie einen Datensatz erneut, wenn sich Anwendung oder Eskalationsweg ändern.",
+  "owners.design.gapsHelp":
+    "Korrigieren Sie zuerst den Verantwortungsdatensatz. Verwenden Sie eine kurzlebige Ausnahme nur, wenn dringende Arbeit nicht warten kann, und dokumentieren Sie, warum ihr späteres Ablaufen sicher ist.",
+  "owners.design.evidenceRule":
+    "Exakte Verantwortlichen-IDs haben Vorrang. Freigegebene Quelldaten dürfen eine Zuordnung vererben. Eine menschliche Bestätigung wird nie durch einen Import überschrieben; Widersprüche warten auf Prüfung. Befristete Ausnahmen laufen ab.",
+  "owners.design.noOwners": "Noch keine Verantwortungsdatensätze",
+  "owners.design.noOwnersHelp": "Weisen Sie Verantwortung zu, um festzuhalten, wer zuständig ist.",
+  "owners.design.noOwnerMatches": "Keine Verantwortungsdatensätze entsprechen diesen Filtern",
+  "owners.design.noOwnerMatchesHelp": "Leeren Sie die Suche oder wählen Sie eine andere Art.",
   "owners.readiness.add": "Verantwortlichen hinzufügen",
   "owners.readiness.applicationID": "Anwendungs-ID",
   "owners.readiness.applicationPlaceholder": "APP-1042",

@@ -6332,6 +6332,86 @@ export const messages = {
     defaultMessage: "CAB-1234",
     description: "Placeholder for a decommission change-management reason.",
   },
+  "owners.design.answer": {
+    defaultMessage: "Which team is accountable for every identity and credential.",
+    description: "Decision-first answer at the top of the Ownership route.",
+  },
+  "owners.design.technicalDetails": {
+    defaultMessage: "Rules, inheritance, exceptions, review history.",
+    description: "Exact expert evidence retained on the Ownership route.",
+  },
+  "owners.design.assign": { defaultMessage: "Assign owner", description: "Primary Ownership-route action and owner-record dialog title." },
+  "owners.design.assignHelp": {
+    defaultMessage:
+      "Create the accountable owner record first. Credentials match it by exact owner ID or approved source data; existing assignments are not silently rewritten.",
+    description: "Explains the safe effect of the Assign owner workflow.",
+  },
+  "owners.design.checkingCoverage": {
+    defaultMessage: "Checking ownership coverage…",
+    description: "Loading state while the Ownership route resolves owner records and known NHI attribution.",
+  },
+  "owners.design.coverageError": {
+    defaultMessage: "Could not confirm ownership coverage",
+    description: "Error title when the Ownership route cannot compute its opening answer.",
+  },
+  "owners.design.statusEmpty": {
+    defaultMessage: "No identities or credentials are known yet",
+    description: "Opening Ownership status when the attribution source is genuinely empty.",
+  },
+  "owners.design.statusComplete": {
+    defaultMessage: "Every known identity and credential has an owner",
+    description: "Opening Ownership status when attribution has no known gap.",
+  },
+  "owners.design.statusNeedsOne": {
+    defaultMessage: "1 known identity or credential needs an owner",
+    description: "Opening Ownership status for one known attribution gap.",
+  },
+  "owners.design.statusNeedsMany": {
+    defaultMessage: "{count} known identities or credentials need an owner",
+    description: "Opening Ownership status for multiple known attribution gaps.",
+  },
+  "owners.design.statusBody": {
+    defaultMessage: "{assigned} of {known} known identities and credentials have an owner record. Current owner records: {current} of {owners}.",
+    description: "Truthful attribution and attestation counts below the opening Ownership status.",
+  },
+  "owners.design.disclosure.directory": {
+    defaultMessage: "Owner records, inheritance, and attestations",
+    description: "Progressive disclosure for owner records and their attestation controls.",
+  },
+  "owners.design.disclosure.gaps": {
+    defaultMessage: "Coverage gaps and temporary exceptions",
+    description: "Progressive disclosure for actionable ownership gaps and bounded exceptions.",
+  },
+  "owners.design.disclosure.evidence": {
+    defaultMessage: "Sources, disagreements, and review history",
+    description: "Progressive disclosure for exact ownership provenance and conflict evidence.",
+  },
+  "owners.design.directoryHelp": {
+    defaultMessage: "Search accountable people, teams, workloads, services, and vendors. Re-attest a record when its application or escalation path changes.",
+    description: "Plain guidance above the owner directory.",
+  },
+  "owners.design.gapsHelp": {
+    defaultMessage: "Fix the owner record first. Use a short-lived exception only when urgent work cannot wait, and record why it is safe to expire later.",
+    description: "Safety guidance above ownership gaps and exceptions.",
+  },
+  "owners.design.evidenceRule": {
+    defaultMessage:
+      "Exact owner IDs win. Approved source data may inherit a match. Human attestation is never overwritten by an import; disagreements wait for review. Temporary exceptions expire.",
+    description: "Technical ELI5 summary of ownership precedence, inheritance, conflict, and exception rules.",
+  },
+  "owners.design.noOwners": { defaultMessage: "No owner records yet", description: "Owner directory empty-state title." },
+  "owners.design.noOwnersHelp": {
+    defaultMessage: "Assign an owner to start tracking who is accountable.",
+    description: "Owner directory empty-state recovery guidance.",
+  },
+  "owners.design.noOwnerMatches": {
+    defaultMessage: "No owner records match these filters",
+    description: "Owner directory filtered-empty title.",
+  },
+  "owners.design.noOwnerMatchesHelp": {
+    defaultMessage: "Clear the search or choose another owner kind.",
+    description: "Owner directory filtered-empty recovery guidance.",
+  },
   "owners.readiness.add": { defaultMessage: "Add owner", description: "Button and dialog title for creating an owner." },
   "owners.readiness.applicationID": { defaultMessage: "Application ID", description: "Owner application identifier field and column." },
   "owners.readiness.applicationPlaceholder": { defaultMessage: "APP-1042", description: "Example owner application identifier." },

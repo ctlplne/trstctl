@@ -1651,6 +1651,33 @@ const esESCatalog = {
   "identities.decommission.inactivity": "Inactividad",
   "identities.decommission.submit": "Retirar",
   "identities.decommission.reasonPlaceholder": "CAB-1234",
+  // DESIGN-ROUTE-029 machine-authored translations — FLAGGED FOR HUMAN REVIEW BEFORE RELEASE.
+  "owners.design.answer": "Qué equipo es responsable de cada identidad y credencial.",
+  "owners.design.technicalDetails": "Reglas, herencia, excepciones e historial de revisión.",
+  "owners.design.assign": "Asignar responsable",
+  "owners.design.assignHelp":
+    "Cree primero el registro de la persona o equipo responsable. Las credenciales lo relacionan mediante el ID exacto o datos de origen aprobados; las asignaciones existentes no se reescriben en silencio.",
+  "owners.design.checkingCoverage": "Comprobando la cobertura de responsables…",
+  "owners.design.coverageError": "No se pudo confirmar la cobertura de responsables",
+  "owners.design.statusEmpty": "Aún no se conoce ninguna identidad ni credencial",
+  "owners.design.statusComplete": "Cada identidad y credencial conocida tiene responsable",
+  "owners.design.statusNeedsOne": "1 identidad o credencial conocida necesita responsable",
+  "owners.design.statusNeedsMany": "{count} identidades o credenciales conocidas necesitan responsable",
+  "owners.design.statusBody":
+    "{assigned} de {known} identidades y credenciales conocidas tienen un registro responsable. Registros responsables vigentes: {current} de {owners}.",
+  "owners.design.disclosure.directory": "Registros responsables, herencia y certificaciones",
+  "owners.design.disclosure.gaps": "Brechas de cobertura y excepciones temporales",
+  "owners.design.disclosure.evidence": "Fuentes, desacuerdos e historial de revisión",
+  "owners.design.directoryHelp":
+    "Busque personas, equipos, cargas de trabajo, servicios y proveedores responsables. Vuelva a certificar un registro cuando cambie su aplicación o ruta de escalado.",
+  "owners.design.gapsHelp":
+    "Corrija primero el registro responsable. Use una excepción de corta duración solo si el trabajo urgente no puede esperar y documente por qué es seguro que caduque después.",
+  "owners.design.evidenceRule":
+    "Los ID exactos de responsable tienen prioridad. Los datos de origen aprobados pueden heredar una coincidencia. Una importación nunca sobrescribe una certificación humana; los desacuerdos esperan revisión. Las excepciones temporales caducan.",
+  "owners.design.noOwners": "Aún no hay registros responsables",
+  "owners.design.noOwnersHelp": "Asigne un responsable para empezar a registrar quién responde.",
+  "owners.design.noOwnerMatches": "Ningún registro responsable coincide con estos filtros",
+  "owners.design.noOwnerMatchesHelp": "Borre la búsqueda o elija otro tipo de responsable.",
   "owners.readiness.add": "Añadir responsable",
   "owners.readiness.applicationID": "ID de aplicación",
   "owners.readiness.applicationPlaceholder": "APP-1042",

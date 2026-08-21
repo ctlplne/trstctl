@@ -828,8 +828,15 @@ describe("i18n boundary", () => {
       // evidence, retained wave evidence, and explicit rollback confirmation.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
       // release.
-      "es-ES": "b0f6555e80dd29d184dc438607e246c68b6d90c3b0e42eeb7bb096af6a22129b",
-      "de-DE": "07afbcd90d5d6fe99270241bbdd18fa1716bd9fcf001f7da523254c8dfaa8d56",
+      // QA design g29 re-pin: the Ownership journey now starts with the
+      // accountable-team answer and exact live coverage counts, exposes one
+      // assign action, and keeps records, bounded exceptions, provenance,
+      // disagreements, and review history behind three named disclosures. A
+      // genuinely empty inventory stays distinct from complete ownership.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
+      // release.
+      "es-ES": "dea1bbcbe4c8caafa57c8b8de9f6102580fc6d205a3ea0cfe226ec964917349c",
+      "de-DE": "938f8c3e5e7ec7e78f90a2d3e6def547aa6d536e400a9b45ad5ccd4ac2c32fc0",
     });
   });
 

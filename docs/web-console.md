@@ -91,18 +91,34 @@ See [Workload identity](features/workload-identity.md) and
 `/api/v1/identities`, `/api/v1/nhi/inventory`, `/api/v1/risk/credentials`, and
 `/api/v1/graph`.
 
-### Owners (`/owners`)
+### Ownership (`/owners`)
 
-Owners is the accountability directory: search and filter the people, teams,
-workloads, and services credentials are attributed to; edit, delete, or read the
-orphan-governance panel flagging credentials with no living owner. A companion
-ownership-attribution table lists each non-human identity against its resolved
-owner (or "orphaned") and how the attribution was derived. The editor carries the
-application ID, service, business unit, environment, and escalation recipients;
-the grid shows whether that exact application/environment model is current. An
-operator explicitly attests a complete model. The ownership-gaps panel separates
-missing, incomplete, never-attested, and stale records, and can grant one
-reasoned exception with an explicit expiry of at most 30 days. Backed by
+The opening answer is deliberately simple: **which team is accountable for every
+identity and credential**. It reports how many known identities and credentials
+have an owner record and how many owner records are current. **Assign owner** is the
+only primary action. A genuinely empty inventory says that nothing is known yet; it
+does not masquerade as complete ownership. Assigning creates an accountable person,
+team, workload, service, or vendor record; it does not silently rewrite existing
+credential assignments.
+
+The exact machinery remains available in three closed disclosures so a first-time
+operator does not have to decode two large tables before learning whether there is
+a problem:
+
+- **Owner records, inheritance, and attestations** searches and filters accountable
+  records and exposes edit, re-attest, and exact-name-confirmed delete controls. The
+  application ID, service, business unit, environment, escalation recipients, and
+  provenance show whether the precise application/environment model is current.
+- **Coverage gaps and temporary exceptions** separates missing, incomplete,
+  never-attested, and stale ownership. Operators fix the owner record first. A
+  reasoned exception is available only for urgent work and must expire within 30
+  days.
+- **Sources, disagreements, and review history** explains the precedence rule and
+  shows CMDB imports, conflicts, and the full ownership-attribution table. Exact
+  owner IDs win; approved source data may inherit a match; imports never overwrite
+  a human attestation; unresolved disagreements wait for review.
+
+Backed by
 `/api/v1/owners`, `/api/v1/owners/{id}`, `/api/v1/owners/{id}/attest`,
 `/api/v1/identities/{id}/ownership-exceptions`, and
 `/api/v1/ownership/attribution`.
@@ -518,7 +534,7 @@ grounded and sufficient. Backed by `/api/v1/ai/status`, `/api/v1/mcp/tools`, `/a
 | `/` | Dashboard |
 | `/journeys` | Journeys |
 | `/identities` | Identities & NHI |
-| `/owners` | Owners |
+| `/owners` | Ownership |
 | `/certificates` | Certificate lifecycle |
 | `/request` | Request credential |
 | `/profiles` | Profiles |
