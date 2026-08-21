@@ -187,6 +187,26 @@ describe("Jobs and queues design contract", () => {
     expect(screen.queryByText("Deploy to Connector Deploy", { exact: true })).not.toBeInTheDocument();
   });
 
+  it("turns a host-and-path target into a clean VPN name and keeps the mobile action short", async () => {
+    apiMock.connectorDeliveries.mockResolvedValue({
+      items: [
+        {
+          ...failedDelivery,
+          connector: "manual",
+          destination: "connector.deploy",
+          target: "vpn-appliance-02:/etc/ssl/vpn.crt",
+        },
+      ],
+    });
+    renderOperations();
+
+    expect(await screen.findByText("Deploy to VPN Appliance 02", { exact: true })).toBeInTheDocument();
+    expect(screen.queryByText("Deploy to Vpn Appliance 02:", { exact: true })).not.toBeInTheDocument();
+    const review = screen.getByRole("button", { name: "Review Deploy to VPN Appliance 02" });
+    expect(review).toHaveTextContent("Review");
+    expect(review).not.toHaveTextContent("Review Deploy to VPN Appliance 02");
+  });
+
   it("uses a responsive worklist instead of the clipped eight-column default table", async () => {
     renderOperations();
 

@@ -385,8 +385,15 @@ function OperationWorkList({
                   </Button>
                 </div>
               ) : (
-                <Button ref={isFirstFailed ? firstFailedReviewRef : undefined} type="button" size="sm" variant="outline" onClick={() => onOpen(row)}>
-                  {translateNow("operations.list.review", { label })}
+                <Button
+                  ref={isFirstFailed ? firstFailedReviewRef : undefined}
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  aria-label={translateNow("operations.list.review", { label })}
+                  onClick={() => onOpen(row)}
+                >
+                  {translateNow("operations.list.reviewShort")}
                 </Button>
               )}
             </div>
@@ -746,13 +753,14 @@ function humanStatus(row: OperationRow): string {
 
 function humanizeIdentifier(value: string): string {
   return value
-    .replace(/[._/-]+/g, " ")
+    .replace(/[._/:-]+/g, " ")
     .trim()
     .split(/\s+/)
     .map((part) => {
       const lower = part.toLowerCase();
       if (lower === "api") return "API";
       if (lower === "github") return "GitHub";
+      if (lower === "vpn") return "VPN";
       if (lower === "ssh") return "SSH";
       if (lower === "spiffe") return "SPIFFE";
       return lower.charAt(0).toUpperCase() + lower.slice(1);

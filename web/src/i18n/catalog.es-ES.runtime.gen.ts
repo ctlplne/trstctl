@@ -647,6 +647,7 @@ const translatedValues = [
   "Todos los trabajos",
   "Actualizado {date}",
   "Revisar {label}",
+  "Revisar",
   "Comprobando límites de trabajadores…",
   "Límites de trabajadores no disponibles",
   "Esta instancia no publica estadísticas de grupos de trabajadores.",

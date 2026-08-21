@@ -2238,7 +2238,11 @@ export const messages = {
   },
   "operations.list.review": {
     defaultMessage: "Review {label}",
-    description: "Opens exact evidence for one background job.",
+    description: "Accessible name for the button that opens exact evidence for one background job.",
+  },
+  "operations.list.reviewShort": {
+    defaultMessage: "Review",
+    description: "Short visible label for a review button inside a job card whose heading already names the job.",
   },
   "operations.bulkheads.loading": {
     defaultMessage: "Checking worker limits…",

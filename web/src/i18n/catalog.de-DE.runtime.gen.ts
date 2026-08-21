@@ -647,6 +647,7 @@ const translatedValues = [
   "Alle Aufträge",
   "Aktualisiert {date}",
   "{label} prüfen",
+  "Prüfen",
   "Worker-Grenzen werden geprüft…",
   "Worker-Grenzen nicht verfügbar",
   "Diese Instanz stellt keine Worker-Pool-Statistiken bereit.",

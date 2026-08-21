@@ -808,8 +808,13 @@ describe("i18n boundary", () => {
       // reference now says Not recorded instead of silently removing the
       // field. Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW
       // before release.
-      "es-ES": "08172d86a0680f8baf456fcaf77dfe32579c26ac4eb9ce3f2fc8d80a74ac7714",
-      "de-DE": "06694c95bf5010afc8207e1bb862cc50f6dda37a6909fed94966562580b0a294",
+      // QA design g25 Jobs-and-queues live-polish re-pin: the visible action is
+      // the short Review/Prüfen/Revisar inside a card that already names the
+      // job; its accessible name still includes the exact human job label.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
+      // release.
+      "es-ES": "610feabd0aa34729dedaf8089a66e861469696b20c6baf430cd3332e7d66ce83",
+      "de-DE": "fc017592ddef1e5cf6a7aa56187fd3b5b9fa3ced65158c9230858d7a2ab11fd7",
     });
   });
 

@@ -5196,6 +5196,7 @@ const esESCatalog = {
   "operations.list.all": "Todos los trabajos",
   "operations.list.updated": "Actualizado {date}",
   "operations.list.review": "Revisar {label}",
+  "operations.list.reviewShort": "Revisar",
   "operations.bulkheads.loading": "Comprobando límites de trabajadores…",
   "operations.bulkheads.unavailable": "Límites de trabajadores no disponibles",
   "operations.bulkheads.notServed": "Esta instancia no publica estadísticas de grupos de trabajadores.",

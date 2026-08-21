@@ -5219,6 +5219,7 @@ const deDECatalog = {
   "operations.list.all": "Alle Aufträge",
   "operations.list.updated": "Aktualisiert {date}",
   "operations.list.review": "{label} prüfen",
+  "operations.list.reviewShort": "Prüfen",
   "operations.bulkheads.loading": "Worker-Grenzen werden geprüft…",
   "operations.bulkheads.unavailable": "Worker-Grenzen nicht verfügbar",
   "operations.bulkheads.notServed": "Diese Instanz stellt keine Worker-Pool-Statistiken bereit.",
