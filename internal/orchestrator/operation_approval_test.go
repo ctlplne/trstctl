@@ -1128,7 +1128,11 @@ func TestApprovedCertificateColdRebuildSurvivesRewrittenApprovalEvidence(t *test
 	}
 	defer leafKey.Destroy()
 	const spiffeID = "spiffe://served.test/retained-workload"
-	const certificateTTL = time.Minute
+	// This fixture proves retained-event recovery, not near-expiry behavior. A
+	// ten-minute lifetime keeps the certificate valid while the race+coverage
+	// suite deliberately contends on the shared PostgreSQL test instance; the
+	// separate ephemeral approval tests retain the exact lifetime boundaries.
+	const certificateTTL = 10 * time.Minute
 	binding, err := ephemerallib.NewApprovalBinding(approvalTestCAID, caDER, "retained-workload", "test",
 		"retained-workload", []string{"selector:retained"}, leafKey.Public().DER, spiffeID, certificateTTL)
 	if err != nil {
@@ -1153,11 +1157,9 @@ func TestApprovedCertificateColdRebuildSurvivesRewrittenApprovalEvidence(t *test
 		t.Fatalf("approve rewrite test request: %v", err)
 	}
 	// Issue only after the immutable approval is ready, matching the served
-	// workflow. Under the complete race+coverage package, approval projection can
-	// spend most of this intentionally short one-minute TTL waiting behind other
-	// PostgreSQL tests. Signing before approval made the later target-event clock
-	// correctly reject an already-expired certificate and hid the cold-rebuild
-	// assertions this fixture exists to prove.
+	// workflow. Signing before approval made the later target-event clock
+	// correctly reject a certificate minted outside the authority window and hid
+	// the cold-rebuild assertions this fixture exists to prove.
 	certificateDER, err := crypto.SignSVID(caDER, caKey, leafKey.Public().DER, spiffeID, certificateTTL)
 	if err != nil {
 		t.Fatalf("sign rewrite test certificate after approval: %v", err)
