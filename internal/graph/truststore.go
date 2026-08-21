@@ -192,7 +192,7 @@ func addTrustStoreFinding(g *Graph, f store.DiscoveryFinding, issuers issuerAnch
 	})
 	if host != "" {
 		ensureResource(g, host)
-		g.AddEdge(Edge{From: resourceID(host), To: storeNode, Type: EdgeHosts})
+		g.AddEdge(Edge{From: resourceID(host), To: storeNode, Type: EdgeHosts, Source: discoverySourceLabel(f), Confidence: "observed"})
 	}
 
 	// The anchor itself. It is a credential node so existing queries that walk
@@ -214,7 +214,7 @@ func addTrustStoreFinding(g *Graph, f store.DiscoveryFinding, issuers issuerAnch
 			"provenance":      f.Provenance,
 		},
 	})
-	g.AddEdge(Edge{From: storeNode, To: anchorNode, Type: EdgeTrusts})
+	g.AddEdge(Edge{From: storeNode, To: anchorNode, Type: EdgeTrusts, Source: discoverySourceLabel(f), Confidence: "observed"})
 
 	// Exact public identity is the only authority for TRUSTS. Certificate
 	// fingerprint handles the ordinary case; SPKI handles cross-signed copies of
@@ -228,11 +228,11 @@ func addTrustStoreFinding(g *Graph, f store.DiscoveryFinding, issuers issuerAnch
 		exact[nodeID] = true
 	}
 	for nodeID := range exact {
-		g.AddEdge(Edge{From: storeNode, To: nodeID, Type: EdgeTrusts})
+		g.AddEdge(Edge{From: storeNode, To: nodeID, Type: EdgeTrusts, Source: discoverySourceLabel(f), Confidence: "authoritative"})
 	}
 	for _, nodeID := range issuers.bySubject[normalizeAnchorIdentity(meta.Subject)] {
 		if !exact[nodeID] {
-			g.AddEdge(Edge{From: storeNode, To: nodeID, Type: EdgeTrustCandidate})
+			g.AddEdge(Edge{From: storeNode, To: nodeID, Type: EdgeTrustCandidate, Source: discoverySourceLabel(f), Confidence: "unverified"})
 		}
 	}
 	return true

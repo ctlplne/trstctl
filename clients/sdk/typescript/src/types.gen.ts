@@ -8455,7 +8455,9 @@ export interface components {
             next_cursor?: string;
         };
         GraphEdge: {
+            confidence?: string;
             from: string;
+            source?: string;
             to: string;
             type: string;
         };

@@ -4062,7 +4062,9 @@ FleetReissuanceRunList = TypedDict(
 GraphEdge = TypedDict(
     'GraphEdge',
     {
+        'confidence': str,
         'from': str,
+        'source': str,
         'to': str,
         'type': str,
     },

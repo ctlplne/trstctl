@@ -117,14 +117,14 @@ func Build(ctx context.Context, st *store.Store, tenantID string) (*Graph, error
 			Attrs: map[string]string{"credential_kind": string(it.Kind), "status": it.Status},
 		})
 		if it.OwnerID != "" {
-			g.AddEdge(Edge{From: workloadID(it.OwnerID), To: nid, Type: EdgeOwns})
+			g.AddEdge(Edge{From: workloadID(it.OwnerID), To: nid, Type: EdgeOwns, Source: "identity owner reference", Confidence: "authoritative"})
 		}
 		if it.IssuerID != nil {
-			g.AddEdge(Edge{From: issuerID(*it.IssuerID), To: nid, Type: EdgeIssued})
+			g.AddEdge(Edge{From: issuerID(*it.IssuerID), To: nid, Type: EdgeIssued, Source: "identity issuer reference", Confidence: "authoritative"})
 		}
 		for _, loc := range identityResourceRefs(it.Attributes) {
 			ensureResource(g, loc)
-			g.AddEdge(Edge{From: nid, To: resourceID(loc), Type: EdgeDeployedTo})
+			g.AddEdge(Edge{From: nid, To: resourceID(loc), Type: EdgeDeployedTo, Source: "identity deployment attribute", Confidence: "observed"})
 		}
 	}
 
@@ -138,14 +138,14 @@ func Build(ctx context.Context, st *store.Store, tenantID string) (*Graph, error
 		node.ID = nid
 		g.AddNode(node)
 		if c.OwnerID != nil {
-			g.AddEdge(Edge{From: workloadID(*c.OwnerID), To: nid, Type: EdgeOwns})
+			g.AddEdge(Edge{From: workloadID(*c.OwnerID), To: nid, Type: EdgeOwns, Source: "certificate owner reference", Confidence: "authoritative"})
 		}
 		if c.DeploymentLocation != "" {
 			ensureResource(g, c.DeploymentLocation)
-			g.AddEdge(Edge{From: nid, To: resourceID(c.DeploymentLocation), Type: EdgeDeployedTo})
+			g.AddEdge(Edge{From: nid, To: resourceID(c.DeploymentLocation), Type: EdgeDeployedTo, Source: "certificate deployment inventory", Confidence: "observed"})
 		}
 		if isID, ok := issuerByName[c.Issuer]; ok {
-			g.AddEdge(Edge{From: isID, To: nid, Type: EdgeIssued})
+			g.AddEdge(Edge{From: isID, To: nid, Type: EdgeIssued, Source: "certificate issuer-name correlation", Confidence: "inferred"})
 		}
 	}
 
@@ -177,7 +177,7 @@ func Build(ctx context.Context, st *store.Store, tenantID string) (*Graph, error
 			if k.StandingAccess {
 				edge = EdgeGrantsAccess
 			}
-			g.AddEdge(Edge{From: nid, To: resourceID(k.Location), Type: edge})
+			g.AddEdge(Edge{From: nid, To: resourceID(k.Location), Type: edge, Source: "SSH key inventory", Confidence: "observed"})
 		}
 	}
 
@@ -207,7 +207,7 @@ func Build(ctx context.Context, st *store.Store, tenantID string) (*Graph, error
 		})
 		if a.Location != "" {
 			ensureResource(g, a.Location)
-			g.AddEdge(Edge{From: resourceID(a.Location), To: nid, Type: EdgeExhibits})
+			g.AddEdge(Edge{From: resourceID(a.Location), To: nid, Type: EdgeExhibits, Source: "CBOM inventory", Confidence: "observed"})
 		}
 	}
 
@@ -246,7 +246,13 @@ func Build(ctx context.Context, st *store.Store, tenantID string) (*Graph, error
 		})
 		if f.Provenance != "" {
 			ensureResource(g, f.Provenance)
-			g.AddEdge(Edge{From: nid, To: resourceID(f.Provenance), Type: EdgeDeployedTo})
+			g.AddEdge(Edge{
+				From:       nid,
+				To:         resourceID(f.Provenance),
+				Type:       EdgeDeployedTo,
+				Source:     discoverySourceLabel(f),
+				Confidence: "observed",
+			})
 		}
 	}
 
@@ -275,11 +281,23 @@ func addServiceDependencyFinding(g *Graph, finding store.DiscoveryFinding, owner
 	}
 	ensureResource(g, metadata.Target)
 	g.AddEdge(Edge{
-		From: workloadID(ownerID),
-		To:   resourceID(metadata.Target),
-		Type: EdgeConnectsTo,
+		From:       workloadID(ownerID),
+		To:         resourceID(metadata.Target),
+		Type:       EdgeConnectsTo,
+		Source:     discoverySourceLabel(finding),
+		Confidence: "observed",
 	})
 	return true, nil
+}
+
+func discoverySourceLabel(finding store.DiscoveryFinding) string {
+	if finding.SourceID != "" {
+		return "discovery source " + finding.SourceID
+	}
+	if finding.Provenance != "" {
+		return "discovery provenance " + finding.Provenance
+	}
+	return "discovery finding"
 }
 
 // certificateNode is the one certificate-to-graph mapping. Governance exports

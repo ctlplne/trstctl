@@ -3559,7 +3559,7 @@ func componentSchemas() map[string]*Schema {
 		"id": str(), "kind": str(), "name": str(), "attrs": {Type: "object"},
 	}, "id", "kind", "name")
 	graphEdge := object(map[string]*Schema{
-		"from": str(), "to": str(), "type": str(),
+		"from": str(), "to": str(), "type": str(), "source": str(), "confidence": str(),
 	}, "from", "to", "type")
 	graphResponse := object(map[string]*Schema{
 		"nodes": {Type: "array", Items: ref("GraphNode")},

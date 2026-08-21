@@ -13,6 +13,7 @@ func TestAUD64ServiceDependencyFindingFailsClosed(t *testing.T) {
 	t.Parallel()
 	base := store.DiscoveryFinding{
 		ID:       "finding-a",
+		SourceID: "source-7",
 		Kind:     serviceDependencyFindingKind,
 		Ref:      "lb-edge",
 		Metadata: json.RawMessage(`{"workload":"checkout-service","target":"lb-edge","protocol":"https"}`),
@@ -49,6 +50,10 @@ func TestAUD64ServiceDependencyFindingFailsClosed(t *testing.T) {
 	neighbors := g.Neighbors("wl:owner-a", EdgeConnectsTo)
 	if len(neighbors) != 1 || neighbors[0].ID != "res:lb-edge" {
 		t.Fatalf("CONNECTS_TO neighbors = %+v, want lb-edge", neighbors)
+	}
+	edges := g.Edges()
+	if len(edges) != 1 || edges[0].Source != "discovery source source-7" || edges[0].Confidence != "observed" {
+		t.Fatalf("CONNECTS_TO evidence = %+v, want discovery source and observed confidence", edges)
 	}
 }
 

@@ -11347,7 +11347,13 @@
       },
       "GraphEdge": {
         "properties": {
+          "confidence": {
+            "type": "string"
+          },
           "from": {
+            "type": "string"
+          },
+          "source": {
             "type": "string"
           },
           "to": {

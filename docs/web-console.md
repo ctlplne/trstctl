@@ -19,7 +19,7 @@ deep-link into a pre-filtered worklist. Each space owns every surface of one
 concern: *Certificates & PKI* (certificates, request, profiles, CA hierarchy,
 protocols, code signing), *Secrets* (the secrets workspace), *Workload & SSH*
 (workloads, identities, SSH trust), *Posture & response* (find unmanaged
-credentials, algorithms and future readiness, risk, credential graph, incidents,
+credentials, algorithms and future readiness, risk, what could be affected, incidents,
 operations — the Detect & respond
 group), and *Platform* (policy, approvals, audit, owners, privacy under Govern &
 administer; agents, connectors, notifications under Infrastructure; integrations
@@ -264,15 +264,28 @@ issued-session ledger (`GET /api/v1/secrets/sessions`), an idempotent,
 event-sourced revocation record. The login test exchange completes the
 create-grant-verify loop in-console.
 
-### Graph & blast radius (`/graph`)
+### What could be affected (`/graph`)
 
-The credential graph as an explorer: pick a node and see its blast radius — every
-workload and resource that depends on it — backed by
-`/api/v1/graph/blast-radius/{id}`. Selecting an X.509 issuer also shows trust stores
-and distinct hosts whose discovered anchor has the exact certificate fingerprint or
-SPKI public-key identity. Same-subject/different-key matches appear in a separate
-unverified-candidate count and never inflate authoritative trust or automation.
-Backed by `/api/v1/graph/trust-stores/{id}`. See
+This screen first answers one question: **Which systems depend on a selected
+credential?** Choose a credential and select **Explore impact**. The answer lists
+only systems reached through relationships trstctl currently knows. It always warns
+that missing discovery coverage can make the real impact larger; zero known systems
+is not presented as proof of zero impact.
+
+The relationship map, filters, node inventory, exact attributes, read-only query,
+and raw edge table remain available under three named disclosures. Each served edge
+can include its evidence source and confidence: foreign-key relationships are
+authoritative, inventory and discovery observations are observed, name correlation
+is inferred, and subject-only trust candidates are unverified. A blast-radius JSON
+download keeps the selected node, known affected nodes, reachable nodes, relevant
+edges, evidence labels, and coverage warning together.
+
+Selecting an X.509 issuer also shows trust stores and distinct hosts whose discovered
+anchor has the exact certificate fingerprint or SPKI public-key identity.
+Same-subject/different-key matches remain a separate unverified-candidate count and
+never inflate authoritative trust or automation. Backed by `/api/v1/graph`,
+`/api/v1/graph/blast-radius/{id}`, `/api/v1/graph/reachable/{id}`,
+`/api/v1/graph/query`, and `/api/v1/graph/trust-stores/{id}`. See
 [Graph, query & AI](features/graph-query-ai.md).
 
 ### Compliance, audit & policy (`/policy`, `/audit`)

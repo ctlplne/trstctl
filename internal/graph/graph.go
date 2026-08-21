@@ -69,11 +69,17 @@ type Node struct {
 	Attrs map[string]string `json:"attrs,omitempty"`
 }
 
-// Edge is a directed relationship between two nodes.
+// Edge is a directed relationship between two nodes. Source tells an operator
+// which tenant-scoped record produced the relationship; Confidence states how
+// strongly that record establishes the link. Both are evidence labels, not
+// authorization inputs, and are optional for backward compatibility with graph
+// fixtures and callers that construct an in-memory graph directly.
 type Edge struct {
-	From string   `json:"from"`
-	To   string   `json:"to"`
-	Type EdgeType `json:"type"`
+	From       string   `json:"from"`
+	To         string   `json:"to"`
+	Type       EdgeType `json:"type"`
+	Source     string   `json:"source,omitempty"`
+	Confidence string   `json:"confidence,omitempty"`
 }
 
 // Graph is an in-memory directed multigraph of the inventory. It is built once

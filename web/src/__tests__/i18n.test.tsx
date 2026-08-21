@@ -818,8 +818,13 @@ describe("i18n boundary", () => {
       // job; its accessible name still includes the exact human job label.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
       // release.
-      "es-ES": "b87ece7d81e9d693c633508ba01582cbb25a556ce687b523329bcb7ef237b407",
-      "de-DE": "4ccc4dcb19a9d105d9d53028aa5886481886ba916d70116381fdff04d4acdffd",
+      // QA design g27 re-pin: the credential-graph journey now starts with the
+      // affected-systems answer, keeps relationship evidence behind named
+      // disclosures, and names source, confidence, coverage limits, and export.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
+      // release.
+      "es-ES": "0038f3190855663bfd761e55c4349e4b205eaafbb8906d394a0d2c810c37f489",
+      "de-DE": "ae3805bb692d19126718938d6199dc63418848948e41680c18cd41e27b9fabb4",
     });
   });
 

@@ -4508,8 +4508,56 @@ export const messages = {
     description: "Primary navigation item. Matches the decision-first cryptography page heading.",
   },
   "nav.item.graph": {
-    defaultMessage: "Credential graph",
-    description: "Primary navigation item.",
+    defaultMessage: "What could be affected",
+    description: "Primary navigation item. Matches the impact-first graph page heading.",
+  },
+  "graph.design.answer": {
+    defaultMessage: "Which systems depend on a selected credential.",
+    description: "Plain-language answer provided by the graph page.",
+  },
+  "graph.design.technicalDetails": {
+    defaultMessage: "Graph edges, discovery source, confidence, blast-radius export.",
+    description: "Exact evidence available from the graph page.",
+  },
+  "graph.design.exploreImpact": {
+    defaultMessage: "Explore impact",
+    description: "Primary graph action.",
+  },
+  "graph.design.credentialLabel": {
+    defaultMessage: "Credential to explore",
+    description: "Graph credential selector label.",
+  },
+  "graph.design.coverage": {
+    defaultMessage: "Only relationships currently known to trstctl are counted. Missing discovery coverage can make the real impact larger.",
+    description: "Safety boundary on graph impact results.",
+  },
+  "graph.design.disclosure.map": {
+    defaultMessage: "Relationship map and filters",
+    description: "Progressive disclosure for the visual graph.",
+  },
+  "graph.design.disclosure.evidence": {
+    defaultMessage: "Graph edges, sources, confidence, and blast-radius export",
+    description: "Progressive disclosure for exact graph evidence.",
+  },
+  "graph.design.disclosure.inventory": {
+    defaultMessage: "Node inventory, exact attributes, and advanced query",
+    description: "Progressive disclosure for expert graph tools.",
+  },
+  "graph.design.export": {
+    defaultMessage: "Export blast-radius evidence",
+    description: "Graph evidence download link.",
+  },
+  "graph.design.resultOne": {
+    defaultMessage: "1 known system could be affected",
+    description: "Graph impact result for one known downstream system.",
+  },
+  "graph.design.resultMany": {
+    defaultMessage: "{count} known systems could be affected",
+    description: "Graph impact result for zero or multiple known downstream systems.",
+  },
+  "graph.design.confidence": {
+    defaultMessage: "Confidence",
+    description: "Graph relationship evidence confidence column.",
   },
   "nav.item.assistant": {
     defaultMessage: "Assistant",
@@ -12206,10 +12254,6 @@ export const messages = {
     defaultMessage: "Advanced JSON import",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Discovery.tsx.",
   },
-  "source.advanced.query.fd7300e32b": {
-    defaultMessage: "Advanced query",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
-  },
   "source.advanced.runtime.diagnostics.c1b601f9f3": {
     defaultMessage: "Advanced runtime diagnostics",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Assistant.tsx.",
@@ -12350,10 +12394,6 @@ export const messages = {
   "source.an.api.token.or.service.key.identity.where.8f7b48a2e6": {
     defaultMessage: "An API token or service key identity where ownership, age, and retirement matter more than a certificate chain.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Identities.tsx.",
-  },
-  "source.analyze.selected.node.9d2c6d8829": {
-    defaultMessage: "Analyze selected node",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
   },
   "source.and.cannot.remediate.or.mutate.credentials.564b159ab9": {
     defaultMessage: "and cannot remediate or mutate credentials. Model egress and redaction posture are read from the runtime status above.",
@@ -12556,17 +12596,9 @@ export const messages = {
     defaultMessage: "Bind and enroll",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Connectors.tsx.",
   },
-  "source.blast.radius.8638fdf109": {
-    defaultMessage: "Blast radius",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
-  },
   "source.blast.radius.impact.42dfddadef": {
     defaultMessage: "Blast-radius impact",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Identities.tsx.",
-  },
-  "source.blast.radius.paths.and.by.kind.summary.d6a5526110": {
-    defaultMessage: "Blast-radius paths and by-kind summary",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
   },
   "source.blast.radius.preview.unavailable.00a241de01": {
     defaultMessage: "Blast-radius preview unavailable",
@@ -12781,10 +12813,6 @@ export const messages = {
     defaultMessage: "certbot",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Protocols.tsx.",
   },
-  "source.certificate.2a93a8a442": {
-    defaultMessage: "Certificate",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
-  },
   "source.certificate.detail.8537d4ad03": {
     defaultMessage: "Certificate detail",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
@@ -12936,10 +12964,6 @@ export const messages = {
   "source.compromised.issuer.18ef83eabb": {
     defaultMessage: "Compromised issuer",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Incidents.tsx.",
-  },
-  "source.compromising.6baa2b0ea9": {
-    defaultMessage: "Compromising",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
   },
   "source.compute.hmac.4809a2f350": {
     defaultMessage: "Compute HMAC",
@@ -13472,10 +13496,6 @@ export const messages = {
     defaultMessage: "Edge types",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
   },
-  "source.edges.658b158af9": {
-    defaultMessage: "Edges",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
-  },
   "source.edit.464c4ffd01": {
     defaultMessage: "Edit",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Owners.tsx.",
@@ -13858,10 +13878,6 @@ export const messages = {
   },
   "source.graph.unavailable.ef2233a071": {
     defaultMessage: "Graph unavailable",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
-  },
-  "source.graph.workspace.9a09dc9bbf": {
-    defaultMessage: "Graph workspace",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
   },
   "source.grounded.means.the.answer.cites.tenant.evi.0c488b912f": {
@@ -14450,10 +14466,6 @@ export const messages = {
     defaultMessage: "Manual rotation and delete",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
-  "source.map.and.analysis.12782f32f8": {
-    defaultMessage: "Map and analysis",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
-  },
   "source.mappings.f64ec16b0d": {
     defaultMessage: "Mappings",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
@@ -14809,10 +14821,6 @@ export const messages = {
     defaultMessage: "No transit ciphertext yet.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
-  "source.node.545ea53846": {
-    defaultMessage: "node",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
-  },
   "source.node.a.66570ff05a": {
     defaultMessage: "node-a",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Agents.tsx, src/pages/Wizard.tsx.",
@@ -14823,14 +14831,6 @@ export const messages = {
   },
   "source.node.kinds.ee50ba00ef": {
     defaultMessage: "Node kinds",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
-  },
-  "source.node.search.results.7531f516c1": {
-    defaultMessage: "Node search results",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
-  },
-  "source.nodes.7ac362063b": {
-    defaultMessage: "Nodes",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
   },
   "source.not.after.577c1c7930": {
@@ -15944,10 +15944,6 @@ export const messages = {
     defaultMessage: "Reachability unavailable",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
   },
-  "source.reachable.from.ea74f7acc4": {
-    defaultMessage: "reachable from",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
-  },
   "source.reachable.nodes.ebf8d10fa5": {
     defaultMessage: "Reachable nodes",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
@@ -16516,10 +16512,6 @@ export const messages = {
   "source.selected.identities.a829228e71": {
     defaultMessage: "selected identities?",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Identities.tsx.",
-  },
-  "source.selected.node.f8716e2fce": {
-    defaultMessage: "Selected node",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
   },
   "source.selected.spec.757c23e3eb": {
     defaultMessage: "Selected spec",
@@ -17980,10 +17972,6 @@ export const messages = {
     defaultMessage: "No issuer bound",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Identities.tsx:1162.",
   },
-  "source.no.node.selected.5eaea81a7b": {
-    defaultMessage: "No node selected",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Graph.tsx:295.",
-  },
   "source.no.rollback.refs.recorded.0d22293f6b": {
     defaultMessage: "No rollback refs recorded.",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Incidents.tsx:1315.",
@@ -18221,10 +18209,6 @@ export const messages = {
   "source.saving.ct.c96661dcd1": {
     defaultMessage: "Saving CT",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Posture.tsx:314.",
-  },
-  "source.select.graph.node.value1.05310572fd": {
-    defaultMessage: "Select graph node {value1}",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Graph.tsx:319.",
   },
   "source.select.value1.187be5793a": {
     defaultMessage: "Select {value1}",

@@ -1,1 +1,0 @@
-import{V as e}from"./index-DdC-9SH0.js";function t(t,n,...r){let i=e[t];return typeof i==`function`?i(...r):Promise.resolve(n)}export{t};

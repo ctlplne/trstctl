@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Graph } from "@/pages/Graph";
@@ -84,42 +84,39 @@ describe("POL-01 graph polish", () => {
     });
     renderGraph();
 
-    await user.click(await screen.findByRole("button", { name: "Select graph node Corp Root" }));
+    await waitFor(() => expect(screen.getByLabelText("Credential to explore")).toHaveValue("iss:managed"));
+    await user.click(screen.getByText("Node inventory, exact attributes, and advanced query"));
     expect(await screen.findByText(/Exact SPKI trust.*1 unverified subject-only candidate stores across 1 hosts/)).toBeInTheDocument();
     expect(screen.getByText("1 trust stores across 1 hosts.")).toBeInTheDocument();
     expect(screen.getByText("Cross-signed Java store")).toBeInTheDocument();
     expect(apiMock.graphTrustStores).toHaveBeenCalledWith("iss:managed");
   });
 
-  it("keeps query controls behind an advanced tab and renders node choices as a list", async () => {
+  it("keeps expert query and node inventory behind one clearly named disclosure", async () => {
     const user = userEvent.setup();
     renderGraph();
 
-    expect(await screen.findByRole("heading", { name: "Credential graph" })).toBeInTheDocument();
-    expect((await screen.findAllByText("payments-cert")).length).toBeGreaterThan(0);
+    expect(await screen.findByRole("heading", { name: "What could be affected" })).toBeInTheDocument();
     expect(screen.queryByLabelText("Cypher-style query")).not.toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
 
-    const nodeList = screen.getByRole("list", { name: "Node search results" });
-    expect(within(nodeList).getByText("payments-cert")).toBeInTheDocument();
-    expect(within(nodeList).getByText("payments-api")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Choose payments-cert" })).not.toBeInTheDocument();
+    await user.click(screen.getByText("Node inventory, exact attributes, and advanced query"));
+    expect(screen.getByRole("button", { name: "Select payments-cert" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Select payments-api" })).toBeInTheDocument();
 
     await user.clear(screen.getByLabelText("Search"));
     await user.type(screen.getByLabelText("Search"), "payments-api");
-    expect(within(screen.getByRole("list", { name: "Node search results" })).queryByText("payments-cert")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Select graph node payments-api" }));
+    expect(screen.queryByRole("button", { name: "Select payments-cert" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Select payments-api" }));
     expect(screen.getByRole("heading", { name: "Node detail" })).toBeInTheDocument();
     expect(screen.getAllByText("workload:payments").length).toBeGreaterThan(0);
 
     await user.clear(screen.getByLabelText("Search"));
-    await user.click(screen.getByRole("button", { name: "Select graph node payments-cert" }));
-    await user.click(screen.getByRole("button", { name: "Analyze selected node" }));
+    await user.click(screen.getByRole("button", { name: "Select payments-cert" }));
+    await user.click(screen.getByRole("button", { name: "Explore impact" }));
 
     await waitFor(() => expect(apiMock.graphBlastRadius).toHaveBeenCalledWith("cert:payments"));
     expect(apiMock.graphReachable).toHaveBeenCalledWith("cert:payments");
-    expect(await screen.findByRole("heading", { name: "Reachable nodes" })).toBeInTheDocument();
-
-    await user.click(screen.getByRole("tab", { name: "Advanced query" }));
     expect(screen.getByLabelText("Cypher-style query")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Run graph query" }));
 
@@ -129,10 +126,8 @@ describe("POL-01 graph polish", () => {
 
   it("removes the old query placement and chooser wall from the module", () => {
     const source = readFileSync(path.join(process.cwd(), "src/pages/Graph.tsx"), "utf8");
-    expect(source).not.toMatch(/Choose \{node\.name|Show reachable/);
-    // The tab/list copy went through the DA-14 sweep: the module references
-    // the typed keys, and the literals live in messages.ts.
-    expect(source).toMatch(/source\.advanced\.query\./);
-    expect(source).toMatch(/source\.node\.search\.results\./);
+    expect(source).not.toMatch(/BlastRadiusExplorer|activeTab|Node search results|Show reachable/);
+    expect(source).toMatch(/graph\.design\.disclosure\.inventory/);
+    expect(source).toMatch(/graph\.design\.exploreImpact/);
   });
 });

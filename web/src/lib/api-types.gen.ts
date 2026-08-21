@@ -2878,7 +2878,9 @@ export interface FleetReissuanceRunList {
 }
 
 export interface GraphEdge {
+  confidence?: string;
   from: string;
+  source?: string;
   to: string;
   type: string;
 }

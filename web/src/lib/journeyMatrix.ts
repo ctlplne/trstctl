@@ -39,7 +39,7 @@ const routeCatalog = {
   caHierarchy: { path: "/ca-hierarchy", heading: "Certificate authorities" },
   certificates: { path: "/certificates", heading: "Certificates" },
   discovery: { path: "/discovery", heading: "Find unmanaged credentials" },
-  graph: { path: "/graph", heading: "Credential graph" },
+  graph: { path: "/graph", heading: "What could be affected" },
   identities: { path: "/identities", heading: "Machine identities" },
   migration: { path: "/migration", heading: "Migration" },
   incidents: { path: "/incidents", heading: "Security incidents" },
