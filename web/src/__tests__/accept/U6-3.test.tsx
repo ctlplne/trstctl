@@ -58,10 +58,14 @@ describe("U6-3 privacy / GDPR console", () => {
         </ToastProvider>
       </MemoryRouter>,
     );
+    expect(await screen.findByRole("heading", { name: "Evidence privacy" })).toBeInTheDocument();
+    expect(apiMock.privacyRetentionRuns).not.toHaveBeenCalled();
+    await user.click(screen.getByText("Retention jobs", { exact: true }));
     await waitFor(() => expect(apiMock.privacyRetentionRuns).toHaveBeenCalled());
-    expect(await screen.findByRole("heading", { name: "Privacy & data governance" })).toBeInTheDocument();
     expect(await screen.findByText("ret-1")).toBeInTheDocument();
 
+    await user.click(screen.getByText("Subject rights", { exact: true }));
+    await waitFor(() => expect(apiMock.privacySubjectErasures).toHaveBeenCalled());
     await user.type(screen.getByLabelText("Data subject"), "owner-42");
     await user.click(screen.getByRole("button", { name: "Erase subject" }));
     await waitFor(() => expect(apiMock.erasePrivacySubject).toHaveBeenCalledWith({ subject: "owner-42", reason: undefined }));

@@ -63,25 +63,33 @@ snapshot from the already-sanitized read model.
 
 ## In the console (`/privacy`)
 
-The web console exposes this stack as a **Privacy & data governance**
-screen at `/privacy` (see **[The web console](web-console.md)**). From
-there an operator can:
+The web console exposes this stack as **Evidence privacy** at `/privacy`
+(see **[The web console](web-console.md)**). It answers the boundary first:
+`privacy:read` can review tenant evidence, `privacy:write` is required to change
+retention or erasure evidence, retention is named per catalog entry, and every
+request stays inside the current tenant. Exact controls stay in four closed
+sections and load only when an operator opens them:
 
-- **File a subject erasure** — submit a subject and optional reason; the
-  console calls `POST /api/v1/privacy/subject-erasures` and shows the
-  count of records erased, drawn from the `privacy.subject.erased`
-  projection.
-- **Enforce retention on demand** — trigger `POST
+- **Policy and data map** — browse the maintained rows from `GET
+  /api/v1/privacy/catalog`, including location, owner, purpose, and retention
+  class.
+- **Subject rights** — submit a subject erasure and optional reason. The
+  console calls `POST /api/v1/privacy/subject-erasures` and shows the count of
+  records erased from the `privacy.subject.erased` projection. Export a
+  subject's cataloged record counts through `POST
+  /api/v1/privacy/subject-exports`. Secret values and token material are not
+  rendered.
+- **Archive removal evidence** — inspect or record tenant-scoped proof that a
+  backup or signed audit archive was deleted, cryptographically shredded, or
+  retained under legal hold through `GET` and `POST` on
+  `/api/v1/privacy/archive-erasure-attestations`.
+- **Retention jobs** — trigger `POST
   /api/v1/privacy/retention-runs` and review recent runs (id, cutoffs,
   records affected, requester), on top of the scheduled `24h` default.
-- **Browse the personal-data catalog** — the same rows above, read from
-  `GET /api/v1/privacy/catalog`, so the data map and its controls live on
-  one screen.
 
-The console surfaces erasure, retention, and the catalog. **Data-subject
-export** (below) stays a deliberate API call, not a one-click console
-action, since it discloses a subject's data and is better issued from an
-audited, scripted context.
+Opening the page does not eagerly fetch these evidence sets. This keeps the
+default view short and avoids moving tenant evidence into the browser before the
+operator asks to review that section.
 
 ## Data-subject access and portability
 

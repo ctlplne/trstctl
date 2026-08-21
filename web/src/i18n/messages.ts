@@ -5941,7 +5941,7 @@ export const messages = {
     description: "List title for NHI compliance residual attestations.",
   },
   "nav.item.privacy": {
-    defaultMessage: "Privacy",
+    defaultMessage: "Evidence privacy",
     description: "Primary navigation item.",
   },
   "nav.item.integrate": {
@@ -11326,13 +11326,93 @@ export const messages = {
     description: "Integrate route infrastructure-as-code section description.",
   },
   "privacy.title": {
-    defaultMessage: "Privacy & data governance",
+    defaultMessage: "Evidence privacy",
     description: "Privacy route page title.",
   },
   "privacy.description": {
-    defaultMessage:
-      "Privacy & GDPR controls: inventory the kinds of personal data you hold, honor erasure requests (right to be forgotten), and enforce data-retention schedules.",
+    defaultMessage: "Who can access evidence, how long it stays, and what is removed.",
     description: "Privacy route page description.",
+  },
+  "privacy.design.technicalDetails": {
+    defaultMessage: "Redaction, retention jobs, access logs, sanitized summaries.",
+    description: "Exact-detail layer named by the whole-product design contract.",
+  },
+  "privacy.design.primaryAction": {
+    defaultMessage: "Review policy",
+    description: "Single primary action that opens the privacy policy and data map.",
+  },
+  "privacy.design.summaryTitle": {
+    defaultMessage: "Your evidence boundary",
+    description: "Heading for the plain-language privacy boundary summary.",
+  },
+  "privacy.design.summaryDescription": {
+    defaultMessage:
+      "Reading evidence requires privacy:read. Changing retention or erasure evidence requires privacy:write. Every request stays inside the current tenant.",
+    description: "Plain-language explanation of privacy permissions and tenant scope.",
+  },
+  "privacy.design.accessLabel": {
+    defaultMessage: "Who can review it",
+    description: "Evidence privacy summary label for read access.",
+  },
+  "privacy.design.retentionLabel": {
+    defaultMessage: "How long it stays",
+    description: "Evidence privacy summary label for retention.",
+  },
+  "privacy.design.retentionValue": {
+    defaultMessage: "Set per catalog entry",
+    description: "Evidence privacy summary value for retention.",
+  },
+  "privacy.design.removalLabel": {
+    defaultMessage: "What is removed",
+    description: "Evidence privacy summary label for erasure.",
+  },
+  "privacy.design.removalValue": {
+    defaultMessage: "Direct data, then archive proof",
+    description: "Evidence privacy summary value for direct erasure and archive attestation.",
+  },
+  "privacy.design.disclosure.policy": {
+    defaultMessage: "Policy and data map",
+    description: "Progressive disclosure for the personal-data policy catalog.",
+  },
+  "privacy.design.disclosure.subjects": {
+    defaultMessage: "Subject rights",
+    description: "Progressive disclosure for subject erasure and export controls.",
+  },
+  "privacy.design.disclosure.archives": {
+    defaultMessage: "Archive removal evidence",
+    description: "Progressive disclosure for backup and signed-archive erasure evidence.",
+  },
+  "privacy.design.disclosure.retention": {
+    defaultMessage: "Retention jobs",
+    description: "Progressive disclosure for retention enforcement and its evidence.",
+  },
+  "privacy.design.catalogScrollArea": {
+    defaultMessage: "Personal-data catalog scroll area",
+    description: "Accessible label for the keyboard-scrollable catalog viewport.",
+  },
+  "privacy.design.erasureScrollArea": {
+    defaultMessage: "Recent subject erasures scroll area",
+    description: "Accessible label for the keyboard-scrollable erasure viewport.",
+  },
+  "privacy.design.exportScrollArea": {
+    defaultMessage: "Subject export counts scroll area",
+    description: "Accessible label for the keyboard-scrollable export viewport.",
+  },
+  "privacy.design.retentionScrollArea": {
+    defaultMessage: "Retention runs scroll area",
+    description: "Accessible label for the keyboard-scrollable retention viewport.",
+  },
+  "privacy.design.archiveDescription": {
+    defaultMessage: "Proof that backups and signed audit archives were deleted, made unreadable by destroying their keys, or kept under a legal hold.",
+    description: "ELI5 description for archive erasure attestations.",
+  },
+  "privacy.design.recordAttestation": {
+    defaultMessage: "Record attestation…",
+    description: "Action for recording archive erasure evidence.",
+  },
+  "privacy.design.recordDialogTitle": {
+    defaultMessage: "Record archive removal evidence",
+    description: "Plain-language archive attestation dialog title.",
   },
   "privacy.loading": {
     defaultMessage: "Loading privacy posture...",

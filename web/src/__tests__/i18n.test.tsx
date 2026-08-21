@@ -878,8 +878,14 @@ describe("i18n boundary", () => {
       // delivery explicit in every locale.
       // Machine-authored Spanish and German remain flagged for human language
       // review.
-      "es-ES": "349d1ec4171d98d6b4c6ff2fe71c8cf469db42ac486f1241b88c489007bd95a1",
-      "de-DE": "a1dbb37080339157832283b4a5b4cd50c80c7d7a96437e88cc37a3ef215fb2da",
+      // QA design g36 re-pin: Evidence privacy now names the exact read/write
+      // permission boundary, per-entry retention, direct-data removal and
+      // archive proof before exposing the policy map, subject rights, archive
+      // attestations, or retention jobs. Its sidebar label and keyboard-scroll
+      // regions use the same reviewed language. Machine-authored Spanish and
+      // German remain flagged for human language review.
+      "es-ES": "7fe3bdd695b65f84c58e9e8d6d030bf2d9f524ca03103c7611848189f447f6d2",
+      "de-DE": "0d1886da3c7b0396da8e4aea71cd91234568bfd62120a02ce6a9e37f86680c0b",
     });
   });
 

@@ -378,13 +378,16 @@ and [Compliance](compliance.md). Backed by
 report dispatch is not served; native audit-feed delivery is a separate served
 workflow.
 
-### Privacy / data governance (`/privacy`)
+### Evidence privacy (`/privacy`)
 
-The GDPR console over the served privacy stack: file a subject erasure (right to be
-forgotten), export a subject's held data, trigger and review retention-enforcement
-runs, and browse the personal-data catalog. See
-[Privacy data catalog](privacy-data-catalog.md). Backed by
+Answers who can access evidence, how long it stays, and what is removed before
+showing exact controls. Reading requires `privacy:read`; changing retention or
+erasure evidence requires `privacy:write`; every request remains tenant-scoped.
+One **Review policy** action opens the data map. Subject erasure/export, archive
+removal attestations, and retention jobs stay in separate closed sections and
+load on demand. See [Privacy data catalog](privacy-data-catalog.md). Backed by
 `/api/v1/privacy/subject-erasures`, `/api/v1/privacy/subject-exports`,
+`/api/v1/privacy/archive-erasure-attestations`,
 `/api/v1/privacy/retention-runs`, and `/api/v1/privacy/catalog`.
 
 ### Operations & trust (`/incidents`, `/codesign`, `/ca-hierarchy`)
@@ -632,7 +635,7 @@ grounded and sufficient. Backed by `/api/v1/ai/status`, `/api/v1/mcp/tools`, `/a
 | `/notifications` | Alerts and delivery |
 | `/policy` | Rules and approvals |
 | `/audit` | Change history |
-| `/privacy` | Privacy |
+| `/privacy` | Evidence privacy |
 | `/connectors` | Where credentials are installed |
 | `/integrate` | Integrate |
 | `/integrate/api` | API Explorer |

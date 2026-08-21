@@ -47,7 +47,7 @@ const routeCatalog = {
   operations: { path: "/operations", heading: "Jobs and queues" },
   platform: { path: "/platform", heading: "Access administration" },
   policy: { path: "/policy", heading: "Rules and approvals" },
-  privacy: { path: "/privacy", heading: "Privacy & data governance" },
+  privacy: { path: "/privacy", heading: "Evidence privacy" },
   profiles: { path: "/profiles", heading: "Certificate rules" },
   request: { path: "/request", heading: "Request a certificate" },
   risk: { path: "/risk", heading: "What to fix first" },
