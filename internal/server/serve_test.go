@@ -4,6 +4,7 @@ package server
 
 import (
 	"bytes"
+	"errors"
 	"net"
 	"net/http"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
 func newHandler() *http.Server {
@@ -70,20 +72,49 @@ func TestServeControlPlaneInternalPersistsIdentityAcrossRestart(t *testing.T) {
 			t.Fatal(err)
 		}
 		srv := newHandler()
+		serveDone := make(chan error, 1)
 		go func() {
-			_ = serveControlPlane(srv, ln, config.TLS{Mode: config.TLSInternal, InternalStateFile: stateFile, InternalTrustFile: trustFile}, &bytes.Buffer{})
+			serveDone <- serveControlPlane(srv, ln, config.TLS{Mode: config.TLSInternal, InternalStateFile: stateFile, InternalTrustFile: trustFile}, &bytes.Buffer{})
 		}()
 		for i := 0; i < 100; i++ {
-			if raw, readErr := os.ReadFile(stateFile); readErr == nil && len(raw) > 0 { // #nosec G304 -- test-owned path under t.TempDir (CWE-22)
-				_ = srv.Close()
-				_ = ln.Close()
-				return raw
+			raw, stateErr := os.ReadFile(stateFile)   // #nosec G304 -- test-owned path under t.TempDir (CWE-22)
+			trust, trustErr := os.ReadFile(trustFile) // #nosec G304 -- test-owned path under t.TempDir (CWE-22)
+			if stateErr == nil && len(raw) > 0 && trustErr == nil && len(trust) > 0 {
+				transport, transportErr := mtls.HTTPTransport(trust)
+				if transportErr != nil {
+					t.Fatalf("build client from published public trust: %v", transportErr)
+				}
+				client := &http.Client{Transport: transport, Timeout: 500 * time.Millisecond}
+				resp, getErr := client.Get("https://" + ln.Addr().String() + "/healthz")
+				client.CloseIdleConnections()
+				if getErr == nil {
+					_ = resp.Body.Close()
+					if resp.StatusCode != http.StatusOK {
+						t.Fatalf("internal TLS readiness status = %d, want 200", resp.StatusCode)
+					}
+					if closeErr := srv.Close(); closeErr != nil {
+						t.Fatalf("close internal TLS server: %v", closeErr)
+					}
+					select {
+					case serveErr := <-serveDone:
+						if serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+							t.Fatalf("internal TLS server stopped with error: %v", serveErr)
+						}
+					case <-time.After(2 * time.Second):
+						t.Fatal("internal TLS server did not stop after close")
+					}
+					return raw
+				}
 			}
 			time.Sleep(20 * time.Millisecond)
 		}
 		_ = srv.Close()
 		_ = ln.Close()
-		t.Fatal("internal TLS state was not persisted before serving")
+		select {
+		case <-serveDone:
+		case <-time.After(2 * time.Second):
+		}
+		t.Fatal("internal TLS identity and public trust were not ready for verified HTTPS")
 		return nil
 	}
 	first := serveOnce()
