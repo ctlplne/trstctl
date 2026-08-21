@@ -111,7 +111,9 @@ describe("route 029 decision-first ownership design", () => {
     expect(disclosures.every((details) => details && !details.hasAttribute("open"))).toBe(true);
 
     await user.click(assign);
-    expect(screen.getByRole("heading", { level: 2, name: "Assign owner" })).toBeInTheDocument();
+    const assignDialog = screen.getByRole("dialog");
+    expect(within(assignDialog).getByRole("heading", { level: 2, name: "Assign owner" })).toBeInTheDocument();
+    expect(assignDialog).toHaveClass("max-h-[calc(100dvh-2rem)]", "overflow-y-auto", "overscroll-contain");
     expect(screen.getByText(/Create the accountable owner record first/, { exact: false })).toBeInTheDocument();
     expect(screen.getByLabelText("Name")).toHaveFocus();
     await user.click(screen.getByRole("button", { name: "Cancel" }));
