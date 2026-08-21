@@ -698,7 +698,7 @@ function PrivacyDisclosurePanel({
   return (
     <details
       ref={detailsRef}
-      className="rounded-panel border border-border bg-card shadow-elevation1"
+      className="min-w-0 rounded-panel border border-border bg-card shadow-elevation1"
       open={open}
       onToggle={(event) => onToggle(event.currentTarget.open)}
     >

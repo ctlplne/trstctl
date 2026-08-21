@@ -112,4 +112,14 @@ describe("Route 036 evidence-privacy hierarchy", () => {
     expect(await screen.findByRole("table", { name: "Retention runs" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Retention runs scroll area" })).toHaveAttribute("tabindex", "0");
   });
+
+  it("contains long evidence fields inside each disclosure instead of widening the page", async () => {
+    renderPrivacy();
+    await screen.findByRole("heading", { level: 1, name: "Evidence privacy" });
+
+    for (const title of ["Policy and data map", "Subject rights", "Archive removal evidence", "Retention jobs"]) {
+      const disclosure = screen.getByText(title, { exact: true }).closest("details");
+      expect(disclosure).toHaveClass("min-w-0");
+    }
+  });
 });
