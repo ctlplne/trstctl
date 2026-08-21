@@ -123,6 +123,17 @@ function contrastRatioOnTint(foreground: HslToken, underlay: HslToken, alpha: nu
   return (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) / (Math.min(foregroundLuminance, backgroundLuminance) + 0.05);
 }
 
+function contrastRatioOnLayeredTints(foreground: HslToken, base: HslToken, layers: Array<{ color: HslToken; alpha: number }>) {
+  const foregroundRgb = hslToRgb(foreground);
+  const backgroundRgb = layers.reduce(
+    (underlay, layer) => hslToRgb(layer.color).map((channel, index) => channel * layer.alpha + underlay[index] * (1 - layer.alpha)),
+    hslToRgb(base),
+  );
+  const foregroundLuminance = relativeLuminanceRgb(foregroundRgb);
+  const backgroundLuminance = relativeLuminanceRgb(backgroundRgb);
+  return (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) / (Math.min(foregroundLuminance, backgroundLuminance) + 0.05);
+}
+
 describe("Clarity/Console design-system foundation", () => {
   it("exposes brand, honesty, risk, density, type, and elevation tokens", () => {
     for (const token of [
@@ -292,6 +303,19 @@ describe("Clarity/Console design-system foundation", () => {
       const card = requireToken(tokens, "card");
       expect(contrastRatio(warning, card), `${themeName} warning text on card`).toBeGreaterThanOrEqual(4.5);
       expect(contrastRatioOnTint(warning, card, 0.1), `${themeName} warning text on 10% warning tint`).toBeGreaterThanOrEqual(4.5);
+      expect(
+        contrastRatioOnLayeredTints(warning, card, [
+          { color: requireToken(tokens, "muted"), alpha: 0.2 },
+          { color: warning, alpha: 0.1 },
+        ]),
+        `${themeName} warning text on 10% warning tint nested in a 20% muted card`,
+      ).toBeGreaterThanOrEqual(4.5);
+      const brandAccent = requireToken(tokens, "brand-accent");
+      expect(contrastRatio(brandAccent, card), `${themeName} brand link text on card`).toBeGreaterThanOrEqual(4.5);
+      expect(
+        contrastRatioOnLayeredTints(brandAccent, card, [{ color: requireToken(tokens, "muted"), alpha: 0.2 }]),
+        `${themeName} brand link text on a 20% muted card`,
+      ).toBeGreaterThanOrEqual(4.5);
       const success = requireToken(tokens, "status-success");
       expect(contrastRatio(success, card), `${themeName} success text on card`).toBeGreaterThanOrEqual(4.5);
       const critical = requireToken(tokens, "risk-critical");
