@@ -524,7 +524,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     component: "Connectors",
     kind: "observe",
     evidence:
-      "native and plugin connector registry, capability grants, delivery receipts, operations queue, notification triage, reachability, and rollback posture",
+      "native and plugin connector registry, capability grants, delivery receipts, jobs-and-queues health, notification triage, reachability, and rollback posture",
   },
   {
     featureId: "F8",

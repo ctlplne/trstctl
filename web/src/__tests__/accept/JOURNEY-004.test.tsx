@@ -75,6 +75,8 @@ const { apiMock, clearApiCalls } = vi.hoisted(() => {
     if (name === "graphBlastRadius") return { root: "", nodes: [], edges: [], summary: {} };
     if (name === "graphReachable") return { root: "", nodes: [], edges: [] };
     if (name === "connectorCatalog") return { items: [], capabilities: [] };
+    if (name === "agentJobPosture") return { served: true, generated_at: generatedAt, claimable_kinds: [], queues: [] };
+    if (name === "bulkheadStats") return { served: true, pools: [] };
     if (name === "caAuthorities") return { items: [] };
     if (name === "caDiscoveryInventory") return { generated_at: generatedAt, authorities: [], summary: {} };
     if (name === "complianceInventoryReport") return { generated_at: generatedAt, frameworks: [], evidence_refs: [] };

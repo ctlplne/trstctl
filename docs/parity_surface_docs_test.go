@@ -63,7 +63,7 @@ func TestC11FeatureDocsReflectParitySurfaces(t *testing.T) {
 		{"features/discovery-and-inventory.md", []string{"/api/v1/discovery/findings/{id}/claim", "/api/v1/discovery/findings/{id}/dismiss", "investigating", "AWS Secrets Manager", "GCP Secret Manager", "reserved-IP"}},
 		{"features/policy-and-governance.md", []string{"severity-to-channel routing matrix", "EffectiveAlertChannels", "per-(subject, threshold, channel)", "/api/v1/notifications/{id}/requeue"}},
 		{"features/graph-query-ai.md", []string{"route-backed REST MCP tools", "rest_list_notifications", "MCP-vs-REST parity CI guard"}},
-		{"web-console.md", []string{"issuer catalog", "Test connection", "operations queue", "Notifications inbox", "Team column", "issuance-rate chart", "CTA empty states", "onboarding carousel", "server-side record search"}},
+		{"web-console.md", []string{"issuer catalog", "Test connection", "Jobs and queues", "Notifications inbox", "Team column", "issuance-rate chart", "CTA empty states", "onboarding carousel", "server-side record search"}},
 		{"limitations.md", []string{"ACME trust_authenticated", "SCEP Intune challenge", "notification routing matrix", "MCP-vs-REST parity guard", "onboarding carousel"}},
 	}
 	for _, tc := range cases {

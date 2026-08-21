@@ -38,6 +38,7 @@ import type {
   ACMEEABCredential,
   ACMEEABPosture,
   AgentJobPosture,
+  BulkheadStats,
   IssuerCapabilityMatrix,
   ACMEDNS01Preflight,
   ACMEDNS01PreflightRequest,
@@ -656,6 +657,7 @@ export type {
   ACMEEABCredential,
   ACMEEABPosture,
   AgentJobPosture,
+  BulkheadStats,
   IssuerCapabilityMatrix,
   ACMEDNS01Preflight,
   ACMEDNS01PreflightRequest,
@@ -1739,6 +1741,7 @@ export interface Api {
   deleteConnectorTarget(id: string): Promise<void>;
   outboxCircuits(): Promise<OutboxCircuitList>;
   agentJobPosture(): Promise<AgentJobPosture>;
+  bulkheadStats(): Promise<BulkheadStats>;
   connectorDelivery(id: string): Promise<ConnectorDelivery>;
   requestEphemeralCredential(input: EphemeralCredentialRequest): Promise<EphemeralCredential>;
   approveEphemeralCredential(id: string, input: EphemeralApprovalRequest): Promise<EphemeralApproval>;
@@ -2208,6 +2211,7 @@ const liveApi: Api = {
   deleteConnectorTarget: (id) => mutate<void>("DELETE", `/api/v1/connectors/targets/${encodeURIComponent(id)}`),
   outboxCircuits: () => req<OutboxCircuitList>("/api/v1/connectors/outbox-circuits"),
   agentJobPosture: () => req<AgentJobPosture>("/api/v1/operations/jobs"),
+  bulkheadStats: () => req<BulkheadStats>("/api/v1/operations/bulkheads"),
   connectorDelivery: (id) => req<ConnectorDelivery>(`/api/v1/connectors/deliveries/${encodeURIComponent(id)}`),
   requestEphemeralCredential: (input) => mutate<EphemeralCredential>("POST", "/api/v1/ephemeral", input),
   approveEphemeralCredential: (id, input) => mutate<EphemeralApproval>("POST", `/api/v1/ephemeral/${encodeURIComponent(id)}/approvals`, input),

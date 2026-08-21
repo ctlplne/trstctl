@@ -1,13 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { CheckCircle2, RefreshCw, XCircle } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
+import { AlertTriangle, CheckCircle2, ExternalLink, RefreshCw, XCircle } from "lucide-react";
+import { Link } from "react-router-dom";
 import { approvalRequestsQueryKey, approvalRows, type ApprovalQueueRow } from "@/lib/approvalQueue";
-import { api, ApiError, type ConnectorDelivery, type PendingApprovalRequest, type RotationRun } from "@/lib/api";
+import { api, ApiError, type BulkheadStats, type ConnectorDelivery, type PendingApprovalRequest, type RotationRun } from "@/lib/api";
 import { useApiQuery, useQueryClient } from "@/lib/query";
 import { formatDateTime } from "@/i18n/format";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { AgentJobLedgerPanel } from "@/pages/operations/AgentJobLedgerPanel";
 import { Dialog } from "@/components/Dialog";
-import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
@@ -80,12 +80,16 @@ export function Operations() {
     live: { intervalMs: 10_000 },
   });
   const approvals = useApiQuery(approvalRequestsQueryKey, api.approvalRequests, { live: { intervalMs: 10_000 } });
+  const jobPosture = useApiQuery(["agent-job-posture"], () => api.agentJobPosture(), { live: { intervalMs: 10_000 } });
+  const bulkheads = useApiQuery(["bulkhead-stats"], () => api.bulkheadStats(), { live: { intervalMs: 10_000 } });
   const [error, setError] = useState<Notice | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState<"" | OperationType>("");
   const [rejectTarget, setRejectTarget] = useState<RejectTarget>(null);
+  const [detailTarget, setDetailTarget] = useState<OperationRow | null>(null);
+  const firstFailedReviewRef = useRef<HTMLButtonElement>(null);
   const rows = useMemo<OperationRow[]>(
     () => [
       ...(rotations.data?.items ?? []).map(rotationOperationRow),
@@ -96,6 +100,21 @@ export function Operations() {
   );
   const loading = rotations.loading || deliveries.loading || approvals.loading;
   const loadError = rotations.error ?? deliveries.error ?? approvals.error;
+  const failedRows = useMemo(() => rows.filter((row) => isFailureStatus(row.statusKey)), [rows]);
+  const attentionRows = useMemo(
+    () => rows.filter((row) => isFailureStatus(row.statusKey) || isActiveStatus(row.statusKey) || row.statusKey === "awaiting_approval"),
+    [rows],
+  );
+  const waitingJobs = useMemo(
+    () => (jobPosture.data?.queues ?? []).reduce((total, queue) => total + (queue.enabled ? queue.pending : 0), 0),
+    [jobPosture.data],
+  );
+  const oldestWaitingSeconds = useMemo(
+    () => Math.max(0, ...(jobPosture.data?.queues ?? []).map((queue) => (queue.enabled ? (queue.oldest_unclaimed_seconds ?? 0) : 0))),
+    [jobPosture.data],
+  );
+  const checkingAttention = loading || jobPosture.loading;
+  const agentQueueUnavailable = !jobPosture.loading && (jobPosture.error !== null || jobPosture.data?.served !== true);
 
   const filteredRows = useMemo(
     () => rows.filter((row) => (!statusFilter || row.statusKey === statusFilter) && (!typeFilter || row.type === typeFilter)),
@@ -151,31 +170,16 @@ export function Operations() {
     }
   }
 
-  function cancel(row: OperationRow) {
-    setNotice({ kind: "warning", message: translateNow("source.cancel.is.not.available.for.this.operation.0210a0d77e") });
-    setBusyKey(row.id);
-    window.setTimeout(() => setBusyKey((current) => (current === row.id ? null : current)), 250);
-  }
-
   return (
     <div className="grid gap-6">
       <PageHeader
-        title={translateNow("source.operations.queue.42686cb416")}
+        title={t("operations.page.title")}
         titleId="operations-heading"
-        description="The execution queue — jobs in flight like credential rotations and connector deployments, with attempts and outcomes. To approve or deny pending requests, see Approvals."
+        description={t("operations.page.answer")}
+        technicalDetails={t("operations.page.details")}
         actions={
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              rotations.refetch();
-              deliveries.refetch();
-              approvals.refetch();
-            }}
-            disabled={loading}
-          >
-            <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
-            {translateNow("source.refresh.0e91610117")}
+          <Button type="button" onClick={() => firstFailedReviewRef.current?.focus()} disabled={failedRows.length === 0}>
+            {t("operations.page.reviewFailed")}
           </Button>
         }
       />
@@ -184,73 +188,139 @@ export function Operations() {
       {error && <ErrorState title={translateNow("source.operations.unavailable.b176555a53")}>{error.message}</ErrorState>}
       {!error && loadError && <ErrorState title={translateNow("source.operations.unavailable.b176555a53")}>{loadError}</ErrorState>}
 
-      {/* A1: estate-touching work is executed by agents, so the queue an operator
-          needs to watch is the one agents claim from — not only the control
-          plane's own execution queue below. */}
-      <AgentJobLedgerPanel />
-
-      <div className="ui-panel grid gap-3 p-comfortable sm:grid-cols-2 lg:grid-cols-[minmax(12rem,16rem)_minmax(12rem,16rem)_1fr]">
-        <label className="grid gap-2 text-sm font-medium">
-          {translateNow("source.status.filter.9bfe8b184f")}
-          <select
-            aria-label={translateNow("source.status.filter.9bfe8b184f")}
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value)}
-            className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-focus focus:ring-2 focus:ring-focus/20"
-          >
-            {statusOptions(t("operations.status.queued")).map((option) => (
-              <option key={option.value || "all"} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="grid gap-2 text-sm font-medium">
-          {translateNow("source.type.filter.5607113309")}
-          <select
-            aria-label={translateNow("source.type.filter.5607113309")}
-            value={typeFilter}
-            onChange={(event) => setTypeFilter(event.target.value as "" | OperationType)}
-            className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-focus focus:ring-2 focus:ring-focus/20"
-          >
-            {typeOptions.map((option) => (
-              <option key={option.value || "all"} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="flex items-end text-sm text-muted-foreground">
-          {filteredRows.length} {translateNow("source.rows.bc51e9e65d")}
+      <section aria-labelledby="operations-attention-heading" className="ui-panel grid gap-4 p-comfortable">
+        <div className="flex items-start gap-3">
+          {checkingAttention ? (
+            <RefreshCw className="mt-0.5 h-5 w-5 shrink-0 animate-spin text-muted-foreground" aria-hidden="true" />
+          ) : failedRows.length > 0 || waitingJobs > 0 || agentQueueUnavailable ? (
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-status-warning" aria-hidden="true" />
+          ) : (
+            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-status-success" aria-hidden="true" />
+          )}
+          <div>
+            <h2 id="operations-attention-heading" className="text-title font-semibold">
+              {t("operations.attention.heading")}
+            </h2>
+            {checkingAttention ? (
+              <p className="mt-1 text-sm text-muted-foreground">{t("operations.attention.checking")}</p>
+            ) : failedRows.length === 0 && waitingJobs === 0 && !agentQueueUnavailable ? (
+              <>
+                <p className="mt-1 font-medium">{t("operations.attention.empty")}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{t("operations.attention.emptyDetail")}</p>
+              </>
+            ) : (
+              <div className="mt-1 grid gap-1 text-sm">
+                {failedRows.length > 0 ? (
+                  <p className="font-medium">
+                    {failedRows.length === 1 ? t("operations.attention.failedOne") : t("operations.attention.failedMany", { count: failedRows.length })}
+                  </p>
+                ) : null}
+                {waitingJobs > 0 ? (
+                  <p className="text-muted-foreground">
+                    {waitingJobs === 1
+                      ? t("operations.attention.waitingOne", { age: waitLabel(oldestWaitingSeconds) })
+                      : t("operations.attention.waitingMany", { count: waitingJobs, age: waitLabel(oldestWaitingSeconds) })}
+                  </p>
+                ) : null}
+                {agentQueueUnavailable ? <p className="text-muted-foreground">{t("operations.attention.agentUnavailable")}</p> : null}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
 
-      {loading ? (
-        <LoadingState>{translateNow("source.loading.operations.f0b144434b")}</LoadingState>
-      ) : filteredRows.length === 0 ? (
-        <EmptyState
-          icon={<RefreshCw className="h-5 w-5" aria-hidden="true" />}
-          title={translateNow("source.no.operations.found.7472e6ceb1")}
-          primaryAction={{ label: translateNow("source.review.approvals.51320f88b0"), to: "/approvals", icon: <CheckCircle2 className="h-4 w-4" /> }}
-          secondaryAction={{
-            label: translateNow("source.open.expiring.certificates.45cc9bb64d"),
-            to: "/certificates?expiry=30d",
-            icon: <RefreshCw className="h-4 w-4" />,
-          }}
-        >
-          {translateNow("source.adjust.filters.refresh.the.queue.or.move.t.4a4fa7f45b")}
-        </EmptyState>
-      ) : (
-        <OperationsTable
-          rows={filteredRows}
-          busyKey={busyKey}
-          onApprove={(row) => void approve(row)}
-          onCancel={cancel}
-          onReject={(row) => setRejectTarget(row)}
-        />
-      )}
+        {loading ? (
+          <LoadingState>{translateNow("source.loading.operations.f0b144434b")}</LoadingState>
+        ) : attentionRows.length > 0 ? (
+          <OperationWorkList
+            ariaLabel={t("operations.list.attention")}
+            rows={attentionRows}
+            busyKey={busyKey}
+            firstFailedReviewRef={firstFailedReviewRef}
+            onApprove={(row) => void approve(row)}
+            onOpen={setDetailTarget}
+            onReject={setRejectTarget}
+          />
+        ) : null}
+      </section>
 
-      <RotationRunsSection />
+      <TechnicalDisclosure title={t("operations.disclosure.pools")}>
+        <BulkheadEvidence stats={bulkheads.data} loading={bulkheads.loading} error={bulkheads.error} />
+        <AgentJobLedgerPanel posture={jobPosture.data ?? null} />
+      </TechnicalDisclosure>
+
+      <TechnicalDisclosure title={t("operations.disclosure.all")}>
+        <div className="grid gap-4">
+          <div className="ui-panel grid gap-3 p-comfortable sm:grid-cols-2 lg:grid-cols-[minmax(12rem,16rem)_minmax(12rem,16rem)_1fr_auto]">
+            <label className="grid gap-2 text-sm font-medium">
+              {translateNow("source.status.filter.9bfe8b184f")}
+              <select
+                aria-label={translateNow("source.status.filter.9bfe8b184f")}
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+                className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-focus focus:ring-2 focus:ring-focus/20"
+              >
+                {statusOptions(t("operations.status.queued")).map((option) => (
+                  <option key={option.value || "all"} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-2 text-sm font-medium">
+              {translateNow("source.type.filter.5607113309")}
+              <select
+                aria-label={translateNow("source.type.filter.5607113309")}
+                value={typeFilter}
+                onChange={(event) => setTypeFilter(event.target.value as "" | OperationType)}
+                className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-focus focus:ring-2 focus:ring-focus/20"
+              >
+                {typeOptions.map((option) => (
+                  <option key={option.value || "all"} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="flex items-end text-sm text-muted-foreground">
+              {filteredRows.length} {translateNow("source.rows.bc51e9e65d")}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="sm:col-span-2 lg:col-span-1"
+              onClick={() => {
+                rotations.refetch();
+                deliveries.refetch();
+                approvals.refetch();
+                jobPosture.refetch();
+                bulkheads.refetch();
+              }}
+              disabled={loading}
+            >
+              <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
+              {translateNow("source.refresh.0e91610117")}
+            </Button>
+          </div>
+          {loading ? (
+            <LoadingState>{translateNow("source.loading.operations.f0b144434b")}</LoadingState>
+          ) : filteredRows.length === 0 ? (
+            <p className="rounded-control border border-dashed border-border p-4 text-sm text-muted-foreground">{t("operations.filters.noMatches")}</p>
+          ) : (
+            <OperationWorkList
+              ariaLabel={t("operations.list.all")}
+              rows={filteredRows}
+              busyKey={busyKey}
+              onApprove={(row) => void approve(row)}
+              onOpen={setDetailTarget}
+              onReject={setRejectTarget}
+            />
+          )}
+        </div>
+      </TechnicalDisclosure>
+
+      <TechnicalDisclosure title={t("operations.disclosure.rotations")}>
+        <RotationRunsSection />
+      </TechnicalDisclosure>
 
       {rejectTarget && (
         <RejectDialog
@@ -260,79 +330,237 @@ export function Operations() {
           onSubmit={(reason) => void reject(rejectTarget, reason)}
         />
       )}
+      {detailTarget && <OperationDetailDialog row={detailTarget} onClose={() => setDetailTarget(null)} />}
     </div>
   );
 }
 
-function OperationsTable({
+function OperationWorkList({
+  ariaLabel,
   busyKey,
+  firstFailedReviewRef,
   onApprove,
-  onCancel,
+  onOpen,
   onReject,
   rows,
 }: {
+  ariaLabel: string;
   rows: OperationRow[];
   busyKey: string | null;
+  firstFailedReviewRef?: RefObject<HTMLButtonElement>;
   onApprove: (row: Extract<OperationRow, { type: "approval" }>) => void;
   onReject: (row: Extract<OperationRow, { type: "approval" }>) => void;
-  onCancel: (row: OperationRow) => void;
+  onOpen: (row: OperationRow) => void;
 }) {
-  const columns: DataGridColumn<OperationRow>[] = [
-    { id: "operation", header: "Operation", className: "font-mono text-xs", cell: (row) => row.id },
-    { id: "type", header: "Type", cell: (row) => operationTypeLabel(row.type) },
-    { id: "status", header: "Status", cell: (row) => <StatusBadge value={row.statusKey} label={row.status} tone={statusTone(row.statusKey)} /> },
-    { id: "subject", header: "Subject", className: "max-w-xs break-all", cell: (row) => row.subject },
-    { id: "attempts", header: "Attempts", cell: (row) => row.attempts },
-    { id: "verification", header: "Verification", cell: (row) => <VerificationBadge status={row.verification} /> },
-    { id: "updated", header: "Updated", cell: (row) => formatDateTime(row.updatedAt) },
-    {
-      id: "actions",
-      header: "Actions",
-      cell: (row) => <OperationActions row={row} busy={busyKey === row.id} onApprove={onApprove} onReject={onReject} onCancel={onCancel} />,
-    },
-  ];
-  return <DataGrid ariaLabel="Operations queue" rows={rows} columns={columns} getRowId={(row) => row.id} state="ready" />;
+  const firstFailedIndex = rows.findIndex((row) => isFailureStatus(row.statusKey));
+  return (
+    <ul aria-label={ariaLabel} className="grid gap-3">
+      {rows.map((row, index) => {
+        const label = operationLabel(row);
+        const isFirstFailed = index === firstFailedIndex;
+        return (
+          <li key={row.id} className="rounded-control border border-border bg-background p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="font-semibold text-foreground">{label}</h3>
+                  <StatusBadge value={row.statusKey} label={humanStatus(row)} tone={statusTone(row.statusKey)} />
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">{operationSummary(row)}</p>
+                <p className="mt-1 text-caption text-muted-foreground">{translateNow("operations.list.updated", { date: formatDateTime(row.updatedAt) })}</p>
+              </div>
+              {row.type === "approval" ? (
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" size="sm" variant="outline" disabled={busyKey === row.id} onClick={() => onApprove(row)}>
+                    {translateNow("source.approve.value1.for.value2.f59c2fc633", {
+                      value1: row.approval.action,
+                      value2: row.approval.resource_name || row.approval.resource_id,
+                    })}
+                  </Button>
+                  <Button type="button" size="sm" variant="outline" disabled={busyKey === row.id} onClick={() => onReject(row)}>
+                    {translateNow("source.reject.value1.for.value2.30ca8dca77", {
+                      value1: row.approval.action,
+                      value2: row.approval.resource_name || row.approval.resource_id,
+                    })}
+                  </Button>
+                </div>
+              ) : (
+                <Button ref={isFirstFailed ? firstFailedReviewRef : undefined} type="button" size="sm" variant="outline" onClick={() => onOpen(row)}>
+                  {translateNow("operations.list.review", { label })}
+                </Button>
+              )}
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
 }
 
-function OperationActions({
-  busy,
-  onApprove,
-  onCancel,
-  onReject,
-  row,
-}: {
-  row: OperationRow;
-  busy: boolean;
-  onApprove: (row: Extract<OperationRow, { type: "approval" }>) => void;
-  onReject: (row: Extract<OperationRow, { type: "approval" }>) => void;
-  onCancel: (row: OperationRow) => void;
-}) {
-  if (row.type === "approval") {
-    return (
-      <div className="flex flex-wrap gap-2">
-        <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => onApprove(row)}>
-          {translateNow("source.approve.value1.for.value2.f59c2fc633", {
-            value1: row.approval.action,
-            value2: row.approval.resource_name || row.approval.resource_id,
-          })}
-        </Button>
-        <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => onReject(row)}>
-          {translateNow("source.reject.value1.for.value2.30ca8dca77", {
-            value1: row.approval.action,
-            value2: row.approval.resource_name || row.approval.resource_id,
-          })}
-        </Button>
+function TechnicalDisclosure({ children, title }: { children: ReactNode; title: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <details
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+      className="group rounded-panel border border-border bg-card px-4 py-3 shadow-elevation1"
+    >
+      <summary className="cursor-pointer list-none font-semibold text-foreground marker:hidden">
+        <span aria-hidden="true" className="me-2 inline-block text-muted-foreground transition-transform group-open:rotate-90">
+          ›
+        </span>
+        {title}
+      </summary>
+      {open ? <div className="mt-4 grid gap-4 border-t border-border pt-4">{children}</div> : null}
+    </details>
+  );
+}
+
+function BulkheadEvidence({ error, loading, stats }: { error: string | null; loading: boolean; stats: BulkheadStats | null }) {
+  if (loading) return <LoadingState>{translateNow("operations.bulkheads.loading")}</LoadingState>;
+  if (error) return <ErrorState title={translateNow("operations.bulkheads.unavailable")}>{error}</ErrorState>;
+  if (!stats?.served) return <p className="text-sm text-muted-foreground">{translateNow("operations.bulkheads.notServed")}</p>;
+  if (stats.pools.length === 0) return <p className="text-sm text-muted-foreground">{translateNow("operations.bulkheads.empty")}</p>;
+
+  return (
+    <section aria-labelledby="worker-pools-heading" className="grid gap-3">
+      <div>
+        <h3 id="worker-pools-heading" className="font-semibold">
+          {translateNow("operations.bulkheads.heading")}
+        </h3>
+        <p className="mt-1 text-sm text-muted-foreground">{translateNow("operations.bulkheads.description")}</p>
       </div>
-    );
+      <ul className="grid gap-3 sm:grid-cols-2">
+        {stats.pools.map((pool) => (
+          <li key={pool.name} className="rounded-control border border-border bg-background p-4">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <h4 className="break-all font-mono text-sm font-semibold">{pool.name}</h4>
+              <StatusBadge
+                value={pool.rejected > 0 || pool.panicked > 0 ? "failed" : pool.saturation_percent >= 80 ? "queued" : "succeeded"}
+                label={translateNow("operations.bulkheads.full", { percent: pool.saturation_percent })}
+                tone={pool.rejected > 0 || pool.panicked > 0 ? "critical" : pool.saturation_percent >= 80 ? "warning" : "success"}
+              />
+            </div>
+            <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <dt className="text-caption text-muted-foreground">{translateNow("operations.bulkheads.workers")}</dt>
+                <dd className="font-medium">{pool.workers}</dd>
+              </div>
+              <div>
+                <dt className="text-caption text-muted-foreground">{translateNow("operations.bulkheads.waiting")}</dt>
+                <dd className="font-medium">{pool.queued}</dd>
+              </div>
+              <div>
+                <dt className="text-caption text-muted-foreground">{translateNow("operations.bulkheads.boundary")}</dt>
+                <dd className="font-medium">{translateNow("operations.bulkheads.boundaryValue", { count: pool.capacity })}</dd>
+              </div>
+              <div>
+                <dt className="text-caption text-muted-foreground">{translateNow("operations.bulkheads.rejectedPanicked")}</dt>
+                <dd className="font-medium">
+                  {pool.rejected} / {pool.panicked}
+                </dd>
+              </div>
+            </dl>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function OperationDetailDialog({ onClose, row }: { onClose: () => void; row: OperationRow }) {
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const label = operationLabel(row);
+  const title = translateNow(isFailureStatus(row.statusKey) ? "operations.detail.failedTitle" : "operations.detail.title", { label });
+  const titleId = "operation-detail-heading";
+  const descriptionId = "operation-detail-description";
+  const fields = operationDetailFields(row);
+
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      titleId={titleId}
+      descriptionId={descriptionId}
+      initialFocusRef={closeRef}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      overlayClassName="absolute inset-0 bg-black/55"
+      panelClassName="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-panel border border-border bg-card shadow-elevation2"
+    >
+      <header className="border-b border-border px-5 py-4">
+        <h2 id={titleId} className="text-title font-semibold">
+          {title}
+        </h2>
+        <p id={descriptionId} className="mt-1 text-sm text-muted-foreground">
+          {translateNow("operations.detail.description")}
+        </p>
+      </header>
+      <div className="grid gap-4 p-5">
+        <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
+          {fields.map((field) => (
+            <div key={field.label} className={field.wide ? "sm:col-span-2" : undefined}>
+              <dt className="text-caption font-medium text-muted-foreground">{field.label}</dt>
+              <dd className={field.technical ? "mt-1 break-all font-mono text-xs" : "mt-1 break-words"}>{field.value}</dd>
+            </div>
+          ))}
+        </dl>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+          <Link to={`/audit?q=${encodeURIComponent(row.id)}`} className="inline-flex items-center gap-2 text-sm font-medium text-link hover:underline">
+            {translateNow("operations.detail.eventLog")}
+            <ExternalLink className="h-4 w-4" aria-hidden="true" />
+          </Link>
+          <Button ref={closeRef} type="button" variant="outline" onClick={onClose}>
+            {translateNow("operations.detail.close")}
+          </Button>
+        </div>
+      </div>
+    </Dialog>
+  );
+}
+
+function operationDetailFields(row: OperationRow): Array<{ label: string; value: ReactNode; technical?: boolean; wide?: boolean }> {
+  const common = [
+    { label: translateNow("operations.detail.jobId"), value: row.id, technical: true },
+    { label: translateNow("operations.detail.status"), value: humanStatus(row) },
+    { label: translateNow("operations.detail.updated"), value: formatDateTime(row.updatedAt) },
+  ];
+  if (row.type === "deployment") {
+    return [
+      ...common,
+      { label: translateNow("operations.detail.attempts"), value: String(row.delivery.attempts) },
+      { label: translateNow("operations.detail.connector"), value: row.delivery.connector, technical: true },
+      { label: translateNow("operations.detail.destination"), value: row.delivery.destination, technical: true },
+      { label: translateNow("operations.detail.target"), value: row.delivery.target, technical: true },
+      ...(row.delivery.reason ? [{ label: translateNow("operations.detail.failureReason"), value: row.delivery.reason, wide: true }] : []),
+      ...(row.delivery.detail ? [{ label: translateNow("operations.detail.outcome"), value: row.delivery.detail, wide: true }] : []),
+      ...(row.delivery.idempotency_key ? [{ label: translateNow("operations.detail.idempotency"), value: row.delivery.idempotency_key, technical: true }] : []),
+      ...(row.delivery.outbox_id !== undefined
+        ? [{ label: translateNow("operations.detail.outbox"), value: String(row.delivery.outbox_id), technical: true }]
+        : []),
+      ...(row.delivery.rollback_ref ? [{ label: translateNow("operations.detail.rollback"), value: row.delivery.rollback_ref, technical: true }] : []),
+    ];
   }
-  if (row.statusKey === "running" || row.statusKey === "queued") {
-    return (
-      <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => onCancel(row)}>
-        {translateNow("source.cancel.value1.64342fbae8", { value1: row.id })}
-      </Button>
-    );
+  if (row.type === "rotation") {
+    return [
+      ...common,
+      { label: translateNow("operations.detail.identityId"), value: row.rotation.identity_id, technical: true },
+      { label: translateNow("operations.detail.trigger"), value: row.rotation.trigger },
+      ...(row.rotation.reason ? [{ label: translateNow("operations.detail.reason"), value: row.rotation.reason, wide: true }] : []),
+      ...(row.rotation.error ? [{ label: translateNow("operations.detail.failure"), value: row.rotation.error, wide: true }] : []),
+      ...(row.rotation.idempotency_key ? [{ label: translateNow("operations.detail.idempotency"), value: row.rotation.idempotency_key, technical: true }] : []),
+      ...(row.rotation.outbox_id !== undefined
+        ? [{ label: translateNow("operations.detail.outbox"), value: String(row.rotation.outbox_id), technical: true }]
+        : []),
+      ...(row.rotation.rollback_ref ? [{ label: translateNow("operations.detail.rollback"), value: row.rotation.rollback_ref, technical: true }] : []),
+    ];
   }
-  return <span className="text-sm text-muted-foreground">-</span>;
+  return [
+    ...common,
+    { label: translateNow("operations.detail.requestId"), value: row.approval.id, technical: true },
+    { label: translateNow("operations.detail.intentDigest"), value: row.approval.intent_digest, technical: true, wide: true },
+    { label: translateNow("operations.detail.action"), value: row.approval.action },
+    { label: translateNow("operations.detail.resource"), value: row.approval.resource_name || row.approval.resource_id },
+  ];
 }
 
 function RejectDialog({
@@ -425,13 +653,6 @@ function OperationNotice({ notice, onDismiss }: { notice: Notice; onDismiss: () 
   );
 }
 
-function VerificationBadge({ status }: { status: OperationRow["verification"] }) {
-  if (status === "verified") return <StatusBadge value="delivered" vocabulary="delivery" label="Verified" />;
-  if (status === "failed") return <StatusBadge value="failed" vocabulary="delivery" label="Failed" />;
-  if (status === "pending") return <StatusBadge value="pending" vocabulary="delivery" label="Pending" />;
-  return <span className="text-sm text-muted-foreground">-</span>;
-}
-
 function rotationOperationRow(rotation: RotationRun): OperationRow {
   return {
     id: rotation.id,
@@ -474,23 +695,84 @@ function approvalOperationRow(approval: ApprovalQueueRow): OperationRow {
   };
 }
 
-function operationTypeLabel(type: OperationType): string {
-  switch (type) {
-    case "approval":
-      return "Approval";
-    case "deployment":
-      return "Deployment";
-    case "rotation":
-      return "Rotation";
+function operationLabel(row: OperationRow): string {
+  if (row.type === "rotation") return translateNow("operations.label.rotation");
+  if (row.type === "approval") {
+    return translateNow("operations.label.approval", {
+      action: humanizeIdentifier(row.approval.action),
+      resource: row.approval.resource_name || row.approval.resource_id,
+    });
   }
+  const destination = row.delivery.destination.split("/").filter(Boolean).at(-1) || row.delivery.target || row.delivery.connector;
+  return translateNow("operations.label.deployment", { destination: humanizeIdentifier(destination) });
+}
+
+function operationSummary(row: OperationRow): string {
+  if (row.type === "deployment") {
+    if (isFailureStatus(row.statusKey)) {
+      return row.delivery.attempts === 1
+        ? translateNow("operations.summary.deploymentFailedOne")
+        : translateNow("operations.summary.deploymentFailedMany", { count: row.delivery.attempts });
+    }
+    if (row.statusKey === "queued") return translateNow("operations.summary.deploymentQueued");
+    if (row.statusKey === "delivered" || row.statusKey === "verified") return translateNow("operations.summary.deploymentCompleted");
+    return translateNow("operations.summary.deploymentRunning");
+  }
+  if (row.type === "rotation") {
+    if (row.statusKey === "failed") return translateNow("operations.summary.rotationFailed");
+    if (row.statusKey === "running") return translateNow("operations.summary.rotationRunning");
+    return translateNow("operations.summary.rotationCompleted");
+  }
+  return translateNow("operations.summary.approval", {
+    count: row.approval.approval_count,
+    required: row.approval.required_approvals,
+  });
+}
+
+function humanStatus(row: OperationRow): string {
+  if (row.statusKey === "awaiting_approval") return translateNow("operations.status.awaitingApproval");
+  if (row.statusKey === "verify_failed") return translateNow("operations.status.verificationFailed");
+  if (row.statusKey === "delivered") return translateNow("operations.status.delivered");
+  if (row.statusKey === "succeeded") return translateNow("operations.status.completed");
+  return humanizeIdentifier(row.statusKey);
+}
+
+function humanizeIdentifier(value: string): string {
+  return value
+    .replace(/[._/-]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .map((part) => {
+      const lower = part.toLowerCase();
+      if (lower === "api") return "API";
+      if (lower === "github") return "GitHub";
+      if (lower === "ssh") return "SSH";
+      if (lower === "spiffe") return "SPIFFE";
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join(" ");
+}
+
+function waitLabel(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+  return `${Math.floor(seconds / 3600)}h`;
 }
 
 function statusTone(status: string) {
   if (status === "succeeded" || status === "delivered") return "success";
-  if (status === "failed") return "critical";
-  if (status === "awaiting_approval" || status === "queued") return "warning";
+  if (isFailureStatus(status)) return "critical";
   if (status === "running") return "operate";
+  if (status === "awaiting_approval" || isActiveStatus(status)) return "warning";
   return "neutral";
+}
+
+function isFailureStatus(status: string): boolean {
+  return ["failed", "verify_failed", "rollback_refused", "rollback_failed", "dry_run_blocked"].includes(status);
+}
+
+function isActiveStatus(status: string): boolean {
+  return ["queued", "running", "rollback_queued", "dry_run_queued"].includes(status);
 }
 
 function RotationRunsSection() {

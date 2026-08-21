@@ -12,8 +12,8 @@
   "security_finding_links": {
     "SEC-f19bdd00": "Go 1.26.6 closes the eight reachable standard-library advisories reported against Go 1.26.5, and golang.org/x/text v0.39.0 closed the earlier module advisory; make vuln must report zero called vulnerabilities.",
     "SEC-de4eb072": "google.golang.org/grpc v1.82.1 closes reachable GO-2026-6061 transport and authorization paths; the whole-module vulnerability advisory and served gRPC transport tests verify the repair.",
-    "SEC-5b43d4b3": "react-router-dom 7.18.1 is the latest published compatible release, but no published release closes every current router advisory; the exception remains needs_human.",
-    "S-7268c77e": "The compatible build-chain repairs are Vite 8.1.5, Vitest and coverage-v8 4.1.10, and PostCSS 8.5.23; remaining high advisories require unpublished or peer-incompatible releases and remain needs_human."
+    "SEC-5b43d4b3": "react-router and react-router-dom 7.18.2 close GHSA-qwww-vcr4-c8h2 on the compatible React 18 line; the package floor and lockfile both resolve the patched pair.",
+    "S-7268c77e": "The compatible build-chain repairs are Vite 8.1.5, Vitest and coverage-v8 4.1.10, PostCSS 8.5.23, and patched brace-expansion 1.1.18/5.0.9 throughout the lockfile; the complete web audit reports zero vulnerabilities."
   },
   "freshness_slos": [
     {
@@ -158,15 +158,15 @@
       "ecosystem": "npm",
       "name": "react-router-dom",
       "current_version": "7.18.2",
-      "latest_observed_version": "7.18.1",
+      "latest_observed_version": "7.18.2",
       "update_type": "security",
       "freshness_slo_class": "web-runtime",
       "owner": "Web/Console",
-      "status": "needs_human",
-      "behind_since": "2026-06-21",
-      "next_review_by": "2026-08-20",
+      "status": "current",
+      "behind_since": "",
+      "next_review_by": "2026-08-26",
       "deferral_until": "",
-      "rationale": "SEC-5b43d4b3: upgraded to the latest published compatible release and kept all route tests green, but that release has a newer advisory and the named fully patched release is not published; do not suppress npm audit. AUD-15 moved next_review_by from 2026-08-26 to 2026-08-20: the 60-day web-runtime budget expires that day, and a review booked after it would have let this row go red with nobody scheduled to look."
+      "rationale": "SEC-5b43d4b3: GitHub's GHSA-qwww-vcr4-c8h2 now names 7.18.2 as the patched 7.x release. The package floor and lockfile install react-router-dom and react-router 7.18.2, and the complete route, typecheck, lint, build, embedded-console, and live-browser gates verify the compatible repair."
     },
     {
       "ecosystem": "npm",

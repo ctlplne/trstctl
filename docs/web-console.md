@@ -393,17 +393,31 @@ can be revoked immediately. The response panel shows real status/content type,
 including RFC 7807 problem details. Backed by `GET /api/v1/openapi.json`,
 `POST /api/v1/access/api-tokens`, and `DELETE /api/v1/access/api-tokens/{id}`.
 
-### Operations queue and notifications (`/operations`, `/notifications`)
+### Jobs and queues, and notifications (`/operations`, `/notifications`)
 
-The operations queue shows issuance, renewal, deployment, and approval work with
-type/status filters, attempts, verification badges, cancel controls for
-pending/running work, and inline approve/reject for dual-control items. Approval rows
-are loaded through every cursor page instead of stopping at the first 100. Each row is
-visible only when the reviewer has the matching real authority: `certs:issue` for
-certificate actions, `secrets:write` for secret actions, or `keys:approve` for
-managed-key actions. Reject records an immutable denial of that exact request and
-does not retire, revoke, delete, or otherwise mutate the target resource. The
-Notifications inbox lists all notification rows and dead letters, filters by
+Jobs and queues answers two questions first: whether background work is moving and
+which failed job needs a person. The default view shows only failed, waiting,
+running, or approval-blocked work as responsive cards; raw UUIDs and internal outbox
+destinations do not crowd the decision path. `Review failed job` moves keyboard
+focus to the first failure. Opening that job reveals its exact ID, attempt count,
+served failure reason, connector destination, idempotency key, outbox payload ID,
+rollback reference, and a link to the matching immutable event log.
+
+Three closed evidence sections keep the page calm without hiding proof. **Worker
+pools and queue limits** explains each bounded pool's worker count, current depth,
+capacity, saturation, rejections, and panics, then exposes the agent claim ledger,
+signed receipts, and live credential-redemption custody. **All jobs and filters**
+contains completed work plus type/status filters. **Rotation run records** contains
+the exact lifecycle history. The UI does not offer a generic cancel button because
+there is no served cancel operation; stopping or rolling back work stays with the
+owning workflow rather than pretending a button succeeded.
+
+Approval work is loaded through every cursor page instead of stopping at the first
+100. Each approval is visible only when the reviewer has the matching real authority:
+`certs:issue` for certificate actions, `secrets:write` for secret actions, or
+`keys:approve` for managed-key actions. Reject records an immutable denial of that
+exact request and does not retire, revoke, delete, or otherwise mutate the target
+resource. The Notifications inbox lists all notification rows and dead letters, filters by
 type/status, marks unread rows read, requeues failed delivery, and shows the
 configured channel families from `GET /api/v1/notification-channels` (email, Slack,
 Teams, SMS, SIEM, and more). The page also creates tenant notification channels with

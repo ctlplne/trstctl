@@ -797,8 +797,15 @@ describe("i18n boundary", () => {
       // "served" with the plain Queue-loaded evidence state in every locale.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
       // release.
-      "es-ES": "8a21242e405e92201c86470088557b7c442d9439c8f3bfaad85acc498373e21d",
-      "de-DE": "106cd096d3c25eb16a3636d7ba05eb3268e47562bafaca09127548e0a4fba2bc",
+      // QA design g20 Jobs-and-queues re-pin: the route now leads with failed
+      // and waiting work, one translated review action, responsive job cards,
+      // and three named evidence disclosures. Exact attempts, queue limits,
+      // payload IDs, failure reasons, rollback references, and event-log links
+      // stay available without exposing raw identifiers in the decision path.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
+      // release.
+      "es-ES": "da02668cf08d3794632e4f2a9b485c37dc8ee2a58b127230589cf76e18f3c9ea",
+      "de-DE": "434ba97bfd3c09b96a1ec5fcd1b7b94240af90ec52b0d07ce3a6e092fd65a107",
     });
   });
 

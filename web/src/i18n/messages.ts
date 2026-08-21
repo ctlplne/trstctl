@@ -2155,6 +2155,219 @@ export const messages = {
     defaultMessage: "Queued",
     description: "Operations-page status filter for queued work.",
   },
+  "operations.page.title": {
+    defaultMessage: "Jobs and queues",
+    description: "Decision-first title for the background-work health page.",
+  },
+  "operations.page.answer": {
+    defaultMessage: "Whether background work is healthy and what failed.",
+    description: "Plain-language answer at the top of the jobs and queues page.",
+  },
+  "operations.page.details": {
+    defaultMessage:
+      "Worker pools, queue limits, attempts, payload IDs, and logs remain available through the named evidence sections and exact event-log links below.",
+    description: "Technical-evidence summary for the jobs and queues page.",
+  },
+  "operations.page.reviewFailed": {
+    defaultMessage: "Review failed job",
+    description: "Primary action that moves focus to the first failed job.",
+  },
+  "operations.attention.heading": {
+    defaultMessage: "Needs attention",
+    description: "Heading for failed or waiting background work.",
+  },
+  "operations.attention.checking": {
+    defaultMessage: "Checking recent jobs…",
+    description: "Honest loading state while recent work is being read.",
+  },
+  "operations.attention.empty": {
+    defaultMessage: "No failed or waiting jobs.",
+    description: "Healthy state after both recent jobs and agent queues have been checked.",
+  },
+  "operations.attention.emptyDetail": {
+    defaultMessage: "Completed work and exact evidence are still available below.",
+    description: "Explains where historical proof remains when no job needs attention.",
+  },
+  "operations.attention.failedOne": {
+    defaultMessage: "1 failed job needs review.",
+    description: "Singular failed-job summary.",
+  },
+  "operations.attention.failedMany": {
+    defaultMessage: "{count} failed jobs need review.",
+    description: "Plural failed-job summary.",
+  },
+  "operations.attention.waitingOne": {
+    defaultMessage: "1 job is waiting; the oldest has waited {age}.",
+    description: "Singular waiting-agent-job summary with oldest age.",
+  },
+  "operations.attention.waitingMany": {
+    defaultMessage: "{count} jobs are waiting; the oldest has waited {age}.",
+    description: "Plural waiting-agent-job summary with oldest age.",
+  },
+  "operations.attention.agentUnavailable": {
+    defaultMessage: "Agent queue status is unavailable; recent control-plane jobs are still shown.",
+    description: "Partial-evidence warning when agent queue health cannot be read.",
+  },
+  "operations.disclosure.pools": {
+    defaultMessage: "Worker pools and queue limits",
+    description: "Disclosure containing bounded-worker and agent-ledger evidence.",
+  },
+  "operations.disclosure.all": {
+    defaultMessage: "All jobs and filters",
+    description: "Disclosure containing completed work and filters.",
+  },
+  "operations.disclosure.rotations": {
+    defaultMessage: "Rotation run records",
+    description: "Disclosure containing exact lifecycle rotation records.",
+  },
+  "operations.filters.noMatches": {
+    defaultMessage: "No jobs match these filters.",
+    description: "Empty result after job filters are applied.",
+  },
+  "operations.list.attention": {
+    defaultMessage: "Jobs needing attention",
+    description: "Accessible label for the responsive urgent-work list.",
+  },
+  "operations.list.all": {
+    defaultMessage: "All jobs",
+    description: "Accessible label for the responsive complete-work list.",
+  },
+  "operations.list.updated": {
+    defaultMessage: "Updated {date}",
+    description: "Human-readable last-update line on a job card.",
+  },
+  "operations.list.review": {
+    defaultMessage: "Review {label}",
+    description: "Opens exact evidence for one background job.",
+  },
+  "operations.bulkheads.loading": {
+    defaultMessage: "Checking worker limits…",
+    description: "Loading state for bounded worker pools.",
+  },
+  "operations.bulkheads.unavailable": {
+    defaultMessage: "Worker limits unavailable",
+    description: "Error heading when worker pool statistics cannot be read.",
+  },
+  "operations.bulkheads.notServed": {
+    defaultMessage: "This instance is not serving worker-pool statistics.",
+    description: "Explicit state when the pool-statistics route is not mounted.",
+  },
+  "operations.bulkheads.empty": {
+    defaultMessage: "No worker pools are mounted on this instance.",
+    description: "Explicit state when pool statistics are served but empty.",
+  },
+  "operations.bulkheads.heading": {
+    defaultMessage: "Worker safety limits",
+    description: "Heading for bounded worker-pool evidence.",
+  },
+  "operations.bulkheads.description": {
+    defaultMessage: "Each pool has its own workers and bounded queue, so one slow integration cannot consume every worker.",
+    description: "ELI5 explanation of bulkheads and backpressure.",
+  },
+  "operations.bulkheads.full": {
+    defaultMessage: "{percent}% full",
+    description: "Current queue saturation for a worker pool.",
+  },
+  "operations.bulkheads.workers": {
+    defaultMessage: "Workers",
+    description: "Count of workers assigned to a pool.",
+  },
+  "operations.bulkheads.waiting": {
+    defaultMessage: "Waiting now",
+    description: "Current queued work in a worker pool.",
+  },
+  "operations.bulkheads.boundary": {
+    defaultMessage: "Queue boundary",
+    description: "The maximum bounded queue depth.",
+  },
+  "operations.bulkheads.boundaryValue": {
+    defaultMessage: "{count} queued-job limit",
+    description: "Exact maximum bounded queue depth.",
+  },
+  "operations.bulkheads.rejectedPanicked": {
+    defaultMessage: "Rejected / panicked",
+    description: "Cumulative safety failures for a worker pool.",
+  },
+  "operations.detail.failedTitle": {
+    defaultMessage: "Failed job: {label}",
+    description: "Dialog title for a failed background job.",
+  },
+  "operations.detail.title": {
+    defaultMessage: "Job: {label}",
+    description: "Dialog title for a non-failed background job.",
+  },
+  "operations.detail.description": {
+    defaultMessage: "Exact identifiers and outcome evidence for this background job.",
+    description: "Dialog description for exact job evidence.",
+  },
+  "operations.detail.eventLog": {
+    defaultMessage: "View exact event log",
+    description: "Link from one job to its immutable audit events.",
+  },
+  "operations.detail.close": {
+    defaultMessage: "Close",
+    description: "Closes the job evidence dialog.",
+  },
+  "operations.detail.jobId": { defaultMessage: "Job ID", description: "Exact background-job identifier." },
+  "operations.detail.status": { defaultMessage: "Status", description: "Background-job status." },
+  "operations.detail.updated": { defaultMessage: "Updated", description: "Background-job last update time." },
+  "operations.detail.attempts": { defaultMessage: "Attempts", description: "Number of job attempts." },
+  "operations.detail.connector": { defaultMessage: "Connector", description: "Connector implementation identifier." },
+  "operations.detail.destination": { defaultMessage: "Destination", description: "Exact outbox destination." },
+  "operations.detail.target": { defaultMessage: "Target", description: "Exact connector target." },
+  "operations.detail.failureReason": { defaultMessage: "Failure reason", description: "Served machine failure reason." },
+  "operations.detail.outcome": { defaultMessage: "Outcome detail", description: "Served job outcome detail." },
+  "operations.detail.idempotency": { defaultMessage: "Idempotency key", description: "Exact mutation replay key." },
+  "operations.detail.outbox": { defaultMessage: "Outbox payload ID", description: "Exact durable external-call payload identifier." },
+  "operations.detail.rollback": { defaultMessage: "Rollback reference", description: "Exact recovery reference." },
+  "operations.detail.identityId": { defaultMessage: "Identity ID", description: "Exact rotated identity identifier." },
+  "operations.detail.trigger": { defaultMessage: "Trigger", description: "Reason the rotation workflow started." },
+  "operations.detail.reason": { defaultMessage: "Reason", description: "Served rotation reason." },
+  "operations.detail.failure": { defaultMessage: "Failure detail", description: "Served rotation failure detail." },
+  "operations.detail.requestId": { defaultMessage: "Request ID", description: "Exact approval request identifier." },
+  "operations.detail.intentDigest": { defaultMessage: "Intent digest", description: "Immutable digest bound to the approval decision." },
+  "operations.detail.action": { defaultMessage: "Requested action", description: "Action awaiting approval." },
+  "operations.detail.resource": { defaultMessage: "Resource", description: "Resource named by an approval request." },
+  "operations.label.rotation": {
+    defaultMessage: "Rotate an identity",
+    description: "Plain-language label for a credential rotation job.",
+  },
+  "operations.label.approval": {
+    defaultMessage: "Approve {action} for {resource}",
+    description: "Plain-language label for a pending approval.",
+  },
+  "operations.label.deployment": {
+    defaultMessage: "Deploy to {destination}",
+    description: "Plain-language label for a connector deployment.",
+  },
+  "operations.summary.deploymentFailedOne": {
+    defaultMessage: "Deployment failed after 1 attempt.",
+    description: "Singular failed deployment summary.",
+  },
+  "operations.summary.deploymentFailedMany": {
+    defaultMessage: "Deployment failed after {count} attempts.",
+    description: "Plural failed deployment summary.",
+  },
+  "operations.summary.deploymentQueued": { defaultMessage: "Deployment is waiting for a worker.", description: "Queued deployment summary." },
+  "operations.summary.deploymentCompleted": {
+    defaultMessage: "Deployment completed and produced delivery evidence.",
+    description: "Completed deployment summary.",
+  },
+  "operations.summary.deploymentRunning": { defaultMessage: "Deployment work is in progress.", description: "Running deployment summary." },
+  "operations.summary.rotationFailed": {
+    defaultMessage: "Credential rotation failed and needs review.",
+    description: "Failed rotation summary.",
+  },
+  "operations.summary.rotationRunning": { defaultMessage: "Credential rotation is in progress.", description: "Running rotation summary." },
+  "operations.summary.rotationCompleted": { defaultMessage: "Credential rotation completed.", description: "Completed rotation summary." },
+  "operations.summary.approval": {
+    defaultMessage: "{count} of {required} required approvals recorded.",
+    description: "Pending approval progress summary.",
+  },
+  "operations.status.awaitingApproval": { defaultMessage: "Awaiting approval", description: "Human status for a pending approval." },
+  "operations.status.verificationFailed": { defaultMessage: "Verification failed", description: "Human status for failed delivery verification." },
+  "operations.status.delivered": { defaultMessage: "Delivered", description: "Human status for delivered work." },
+  "operations.status.completed": { defaultMessage: "Completed", description: "Human status for succeeded work." },
   "certificates.ingest.pem.label": {
     defaultMessage: "Paste the certificate",
     description: "Add-certificate wizard step 1 title.",
@@ -5155,7 +5368,7 @@ export const messages = {
     description: "Contextual navigation item for the runnable API explorer.",
   },
   "nav.item.operations": {
-    defaultMessage: "Operations",
+    defaultMessage: "Jobs and queues",
     description: "Primary navigation item.",
   },
   "nav.item.notifications": {

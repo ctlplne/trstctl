@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestSecurityExceptionRegisterKeepsAcceptedDebtVisible(t *testing.T) {
+func TestSecurityExceptionRegisterRecordsClosedDebtAndKeepsGatesVisible(t *testing.T) {
 	t.Parallel()
 
 	register, err := os.ReadFile("security-exceptions.md")
@@ -23,16 +23,21 @@ func TestSecurityExceptionRegisterKeepsAcceptedDebtVisible(t *testing.T) {
 		"SEC-5b43d4b3",
 		"S-7268c77e",
 		"Accepted:",
-		"Review by:",
-		"Package and version:",
-		"Why no compatible patch exists:",
-		"Why the vulnerable path is unreachable:",
-		"What we are waiting for:",
-		"Gate remains reporting:",
+		"Closed:",
+		"Resolved version",
+		"Why it is closed:",
+		"Verification:",
 		"audit-harness/harness.sh reopen <card>",
 	} {
 		if !strings.Contains(text, required) {
 			t.Errorf("security exception register does not contain %q", required)
+		}
+	}
+
+	openSection := strings.SplitN(text, "## Closed exceptions", 2)[0]
+	for _, closedAdvisory := range []string{"GHSA-qwww-vcr4-c8h2", "GHSA-mh99-v99m-4gvg"} {
+		if strings.Contains(openSection, "### "+closedAdvisory) {
+			t.Errorf("remediated advisory %q is still listed as an open exception", closedAdvisory)
 		}
 	}
 
@@ -103,7 +108,7 @@ func TestSDKGeneratorAdvisoriesStayRemediated(t *testing.T) {
 	}
 }
 
-func TestReactRouterExceptionNamesPublishedButIncompatiblePatch(t *testing.T) {
+func TestReactRouterExceptionRecordsCompatiblePatchedPair(t *testing.T) {
 	t.Parallel()
 
 	register, err := os.ReadFile("security-exceptions.md")
@@ -113,20 +118,46 @@ func TestReactRouterExceptionNamesPublishedButIncompatiblePatch(t *testing.T) {
 	text := string(register)
 	normalized := strings.Join(strings.Fields(text), " ")
 	for _, required := range []string{
-		"react-router@8.3.0`, is published",
-		"React and React DOM `>=19.2.7`",
-		"Node `>=22.22.0`",
-		"react-router-dom`, `7.18.2`",
-		"react-router@7.18.2",
-		"lockfile currently installs both packages at",
-		"compatible `react-router-dom` release",
-		"Publication of the standalone router alone is not that event",
+		"GHSA-qwww-vcr4-c8h2 — React Router RSC action handling",
+		"Closed:** 2026-08-20",
+		"react-router@7.18.2` through `react-router-dom@7.18.2",
+		"names `7.18.2` as the patched 7.x release",
+		"direct package floor and lockfile both resolve `react-router-dom` and its `react-router` dependency to `7.18.2`",
+		"does not add an ignore or suppress a future router finding",
 	} {
 		if !strings.Contains(normalized, required) {
-			t.Errorf("React Router exception does not contain current compatibility fact %q", required)
+			t.Errorf("closed React Router exception does not contain remediation fact %q", required)
 		}
 	}
-	if strings.Contains(normalized, "8.3.0` as the first patched release, but that version is not published") {
-		t.Error("React Router exception still calls the published 8.3.0 patch unavailable")
+	for _, stale := range []string{
+		"Why no compatible patch exists:",
+		"Why the vulnerable path is unreachable:",
+		"Publication of the standalone router alone is not that event",
+	} {
+		if strings.Contains(normalized, stale) {
+			t.Errorf("closed React Router exception retains obsolete acceptance rationale %q", stale)
+		}
+	}
+
+	type lockedPackage struct {
+		Version string `json:"version"`
+	}
+	var lock struct {
+		Packages map[string]lockedPackage `json:"packages"`
+	}
+	contents, err := os.ReadFile("../web/package-lock.json")
+	if err != nil {
+		t.Fatalf("read web lockfile: %v", err)
+	}
+	if err := json.Unmarshal(contents, &lock); err != nil {
+		t.Fatalf("decode web lockfile: %v", err)
+	}
+	for path, want := range map[string]string{
+		"node_modules/react-router":     "7.18.2",
+		"node_modules/react-router-dom": "7.18.2",
+	} {
+		if got := lock.Packages[path].Version; got != want {
+			t.Errorf("%s version = %q, want remediated %q", path, got, want)
+		}
 	}
 }

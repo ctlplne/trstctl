@@ -33,23 +33,24 @@ function waitLabel(seconds: number | undefined): string {
   return `${Math.floor(seconds / 3600)}h`;
 }
 
-export function AgentJobLedgerPanel() {
+export function AgentJobLedgerPanel({ posture: providedPosture }: { posture?: AgentJobPosture | null }) {
   const { t } = useTranslation();
   const canRead = useCan("access:read");
   const [read, setRead] = useState<LedgerRead | null>(null);
+  const readsOwnPosture = providedPosture === undefined;
 
   const refresh = useCallback(() => {
-    if (!canRead) return Promise.resolve();
+    if (!canRead || !readsOwnPosture) return Promise.resolve();
     return readPosture()
       .then(setRead)
       .catch(() => setRead({ kind: "unavailable" }));
-  }, [canRead]);
+  }, [canRead, readsOwnPosture]);
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
   if (!canRead) return null;
-  const posture = read?.kind === "ready" ? read.posture : null;
+  const posture = readsOwnPosture ? (read?.kind === "ready" ? read.posture : null) : providedPosture;
   // Read the arrays defensively. The served response always carries them, but a
   // missing field must not take the whole Operations page down — the panel is a
   // health readout, and a health readout that crashes the page it reports on is
@@ -71,7 +72,7 @@ export function AgentJobLedgerPanel() {
         <p className="mt-1 text-sm text-muted-foreground">{t("operations.jobs.description")}</p>
       </div>
 
-      {read?.kind === "unavailable" || (posture && !posture.served) ? (
+      {(readsOwnPosture && read?.kind === "unavailable") || (posture && !posture.served) ? (
         <p className="text-sm text-muted-foreground">{t("operations.jobs.notServed")}</p>
       ) : posture && kinds.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t("operations.jobs.noneEnabled")}</p>

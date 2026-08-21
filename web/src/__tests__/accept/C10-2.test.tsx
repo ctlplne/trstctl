@@ -12,6 +12,8 @@ const { apiMock } = vi.hoisted(() => ({
     approvalRequests: vi.fn(),
     approveApprovalRequest: vi.fn(),
     denyApprovalRequest: vi.fn(),
+    agentJobPosture: vi.fn(),
+    bulkheadStats: vi.fn(),
     transitionIdentity: vi.fn(),
   },
 }));
@@ -111,31 +113,36 @@ describe("C10-2 operations queue", () => {
       status: "retired",
       owner_id: "owner-1",
     });
+    apiMock.agentJobPosture.mockResolvedValue({ served: true, generated_at: "2026-06-26T10:05:00Z", claimable_kinds: [], queues: [] });
+    apiMock.bulkheadStats.mockResolvedValue({ served: true, pools: [] });
   });
 
   it("renders operations, filters them, records approval decisions, and fails closed for missing cancel support", async () => {
     const user = userEvent.setup();
     renderOperations();
 
-    expect(await screen.findByRole("heading", { name: "Operations queue" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Jobs and queues" })).toBeInTheDocument();
     await waitFor(() => expect(apiMock.rotationRuns).toHaveBeenCalledWith({ limit: 50 }));
     expect(apiMock.connectorDeliveries).toHaveBeenCalledWith({ limit: 50 });
     expect(apiMock.approvalRequests).toHaveBeenCalled();
 
+    const attention = screen.getByRole("list", { name: "Jobs needing attention" });
+    const rotationRow = within(attention).getByText("Rotate an identity").closest("li")!;
+    expect(within(rotationRow).getByText("Running")).toBeInTheDocument();
+    expect(screen.queryByText("rot-1")).not.toBeInTheDocument();
+    await user.click(within(rotationRow).getByRole("button", { name: "Review Rotate an identity" }));
+    const rotationDialog = await screen.findByRole("dialog", { name: "Job: Rotate an identity" });
+    expect(within(rotationDialog).getByText("rot-1")).toBeInTheDocument();
+    expect(within(rotationDialog).queryByRole("button", { name: /cancel/i })).not.toBeInTheDocument();
+    await user.click(within(rotationDialog).getByRole("button", { name: "Close" }));
+
+    await user.click(screen.getByText("All jobs and filters"));
     expect(screen.getByRole("combobox", { name: "Status filter" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Type filter" })).toBeInTheDocument();
+    const allJobs = screen.getByRole("list", { name: "All jobs" });
+    expect(within(allJobs).getByText("Deploy to Prod")).toBeInTheDocument();
 
-    const rotationRow = screen.getByText("rot-1").closest("tr")!;
-    expect(within(rotationRow).getByText("Rotation")).toBeInTheDocument();
-    expect(within(rotationRow).getByText("running")).toBeInTheDocument();
-    expect(within(rotationRow).getByText("1 / n/a")).toBeInTheDocument();
-
-    const deploymentRow = screen.getByText("dep-1").closest("tr")!;
-    expect(within(deploymentRow).getByText("Deployment")).toBeInTheDocument();
-    expect(within(deploymentRow).getByText("2 / n/a")).toBeInTheDocument();
-    expect(within(deploymentRow).getByText("Verified")).toBeInTheDocument();
-
-    const approvalRow = screen.getByText("jit-db").closest("tr")!;
+    const approvalRow = within(attention).getByText("Approve Issue for jit-db").closest("li")!;
     expect(within(approvalRow).getByText("Awaiting approval")).toBeInTheDocument();
     await user.click(within(approvalRow).getByRole("button", { name: "Approve issue for jit-db" }));
     await waitFor(() => expect(apiMock.approveApprovalRequest).toHaveBeenCalledWith("019fec49-6641-7131-ae7f-17f7ea4b5e0e", "sha256:jit-db"));
@@ -150,9 +157,6 @@ describe("C10-2 operations queue", () => {
     );
     expect(apiMock.transitionIdentity).not.toHaveBeenCalled();
 
-    await user.click(within(rotationRow).getByRole("button", { name: "Cancel rot-1" }));
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "Cancel is not available for this operation yet. Use the owning workflow to stop or roll it back.",
-    );
+    expect(screen.queryByRole("button", { name: /cancel rot-1/i })).not.toBeInTheDocument();
   });
 });

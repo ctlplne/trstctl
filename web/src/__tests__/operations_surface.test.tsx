@@ -33,6 +33,8 @@ const { apiMock } = vi.hoisted(() => ({
     approvalRequests: vi.fn(),
     approveApprovalRequest: vi.fn(),
     denyApprovalRequest: vi.fn(),
+    agentJobPosture: vi.fn(),
+    bulkheadStats: vi.fn(),
     approveIdentityAction: vi.fn(),
     transitionIdentity: vi.fn(),
   },
@@ -76,6 +78,8 @@ describe("operational console surface", () => {
       approval_count: 1,
       required_approvals: 2,
     });
+    apiMock.agentJobPosture.mockResolvedValue({ served: true, generated_at: "2026-06-19T17:00:00Z", claimable_kinds: [], queues: [] });
+    apiMock.bulkheadStats.mockResolvedValue({ served: true, pools: [] });
     apiMock.nhiPolicyCompliance.mockResolvedValue(emptyNHIPolicyCompliance());
     apiMock.nhiOverPrivilegePosture.mockResolvedValue(emptyNHIOverPrivilegePosture());
     apiMock.nhiStalePosture.mockResolvedValue(emptyNHIStalePosture());
@@ -95,7 +99,7 @@ describe("operational console surface", () => {
 
     renderAt("/operations");
 
-    expect(await screen.findByText("No operations found")).toBeInTheDocument();
+    expect(await screen.findByText("No failed or waiting jobs.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /approve revoke for/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /reject revoke for/i })).not.toBeInTheDocument();
     expect(apiMock.approvalRequests).toHaveBeenCalledTimes(1);
