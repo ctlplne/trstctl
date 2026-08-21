@@ -204,9 +204,15 @@ export function Graph() {
         <>
           <div className="ui-panel grid gap-4 p-comfortable">
             <div className="grid gap-3 md:grid-cols-[minmax(16rem,32rem)]">
-              <label className="grid gap-1 text-sm font-medium" htmlFor="impact-credential">
+              <label className="grid min-w-0 max-w-full gap-1 text-sm font-medium" htmlFor="impact-credential">
                 {t("graph.design.credentialLabel")}
-                <Select id="impact-credential" value={selected} disabled={credentialNodes.length === 0} onChange={(event) => selectNode(event.target.value)}>
+                <Select
+                  className="min-w-0 max-w-full"
+                  id="impact-credential"
+                  value={selected}
+                  disabled={credentialNodes.length === 0}
+                  onChange={(event) => selectNode(event.target.value)}
+                >
                   {credentialNodes.length === 0 ? <option value="">{translateNow("operations.jobs.redemptions.none")}</option> : null}
                   {credentialNodes.map((node) => (
                     <option key={node.id} value={node.id}>
