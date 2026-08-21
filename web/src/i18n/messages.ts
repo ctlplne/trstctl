@@ -7148,6 +7148,22 @@ export const messages = {
     defaultMessage: "Map severity tiers to configured channels, assign an owner, and preview the digest cadence.",
     description: "Description for notification routing policy authoring.",
   },
+  "notifications.routing.readinessNoChannels": {
+    defaultMessage: "Add and enable a channel before saving a routing rule.",
+    description: "Routing policy form guidance when the tenant has no ready notification destination.",
+  },
+  "notifications.routing.readinessNoSelection": {
+    defaultMessage: "Enter at least one ready channel ID from the list below.",
+    description: "Routing policy form guidance when no destination has been entered.",
+  },
+  "notifications.routing.readinessUnknownSelection": {
+    defaultMessage: "Every channel ID must match a ready channel shown below.",
+    description: "Routing policy form guidance when an entered destination is missing or disabled.",
+  },
+  "notifications.routing.readinessReady": {
+    defaultMessage: "This rule can reach every destination entered below.",
+    description: "Routing policy form guidance when every entered destination is ready.",
+  },
   "notifications.routing.loadError": {
     defaultMessage: "Could not load notification routing policies",
     description: "Fallback error when notification routing policies cannot be fetched.",
@@ -7172,9 +7188,17 @@ export const messages = {
     defaultMessage: "Policy name",
     description: "Label for notification routing policy name.",
   },
+  "notifications.routing.namePlaceholder": {
+    defaultMessage: "For example, Expiring certificates",
+    description: "Non-persisted example for a notification routing policy name.",
+  },
   "notifications.routing.ownerRef": {
     defaultMessage: "Owner reference",
     description: "Label for notification routing policy owner reference.",
+  },
+  "notifications.routing.ownerRefPlaceholder": {
+    defaultMessage: "For example, team/platform-security",
+    description: "Non-persisted example for a notification routing owner reference.",
   },
   "notifications.routing.ownerEmail": {
     defaultMessage: "Owner email",
@@ -7204,6 +7228,10 @@ export const messages = {
     defaultMessage: "Default channels",
     description: "Label for notification routing default channels.",
   },
+  "notifications.routing.channelIDsPlaceholder": {
+    defaultMessage: "Ready channel IDs, separated by commas",
+    description: "Non-persisted format hint for notification routing channel IDs.",
+  },
   "notifications.routing.criticalChannels": {
     defaultMessage: "Critical channels",
     description: "Label for critical severity notification channels.",
@@ -7231,6 +7259,10 @@ export const messages = {
   "notifications.routing.channel": {
     defaultMessage: "Channel",
     description: "Label for notification channel selection.",
+  },
+  "notifications.routing.noReadyChannels": {
+    defaultMessage: "No ready channels",
+    description: "Empty option in the delivery-test channel selector.",
   },
   "notifications.routing.severity": {
     defaultMessage: "Severity",

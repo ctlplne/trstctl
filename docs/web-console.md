@@ -507,7 +507,9 @@ Teams, SMS, SIEM, and more) and whether each is ready. **Routing rules and templ
 maps event severity to ready destinations, records an accountable owner, and queues a
 redacted test through durable outbox work. trstctl currently uses one fixed server
 alert envelope across channels; this build does not pretend to offer a tenant-editable
-template library. **Delivery attempts and dead letters** filters the durable inbox,
+template library. The console leaves policy and owner fields empty rather than showing
+sample data as if it were configured, and it enables **Save policy** only when every
+entered destination matches a ready channel. **Delivery attempts and dead letters** filters the durable inbox,
 marks unread rows read, shows retry/error/idempotency/owner/recipient evidence, and
 offers requeue only for failed delivery. Toasts report real success and failure.
 

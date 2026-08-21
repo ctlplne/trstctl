@@ -96,6 +96,16 @@ describe("Route 034 alert delivery hierarchy", () => {
     expect(screen.queryByText("Routing policies")).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Dead-letter" })).not.toBeInTheDocument();
 
+    await user.click(screen.getByText("Routing rules and templates", { exact: true }));
+    expect(await screen.findByRole("form", { name: "Create routing rule" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Policy name")).toHaveValue("");
+    expect(screen.getByLabelText("Owner reference")).toHaveValue("");
+    expect(screen.getByLabelText("Default channels")).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Save policy" })).toBeDisabled();
+    expect(screen.getByText("Add and enable a channel before saving a routing rule.", { exact: true })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /^No ready channels$/ })).toBeInTheDocument();
+    await user.click(screen.getByText("Routing rules and templates", { exact: true }));
+
     await user.click(within(actions).getByRole("button", { name: "Add channel" }));
     const dialog = screen.getByRole("dialog", { name: "Add channel" });
     expect(within(dialog).getByRole("heading", { name: "Add channel" })).toHaveFocus();
@@ -129,6 +139,20 @@ describe("Route 034 alert delivery hierarchy", () => {
     expect(await screen.findByRole("form", { name: "Create routing rule" })).toBeInTheDocument();
     expect(screen.getByRole("form", { name: "Queue a safe delivery test" })).toBeInTheDocument();
     expect(screen.getByText(/one fixed alert envelope.*no tenant-editable template library/i)).toBeInTheDocument();
+    expect(screen.getByLabelText("Policy name")).toHaveValue("");
+    expect(screen.getByLabelText("Owner reference")).toHaveValue("");
+    expect(screen.getByLabelText("Default channels")).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Save policy" })).toBeDisabled();
+    expect(screen.getByText("Enter at least one ready channel ID from the list below.", { exact: true })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /^Partner webhook$/ })).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Default channels"), "slack");
+    expect(screen.getByText("Every channel ID must match a ready channel shown below.", { exact: true })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save policy" })).toBeDisabled();
+    await user.clear(screen.getByLabelText("Default channels"));
+    await user.type(screen.getByLabelText("Default channels"), "webhook");
+    await user.type(screen.getByLabelText("Policy name"), "Critical delivery");
+    expect(screen.getByText("This rule can reach every destination entered below.", { exact: true })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save policy" })).toBeEnabled();
 
     await user.click(screen.getByText("Delivery attempts and dead letters", { exact: true }));
     expect(await screen.findByRole("tab", { name: "Dead-letter" })).toBeInTheDocument();

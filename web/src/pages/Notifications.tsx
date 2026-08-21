@@ -52,14 +52,14 @@ const initialChannelForm: ChannelFormState = {
   enabled: true,
 };
 const initialPolicyForm: PolicyFormState = {
-  name: "Expiry escalation",
-  ownerRef: "team/platform-security",
+  name: "",
+  ownerRef: "",
   ownerEmail: "",
   digestInterval: "86400",
-  defaultChannels: "email",
-  criticalChannels: "slack, webhook",
-  warningChannels: "slack",
-  lowChannels: "email",
+  defaultChannels: "",
+  criticalChannels: "",
+  warningChannels: "",
+  lowChannels: "",
 };
 const initialTestForm: TestFormState = {
   channelId: "",
@@ -860,6 +860,25 @@ function RoutingPolicyAuthoring({
   const { t } = useTranslation();
   const configured = channels.filter(channelReady);
   const selectedChannel = testForm.channelId || firstConfiguredChannel(channels)?.id || "";
+  const readyChannelIDs = new Set(configured.map((channel) => channel.id));
+  const requestedChannelIDs = Array.from(
+    new Set([
+      ...splitChannels(policyForm.defaultChannels),
+      ...splitChannels(policyForm.criticalChannels),
+      ...splitChannels(policyForm.warningChannels),
+      ...splitChannels(policyForm.lowChannels),
+    ]),
+  );
+  const requestedChannelsReady = requestedChannelIDs.length > 0 && requestedChannelIDs.every((channelID) => readyChannelIDs.has(channelID));
+  const policyReady = policyForm.name.trim().length > 0 && requestedChannelsReady;
+  const routingReadiness =
+    configured.length === 0
+      ? t("notifications.routing.readinessNoChannels")
+      : requestedChannelIDs.length === 0
+        ? t("notifications.routing.readinessNoSelection")
+        : !requestedChannelsReady
+          ? t("notifications.routing.readinessUnknownSelection")
+          : t("notifications.routing.readinessReady");
   return (
     <div className="grid gap-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -876,6 +895,7 @@ function RoutingPolicyAuthoring({
               label={t("notifications.routing.name")}
               value={policyForm.name}
               onChange={(value) => onPolicyFormChange({ ...policyForm, name: value })}
+              placeholder={t("notifications.routing.namePlaceholder")}
               required
             />
             <TextInput
@@ -888,6 +908,7 @@ function RoutingPolicyAuthoring({
               label={t("notifications.routing.ownerRef")}
               value={policyForm.ownerRef}
               onChange={(value) => onPolicyFormChange({ ...policyForm, ownerRef: value })}
+              placeholder={t("notifications.routing.ownerRefPlaceholder")}
             />
             <label className="grid gap-2 text-sm font-medium">
               {t("notifications.routing.digestInterval")}
@@ -909,29 +930,40 @@ function RoutingPolicyAuthoring({
               label={t("notifications.routing.defaultChannels")}
               value={policyForm.defaultChannels}
               onChange={(value) => onPolicyFormChange({ ...policyForm, defaultChannels: value })}
+              placeholder={t("notifications.routing.channelIDsPlaceholder")}
+              describedBy="notification-routing-readiness"
             />
             <TextInput
               label={t("notifications.routing.criticalChannels")}
               value={policyForm.criticalChannels}
               onChange={(value) => onPolicyFormChange({ ...policyForm, criticalChannels: value })}
+              placeholder={t("notifications.routing.channelIDsPlaceholder")}
+              describedBy="notification-routing-readiness"
             />
             <TextInput
               label={t("notifications.routing.warningChannels")}
               value={policyForm.warningChannels}
               onChange={(value) => onPolicyFormChange({ ...policyForm, warningChannels: value })}
+              placeholder={t("notifications.routing.channelIDsPlaceholder")}
+              describedBy="notification-routing-readiness"
             />
             <TextInput
               label={t("notifications.routing.lowChannels")}
               value={policyForm.lowChannels}
               onChange={(value) => onPolicyFormChange({ ...policyForm, lowChannels: value })}
+              placeholder={t("notifications.routing.channelIDsPlaceholder")}
+              describedBy="notification-routing-readiness"
             />
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {configured.map((channel) => (
-              <StatusBadge key={channel.id} value={channel.id} label={channel.label} tone="success" />
+              <StatusBadge key={channel.id} value={channel.id} label={`${channel.label} — ${channel.id}`} tone="success" />
             ))}
           </div>
-          <Button type="submit" className="w-fit" disabled={policyBusy}>
+          <p id="notification-routing-readiness" className="text-sm text-muted-foreground" role="status">
+            {routingReadiness}
+          </p>
+          <Button type="submit" className="w-fit" aria-describedby="notification-routing-readiness" disabled={policyBusy || !policyReady}>
             <Save className="h-4 w-4" aria-hidden="true" />
             {policyBusy ? t("notifications.routing.saving") : t("notifications.routing.save")}
           </Button>
@@ -950,6 +982,7 @@ function RoutingPolicyAuthoring({
               onChange={(event) => onTestFormChange({ ...testForm, channelId: event.target.value })}
               className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-focus focus:ring-2 focus:ring-focus/20"
             >
+              {configured.length === 0 ? <option value="">{t("notifications.routing.noReadyChannels")}</option> : null}
               {configured.map((channel) => (
                 <option key={channel.id} value={channel.id}>
                   {channel.label}
@@ -1031,12 +1064,16 @@ function TextInput({
   onChange,
   type = "text",
   required = false,
+  placeholder,
+  describedBy,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   type?: string;
   required?: boolean;
+  placeholder?: string;
+  describedBy?: string;
 }) {
   return (
     <label className="grid gap-2 text-sm font-medium">
@@ -1045,6 +1082,8 @@ function TextInput({
         type={type}
         value={value}
         required={required}
+        placeholder={placeholder}
+        aria-describedby={describedBy}
         onChange={(event) => onChange(event.target.value)}
         className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-focus focus:ring-2 focus:ring-focus/20"
       />

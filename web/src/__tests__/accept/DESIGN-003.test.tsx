@@ -123,11 +123,15 @@ describe("DESIGN-003 notification routing authoring", () => {
 
     await user.click(screen.getByText("Routing rules and templates", { exact: true }));
     expect(await screen.findByRole("heading", { name: "Routing policies" })).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Policy name"), "Expiry escalation");
+    await user.type(screen.getByLabelText("Owner reference"), "team/platform-security");
     await user.clear(screen.getByLabelText("Owner email"));
     await user.type(screen.getByLabelText("Owner email"), "platform-security@example.test");
     await user.selectOptions(screen.getByLabelText("Digest interval"), "43200");
-    await user.clear(screen.getByLabelText("Default channels"));
     await user.type(screen.getByLabelText("Default channels"), "webhook");
+    await user.type(screen.getByLabelText("Critical channels"), "slack, webhook");
+    await user.type(screen.getByLabelText("Warning channels"), "slack");
+    await user.type(screen.getByLabelText("Low channels"), "email");
 
     await user.click(screen.getByRole("button", { name: /Save policy/ }));
     await waitFor(() => expect(apiMock.createNotificationRoutingPolicy).toHaveBeenCalled());

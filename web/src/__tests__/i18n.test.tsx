@@ -866,8 +866,13 @@ describe("i18n boundary", () => {
       // dead-letter evidence, and the honest fixed-template limitation in
       // every production locale. Machine-authored Spanish and German remain
       // flagged for human language review.
-      "es-ES": "c6e91752fd5190fc8f88c9aab463ba9716d0d232e5fcbd4519f233013ee56b7b",
-      "de-DE": "65cc9342734beb91441d24f01b2bd5121bfd282eb1489a36ad9fc467c2846faf",
+      // QA design g34.1 live-polish re-pin: the empty routing form no longer
+      // presents invented channels or ownership as saved-looking defaults;
+      // every locale names the no-ready-channel boundary and the exact safe
+      // next step. Machine-authored Spanish and German remain flagged for
+      // human language review.
+      "es-ES": "6bfa1d6a135e49d0e98b4f2cd7f7f2476df8535dbb012cff15bca88829fed218",
+      "de-DE": "1e67d09ddf9a420efc796f9e874a21c21a14e2c234ab9bfb32d4d24eb198dd45",
     });
   });
 

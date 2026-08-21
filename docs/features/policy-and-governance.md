@@ -217,7 +217,9 @@ person or system, and it separates failed-delivery evidence from configuration. 
 attempts remain in three closed detail sections until needed. The server applies one
 fixed alert envelope across channel providers. There is no tenant-editable template
 library in this build, and the console states that limitation instead of presenting a
-false template editor.
+false template editor. The console does not prefill invented channel or owner values,
+and it keeps routing-policy save disabled until every entered destination is a ready
+channel.
 
 **Status:** served. When the lifecycle alert window is set, the leader scheduler writes
 `notification.expiry` outbox work, stamps the certificate alerted, and includes the
