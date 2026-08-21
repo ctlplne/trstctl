@@ -823,8 +823,13 @@ describe("i18n boundary", () => {
       // disclosures, and names source, confidence, coverage limits, and export.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
       // release.
-      "es-ES": "0038f3190855663bfd761e55c4349e4b205eaafbb8906d394a0d2c810c37f489",
-      "de-DE": "ae3805bb692d19126718938d6199dc63418848948e41680c18cd41e27b9fabb4",
+      // QA design g28 re-pin: the migration journey now names cutover
+      // readiness, incomplete-plan rejection, source mappings, dual-run trust
+      // evidence, retained wave evidence, and explicit rollback confirmation.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
+      // release.
+      "es-ES": "b0f6555e80dd29d184dc438607e246c68b6d90c3b0e42eeb7bb096af6a22129b",
+      "de-DE": "07afbcd90d5d6fe99270241bbdd18fa1716bd9fcf001f7da523254c8dfaa8d56",
     });
   });
 

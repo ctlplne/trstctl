@@ -32,7 +32,19 @@ const existingRun = {
       phase: "verifying_live",
       started: true,
       members: [
-        { identity_id: "identity-a", binding: {}, trust_verdict: "verified", successor_verdict: "verified" },
+        {
+          identity_id: "identity-a",
+          binding: {
+            connector: "kubernetes",
+            target: "payments/api",
+            predecessor_fingerprint: "SHA256:CURRENT-A",
+            successor_fingerprint: "SHA256:NEXT-A",
+          },
+          trust_verdict: "verified",
+          successor_verdict: "verified",
+          rollback_trust_verdict: "verified",
+          rollback_successor_verdict: "verified",
+        },
         { identity_id: "identity-b", binding: {}, trust_verdict: "verified" },
       ],
     },
@@ -86,13 +98,13 @@ describe("executable CA migration console (AUD-40)", () => {
   it("assesses, reviews, and starts only the validated manifest", async () => {
     const user = userEvent.setup();
     const { container } = renderMigration();
-    expect(await screen.findByText("existing-rollover")).toBeInTheDocument();
-    expect(screen.getByText("canary").closest("li")).toHaveTextContent("verifying_live · 2 · 75% (3/4)");
-    expect(screen.getByText("identity-a, identity-b")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "1 migration run" })).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Migration plan"), { target: { value: JSON.stringify(manifest) } });
-    await user.click(screen.getByRole("button", { name: "Assess plan" }));
-    expect(await screen.findByText("Migratable: 1/1 members.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Start migration plan" }));
+    fireEvent.change(screen.getByLabelText("Migration plan JSON"), { target: { value: JSON.stringify(manifest) } });
+    await user.click(screen.getByRole("button", { name: "Check cutover readiness" }));
+
+    expect(await screen.findByText("Ready to move: 1 of 1 identities.")).toBeInTheDocument();
     expect(screen.getByText(manifest.new_authority_id)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Start migration" }));
 
@@ -103,10 +115,22 @@ describe("executable CA migration console (AUD-40)", () => {
   it("wires pause and rollback controls to the durable run", async () => {
     const user = userEvent.setup();
     renderMigration();
+    expect(await screen.findByRole("heading", { name: "1 migration run" })).toBeInTheDocument();
+    await user.click(screen.getByText("Run history, wave evidence, and rollback controls"));
+
     expect(await screen.findByText("existing-rollover")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: `Pause fleet run ${existingRun.plan_id}` }));
+    expect(screen.getByRole("heading", { name: "canary · verifying_live" }).closest("li")).toHaveTextContent("2 members · 75% verified (3/4 trust checks)");
+    expect(screen.getByText("kubernetes → payments/api")).toBeInTheDocument();
+    expect(screen.getByText("SHA256:CURRENT-A")).toBeInTheDocument();
+    expect(screen.getByText("SHA256:NEXT-A")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Pause run" }));
     await waitFor(() => expect(apiMock.pauseMigrationRun).toHaveBeenCalledWith(existingRun.id));
-    await user.click(screen.getByRole("button", { name: "Rollback" }));
+    await user.click(screen.getByRole("button", { name: "Review rollback" }));
+    const confirmation = screen.getByRole("alertdialog", { name: "Roll back existing-rollover?" });
+    expect(confirmation).toHaveTextContent("server-owned rollback path");
+    expect(apiMock.rollbackMigrationRun).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Roll back run" }));
     await waitFor(() => expect(apiMock.rollbackMigrationRun).toHaveBeenCalledWith(existingRun.id));
   });
 });

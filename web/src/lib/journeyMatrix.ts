@@ -41,7 +41,7 @@ const routeCatalog = {
   discovery: { path: "/discovery", heading: "Find unmanaged credentials" },
   graph: { path: "/graph", heading: "What could be affected" },
   identities: { path: "/identities", heading: "Machine identities" },
-  migration: { path: "/migration", heading: "Migration" },
+  migration: { path: "/migration", heading: "Move to trstctl" },
   incidents: { path: "/incidents", heading: "Security incidents" },
   integrate: { path: "/integrate", heading: "Integrate" },
   operations: { path: "/operations", heading: "Jobs and queues" },

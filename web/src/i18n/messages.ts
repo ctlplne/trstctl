@@ -1,3 +1,5 @@
+import { defaultMessageValues, orderedMessageKeys } from "@/i18n/catalog.en-US.runtime.gen";
+
 export const defaultLocale = "en-US";
 export const defaultTimeZone = "UTC";
 export const supportedLocales = ["en-US", "es-ES", "de-DE", "en-XA", "ar-XB"] as const;
@@ -4558,6 +4560,188 @@ export const messages = {
   "graph.design.confidence": {
     defaultMessage: "Confidence",
     description: "Graph relationship evidence confidence column.",
+  },
+  "migration.design.answer": {
+    defaultMessage: "What can move now, what blocks cutover, and how to roll back.",
+    description: "Plain-language answer provided by the migration page.",
+  },
+  "migration.design.technicalDetails": {
+    defaultMessage: "Source mappings, dual-run evidence, cutover and rollback controls.",
+    description: "Exact evidence available from the migration page.",
+  },
+  "migration.design.startPlan": {
+    defaultMessage: "Start migration plan",
+    description: "Primary migration-page action. Opens planning but does not execute a migration.",
+  },
+  "migration.design.checkingRuns": {
+    defaultMessage: "Checking migration runs…",
+    description: "Loading state for tenant migration runs.",
+  },
+  "migration.design.noRuns": {
+    defaultMessage: "No migration runs yet",
+    description: "Migration opening status when the tenant has no retained runs.",
+  },
+  "migration.design.noRunsBody": {
+    defaultMessage: "Create and check a plan before trstctl changes any trust.",
+    description: "Safe next step when no migration run exists.",
+  },
+  "migration.design.noRunsHistory": {
+    defaultMessage: "Completed and active migration runs will appear here with wave, verification, and rollback evidence.",
+    description: "Empty state inside migration run history.",
+  },
+  "migration.design.runCountOne": {
+    defaultMessage: "1 migration run",
+    description: "Migration opening status for one retained run.",
+  },
+  "migration.design.runCountMany": {
+    defaultMessage: "{count} migration runs",
+    description: "Migration opening status for multiple retained runs.",
+  },
+  "migration.design.runSummary": {
+    defaultMessage: "{active} active · {attention} need attention.",
+    description: "Concise tenant migration-run status summary.",
+  },
+  "migration.design.disclosure.plan": {
+    defaultMessage: "Plan details and source mappings",
+    description: "Progressive disclosure for the migration manifest.",
+  },
+  "migration.design.disclosure.gates": {
+    defaultMessage: "Assessment, dual-run evidence, and cutover gates",
+    description: "Progressive disclosure for migration readiness and execution review.",
+  },
+  "migration.design.disclosure.history": {
+    defaultMessage: "Run history, wave evidence, and rollback controls",
+    description: "Progressive disclosure for retained migration runs.",
+  },
+  "migration.design.planJson": {
+    defaultMessage: "Migration plan JSON",
+    description: "Label for the advanced migration manifest editor.",
+  },
+  "migration.design.planHelp": {
+    defaultMessage: "Advanced input. Replace every blank identity_id and agent_id with an exact source mapping; trstctl rejects incomplete plans.",
+    description: "Safe ELI5 guidance for completing the advanced migration manifest.",
+  },
+  "migration.design.invalidPlan": {
+    defaultMessage:
+      "This plan is incomplete or is not valid JSON. Fill in every plan, authority, wave, identity, agent, and trust-anchor field before checking it.",
+    description: "Local migration-manifest validation error before any API request is made.",
+  },
+  "migration.design.assess": {
+    defaultMessage: "Check cutover readiness",
+    description: "Read-only migration assessment action.",
+  },
+  "migration.design.readOnly": {
+    defaultMessage: "This check changes nothing. trstctl will not start until you review the result.",
+    description: "Safety boundary beneath the migration assessment action.",
+  },
+  "migration.design.dualRunBoundary": {
+    defaultMessage: "trstctl adds and verifies the new trust path before moving leaves. The old path remains available until the server's cutover gates pass.",
+    description: "Technical ELI5 explanation of trust-before-leaf dual-run behavior.",
+  },
+  "migration.design.noAssessment": {
+    defaultMessage: "No plan checked yet",
+    description: "Empty state when no migration assessment exists.",
+  },
+  "migration.design.noAssessmentBody": {
+    defaultMessage: "Open Plan details and source mappings, complete every member mapping, then check cutover readiness.",
+    description: "Next step before a migration assessment exists.",
+  },
+  "migration.design.assessmentTitle": {
+    defaultMessage: "Cutover readiness",
+    description: "Heading for a completed migration assessment.",
+  },
+  "migration.design.readyCount": {
+    defaultMessage: "Ready to move: {migratable} of {members} identities.",
+    description: "Migration assessment member counts.",
+  },
+  "migration.design.blockers": {
+    defaultMessage: "Cutover blockers",
+    description: "Heading for migration assessment unknowns.",
+  },
+  "migration.design.assessmentMismatch": {
+    defaultMessage: "This result does not match the plan, waves, and identities you checked. Start is blocked; check the plan again before changing trust.",
+    description: "Fail-closed warning when a migration assessment response does not bind to the reviewed request.",
+  },
+  "migration.design.readyToStart": {
+    defaultMessage: "Ready for explicit start",
+    description: "Heading shown only after every migration member passes assessment.",
+  },
+  "migration.design.planId": {
+    defaultMessage: "Plan ID",
+    description: "Migration plan identifier label.",
+  },
+  "migration.design.newAuthority": {
+    defaultMessage: "New authority",
+    description: "Migration successor authority label.",
+  },
+  "migration.design.waves": {
+    defaultMessage: "Migration waves",
+    description: "Migration wave count label.",
+  },
+  "migration.design.startRun": {
+    defaultMessage: "Start migration",
+    description: "Explicit execution action available only after successful assessment.",
+  },
+  "migration.design.waveProgress": {
+    defaultMessage: "{members} members · {percent}% verified ({verified}/{total} trust checks)",
+    description: "Plain migration wave verification summary.",
+  },
+  "migration.design.sourceMapping": {
+    defaultMessage: "Source mapping",
+    description: "Migration member source connector to target mapping label.",
+  },
+  "migration.design.currentFingerprint": {
+    defaultMessage: "Current fingerprint",
+    description: "Migration predecessor certificate fingerprint label.",
+  },
+  "migration.design.nextFingerprint": {
+    defaultMessage: "Next fingerprint",
+    description: "Migration successor certificate fingerprint label.",
+  },
+  "migration.design.trustEvidence": {
+    defaultMessage: "Trust / successor evidence",
+    description: "Migration member forward verification label.",
+  },
+  "migration.design.rollbackEvidence": {
+    defaultMessage: "Rollback trust / successor evidence",
+    description: "Migration member rollback verification label.",
+  },
+  "migration.design.notObserved": {
+    defaultMessage: "Not observed",
+    description: "Honest migration evidence fallback when a check has not happened.",
+  },
+  "migration.design.notReturned": {
+    defaultMessage: "Not returned",
+    description: "Honest migration evidence fallback when the API omitted a field.",
+  },
+  "migration.design.pauseRun": {
+    defaultMessage: "Pause run",
+    description: "Pause a running migration at its current server-owned gate.",
+  },
+  "migration.design.resumeRun": {
+    defaultMessage: "Resume run",
+    description: "Resume a paused migration at its current server-owned gate.",
+  },
+  "migration.design.reviewRollback": {
+    defaultMessage: "Review rollback",
+    description: "Opens confirmation before requesting a migration rollback.",
+  },
+  "migration.design.confirmRollbackTitle": {
+    defaultMessage: "Roll back {plan}?",
+    description: "Migration rollback confirmation heading.",
+  },
+  "migration.design.confirmRollbackBody": {
+    defaultMessage:
+      "trstctl will request the server-owned rollback path for this run. It will not skip trust checks, and the retained run will record the outcome.",
+    description: "Migration rollback confirmation safety explanation.",
+  },
+  "migration.design.confirmRollback": {
+    defaultMessage: "Roll back run",
+    description: "Confirmed migration rollback action.",
+  },
+  "migration.design.operationError": {
+    defaultMessage: "The migration action did not complete. Nothing was assumed successful; review the plan and retained run evidence before retrying.",
+    description: "Safe generic error for migration assessment and run controls.",
   },
   "nav.item.assistant": {
     defaultMessage: "Assistant",
@@ -12347,10 +12531,10 @@ export const messages = {
     description: "H1: empty state, worded so absence of evidence does not read as evidence of absence.",
   },
   "source.migration.h2mig00001": {
-    defaultMessage: "Migration",
+    defaultMessage: "Move to trstctl",
   },
   "source.migration.description.h2mig00002": {
-    defaultMessage: "Run CA waves: trust, leaves, verify, or roll back.",
+    defaultMessage: "What can move now, what blocks cutover, and how to roll back.",
   },
   "source.migration.plan.h2mig00003": {
     defaultMessage: "Migration plan",
@@ -18614,10 +18798,8 @@ export function pseudoLocalize(message: string): string {
 }
 
 function buildCatalog(localize: (message: string) => string): Record<MessageKey, string> {
-  return Object.fromEntries(Object.entries(messages).map(([key, descriptor]) => [key, localize(descriptor.defaultMessage)])) as Record<MessageKey, string>;
+  return Object.fromEntries(orderedMessageKeys.map((key, index) => [key, localize(defaultMessageValues[index])])) as Record<MessageKey, string>;
 }
-
-const orderedMessageKeys = Object.keys(messages) as MessageKey[];
 
 /** Rebuild a lazy production catalog whose generated chunk carries values
  * only. Message IDs already exist in the eager English catalog, so sending
