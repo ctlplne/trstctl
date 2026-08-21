@@ -41,7 +41,7 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1315 annotated sites across 26 rules. Each row is
+1316 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -357,7 +357,7 @@ not this file.
 | `internal/server/incident_fleet_reissuance_served_test.go:352` | loopback test fixture is explicitly closed (CWE-400) |
 | `internal/server/migration_run_served_test.go:87` | loopback fixture is closed below (CWE-400) |
 | `internal/server/migration_run_served_test.go:329` | loopback fixture is closed below (CWE-400) |
-| `internal/server/serve_test.go:19` | local test listener owned and torn down by the test (CWE-400) |
+| `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
 ### G115 — CWE-190 Integer overflow or wraparound (201 sites)
 
@@ -908,7 +908,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (355 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (356 sites)
 
 | Location | Reason |
 |---|---|
@@ -1167,8 +1167,9 @@ not this file.
 | `internal/server/run.go:1482` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/run_connectors_test.go:89` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/runtime_worker_census_test.go:65` | test reads its own package directory (CWE-22) |
-| `internal/server/serve_test.go:77` | test-owned path under t.TempDir (CWE-22) |
-| `internal/server/serve_test.go:94` | test-owned path under t.TempDir (CWE-22) |
+| `internal/server/serve_test.go:80` | test-owned path under t.TempDir (CWE-22) |
+| `internal/server/serve_test.go:81` | test-owned path under t.TempDir (CWE-22) |
+| `internal/server/serve_test.go:125` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/server.go:2074` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/server.go:2151` | same operator-configured directory as the target certificate (CWE-22) |
 | `internal/signing/design_test.go:30` | test reads its own fixture/tempdir path (CWE-22) |
