@@ -4494,8 +4494,8 @@ export const messages = {
     description: "Primary navigation item.",
   },
   "nav.item.connectors": {
-    defaultMessage: "Deployment connectors",
-    description: "Primary navigation item.",
+    defaultMessage: "Where credentials are installed",
+    description: "Primary navigation item. Matches the decision-first deployment-destination page heading.",
   },
   "nav.item.plugins": {
     defaultMessage: "Plugins",
@@ -7309,6 +7309,109 @@ export const messages = {
   "incidents.response.servicenowPlaceholder": {
     defaultMessage: "https://example.service-now.com",
     description: "Placeholder for ServiceNow instance URL.",
+  },
+  "connectors.design.title": {
+    defaultMessage: "Where credentials are installed",
+    description: "Decision-first title and navigation label for the deployment-destination route.",
+  },
+  "connectors.design.answer": {
+    defaultMessage: "Which destinations trstctl can update and whether they are healthy.",
+    description: "Decision-first answer at the top of the deployment-destination route.",
+  },
+  "connectors.design.technicalDetails": {
+    defaultMessage: "Capabilities, grants, health, retries, rollback, plugin evidence.",
+    description: "Exact expert evidence retained on the deployment-destination route.",
+  },
+  "connectors.design.add": { defaultMessage: "Add destination", description: "Primary deployment-destination action and dialog title." },
+  "connectors.design.addHelp": {
+    defaultMessage:
+      "Choose the system trstctl may update and the connector that knows how. Saving a destination does not deploy a credential; binding, testing, deployment, and rollback remain separate reviewed actions.",
+    description: "Safety boundary explanation in the Add destination dialog.",
+  },
+  "connectors.design.checking": { defaultMessage: "Checking deployment destinations…", description: "Loading state for the opening destination answer." },
+  "connectors.design.statusEmpty": { defaultMessage: "No destinations are configured", description: "Opening status for a genuinely empty deployment estate." },
+  "connectors.design.statusEmptyBody": {
+    defaultMessage: "Add one before trstctl can install or rotate a credential on another system.",
+    description: "Recovery guidance for an empty deployment estate.",
+  },
+  "connectors.design.statusOneVerified": {
+    defaultMessage: "1 destination is configured and verified",
+    description: "Opening status for one configured destination with served listener verification.",
+  },
+  "connectors.design.statusAllVerified": {
+    defaultMessage: "All {targets} configured destinations have verification evidence",
+    description: "Opening status when every configured destination has served verification evidence.",
+  },
+  "connectors.design.statusPartial": {
+    defaultMessage: "{verified} of {targets} configured destinations have verification evidence",
+    description: "Opening status when destination verification evidence is incomplete.",
+  },
+  "connectors.design.rollbackOne": {
+    defaultMessage: "1 connector type can execute rollback for this deployment.",
+    description: "Rollback-capability count when exactly one connector can execute rollback.",
+  },
+  "connectors.design.rollbackMany": {
+    defaultMessage: "{connectors} connector types can execute rollback for this deployment.",
+    description: "Rollback-capability count when zero or multiple connectors can execute rollback.",
+  },
+  "connectors.design.verificationBoundary": {
+    defaultMessage: "A destination without verification evidence is not claimed healthy; open Health, retries, and rollback to inspect what was observed.",
+    description: "Truth boundary for missing endpoint verification evidence.",
+  },
+  "connectors.design.disclosure.destinations": {
+    defaultMessage: "Destinations and safe actions",
+    description: "Progressive disclosure for configured destinations, identity binding, and mutations.",
+  },
+  "connectors.design.disclosure.health": {
+    defaultMessage: "Health, retries, and rollback",
+    description: "Progressive disclosure for listener verification, delivery receipts, custody, and outbox circuits.",
+  },
+  "connectors.design.disclosure.capabilities": {
+    defaultMessage: "Connector capabilities and plugin evidence",
+    description: "Progressive disclosure for the connector registry and relay plugin grants.",
+  },
+  "connectors.design.destinationsHelp": {
+    defaultMessage:
+      "A destination names one system and connector. Binding chooses which identity may use it; Test validates the target without claiming a deployment; Deploy and Rollback are separate state-changing actions.",
+    description: "Technical ELI5 action boundary above configured destinations.",
+  },
+  "connectors.design.destinationsLoading": {
+    defaultMessage: "Loading identities for destination actions…",
+    description: "Lazy destination-action loading state.",
+  },
+  "connectors.design.destinationsError": { defaultMessage: "Could not load destination actions", description: "Lazy destination-action error title." },
+  "connectors.design.configuredDestinations": { defaultMessage: "Configured destinations", description: "Heading for saved deployment destinations." },
+  "connectors.design.bindHelp": {
+    defaultMessage:
+      "Use the owner and DNS form only when one reviewed action must create the identity, destination, issuance intent, and deployment intent together.",
+    description: "Safety explanation for the compound endpoint-binding action.",
+  },
+  "connectors.design.destinationsTable": {
+    defaultMessage: "Configured deployment destinations",
+    description: "Accessible caption for saved destination rows.",
+  },
+  "connectors.design.capabilitiesHelp": {
+    defaultMessage:
+      "This is capability evidence, not a claim that every connector is configured here. Execution location, rollback behavior, device proof, migration limits, signed publisher identity, and effective grants remain exact.",
+    description: "Truth boundary above connector and plugin capability evidence.",
+  },
+  "connectors.design.capabilitiesTable": { defaultMessage: "Connector capability registry", description: "Accessible caption for connector capability rows." },
+  "connectors.design.healthHelp": {
+    defaultMessage:
+      "Listener checks show what a client or relay observed. Delivery receipts show what trstctl attempted. Retry counts, rollback references, key custody, and outbox circuits are evidence; one does not silently stand in for another.",
+    description: "Technical ELI5 distinction among destination-health evidence types.",
+  },
+  "connectors.design.healthLoading": {
+    defaultMessage: "Loading destination health and delivery evidence…",
+    description: "Lazy destination-health loading state.",
+  },
+  "connectors.design.healthError": { defaultMessage: "Could not load all destination health evidence", description: "Lazy destination-health error title." },
+  "connectors.design.destinationName": { defaultMessage: "Destination name", description: "Label for a human-readable deployment destination name." },
+  "connectors.design.connectorType": { defaultMessage: "Connector type", description: "Label for the connector implementation used by a destination." },
+  "connectors.design.configuration": { defaultMessage: "Configuration (JSON)", description: "Label for exact advanced connector target configuration." },
+  "connectors.design.configurationHelp": {
+    defaultMessage: "Store credential references, never secret values. The server validates the selected connector's schema before saving.",
+    description: "Security guidance for connector configuration JSON.",
   },
   "connectors.deliveryEvidence": {
     defaultMessage: "Connector delivery evidence",

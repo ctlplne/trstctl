@@ -689,12 +689,19 @@ func TestJourney006Trace014ConsoleDisclosesLibraryGaps(t *testing.T) {
 
 	connectors := read(t, "../web/src/pages/Connectors.tsx")
 	requireAllContained(t, "JOURNEY-006/TRACE-014", "web/src/pages/Connectors.tsx", connectors,
-		"Target setup, identity binding, delivery actions, and receipt evidence from the served connector API.",
-		`"source.create.connector.target.bb8ec59505"`,
+		`title={t("connectors.design.title")}`,
+		`description={t("connectors.design.answer")}`,
+		`{t("connectors.design.add")}`,
+		`onSubmit={(event) => void createTarget(event)}`,
+		`"connectors.design.disclosure.destinations"`,
+		`"connectors.design.disclosure.health"`,
+		`"connectors.design.disclosure.capabilities"`,
 		`"source.target.actions.4d6d059ed8"`,
 		`"source.deploy.4c236daafb"`)
 	requireAllContained(t, "JOURNEY-006/TRACE-014", "web/src/i18n/messages.ts", messages,
-		"Create connector target",
+		"Which destinations trstctl can update and whether they are healthy.",
+		"Saving a destination does not deploy a credential",
+		"Capabilities, grants, health, retries, rollback, plugin evidence.",
 		"Target actions",
 		"Deploy")
 	if strings.Contains(connectors, "UnavailableState") || strings.Contains(strings.ToLower(connectors), "not served yet") {

@@ -1161,7 +1161,7 @@ const esESCatalog = {
   "nav.item.pkiSecrets": "Secretos PKI",
   "nav.item.machineLogin": "Inicio de sesión de máquina",
   "nav.item.secretSharing": "Compartición de secretos",
-  "nav.item.connectors": "Conectores de despliegue",
+  "nav.item.connectors": "Dónde se instalan las credenciales",
   "nav.item.plugins": "Plugins",
   "nav.item.risk": "Qué corregir primero",
   // DESIGN-ROUTE-026 machine-authored translations — FLAGGED FOR HUMAN REVIEW BEFORE RELEASE.
@@ -1955,6 +1955,46 @@ const esESCatalog = {
   "incidents.response.splunkPlaceholder": "https://splunk.example/services/collector",
   "incidents.response.jiraPlaceholder": "https://jira.example",
   "incidents.response.servicenowPlaceholder": "https://example.service-now.com",
+  // QA-G31 machine-authored translations; human review required before release.
+  "connectors.design.title": "Dónde se instalan las credenciales",
+  "connectors.design.answer": "Qué destinos puede actualizar trstctl y si están en buen estado.",
+  "connectors.design.technicalDetails": "Capacidades, permisos, estado, reintentos, reversión y evidencia de plugins.",
+  "connectors.design.add": "Añadir destino",
+  "connectors.design.addHelp":
+    "Elija el sistema que trstctl puede actualizar y el conector que sabe cómo hacerlo. Guardar un destino no despliega una credencial; la vinculación, la prueba, el despliegue y la reversión siguen siendo acciones separadas y revisadas.",
+  "connectors.design.checking": "Comprobando destinos de despliegue…",
+  "connectors.design.statusEmpty": "No hay destinos configurados",
+  "connectors.design.statusEmptyBody": "Añada uno antes de que trstctl pueda instalar o rotar una credencial en otro sistema.",
+  "connectors.design.statusOneVerified": "Hay 1 destino configurado y verificado",
+  "connectors.design.statusAllVerified": "Los {targets} destinos configurados tienen evidencia de verificación",
+  "connectors.design.statusPartial": "{verified} de {targets} destinos configurados tienen evidencia de verificación",
+  "connectors.design.rollbackOne": "1 tipo de conector puede ejecutar la reversión de este despliegue.",
+  "connectors.design.rollbackMany": "{connectors} tipos de conectores pueden ejecutar la reversión de este despliegue.",
+  "connectors.design.verificationBoundary":
+    "Un destino sin evidencia de verificación no se declara sano; abra Estado, reintentos y reversión para inspeccionar lo observado.",
+  "connectors.design.disclosure.destinations": "Destinos y acciones seguras",
+  "connectors.design.disclosure.health": "Estado, reintentos y reversión",
+  "connectors.design.disclosure.capabilities": "Capacidades del conector y evidencia de plugins",
+  "connectors.design.destinationsHelp":
+    "Un destino nombra un sistema y un conector. La vinculación elige qué identidad puede usarlo; Probar valida el destino sin afirmar un despliegue; Desplegar y Revertir son acciones separadas que cambian el estado.",
+  "connectors.design.destinationsLoading": "Cargando identidades para las acciones del destino…",
+  "connectors.design.destinationsError": "No se pudieron cargar las acciones del destino",
+  "connectors.design.configuredDestinations": "Destinos configurados",
+  "connectors.design.bindHelp":
+    "Use el formulario de propietario y DNS solo cuando una acción revisada deba crear a la vez la identidad, el destino, la intención de emisión y la intención de despliegue.",
+  "connectors.design.destinationsTable": "Destinos de despliegue configurados",
+  "connectors.design.capabilitiesHelp":
+    "Esto es evidencia de capacidades, no una afirmación de que todos los conectores estén configurados aquí. La ubicación de ejecución, la reversión, la prueba del dispositivo, los límites de migración, la identidad firmada del editor y los permisos efectivos siguen siendo exactos.",
+  "connectors.design.capabilitiesTable": "Registro de capacidades de conectores",
+  "connectors.design.healthHelp":
+    "Las comprobaciones del listener muestran lo que observó un cliente o relay. Los recibos muestran lo que intentó trstctl. Los reintentos, referencias de reversión, custodia de claves y circuitos del outbox son evidencias distintas; ninguna sustituye silenciosamente a otra.",
+  "connectors.design.healthLoading": "Cargando el estado del destino y la evidencia de entrega…",
+  "connectors.design.healthError": "No se pudo cargar toda la evidencia de estado del destino",
+  "connectors.design.destinationName": "Nombre del destino",
+  "connectors.design.connectorType": "Tipo de conector",
+  "connectors.design.configuration": "Configuración (JSON)",
+  "connectors.design.configurationHelp":
+    "Guarde referencias de credenciales, nunca valores secretos. El servidor valida el esquema del conector seleccionado antes de guardar.",
   "connectors.deliveryEvidence": "Evidencia de entrega del conector",
   "platform.editions.useRights": "Derechos de uso",
   "platform.editions.managedCustomerBand": "Banda de clientes gestionados",

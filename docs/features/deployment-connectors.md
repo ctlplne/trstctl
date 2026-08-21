@@ -117,6 +117,38 @@ appliance host.
 
 ## Use it
 
+### Console journey: Where credentials are installed
+
+The `/connectors` page is named **Where credentials are installed** because the
+operator's first question is not “which plugins exist?” It is “which systems can
+trstctl update, and what proof says those systems are healthy?” The opening view
+therefore shows the configured-destination count, the count with listener
+verification evidence, and how many connector types can execute rollback. A target
+without verification evidence is never described as healthy.
+
+The first view has one action, **Add destination**. Its dialog explains that saving a
+destination does not deploy a credential. It accepts a non-secret name, one connector
+type, and the connector's exact JSON configuration; credential fields must be
+`secret://` references. Cancel closes the dialog without an API mutation. Binding,
+testing, deploying, and rolling back remain separate reviewed actions.
+
+Three closed sections keep implementation machinery available without making it the
+default reading path:
+
+- **Destinations and safe actions** loads identities only when opened, then exposes
+  target evidence, binding, test, deploy, rollback, and the exact activity timeline.
+- **Health, retries, and rollback** loads delivery receipts, listener verification,
+  key custody, and outbox-circuit evidence only when opened. These are distinct
+  observations; a successful outbox attempt does not silently stand in for a listener
+  check.
+- **Connector capabilities and plugin evidence** retains the complete registry,
+  execution vantage, rollback behavior, device proof, relay-migration disposition,
+  signed publisher identity, and effective plugin grants.
+
+The closed sections reduce first-view noise only. They do not remove APIs, evidence,
+or state-changing controls, and they do not prefetch the larger expert datasets until
+an operator asks to inspect them.
+
 Tenant operators create non-secret deployment targets through the served API, CLI, or
 console. A target names the connector, the route name, and references to credentials
 or operator-managed endpoint config; it never stores passwords, tokens, private keys,

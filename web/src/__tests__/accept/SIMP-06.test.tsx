@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Connectors } from "@/pages/Connectors";
 import { ToastProvider } from "@/components/ToastProvider";
@@ -71,11 +72,14 @@ describe("SIMP-06 connector evidence de-fixturing", () => {
   });
 
   it("renders only served registry and receipt evidence", async () => {
+    const user = userEvent.setup();
     renderConnectors();
 
-    expect(screen.getByRole("heading", { name: "Connector delivery evidence" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Where credentials are installed" })).toBeInTheDocument();
+    await user.click(screen.getByText("Connector capabilities and plugin evidence", { exact: true }));
     await waitFor(() => expect(apiMock.connectorCatalog).toHaveBeenCalledTimes(1));
-    expect(apiMock.connectorDeliveries).toHaveBeenCalledWith({ limit: 20 });
+    await user.click(screen.getByText("Health, retries, and rollback", { exact: true }));
+    await waitFor(() => expect(apiMock.connectorDeliveries).toHaveBeenCalledWith({ limit: 20 }));
 
     expect((await screen.findAllByText("signed-nginx-plugin")).length).toBeGreaterThan(0);
     expect(screen.getByText("aws-acm-importer")).toBeInTheDocument();

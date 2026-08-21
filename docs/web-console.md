@@ -515,8 +515,12 @@ the notification outbox; toasts report success and failure.
   read-only packaging, tenant, transport, scale, and support disclosure; and
   **Editions & license** (`/admin/editions`) is the one commercial surface — license
   state, edition/feature rows, FIPS posture, and `GET /api/v1/editions` packaging.
-  **Connectors** (`/connectors`) is the deployment-connector registry: target setup,
-  identity binding, deploy/rollback, and delivery receipts.
+  **Where credentials are installed** (`/connectors`) answers destination coverage
+  and verified health first. One **Add destination** action is followed by three
+  closed evidence sections for safe target actions, health/retries/rollback, and the
+  full connector/plugin capability registry. Expert APIs load only when their section
+  opens; identity binding, test, deploy, rollback, delivery receipts, listener proof,
+  key custody, circuits, grants, and provenance remain available.
 - **Wizard** (`/wizard`) is the onboarding carousel: connect an issuer, enable the
   evaluation enrollment profile, issue a first certificate, optionally prove a
   configured connector/upstream-CA/dynamic-secret backend, enroll an agent, then
@@ -587,7 +591,7 @@ grounded and sufficient. Backed by `/api/v1/ai/status`, `/api/v1/mcp/tools`, `/a
 | `/policy` | Policy |
 | `/audit` | Audit |
 | `/privacy` | Privacy |
-| `/connectors` | Connectors |
+| `/connectors` | Where credentials are installed |
 | `/integrate` | Integrate |
 | `/integrate/api` | API Explorer |
 | `/admin/access` | Access admin |

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Connectors } from "@/pages/Connectors";
@@ -17,7 +17,9 @@ const { apiMock } = vi.hoisted(() => ({
     deployConnectorTarget: vi.fn(),
     rollbackConnectorTarget: vi.fn(),
     connectorDeliveries: vi.fn(),
+    outboxCircuits: vi.fn(),
     endpointVerifications: vi.fn(),
+    endpointKeyCustody: vi.fn(),
   },
 }));
 
@@ -185,6 +187,8 @@ describe("connector deployment disclosure surface", () => {
         },
       ],
     });
+    apiMock.outboxCircuits.mockReset().mockResolvedValue({ items: [] });
+    apiMock.endpointKeyCustody.mockReset().mockResolvedValue({ items: [], summary: { host_generated: 0, targets: 0, migrated_percent: 0 } });
     apiMock.endpointVerifications.mockReset().mockResolvedValue({
       guidance: "",
       summary: { endpoints: 1, verified: 1, diverged: 0, unreachable: 0, not_checked: 0 },
@@ -205,11 +209,16 @@ describe("connector deployment disclosure surface", () => {
   });
 
   it("renders connector registry and receipt evidence from served data only", async () => {
+    const user = userEvent.setup();
     renderConnectors();
 
-    expect(screen.getByRole("heading", { name: "Deployment connectors" })).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: "Connector targets" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Where credentials are installed" })).toBeInTheDocument();
+    await user.click(screen.getByText("Destinations and safe actions", { exact: true }));
+    expect(await screen.findByRole("heading", { name: "Configured destinations" })).toBeInTheDocument();
+    await user.click(screen.getByText("Connector capabilities and plugin evidence", { exact: true }));
     expect(await screen.findByRole("heading", { name: "Connector registry" })).toBeInTheDocument();
+    await user.click(screen.getByText("Health, retries, and rollback", { exact: true }));
+    expect(await screen.findByRole("heading", { name: "Recent delivery receipts" })).toBeInTheDocument();
     await waitFor(() => expect(apiMock.connectorCatalog).toHaveBeenCalled());
     expect(apiMock.connectorTargets).toHaveBeenCalled();
     expect(apiMock.identities).toHaveBeenCalled();
@@ -221,7 +230,6 @@ describe("connector deployment disclosure surface", () => {
     expect(screen.getAllByText("rabbitmq").length).toBeGreaterThan(0);
     expect(screen.getAllByText("edge/prod/payments").length).toBeGreaterThan(0);
     expect(screen.getAllByText("native registry, signed plugin, or receipt").length).toBeGreaterThan(0);
-    expect(screen.getByRole("heading", { name: "Recent delivery receipts" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Verified relay plugins" })).toBeInTheDocument();
     expect(screen.getByText("partner-f5")).toBeInTheDocument();
     expect(screen.getByText("relay-plant-7")).toBeInTheDocument();
@@ -296,8 +304,11 @@ describe("connector deployment disclosure surface", () => {
       ],
     });
 
+    const user = userEvent.setup();
     renderConnectors();
 
+    await screen.findByRole("heading", { name: "Where credentials are installed" });
+    await user.click(screen.getByText("Connector capabilities and plugin evidence", { exact: true }));
     expect(await screen.findByText("Relay-executed")).toBeInTheDocument();
     expect(screen.getByText("Open architecture exception")).toBeInTheDocument();
     expect(screen.getByText("Network-relay migration unimplemented")).toBeInTheDocument();
@@ -309,8 +320,10 @@ describe("connector deployment disclosure surface", () => {
     const user = userEvent.setup();
     renderConnectors();
 
-    await screen.findByRole("heading", { name: "Connector targets" });
-    await user.click(screen.getByRole("button", { name: "Create target" }));
+    await screen.findByRole("heading", { name: "Where credentials are installed" });
+    await user.click(screen.getByRole("button", { name: "Add destination" }));
+    const dialog = screen.getByRole("dialog", { name: "Add destination" });
+    await user.click(within(dialog).getByRole("button", { name: "Add destination" }));
     await waitFor(() =>
       expect(apiMock.createConnectorTarget).toHaveBeenCalledWith({
         name: "edge/prod/payments",
@@ -319,6 +332,8 @@ describe("connector deployment disclosure surface", () => {
       }),
     );
 
+    await user.click(screen.getByText("Destinations and safe actions", { exact: true }));
+    await screen.findByRole("heading", { name: "Configured destinations" });
     await user.type(screen.getByLabelText("Owner ID"), "owner-1");
     await user.click(screen.getByRole("button", { name: "Bind and enroll" }));
     await waitFor(() =>

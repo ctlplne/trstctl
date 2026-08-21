@@ -1173,7 +1173,7 @@ const deDECatalog = {
   "nav.item.pkiSecrets": "PKI-Secrets",
   "nav.item.machineLogin": "Maschinen-Login",
   "nav.item.secretSharing": "Secret-Teilen",
-  "nav.item.connectors": "Deployment-Connectors",
+  "nav.item.connectors": "Wo Credentials installiert sind",
   "nav.item.plugins": "Plugins",
   "nav.item.risk": "Was zuerst beheben",
   // DESIGN-ROUTE-026 machine-authored translations — FLAGGED FOR HUMAN REVIEW BEFORE RELEASE.
@@ -1967,6 +1967,46 @@ const deDECatalog = {
   "incidents.response.splunkPlaceholder": "https://splunk.example/services/collector",
   "incidents.response.jiraPlaceholder": "https://jira.example",
   "incidents.response.servicenowPlaceholder": "https://example.service-now.com",
+  // QA-G31 machine-authored translations; human review required before release.
+  "connectors.design.title": "Wo Credentials installiert sind",
+  "connectors.design.answer": "Welche Ziele trstctl aktualisieren kann und ob sie gesund sind.",
+  "connectors.design.technicalDetails": "Fähigkeiten, Berechtigungen, Zustand, Wiederholungen, Rollback und Plugin-Nachweise.",
+  "connectors.design.add": "Ziel hinzufügen",
+  "connectors.design.addHelp":
+    "Wählen Sie das System, das trstctl aktualisieren darf, und den Connector, der weiß, wie es geht. Das Speichern eines Ziels stellt kein Credential bereit; Bindung, Test, Bereitstellung und Rollback bleiben getrennte, geprüfte Aktionen.",
+  "connectors.design.checking": "Bereitstellungsziele werden geprüft…",
+  "connectors.design.statusEmpty": "Keine Ziele sind konfiguriert",
+  "connectors.design.statusEmptyBody": "Fügen Sie eines hinzu, bevor trstctl ein Credential auf einem anderen System installieren oder rotieren kann.",
+  "connectors.design.statusOneVerified": "1 Ziel ist konfiguriert und verifiziert",
+  "connectors.design.statusAllVerified": "Alle {targets} konfigurierten Ziele haben Verifikationsnachweise",
+  "connectors.design.statusPartial": "{verified} von {targets} konfigurierten Zielen haben Verifikationsnachweise",
+  "connectors.design.rollbackOne": "1 Connector-Typ kann für diese Bereitstellung einen Rollback ausführen.",
+  "connectors.design.rollbackMany": "{connectors} Connector-Typen können für diese Bereitstellung einen Rollback ausführen.",
+  "connectors.design.verificationBoundary":
+    "Ein Ziel ohne Verifikationsnachweis wird nicht als gesund bezeichnet; öffnen Sie Zustand, Wiederholungen und Rollback, um die Beobachtungen zu prüfen.",
+  "connectors.design.disclosure.destinations": "Ziele und sichere Aktionen",
+  "connectors.design.disclosure.health": "Zustand, Wiederholungen und Rollback",
+  "connectors.design.disclosure.capabilities": "Connector-Fähigkeiten und Plugin-Nachweise",
+  "connectors.design.destinationsHelp":
+    "Ein Ziel benennt ein System und einen Connector. Die Bindung wählt die Identität; Test prüft das Ziel, ohne eine Bereitstellung zu behaupten; Bereitstellen und Rollback sind getrennte zustandsändernde Aktionen.",
+  "connectors.design.destinationsLoading": "Identitäten für Zielaktionen werden geladen…",
+  "connectors.design.destinationsError": "Zielaktionen konnten nicht geladen werden",
+  "connectors.design.configuredDestinations": "Konfigurierte Ziele",
+  "connectors.design.bindHelp":
+    "Verwenden Sie das Owner- und DNS-Formular nur, wenn eine geprüfte Aktion Identität, Ziel, Ausstellungsabsicht und Bereitstellungsabsicht zusammen erstellen muss.",
+  "connectors.design.destinationsTable": "Konfigurierte Bereitstellungsziele",
+  "connectors.design.capabilitiesHelp":
+    "Dies sind Fähigkeitsnachweise, keine Behauptung, dass jeder Connector hier konfiguriert ist. Ausführungsort, Rollback, Gerätenachweis, Migrationsgrenzen, signierte Herausgeberidentität und wirksame Berechtigungen bleiben exakt.",
+  "connectors.design.capabilitiesTable": "Register der Connector-Fähigkeiten",
+  "connectors.design.healthHelp":
+    "Listener-Prüfungen zeigen, was ein Client oder Relay beobachtet hat. Zustellbelege zeigen, was trstctl versucht hat. Wiederholungen, Rollback-Referenzen, Schlüsselverwahrung und Outbox-Schaltkreise sind getrennte Nachweise; keiner ersetzt stillschweigend einen anderen.",
+  "connectors.design.healthLoading": "Zielzustand und Zustellnachweise werden geladen…",
+  "connectors.design.healthError": "Nicht alle Nachweise zum Zielzustand konnten geladen werden",
+  "connectors.design.destinationName": "Zielname",
+  "connectors.design.connectorType": "Connector-Typ",
+  "connectors.design.configuration": "Konfiguration (JSON)",
+  "connectors.design.configurationHelp":
+    "Speichern Sie Credential-Referenzen, niemals Geheimwerte. Der Server validiert vor dem Speichern das Schema des ausgewählten Connectors.",
   "connectors.deliveryEvidence": "Connector-Zustellevidenz",
   "platform.editions.useRights": "Nutzungsrechte",
   "platform.editions.managedCustomerBand": "Managed-Kundenband",

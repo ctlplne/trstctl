@@ -842,8 +842,15 @@ describe("i18n boundary", () => {
       // or service reports remain unknown rather than reading as healthy.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
       // release.
-      "es-ES": "45393d555f8d6fe1205693104c2e7df5e7600874de2dcc893b4aae573256ee97",
-      "de-DE": "fa6428d9e2ac566ea878a97fb529cb0f88b8d29ab418ef6339670b817f364e3c",
+      // QA design g31 re-pin: the deployment-destination journey now answers
+      // configured and verified coverage first, names the one safe add action,
+      // and keeps target mutation, health/retry/rollback, and connector/plugin
+      // evidence behind three translated disclosures. Unconfigured endpoints
+      // and unused connector capabilities cannot inflate the opening claim.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
+      // release.
+      "es-ES": "67b8735837ea9a08dc28bf85a3cb446ba9574879f85d0da9ef9f56d4699bf50b",
+      "de-DE": "7a1acb4274ed75fde22e3829cbecd8dc1148ab787728a65a3419ba2fe27e7e05",
     });
   });
 
