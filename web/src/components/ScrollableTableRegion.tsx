@@ -6,7 +6,7 @@ export function ScrollableTableRegion({ children, className = "", label }: { chi
     <div
       aria-label={label}
       className={`${className} min-w-0 max-w-full overflow-x-auto rounded-md border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2`}
-      role="region"
+      role="group"
       tabIndex={0}
     >
       {children}

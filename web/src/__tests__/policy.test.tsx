@@ -666,6 +666,7 @@ describe("policy governance surface", () => {
 
     await user.click(screen.getByText("Rule versions and change history", { exact: true }));
     expect(await screen.findByRole("table", { name: "Policy versions" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Policy versions" })).toHaveAttribute("tabindex", "0");
     expect(screen.getByText("Emergency issuance guard", { exact: true })).toBeInTheDocument();
 
     await user.click(screen.getByText("Test a rule safely", { exact: true }));
