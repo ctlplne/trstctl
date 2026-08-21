@@ -389,7 +389,7 @@ describe("dedicated approvals inbox", () => {
     apiMock.identities.mockResolvedValue([]);
     renderAt("/audit?type=identity.approval&q=jit-1+issue");
 
-    await screen.findByRole("heading", { name: "Audit" });
+    await screen.findByRole("heading", { name: "Change history" });
     await waitFor(() =>
       expect(apiMock.auditEvents).toHaveBeenCalledWith({
         type: "identity.approval",

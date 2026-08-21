@@ -322,12 +322,14 @@ describe("operational console surface", () => {
     const user = userEvent.setup();
     renderAt("/audit");
 
-    expect(await screen.findByRole("heading", { name: "Audit" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Audit" })).toHaveAttribute("href", "/audit");
+    expect(await screen.findByRole("heading", { name: "Change history" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Change history" })).toHaveAttribute("href", "/audit");
+    await user.click(screen.getByRole("button", { name: "Search activity" }));
     expect(await screen.findByText("identity.issued")).toBeInTheDocument();
     expect(screen.getByRole("table", { name: "Tenant audit events" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Columns/i })).toBeInTheDocument();
 
+    await user.click(screen.getByText("Signatures and evidence export", { exact: true }));
     await user.click(screen.getByRole("button", { name: /Export evidence/i }));
     expect(await screen.findByText("jws: sealed.bundle")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Download signed bundle" })).toHaveAttribute("download", "audit-evidence.jws.json");
@@ -352,10 +354,11 @@ describe("operational console surface", () => {
     const user = userEvent.setup();
     renderAt("/audit");
 
+    await user.click(await screen.findByRole("button", { name: "Search activity" }));
     expect(await screen.findByText("identity.requested")).toBeInTheDocument();
 
     await user.type(screen.getByLabelText("Type"), "identity.issued");
-    await user.type(screen.getByLabelText("Search"), "payments");
+    await user.type(screen.getByLabelText("Search activity"), "payments");
     await user.type(screen.getByLabelText("Since"), "2026-06-17T00:00:00Z");
     await user.clear(screen.getByLabelText("Limit"));
     await user.type(screen.getByLabelText("Limit"), "25");
@@ -380,9 +383,12 @@ describe("operational console surface", () => {
   });
 
   it("shows audit empty and permission-denied states without leaking tenant details", async () => {
+    const user = userEvent.setup();
     apiMock.auditEvents.mockResolvedValueOnce([]);
     const empty = renderAt("/audit");
 
+    expect(await screen.findByRole("heading", { name: "No changes found in this window" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Search activity" }));
     expect(await screen.findByText("No audit events match these filters")).toBeInTheDocument();
     expect(empty.container.querySelector('[data-state-primitive="empty"]')).toBeInTheDocument();
     empty.unmount();
@@ -391,6 +397,8 @@ describe("operational console surface", () => {
     apiMock.auditEvents.mockRejectedValue(new ApiError(403, JSON.stringify({ detail: "tenant t2 audit stream exists but is forbidden" })));
     renderAt("/audit");
 
+    expect(await screen.findByRole("heading", { name: "Change history is unavailable" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Search activity" }));
     expect(await screen.findByText("Permission denied")).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent("Your session cannot read tenant audit evidence.");
     expect(screen.queryByText(/tenant t2/i)).not.toBeInTheDocument();
@@ -402,7 +410,8 @@ describe("operational console surface", () => {
     const user = userEvent.setup();
     renderAt("/audit");
 
-    await screen.findByText("identity.issued");
+    await screen.findByRole("heading", { name: "1 change is ready to search" });
+    await user.click(screen.getByText("Signatures and evidence export", { exact: true }));
     await user.click(screen.getByRole("button", { name: /Export evidence/i }));
 
     expect(await screen.findByText(/Could not export evidence: audit export window too large/)).toBeInTheDocument();

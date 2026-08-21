@@ -369,6 +369,7 @@ describe("SIMP-03 policy, audit, and compliance remediation", () => {
       ]);
     renderAudit();
 
+    await user.click(await screen.findByRole("button", { name: "Search activity" }));
     await screen.findByText("identity.issued");
     await user.click(screen.getByRole("button", { name: "Policy decisions" }));
 
@@ -376,7 +377,7 @@ describe("SIMP-03 policy, audit, and compliance remediation", () => {
     expect(await screen.findByText("policy.decision")).toBeInTheDocument();
     expect(screen.getByDisplayValue("policy.decision")).toBeInTheDocument();
     expect(screen.getByText("cert/payments")).toBeInTheDocument();
-    expect(screen.getByText("ra@example.test")).toBeInTheDocument();
+    expect(screen.getAllByText("ra@example.test").length).toBeGreaterThan(0);
   });
 
   it("removes notification-channel fixtures from Policy", async () => {

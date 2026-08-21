@@ -1,5 +1,5 @@
 import { Search } from "lucide-react";
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 import { cn } from "@/lib/utils";
 
 export type DataGridToolbarProps = {
@@ -7,6 +7,8 @@ export type DataGridToolbarProps = {
   searchPlaceholder?: string;
   searchValue?: string;
   onSearchChange?: (value: string) => void;
+  searchInputId?: string;
+  searchInputRef?: Ref<HTMLInputElement>;
   filters?: ReactNode;
   bulkActions?: ReactNode;
   savedViews?: ReactNode;
@@ -20,6 +22,8 @@ export function DataGridToolbar({
   searchPlaceholder = "Search...",
   searchValue,
   onSearchChange,
+  searchInputId,
+  searchInputRef,
   filters,
   bulkActions,
   savedViews,
@@ -35,6 +39,8 @@ export function DataGridToolbar({
           <span className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
             <input
+              id={searchInputId}
+              ref={searchInputRef}
               type="search"
               aria-label={searchLabel}
               placeholder={searchPlaceholder}

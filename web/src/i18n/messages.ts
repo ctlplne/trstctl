@@ -3051,8 +3051,8 @@ export const messages = {
     description: "Primary nav section label above the S-B2 product module switcher.",
   },
   "nav.module.auditLens": {
-    defaultMessage: "Audit (this module)",
-    description: "Module-band link to the audit stream scoped to the active module (S-B4).",
+    defaultMessage: "Change history (this module)",
+    description: "Module-band link to change history scoped to the active module (S-B4).",
   },
   "nav.module.upsell": {
     defaultMessage: "This module requires a commercial edition — view Editions & license",
@@ -4966,8 +4966,113 @@ export const messages = {
     description: "Delete approval consequence.",
   },
   "nav.item.audit": {
-    defaultMessage: "Audit",
-    description: "Primary navigation item.",
+    defaultMessage: "Change history",
+    description: "Primary navigation item. Matches the plain-language immutable event history page heading.",
+  },
+  "audit.design.answer": {
+    defaultMessage: "Who changed what, when, and whether it succeeded.",
+    description: "Plain-language answer provided by the change-history page.",
+  },
+  "audit.design.technicalDetails": {
+    defaultMessage: "Immutable event envelope, signatures, export, retention.",
+    description: "Exact evidence and lifecycle boundaries available from the change-history page.",
+  },
+  "audit.design.searchAction": {
+    defaultMessage: "Search activity",
+    description: "Primary change-history action.",
+  },
+  "audit.design.summaryCheckingTitle": {
+    defaultMessage: "Checking recorded changes…",
+    description: "Loading title for the bounded change-history summary.",
+  },
+  "audit.design.summaryCheckingBody": {
+    defaultMessage: "Reading a bounded immutable event window for this tenant.",
+    description: "Loading explanation for the bounded change-history summary.",
+  },
+  "audit.design.summaryUnavailableTitle": {
+    defaultMessage: "Change history is unavailable",
+    description: "Safe title when tenant change history cannot be read.",
+  },
+  "audit.design.summaryUnavailableBody": {
+    defaultMessage: "No conclusion is shown because the event window could not be read. Open search for the exact error and retry path.",
+    description: "Safe explanation when tenant change history cannot be read.",
+  },
+  "audit.design.summaryEmptyTitle": {
+    defaultMessage: "No changes found in this window",
+    description: "Title when the current bounded change-history window is empty.",
+  },
+  "audit.design.summaryEmptyBody": {
+    defaultMessage: "Nothing is recorded in this 50-event window. Search a different time or event type before concluding that no change happened.",
+    description: "Bounded and non-misleading explanation for an empty event window.",
+  },
+  "audit.design.summaryOne": {
+    defaultMessage: "1 change is ready to search",
+    description: "Bounded change-history summary for one event.",
+  },
+  "audit.design.summaryMany": {
+    defaultMessage: "{count} changes are ready to search",
+    description: "Bounded change-history summary for multiple events.",
+  },
+  "audit.design.summaryWindowBoundary": {
+    defaultMessage:
+      "This is a {count}-event window, not a claim about the newest or complete history. Search or export an exact window before making an audit decision.",
+    description: "Safety boundary explaining that the default recent event list is bounded.",
+  },
+  "audit.design.lastChangeShown": {
+    defaultMessage: "Last change shown",
+    description: "Label for the highest-sequence event in the bounded change summary without claiming it is the newest event overall.",
+  },
+  "audit.design.changedBy": {
+    defaultMessage: "Changed by",
+    description: "Label for the actor of the highest-sequence event shown in the bounded change summary.",
+  },
+  "audit.design.when": {
+    defaultMessage: "When",
+    description: "Label for the time of the highest-sequence event shown in the bounded change summary.",
+  },
+  "audit.design.result": {
+    defaultMessage: "Result",
+    description: "Label for the outcome of the highest-sequence event shown in the bounded change summary.",
+  },
+  "audit.design.result.succeeded": {
+    defaultMessage: "Succeeded",
+    description: "Plain-language successful audit event outcome.",
+  },
+  "audit.design.result.failed": {
+    defaultMessage: "Failed",
+    description: "Plain-language failed audit event outcome.",
+  },
+  "audit.design.result.denied": {
+    defaultMessage: "Denied",
+    description: "Plain-language denied audit event outcome.",
+  },
+  "audit.design.result.allowed": {
+    defaultMessage: "Allowed",
+    description: "Plain-language allowed audit event outcome.",
+  },
+  "audit.design.result.recorded": {
+    defaultMessage: "Recorded; no success result in this event",
+    description: "Truthful audit event outcome when the envelope does not state success or failure.",
+  },
+  "audit.design.disclosure.search": {
+    defaultMessage: "Search and inspect activity",
+    description: "Progressive disclosure for exact audit-event search, filters, rows, and detail.",
+  },
+  "audit.design.disclosure.evidence": {
+    defaultMessage: "Signatures and evidence export",
+    description: "Progressive disclosure for hash-chain status and signed or ingestible audit export.",
+  },
+  "audit.design.disclosure.collectors": {
+    defaultMessage: "Collector delivery",
+    description: "Progressive disclosure for scheduled external audit collector feeds.",
+  },
+  "audit.design.retentionBoundary": {
+    defaultMessage: "Retention is enforced by the tenant privacy policy; exporting evidence does not change that policy.",
+    description: "Boundary between audit evidence export and privacy retention controls.",
+  },
+  "audit.design.reviewRetention": {
+    defaultMessage: "Review retention controls",
+    description: "Link from change-history evidence to privacy retention controls.",
   },
   "nav.item.ownership": {
     defaultMessage: "Ownership",

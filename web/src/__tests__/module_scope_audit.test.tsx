@@ -66,7 +66,7 @@ describe("audit module scope (S-B4)", () => {
   it("scopes the shared audit stream from ?module and shows a clearable chip", async () => {
     renderAt("/audit?module=secrets");
 
-    await screen.findByRole("heading", { level: 1, name: "Audit" });
+    await screen.findByRole("heading", { level: 1, name: "Change history" });
     // The scope is applied to the served query as the module's term.
     await waitFor(() => expect(apiMock.auditEvents).toHaveBeenCalledWith(expect.objectContaining({ q: "secret" })));
 
@@ -84,7 +84,7 @@ describe("audit module scope (S-B4)", () => {
 
   it("shows no scope chip on the unscoped audit surface", async () => {
     renderAt("/audit");
-    await screen.findByRole("heading", { level: 1, name: "Audit" });
+    await screen.findByRole("heading", { level: 1, name: "Change history" });
     expect(screen.queryByTestId("audit-module-scope")).not.toBeInTheDocument();
   });
 });

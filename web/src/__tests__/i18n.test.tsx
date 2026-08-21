@@ -871,8 +871,15 @@ describe("i18n boundary", () => {
       // every locale names the no-ready-channel boundary and the exact safe
       // next step. Machine-authored Spanish and German remain flagged for
       // human language review.
-      "es-ES": "6bfa1d6a135e49d0e98b4f2cd7f7f2476df8535dbb012cff15bca88829fed218",
-      "de-DE": "1e67d09ddf9a420efc796f9e874a21c21a14e2c234ab9bfb32d4d24eb198dd45",
+      // QA design g35 re-pin: Change history now answers who changed what,
+      // when, and whether the last event shown records an outcome; it keeps
+      // the explicit not-newest/not-complete bounded-window warning, search,
+      // immutable signatures/exports, retention boundary, and collector
+      // delivery explicit in every locale.
+      // Machine-authored Spanish and German remain flagged for human language
+      // review.
+      "es-ES": "349d1ec4171d98d6b4c6ff2fe71c8cf469db42ac486f1241b88c489007bd95a1",
+      "de-DE": "a1dbb37080339157832283b4a5b4cd50c80c7d7a96437e88cc37a3ef215fb2da",
     });
   });
 

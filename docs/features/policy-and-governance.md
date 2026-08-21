@@ -185,6 +185,14 @@ Buyer receipt for CAP-POL-06 Tamper-evident / signed audit log: the served audit
 surface is `GET /api/v1/audit/events` for tenant-scoped replay and `GET
 /api/v1/audit/export` for a signed offline evidence bundle.
 
+The console names this surface **Change history** and starts with a bounded event
+summary rather than raw event machinery. It does not call that window the newest or
+complete history. **Search activity** opens filters, rows, and
+event detail. Hash-chain status and signed or ingestible exports live under
+**Signatures and evidence export**; scheduled SIEM feeds live under **Collector
+delivery**. All three sections preserve the same served endpoints and tenant scope,
+and explicit query links open the search layer automatically.
+
 The audit log is a hash-chained, tamper-evident record where each entry's hash links
 to the previous one (`hash_i = SHA256(hash_{i-1} || record_i)`; all hashing goes through
 the single crypto path). Altering, dropping, or reordering any record breaks the chain,

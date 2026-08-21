@@ -62,6 +62,7 @@ describe("AUD-51 self-contained audit downloads", () => {
   it("shows the external timestamp and saves the complete canonical envelope", async () => {
     const user = userEvent.setup();
     renderAudit();
+    await user.click(await screen.findByText("Signatures and evidence export", { exact: true }));
     await user.click(await screen.findByRole("button", { name: /Export evidence/i }));
 
     expect(await screen.findByText("Complete RFC 3161 token saved")).toBeInTheDocument();

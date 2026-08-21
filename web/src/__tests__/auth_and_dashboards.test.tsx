@@ -409,7 +409,7 @@ describe("auth + dashboards", () => {
     expect(within(rail).getByRole("button", { name: "Posture & response" })).toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: /Request a certificate/i })).not.toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: /Approvals/i })).not.toBeInTheDocument();
-    expect(within(nav).queryByRole("link", { name: /^Audit$/i })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole("link", { name: /^Change history$/i })).not.toBeInTheDocument();
   });
 
   it("shapes navigation for auditor sessions around audit evidence only", async () => {
@@ -418,9 +418,9 @@ describe("auth + dashboards", () => {
 
     renderAt("/audit");
 
-    expect(await screen.findByRole("heading", { name: "Audit" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Change history" })).toBeInTheDocument();
     const nav = screen.getByRole("navigation", { name: "Primary" });
-    expect(within(nav).getByRole("link", { name: /^Audit$/i })).toHaveAttribute("href", "/audit");
+    expect(within(nav).getByRole("link", { name: /^Change history$/i })).toHaveAttribute("href", "/audit");
     expect(within(nav).queryByRole("link", { name: /Certificates/i })).not.toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: /unmanaged credentials/i })).not.toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: /Request a certificate/i })).not.toBeInTheDocument();
@@ -438,7 +438,7 @@ describe("auth + dashboards", () => {
     expect(within(nav).getByRole("link", { name: /Request a certificate/i })).toHaveAttribute("href", "/request");
     expect(within(nav).getByRole("link", { name: /Certificates/i })).toHaveAttribute("href", "/certificates");
     expect(within(nav).queryByRole("link", { name: /unmanaged credentials/i })).not.toBeInTheDocument();
-    expect(within(nav).queryByRole("link", { name: /^Audit$/i })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole("link", { name: /^Change history$/i })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /Open command palette/i }));
     const dialog = await screen.findByRole("dialog", { name: "Command palette" });
@@ -448,15 +448,18 @@ describe("auth + dashboards", () => {
   });
 
   it("keeps backend 403 handling for direct denied routes", async () => {
+    const user = userEvent.setup();
     apiMock.me.mockResolvedValue(sessionForRole("viewer"));
     apiMock.auditEvents.mockRejectedValue(new ApiError(403, JSON.stringify({ detail: "missing audit:read" })));
 
     renderAt("/audit");
 
+    expect(await screen.findByRole("heading", { name: "Change history is unavailable" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Search activity" }));
     expect(await screen.findByText("Your session cannot read tenant audit evidence.")).toBeInTheDocument();
     expect(apiMock.auditEvents).toHaveBeenCalledWith({ limit: 50 });
     const nav = screen.getByRole("navigation", { name: "Primary" });
-    expect(within(nav).queryByRole("link", { name: /^Audit$/i })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole("link", { name: /^Change history$/i })).not.toBeInTheDocument();
   });
 
   // ---------------------------------------------------------------- S-N0 ----

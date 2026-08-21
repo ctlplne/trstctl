@@ -35,7 +35,7 @@ export interface JourneySmokeCell {
 const routeCatalog = {
   agents: { path: "/agents", heading: "Agents" },
   approvals: { path: "/approvals", heading: "Requests waiting for approval" },
-  audit: { path: "/audit", heading: "Audit" },
+  audit: { path: "/audit", heading: "Change history" },
   caHierarchy: { path: "/ca-hierarchy", heading: "Certificate authorities" },
   certificates: { path: "/certificates", heading: "Certificates" },
   discovery: { path: "/discovery", heading: "Find unmanaged credentials" },
@@ -87,7 +87,7 @@ function notApplicable(persona: JourneySmokePersona, step: JourneySmokeStep, doc
     step,
     status: "not_applicable",
     uiRoute: "/audit",
-    uiHeading: "Audit",
+    uiHeading: "Change history",
     apiPaths: [],
     cliCommands: [],
     docs,

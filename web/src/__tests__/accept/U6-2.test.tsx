@@ -37,11 +37,13 @@ describe("U6-2 audit explorer uplift", () => {
       </AppQueryProvider>,
     );
     await waitFor(() => expect(apiMock.auditEvents).toHaveBeenCalled());
+    await user.click(screen.getByRole("button", { name: "Search activity" }));
     expect(await screen.findByText("identity.issued")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Policy decisions" }));
     await waitFor(() => expect(apiMock.auditEvents).toHaveBeenCalledWith(expect.objectContaining({ type: "policy.decision" })));
 
+    await user.click(screen.getByText("Signatures and evidence export", { exact: true }));
     await user.click(screen.getByRole("button", { name: "Export evidence" }));
     await waitFor(() => expect(apiMock.exportAudit).toHaveBeenCalled());
     expect(await screen.findByRole("heading", { name: "Signed evidence bundle ready" })).toBeInTheDocument();

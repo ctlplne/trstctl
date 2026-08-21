@@ -30,7 +30,7 @@ The mechanism: the URL decides the active space — deep-linking any route light
 its owning space, and choosing a space in the rail lands on the first route your
 session may read. trstctl's cross-domain moat still meets in one place (one
 identity graph, one blast-radius view, one signed audit stream): every non-Platform
-space keeps an Audit (this space) row, a scoped lens over the single stream, and
+space keeps a Change history (this space) row, a scoped lens over the single stream, and
 the command palette jumps across spaces from anywhere. A space with no readable
 routes disappears from the rail entirely, and route URLs are unchanged from the
 pre-spaces console, so old links and bookmarks resolve.
@@ -341,17 +341,26 @@ includes PCI-DSS, HIPAA, SOC 2, FedRAMP, FIPS 140, CA/B Forum BR, and more, with
 signed tenant/window, exact event/object references, and missing prerequisites. It
 also shows signed certificate-custody totals and the exact fingerprint/fields for
 every incomplete custody row, the CAP-OBS-02 inventory report, report schedules, and
-the dry-run workbench. The audit
-explorer filters the tamper-evident event stream and exports a signed evidence
-bundle. The evidence panel names the exact chain head, RFC 3161 kind, authority
+the dry-run workbench.
+
+**Change history** opens with a bounded event window and answers who changed what,
+when, and whether the last event shown records a result. It does not call that window
+the newest or complete history. **Search activity** opens the filters, event rows, and
+exact event detail. Signatures and export, plus collector delivery, remain in two
+separate closed sections until requested. This keeps the default page calm without
+removing tenant-scoped evidence or operational controls.
+
+The event explorer filters the tamper-evident stream and exports a signed evidence
+bundle. The evidence section names the exact chain head, RFC 3161 kind, authority
 time, and whether the full token is present. Its download is the canonical JSON
 envelope from the served contract—not a display string—so the compact JWS and
 complete external timestamp remain together for offline verification against the
 operator's pinned audit JWK set and TSA root. CSV downloads likewise keep their
 proof in the final RFC-safe row rather than transient response headers.
 
-The same Audit screen configures tenant-scoped scheduled Splunk HEC and Microsoft
-Sentinel feeds. The table shows the durable delivered cursor, exact queued-record
+The same Change history screen configures tenant-scoped scheduled Splunk HEC and
+Microsoft Sentinel feeds inside **Collector delivery**. That section loads only when
+opened. Its table shows the durable delivered cursor, exact queued-record
 lag, retry attempt/time, terminal error code, and collector request ID. The form
 accepts only an operator-allowlisted `env:NAME` credential pointer—never a token
 value—and clearly separates public HTTPS from permission-gated private CIDRs. A
@@ -619,7 +628,7 @@ grounded and sufficient. Backed by `/api/v1/ai/status`, `/api/v1/mcp/tools`, `/a
 | `/operations` | Operations |
 | `/notifications` | Alerts and delivery |
 | `/policy` | Rules and approvals |
-| `/audit` | Audit |
+| `/audit` | Change history |
 | `/privacy` | Privacy |
 | `/connectors` | Where credentials are installed |
 | `/integrate` | Integrate |

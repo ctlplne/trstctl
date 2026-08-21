@@ -1,1 +1,0 @@
-import{f as e,h as t,p as n,t as r}from"./utils-CV_V-OjE.js";var i=t(n(),1),a=e(),o=(0,i.forwardRef)(function({className:e,...t},n){return(0,a.jsx)(`input`,{ref:n,type:`checkbox`,className:r(`h-4 w-4 shrink-0 rounded border-border`,e),...t})});export{o as t};

@@ -35,6 +35,7 @@ describe("U7-3 policy decisions from the audit stream", () => {
       </AppQueryProvider>,
     );
     await waitFor(() => expect(apiMock.auditEvents).toHaveBeenCalled());
+    await user.click(screen.getByRole("button", { name: "Search activity" }));
     expect(await screen.findByText("policy.decision")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Policy decisions" }));
