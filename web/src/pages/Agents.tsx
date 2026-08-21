@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { UpgradeCampaignPanel } from "@/components/UpgradeCampaignPanel";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Copy, Loader2, RefreshCw, ShieldOff, UserX, X } from "lucide-react";
 import { CredentialChip } from "@/components/CredentialChip";
 import { Dialog } from "@/components/Dialog";
@@ -11,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PageHeader } from "@/components/PageHeader";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
-import { api, type Agent, type EnrollmentToken } from "@/lib/api";
+import { api, type Agent, type AgentJobPosture, type AgentUpgradeCampaign, type EnrollmentToken } from "@/lib/api";
+import { optionalApiCall } from "@/lib/optionalApi";
 import { formatDate as formatDatePolicy, formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
@@ -35,6 +35,7 @@ const certRevocationReasons = [
 // agent acts on things in its segment that cannot run an agent at all. An agent
 // can hold both — that is the F5-beside-a-server case.
 type AgentRole = "host" | "network";
+type AgentDisclosure = "fleet" | "trust" | "operations";
 
 const AGENT_ROLE_CHOICES = [
   { value: "host", labelKey: "source.agent.role.host.a2r0le0003", helpKey: "source.agent.role.host.help.a2r0le0004" },
@@ -97,6 +98,13 @@ export function Agents() {
   const [revokeConfirmed, setRevokeConfirmed] = useState(false);
   const [revokeBusy, setRevokeBusy] = useState(false);
   const [revokeError, setRevokeError] = useState<string | null>(null);
+  const [enrollmentOpen, setEnrollmentOpen] = useState(false);
+  const [open, setOpen] = useState<Record<AgentDisclosure, boolean>>({ fleet: false, trust: false, operations: false });
+  const [campaign, setCampaign] = useState<AgentUpgradeCampaign | null>(null);
+  const [jobPosture, setJobPosture] = useState<AgentJobPosture | null>(null);
+  const [operationsLoading, setOperationsLoading] = useState(false);
+  const [operationsLoaded, setOperationsLoaded] = useState(false);
+  const [operationsError, setOperationsError] = useState<string | null>(null);
   const { toast } = useToast();
 
   async function load() {
@@ -116,6 +124,32 @@ export function Agents() {
   useEffect(() => {
     void load();
   }, []);
+
+  async function loadOperationsEvidence() {
+    if (operationsLoaded || operationsLoading) return;
+    setOperationsLoading(true);
+    setOperationsError(null);
+    try {
+      const [nextCampaign, nextJobPosture] = await Promise.all([
+        optionalApiCall<AgentUpgradeCampaign>("agentUpgradeCampaign", { active: false, rings: {}, versions: {}, guidance: "" }),
+        optionalApiCall<AgentJobPosture>("agentJobPosture", {
+          served: false,
+          claimable_kinds: [],
+          generated_at: "",
+          queues: [],
+          redemptions: { total: 0, live: 0 },
+          receipts: { verified: 0, rejected: 0 },
+        }),
+      ]);
+      setCampaign(nextCampaign);
+      setJobPosture(nextJobPosture);
+      setOperationsLoaded(true);
+    } catch (err) {
+      setOperationsError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setOperationsLoading(false);
+    }
+  }
 
   async function mintToken() {
     setTokenError(null);
@@ -139,6 +173,24 @@ export function Agents() {
 
   const selected = useMemo(() => agents.find((agent) => agent.id === selectedID) ?? agents[0] ?? null, [agents, selectedID]);
   const command = token ? enrollmentCommand(token, tokenIdentity) : "";
+  const activeAgents = useMemo(() => agents.filter((agent) => !isOffboarded(agent)), [agents]);
+  const onlineAgents = useMemo(
+    () => activeAgents.filter((agent) => agent.status.toLowerCase() === "online" && !heartbeatFreshness(agent.last_seen_at).stale),
+    [activeAgents],
+  );
+  const trustedAgents = useMemo(() => activeAgents.filter((agent) => agent.role_source === "certificate" && (agent.roles ?? []).length > 0), [activeAgents]);
+  const currentEvidenceAgents = useMemo(
+    () => activeAgents.filter((agent) => Boolean(agent.version?.trim()) && !heartbeatFreshness(agent.last_seen_at).stale),
+    [activeAgents],
+  );
+
+  function closeEnrollment() {
+    if (tokenBusy) return;
+    setEnrollmentOpen(false);
+    setToken(null);
+    setCopied(false);
+    setTokenError(null);
+  }
 
   async function copyCommand() {
     if (!command) return;
@@ -275,146 +327,219 @@ export function Agents() {
   ];
 
   return (
-    <section aria-labelledby="agents-heading" className="grid gap-6">
+    <section aria-labelledby="agents-heading" className="space-y-4">
       <PageHeader
         titleId="agents-heading"
         title={translateNow("source.agents.279b44d2ab")}
-        description="The in-network agents that deploy and rotate credentials on your hosts. Register a new agent with a one-time enrollment token."
+        description={t("agents.design.answer")}
+        technicalDetails={t("agents.design.technicalDetails")}
         actions={
-          <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
-            {translateNow("source.refresh.0e91610117")}
+          <Button type="button" onClick={() => setEnrollmentOpen(true)}>
+            {t("agents.design.add")}
           </Button>
         }
       />
-      <UpgradeCampaignPanel />
+      {loading ? (
+        <LoadingState>{t("agents.design.checkingFleet")}</LoadingState>
+      ) : error ? (
+        <ErrorState title={t("agents.design.fleetError")}>{error}</ErrorState>
+      ) : (
+        <div className="ui-panel grid gap-2 p-comfortable" role="status" aria-live="polite">
+          <h2 className="text-title font-semibold">
+            {agents.length === 0
+              ? t("agents.design.statusEmpty")
+              : activeAgents.length === 0
+                ? t("agents.design.statusNoActive")
+                : onlineAgents.length === 1
+                  ? t("agents.design.statusOneOnline", { active: String(activeAgents.length) })
+                  : t("agents.design.statusOnline", { online: String(onlineAgents.length), active: String(activeAgents.length) })}
+          </h2>
+          {agents.length === 0 ? (
+            <p className="max-w-3xl text-sm text-muted-foreground">{t("agents.design.statusEmptyBody")}</p>
+          ) : activeAgents.length === 0 ? (
+            <p className="max-w-3xl text-sm text-muted-foreground">{t("agents.design.statusNoActiveBody", { records: String(agents.length) })}</p>
+          ) : (
+            <div className="grid gap-1 text-sm text-muted-foreground">
+              <p>{t("agents.design.trustBody", { trusted: String(trustedAgents.length), active: String(activeAgents.length) })}</p>
+              <p>{t("agents.design.currentBody", { current: String(currentEvidenceAgents.length), active: String(activeAgents.length) })}</p>
+            </div>
+          )}
+        </div>
+      )}
 
-      <section aria-labelledby="enrollment-heading" className="border-y border-border py-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+      <AgentDetails title={t("agents.design.disclosure.fleet")} open={open.fleet} onToggle={(value) => setOpen((current) => ({ ...current, fleet: value }))}>
+        <div className="grid gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <p className="max-w-3xl text-sm text-muted-foreground">{t("agents.design.fleetHelp")}</p>
+            <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
+              {t("agents.design.refresh")}
+            </Button>
+          </div>
+          {error && <ErrorState title={translateNow("source.could.not.load.agents.1d510cf246")}>{error}</ErrorState>}
+          {loading && <LoadingState>{translateNow("source.loading.agents.a4e0608f99")}</LoadingState>}
+          {!loading && !error && agents.length === 0 && <EmptyState title={t("agents.design.noFleet")}>{t("agents.design.noFleetHelp")}</EmptyState>}
+          {!loading && !error && agents.length > 0 && (
+            <section aria-labelledby="fleet-heading" className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+              <div>
+                <h2 id="fleet-heading" className="sr-only">
+                  {translateNow("source.agent.fleet.ac46d1b700")}
+                </h2>
+                {offboardEvidence && <p className="mb-3 text-sm text-muted-foreground">{offboardEvidence}</p>}
+                <DataGrid ariaLabel="Registered in-network agents" rows={agents} columns={agentColumns} getRowId={(agent) => agent.id} state="ready" />
+              </div>
+              {selected && <AgentDetail agent={selected} />}
+            </section>
+          )}
+        </div>
+      </AgentDetails>
+
+      <AgentDetails title={t("agents.design.disclosure.trust")} open={open.trust} onToggle={(value) => setOpen((current) => ({ ...current, trust: value }))}>
+        <div className="grid gap-4">
+          <p className="max-w-3xl text-sm text-muted-foreground">{t("agents.design.trustRule")}</p>
+          {agents.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t("agents.design.noTrustEvidence")}</p>
+          ) : (
+            <ul className="grid gap-2 sm:grid-cols-2">
+              {agents.map((agent) => {
+                const trusted = !isOffboarded(agent) && agent.role_source === "certificate" && (agent.roles ?? []).length > 0;
+                return (
+                  <li key={agent.id} className="rounded-control border border-border p-3 text-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-medium">{agent.name}</span>
+                      <span className={trusted ? "text-status-success" : "text-status-warning"}>
+                        {isOffboarded(agent)
+                          ? t("agents.design.trustOffboarded")
+                          : trusted
+                            ? t("agents.design.trustVerified")
+                            : t("agents.design.trustMissing")}
+                      </span>
+                    </div>
+                    <div className="mt-2">
+                      <AgentRoleBadges agent={agent} />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </AgentDetails>
+
+      <AgentDetails
+        title={t("agents.design.disclosure.operations")}
+        open={open.operations}
+        onToggle={(value) => {
+          setOpen((current) => ({ ...current, operations: value }));
+          if (value) void loadOperationsEvidence();
+        }}
+      >
+        <AgentOperationsEvidence campaign={campaign} posture={jobPosture} loading={operationsLoading} error={operationsError} />
+      </AgentDetails>
+
+      <Dialog
+        open={enrollmentOpen}
+        onClose={closeEnrollment}
+        titleId="agent-enrollment-title"
+        descriptionId="agent-enrollment-description"
+        panelAnimation="none"
+        panelClassName="fixed left-1/2 top-1/2 grid max-h-[calc(100dvh-2rem)] w-[min(94vw,48rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain rounded-panel border border-border bg-card p-5 shadow-elevation3"
+      >
+        <div className="grid gap-4">
           <div>
-            <h2 id="enrollment-heading" className="text-title font-semibold">
-              {translateNow("source.enrollment.token.6c86be7863")}
+            <h2 id="agent-enrollment-title" className="text-title font-semibold">
+              {t("agents.design.add")}
             </h2>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              Mint a one-time bootstrap token. The token stays in component memory only; it is never written to browser storage.
+            <p id="agent-enrollment-description" className="mt-1 max-w-3xl text-sm text-muted-foreground">
+              {t("agents.design.addHelp")}
             </p>
           </div>
-          <div className="grid gap-2 sm:grid-cols-[minmax(12rem,18rem)_auto] sm:items-end">
-            <label className="grid gap-1 text-sm font-medium">
-              {translateNow("source.agent.identity.698c87920a")}
-              <input
-                className="rounded-control border border-border bg-background px-3 py-2 text-sm font-normal"
-                placeholder={translateNow("source.node.a.66570ff05a")}
-                value={tokenAllowedIdentity}
-                onChange={(event) => setTokenAllowedIdentity(event.target.value)}
-                disabled={tokenBusy}
-                autoComplete="off"
-                spellCheck={false}
-              />
-            </label>
+          <label className="grid gap-1 text-sm font-medium">
+            {translateNow("source.agent.identity.698c87920a")}
+            <input
+              className="rounded-control border border-border bg-background px-3 py-2 text-sm font-normal"
+              placeholder={translateNow("source.node.a.66570ff05a")}
+              value={tokenAllowedIdentity}
+              onChange={(event) => setTokenAllowedIdentity(event.target.value)}
+              disabled={tokenBusy}
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </label>
+          <fieldset className="grid gap-2 rounded-md border border-border p-3">
+            <legend className="px-1 text-sm font-medium">{translateNow("source.agent.role.a2r0le0001")}</legend>
+            <p className="text-sm text-muted-foreground">{translateNow("source.agent.role.help.a2r0le0002")}</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {AGENT_ROLE_CHOICES.map((choice) => (
+                <label key={choice.value} htmlFor={`agent-role-${choice.value}`} className="flex items-start gap-2 text-sm">
+                  <Checkbox
+                    id={`agent-role-${choice.value}`}
+                    className="mt-1"
+                    checked={tokenRoles.includes(choice.value)}
+                    onChange={(event) =>
+                      setTokenRoles((current) =>
+                        event.target.checked
+                          ? [...current.filter((role) => role !== choice.value), choice.value]
+                          : current.filter((role) => role !== choice.value),
+                      )
+                    }
+                    disabled={tokenBusy}
+                  />
+                  <span>
+                    <span className="font-medium">{translateNow(choice.labelKey)}</span>
+                    <span className="block text-muted-foreground">{translateNow(choice.helpKey)}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            {tokenRoles.includes("network") && <p className="text-sm text-status-warning">{translateNow("source.agent.role.relay.warning.a2r0le0007")}</p>}
+            {tokenRoles.length === 0 && <p className="text-sm text-muted-foreground">{translateNow("source.agent.role.empty.a2r0le0008")}</p>}
+          </fieldset>
+          {tokenError && <ErrorState title={translateNow("source.could.not.mint.enrollment.token.7b0b6374e9")}>{tokenError}</ErrorState>}
+          {token && (
+            <div className="grid gap-3 rounded-md border border-border p-3 text-sm">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="font-medium">{translateNow("source.shown.once.22548d041f")}</p>
+                  <p className="mt-1 text-muted-foreground">{t("agents.design.tokenOnceHelp")}</p>
+                </div>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setToken(null)}>
+                  <X className="h-4 w-4" aria-hidden="true" />
+                  {translateNow("source.dismiss.48845bff33")}
+                </Button>
+              </div>
+              <dl className="grid gap-2">
+                <div>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.bootstrap.token.2996dc8b78")}</dt>
+                  <dd className="mt-0.5">
+                    <CredentialChip value={token.token} label="bootstrap token" head={14} tail={8} />
+                  </dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.install.command.1ae9754205")}</dt>
+                  <dd className="mt-1">
+                    <code className="block overflow-x-auto rounded bg-muted px-3 py-2 text-xs">{command}</code>
+                  </dd>
+                </div>
+              </dl>
+              <Button type="button" size="sm" variant="outline" className="w-fit" onClick={() => void copyCommand()}>
+                <Copy className="h-4 w-4" aria-hidden="true" />
+                {translateNow("source.copy.command.9a01feecae")}
+              </Button>
+              {copied && <p className="text-xs text-muted-foreground">{translateNow("source.copied.once.from.memory.ffb61f0314")}</p>}
+            </div>
+          )}
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={closeEnrollment} disabled={tokenBusy}>
+              {translateNow("source.cancel.19766ed6cc")}
+            </Button>
             <Button type="button" onClick={() => void mintToken()} disabled={tokenBusy}>
               {tokenBusy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
               {translateNow("source.mint.enrollment.token.b50d28fa1d")}
             </Button>
           </div>
         </div>
-
-        <fieldset className="mt-4 grid gap-2 rounded-md border border-border p-3">
-          <legend className="px-1 text-sm font-medium">{translateNow("source.agent.role.a2r0le0001")}</legend>
-          <p className="text-sm text-muted-foreground">{translateNow("source.agent.role.help.a2r0le0002")}</p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {AGENT_ROLE_CHOICES.map((choice) => (
-              // Explicitly paired rather than relying on the wrapping label:
-              // the control is a component, so neither a reader of this code nor
-              // the a11y linter can see that a form control is inside it.
-              <label key={choice.value} htmlFor={`agent-role-${choice.value}`} className="flex items-start gap-2 text-sm">
-                <Checkbox
-                  id={`agent-role-${choice.value}`}
-                  className="mt-1"
-                  checked={tokenRoles.includes(choice.value)}
-                  onChange={(event) =>
-                    setTokenRoles((current) =>
-                      event.target.checked
-                        ? [...current.filter((role) => role !== choice.value), choice.value]
-                        : current.filter((role) => role !== choice.value),
-                    )
-                  }
-                  disabled={tokenBusy}
-                />
-                <span>
-                  <span className="font-medium">{translateNow(choice.labelKey)}</span>
-                  <span className="block text-muted-foreground">{translateNow(choice.helpKey)}</span>
-                </span>
-              </label>
-            ))}
-          </div>
-          {tokenRoles.includes("network") && <p className="text-sm text-status-warning">{translateNow("source.agent.role.relay.warning.a2r0le0007")}</p>}
-          {tokenRoles.length === 0 && <p className="text-sm text-muted-foreground">{translateNow("source.agent.role.empty.a2r0le0008")}</p>}
-        </fieldset>
-
-        {tokenError && <ErrorState title={translateNow("source.could.not.mint.enrollment.token.7b0b6374e9")}>{tokenError}</ErrorState>}
-
-        {token && (
-          <div className="mt-4 grid gap-3 rounded-md border border-border p-3 text-sm">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="font-medium">{translateNow("source.shown.once.22548d041f")}</p>
-                <p className="mt-1 text-muted-foreground">
-                  Save the token to ./trstctl-bootstrap-token with 0600 permissions, then copy this command. Dismiss clears the token from the page state; the
-                  console does not persist it.
-                </p>
-              </div>
-              <Button type="button" variant="ghost" size="sm" onClick={() => setToken(null)}>
-                <X className="h-4 w-4" aria-hidden="true" />
-                {translateNow("source.dismiss.48845bff33")}
-              </Button>
-            </div>
-            <dl className="grid gap-2">
-              <div>
-                <dt className="font-medium text-muted-foreground">{translateNow("source.bootstrap.token.2996dc8b78")}</dt>
-                <dd className="mt-0.5">
-                  <CredentialChip value={token.token} label="bootstrap token" head={14} tail={8} />
-                </dd>
-              </div>
-              <div>
-                <dt className="font-medium text-muted-foreground">{translateNow("source.install.command.1ae9754205")}</dt>
-                <dd className="mt-1">
-                  <code className="block overflow-x-auto rounded bg-muted px-3 py-2 text-xs">{command}</code>
-                </dd>
-              </div>
-            </dl>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" size="sm" variant="outline" onClick={() => void copyCommand()}>
-                <Copy className="h-4 w-4" aria-hidden="true" />
-                {translateNow("source.copy.command.9a01feecae")}
-              </Button>
-              {copied && <p className="text-xs text-muted-foreground">{translateNow("source.copied.once.from.memory.ffb61f0314")}</p>}
-            </div>
-          </div>
-        )}
-      </section>
-
-      {error && <ErrorState title={translateNow("source.could.not.load.agents.1d510cf246")}>{error}</ErrorState>}
-      {loading && <LoadingState>{translateNow("source.loading.agents.a4e0608f99")}</LoadingState>}
-
-      {!loading && !error && agents.length === 0 && (
-        <EmptyState title={translateNow("source.no.agents.enrolled.yet.345799ad5d")}>
-          {translateNow("source.mint.a.one.time.enrollment.token.install.a.d9cbac0c9e")}
-        </EmptyState>
-      )}
-
-      {!loading && !error && agents.length > 0 && (
-        <section aria-labelledby="fleet-heading" className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
-          <div>
-            <h2 id="fleet-heading" className="mb-3 text-title font-semibold">
-              {translateNow("source.agent.fleet.ac46d1b700")}
-            </h2>
-            {offboardEvidence && <p className="mb-3 text-sm text-muted-foreground">{offboardEvidence}</p>}
-            <DataGrid ariaLabel="Registered in-network agents" rows={agents} columns={agentColumns} getRowId={(agent) => agent.id} state="ready" />
-          </div>
-          {selected && <AgentDetail agent={selected} />}
-        </section>
-      )}
+      </Dialog>
 
       <Dialog
         open={offboardTarget !== null}
@@ -426,7 +551,8 @@ export function Agents() {
         role="alertdialog"
         initialFocusRef={offboardConfirmRef}
         closeOnBackdropClick={false}
-        panelClassName="fixed left-1/2 top-1/2 grid w-[min(92vw,30rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-panel border border-border bg-card p-5 shadow-elevation3"
+        panelAnimation="none"
+        panelClassName="fixed left-1/2 top-1/2 grid max-h-[calc(100dvh-2rem)] w-[min(92vw,30rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain rounded-panel border border-border bg-card p-5 shadow-elevation3"
       >
         {offboardTarget && (
           <form
@@ -475,7 +601,8 @@ export function Agents() {
         descriptionId="agent-revoke-cert-description"
         role="alertdialog"
         closeOnBackdropClick={false}
-        panelClassName="fixed left-1/2 top-1/2 grid w-[min(92vw,30rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-panel border border-border bg-card p-5 shadow-elevation3"
+        panelAnimation="none"
+        panelClassName="fixed left-1/2 top-1/2 grid max-h-[calc(100dvh-2rem)] w-[min(92vw,30rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain rounded-panel border border-border bg-card p-5 shadow-elevation3"
       >
         {revokeTarget && (
           <form
@@ -558,6 +685,116 @@ export function Agents() {
   );
 }
 
+function AgentDetails({ title, open, onToggle, children }: { title: string; open: boolean; onToggle: (open: boolean) => void; children: ReactNode }) {
+  return (
+    <details className="rounded-panel border border-border bg-card shadow-elevation1" open={open} onToggle={(event) => onToggle(event.currentTarget.open)}>
+      <summary className="cursor-pointer px-4 py-3 font-semibold text-foreground">{title}</summary>
+      <div className="border-t border-border p-4">{open ? children : null}</div>
+    </details>
+  );
+}
+
+function AgentOperationsEvidence({
+  campaign,
+  posture,
+  loading,
+  error,
+}: {
+  campaign: AgentUpgradeCampaign | null;
+  posture: AgentJobPosture | null;
+  loading: boolean;
+  error: string | null;
+}) {
+  const { t } = useTranslation();
+  if (loading) return <LoadingState>{t("agents.design.operationsLoading")}</LoadingState>;
+  if (error) return <ErrorState title={t("agents.design.operationsError")}>{error}</ErrorState>;
+  if (!campaign || !posture) return <p className="text-sm text-muted-foreground">{t("agents.design.operationsWaiting")}</p>;
+
+  const rings = Object.entries(campaign.rings ?? {});
+  const versions = Object.entries(campaign.versions ?? {});
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <section aria-labelledby="agent-version-evidence" className="grid content-start gap-3 rounded-control border border-border p-4">
+        <div>
+          <h2 id="agent-version-evidence" className="text-title font-semibold">
+            {t("agents.design.versionHeading")}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t("agents.design.versionHelp")}</p>
+        </div>
+        <dl className="grid gap-2 text-sm">
+          <div>
+            <dt className="font-medium text-muted-foreground">{t("agents.design.campaignState")}</dt>
+            <dd>{campaign.active ? (campaign.status ?? t("agents.design.campaignActive")) : t("agents.design.noCampaign")}</dd>
+          </div>
+          {campaign.target_version && (
+            <div>
+              <dt className="font-medium text-muted-foreground">{t("agents.design.targetVersion")}</dt>
+              <dd className="font-mono text-xs">{campaign.target_version}</dd>
+            </div>
+          )}
+        </dl>
+        {versions.length > 0 && (
+          <div>
+            <h3 className="text-sm font-semibold">{t("agents.design.reportedVersions")}</h3>
+            <ul className="mt-1 grid gap-1 text-sm text-muted-foreground">
+              {versions.map(([version, count]) => (
+                <li key={version}>
+                  <span className="font-mono text-xs">{version}</span> — {String(count)}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {rings.length > 0 && (
+          <p className="text-sm text-muted-foreground">
+            {t("agents.design.rings", { rings: rings.map(([ring, count]) => `${ring} ${String(count)}`).join(", ") })}
+          </p>
+        )}
+        {campaign.guidance && <p className="text-sm text-muted-foreground">{campaign.guidance}</p>}
+      </section>
+
+      <section aria-labelledby="agent-queue-evidence" className="grid content-start gap-3 rounded-control border border-border p-4">
+        <div>
+          <h2 id="agent-queue-evidence" className="text-title font-semibold">
+            {t("agents.design.queueHeading")}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t("agents.design.queueHelp")}</p>
+        </div>
+        {!posture.served ? (
+          <p className="text-sm text-status-warning">{t("agents.design.queueUnavailable")}</p>
+        ) : posture.queues.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("agents.design.queueEmpty")}</p>
+        ) : (
+          <ul className="grid gap-2">
+            {posture.queues.map((queue) => (
+              <li key={queue.kind} className="rounded-control border border-border p-3 text-sm">
+                <span className="font-mono text-xs">{queue.kind}</span>
+                <span className="mt-1 block text-muted-foreground">
+                  {t("agents.design.queueCounts", { pending: String(queue.pending), claimed: String(queue.claimed) })}
+                </span>
+                {!queue.enabled && <span className="mt-1 block text-status-warning">{t("agents.design.queueDisabled")}</span>}
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="text-sm text-muted-foreground">
+          {t("agents.design.receipts", {
+            verified: String(posture.receipts.verified),
+            rejected: String(posture.receipts.rejected),
+            live: String(posture.redemptions.live),
+          })}
+        </p>
+        {posture.claimable_kinds.length > 0 && (
+          <p className="break-words text-xs text-muted-foreground">
+            {t("agents.design.claimableKinds")} <span className="font-mono">{posture.claimable_kinds.join(", ")}</span>
+          </p>
+        )}
+        {posture.generated_at && <p className="text-xs text-muted-foreground">{t("agents.design.measuredAt", { date: formatDate(posture.generated_at) })}</p>}
+      </section>
+    </div>
+  );
+}
+
 function AgentDetail({ agent }: { agent: Agent }) {
   const { t } = useTranslation();
   // Capability comes from the served response only. The console used to fall back
@@ -570,7 +807,7 @@ function AgentDetail({ agent }: { agent: Agent }) {
   const reportPath = agent.inventory_report_path || "agent.mtls.ReportInventory";
 
   return (
-    <aside aria-labelledby="agent-detail-heading" className="grid content-start gap-3 border-y border-border py-4">
+    <div aria-labelledby="agent-detail-heading" className="grid content-start gap-3 border-y border-border py-4">
       <div>
         <h2 id="agent-detail-heading" className="text-title font-semibold">
           {agent.name}
@@ -677,7 +914,58 @@ function AgentDetail({ agent }: { agent: Agent }) {
           ))}
         </ul>
       </section>
-    </aside>
+      <section aria-labelledby="agent-service-posture-heading" className="grid gap-3 border-t border-border pt-3 text-sm">
+        <div>
+          <h3 id="agent-service-posture-heading" className="font-semibold">
+            {t("agents.design.servicePostureHeading")}
+          </h3>
+          <p className="mt-1 text-muted-foreground">{t("agents.design.servicePostureHelp")}</p>
+        </div>
+        {agent.workload_api ? (
+          <div className="rounded-control border border-border p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-medium">{t("agents.design.workloadAPI")}</span>
+              <span>{agent.workload_api.state}</span>
+            </div>
+            <p className="mt-1 text-muted-foreground">{agent.workload_api.detail}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{t("agents.design.svidsIssued", { count: String(agent.workload_api.svids_issued) })}</p>
+            {agent.workload_api.reported_at && (
+              <p className="mt-1 text-xs text-muted-foreground">{t("agents.design.reportedAt", { date: formatDate(agent.workload_api.reported_at) })}</p>
+            )}
+          </div>
+        ) : (
+          <p className="text-muted-foreground">{t("agents.design.workloadAPIUnreported")}</p>
+        )}
+        {agent.enrollment_proxy ? (
+          <div className="rounded-control border border-border p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-medium">{t("agents.design.enrollmentProxy")}</span>
+              <span>{agent.enrollment_proxy.state}</span>
+            </div>
+            <p className="mt-1 text-muted-foreground">{agent.enrollment_proxy.detail}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t("agents.design.proxyUpstreams", {
+                healthy: String(agent.enrollment_proxy.healthy_upstreams),
+                unhealthy: String(agent.enrollment_proxy.unhealthy_upstreams),
+                unknown: String(agent.enrollment_proxy.unknown_upstreams),
+              })}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t("agents.design.proxyRequests", {
+                forwarded: String(agent.enrollment_proxy.forwarded_requests),
+                refused: String(agent.enrollment_proxy.refused_requests),
+                failures: String(agent.enrollment_proxy.upstream_failures),
+              })}
+            </p>
+            {agent.enrollment_proxy.reported_at && (
+              <p className="mt-1 text-xs text-muted-foreground">{t("agents.design.reportedAt", { date: formatDate(agent.enrollment_proxy.reported_at) })}</p>
+            )}
+          </div>
+        ) : (
+          <p className="text-muted-foreground">{t("agents.design.enrollmentProxyUnreported")}</p>
+        )}
+      </section>
+    </div>
   );
 }
 

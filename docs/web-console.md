@@ -125,13 +125,39 @@ Backed by
 
 ### Agents (`/agents`)
 
-Agents lists the in-network fleet that deploys and rotates credentials on your hosts:
-issue a one-time enrollment token to register an agent, inspect its reported
-endpoint-discovery capabilities (filesystem and PKCS#11 sources, metadata-only, no
-private key bytes), offboard it, or revoke one of its certificates with a standard
-revocation reason. Backed by `/api/v1/agents`,
-`/api/v1/agents/enrollment-tokens`, `/api/v1/agents/{id}/offboard`, and
-`/api/v1/agents/{id}/cert-revocations`.
+Agents answers three questions before it exposes fleet machinery: which in-network
+workers are online, which presented certificate-bound role evidence, and which
+reported both a fresh heartbeat and a version. These are separate claims. An
+enrolled row is not automatically called trusted, and a reported version is not
+automatically called approved.
+
+The only default action is **Add agent**. It opens a viewport-bounded dialog that
+chooses host and/or network-relay capability, mints one bootstrap token, and shows
+the install command. The role is signed into the enrolled client certificate; it
+cannot change silently. Closing or dismissing the dialog clears the token from page
+memory, and the console does not persist it.
+
+Exact work remains in three closed disclosures:
+
+- **Fleet status and safe actions** contains heartbeat and version rows, exact agent
+  details, certificate revocation, and offboarding. Revocation takes effect after
+  revocation data propagates. Offboarding leaves a tombstone instead of erasing the
+  record.
+- **Enrollment and trust evidence** shows the roles each agent reported from its
+  signed certificate. Missing evidence stays missing; the console never guesses
+  that an old agent has host access.
+- **Versions, queues, and diagnostics** loads only when opened. It shows the active
+  upgrade target and version histogram, rollout rings, pending and claimed agent
+  work, verified/rejected receipts, live credential redemptions, and the exact work
+  kinds this build lets agents claim. Selected-agent diagnostics also show the
+  served endpoint-discovery census, Workload API posture, and enrollment-proxy
+  upstream/request evidence. Discovery capabilities come from the running build's
+  compiled census (including build-dependent sources) and remain metadata-only;
+  the console does not receive private-key bytes.
+
+Backed by `/api/v1/agents`, `/api/v1/agents/enrollment-tokens`,
+`/api/v1/agents/upgrade-campaign`, `/api/v1/operations/jobs`,
+`/api/v1/agents/{id}/offboard`, and `/api/v1/agents/{id}/cert-revocations`.
 
 ### Workloads (`/workloads`)
 

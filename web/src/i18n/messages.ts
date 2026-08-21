@@ -6332,6 +6332,139 @@ export const messages = {
     defaultMessage: "CAB-1234",
     description: "Placeholder for a decommission change-management reason.",
   },
+  "agents.design.answer": {
+    defaultMessage: "Which in-network workers are online, trusted, and current.",
+    description: "Decision-first answer at the top of the Agents route.",
+  },
+  "agents.design.technicalDetails": {
+    defaultMessage: "Enrollment, attestation, version, queues, diagnostics.",
+    description: "Exact expert evidence retained on the Agents route.",
+  },
+  "agents.design.add": { defaultMessage: "Add agent", description: "Primary Agents-route action and enrollment dialog title." },
+  "agents.design.addHelp": {
+    defaultMessage:
+      "Choose where this agent may work, then mint one bootstrap token. Its role is signed into the enrolled client certificate and cannot change silently.",
+    description: "Plain security boundary explanation in the Add agent dialog.",
+  },
+  "agents.design.checkingFleet": { defaultMessage: "Checking the agent fleet…", description: "Loading state for the Agents opening answer." },
+  "agents.design.fleetError": { defaultMessage: "Could not confirm agent fleet health", description: "Error title for the Agents opening answer." },
+  "agents.design.statusEmpty": { defaultMessage: "No agents are enrolled", description: "Opening Agents status for a genuinely empty fleet." },
+  "agents.design.statusEmptyBody": {
+    defaultMessage: "Add one before trstctl can deploy or rotate credentials inside your network.",
+    description: "Recovery guidance for an empty agent fleet.",
+  },
+  "agents.design.statusNoActive": { defaultMessage: "No active agents remain", description: "Opening Agents status when only offboarded tombstones remain." },
+  "agents.design.statusNoActiveBody": {
+    defaultMessage: "All {records} agent records are offboarded. Their evidence remains for audit, but none can receive work.",
+    description: "Truthful explanation when only offboarded agent records remain.",
+  },
+  "agents.design.statusOneOnline": {
+    defaultMessage: "1 of {active} active agents is online with a fresh heartbeat",
+    description: "Opening fleet status when exactly one agent is online and fresh.",
+  },
+  "agents.design.statusOnline": {
+    defaultMessage: "{online} of {active} active agents are online with a fresh heartbeat",
+    description: "Opening fleet status when zero or multiple agents are online and fresh.",
+  },
+  "agents.design.trustBody": {
+    defaultMessage: "{trusted} of {active} active agents reports certificate-bound role evidence.",
+    description: "Served trust-evidence count in the Agents opening answer.",
+  },
+  "agents.design.currentBody": {
+    defaultMessage: "{current} of {active} active agents reports both a fresh heartbeat and version.",
+    description: "Served currency-evidence count in the Agents opening answer.",
+  },
+  "agents.design.disclosure.fleet": {
+    defaultMessage: "Fleet status and safe actions",
+    description: "Progressive disclosure for agent rows and lifecycle actions.",
+  },
+  "agents.design.disclosure.trust": {
+    defaultMessage: "Enrollment and trust evidence",
+    description: "Progressive disclosure for certificate-bound agent roles.",
+  },
+  "agents.design.disclosure.operations": {
+    defaultMessage: "Versions, queues, and diagnostics",
+    description: "Progressive disclosure for fleet rollout and job evidence.",
+  },
+  "agents.design.fleetHelp": {
+    defaultMessage:
+      "Inspect exact heartbeat and version evidence here. Revoking a certificate stops that certificate after revocation data propagates; offboarding also leaves a tombstone.",
+    description: "Safety guidance above the agent fleet table.",
+  },
+  "agents.design.refresh": { defaultMessage: "Refresh fleet", description: "Secondary refresh action inside the fleet disclosure." },
+  "agents.design.noFleet": { defaultMessage: "No agent records yet", description: "Fleet disclosure empty-state title." },
+  "agents.design.noFleetHelp": {
+    defaultMessage: "Use Add agent to mint the one-time token needed for first enrollment.",
+    description: "Fleet disclosure empty-state guidance.",
+  },
+  "agents.design.trustRule": {
+    defaultMessage:
+      "Trusted means the agent reported roles read from its signed client certificate. A missing role report is never guessed to mean host access; that agent must re-enroll before its role can be trusted.",
+    description: "Technical ELI5 trust oracle for agent role evidence.",
+  },
+  "agents.design.noTrustEvidence": { defaultMessage: "No enrolled agent has presented trust evidence yet.", description: "Empty trust-evidence state." },
+  "agents.design.trustVerified": { defaultMessage: "Certificate-bound", description: "Agent trust label when signed role evidence is reported." },
+  "agents.design.trustMissing": { defaultMessage: "Role evidence missing", description: "Agent trust label when no signed role evidence is reported." },
+  "agents.design.trustOffboarded": { defaultMessage: "Offboarded", description: "Agent trust label for an offboarded tombstone." },
+  "agents.design.tokenOnceHelp": {
+    defaultMessage:
+      "Save the token to ./trstctl-bootstrap-token with 0600 permissions, then copy the command. Closing or dismissing this dialog clears the token from page memory; the console does not persist it.",
+    description: "One-time bootstrap token handling guidance.",
+  },
+  "agents.design.operationsLoading": { defaultMessage: "Loading version and queue evidence…", description: "Lazy operations-evidence loading state." },
+  "agents.design.operationsError": { defaultMessage: "Could not load version and queue evidence", description: "Lazy operations-evidence error title." },
+  "agents.design.operationsWaiting": { defaultMessage: "Version and queue evidence has not loaded yet.", description: "Operations evidence pre-load state." },
+  "agents.design.versionHeading": { defaultMessage: "Version rollout", description: "Agent version and campaign evidence heading." },
+  "agents.design.versionHelp": {
+    defaultMessage: "Reported versions are evidence, not an automatic claim that every build is approved.",
+    description: "Version evidence truth boundary.",
+  },
+  "agents.design.campaignState": { defaultMessage: "Campaign state", description: "Upgrade campaign state label." },
+  "agents.design.campaignActive": { defaultMessage: "Active", description: "Fallback state for an active agent upgrade campaign." },
+  "agents.design.noCampaign": { defaultMessage: "No rollout is active", description: "Inactive agent upgrade campaign state." },
+  "agents.design.targetVersion": { defaultMessage: "Approved target version", description: "Upgrade campaign target-version label." },
+  "agents.design.reportedVersions": { defaultMessage: "Reported versions", description: "Fleet version histogram heading." },
+  "agents.design.rings": { defaultMessage: "Rollout rings: {rings}", description: "Agent rollout-ring count summary." },
+  "agents.design.queueHeading": { defaultMessage: "Agent work queues", description: "Agent job queue evidence heading." },
+  "agents.design.queueHelp": {
+    defaultMessage: "Pending is waiting work. Claimed is work an agent has taken but not finished.",
+    description: "Technical ELI5 queue-state explanation.",
+  },
+  "agents.design.queueUnavailable": { defaultMessage: "This build did not serve live agent queue evidence.", description: "Unserved queue-evidence state." },
+  "agents.design.queueEmpty": { defaultMessage: "No agent-executed work is queued.", description: "Empty agent queue evidence state." },
+  "agents.design.queueCounts": { defaultMessage: "{pending} pending, {claimed} claimed", description: "Per-agent-job-kind queue counts." },
+  "agents.design.queueDisabled": { defaultMessage: "This queue is disabled.", description: "Disabled agent job queue warning." },
+  "agents.design.receipts": {
+    defaultMessage: "Receipts: {verified} verified, {rejected} rejected. Live credential redemptions: {live}.",
+    description: "Agent work receipt and credential-redemption evidence summary.",
+  },
+  "agents.design.claimableKinds": { defaultMessage: "This build lets agents claim:", description: "Agent-claimable work-kinds label." },
+  "agents.design.measuredAt": { defaultMessage: "Measured {date}", description: "Agent queue evidence timestamp." },
+  "agents.design.servicePostureHeading": { defaultMessage: "Workload and enrollment services", description: "Selected-agent service posture heading." },
+  "agents.design.servicePostureHelp": {
+    defaultMessage: "These are the services this agent last reported. A missing report stays unknown; it is never shown as healthy.",
+    description: "Truth boundary for selected-agent service diagnostics.",
+  },
+  "agents.design.workloadAPI": { defaultMessage: "Workload API", description: "Selected-agent SPIFFE Workload API label." },
+  "agents.design.svidsIssued": { defaultMessage: "SVIDs issued: {count}", description: "Selected-agent Workload API issuance count." },
+  "agents.design.reportedAt": { defaultMessage: "Reported {date}", description: "Selected-agent service-posture timestamp." },
+  "agents.design.workloadAPIUnreported": {
+    defaultMessage: "This agent has not reported Workload API posture.",
+    description: "Missing Workload API report state.",
+  },
+  "agents.design.enrollmentProxy": { defaultMessage: "Enrollment proxy", description: "Selected-agent enrollment-proxy label." },
+  "agents.design.proxyUpstreams": {
+    defaultMessage: "Upstreams: {healthy} healthy, {unhealthy} unhealthy, {unknown} unknown.",
+    description: "Selected-agent enrollment-proxy upstream counts.",
+  },
+  "agents.design.proxyRequests": {
+    defaultMessage: "Requests: {forwarded} forwarded, {refused} refused. Upstream failures: {failures}.",
+    description: "Selected-agent enrollment-proxy request evidence.",
+  },
+  "agents.design.enrollmentProxyUnreported": {
+    defaultMessage: "This agent has not reported enrollment-proxy posture.",
+    description: "Missing enrollment-proxy report state.",
+  },
   "owners.design.answer": {
     defaultMessage: "Which team is accountable for every identity and credential.",
     description: "Decision-first answer at the top of the Ownership route.",

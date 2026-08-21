@@ -67,6 +67,7 @@ describe("JOURNEY-003 agent offboarding", () => {
     const user = userEvent.setup();
     renderAgents();
 
+    await user.click(await screen.findByText("Fleet status and safe actions"));
     const row = (await screen.findAllByText("edge-journey-003"))[0].closest("tr");
     expect(row).toBeTruthy();
     await user.click(within(row as HTMLTableRowElement).getByRole("button", { name: "Offboard" }));

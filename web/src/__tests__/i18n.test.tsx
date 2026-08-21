@@ -835,8 +835,15 @@ describe("i18n boundary", () => {
       // genuinely empty inventory stays distinct from complete ownership.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
       // release.
-      "es-ES": "dea1bbcbe4c8caafa57c8b8de9f6102580fc6d205a3ea0cfe226ec964917349c",
-      "de-DE": "938f8c3e5e7ec7e78f90a2d3e6def547aa6d536e400a9b45ad5ccd4ac2c32fc0",
+      // QA design g30 re-pin: the Agents journey now answers online,
+      // certificate-bound trust, and current heartbeat/version evidence before
+      // exposing enrollment, revocation, offboarding, upgrade, queue, Workload
+      // API, enrollment-proxy, and endpoint-discovery machinery. Unknown trust
+      // or service reports remain unknown rather than reading as healthy.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
+      // release.
+      "es-ES": "45393d555f8d6fe1205693104c2e7df5e7600874de2dcc893b4aae573256ee97",
+      "de-DE": "fa6428d9e2ac566ea878a97fb529cb0f88b8d29ab418ef6339670b817f364e3c",
     });
   });
 
