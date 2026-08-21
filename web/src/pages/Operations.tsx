@@ -400,12 +400,8 @@ function OperationWorkList({
 function TechnicalDisclosure({ children, title }: { children: ReactNode; title: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <details
-      open={open}
-      onToggle={(event) => setOpen(event.currentTarget.open)}
-      className="group rounded-panel border border-border bg-card px-4 py-3 shadow-elevation1"
-    >
-      <summary className="cursor-pointer list-none font-semibold text-foreground marker:hidden">
+    <details className="group rounded-panel border border-border bg-card px-4 py-3 shadow-elevation1">
+      <summary onClick={() => setOpen((current) => !current)} className="cursor-pointer list-none font-semibold text-foreground marker:hidden">
         <span aria-hidden="true" className="me-2 inline-block text-muted-foreground transition-transform group-open:rotate-90">
           ›
         </span>
