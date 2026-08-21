@@ -19,8 +19,8 @@ deep-link into a pre-filtered worklist. Each space owns every surface of one
 concern: *Certificates & PKI* (certificates, request, profiles, CA hierarchy,
 protocols, code signing), *Secrets* (the secrets workspace), *Workload & SSH*
 (workloads, identities, SSH trust), *Posture & response* (find unmanaged
-credentials, crypto
-posture, risk, credential graph, incidents, operations — the Detect & respond
+credentials, algorithms and future readiness, risk, credential graph, incidents,
+operations — the Detect & respond
 group), and *Platform* (policy, approvals, audit, owners, privacy under Govern &
 administer; agents, connectors, notifications under Infrastructure; integrations
 and the API explorer; access, system posture, editions, and the assistant under
@@ -158,24 +158,40 @@ decoding implementation details, not because the proof is missing. See
 `/api/v1/discovery/sources`, `/schedules`, `/runs`, `/findings`, `/monitoring`,
 `/ct-monitoring`, `/drift`, and `/nhi/posture/shadow`.
 
-### Posture — crypto-agility & PQC (`/posture`)
+### Algorithms and future readiness (`/posture`)
 
-CT and drift findings, the drift-remediation decision workflow, a CBOM scan trigger
-and cryptographic inventory, and a PQC readiness gauge — readiness percentage plus
-quantum-vulnerable/PQC-ready/out-of-policy counts, framed against NIST FIPS
-203/204 — derived from the served CBOM `migration_progress`. The readiness table joins
-the same digest-bound graph rows used by Risk, including observed dependency paths,
-attributed owners, recommendations, and event-backed owner actions. Missing graph
-placement renders as `Unknown`, never ready. Creating a campaign here calls the
-graph-bound action route, so an owner must be currently attributed and later topology
-drift blocks stale evidence mutation. Risk downloads the matching CSV, NDJSON, or
-audit-key-signed JSON/JWKS export. Queuing or rolling back a
-PQC re-issuance run is a licensed API capability (`POST /api/v1/pqc/migrations`) not
-yet exposed here as a control. See
-[Lifecycle & PQC → PQC](features/lifecycle-and-pqc.md). Backed by
-`/api/v1/cbom/assets`, `/api/v1/cbom/scans`, `/api/v1/graph/crypto-readiness`,
-`/api/v1/graph/crypto-readiness/actions`, `/api/v1/graph/crypto-readiness/export`,
-`/api/v1/discovery/ct-monitoring`, and `/api/v1/discovery/drift-remediation`.
+This screen first answers one question: **Which credentials use outdated or
+incompatible cryptography?** The default view shows how many credentials were
+checked, how many need an upgrade, and a plain-language worklist that explains each
+current-policy or future-readiness problem beside the current and target algorithms.
+An empty inventory says that nothing has been checked; it never claims that the
+estate is safe.
+
+**Plan upgrade** is the only primary action. It opens compatibility, PQC policy,
+campaign tracking, and the guarded migration workflow. The Community edition keeps
+CBOM discovery, readiness, campaign ownership, evidence, and signed campaign closure
+usable. Licensed migration execution separately requires an exact preview, selected
+assets, explicit confirmation, progress evidence, and a second confirmation before
+rollback.
+
+The complete expert machinery remains on this page under three named disclosures:
+
+- **Algorithm inventory and scan evidence** contains the CBOM scan trigger, policy
+  floor, algorithm rollup, exact asset rows, recommendations, and scan results.
+- **Compatibility, PQC policy, and upgrade planning** contains graph-bound readiness,
+  attributed owners, dependency paths, core PQC campaigns, and licensed migration.
+- **Certificate, AD CS, authority, and drift evidence** contains CT monitoring,
+  AD CS template/database checks, authority agreement, discovery findings, and the
+  drift-remediation decision workflow.
+
+The readiness rows use the same digest-bound graph evidence as Risk. Missing graph
+placement renders as `Unknown`, never ready, and later topology drift refuses stale
+evidence mutation. See [Lifecycle & PQC → PQC](features/lifecycle-and-pqc.md). Backed
+by `/api/v1/cbom/assets`, `/api/v1/cbom/scans`,
+`/api/v1/graph/crypto-readiness`, `/api/v1/graph/crypto-readiness/actions`,
+`/api/v1/graph/crypto-readiness/export`, `/api/v1/pqc/campaigns`,
+`/api/v1/pqc/migrations`, `/api/v1/discovery/ct-monitoring`, and
+`/api/v1/discovery/drift-remediation`.
 
 ### CA migration (`/migration`)
 
@@ -507,7 +523,7 @@ grounded and sufficient. Backed by `/api/v1/ai/status`, `/api/v1/mcp/tools`, `/a
 | `/workloads` | Workloads |
 | `/discovery` | Find unmanaged credentials |
 | `/risk` | What to fix first |
-| `/posture` | Posture |
+| `/posture` | Algorithms and future readiness |
 | `/graph` | Graph |
 | `/incidents` | Incidents |
 | `/approvals` | Approvals |

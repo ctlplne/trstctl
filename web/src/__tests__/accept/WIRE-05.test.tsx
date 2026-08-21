@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Posture } from "@/pages/Posture";
 import { AppQueryProvider } from "@/lib/query";
@@ -86,7 +87,9 @@ describe("WIRE-05 Posture crypto-agility readiness wiring", () => {
   });
 
   it("renders crypto-agility readiness from served CBOM data", async () => {
+    const user = userEvent.setup();
     renderPosture();
+    await user.click(screen.getByText("Algorithm inventory and scan evidence", { exact: true }));
 
     const row = await screen.findByRole("row", { name: /legacy mesh edge tls_endpoint rsa-1024 tls 1\.0 \/ rc4 out of policy ML-KEM hybrid/i });
     expect(within(row).getByText("RSA-1024 below policy floor")).toBeInTheDocument();

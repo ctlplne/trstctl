@@ -4504,8 +4504,8 @@ export const messages = {
     description: "Primary navigation item. Matches the Risk page H1 and title (S-A2 naming parity).",
   },
   "nav.item.posture": {
-    defaultMessage: "Crypto posture",
-    description: "Primary navigation item.",
+    defaultMessage: "Algorithms and future readiness",
+    description: "Primary navigation item. Matches the decision-first cryptography page heading.",
   },
   "nav.item.graph": {
     defaultMessage: "Credential graph",
@@ -15514,6 +15514,38 @@ export const messages = {
   "risk.scoreMeter.remaining": {
     defaultMessage: "remaining",
     description: "S-C13: title of the unfilled portion of the risk score meter.",
+  },
+  "posture.design.answer": {
+    defaultMessage: "Which credentials use outdated or incompatible cryptography.",
+    description: "Posture page answer.",
+  },
+  "posture.design.technicalDetails": {
+    defaultMessage: "Algorithm inventory, compatibility, PQC policy, and evidence.",
+    description: "Posture page evidence.",
+  },
+  "posture.design.planUpgrade": {
+    defaultMessage: "Plan upgrade",
+    description: "Posture page action.",
+  },
+  "posture.design.disclosure.supporting": {
+    defaultMessage: "Certificate, AD CS, authority, and drift evidence",
+    description: "Supporting evidence disclosure.",
+  },
+  "posture.design.disclosure.inventory": {
+    defaultMessage: "Algorithm inventory and scan evidence",
+    description: "Inventory disclosure.",
+  },
+  "posture.design.disclosure.compatibility": {
+    defaultMessage: "Compatibility, PQC policy, and upgrade planning",
+    description: "Planning disclosure.",
+  },
+  "posture.design.upgradeStatus": {
+    defaultMessage: "Upgrade status",
+    description: "Upgrade summary heading.",
+  },
+  "posture.design.reason.futureRisk": {
+    defaultMessage: "Not ready for future quantum threats",
+    description: "Future-risk reason.",
   },
   "posture.algorithmRollup.title": {
     defaultMessage: "Exposure by algorithm",

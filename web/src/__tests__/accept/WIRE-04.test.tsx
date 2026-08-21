@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Posture } from "@/pages/Posture";
 import { AppQueryProvider } from "@/lib/query";
@@ -131,11 +132,13 @@ describe("WIRE-04 Posture discovery wiring", () => {
   });
 
   it("renders CT-log and drift findings from the served Discovery responses", async () => {
+    const user = userEvent.setup();
     renderPosture();
 
     expect(apiMock.discoverySources).toHaveBeenCalledWith({ limit: 50 });
     expect(apiMock.discoveryRuns).toHaveBeenCalledWith({ limit: 50 });
     expect(apiMock.discoveryFindings).toHaveBeenCalledWith({ limit: 50 });
+    await user.click(screen.getByText("Certificate, AD CS, authority, and drift evidence", { exact: true }));
 
     const ctRow = await screen.findByRole("row", { name: /\*\.payments\.example\.com Public CT logs x509_certificate 88 succeeded/i });
     expect(within(ctRow).getByText("unexpected SAN outside approved issuer profile")).toBeInTheDocument();

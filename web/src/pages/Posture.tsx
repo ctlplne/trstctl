@@ -1,5 +1,5 @@
 import type { FormEvent, ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Bell, CheckCircle2, FileWarning, Radar, SearchCheck, ShieldAlert, XCircle } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
@@ -68,6 +68,10 @@ export function Posture() {
   const [cbomLoading, setCBOMLoading] = useState(true);
   const [cbomScanning, setCBOMScanning] = useState(false);
   const [cbomError, setCBOMError] = useState<string | null>(null);
+  const [supportingOpen, setSupportingOpen] = useState(false);
+  const [inventoryOpen, setInventoryOpen] = useState(false);
+  const [planningOpen, setPlanningOpen] = useState(false);
+  const planningDisclosureRef = useRef<HTMLDetailsElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -225,10 +229,19 @@ export function Posture() {
   }
 
   const cbomProgress = cbomInventory.migration_progress ?? lastCBOMScan?.migration_progress ?? emptyCBOMProgress;
+  const upgradeAssets = cbomInventory.items.filter((asset) => asset.out_of_policy || asset.quantum_vulnerable);
   const discoverySourceByID = useMemo(() => new Map(discoverySources.map((source) => [source.id, source])), [discoverySources]);
   const discoveryRunByID = useMemo(() => new Map(discoveryRuns.map((run) => [run.id, run])), [discoveryRuns]);
   const ctFindings = discoveryFindings.filter((finding) => findingSourceKind(finding, discoverySourceByID) === "ct_log");
   const driftFindings = discoveryFindings.filter((finding) => findingSourceKind(finding, discoverySourceByID) === "drift");
+
+  function focusUpgradePlanning() {
+    const disclosure = planningDisclosureRef.current;
+    if (!disclosure) return;
+    disclosure.open = true;
+    setPlanningOpen(true);
+    disclosure.querySelector("summary")?.focus();
+  }
 
   async function recordDriftDecision(finding: DriftRemediationFinding, decision: DriftDecision) {
     const busyKey = `${finding.finding_id}:${decision}`;
@@ -260,253 +273,353 @@ export function Posture() {
       <PageHeader
         titleId="posture-heading"
         title={t("nav.item.posture")}
-        description="Your fleet's cryptographic health: certificate-transparency findings, configuration drift, and a cryptographic bill of materials (which algorithms you run and how post-quantum-ready they are). For per-credential rotation urgency see Risk; for scan setup see Discovery."
+        description={t("posture.design.answer")}
+        technicalDetails={t("posture.design.technicalDetails")}
+        actions={
+          <Button type="button" onClick={focusUpgradePlanning}>
+            {t("posture.design.planUpgrade")}
+          </Button>
+        }
       />
 
-      <section aria-labelledby="ct-heading" className="grid gap-3 border-y border-border py-4">
-        <div className="flex items-start gap-3">
-          <Radar className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <div>
-            <h2 id="ct-heading" className="text-title font-semibold">
-              {translateNow("source.certificate.transparency.monitoring.a0ad3241c4")}
-            </h2>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.ct.monitoring.watches.public.logs.for.cert.3163770746")}</p>
-          </div>
-        </div>
-        <DiscoveryFindingTable
-          title={translateNow("source.certificate.transparency.findings.55891f79b6")}
-          findings={ctFindings}
-          sourceByID={discoverySourceByID}
-          runByID={discoveryRunByID}
-          loading={discoveryLoading}
-          error={discoveryError}
-          emptyTitle="No CT findings returned yet"
-        />
-        <form className="grid gap-3 rounded-panel border border-border p-comfortable" onSubmit={handleCTMonitoringSubmit}>
-          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_10rem]">
-            <label className="grid gap-1 text-sm font-medium" htmlFor="ct-watched-domains">
-              {translateNow("source.watched.domains.0a60ff7e19")}
-              <textarea
-                id="ct-watched-domains"
-                className="ui-input min-h-20 font-mono text-xs"
-                value={ctForm.watchedDomains}
-                onChange={(event) => setCTForm((current) => ({ ...current, watchedDomains: event.target.value }))}
-                placeholder={translateNow("source.example.com.a379a6f6ee")}
-              />
-            </label>
-            <label className="grid gap-1 text-sm font-medium" htmlFor="ct-log-urls">
-              {translateNow("source.ct.log.urls.20c5c9807c")}
-              <textarea
-                id="ct-log-urls"
-                className="ui-input min-h-20 font-mono text-xs"
-                value={ctForm.logs}
-                onChange={(event) => setCTForm((current) => ({ ...current, logs: event.target.value }))}
-                placeholder={translateNow("source.https.ct.googleapis.com.logs.argon2026.109b891d19")}
-              />
-            </label>
-            <label className="grid gap-1 text-sm font-medium" htmlFor="ct-max-batch">
-              {translateNow("source.max.entries.per.poll.a77eca9293")}
-              <input
-                id="ct-max-batch"
-                className="ui-input"
-                type="number"
-                min={1}
-                value={ctForm.maxBatch}
-                onChange={(event) => setCTForm((current) => ({ ...current, maxBatch: event.target.value }))}
-              />
-            </label>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button type="submit" disabled={ctSaving || linesFromText(ctForm.watchedDomains).length === 0 || linesFromText(ctForm.logs).length === 0}>
-              <Radar className="h-4 w-4" aria-hidden="true" />
-              {ctSaving ? translateNow("source.saving.ct.c96661dcd1") : translateNow("source.save.and.poll.ct.609730cebd")}
-            </Button>
-            {ctResult ? <p className="text-sm font-medium text-status-success">{ctResult}</p> : null}
-            {ctError ? <p className="text-sm font-medium text-destructive">{ctError}</p> : null}
-          </div>
-        </form>
-        {ctMonitoring ? (
-          <>
-            <dl className="grid gap-3 md:grid-cols-5">
-              <Metric label="Watch domains" value={String(ctMonitoring.summary.watched_domain_count)} />
-              <Metric label="CT logs" value={String(ctMonitoring.summary.log_count)} />
-              <Metric label="Unexpected issuance" value={String(ctMonitoring.summary.unexpected_issuance_count)} />
-              <Metric label="Open findings" value={String(ctMonitoring.summary.open_finding_count)} />
-              <Metric label="Alert channels" value={String(ctMonitoring.summary.outbox_alert_channel_count)} />
-            </dl>
-            <PreviewTable title={translateNow("source.ct.log.checkpoints.4f19929a7b")} headers={["Log URL", "Next index"]}>
-              {ctMonitoring.logs.map((log) => (
-                <tr key={log.url} className="align-top">
-                  <td className="font-mono text-xs">{log.url}</td>
-                  <td>{log.next_index}</td>
-                </tr>
-              ))}
-            </PreviewTable>
-          </>
-        ) : null}
-      </section>
+      <CryptoUpgradeSummary assets={upgradeAssets} total={cbomProgress.total_assets} loading={cbomLoading} error={cbomError} />
 
-      <ADCSTemplatePanel />
-      <ADCSDatabasePanel />
-      {/* C4: whether the authorities agree about what was issued. Sits beside
+      <details className="rounded-panel border border-border bg-card shadow-elevation1" onToggle={(event) => setSupportingOpen(event.currentTarget.open)}>
+        <summary className="cursor-pointer px-4 py-3 font-semibold text-foreground">{t("posture.design.disclosure.supporting")}</summary>
+        <div className="grid gap-6 border-t border-border p-4" hidden={!supportingOpen}>
+          <section aria-labelledby="ct-heading" className="grid gap-3 border-y border-border py-4">
+            <div className="flex items-start gap-3">
+              <Radar className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <div>
+                <h2 id="ct-heading" className="text-title font-semibold">
+                  {translateNow("source.certificate.transparency.monitoring.a0ad3241c4")}
+                </h2>
+                <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.ct.monitoring.watches.public.logs.for.cert.3163770746")}</p>
+              </div>
+            </div>
+            <DiscoveryFindingTable
+              title={translateNow("source.certificate.transparency.findings.55891f79b6")}
+              findings={ctFindings}
+              sourceByID={discoverySourceByID}
+              runByID={discoveryRunByID}
+              loading={discoveryLoading}
+              error={discoveryError}
+              emptyTitle="No CT findings returned yet"
+            />
+            <form className="grid gap-3 rounded-panel border border-border p-comfortable" onSubmit={handleCTMonitoringSubmit}>
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_10rem]">
+                <label className="grid gap-1 text-sm font-medium" htmlFor="ct-watched-domains">
+                  {translateNow("source.watched.domains.0a60ff7e19")}
+                  <textarea
+                    id="ct-watched-domains"
+                    className="ui-input min-h-20 font-mono text-xs"
+                    value={ctForm.watchedDomains}
+                    onChange={(event) => setCTForm((current) => ({ ...current, watchedDomains: event.target.value }))}
+                    placeholder={translateNow("source.example.com.a379a6f6ee")}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm font-medium" htmlFor="ct-log-urls">
+                  {translateNow("source.ct.log.urls.20c5c9807c")}
+                  <textarea
+                    id="ct-log-urls"
+                    className="ui-input min-h-20 font-mono text-xs"
+                    value={ctForm.logs}
+                    onChange={(event) => setCTForm((current) => ({ ...current, logs: event.target.value }))}
+                    placeholder={translateNow("source.https.ct.googleapis.com.logs.argon2026.109b891d19")}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm font-medium" htmlFor="ct-max-batch">
+                  {translateNow("source.max.entries.per.poll.a77eca9293")}
+                  <input
+                    id="ct-max-batch"
+                    className="ui-input"
+                    type="number"
+                    min={1}
+                    value={ctForm.maxBatch}
+                    onChange={(event) => setCTForm((current) => ({ ...current, maxBatch: event.target.value }))}
+                  />
+                </label>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button type="submit" disabled={ctSaving || linesFromText(ctForm.watchedDomains).length === 0 || linesFromText(ctForm.logs).length === 0}>
+                  <Radar className="h-4 w-4" aria-hidden="true" />
+                  {ctSaving ? translateNow("source.saving.ct.c96661dcd1") : translateNow("source.save.and.poll.ct.609730cebd")}
+                </Button>
+                {ctResult ? <p className="text-sm font-medium text-status-success">{ctResult}</p> : null}
+                {ctError ? <p className="text-sm font-medium text-destructive">{ctError}</p> : null}
+              </div>
+            </form>
+            {ctMonitoring ? (
+              <>
+                <dl className="grid gap-3 md:grid-cols-5">
+                  <Metric label="Watch domains" value={String(ctMonitoring.summary.watched_domain_count)} />
+                  <Metric label="CT logs" value={String(ctMonitoring.summary.log_count)} />
+                  <Metric label="Unexpected issuance" value={String(ctMonitoring.summary.unexpected_issuance_count)} />
+                  <Metric label="Open findings" value={String(ctMonitoring.summary.open_finding_count)} />
+                  <Metric label="Alert channels" value={String(ctMonitoring.summary.outbox_alert_channel_count)} />
+                </dl>
+                <PreviewTable title={translateNow("source.ct.log.checkpoints.4f19929a7b")} headers={["Log URL", "Next index"]}>
+                  {ctMonitoring.logs.map((log) => (
+                    <tr key={log.url} className="align-top">
+                      <td className="font-mono text-xs">{log.url}</td>
+                      <td>{log.next_index}</td>
+                    </tr>
+                  ))}
+                </PreviewTable>
+              </>
+            ) : null}
+          </section>
+
+          <ADCSTemplatePanel />
+          <ADCSDatabasePanel />
+          {/* C4: whether the authorities agree about what was issued. Sits beside
           the AD CS template posture because both answer "what does that
           authority actually say", one about policy and one about inventory. */}
-      <AuthorityAgreementPanel />
+          <AuthorityAgreementPanel />
 
-      <section aria-labelledby="drift-heading" className="grid gap-3 border-y border-border py-4">
-        <div className="flex items-start gap-3">
-          <FileWarning className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <div>
-            <h2 id="drift-heading" className="text-title font-semibold">
-              {translateNow("source.drift.detection.93e554780a")}
-            </h2>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.drift.detection.compares.what.trstctl.inte.95457304d6")}</p>
-          </div>
+          <section aria-labelledby="drift-heading" className="grid gap-3 border-y border-border py-4">
+            <div className="flex items-start gap-3">
+              <FileWarning className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <div>
+                <h2 id="drift-heading" className="text-title font-semibold">
+                  {translateNow("source.drift.detection.93e554780a")}
+                </h2>
+                <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.drift.detection.compares.what.trstctl.inte.95457304d6")}</p>
+              </div>
+            </div>
+            <DiscoveryFindingTable
+              title={translateNow("source.drift.findings.cd56c69007")}
+              findings={driftFindings}
+              sourceByID={discoverySourceByID}
+              runByID={discoveryRunByID}
+              loading={discoveryLoading}
+              error={discoveryError}
+              emptyTitle="No drift findings returned yet"
+            />
+            <DriftRemediationWorkflow
+              state={driftRemediation}
+              loading={driftLoading}
+              error={driftError}
+              busy={driftBusy}
+              result={driftResult}
+              onDecision={recordDriftDecision}
+            />
+          </section>
+
+          <section aria-labelledby="alert-heading" className="ui-panel flex items-start gap-3 p-comfortable text-sm">
+            <Bell className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <div>
+              <h2 id="alert-heading" className="text-title font-semibold">
+                {translateNow("source.alert.routing.is.managed.from.notification.f26eb33c8e")}
+              </h2>
+              <p className="mt-1 text-muted-foreground">{translateNow("source.ct.anomalies.and.drift.findings.can.be.rou.360679ac1d")}</p>
+            </div>
+          </section>
         </div>
-        <DiscoveryFindingTable
-          title={translateNow("source.drift.findings.cd56c69007")}
-          findings={driftFindings}
-          sourceByID={discoverySourceByID}
-          runByID={discoveryRunByID}
-          loading={discoveryLoading}
-          error={discoveryError}
-          emptyTitle="No drift findings returned yet"
-        />
-        <DriftRemediationWorkflow
-          state={driftRemediation}
-          loading={driftLoading}
-          error={driftError}
-          busy={driftBusy}
-          result={driftResult}
-          onDecision={recordDriftDecision}
-        />
-      </section>
+      </details>
 
-      <section aria-labelledby="cbom-heading" className="grid gap-3 border-y border-border py-4">
-        <div className="flex items-start gap-3">
-          <ShieldAlert className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <div>
-            <h2 id="cbom-heading" className="text-title font-semibold">
-              {translateNow("source.cbom.and.cryptographic.observability.11b90cf944")}
-            </h2>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.the.cbom.scanner.inventories.algorithms.ke.94de5272b7")}</p>
+      <details className="rounded-panel border border-border bg-card shadow-elevation1" onToggle={(event) => setInventoryOpen(event.currentTarget.open)}>
+        <summary className="cursor-pointer px-4 py-3 font-semibold text-foreground">{t("posture.design.disclosure.inventory")}</summary>
+        <section aria-labelledby="cbom-heading" className="grid gap-3 border-t border-border p-4" hidden={!inventoryOpen}>
+          <div className="flex items-start gap-3">
+            <ShieldAlert className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <div>
+              <h2 id="cbom-heading" className="text-title font-semibold">
+                {translateNow("source.cbom.and.cryptographic.observability.11b90cf944")}
+              </h2>
+              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.the.cbom.scanner.inventories.algorithms.ke.94de5272b7")}</p>
+            </div>
           </div>
-        </div>
-        <form className="grid gap-3 rounded-panel border border-border p-comfortable" onSubmit={handleCBOMScan}>
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="grid gap-1 text-sm font-medium" htmlFor="cbom-tls-endpoints">
-              {translateNow("source.tls.endpoints.c928457ec8")}
-              <textarea
-                id="cbom-tls-endpoints"
-                className="ui-input min-h-20 font-mono text-xs"
-                name="tls_endpoints"
-                placeholder={translateNow("source.https.api.example.com.443.74d0333a40")}
-              />
-            </label>
-            <label className="grid gap-1 text-sm font-medium" htmlFor="cbom-host-configs">
-              {translateNow("source.host.config.paths.8b2c6c7bdd")}
-              <textarea
-                id="cbom-host-configs"
-                className="ui-input min-h-20 font-mono text-xs"
-                name="host_configs"
-                placeholder={translateNow("source.etc.ssh.sshd.config.83ca950c7a")}
-              />
-            </label>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button type="submit" disabled={cbomScanning}>
-              {cbomScanning ? translateNow("source.running.scan.34932df63a") : translateNow("source.run.cbom.scan.ca786ed005")}
-            </Button>
-            <p className="text-sm text-muted-foreground">{translateNow("source.the.request.sends.endpoint.and.host.config.057e53f9e9")}</p>
-          </div>
-          {cbomError ? <p className="text-sm font-medium text-destructive">{cbomError}</p> : null}
-        </form>
-
-        <dl className="grid gap-3 md:grid-cols-2">
-          <Metric label="Total assets" value={String(cbomProgress.total_assets)} />
-          <Metric label="Out of policy" value={`${cbomProgress.out_of_policy_assets} out of policy`} />
-        </dl>
-        <PQCReadinessSummary progress={cbomProgress} />
-        <AlgorithmRollup assets={cbomInventory.items} loading={cbomLoading} />
-
-        {lastCBOMScan ? (
-          <dl className="grid gap-3 rounded-panel border border-border p-comfortable text-sm md:grid-cols-6">
-            <Metric label="Sources scanned" value={String(lastCBOMScan.report.sources)} />
-            <Metric label="Findings" value={String(lastCBOMScan.report.findings)} />
-            <Metric label="Weak" value={String(lastCBOMScan.report.weak)} />
-            <Metric label="Failed" value={String(lastCBOMScan.report.failed)} />
-            <Metric label="Out of policy" value={String(lastCBOMScan.report.out_of_policy)} />
-            <Metric label="Quantum vulnerable" value={String(lastCBOMScan.report.quantum_vulnerable)} />
-          </dl>
-        ) : null}
-
-        <PreviewTable
-          title={translateNow("source.cbom.asset.inventory.2ba70c3036")}
-          headers={["Asset", "Crypto", "Transport", "Policy", "Recommended action", "Evidence"]}
-        >
-          {cbomInventory.items.map((asset) => (
-            <tr key={asset.id} className="align-top">
-              <td className="font-medium">
-                <span className="block">{asset.location}</span>
-                <span className="text-xs text-muted-foreground">{asset.kind}</span>
-              </td>
-              <td>{algorithmLabel(asset)}</td>
-              <td>{transportLabel(asset)}</td>
-              <td>
-                <StatusBadge
-                  value={asset.out_of_policy ? "out_of_policy" : asset.quantum_vulnerable ? "quantum_vulnerable" : "allowed"}
-                  label={asset.out_of_policy ? "Out of policy" : asset.quantum_vulnerable ? "Quantum vulnerable" : "Allowed"}
-                  tone={asset.out_of_policy ? "critical" : asset.quantum_vulnerable ? "warning" : "success"}
-                  vocabulary="risk"
+          <form className="grid gap-3 rounded-panel border border-border p-comfortable" onSubmit={handleCBOMScan}>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="grid gap-1 text-sm font-medium" htmlFor="cbom-tls-endpoints">
+                {translateNow("source.tls.endpoints.c928457ec8")}
+                <textarea
+                  id="cbom-tls-endpoints"
+                  className="ui-input min-h-20 font-mono text-xs"
+                  name="tls_endpoints"
+                  placeholder={translateNow("source.https.api.example.com.443.74d0333a40")}
                 />
-              </td>
-              <td>
-                <span className="block">{asset.migration_target}</span>
-                <span className="text-xs text-muted-foreground">
-                  {asset.migration_standard} / {asset.migration_generation}
-                </span>
-              </td>
-              <td>{asset.reasons?.length ? asset.reasons.join("; ") : asset.strength}</td>
-            </tr>
-          ))}
-        </PreviewTable>
-        {!cbomLoading && cbomInventory.items.length === 0 ? (
-          <EmptyState title={translateNow("source.no.cbom.assets.returned.yet.6164e1adf5")}>
-            {translateNow("source.run.a.scan.against.tls.endpoints.or.host.c.e657e656ce")}
-          </EmptyState>
-        ) : null}
-      </section>
+              </label>
+              <label className="grid gap-1 text-sm font-medium" htmlFor="cbom-host-configs">
+                {translateNow("source.host.config.paths.8b2c6c7bdd")}
+                <textarea
+                  id="cbom-host-configs"
+                  className="ui-input min-h-20 font-mono text-xs"
+                  name="host_configs"
+                  placeholder={translateNow("source.etc.ssh.sshd.config.83ca950c7a")}
+                />
+              </label>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button type="submit" disabled={cbomScanning}>
+                {cbomScanning ? translateNow("source.running.scan.34932df63a") : translateNow("source.run.cbom.scan.ca786ed005")}
+              </Button>
+              <p className="text-sm text-muted-foreground">{translateNow("source.the.request.sends.endpoint.and.host.config.057e53f9e9")}</p>
+            </div>
+            {cbomError ? <p className="text-sm font-medium text-destructive">{cbomError}</p> : null}
+          </form>
 
-      <section aria-labelledby="crypto-agility-heading" className="grid gap-3 border-y border-border py-4">
-        <div className="flex items-start gap-3">
-          <ShieldAlert className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <div>
-            <h2 id="crypto-agility-heading" className="text-title font-semibold">
-              {translateNow("source.crypto.agility.readiness.7bc9bc7019")}
-            </h2>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.crypto.agility.means.the.system.can.see.we.6ff0a0d217")}</p>
+          <dl className="grid gap-3 md:grid-cols-2">
+            <Metric label="Total assets" value={String(cbomProgress.total_assets)} />
+            <Metric label="Out of policy" value={`${cbomProgress.out_of_policy_assets} out of policy`} />
+          </dl>
+          <PQCReadinessSummary progress={cbomProgress} />
+          <AlgorithmRollup assets={cbomInventory.items} loading={cbomLoading} />
+
+          {lastCBOMScan ? (
+            <dl className="grid gap-3 rounded-panel border border-border p-comfortable text-sm md:grid-cols-6">
+              <Metric label="Sources scanned" value={String(lastCBOMScan.report.sources)} />
+              <Metric label="Findings" value={String(lastCBOMScan.report.findings)} />
+              <Metric label="Weak" value={String(lastCBOMScan.report.weak)} />
+              <Metric label="Failed" value={String(lastCBOMScan.report.failed)} />
+              <Metric label="Out of policy" value={String(lastCBOMScan.report.out_of_policy)} />
+              <Metric label="Quantum vulnerable" value={String(lastCBOMScan.report.quantum_vulnerable)} />
+            </dl>
+          ) : null}
+
+          <PreviewTable
+            title={translateNow("source.cbom.asset.inventory.2ba70c3036")}
+            headers={["Asset", "Crypto", "Transport", "Policy", "Recommended action", "Evidence"]}
+          >
+            {cbomInventory.items.map((asset) => (
+              <tr key={asset.id} className="align-top">
+                <td className="font-medium">
+                  <span className="block">{asset.location}</span>
+                  <span className="text-xs text-muted-foreground">{asset.kind}</span>
+                </td>
+                <td>{algorithmLabel(asset)}</td>
+                <td>{transportLabel(asset)}</td>
+                <td>
+                  <StatusBadge
+                    value={asset.out_of_policy ? "out_of_policy" : asset.quantum_vulnerable ? "quantum_vulnerable" : "allowed"}
+                    label={asset.out_of_policy ? "Out of policy" : asset.quantum_vulnerable ? "Quantum vulnerable" : "Allowed"}
+                    tone={asset.out_of_policy ? "critical" : asset.quantum_vulnerable ? "warning" : "success"}
+                    vocabulary="risk"
+                  />
+                </td>
+                <td>
+                  <span className="block">{asset.migration_target}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {asset.migration_standard} / {asset.migration_generation}
+                  </span>
+                </td>
+                <td>{asset.reasons?.length ? asset.reasons.join("; ") : asset.strength}</td>
+              </tr>
+            ))}
+          </PreviewTable>
+          {!cbomLoading && cbomInventory.items.length === 0 ? (
+            <EmptyState title={translateNow("source.no.cbom.assets.returned.yet.6164e1adf5")}>
+              {translateNow("source.run.a.scan.against.tls.endpoints.or.host.c.e657e656ce")}
+            </EmptyState>
+          ) : null}
+        </section>
+      </details>
+
+      <details
+        ref={planningDisclosureRef}
+        className="rounded-panel border border-border bg-card shadow-elevation1"
+        onToggle={(event) => setPlanningOpen(event.currentTarget.open)}
+      >
+        <summary className="cursor-pointer px-4 py-3 font-semibold text-foreground">{t("posture.design.disclosure.compatibility")}</summary>
+        <section aria-labelledby="crypto-agility-heading" className="grid gap-3 border-t border-border p-4" hidden={!planningOpen}>
+          <div className="flex items-start gap-3">
+            <ShieldAlert className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <div>
+              <h2 id="crypto-agility-heading" className="text-title font-semibold">
+                {translateNow("source.crypto.agility.readiness.7bc9bc7019")}
+              </h2>
+              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.crypto.agility.means.the.system.can.see.we.6ff0a0d217")}</p>
+            </div>
           </div>
-        </div>
-        <CBOMReadinessTable
-          assets={cbomInventory.items}
-          loading={cbomLoading || cryptoReadiness.loading}
-          readiness={cryptoReadiness.data}
-          readinessError={cryptoReadiness.error}
-        />
-        <PQCCampaigns assets={cbomInventory.items} />
-        <PQCMigrationWorkflow assets={cbomInventory.items} />
-      </section>
-
-      <section aria-labelledby="alert-heading" className="ui-panel flex items-start gap-3 p-comfortable text-sm">
-        <Bell className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <div>
-          <h2 id="alert-heading" className="text-title font-semibold">
-            {translateNow("source.alert.routing.is.managed.from.notification.f26eb33c8e")}
-          </h2>
-          <p className="mt-1 text-muted-foreground">{translateNow("source.ct.anomalies.and.drift.findings.can.be.rou.360679ac1d")}</p>
-        </div>
-      </section>
+          <CBOMReadinessTable
+            assets={cbomInventory.items}
+            loading={cbomLoading || cryptoReadiness.loading}
+            readiness={cryptoReadiness.data}
+            readinessError={cryptoReadiness.error}
+          />
+          <PQCCampaigns assets={cbomInventory.items} />
+          <PQCMigrationWorkflow assets={cbomInventory.items} />
+        </section>
+      </details>
     </section>
+  );
+}
+
+function CryptoUpgradeSummary({ assets, total, loading, error }: { assets: CBOMAsset[]; total: number; loading: boolean; error: string | null }) {
+  return (
+    <section aria-labelledby="crypto-upgrade-status" className="ui-panel grid gap-4 p-comfortable">
+      <div>
+        <h2 id="crypto-upgrade-status" className="text-title font-semibold">
+          {translateNow("posture.design.upgradeStatus")}
+        </h2>
+      </div>
+
+      {loading ? <LoadingState>{translateNow("source.loading.cbom.readiness.0b111b06ca")}</LoadingState> : null}
+      {!loading && error ? <ErrorState title={translateNow("dashboard.attention.unavailable")}>{error}</ErrorState> : null}
+      {!loading && !error ? (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <DecisionCount value={total} label={translateNow("source.checked.d2ver00006")} />
+            <DecisionCount
+              value={assets.length}
+              label={translateNow(assets.length === 1 ? "dashboard.attention.needsAttentionOne" : "dashboard.attention.needsAttentionMany", {
+                count: assets.length,
+              })}
+              tone={assets.length > 0 ? "critical" : "neutral"}
+            />
+          </div>
+
+          {total === 0 ? (
+            <EmptyState title={translateNow("source.no.cbom.assets.returned.yet.6164e1adf5")}>
+              {translateNow("source.run.a.scan.against.tls.endpoints.or.host.c.e657e656ce")}
+            </EmptyState>
+          ) : assets.length === 0 ? (
+            <EmptyState title={translateNow("dashboard.attention.healthy")} />
+          ) : (
+            <ul aria-labelledby="crypto-upgrade-status" className="grid gap-3">
+              {assets.map((asset) => (
+                <li key={asset.id} className="rounded-control border border-border bg-background p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <h3 className="font-semibold text-foreground">{asset.location}</h3>
+                    <StatusBadge value="needs_upgrade" label={translateNow("operations.attention.heading")} tone="critical" vocabulary="risk" />
+                  </div>
+                  <ul className="mt-2 list-disc space-y-1 ps-5 text-sm text-foreground">
+                    {asset.out_of_policy ? <li>{translateNow("risk.reason.weakCrypto")}</li> : null}
+                    {asset.quantum_vulnerable ? <li>{translateNow("posture.design.reason.futureRisk")}</li> : null}
+                  </ul>
+                  <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                    <div>
+                      <dt className="text-caption text-muted-foreground">{translateNow("owners.readiness.currentNoDate")}</dt>
+                      <dd className="mt-1 font-medium">
+                        {translateNow("source.value1.value2.7c639bc99b", {
+                          value1: algorithmLabel(asset),
+                          value2: transportLabel(asset),
+                        })}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-caption text-muted-foreground">{translateNow("posture.algorithmRollup.target")}</dt>
+                      <dd className="mt-1 font-medium">{asset.migration_target || translateNow("operations.detail.notRecorded")}</dd>
+                    </div>
+                  </dl>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      ) : null}
+    </section>
+  );
+}
+
+function DecisionCount({ value, label, tone = "neutral" }: { value: number; label: string; tone?: "neutral" | "critical" }) {
+  const toneClass = tone === "critical" ? "border-destructive/30 bg-destructive/5" : "border-border";
+  return (
+    <div className={`rounded-control border p-3 ${toneClass}`}>
+      <p className="text-display-sm font-semibold text-foreground">{value}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{label}</p>
+    </div>
   );
 }
 

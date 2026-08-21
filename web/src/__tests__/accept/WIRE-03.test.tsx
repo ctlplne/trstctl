@@ -90,6 +90,7 @@ describe("WIRE-03 Posture CBOM wiring", () => {
     renderPosture();
 
     await waitFor(() => expect(apiMock.listCBOMAssets).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByText("Algorithm inventory and scan evidence", { exact: true }));
 
     await user.type(screen.getByLabelText("TLS endpoints"), "https://legacy.example.com:443\napi.internal:8443");
     await user.type(screen.getByLabelText("Host config paths"), "/etc/ssh/sshd_config");

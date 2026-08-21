@@ -319,6 +319,11 @@ describe("i18n boundary", () => {
       // behind the evidence disclosure, and removes blast-radius jargon from
       // the screen-reader caption. Machine-authored es/de — FLAGGED FOR HUMAN
       // TRANSLATION REVIEW before release.
+      // QA design g26 re-pin: the cryptography route now leads with the
+      // upgrade decision, uses a plain-language worklist, and moves scanner,
+      // compatibility, PQC, authority, and drift machinery behind three named
+      // disclosures. Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION
+      // REVIEW before release.
       // AUD-58 Provider workforce re-pin: twenty-two keys label SAML sign-in,
       // SCIM lifecycle, exact customer/operation grants, expiry, last use, and
       // retained revocation evidence. Machine-authored es/de — FLAGGED FOR
@@ -813,8 +818,8 @@ describe("i18n boundary", () => {
       // job; its accessible name still includes the exact human job label.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
       // release.
-      "es-ES": "610feabd0aa34729dedaf8089a66e861469696b20c6baf430cd3332e7d66ce83",
-      "de-DE": "fc017592ddef1e5cf6a7aa56187fd3b5b9fa3ced65158c9230858d7a2ab11fd7",
+      "es-ES": "b87ece7d81e9d693c633508ba01582cbb25a556ce687b523329bcb7ef237b407",
+      "de-DE": "4ccc4dcb19a9d105d9d53028aa5886481886ba916d70116381fdff04d4acdffd",
     });
   });
 

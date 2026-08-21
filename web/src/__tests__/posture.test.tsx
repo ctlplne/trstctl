@@ -387,8 +387,41 @@ describe("posture collector disclosures", () => {
     apiMock.rollbackPQCMigration.mockReset();
   });
 
-  it("joins canonical graph readiness and owner actions into the CBOM inventory", async () => {
+  it("leads with the upgrade decision and keeps collector machinery behind named disclosures", async () => {
+    const user = userEvent.setup();
     await renderPosture();
+
+    expect(screen.getByRole("heading", { level: 1, name: "Algorithms and future readiness" })).toBeInTheDocument();
+    expect(screen.getByText("Which credentials use outdated or incompatible cryptography.", { exact: true })).toBeInTheDocument();
+
+    const operate = screen.getByTestId("page-depth-operate");
+    const planUpgrade = within(operate).getByRole("button", { name: "Plan upgrade" });
+    expect(within(operate).getAllByRole("button")).toHaveLength(1);
+    expect(screen.getByRole("heading", { level: 2, name: "Upgrade status" })).toBeInTheDocument();
+    const upgradeStatus = screen.getByRole("region", { name: "Upgrade status" });
+    expect(within(upgradeStatus).getByText("Checked", { exact: true })).toBeInTheDocument();
+    expect(within(upgradeStatus).getByText("2", { exact: true })).toBeInTheDocument();
+    expect(within(upgradeStatus).getByText("1 credential needs attention.", { exact: true })).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "Upgrade status" })).toHaveTextContent("legacy mesh edge");
+
+    const inventory = screen.getByText("Algorithm inventory and scan evidence", { exact: true }).closest("details");
+    const compatibility = screen.getByText("Compatibility, PQC policy, and upgrade planning", { exact: true }).closest("details");
+    const supporting = screen.getByText("Certificate, AD CS, authority, and drift evidence", { exact: true }).closest("details");
+    expect(inventory).not.toHaveAttribute("open");
+    expect(compatibility).not.toHaveAttribute("open");
+    expect(supporting).not.toHaveAttribute("open");
+    expect(screen.queryByRole("heading", { name: "Certificate Transparency monitoring" })).not.toBeInTheDocument();
+
+    await user.click(planUpgrade);
+    expect(compatibility).toHaveAttribute("open");
+    expect(screen.getByText("Compatibility, PQC policy, and upgrade planning", { exact: true })).toHaveFocus();
+    expect(screen.getByRole("heading", { name: "PQC migration campaigns" })).toBeVisible();
+  });
+
+  it("joins canonical graph readiness and owner actions into the CBOM inventory", async () => {
+    const user = userEvent.setup();
+    await renderPosture();
+    await user.click(screen.getByText("Compatibility, PQC policy, and upgrade planning", { exact: true }));
 
     await waitFor(() => expect(apiMock.cryptoReadiness).toHaveBeenCalledTimes(1));
     expect(await screen.findByText("checkout-service")).toBeInTheDocument();
@@ -400,8 +433,9 @@ describe("posture collector disclosures", () => {
   it("renders CT monitoring through Discovery findings", async () => {
     const user = userEvent.setup();
     await renderPosture();
+    await user.click(screen.getByText("Certificate, AD CS, authority, and drift evidence", { exact: true }));
 
-    expect(screen.getByRole("heading", { name: "Crypto posture" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Algorithms and future readiness" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Certificate Transparency monitoring" })).toBeInTheDocument();
     expect(screen.getAllByText("https://ct.googleapis.com/logs/argon2026/").length).toBeGreaterThan(0);
     expect(screen.getByText("42")).toBeInTheDocument();
@@ -436,6 +470,7 @@ describe("posture collector disclosures", () => {
   it("renders drift remediation workflow and records an operator decision", async () => {
     const user = userEvent.setup();
     await renderPosture();
+    await user.click(screen.getByText("Certificate, AD CS, authority, and drift evidence", { exact: true }));
 
     expect(screen.getByRole("heading", { name: "Drift detection" })).toBeInTheDocument();
     const row = await screen.findByRole("row", { name: /agent-7:\/etc\/tls\/current\.pem Agent drift watch credential_drift 91 failed/i });
@@ -458,7 +493,9 @@ describe("posture collector disclosures", () => {
   });
 
   it("renders CBOM crypto posture with a served scan trigger and inventory rows", async () => {
+    const user = userEvent.setup();
     await renderPosture();
+    await user.click(screen.getByText("Algorithm inventory and scan evidence", { exact: true }));
 
     expect(screen.getByRole("heading", { name: "CBOM and cryptographic observability" })).toBeInTheDocument();
     expect(screen.getByLabelText("TLS endpoints")).toBeInTheDocument();
@@ -474,7 +511,9 @@ describe("posture collector disclosures", () => {
   });
 
   it("renders crypto-agility readiness from CBOM inventory", async () => {
+    const user = userEvent.setup();
     await renderPosture();
+    await user.click(screen.getByText("Compatibility, PQC policy, and upgrade planning", { exact: true }));
 
     expect(screen.getByRole("heading", { name: "Crypto-agility readiness" })).toBeInTheDocument();
     const readiness = screen.getByRole("region", { name: "Crypto-agility readiness" });
@@ -492,7 +531,9 @@ describe("posture collector disclosures", () => {
   });
 
   it("keeps Community CBOM useful without calling unavailable migration routes", async () => {
+    const user = userEvent.setup();
     await renderPosture();
+    await user.click(screen.getByText("Compatibility, PQC policy, and upgrade planning", { exact: true }));
 
     expect(screen.getByRole("heading", { name: "PQC migration workflow" })).toBeInTheDocument();
     expect(screen.getByText("Migration execution is unavailable in this edition")).toBeInTheDocument();
@@ -585,6 +626,7 @@ describe("posture collector disclosures", () => {
 
     const user = userEvent.setup();
     await renderPosture();
+    await user.click(screen.getByText("Compatibility, PQC policy, and upgrade planning", { exact: true }));
     await user.click(screen.getByRole("checkbox", { name: "Select legacy mesh edge for PQC migration" }));
     await user.click(screen.getByRole("button", { name: "Preview migration plan" }));
     await waitFor(() =>

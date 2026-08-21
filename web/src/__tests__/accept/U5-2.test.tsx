@@ -65,6 +65,7 @@ describe("U5-2 CBOM inventory explorer", () => {
       </MemoryRouter>,
     );
     await waitFor(() => expect(apiMock.listCBOMAssets).toHaveBeenCalled());
+    await user.click(screen.getByText("Algorithm inventory and scan evidence", { exact: true }));
     expect(await screen.findByRole("heading", { name: "CBOM and cryptographic observability" })).toBeInTheDocument();
     // The weak asset is rendered from served inventory (appears in both the CBOM and readiness tables).
     expect(screen.getAllByText("legacy mesh edge").length).toBeGreaterThan(0);
