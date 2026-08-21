@@ -125,6 +125,9 @@ function UnownedQueuePanel() {
           if (!exceptionBusy) setExceptionTarget(null);
         }}
         titleId="ownership-exception-title"
+        // The shared panel animation owns `transform`, which would erase this
+        // tall form's translate-based centering and push its footer off-screen.
+        panelAnimation="none"
         panelClassName="fixed left-1/2 top-1/2 grid max-h-[calc(100dvh-2rem)] w-[min(92vw,30rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain rounded-panel border border-border bg-card p-5 shadow-elevation3"
       >
         {exceptionTarget && (
@@ -548,6 +551,9 @@ export function Owners() {
           if (!editBusy) setEditorOpen(false);
         }}
         titleId="owner-edit-title"
+        // Preserve the centering transform so the bounded panel can scroll its
+        // full form and footer inside the viewport.
+        panelAnimation="none"
         panelClassName="fixed left-1/2 top-1/2 grid max-h-[calc(100dvh-2rem)] w-[min(92vw,30rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain rounded-panel border border-border bg-card p-5 shadow-elevation3"
       >
         {editorOpen && (
