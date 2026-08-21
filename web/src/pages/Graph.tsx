@@ -203,7 +203,7 @@ export function Graph() {
       {data && (
         <>
           <div className="ui-panel grid gap-4 p-comfortable">
-            <div className="grid gap-3 md:grid-cols-[minmax(16rem,32rem)]">
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-3 md:grid-cols-[minmax(16rem,32rem)]">
               <label className="grid min-w-0 max-w-full gap-1 text-sm font-medium" htmlFor="impact-credential">
                 {t("graph.design.credentialLabel")}
                 <Select
