@@ -533,7 +533,11 @@ function operationDetailFields(row: OperationRow): Array<{ label: string; value:
       ...(row.delivery.outbox_id !== undefined
         ? [{ label: translateNow("operations.detail.outbox"), value: String(row.delivery.outbox_id), technical: true }]
         : []),
-      ...(row.delivery.rollback_ref ? [{ label: translateNow("operations.detail.rollback"), value: row.delivery.rollback_ref, technical: true }] : []),
+      {
+        label: translateNow("operations.detail.rollback"),
+        value: row.delivery.rollback_ref || translateNow("operations.detail.notRecorded"),
+        technical: Boolean(row.delivery.rollback_ref),
+      },
     ];
   }
   if (row.type === "rotation") {
@@ -547,7 +551,11 @@ function operationDetailFields(row: OperationRow): Array<{ label: string; value:
       ...(row.rotation.outbox_id !== undefined
         ? [{ label: translateNow("operations.detail.outbox"), value: String(row.rotation.outbox_id), technical: true }]
         : []),
-      ...(row.rotation.rollback_ref ? [{ label: translateNow("operations.detail.rollback"), value: row.rotation.rollback_ref, technical: true }] : []),
+      {
+        label: translateNow("operations.detail.rollback"),
+        value: row.rotation.rollback_ref || translateNow("operations.detail.notRecorded"),
+        technical: Boolean(row.rotation.rollback_ref),
+      },
     ];
   }
   return [

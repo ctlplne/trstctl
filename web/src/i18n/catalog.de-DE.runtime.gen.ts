@@ -676,6 +676,7 @@ const translatedValues = [
   "Idempotenzschlüssel",
   "Outbox-Nutzlast-ID",
   "Rollback-Referenz",
+  "Nicht erfasst",
   "Identitäts-ID",
   "Auslöser",
   "Grund",

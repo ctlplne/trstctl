@@ -5226,6 +5226,7 @@ const esESCatalog = {
   "operations.detail.idempotency": "Clave de idempotencia",
   "operations.detail.outbox": "ID de carga del buzón de salida",
   "operations.detail.rollback": "Referencia de reversión",
+  "operations.detail.notRecorded": "No registrado",
   "operations.detail.identityId": "ID de identidad",
   "operations.detail.trigger": "Desencadenante",
   "operations.detail.reason": "Motivo",

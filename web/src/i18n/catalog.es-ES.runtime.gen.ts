@@ -676,6 +676,7 @@ const translatedValues = [
   "Clave de idempotencia",
   "ID de carga del buzón de salida",
   "Referencia de reversión",
+  "No registrado",
   "ID de identidad",
   "Desencadenante",
   "Motivo",

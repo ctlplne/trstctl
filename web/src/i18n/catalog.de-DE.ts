@@ -5249,6 +5249,7 @@ const deDECatalog = {
   "operations.detail.idempotency": "Idempotenzschlüssel",
   "operations.detail.outbox": "Outbox-Nutzlast-ID",
   "operations.detail.rollback": "Rollback-Referenz",
+  "operations.detail.notRecorded": "Nicht erfasst",
   "operations.detail.identityId": "Identitäts-ID",
   "operations.detail.trigger": "Auslöser",
   "operations.detail.reason": "Grund",

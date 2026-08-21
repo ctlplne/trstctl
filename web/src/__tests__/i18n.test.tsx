@@ -804,8 +804,12 @@ describe("i18n boundary", () => {
       // stay available without exposing raw identifiers in the decision path.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
       // release.
-      "es-ES": "da02668cf08d3794632e4f2a9b485c37dc8ee2a58b127230589cf76e18f3c9ea",
-      "de-DE": "434ba97bfd3c09b96a1ec5fcd1b7b94240af90ec52b0d07ce3a6e092fd65a107",
+      // QA design g23 Jobs-and-queues evidence re-pin: an absent rollback
+      // reference now says Not recorded instead of silently removing the
+      // field. Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW
+      // before release.
+      "es-ES": "08172d86a0680f8baf456fcaf77dfe32579c26ac4eb9ce3f2fc8d80a74ac7714",
+      "de-DE": "06694c95bf5010afc8207e1bb862cc50f6dda37a6909fed94966562580b0a294",
     });
   });
 

@@ -2320,6 +2320,7 @@ export const messages = {
   "operations.detail.idempotency": { defaultMessage: "Idempotency key", description: "Exact mutation replay key." },
   "operations.detail.outbox": { defaultMessage: "Outbox payload ID", description: "Exact durable external-call payload identifier." },
   "operations.detail.rollback": { defaultMessage: "Rollback reference", description: "Exact recovery reference." },
+  "operations.detail.notRecorded": { defaultMessage: "Not recorded", description: "Honest label when optional exact job evidence was not recorded." },
   "operations.detail.identityId": { defaultMessage: "Identity ID", description: "Exact rotated identity identifier." },
   "operations.detail.trigger": { defaultMessage: "Trigger", description: "Reason the rotation workflow started." },
   "operations.detail.reason": { defaultMessage: "Reason", description: "Served rotation reason." },

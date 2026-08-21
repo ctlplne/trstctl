@@ -164,6 +164,19 @@ describe("Jobs and queues design contract", () => {
     expect(screen.getByRole("table", { name: "Rotation runs" })).toBeVisible();
   });
 
+  it("marks an absent rollback reference as not recorded instead of silently hiding the evidence field", async () => {
+    const user = userEvent.setup();
+    apiMock.connectorDeliveries.mockResolvedValue({
+      items: [{ ...failedDelivery, rollback_ref: undefined }],
+    });
+    renderOperations();
+
+    await user.click(await screen.findByRole("button", { name: "Review Deploy to GitHub Actions" }));
+    const dialog = await screen.findByRole("dialog", { name: "Failed job: Deploy to GitHub Actions" });
+    expect(within(dialog).getByText("Rollback reference", { exact: true })).toBeInTheDocument();
+    expect(within(dialog).getByText("Not recorded", { exact: true })).toBeInTheDocument();
+  });
+
   it("uses a responsive worklist instead of the clipped eight-column default table", async () => {
     renderOperations();
 
