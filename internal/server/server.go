@@ -1178,7 +1178,6 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	if d.RateLimiter != nil {
 		defaults = append(defaults, api.WithRateLimiter(d.RateLimiter))
 	}
-	s.appendOperationalReadModels(d, &defaults)
 	if err := configureBreakglassAPIOptions(d, &defaults); err != nil {
 		return nil, nil, err
 	}
@@ -1187,6 +1186,11 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	if err := s.configurePolicyGate(d, orch, &defaults); err != nil {
 		return nil, nil, err
 	}
+	// configurePolicyGate initializes the server's real bulkhead set. Attach
+	// operational read models only after that point so the Jobs and queues API
+	// receives the live pool provider instead of permanently capturing the
+	// truthful-but-wrong served=false fallback during startup.
+	s.appendOperationalReadModels(d, &defaults)
 	authOpt, err := buildBrowserAuth(d.OIDC, d.SAML, d.LDAP, d.SecurityHeaders.TLS, d.AuthHTTPClient, d.Store, d.KEK, d.TenantCrypto)
 	if err != nil {
 		return nil, nil, err
