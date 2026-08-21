@@ -292,6 +292,11 @@ describe("Clarity/Console design-system foundation", () => {
       const card = requireToken(tokens, "card");
       expect(contrastRatio(warning, card), `${themeName} warning text on card`).toBeGreaterThanOrEqual(4.5);
       expect(contrastRatioOnTint(warning, card, 0.1), `${themeName} warning text on 10% warning tint`).toBeGreaterThanOrEqual(4.5);
+      const success = requireToken(tokens, "status-success");
+      expect(contrastRatio(success, card), `${themeName} success text on card`).toBeGreaterThanOrEqual(4.5);
+      const critical = requireToken(tokens, "risk-critical");
+      expect(contrastRatio(critical, card), `${themeName} critical text on card`).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatioOnTint(critical, card, 0.1), `${themeName} critical text on 10% critical tint`).toBeGreaterThanOrEqual(4.5);
     }
   });
 

@@ -454,7 +454,7 @@ export function Connectors() {
                 </EmptyState>
               ) : (
                 targets && (
-                  <div className="ui-panel overflow-x-auto">
+                  <ScrollableTableRegion label={t("connectors.design.destinationsTable")}>
                     <table className="ui-table min-w-[60rem]">
                       <caption className="sr-only">{t("connectors.design.destinationsTable")}</caption>
                       <thead>
@@ -487,7 +487,7 @@ export function Connectors() {
                         ))}
                       </tbody>
                     </table>
-                  </div>
+                  </ScrollableTableRegion>
                 )
               )}
             </section>
@@ -603,7 +603,7 @@ export function Connectors() {
                   {translateNow("source.no.connector.catalog.rows.were.returned.3a8d5bf05f")}
                 </EmptyState>
               ) : (
-                <div className="ui-panel overflow-x-auto">
+                <ScrollableTableRegion label={t("connectors.design.capabilitiesTable")}>
                   <table className="ui-table min-w-[54rem]">
                     <caption className="sr-only">{t("connectors.design.capabilitiesTable")}</caption>
                     <thead>
@@ -717,7 +717,7 @@ export function Connectors() {
                       ))}
                     </tbody>
                   </table>
-                </div>
+                </ScrollableTableRegion>
               )}
             </section>
           )}
@@ -733,7 +733,7 @@ export function Connectors() {
               {relayPlugins.length === 0 ? (
                 <EmptyState title={translateNow("connectors.relayPlugins.emptyTitle")}>{translateNow("connectors.relayPlugins.emptyBody")}</EmptyState>
               ) : (
-                <div className="ui-panel overflow-x-auto">
+                <ScrollableTableRegion label={translateNow("connectors.relayPlugins.title")}>
                   <table className="ui-table min-w-[76rem]">
                     <caption className="sr-only">{translateNow("connectors.relayPlugins.title")}</caption>
                     <thead>
@@ -790,7 +790,7 @@ export function Connectors() {
                       })}
                     </tbody>
                   </table>
-                </div>
+                </ScrollableTableRegion>
               )}
               {relayPluginsCursor ? (
                 <Button
@@ -849,7 +849,7 @@ export function Connectors() {
                       })}
                     </p>
                   </div>
-                  <div className="ui-panel overflow-x-auto">
+                  <ScrollableTableRegion label={translateNow("source.endpoint.key.custody.caption.b2cus00004")}>
                     <table className="ui-table min-w-[56rem]">
                       <caption className="sr-only">{translateNow("source.endpoint.key.custody.caption.b2cus00004")}</caption>
                       <thead>
@@ -898,7 +898,7 @@ export function Connectors() {
                         ))}
                       </tbody>
                     </table>
-                  </div>
+                  </ScrollableTableRegion>
                 </section>
               ) : null}
 
@@ -910,7 +910,7 @@ export function Connectors() {
                     </h2>
                     <p className="mt-1 max-w-4xl text-caption text-muted-foreground">{translateNow("source.endpoint.verification.help.d2ver00002")}</p>
                   </div>
-                  <div className="ui-panel overflow-x-auto">
+                  <ScrollableTableRegion label={translateNow("source.endpoint.verification.caption.d2ver00003")}>
                     <table className="ui-table min-w-[72rem]">
                       <caption className="sr-only">{translateNow("source.endpoint.verification.caption.d2ver00003")}</caption>
                       <thead>
@@ -971,7 +971,7 @@ export function Connectors() {
                         ))}
                       </tbody>
                     </table>
-                  </div>
+                  </ScrollableTableRegion>
                 </section>
               ) : null}
 
@@ -986,7 +986,7 @@ export function Connectors() {
                 </EmptyState>
               ) : (
                 <>
-                  <div className="ui-panel overflow-x-auto">
+                  <ScrollableTableRegion label={translateNow("source.recent.connector.delivery.receipts.3a2bf7db18")}>
                     <table className="ui-table min-w-[80rem]">
                       <caption className="sr-only">{translateNow("source.recent.connector.delivery.receipts.3a2bf7db18")}</caption>
                       <thead>
@@ -1024,7 +1024,7 @@ export function Connectors() {
                         ))}
                       </tbody>
                     </table>
-                  </div>
+                  </ScrollableTableRegion>
                   {deliveriesCursor && (
                     <div>
                       <Button type="button" size="sm" variant="outline" disabled={deliveriesLoadingMore} onClick={() => void loadMoreDeliveries()}>
@@ -1050,7 +1050,7 @@ export function Connectors() {
               {circuits.length === 0 ? (
                 <EmptyState title={t("parity.noOutboxCircuitBreakers_b8a7be")}>{t("parity.noOutboxDestinationHasRecordedCircuit_1c248f")}</EmptyState>
               ) : (
-                <div className="ui-panel overflow-x-auto">
+                <ScrollableTableRegion label={t("parity.outboxCircuitBreakers_278ec6")}>
                   <table className="ui-table min-w-[48rem]">
                     <caption className="sr-only">{t("parity.outboxCircuitBreakers_278ec6")}</caption>
                     <thead>
@@ -1078,7 +1078,7 @@ export function Connectors() {
                       ))}
                     </tbody>
                   </table>
-                </div>
+                </ScrollableTableRegion>
               )}
             </section>
           )}
@@ -1336,6 +1336,24 @@ function ConnectorDetails({ title, open, onToggle, children }: { title: string; 
     </details>
   );
 }
+
+/* eslint-disable jsx-a11y/no-noninteractive-tabindex -- A focusable labeled
+   region is the WCAG keyboard path for a table whose columns overflow on a
+   narrow viewport. The generic lint rule cannot see runtime overflow, while
+   live axe explicitly requires this tab stop. */
+function ScrollableTableRegion({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div
+      className="ui-panel overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+      role="region"
+      aria-label={label}
+      tabIndex={0}
+    >
+      {children}
+    </div>
+  );
+}
+/* eslint-enable jsx-a11y/no-noninteractive-tabindex */
 
 function ConnectorDetailRow({ children, mono = false, term }: { term: string; children: ReactNode; mono?: boolean }) {
   return (

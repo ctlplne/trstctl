@@ -179,9 +179,12 @@ describe("route 031 decision-first deployment destination design", () => {
     expect(await screen.findByRole("heading", { name: "Recent delivery receipts" })).toBeInTheDocument();
     const deliveryTable = screen.getByRole("table", { name: "Recent connector delivery receipts" });
     expect(within(deliveryTable).getByText("rollback:delivery-31")).toBeInTheDocument();
+    expect(deliveryTable.parentElement).toHaveAttribute("tabindex", "0");
 
     await user.click(screen.getByText("Connector capabilities and plugin evidence", { exact: true }));
-    expect(await screen.findByRole("table", { name: "Connector capability registry" })).toHaveTextContent("nginx");
+    const capabilityTable = await screen.findByRole("table", { name: "Connector capability registry" });
+    expect(capabilityTable).toHaveTextContent("nginx");
+    expect(capabilityTable.parentElement).toHaveAttribute("tabindex", "0");
     expect(screen.getByRole("heading", { name: "Verified relay plugins" })).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/BEGIN .* PRIVATE KEY|raw token hidden/i);
   });
