@@ -707,8 +707,11 @@ function operationLabel(row: OperationRow): string {
       resource: row.approval.resource_name || row.approval.resource_id,
     });
   }
-  const destination = row.delivery.destination.split("/").filter(Boolean).at(-1) || row.delivery.target || row.delivery.connector;
-  return translateNow("operations.label.deployment", { destination: humanizeIdentifier(destination) });
+  const destination = row.delivery.destination.split("/").filter(Boolean).at(-1) || "";
+  const destinationIsQueueKind = ["connector.deploy", "connector.rollback", "connector.test"].includes(destination.toLowerCase());
+  const targetSystem = row.delivery.target.split("/").filter(Boolean).at(0) || "";
+  const labelDestination = destinationIsQueueKind ? targetSystem || row.delivery.connector : destination || targetSystem || row.delivery.connector;
+  return translateNow("operations.label.deployment", { destination: humanizeIdentifier(labelDestination) });
 }
 
 function operationSummary(row: OperationRow): string {

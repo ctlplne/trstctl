@@ -116,9 +116,9 @@ describe("Jobs and queues design contract", () => {
     expect(within(operate).getAllByRole("button")).toHaveLength(1);
 
     expect(await screen.findByRole("heading", { level: 2, name: "Needs attention" })).toBeInTheDocument();
-    expect(screen.getByText("1 failed job needs review.")).toBeInTheDocument();
-    expect(screen.getByText("2 jobs are waiting; the oldest has waited 2h.")).toBeInTheDocument();
-    const review = screen.getByRole("button", { name: "Review Deploy to GitHub Actions" });
+    expect(await screen.findByText("1 failed job needs review.")).toBeInTheDocument();
+    expect(await screen.findByText("2 jobs are waiting; the oldest has waited 2h.")).toBeInTheDocument();
+    const review = await screen.findByRole("button", { name: "Review Deploy to GitHub Actions" });
 
     expect(screen.queryByText(failedDelivery.id)).not.toBeInTheDocument();
     expect(screen.queryByText(failedDelivery.destination)).not.toBeInTheDocument();
@@ -175,6 +175,16 @@ describe("Jobs and queues design contract", () => {
     const dialog = await screen.findByRole("dialog", { name: "Failed job: Deploy to GitHub Actions" });
     expect(within(dialog).getByText("Rollback reference", { exact: true })).toBeInTheDocument();
     expect(within(dialog).getByText("Not recorded", { exact: true })).toBeInTheDocument();
+  });
+
+  it("names a generic connector.deploy queue after its human target instead of repeating the machine action", async () => {
+    apiMock.connectorDeliveries.mockResolvedValue({
+      items: [{ ...failedDelivery, destination: "connector.deploy", target: "github-actions/release" }],
+    });
+    renderOperations();
+
+    expect(await screen.findByText("Deploy to GitHub Actions", { exact: true })).toBeInTheDocument();
+    expect(screen.queryByText("Deploy to Connector Deploy", { exact: true })).not.toBeInTheDocument();
   });
 
   it("uses a responsive worklist instead of the clipped eight-column default table", async () => {
