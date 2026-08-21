@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Graph } from "@/pages/Graph";
@@ -84,7 +84,10 @@ describe("POL-01 graph polish", () => {
     });
     renderGraph();
 
-    await waitFor(() => expect(screen.getByLabelText("Credential to explore")).toHaveValue("iss:managed"));
+    const credentialSelector = await screen.findByLabelText("Credential to explore");
+    expect(credentialSelector).toBeDisabled();
+    expect(credentialSelector).toHaveValue("");
+    expect(within(credentialSelector).getByRole("option", { name: "None" })).toBeInTheDocument();
     await user.click(screen.getByText("Node inventory, exact attributes, and advanced query"));
     expect(await screen.findByText(/Exact SPKI trust.*1 unverified subject-only candidate stores across 1 hosts/)).toBeInTheDocument();
     expect(screen.getByText("1 trust stores across 1 hosts.")).toBeInTheDocument();

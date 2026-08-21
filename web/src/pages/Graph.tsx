@@ -18,12 +18,14 @@ type Disclosure = "map" | "evidence" | "inventory";
 export function Graph() {
   const { t } = useTranslation();
   const [searchParams] = useSearchParams();
+  const requestedNode = searchParams.get("node") ?? "";
   const [graph, setGraph] = useState<{ data: GraphResponse | null; loading: boolean; error: Notice | null }>({
     data: null,
     loading: true,
     error: null,
   });
-  const [selected, setSelected] = useState(searchParams.get("node") ?? "");
+  const [selected, setSelected] = useState("");
+  const [inspected, setInspected] = useState(requestedNode);
   const [search, setSearch] = useState("");
   const [kindFilter, setKindFilter] = useState("all");
   const [hiddenNodeKinds, setHiddenNodeKinds] = useState<Set<string>>(() => new Set());
@@ -42,6 +44,7 @@ export function Graph() {
   const { data, loading, error } = graph;
 
   const nodeByID = useMemo(() => new Map((data?.nodes ?? []).map((node) => [node.id, node])), [data]);
+  const credentialNodes = useMemo(() => (data?.nodes ?? []).filter((node) => node.kind === "credential"), [data]);
   const kinds = useMemo(() => Array.from(new Set((data?.nodes ?? []).map((node) => node.kind))).sort(), [data]);
   const edgeTypes = useMemo(() => Array.from(new Set((data?.edges ?? []).map((edge) => edge.type))).sort(), [data]);
   const legendNodeKinds = useMemo(() => mergeCanonical(canonicalGraphNodeKinds, kinds), [kinds]);
@@ -67,7 +70,7 @@ export function Graph() {
     () => (data?.edges ?? []).filter((edge) => !hiddenEdgeTypes.has(edge.type) && visibleNodeIDs.has(edge.from) && visibleNodeIDs.has(edge.to)),
     [data, hiddenEdgeTypes, visibleNodeIDs],
   );
-  const selectedNode = selected ? (nodeByID.get(selected) ?? null) : null;
+  const inspectedNode = inspected ? (nodeByID.get(inspected) ?? null) : null;
   const impactIDs = useMemo(() => (impact ? new Set([impact.node.id, ...impact.affected.map((node) => node.id)]) : undefined), [impact]);
   const evidenceEdges = useMemo(() => {
     if (!data || !impact) return data?.edges ?? [];
@@ -88,25 +91,29 @@ export function Graph() {
   }, []);
 
   useEffect(() => {
-    if (!data || data.nodes.length === 0 || (selected && nodeByID.has(selected))) return;
+    if (!data || credentialNodes.length === 0 || nodeByID.get(selected)?.kind === "credential") return;
     const outgoing = new Set(data.edges.map((edge) => edge.from));
-    const usefulDefault =
-      data.nodes.find((node) => node.kind === "credential" && outgoing.has(node.id)) ?? data.nodes.find((node) => outgoing.has(node.id)) ?? data.nodes[0];
+    const usefulDefault = credentialNodes.find((node) => outgoing.has(node.id)) ?? credentialNodes[0];
     setSelected(usefulDefault.id);
-  }, [data, nodeByID, selected]);
+  }, [credentialNodes, data, nodeByID, selected]);
+
+  useEffect(() => {
+    if (!data || data.nodes.length === 0 || (inspected && nodeByID.has(inspected))) return;
+    setInspected(selected || data.nodes[0].id);
+  }, [data, inspected, nodeByID, selected]);
 
   useEffect(() => {
     let active = true;
     setTrustStores(null);
-    if (!selectedNode || selectedNode.kind !== "issuer" || typeof api.graphTrustStores !== "function") return;
+    if (!inspectedNode || inspectedNode.kind !== "issuer" || typeof api.graphTrustStores !== "function") return;
     api
-      .graphTrustStores(selectedNode.id)
+      .graphTrustStores(inspectedNode.id)
       .then((result) => active && setTrustStores(result))
       .catch(() => active && setTrustStores(null));
     return () => {
       active = false;
     };
-  }, [selectedNode]);
+  }, [inspectedNode]);
 
   useEffect(() => {
     if (impact || blastError || reachableError) resultRef.current?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
@@ -114,6 +121,7 @@ export function Graph() {
 
   function selectNode(id: string) {
     setSelected(id);
+    setInspected(id);
     setImpact(null);
     setReachable(null);
     setBlastError(null);
@@ -198,8 +206,9 @@ export function Graph() {
             <div className="grid gap-3 md:grid-cols-[minmax(16rem,32rem)]">
               <label className="grid gap-1 text-sm font-medium" htmlFor="impact-credential">
                 {t("graph.design.credentialLabel")}
-                <Select id="impact-credential" value={selected} disabled={data.nodes.length === 0} onChange={(event) => selectNode(event.target.value)}>
-                  {data.nodes.map((node) => (
+                <Select id="impact-credential" value={selected} disabled={credentialNodes.length === 0} onChange={(event) => selectNode(event.target.value)}>
+                  {credentialNodes.length === 0 ? <option value="">{translateNow("operations.jobs.redemptions.none")}</option> : null}
+                  {credentialNodes.map((node) => (
                     <option key={node.id} value={node.id}>
                       {node.name || graphNodeKindLabel(node.kind)} · {graphNodeKindLabel(node.kind)}
                     </option>
@@ -230,8 +239,8 @@ export function Graph() {
                 <GraphView
                   nodes={visibleNodes}
                   edges={visibleEdges}
-                  selectedId={selected}
-                  onSelect={selectNode}
+                  selectedId={inspected}
+                  onSelect={setInspected}
                   impactIds={impactIDs}
                   focusId={impact?.node.id}
                 />
@@ -302,7 +311,7 @@ export function Graph() {
                     </Select>
                   </label>
                 </div>
-                <NodeInventory nodes={filteredNodes} selected={selected} onSelect={selectNode} />
+                <NodeInventory nodes={filteredNodes} selected={inspected} onSelect={setInspected} />
               </section>
 
               <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
@@ -314,7 +323,7 @@ export function Graph() {
                   onChange={setQueryText}
                   onRun={() => void runGraphQuery()}
                 />
-                <NodeDetail node={selectedNode} trustStores={trustStores} />
+                <NodeDetail node={inspectedNode} trustStores={trustStores} />
               </div>
             </div>
           </DecisionDisclosure>

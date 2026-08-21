@@ -76,7 +76,10 @@ describe("route 027 impact-first graph design", () => {
 
     expect(await screen.findByRole("heading", { level: 1, name: "What could be affected" })).toBeInTheDocument();
     expect(screen.getByText("Which systems depend on a selected credential.", { exact: true })).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByLabelText("Credential to explore")).toHaveValue("cert:payments"));
+    const credentialSelector = screen.getByLabelText("Credential to explore");
+    await waitFor(() => expect(credentialSelector).toHaveValue("cert:payments"));
+    expect(within(credentialSelector).getAllByRole("option")).toHaveLength(1);
+    expect(within(credentialSelector).queryByRole("option", { name: /payments-db/ })).not.toBeInTheDocument();
 
     const operate = screen.getByTestId("page-depth-operate");
     expect(within(operate).getAllByRole("button")).toHaveLength(1);
@@ -111,5 +114,7 @@ describe("route 027 impact-first graph design", () => {
     await user.click(screen.getByText("Node inventory, exact attributes, and advanced query", { exact: true }));
     expect(screen.getByLabelText("Search")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Run graph query" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Select payments-db" }));
+    expect(credentialSelector).toHaveValue("cert:payments");
   });
 });
