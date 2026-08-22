@@ -1363,7 +1363,7 @@ func (o *Orchestrator) RecordCertificateWithApproval(ctx context.Context, tenant
 	}
 	candidateEvent := events.Event{
 		ID: eventID, Type: projections.EventCertificateRecorded,
-		TenantID: tenantID, Time: time.Now().UTC(),
+		TenantID: tenantID, Time: approvedCertificateEventTime(time.Now()),
 		SchemaVersion: projections.CertificateApprovalEventSchemaVersion,
 		Data:          payload,
 	}
@@ -1394,6 +1394,14 @@ func approvedCertificateActor(ctx context.Context) *events.Actor {
 		return nil
 	}
 	return &actor
+}
+
+// approvedCertificateEventTime crosses the SQL fence and the event log as part
+// of one semantic digest. PostgreSQL timestamps stop at microseconds, so remove
+// sub-microsecond data before hashing; otherwise a valid command can look changed
+// after the fence is read back.
+func approvedCertificateEventTime(now time.Time) time.Time {
+	return now.UTC().Truncate(time.Microsecond)
 }
 
 // validateApprovedCertificateReplayUse separates immutable capability identity

@@ -197,9 +197,10 @@ func validateApprovedTargetFence(f ApprovedTargetFence) error {
 	if f.TargetKind != ApprovedTargetEphemeralCertificate && f.TargetKind != ApprovedTargetCodeSigningCommand {
 		return fmt.Errorf("store: unsupported approved target kind %q", f.TargetKind)
 	}
-	if f.TargetKind == ApprovedTargetCodeSigningCommand && f.SchemaVersion >= 3 &&
+	if (f.TargetKind == ApprovedTargetEphemeralCertificate ||
+		f.TargetKind == ApprovedTargetCodeSigningCommand && f.SchemaVersion >= 3) &&
 		!f.EventTime.Equal(f.EventTime.UTC().Truncate(time.Microsecond)) {
-		return errors.New("store: privacy-safe code-signing fence time is not PostgreSQL-exact")
+		return errors.New("store: approved target fence time is not PostgreSQL-exact")
 	}
 	for name, digest := range map[string]string{
 		"request binding": f.RequestBinding,
