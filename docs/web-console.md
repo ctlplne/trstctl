@@ -3,7 +3,7 @@
 trstctl ships a full web console served by the binary itself — a React 18 + Vite SPA
 from an embedded filesystem, on the same port and TLS certificate as the API, nothing
 separate to deploy. It sits behind the same `/auth/login` session as every other
-surface, and it is a *view* over that served control plane: anything you can do here
+surface, and it is a _view_ over that served control plane: anything you can do here
 you can also do through the [REST API](features/platform-and-api.md), the
 [CLI](cli.md), or the [SDKs](features/client-sdks.md). This page maps the navigation,
 every real screen, the served endpoints behind each one, and the feature page that
@@ -13,17 +13,17 @@ related capability is API-only today.
 ## Navigation
 
 The console is a unified shell: an icon rail of five spaces at the far edge, and a
-sidebar scoped to the active space. *Home* is the cross-space plane — Dashboard and
-Journeys sit above a few quick tasks (for example *Expiring ≤30 days*) that
+sidebar scoped to the active space. _Home_ is the cross-space plane — Dashboard and
+Journeys sit above a few quick tasks (for example _Expiring ≤30 days_) that
 deep-link into a pre-filtered worklist. Each space owns every surface of one
-concern: *Certificates & PKI* (certificates, request, profiles, CA hierarchy,
-protocols, code signing), *Secrets* (the secrets workspace), *Workload & SSH*
-(workloads, identities, SSH trust), *Posture & response* (find unmanaged
+concern: _Certificates & PKI_ (certificates, request, profiles, CA hierarchy,
+protocols, code signing), _Secrets_ (the secrets workspace), _Workload & SSH_
+(workloads, identities, SSH trust), _Posture & response_ (find unmanaged
 credentials, algorithms and future readiness, risk, what could be affected, incidents,
 operations — the Detect & respond
-group), and *Platform* (policy, approvals, audit, owners, privacy under Govern &
+group), and _Platform_ (policy, approvals, audit, owners, privacy under Govern &
 administer; agents, connectors, notifications under Infrastructure; integrations
-and the API explorer; access, system posture, editions, and the assistant under
+and the API playground; access, system posture, editions, and the assistant under
 Administration).
 
 The mechanism: the URL decides the active space — deep-linking any route lights up
@@ -475,23 +475,36 @@ surface. See
 [Client SDKs](features/client-sdks.md), and
 [Terraform provider](terraform-provider.md).
 
-### API Explorer (`/integrate/api`)
+### API playground (`/integrate/api`)
 
-API Explorer is a live console over the served OpenAPI contract, not a static
-viewer: it lists every operation with its permission scope and response schema,
-builds a sample request body and matching curl/SDK snippets, and turns every served
-path, query, and header parameter plus JSON body into an editable request draft.
-Optional query fields stay empty until the operator supplies them. Required values,
-UUIDs, RFC3339 timestamps, enums, numbers, booleans, arrays, and recursive JSON
-requirements validate before execution; the exact encoded URL, headers, and
-normalized body are shown with only the bearer secret hidden.
+API playground first answers one question: how to try a safe request and understand
+the response. Its default screen runs nothing. It explains the three-step path —
+start with a read-only operation, create temporary least-privilege access, then read
+a plain-language result — and exposes one **Try request** action. Opening the
+workspace selects a read-only operation that has no required inputs when the served
+contract provides one. Creating access and sending the request remain separate,
+explicit actions.
 
-The runner uses a self-service 15-minute token scoped to just that operation. A
-write cannot run until the draft validates and the operator explicitly confirms
-the exact preview; changing any input clears that confirmation. In-flight requests
-can be cancelled, expired tokens fail closed in the browser, and the current token
-can be revoked immediately. The response panel shows real status/content type,
-including RFC 7807 problem details. Backed by `GET /api/v1/openapi.json`,
+The full OpenAPI surface remains reachable without putting hundreds of operations
+on the first screen. **All contract operations** searches by name, path, summary, or
+permission and renders at most 12 matches at once. **Headers, body, and exact
+request** preserves every served path, query, and header parameter; JSON body;
+recursive validation rule; idempotency header; and the exact normalized preview
+with only the bearer secret hidden. **OpenAPI schema and code examples** links to
+the served contract and keeps matching curl and SDK snippets copyable. Keyboard
+users can focus every scrollable code region. A link containing
+`?operation=<operationId>` opens the real workspace on that exact operation without
+creating access or sending it.
+
+The runner uses a self-service 15-minute token scoped only to the selected
+operation. A write cannot run until its draft validates and the operator confirms
+the exact mutation preview; changing any input clears that confirmation. In-flight
+requests can be cancelled, expired tokens fail closed in the browser, and a live
+token can be revoked immediately. The response starts with a plain-language answer,
+then shows the real status and content type. RFC 7807 problem details remain visible,
+and **Raw response** retains the exact payload. A denied or unavailable contract
+names the problem and recovery action; a successfully loaded empty contract never
+invents operations. Backed by `GET /api/v1/openapi.json`,
 `POST /api/v1/access/api-tokens`, and `DELETE /api/v1/access/api-tokens/{id}`.
 
 ### Jobs and queues, and notifications (`/operations`, `/notifications`)
@@ -513,8 +526,7 @@ the exact lifecycle history. The UI does not offer a generic cancel button becau
 there is no served cancel operation; stopping or rolling back work stays with the
 owning workflow rather than pretending a button succeeded.
 
-Approval work is loaded through every cursor page instead of stopping at the first
-100. Each approval is visible only when the reviewer has the matching real authority:
+Approval work is loaded through every cursor page instead of stopping at the first 100. Each approval is visible only when the reviewer has the matching real authority:
 `certs:issue` for certificate actions, `secrets:write` for secret actions, or
 `keys:approve` for managed-key actions. Reject records an immutable denial of that
 exact request and does not retire, revoke, delete, or otherwise mutate the target
@@ -615,47 +627,47 @@ grounded and sufficient. Backed by `/api/v1/ai/status`, `/api/v1/mcp/tools`, `/a
 
 ## Reference: route → screen
 
-| Route | Screen |
-|---|---|
-| `/` | Dashboard |
-| `/journeys` | Journeys |
-| `/identities` | Identities & NHI |
-| `/owners` | Ownership |
-| `/certificates` | Certificate lifecycle |
-| `/request` | Request credential |
-| `/profiles` | Profiles |
-| `/ca-hierarchy` | CA hierarchy |
-| `/protocols` | Protocols |
-| `/ssh` | SSH trust |
-| `/codesign` | Code signing |
-| `/secrets` | Secret store |
-| `/secrets/engines` | Automatic secret sources |
-| `/secrets/access` | Machine access |
-| `/secrets/sharing` | One-time secret links |
-| `/secrets/scanning` | Find leaked secrets in code |
-| `/secrets/sync` | Send secrets to systems |
-| `/agents` | Agents |
-| `/workloads` | Workloads |
-| `/discovery` | Find unmanaged credentials |
-| `/risk` | What to fix first |
-| `/posture` | Algorithms and future readiness |
-| `/graph` | Graph |
-| `/incidents` | Incidents |
-| `/approvals` | Requests waiting for approval |
-| `/operations` | Operations |
-| `/notifications` | Alerts and delivery |
-| `/policy` | Rules and approvals |
-| `/audit` | Change history |
-| `/privacy` | Evidence privacy |
-| `/connectors` | Where credentials are installed |
-| `/integrate` | Connect other tools |
-| `/integrate/api` | API Explorer |
-| `/admin/access` | Access admin |
-| `/admin/system` | System posture |
-| `/admin/editions` | Editions |
-| `/assistant` | Assistant |
-| `/wizard` | Wizard (not in rail) |
-| `/platform` | redirects to `/admin/*` |
+| Route               | Screen                          |
+| ------------------- | ------------------------------- |
+| `/`                 | Dashboard                       |
+| `/journeys`         | Journeys                        |
+| `/identities`       | Identities & NHI                |
+| `/owners`           | Ownership                       |
+| `/certificates`     | Certificate lifecycle           |
+| `/request`          | Request credential              |
+| `/profiles`         | Profiles                        |
+| `/ca-hierarchy`     | CA hierarchy                    |
+| `/protocols`        | Protocols                       |
+| `/ssh`              | SSH trust                       |
+| `/codesign`         | Code signing                    |
+| `/secrets`          | Secret store                    |
+| `/secrets/engines`  | Automatic secret sources        |
+| `/secrets/access`   | Machine access                  |
+| `/secrets/sharing`  | One-time secret links           |
+| `/secrets/scanning` | Find leaked secrets in code     |
+| `/secrets/sync`     | Send secrets to systems         |
+| `/agents`           | Agents                          |
+| `/workloads`        | Workloads                       |
+| `/discovery`        | Find unmanaged credentials      |
+| `/risk`             | What to fix first               |
+| `/posture`          | Algorithms and future readiness |
+| `/graph`            | Graph                           |
+| `/incidents`        | Incidents                       |
+| `/approvals`        | Requests waiting for approval   |
+| `/operations`       | Operations                      |
+| `/notifications`    | Alerts and delivery             |
+| `/policy`           | Rules and approvals             |
+| `/audit`            | Change history                  |
+| `/privacy`          | Evidence privacy                |
+| `/connectors`       | Where credentials are installed |
+| `/integrate`        | Connect other tools             |
+| `/integrate/api`    | API playground                  |
+| `/admin/access`     | Access admin                    |
+| `/admin/system`     | System posture                  |
+| `/admin/editions`   | Editions                        |
+| `/assistant`        | Assistant                       |
+| `/wizard`           | Wizard (not in rail)            |
+| `/platform`         | redirects to `/admin/*`         |
 
 ## Use it
 

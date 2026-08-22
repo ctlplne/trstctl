@@ -1,6 +1,7 @@
 # Build on the API, CLI, and SDKs
 
 <!-- trstctl:journey-census:start -->
+
 !!! success "Served path — wiring census 81/81"
 
     The Definition-of-Done census reports **81/81 required capabilities served**: **12 of 81 census rows launch the shipped binary** and **69 of 81 are proved through the production-assembled handler**.
@@ -8,6 +9,7 @@
     This journey uses no separately proof-gated capability row; it stays on core served surfaces.
     Core surfaces guarded by route and journey tests: `openapi_contract`, `cli`, `generated_sdks`, `cursor_pagination`, `credential_graph`.
     This badge is generated from `wiring-census.json`; `make journey-census-check` fails closed if the census or this page drifts.
+
 <!-- trstctl:journey-census:end -->
 
 ## Goal
@@ -32,7 +34,18 @@ in lockstep.
 
 ## Steps
 
-1. Fetch the OpenAPI 3.1 contract. Every route is declared once and published as a
+1. Start in **API playground** at `/integrate/api` if you want a guided first
+   request. The overview runs nothing. Choose **Try request** to begin with a
+   read-only operation, create a 15-minute key scoped only to that operation, review
+   the exact request, and send it explicitly. The result is explained in plain
+   language before status, problem details, and the raw response.
+
+   Use **All contract operations** to search every served operation without loading
+   hundreds of controls at once. **Headers, body, and exact request** contains the
+   editable OpenAPI fields and idempotency key. Writes additionally require an exact
+   mutation confirmation that is cleared whenever an input changes.
+
+2. Fetch the OpenAPI 3.1 contract. Every route is declared once and published as a
    single spec — no auth needed to read it:
 
    ```sh
@@ -43,7 +56,7 @@ in lockstep.
    You should get the full OpenAPI 3.1 document. Point your code generator or API
    tooling at it; the spec, server, and CLI cannot drift apart.
 
-2. Drive it from the CLI. `trstctl-cli` maps each command straight to an API
+3. Drive it from the CLI. `trstctl-cli` maps each command straight to an API
    route and auto-supplies an `Idempotency-Key` on mutations:
 
    ```sh
@@ -58,7 +71,7 @@ in lockstep.
    The CLI is provably at parity with the API — see
    [Platform & API](../features/platform-and-api.md).
 
-3. Call a mutation with your own idempotency key. Every state-changing request
+4. Call a mutation with your own idempotency key. Every state-changing request
    takes an `Idempotency-Key`; a retry with the same key returns the original result
    instead of acting twice. The CLI exposes it as a flag:
 
@@ -70,7 +83,7 @@ in lockstep.
    You should see the owner created once; re-running the exact command returns the
    same owner rather than creating a second.
 
-4. Use a typed SDK instead of hand-rolling a client. trstctl ships supported Go
+5. Use a typed SDK instead of hand-rolling a client. trstctl ships supported Go
    and TypeScript SDKs pinned to the served contract, with auth, idempotency, retries
    (honoring `Retry-After`), problem+json errors, and cursor iterators built in:
 
@@ -102,7 +115,7 @@ in lockstep.
    `next_cursor`. The Go and TypeScript surfaces and their behavior are in
    [Client SDKs](../features/client-sdks.md).
 
-5. Page a large list over raw HTTP with cursors. List endpoints return
+6. Page a large list over raw HTTP with cursors. List endpoints return
    `{ items, next_cursor }`. Pass the returned cursor back to get the next page:
 
    ```sh
@@ -114,7 +127,7 @@ in lockstep.
    You should get the next page of `items` plus a fresh `next_cursor` (absent on the
    last page). Over-budget callers get `429` with `Retry-After`.
 
-6. Query the credential graph. Ask how things connect through the served graph
+7. Query the credential graph. Ask how things connect through the served graph
    surface — a typed, allow-listed query, not raw SQL:
 
    ```sh

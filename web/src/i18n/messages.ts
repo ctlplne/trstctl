@@ -2868,7 +2868,7 @@ export const messages = {
   },
   "journeys.api.contract.title": { defaultMessage: "Fetch the contract", description: "API journey step title." },
   "journeys.api.contract.body": {
-    defaultMessage: "The OpenAPI 3.1 document is the source of truth; the API Explorer renders it live.",
+    defaultMessage: "The OpenAPI 3.1 document is the source of truth; the API playground turns it into a safe guided request.",
     description: "API journey step body.",
   },
   "journeys.api.cli.title": { defaultMessage: "Drive it from the CLI", description: "API journey step title." },
@@ -3497,7 +3497,7 @@ export const messages = {
   },
   "nav.group.integrations": {
     defaultMessage: "Integrate & extend",
-    description: "Platform space navigation group: API explorer and integration surfaces.",
+    description: "Platform space navigation group: API playground and integration surfaces.",
   },
   "nav.group.adminConsole": {
     defaultMessage: "Administration",
@@ -5949,8 +5949,8 @@ export const messages = {
     description: "Primary navigation item. Matches the Connect other tools page H1 for naming parity.",
   },
   "nav.item.apiExplorer": {
-    defaultMessage: "API explorer",
-    description: "Contextual navigation item for the runnable API explorer.",
+    defaultMessage: "API playground",
+    description: "Contextual navigation item for the answer-first API playground.",
   },
   "nav.item.operations": {
     defaultMessage: "Jobs and queues",
@@ -10810,28 +10810,132 @@ export const messages = {
     description: "Screen-reader caption for attested SVID outcomes.",
   },
   "apiExplorer.title": {
-    defaultMessage: "API explorer",
-    description: "Page title for the runnable API explorer.",
+    defaultMessage: "API playground",
+    description: "Answer-first page title for safely trying an API request.",
   },
   "apiExplorer.description": {
-    defaultMessage: "Select a contract operation, mint a short-lived scoped test key, run the request, and inspect the response.",
-    description: "Page description for the runnable API explorer.",
+    defaultMessage: "How to try a safe request and understand the response.",
+    description: "Plain-language opening answer for the API playground.",
+  },
+  "apiExplorer.technicalDetails": {
+    defaultMessage: "OpenAPI schema, headers, idempotency, raw payload and error.",
+    description: "Exact-detail layer named by the API playground design contract.",
+  },
+  "apiExplorer.primaryAction": {
+    defaultMessage: "Try request",
+    description: "Single primary action that opens the real API request workspace.",
   },
   "apiExplorer.back": {
     defaultMessage: "Integration hub",
     description: "Link back to the integration hub.",
   },
   "apiExplorer.loading": {
-    defaultMessage: "Loading contract operations.",
-    description: "Status text while the API explorer loads its contract.",
+    defaultMessage: "Loading the API contract.",
+    description: "Status text while the API playground loads its contract.",
   },
   "apiExplorer.loadFailed": {
-    defaultMessage: "Contract operations could not be loaded.",
-    description: "Error title shown when the API explorer cannot load its contract.",
+    defaultMessage: "The API contract is unavailable",
+    description: "Plain-language error title shown when the API playground cannot load its contract.",
+  },
+  "apiExplorer.loadFailedHelp": {
+    defaultMessage: "No request can run until trstctl can read the served OpenAPI contract. Check access, then try again.",
+    description: "Recovery guidance when the API contract cannot load.",
+  },
+  "apiExplorer.loadFailedDetails": {
+    defaultMessage: "Exact load error",
+    description: "Disclosure label for the exact API contract load failure.",
   },
   "apiExplorer.reload": {
-    defaultMessage: "Reload",
-    description: "Button label for reloading the API explorer contract.",
+    defaultMessage: "Try loading again",
+    description: "Recovery button for reloading the API playground contract.",
+  },
+  "apiExplorer.empty": {
+    defaultMessage: "No API operations are available.",
+    description: "Truthful empty state when the served contract contains no runnable operations.",
+  },
+  "apiExplorer.emptyHelp": {
+    defaultMessage: "The contract loaded, but it did not publish an operation with an operation ID.",
+    description: "Explanation for an empty API contract.",
+  },
+  "apiExplorer.design.summaryTitle": {
+    defaultMessage: "What happens when you try a request",
+    description: "Heading for the ELI5 API request flow.",
+  },
+  "apiExplorer.design.summaryDescription": {
+    defaultMessage: "Nothing runs from this overview. Open the playground, review one exact request, then choose whether to send it.",
+    description: "Safety boundary for the API playground overview.",
+  },
+  "apiExplorer.design.readLabel": {
+    defaultMessage: "Start with a read",
+    description: "First safe API playground step.",
+  },
+  "apiExplorer.design.readValue": {
+    defaultMessage: "The starting request only reads data. It cannot change or delete anything.",
+    description: "Explains the safe starting API operation.",
+  },
+  "apiExplorer.design.accessLabel": {
+    defaultMessage: "Use temporary access",
+    description: "Second safe API playground step.",
+  },
+  "apiExplorer.design.accessValue": {
+    defaultMessage: "A 15-minute test key gets only the permission required by the selected request.",
+    description: "Explains least-privilege temporary API access.",
+  },
+  "apiExplorer.design.answerLabel": {
+    defaultMessage: "Read the answer",
+    description: "Third safe API playground step.",
+  },
+  "apiExplorer.design.answerValue": {
+    defaultMessage: "trstctl explains the result first. Status, error details, and the raw body remain available underneath.",
+    description: "Explains the layered API response.",
+  },
+  "apiExplorer.workspaceTitle": {
+    defaultMessage: "Try a safe request",
+    description: "Heading for the real API request workspace.",
+  },
+  "apiExplorer.workspaceDescription": {
+    defaultMessage: "The read-only starting point is selected for you. Creating access and sending the request are separate, explicit steps.",
+    description: "Safety explanation at the start of the API request workspace.",
+  },
+  "apiExplorer.safeStartingPoint": {
+    defaultMessage: "Safe starting point",
+    description: "Label for the automatically selected read-only operation.",
+  },
+  "apiExplorer.changesData": {
+    defaultMessage: "Changes data — confirmation required",
+    description: "Warning label for a selected mutating operation.",
+  },
+  "apiExplorer.allOperations": {
+    defaultMessage: "All contract operations",
+    description: "Progressive disclosure for the full searchable API operation set.",
+  },
+  "apiExplorer.chooseRequest": {
+    defaultMessage: "Choose a request",
+    description: "Heading for choosing a different API contract operation.",
+  },
+  "apiExplorer.resultLimit": {
+    defaultMessage: "Showing the first {shown} of {count} matches. Add a name, path, or permission to narrow the list.",
+    description: "Explains the bounded operation search result list.",
+  },
+  "apiExplorer.requestDetailsDisclosure": {
+    defaultMessage: "Headers, body, and exact request",
+    description: "Progressive disclosure for editable request fields and the exact request preview.",
+  },
+  "apiExplorer.schemaExamplesDisclosure": {
+    defaultMessage: "OpenAPI schema and code examples",
+    description: "Progressive disclosure for exact contract and code evidence.",
+  },
+  "apiExplorer.openSchema": {
+    defaultMessage: "Open served OpenAPI schema",
+    description: "Link label for the exact served OpenAPI contract.",
+  },
+  "apiExplorer.stepTwo": {
+    defaultMessage: "Step 2",
+    description: "Eyebrow for temporary API access.",
+  },
+  "apiExplorer.stepThree": {
+    defaultMessage: "Step 3",
+    description: "Eyebrow for understanding the API response.",
   },
   "apiExplorer.operations": {
     defaultMessage: "Operations",
@@ -10934,8 +11038,12 @@ export const messages = {
     description: "Copy button status after clipboard write.",
   },
   "apiExplorer.runner": {
-    defaultMessage: "Runnable request",
-    description: "Heading for API request runner.",
+    defaultMessage: "Temporary access and run",
+    description: "Plain-language heading for the API request runner.",
+  },
+  "apiExplorer.runnerHelp": {
+    defaultMessage: "Create a least-privilege test key, review the request, then send it. The key expires after 15 minutes.",
+    description: "Explains the runner's temporary access and explicit-send boundary.",
   },
   "apiExplorer.subject": {
     defaultMessage: "Token subject",
@@ -11115,7 +11223,7 @@ export const messages = {
   },
   "apiExplorer.response": {
     defaultMessage: "Response",
-    description: "Heading for API explorer response output.",
+    description: "Heading for API playground response output.",
   },
   "apiExplorer.problemResponse": {
     defaultMessage: "Problem response",
@@ -11139,11 +11247,35 @@ export const messages = {
   },
   "apiExplorer.noResponse": {
     defaultMessage: "Run a request to see the response.",
-    description: "Empty state for API explorer response output.",
+    description: "Empty state for API playground response output.",
   },
   "apiExplorer.responseBody": {
     defaultMessage: "Response body",
     description: "Heading for raw API response body output.",
+  },
+  "apiExplorer.rawResponse": {
+    defaultMessage: "Raw response",
+    description: "Progressive disclosure for the exact raw API response payload.",
+  },
+  "apiExplorer.responseSummary.success": {
+    defaultMessage: "The request worked.",
+    description: "Plain-language summary for a successful API response.",
+  },
+  "apiExplorer.responseSummary.denied": {
+    defaultMessage: "trstctl understood the request but did not allow it.",
+    description: "Plain-language summary for an authentication or permission response.",
+  },
+  "apiExplorer.responseSummary.notFound": {
+    defaultMessage: "trstctl could not find the requested item.",
+    description: "Plain-language summary for an API not-found response.",
+  },
+  "apiExplorer.responseSummary.server": {
+    defaultMessage: "trstctl could not complete the request. Nothing should be assumed to have succeeded.",
+    description: "Fail-safe plain-language summary for a server error response.",
+  },
+  "apiExplorer.responseSummary.other": {
+    defaultMessage: "The API answered. Review the status and details below.",
+    description: "Plain-language summary for any other API response.",
   },
   "apiExplorer.runFailed": {
     defaultMessage: "Request execution failed.",
@@ -11214,8 +11346,8 @@ export const messages = {
     description: "Progressive disclosure for integration security and delivery evidence.",
   },
   "integrate.design.openApiExplorer": {
-    defaultMessage: "Open the runnable API explorer",
-    description: "Link from developer integration evidence to the API explorer.",
+    defaultMessage: "Open the API playground",
+    description: "Link from developer integration evidence to the API playground.",
   },
   "integrate.design.gitopsScrollArea": {
     defaultMessage: "GitOps drift comparison scroll area",
@@ -11271,7 +11403,7 @@ export const messages = {
   },
   "integrate.design.reviewScopes": {
     defaultMessage: "Review API scopes",
-    description: "Link to the API explorer and exact operation scopes.",
+    description: "Link to the API playground and exact operation scopes.",
   },
   "integrate.design.addDescription": {
     defaultMessage: "Choose what should connect. You will continue in its real configuration screen; this chooser does not save pretend settings.",
@@ -11410,8 +11542,8 @@ export const messages = {
     description: "Link label for downloading a GitOps declaration.",
   },
   "integrate.gitops.openApiExplorer": {
-    defaultMessage: "Open in API explorer",
-    description: "Link label to open the GitOps policy dry run in the API explorer.",
+    defaultMessage: "Open in API playground",
+    description: "Link label to open the GitOps policy dry run in the API playground.",
   },
   "integrate.gitops.validationResult": {
     defaultMessage: "GitOps validation result",

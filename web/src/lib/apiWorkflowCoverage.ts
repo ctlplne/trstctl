@@ -257,7 +257,7 @@ export const apiWorkflowCoverage = [
     owner: "SURFACE/privacy",
     kind: "api-explorer",
     workflow: "Privacy subject export",
-    rationale: "The Privacy page covers catalog, erasure, and retention; subject portability exports are available through the API Explorer.",
+    rationale: "The Privacy page covers catalog, erasure, and retention; subject portability exports are available through the API playground.",
   },
   {
     path: "/api/v1/remediation/playbook-runs",

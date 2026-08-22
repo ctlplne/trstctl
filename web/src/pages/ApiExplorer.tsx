@@ -1,5 +1,6 @@
+/* eslint-disable jsx-a11y/no-noninteractive-tabindex -- Exact request and response code blocks must be keyboard-scrollable at narrow viewports. */
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Clipboard, KeyRound, Loader2, Play, RefreshCw } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { PageHeader } from "@/components/PageHeader";
@@ -13,6 +14,7 @@ import { api, type APITokenCreateResponse } from "@/lib/api";
 
 export const apiExplorerSpecURL = "/api/v1/openapi.json";
 const docsTokenTTLMinutes = 15;
+const operationResultLimit = 12;
 const methods = ["get", "post", "put", "patch", "delete"] as const;
 const sampleUUID = "00000000-0000-4000-8000-000000000001";
 
@@ -535,17 +537,51 @@ function CopyButton({ label, value }: { label: string; value: string }) {
 }
 
 function MethodBadge({ method }: { method: HTTPMethod }) {
-  return <span className="rounded-control bg-brand-accent/10 px-2 py-1 font-mono text-xs font-semibold text-brand-accent">{methodLabel(method)}</span>;
+  return <span className="rounded-control bg-muted px-2 py-1 font-mono text-xs font-semibold text-foreground">{methodLabel(method)}</span>;
 }
 
 function CodeBlock({ value, labelledBy }: { value: string; labelledBy?: string }) {
   return (
     <pre
       aria-labelledby={labelledBy}
+      role="region"
+      tabIndex={0}
       className="max-h-72 min-w-0 max-w-full overflow-auto rounded-panel border border-border bg-muted p-3 text-xs leading-relaxed"
     >
       <code>{value}</code>
     </pre>
+  );
+}
+
+function safeStartingOperation(operations: OperationEntry[]): OperationEntry | undefined {
+  return (
+    operations.find(
+      (entry) => entry.method === "get" && !(entry.operation.parameters ?? []).some((parameter) => parameter.in === "path" || parameter.required),
+    ) ?? operations.find((entry) => entry.method === "get")
+  );
+}
+
+function responseSummaryKey(
+  response: ExplorerResponse,
+):
+  | "apiExplorer.responseSummary.success"
+  | "apiExplorer.responseSummary.denied"
+  | "apiExplorer.responseSummary.notFound"
+  | "apiExplorer.responseSummary.server"
+  | "apiExplorer.responseSummary.other" {
+  if (response.status >= 200 && response.status < 300) return "apiExplorer.responseSummary.success";
+  if (response.status === 401 || response.status === 403) return "apiExplorer.responseSummary.denied";
+  if (response.status === 404) return "apiExplorer.responseSummary.notFound";
+  if (response.status >= 500) return "apiExplorer.responseSummary.server";
+  return "apiExplorer.responseSummary.other";
+}
+
+function PlaygroundFact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-control border border-border bg-background p-4">
+      <dt className="font-medium text-foreground">{label}</dt>
+      <dd className="mt-1 text-sm leading-relaxed text-muted-foreground">{value}</dd>
+    </div>
   );
 }
 
@@ -619,9 +655,12 @@ function ParameterEditor({
 export function ApiExplorer() {
   const { user } = useAuth();
   const { t, formatDateTime } = useTranslation();
+  const [searchParams] = useSearchParams();
   const [spec, setSpec] = useState<OpenAPIDocument | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [requestDetailsOpen, setRequestDetailsOpen] = useState(false);
   const [filter, setFilter] = useState("");
   const [selectedKey, setSelectedKey] = useState<string>("");
   const [tokenSubject, setTokenSubject] = useState(user?.email ?? user?.subject ?? "");
@@ -637,6 +676,8 @@ export function ApiExplorer() {
   const [runError, setRunError] = useState<string | null>(null);
   const [runBusy, setRunBusy] = useState(false);
   const runController = useRef<AbortController | null>(null);
+  const workspaceHeading = useRef<HTMLHeadingElement | null>(null);
+  const appliedOperationQuery = useRef("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -660,18 +701,29 @@ export function ApiExplorer() {
   }, [tokenSubject, user]);
 
   const operations = useMemo(() => (spec ? buildOperations(spec) : []), [spec]);
+  const requestedOperation = searchParams.get("operation")?.trim() ?? "";
 
   useEffect(() => {
-    if (!selectedKey && operations.length > 0) setSelectedKey(operations[0].key);
-  }, [operations, selectedKey]);
+    if (requestedOperation && appliedOperationQuery.current !== requestedOperation && operations.length > 0) {
+      appliedOperationQuery.current = requestedOperation;
+      const requested = operations.find((entry) => entry.operation.operationId === requestedOperation);
+      if (requested) {
+        setSelectedKey(requested.key);
+        setWorkspaceOpen(true);
+        return;
+      }
+    }
+    if (!selectedKey && operations.length > 0) setSelectedKey((safeStartingOperation(operations) ?? operations[0]).key);
+  }, [operations, requestedOperation, selectedKey]);
 
-  const selected = operations.find((entry) => entry.key === selectedKey) ?? operations[0];
+  const selected = operations.find((entry) => entry.key === selectedKey) ?? safeStartingOperation(operations) ?? operations[0];
   useEffect(() => {
     if (!selected || !spec) return;
     runController.current?.abort();
     runController.current = null;
     setDraft(buildInitialRequestDraft(selected, spec));
     setMutationConfirmed(false);
+    setRequestDetailsOpen(isUnsafe(selected.method));
     setRunBusy(false);
     setResponse(null);
     setRunError(null);
@@ -692,10 +744,16 @@ export function ApiExplorer() {
   useEffect(() => () => runController.current?.abort(), []);
 
   const loweredFilter = filter.trim().toLowerCase();
-  const visibleOperations = operations.filter((entry) => {
+  const matchingOperations = operations.filter((entry) => {
     if (!loweredFilter) return true;
     return [entry.path, entry.operation.operationId, entry.operation.summary, entry.permission].filter(Boolean).join(" ").toLowerCase().includes(loweredFilter);
   });
+  const visibleOperations = matchingOperations.slice(0, operationResultLimit);
+
+  function openWorkspace() {
+    setWorkspaceOpen(true);
+    globalThis.requestAnimationFrame?.(() => workspaceHeading.current?.focus());
+  }
 
   async function mintTestKey(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -799,21 +857,38 @@ export function ApiExplorer() {
   }
 
   return (
-    <section aria-labelledby="api-explorer-heading" className="grid gap-6">
+    <section aria-labelledby="api-explorer-heading" className="grid min-w-0 gap-6">
       <PageHeader
         titleId="api-explorer-heading"
         title={t("apiExplorer.title")}
         description={t("apiExplorer.description")}
+        technicalDetails={t("apiExplorer.technicalDetails")}
         actions={
-          <Link
-            to="/integrate"
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:border-brand-accent/40 hover:bg-muted/60"
-          >
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            {t("apiExplorer.back")}
-          </Link>
+          <Button type="button" onClick={openWorkspace} disabled={loading || Boolean(loadError) || !selected}>
+            <Play className="h-4 w-4" aria-hidden="true" />
+            {t("apiExplorer.primaryAction")}
+          </Button>
         }
       />
+
+      <Link className="inline-flex w-fit items-center gap-2 text-sm font-medium text-muted-foreground underline hover:text-foreground" to="/integrate">
+        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+        {t("apiExplorer.back")}
+      </Link>
+
+      <section aria-labelledby="api-playground-map-heading" className="ui-panel grid gap-4 p-comfortable">
+        <div className="grid gap-1">
+          <h2 id="api-playground-map-heading" className="text-title font-semibold">
+            {t("apiExplorer.design.summaryTitle")}
+          </h2>
+          <p className="max-w-3xl text-body text-muted-foreground">{t("apiExplorer.design.summaryDescription")}</p>
+        </div>
+        <dl className="grid gap-3 md:grid-cols-3">
+          <PlaygroundFact label={t("apiExplorer.design.readLabel")} value={t("apiExplorer.design.readValue")} />
+          <PlaygroundFact label={t("apiExplorer.design.accessLabel")} value={t("apiExplorer.design.accessValue")} />
+          <PlaygroundFact label={t("apiExplorer.design.answerLabel")} value={t("apiExplorer.design.answerValue")} />
+        </dl>
+      </section>
 
       {loading && (
         <p role="status" className="rounded-panel border border-border bg-card p-4 text-sm text-muted-foreground">
@@ -827,7 +902,11 @@ export function ApiExplorer() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="font-medium">{t("apiExplorer.loadFailed")}</p>
-              <p>{loadError}</p>
+              <p className="mt-1">{t("apiExplorer.loadFailedHelp")}</p>
+              <details className="mt-2 text-xs">
+                <summary className="cursor-pointer">{t("apiExplorer.loadFailedDetails")}</summary>
+                <code className="mt-1 block break-all">{loadError}</code>
+              </details>
             </div>
             <Button type="button" size="sm" variant="outline" onClick={() => void load()}>
               <RefreshCw className="h-4 w-4" aria-hidden="true" />
@@ -837,324 +916,365 @@ export function ApiExplorer() {
         </div>
       )}
 
-      {selected && (
-        <div className="grid min-w-0 gap-4 xl:grid-cols-[18rem_minmax(0,1fr)] 2xl:grid-cols-[18rem_minmax(0,1fr)_minmax(22rem,0.9fr)]">
-          <aside className="ui-panel min-h-0 min-w-0 p-comfortable" aria-labelledby="api-operation-list-heading">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 id="api-operation-list-heading" className="text-title font-semibold">
-                {t("apiExplorer.operations")}
-              </h2>
-              <span className="text-caption text-muted-foreground">{t("apiExplorer.operationCount", { count: operations.length })}</span>
-            </div>
-            <label className="mb-3 grid gap-1 text-sm">
-              <span className="sr-only">{t("apiExplorer.searchLabel")}</span>
-              <Input value={filter} onChange={(event) => setFilter(event.target.value)} placeholder={t("apiExplorer.searchPlaceholder")} />
-            </label>
-            <div className="max-h-[34rem] overflow-auto pr-1">
-              {visibleOperations.length === 0 ? (
-                <p className="rounded-control bg-muted px-3 py-2 text-sm text-muted-foreground">{t("apiExplorer.noMatches")}</p>
-              ) : (
-                <div className="grid gap-2">
-                  {visibleOperations.map((entry) => (
-                    <button
-                      key={entry.key}
-                      type="button"
-                      className={`rounded-control border px-3 py-2 text-left transition ${
-                        entry.key === selected.key
-                          ? "border-brand-accent bg-brand-accent/10 text-foreground"
-                          : "border-border bg-background hover:border-brand-accent/40 hover:bg-muted/60"
-                      }`}
-                      onClick={() => {
-                        setSelectedKey(entry.key);
-                        setResponse(null);
-                        setRunError(null);
-                      }}
-                    >
-                      <span className="flex items-center gap-2">
-                        <MethodBadge method={entry.method} />
-                        <span className="truncate font-mono text-xs">{entry.operation.operationId}</span>
-                      </span>
-                      <span className="mt-1 block truncate text-xs text-muted-foreground">{entry.path}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </aside>
+      {!loading && !loadError && spec && operations.length === 0 && (
+        <div className="rounded-panel border border-border bg-card p-4 text-sm">
+          <p className="font-medium">{t("apiExplorer.empty")}</p>
+          <p className="mt-1 text-muted-foreground">{t("apiExplorer.emptyHelp")}</p>
+        </div>
+      )}
 
-          <main className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4" aria-labelledby="api-operation-detail-heading">
-            <section className="ui-panel p-comfortable">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h2 id="api-operation-detail-heading" className="text-title font-semibold">
-                    {selected.operation.summary ?? selected.operation.operationId}
-                  </h2>
-                  {selected.operation.description && <p className="mt-1 text-sm text-muted-foreground">{selected.operation.description}</p>}
-                </div>
-                <MethodBadge method={selected.method} />
-              </div>
-              <dl className="mt-4 grid gap-3 text-sm md:grid-cols-2">
-                <div>
-                  <dt className="font-medium text-muted-foreground">{t("apiExplorer.route")}</dt>
-                  <dd className="break-all font-mono text-xs">{selected.path}</dd>
-                </div>
-                <div>
-                  <dt className="font-medium text-muted-foreground">{t("apiExplorer.operationId")}</dt>
-                  <dd className="break-all font-mono text-xs">{selected.operation.operationId}</dd>
-                </div>
-                <div>
-                  <dt className="font-medium text-muted-foreground">{t("apiExplorer.permission")}</dt>
-                  <dd className="font-mono text-xs">{selected.permission}</dd>
-                </div>
-                <div>
-                  <dt className="font-medium text-muted-foreground">{t("apiExplorer.response")}</dt>
-                  <dd className="font-mono text-xs">{responseNames(selected.operation).join(", ")}</dd>
-                </div>
-              </dl>
-            </section>
+      {workspaceOpen && selected && (
+        <section aria-labelledby="api-workspace-heading" className="grid min-w-0 gap-4">
+          <div className="grid gap-1">
+            <h2 ref={workspaceHeading} id="api-workspace-heading" tabIndex={-1} className="text-title font-semibold outline-none">
+              {t("apiExplorer.workspaceTitle")}
+            </h2>
+            <p className="max-w-3xl text-sm text-muted-foreground">{t("apiExplorer.workspaceDescription")}</p>
+          </div>
 
-            <section className="grid gap-4 2xl:grid-cols-3">
-              {[
-                { title: t("apiExplorer.pathParameters"), parameters: pathParameters },
-                { title: t("apiExplorer.queryParameters"), parameters: queryParameters },
-                { title: t("apiExplorer.headerParameters"), parameters: headerParameters },
-              ].map(({ title, parameters }) => (
-                <ParameterEditor
-                  key={title}
-                  title={title}
-                  parameters={parameters}
-                  values={draft.parameterValues}
-                  issues={issueByKey}
-                  onChange={updateParameter}
-                  noParameters={t("apiExplorer.noParameters")}
-                  requiredLabel={t("apiExplorer.required")}
-                  optionalLabel={t("apiExplorer.optional")}
-                  schemaFallback={t("apiExplorer.schemaString")}
-                  inputLabel={(parameter) => t("apiExplorer.parameterValue", { name: parameter.name, location: parameter.in })}
-                />
-              ))}
-            </section>
-
-            <section className="ui-panel p-comfortable">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <h3 id="api-request-body-heading" className="text-body font-semibold">
-                  {t("apiExplorer.requestBody")}
-                </h3>
-              </div>
-              {selected.operation.requestBody ? (
-                <Field
-                  label={t("apiExplorer.bodyInput")}
-                  description={schemaNameForOperation(selected.operation)}
-                  required={selected.operation.requestBody.required}
-                  error={
-                    bodyIssues.length > 0 ? (
-                      <span className="grid gap-1">
-                        {bodyIssues.map((issue, index) => (
-                          <span key={`${issue.message}-${index}`}>{issue.message}</span>
-                        ))}
-                      </span>
-                    ) : undefined
-                  }
-                >
-                  {(control) => (
-                    <Textarea
-                      {...control}
-                      className="min-h-52 font-mono text-xs leading-relaxed"
-                      aria-label={t("apiExplorer.bodyInput")}
-                      required={selected.operation.requestBody?.required}
-                      value={draft.bodyText}
-                      onChange={(event) => updateBody(event.target.value)}
-                    />
-                  )}
-                </Field>
-              ) : (
-                <p className="text-sm text-muted-foreground">{t("apiExplorer.noRequestBody")}</p>
-              )}
-            </section>
-
-            <section className="ui-panel p-comfortable">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <h3 id="api-examples-heading" className="text-body font-semibold">
-                  {t("apiExplorer.examples")}
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                  <CopyButton label={t("apiExplorer.copyCurl")} value={curl} />
-                  <CopyButton label={t("apiExplorer.copySdk")} value={sdk} />
-                </div>
-              </div>
-              <CodeBlock labelledBy="api-examples-heading" value={`${curl}\n\n${sdk}`} />
-            </section>
-          </main>
-
-          <aside className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-4 xl:col-span-2 2xl:col-span-1">
-            <section className="ui-panel min-w-0 p-comfortable" aria-labelledby="api-runner-heading">
-              <h2 id="api-runner-heading" className="text-title font-semibold">
-                {t("apiExplorer.runner")}
-              </h2>
-              <form onSubmit={(event) => void mintTestKey(event)} className="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3">
-                <label className="grid gap-1 text-sm">
-                  <span className="font-medium text-muted-foreground">{t("apiExplorer.subject")}</span>
-                  <Input value={tokenSubject} onChange={(event) => setTokenSubject(event.target.value)} required />
-                </label>
-                <div className="grid gap-1 text-sm">
-                  <span className="font-medium text-muted-foreground">{t("apiExplorer.tokenScope")}</span>
-                  <code className="rounded-control bg-muted px-2 py-1 text-xs">{selected.permission}</code>
-                </div>
-                <Button type="submit" disabled={keyBusy || !tokenSubject.trim()}>
-                  {keyBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
-                  {keyBusy ? t("apiExplorer.generating") : t("apiExplorer.testKey")}
-                </Button>
-              </form>
-              {keyError && (
-                <p role="alert" className="mt-3 rounded-control border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                  {t("apiExplorer.keyFailed")} {keyError}
+          <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)]">
+            <div className="grid min-w-0 gap-4">
+              <section className="ui-panel min-w-0 p-comfortable" aria-labelledby="api-operation-detail-heading">
+                <p className="text-caption font-medium uppercase tracking-wide text-muted-foreground">
+                  {isUnsafe(selected.method) ? t("apiExplorer.changesData") : t("apiExplorer.safeStartingPoint")}
                 </p>
-              )}
-              {testKey && (
-                <div
-                  role="status"
-                  className={`mt-3 rounded-panel border p-3 text-sm ${
-                    tokenExpired || keyRevoked
-                      ? "border-status-warning/30 bg-status-warning/10 text-status-warning"
-                      : "border-status-success/30 bg-status-success/10 text-status-success"
-                  }`}
-                >
-                  <p className="font-medium">
-                    {tokenExpired
-                      ? t("apiExplorer.keyExpired")
-                      : keyRevoked
-                        ? t("apiExplorer.keyRevoked")
-                        : t("apiExplorer.keyReady", { scope: testKey.scopes.join(", ") })}
-                  </p>
-                  <p className="mt-1 text-xs">{t("apiExplorer.revealOnce")}</p>
-                  {testKey.expires_at && (
-                    <p className="mt-1 text-xs">
-                      {t("apiExplorer.expires")}: {formatDateTime(testKey.expires_at)}
+                <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 id="api-operation-detail-heading" className="text-title font-semibold">
+                      {selected.operation.summary ?? selected.operation.operationId}
+                    </h3>
+                    {selected.operation.description && <p className="mt-1 text-sm text-muted-foreground">{selected.operation.description}</p>}
+                  </div>
+                  <MethodBadge method={selected.method} />
+                </div>
+                <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{t("apiExplorer.route")}</dt>
+                    <dd className="break-all font-mono text-xs">{selected.path}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{t("apiExplorer.operationId")}</dt>
+                    <dd className="break-all font-mono text-xs">{selected.operation.operationId}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{t("apiExplorer.permission")}</dt>
+                    <dd className="break-all font-mono text-xs">{selected.permission}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{t("apiExplorer.response")}</dt>
+                    <dd className="break-all font-mono text-xs">{responseNames(selected.operation).join(", ")}</dd>
+                  </div>
+                </dl>
+              </section>
+
+              <details className="ui-panel min-w-0 p-comfortable">
+                <summary className="cursor-pointer font-medium text-foreground">{t("apiExplorer.allOperations")}</summary>
+                <div className="mt-4 grid min-w-0 gap-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-body font-semibold">{t("apiExplorer.chooseRequest")}</h3>
+                    <span className="text-caption text-muted-foreground">{t("apiExplorer.operationCount", { count: operations.length })}</span>
+                  </div>
+                  <label className="grid gap-1 text-sm">
+                    <span className="sr-only">{t("apiExplorer.searchLabel")}</span>
+                    <Input value={filter} onChange={(event) => setFilter(event.target.value)} placeholder={t("apiExplorer.searchPlaceholder")} />
+                  </label>
+                  {visibleOperations.length === 0 ? (
+                    <p className="rounded-control bg-muted px-3 py-2 text-sm text-muted-foreground">{t("apiExplorer.noMatches")}</p>
+                  ) : (
+                    <div className="grid gap-2">
+                      {visibleOperations.map((entry) => (
+                        <button
+                          key={entry.key}
+                          type="button"
+                          className={`rounded-control border px-3 py-2 text-left transition ${
+                            entry.key === selected.key ? "border-foreground/40 bg-muted text-foreground" : "border-border bg-background hover:bg-muted/60"
+                          }`}
+                          onClick={() => {
+                            setSelectedKey(entry.key);
+                            setResponse(null);
+                            setRunError(null);
+                          }}
+                        >
+                          <span className="flex min-w-0 items-center gap-2">
+                            <MethodBadge method={entry.method} />
+                            <span className="truncate font-mono text-xs">{entry.operation.operationId}</span>
+                          </span>
+                          <span className="mt-1 block truncate text-xs text-muted-foreground">{entry.path}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {matchingOperations.length > operationResultLimit && (
+                    <p className="text-caption text-muted-foreground">
+                      {t("apiExplorer.resultLimit", { shown: operationResultLimit, count: matchingOperations.length })}
                     </p>
                   )}
-                  {!tokenExpired && !keyRevoked && (
-                    <Button className="mt-3" type="button" size="sm" variant="outline" disabled={revokeBusy} onClick={() => void revokeTestKey()}>
-                      {revokeBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
-                      {revokeBusy ? t("apiExplorer.revokingKey") : t("apiExplorer.revokeKey")}
-                    </Button>
-                  )}
                 </div>
-              )}
+              </details>
 
-              <div className="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3">
-                <div className="min-w-0">
-                  <h3 id="api-request-preview-heading" className="mb-2 text-body font-semibold">
-                    {t("apiExplorer.requestPreview")}
-                  </h3>
-                  <p className="mb-2 text-caption text-muted-foreground">{t("apiExplorer.previewSecretNote")}</p>
-                  <CodeBlock
-                    labelledBy="api-request-preview-heading"
-                    value={prepared.request?.preview ?? `${methodLabel(selected.method)} ${selected.path}\n\n${t("apiExplorer.fixValidation")}`}
-                  />
-                </div>
-                {prepared.issues.length > 0 && (
-                  <div role="alert" className="rounded-control border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                    <p className="font-medium">{t("apiExplorer.validationFailed")}</p>
-                    <ul className="mt-1 list-disc ps-5 text-xs">
-                      {prepared.issues.map((issue, index) => (
-                        <li key={`${issue.key}-${issue.message}-${index}`}>{issue.message}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {isUnsafe(selected.method) && prepared.request && (
-                  <label
-                    htmlFor="api-explorer-confirm-mutation"
-                    className="flex items-start gap-2 rounded-control border border-status-warning/30 bg-status-warning/10 px-3 py-2 text-sm"
-                  >
-                    <Checkbox
-                      id="api-explorer-confirm-mutation"
-                      className="mt-0.5 accent-brand-accent"
-                      aria-label={t("apiExplorer.confirmMutation")}
-                      checked={mutationConfirmed}
-                      onChange={(event) => setMutationConfirmed(event.target.checked)}
-                    />
-                    <span>
-                      <span className="font-medium">{t("apiExplorer.confirmMutation")}</span>
-                      <span className="mt-1 block text-xs text-muted-foreground">{t("apiExplorer.confirmMutationDetail")}</span>
-                    </span>
-                  </label>
-                )}
-                <div className="flex flex-wrap gap-2">
-                  <Button type="button" onClick={() => void runRequest()} disabled={!canRun}>
-                    {runBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Play className="h-4 w-4" aria-hidden="true" />}
-                    {runBusy ? t("apiExplorer.running") : t("apiExplorer.run")}
-                  </Button>
-                  {runBusy && (
-                    <Button type="button" variant="outline" onClick={() => runController.current?.abort()}>
-                      {t("apiExplorer.cancel")}
-                    </Button>
-                  )}
-                </div>
-                {!testKey && <p className="text-sm text-muted-foreground">{t("apiExplorer.needsKey")}</p>}
-              </div>
-            </section>
+              <details
+                className="ui-panel min-w-0 p-comfortable"
+                open={requestDetailsOpen}
+                onToggle={(event) => setRequestDetailsOpen(event.currentTarget.open)}
+              >
+                <summary className="cursor-pointer font-medium text-foreground">{t("apiExplorer.requestDetailsDisclosure")}</summary>
+                <div className="mt-4 grid min-w-0 gap-4">
+                  <section className="grid gap-4 lg:grid-cols-3">
+                    {[
+                      { title: t("apiExplorer.pathParameters"), parameters: pathParameters },
+                      { title: t("apiExplorer.queryParameters"), parameters: queryParameters },
+                      { title: t("apiExplorer.headerParameters"), parameters: headerParameters },
+                    ].map(({ title, parameters }) => (
+                      <ParameterEditor
+                        key={title}
+                        title={title}
+                        parameters={parameters}
+                        values={draft.parameterValues}
+                        issues={issueByKey}
+                        onChange={updateParameter}
+                        noParameters={t("apiExplorer.noParameters")}
+                        requiredLabel={t("apiExplorer.required")}
+                        optionalLabel={t("apiExplorer.optional")}
+                        schemaFallback={t("apiExplorer.schemaString")}
+                        inputLabel={(parameter) => t("apiExplorer.parameterValue", { name: parameter.name, location: parameter.in })}
+                      />
+                    ))}
+                  </section>
 
-            <section className="ui-panel p-comfortable" aria-labelledby="api-response-heading">
-              <h2 id="api-response-heading" className="text-title font-semibold">
-                {t("apiExplorer.response")}
-              </h2>
-              {runError && (
-                <p role="alert" className="mt-3 rounded-control border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                  {runError === t("apiExplorer.cancelled") ? runError : t("apiExplorer.runFailedDetail", { detail: runError })}
-                </p>
-              )}
-              {!runError && !response && <p className="mt-3 text-sm text-muted-foreground">{t("apiExplorer.noResponse")}</p>}
-              {response && (
-                <div className="mt-3 grid gap-3 text-sm">
-                  <dl className="grid gap-2">
-                    <div>
-                      <dt className="font-medium text-muted-foreground">{t("apiExplorer.status")}</dt>
-                      <dd>
-                        {response.status} {response.statusText}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="font-medium text-muted-foreground">{t("apiExplorer.contentType")}</dt>
-                      <dd className="break-all font-mono text-xs">{response.contentType || "-"}</dd>
-                    </div>
-                  </dl>
-                  {response.problem && (
-                    <div className="rounded-panel border border-status-warning/30 bg-status-warning/10 p-3" aria-labelledby="api-problem-heading">
-                      <h3 id="api-problem-heading" className="text-body font-semibold">
-                        {t("apiExplorer.problemResponse")}
-                      </h3>
-                      <dl className="mt-2 grid gap-2">
-                        <div>
-                          <dt className="font-medium text-muted-foreground">{t("apiExplorer.status")}</dt>
-                          <dd>{response.problem.status ?? response.status}</dd>
-                        </div>
-                        {response.problem.title && (
-                          <div>
-                            <dt className="font-medium text-muted-foreground">{t("apiExplorer.problemTitle")}</dt>
-                            <dd>{response.problem.title}</dd>
-                          </div>
-                        )}
-                        {response.problem.detail && (
-                          <div>
-                            <dt className="font-medium text-muted-foreground">{t("apiExplorer.problemDetail")}</dt>
-                            <dd>{response.problem.detail}</dd>
-                          </div>
-                        )}
-                      </dl>
-                    </div>
-                  )}
-                  <div>
-                    <h3 id="api-response-body-heading" className="mb-2 text-body font-semibold">
-                      {t("apiExplorer.responseBody")}
+                  <section className="rounded-control border border-border p-4">
+                    <h3 id="api-request-body-heading" className="text-body font-semibold">
+                      {t("apiExplorer.requestBody")}
                     </h3>
-                    <CodeBlock labelledBy="api-response-body-heading" value={response.bodyText || "{}"} />
-                  </div>
+                    {selected.operation.requestBody ? (
+                      <Field
+                        className="mt-3"
+                        label={t("apiExplorer.bodyInput")}
+                        description={schemaNameForOperation(selected.operation)}
+                        required={selected.operation.requestBody.required}
+                        error={
+                          bodyIssues.length > 0 ? (
+                            <span className="grid gap-1">
+                              {bodyIssues.map((issue, index) => (
+                                <span key={`${issue.message}-${index}`}>{issue.message}</span>
+                              ))}
+                            </span>
+                          ) : undefined
+                        }
+                      >
+                        {(control) => (
+                          <Textarea
+                            {...control}
+                            className="min-h-52 font-mono text-xs leading-relaxed"
+                            aria-label={t("apiExplorer.bodyInput")}
+                            required={selected.operation.requestBody?.required}
+                            value={draft.bodyText}
+                            onChange={(event) => updateBody(event.target.value)}
+                          />
+                        )}
+                      </Field>
+                    ) : (
+                      <p className="mt-2 text-sm text-muted-foreground">{t("apiExplorer.noRequestBody")}</p>
+                    )}
+                  </section>
+
+                  <section className="min-w-0" aria-labelledby="api-request-preview-heading">
+                    <h3 id="api-request-preview-heading" className="mb-2 text-body font-semibold">
+                      {t("apiExplorer.requestPreview")}
+                    </h3>
+                    <p className="mb-2 text-caption text-muted-foreground">{t("apiExplorer.previewSecretNote")}</p>
+                    <CodeBlock
+                      labelledBy="api-request-preview-heading"
+                      value={prepared.request?.preview ?? `${methodLabel(selected.method)} ${selected.path}\n\n${t("apiExplorer.fixValidation")}`}
+                    />
+                  </section>
+                  {prepared.issues.length > 0 && (
+                    <div role="alert" className="rounded-control border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                      <p className="font-medium">{t("apiExplorer.validationFailed")}</p>
+                      <ul className="mt-1 list-disc ps-5 text-xs">
+                        {prepared.issues.map((issue, index) => (
+                          <li key={`${issue.key}-${issue.message}-${index}`}>{issue.message}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
-              )}
-            </section>
-          </aside>
-        </div>
+              </details>
+
+              <details className="ui-panel min-w-0 p-comfortable">
+                <summary className="cursor-pointer font-medium text-foreground">{t("apiExplorer.schemaExamplesDisclosure")}</summary>
+                <div className="mt-4 grid min-w-0 gap-3">
+                  <a className="w-fit text-sm font-medium underline" href={apiExplorerSpecURL} target="_blank" rel="noreferrer">
+                    {t("apiExplorer.openSchema")}
+                  </a>
+                  <div className="flex flex-wrap gap-2">
+                    <CopyButton label={t("apiExplorer.copyCurl")} value={curl} />
+                    <CopyButton label={t("apiExplorer.copySdk")} value={sdk} />
+                  </div>
+                  <h3 id="api-examples-heading" className="sr-only">
+                    {t("apiExplorer.examples")}
+                  </h3>
+                  <CodeBlock labelledBy="api-examples-heading" value={`${curl}\n\n${sdk}`} />
+                </div>
+              </details>
+            </div>
+
+            <div className="grid min-w-0 gap-4">
+              <section className="ui-panel min-w-0 p-comfortable" aria-labelledby="api-runner-heading">
+                <p className="text-caption font-medium uppercase tracking-wide text-muted-foreground">{t("apiExplorer.stepTwo")}</p>
+                <h3 id="api-runner-heading" className="mt-1 text-title font-semibold">
+                  {t("apiExplorer.runner")}
+                </h3>
+                <p className="mt-1 text-sm text-muted-foreground">{t("apiExplorer.runnerHelp")}</p>
+                <form onSubmit={(event) => void mintTestKey(event)} className="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3">
+                  <label className="grid gap-1 text-sm">
+                    <span className="font-medium text-muted-foreground">{t("apiExplorer.subject")}</span>
+                    <Input value={tokenSubject} onChange={(event) => setTokenSubject(event.target.value)} required />
+                  </label>
+                  <div className="grid gap-1 text-sm">
+                    <span className="font-medium text-muted-foreground">{t("apiExplorer.tokenScope")}</span>
+                    <code className="rounded-control bg-muted px-2 py-1 text-xs">{selected.permission}</code>
+                  </div>
+                  <Button type="submit" disabled={keyBusy || !tokenSubject.trim()}>
+                    {keyBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
+                    {keyBusy ? t("apiExplorer.generating") : t("apiExplorer.testKey")}
+                  </Button>
+                </form>
+                {keyError && (
+                  <p role="alert" className="mt-3 rounded-control border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    {t("apiExplorer.keyFailed")} {keyError}
+                  </p>
+                )}
+                {testKey && (
+                  <div
+                    role="status"
+                    className={`mt-3 rounded-panel border p-3 text-sm ${
+                      tokenExpired || keyRevoked
+                        ? "border-status-warning/30 bg-status-warning/10 text-status-warning"
+                        : "border-status-success/30 bg-status-success/10 text-status-success"
+                    }`}
+                  >
+                    <p className="font-medium">
+                      {tokenExpired
+                        ? t("apiExplorer.keyExpired")
+                        : keyRevoked
+                          ? t("apiExplorer.keyRevoked")
+                          : t("apiExplorer.keyReady", { scope: testKey.scopes.join(", ") })}
+                    </p>
+                    <p className="mt-1 text-xs">{t("apiExplorer.revealOnce")}</p>
+                    {testKey.expires_at && (
+                      <p className="mt-1 text-xs">
+                        {t("apiExplorer.expires")}: {formatDateTime(testKey.expires_at)}
+                      </p>
+                    )}
+                    {!tokenExpired && !keyRevoked && (
+                      <Button className="mt-3" type="button" size="sm" variant="outline" disabled={revokeBusy} onClick={() => void revokeTestKey()}>
+                        {revokeBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+                        {revokeBusy ? t("apiExplorer.revokingKey") : t("apiExplorer.revokeKey")}
+                      </Button>
+                    )}
+                  </div>
+                )}
+
+                <div className="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3">
+                  {isUnsafe(selected.method) && prepared.request && (
+                    <label
+                      htmlFor="api-explorer-confirm-mutation"
+                      className="flex items-start gap-2 rounded-control border border-status-warning/30 bg-status-warning/10 px-3 py-2 text-sm"
+                    >
+                      <Checkbox
+                        id="api-explorer-confirm-mutation"
+                        className="mt-0.5 accent-brand-accent"
+                        aria-label={t("apiExplorer.confirmMutation")}
+                        checked={mutationConfirmed}
+                        onChange={(event) => setMutationConfirmed(event.target.checked)}
+                      />
+                      <span>
+                        <span className="font-medium">{t("apiExplorer.confirmMutation")}</span>
+                        <span className="mt-1 block text-xs text-muted-foreground">{t("apiExplorer.confirmMutationDetail")}</span>
+                      </span>
+                    </label>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" onClick={() => void runRequest()} disabled={!canRun}>
+                      {runBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Play className="h-4 w-4" aria-hidden="true" />}
+                      {runBusy ? t("apiExplorer.running") : t("apiExplorer.run")}
+                    </Button>
+                    {runBusy && (
+                      <Button type="button" variant="outline" onClick={() => runController.current?.abort()}>
+                        {t("apiExplorer.cancel")}
+                      </Button>
+                    )}
+                  </div>
+                  {!testKey && <p className="text-sm text-muted-foreground">{t("apiExplorer.needsKey")}</p>}
+                </div>
+              </section>
+
+              <section className="ui-panel p-comfortable" aria-labelledby="api-response-heading">
+                <p className="text-caption font-medium uppercase tracking-wide text-muted-foreground">{t("apiExplorer.stepThree")}</p>
+                <h3 id="api-response-heading" className="mt-1 text-title font-semibold">
+                  {t("apiExplorer.response")}
+                </h3>
+                {runError && (
+                  <p role="alert" className="mt-3 rounded-control border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    {runError === t("apiExplorer.cancelled") ? runError : t("apiExplorer.runFailedDetail", { detail: runError })}
+                  </p>
+                )}
+                {!runError && !response && <p className="mt-3 text-sm text-muted-foreground">{t("apiExplorer.noResponse")}</p>}
+                {response && (
+                  <div className="mt-3 grid gap-3 text-sm">
+                    <p className="rounded-control bg-muted px-3 py-2 font-medium">{t(responseSummaryKey(response))}</p>
+                    <dl className="grid gap-2">
+                      <div>
+                        <dt className="font-medium text-muted-foreground">{t("apiExplorer.status")}</dt>
+                        <dd>
+                          {response.status} {response.statusText}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="font-medium text-muted-foreground">{t("apiExplorer.contentType")}</dt>
+                        <dd className="break-all font-mono text-xs">{response.contentType || "-"}</dd>
+                      </div>
+                    </dl>
+                    {response.problem && (
+                      <div className="rounded-panel border border-status-warning/30 bg-status-warning/10 p-3" aria-labelledby="api-problem-heading">
+                        <h3 id="api-problem-heading" className="text-body font-semibold">
+                          {t("apiExplorer.problemResponse")}
+                        </h3>
+                        <dl className="mt-2 grid gap-2">
+                          <div>
+                            <dt className="font-medium text-muted-foreground">{t("apiExplorer.status")}</dt>
+                            <dd>{response.problem.status ?? response.status}</dd>
+                          </div>
+                          {response.problem.title && (
+                            <div>
+                              <dt className="font-medium text-muted-foreground">{t("apiExplorer.problemTitle")}</dt>
+                              <dd>{response.problem.title}</dd>
+                            </div>
+                          )}
+                          {response.problem.detail && (
+                            <div>
+                              <dt className="font-medium text-muted-foreground">{t("apiExplorer.problemDetail")}</dt>
+                              <dd>{response.problem.detail}</dd>
+                            </div>
+                          )}
+                        </dl>
+                      </div>
+                    )}
+                    <details className="min-w-0 rounded-control border border-border p-3">
+                      <summary className="cursor-pointer font-medium">{t("apiExplorer.rawResponse")}</summary>
+                      <div className="mt-3 min-w-0">
+                        <h4 id="api-response-body-heading" className="sr-only">
+                          {t("apiExplorer.responseBody")}
+                        </h4>
+                        <CodeBlock labelledBy="api-response-body-heading" value={response.bodyText || "{}"} />
+                      </div>
+                    </details>
+                  </div>
+                )}
+              </section>
+            </div>
+          </div>
+        </section>
       )}
     </section>
   );

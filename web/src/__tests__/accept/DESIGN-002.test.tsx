@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -103,11 +103,11 @@ const explorerSpec = {
   },
 };
 
-function renderRoute() {
+function renderRoute(initialEntry = "/integrate/api") {
   return render(
     <ThemeProvider>
       <AuthProvider>
-        <MemoryRouter initialEntries={["/integrate/api"]}>
+        <MemoryRouter initialEntries={[initialEntry]}>
           <AppRoutes />
         </MemoryRouter>
       </AuthProvider>
@@ -115,7 +115,21 @@ function renderRoute() {
   );
 }
 
-describe("DESIGN-002 runnable API explorer", () => {
+async function openPlayground(user: ReturnType<typeof userEvent.setup>) {
+  expect(await screen.findByRole("heading", { level: 1, name: "API playground" })).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Try request" }));
+  expect(await screen.findByRole("heading", { level: 2, name: "Try a safe request" })).toBeInTheDocument();
+}
+
+async function selectOperation(user: ReturnType<typeof userEvent.setup>, name: RegExp) {
+  const operationDisclosure = screen.getByText("All contract operations", { exact: true }).closest("details");
+  if (!operationDisclosure?.hasAttribute("open")) await user.click(screen.getByText("All contract operations", { exact: true }));
+  await user.click(await screen.findByRole("button", { name }));
+  const requestDisclosure = screen.getByText("Headers, body, and exact request", { exact: true }).closest("details");
+  if (!requestDisclosure?.hasAttribute("open")) await user.click(screen.getByText("Headers, body, and exact request", { exact: true }));
+}
+
+describe("DESIGN-002 answer-first API playground", () => {
   beforeEach(() => {
     apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "docs-operator", tenant_id: "tenant-1", email: "docs@example.test" });
     apiMock.createAPIToken.mockImplementation(async (input: { scopes: string[]; expires_at: string }) => ({
@@ -149,12 +163,70 @@ describe("DESIGN-002 runnable API explorer", () => {
     vi.stubGlobal("fetch", fetchMock);
   });
 
+  it("answers the safe-request question before revealing any expert controls", async () => {
+    const user = userEvent.setup();
+    renderRoute();
+
+    expect(await screen.findByRole("heading", { level: 1, name: "API playground" })).toBeInTheDocument();
+    expect(screen.getByText("How to try a safe request and understand the response.", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText("OpenAPI schema, headers, idempotency, raw payload and error.", { exact: true })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "What happens when you try a request" })).toBeInTheDocument();
+    expect(screen.getByText("Start with a read", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText("Use temporary access", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText("Read the answer", { exact: true })).toBeInTheDocument();
+
+    const actions = screen.getByTestId("page-depth-operate");
+    expect(within(actions).getAllByRole("button")).toHaveLength(1);
+    await waitFor(() => expect(within(actions).getByRole("button", { name: "Try request" })).toBeEnabled());
+    expect(screen.queryByRole("heading", { name: "Choose a request" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Generate test key" })).not.toBeInTheDocument();
+    expect(document.querySelectorAll("main")).toHaveLength(1);
+    expect(apiMock.createAPIToken).not.toHaveBeenCalled();
+
+    await openPlayground(user);
+    expect(screen.getByText("Safe starting point", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText("All contract operations", { exact: true }).closest("details")).not.toHaveAttribute("open");
+    expect(screen.getByText("Headers, body, and exact request", { exact: true }).closest("details")).not.toHaveAttribute("open");
+    expect(screen.getByText("OpenAPI schema and code examples", { exact: true }).closest("details")).not.toHaveAttribute("open");
+    expect(apiMock.createAPIToken).not.toHaveBeenCalled();
+  });
+
+  it("names empty and failed contract states and can retry without inventing operations", async () => {
+    const user = userEvent.setup();
+    let attempts = 0;
+    vi.mocked(globalThis.fetch).mockImplementation(async (input: RequestInfo | URL) => {
+      expect(String(input)).toBe("/api/v1/openapi.json");
+      attempts += 1;
+      if (attempts === 1) return new Response("forbidden", { status: 403 });
+      return new Response(JSON.stringify({ openapi: "3.1.0", paths: {} }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    renderRoute();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("The API contract is unavailable");
+    expect(screen.getByRole("button", { name: "Try request" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Try loading again" }));
+    expect(await screen.findByText("No API operations are available.", { exact: true })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try request" })).toBeDisabled();
+    expect(apiMock.createAPIToken).not.toHaveBeenCalled();
+  });
+
+  it("honors a linked operation without minting a key or bypassing mutation confirmation", async () => {
+    renderRoute("/integrate/api?operation=createIdentity");
+
+    expect(await screen.findByRole("heading", { level: 2, name: "Try a safe request" })).toBeInTheDocument();
+    expect(screen.getByText("Changes data — confirmation required", { exact: true })).toBeInTheDocument();
+    expect(screen.getAllByText("createIdentity", { exact: true }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("checkbox", { name: /I reviewed this exact mutation request/ })).not.toBeChecked();
+    expect(screen.getByRole("button", { name: "Run request" })).toBeDisabled();
+    expect(apiMock.createAPIToken).not.toHaveBeenCalled();
+  });
+
   it("opens the route, selects an operation, mints a scoped test key, runs it, and renders problem responses", async () => {
     const user = userEvent.setup();
     renderRoute();
 
-    expect(await screen.findByRole("heading", { name: "API explorer" })).toBeInTheDocument();
-    await user.click(await screen.findByRole("button", { name: /listCertificates/i }));
+    await openPlayground(user);
+    await selectOperation(user, /listCertificates/i);
     expect(screen.getAllByText("certs:read").length).toBeGreaterThan(0);
 
     const limit = screen.getByRole("textbox", { name: "Value for limit query parameter" });
@@ -204,7 +276,8 @@ describe("DESIGN-002 runnable API explorer", () => {
     });
     renderRoute();
 
-    await user.click(await screen.findByRole("button", { name: /getIdentity/i }));
+    await openPlayground(user);
+    await selectOperation(user, /getIdentity/i);
     const pathID = screen.getByRole("textbox", { name: "Value for id path parameter" });
     await user.clear(pathID);
     await user.type(pathID, "not-a-uuid");
@@ -240,7 +313,8 @@ describe("DESIGN-002 runnable API explorer", () => {
     });
     renderRoute();
 
-    await user.click(await screen.findByRole("button", { name: /createIdentity/i }));
+    await openPlayground(user);
+    await selectOperation(user, /createIdentity/i);
     const body = screen.getByRole("textbox", { name: "Request body JSON" });
     fireEvent.change(body, { target: { value: "{" } });
     expect(screen.getAllByText(/Request body is not valid JSON/)).toHaveLength(2);
@@ -289,7 +363,8 @@ describe("DESIGN-002 runnable API explorer", () => {
     });
     renderRoute();
 
-    await user.click(await screen.findByRole("button", { name: /listCertificates/i }));
+    await openPlayground(user);
+    await selectOperation(user, /listCertificates/i);
     await user.click(screen.getByRole("button", { name: "Generate test key" }));
     await user.click(await screen.findByRole("button", { name: "Run request" }));
     await user.click(await screen.findByRole("button", { name: "Cancel request" }));
@@ -311,7 +386,8 @@ describe("DESIGN-002 runnable API explorer", () => {
     });
     renderRoute();
 
-    await user.click(await screen.findByRole("button", { name: /listCertificates/i }));
+    await openPlayground(user);
+    await selectOperation(user, /listCertificates/i);
     await user.click(screen.getByRole("button", { name: "Generate test key" }));
     expect(await screen.findByText("Test key expired.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Run request" })).toBeDisabled();

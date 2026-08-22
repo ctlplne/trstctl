@@ -145,6 +145,6 @@ describe("DESIGN-003 GitOps workflow", () => {
     expect(await screen.findByText("policy.dry_run.evaluated")).toBeInTheDocument();
     expect(screen.getByText("sha256-gitops")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Export declaration" })).toHaveAttribute("download", "trstctl-gitops-profile.json");
-    expect(screen.getByRole("link", { name: "Open in API explorer" })).toHaveAttribute("href", "/integrate/api?operation=dryRunPolicy");
+    expect(screen.getByRole("link", { name: "Open in API playground" })).toHaveAttribute("href", "/integrate/api?operation=dryRunPolicy");
   });
 });

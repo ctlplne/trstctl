@@ -205,7 +205,7 @@ describe("route-level product surface parity", () => {
     });
   });
 
-  it("keeps every served OpenAPI operation reachable from the API Explorer workflow", () => {
+  it("keeps every served OpenAPI operation reachable from the API playground workflow", () => {
     const spec = servedOpenAPI();
     const expectedOperationKeys = Object.entries(spec.paths).flatMap(([path, pathItem]) =>
       Object.entries(pathItem)
