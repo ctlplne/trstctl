@@ -32,7 +32,10 @@ from urllib.parse import parse_qs, parse_qsl, quote, unquote, urlparse
 IMAGES = {
     "postgresql": "postgres:16-alpine@sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229",
     "mysql": "mysql:8.4@sha256:d36d39a64cd12a5c1cc9e6aa2bfb5f8d4c81a2f6586e0a04a9ae13939db02209",
-    "mongodb": "mongo:8.0-noble@sha256:b49841837cd7688885d7479d14a71733bacae4c99faaae615622384eaee045a0",
+    # MongoDB 8.x refuses to start on Docker Desktop's Linux 6.19 kernel
+    # (SERVER-121912). The still-supported 7.0 line exercises the same native
+    # user/session lifecycle without weakening the database proof.
+    "mongodb": "mongo:7.0.39-jammy@sha256:04582c3a144d088f841c446abfc19f79adcefa8bd00ad4a7fb18e27b9585c5d6",
     "redis": "redis:8.2-bookworm@sha256:14678cf7a021c8fef198403f2cf5f6d30492218156f41f03cdb79a4caafb8bd4",
 }
 
@@ -251,7 +254,10 @@ class State:
 
     def _start_database(self) -> None:
         try:
-            args = ["docker", "run", "-d", "--rm", "--name", self.container, "-p", f"127.0.0.1::{self.container_port}"]
+            # Keep an exited fixture until cleanup so timeout diagnostics can
+            # inspect its exact state and bounded logs. cleanup() always removes
+            # this nonce-scoped name, whether startup succeeds or fails.
+            args = ["docker", "run", "-d", "--name", self.container, "-p", f"127.0.0.1::{self.container_port}"]
             if self.kind == "postgresql":
                 args += ["-e", "POSTGRES_PASSWORD=dod-admin", "-e", "POSTGRES_DB=app", IMAGES[self.kind]]
             elif self.kind == "mysql":
@@ -262,6 +268,7 @@ class State:
                 args += [IMAGES[self.kind], "redis-server", "--requirepass", "dod-admin"]
             run(args, timeout=180)
             deadline = time.time() + 120
+            last_database_error = ""
             while time.time() < deadline and not self.stop.is_set():
                 try:
                     mapped = run(["docker", "port", self.container, f"{self.container_port}/tcp"], timeout=5).stdout.strip().splitlines()[0]
@@ -270,13 +277,33 @@ class State:
                         self._start_database_bridge()
                         self.ready.set()
                         return
-                except Exception:
-                    pass
+                except Exception as exc:
+                    last_database_error = str(exc)
                 time.sleep(0.25)
-            raise RuntimeError("database did not become healthy")
+            diagnostics = self._database_failure_diagnostics(last_database_error)
+            raise RuntimeError(f"database did not become healthy: {diagnostics}")
         except Exception as exc:
             self.start_error = str(exc)
             self.ready.set()
+
+    def _database_failure_diagnostics(self, last_database_error: str) -> str:
+        details = [f"kind={self.kind}"]
+        if last_database_error:
+            details.append(f"last_error={' '.join(last_database_error.split())[:2000]}")
+        commands = (
+            ("state", ["docker", "inspect", "--format", "{{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} error={{json .State.Error}}", self.container]),
+            ("logs", ["docker", "logs", "--tail", "80", self.container]),
+        )
+        for label, args in commands:
+            try:
+                output = run(args, timeout=10, check=False).stdout
+                # The fixtures use this password only for their private test
+                # containers, but keep even that value out of retained evidence.
+                output = " ".join(output.replace("dod-admin", "[redacted]").split())[:4000]
+                details.append(f"{label}={output or '[empty]'}")
+            except Exception as exc:
+                details.append(f"{label}_error={' '.join(str(exc).split())[:1000]}")
+        return "; ".join(details)
 
     def _start_database_bridge(self) -> None:
         upstream_port = self.host_port

@@ -737,6 +737,22 @@ func TestShippedBuildsReuseOneGatePrivateGoCache(t *testing.T) {
 	}
 }
 
+func TestPrivateDirectoryFailureNamesTheRejectedBoundary(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o755); err != nil { // #nosec G302 -- deliberately unsafe fixture mode (CWE-276)
+		t.Fatal(err)
+	}
+	err := validatePrivateDirectory(dir)
+	if err == nil {
+		t.Fatal("non-private directory passed")
+	}
+	for _, want := range []string{dir, "mode=0755", "owner_uid=", "effective_uid="} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("private-directory failure %q does not explain %q", err, want)
+		}
+	}
+}
+
 func TestShippedBuildCacheRejectsAmbientOrReceiptOverlappingPaths(t *testing.T) {
 	receiptDir := t.TempDir()
 	for _, test := range []struct {

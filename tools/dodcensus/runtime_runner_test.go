@@ -165,6 +165,56 @@ func TestRuntimeRunnerWritableDirRequiresPrivateHostOwnership(t *testing.T) {
 	}
 }
 
+func TestRuntimeRunnerCacheMountKeepsDarwinCacheBelowPrivateBoundary(t *testing.T) {
+	parent := t.TempDir()
+	if err := os.Chmod(parent, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	cache := filepath.Join(parent, "go-build")
+	if err := os.Mkdir(cache, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := runtimeRunnerCacheMountDir(cache, "darwin", uint32(os.Getuid())) // #nosec G115 -- bounded fixture/corpus value packing inside a test (CWE-190)
+	if err != nil {
+		t.Fatalf("private Darwin cache boundary rejected: %v", err)
+	}
+	if got != parent {
+		t.Fatalf("Darwin cache mount = %q, want private parent %q", got, parent)
+	}
+
+	sibling := filepath.Join(parent, "unrelated")
+	if err := os.WriteFile(sibling, []byte("must not be exposed"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runtimeRunnerCacheMountDir(cache, "darwin", uint32(os.Getuid())); err == nil { // #nosec G115 -- bounded fixture/corpus value packing inside a test (CWE-190)
+		t.Fatal("Darwin cache parent containing an unrelated sibling passed")
+	}
+	if err := os.Remove(sibling); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(parent, 0o755); err != nil { // #nosec G302 -- fixture mode in a test tempdir; the mode is part of the fixture (CWE-276)
+		t.Fatal(err)
+	}
+	if _, err := runtimeRunnerCacheMountDir(cache, "darwin", uint32(os.Getuid())); err == nil { // #nosec G115 -- bounded fixture/corpus value packing inside a test (CWE-190)
+		t.Fatal("world-visible Darwin cache parent passed")
+	}
+}
+
+func TestRuntimeRunnerCacheMountUsesExactCacheOnNativeLinux(t *testing.T) {
+	cache := filepath.Join(t.TempDir(), "go-build")
+	if err := os.Mkdir(cache, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	got, err := runtimeRunnerCacheMountDir(cache, "linux", uint32(os.Getuid())) // #nosec G115 -- bounded fixture/corpus value packing inside a test (CWE-190)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != cache {
+		t.Fatalf("Linux cache mount = %q, want exact cache %q", got, cache)
+	}
+}
+
 func TestHostDockerCommandBoundaryIsClosed(t *testing.T) {
 	for _, command := range []string{"build", "context", "image", "network", "run"} {
 		if err := validateHostCommand("docker", []string{command, "reviewed-argument"}); err != nil {

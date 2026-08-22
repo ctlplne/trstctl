@@ -184,26 +184,18 @@ func TestDODSecretSyncProductionAssembly(t *testing.T) {
 }
 
 func dodRunAllDynamicSecretProductionAssembly(t *testing.T) {
-	var (
-		dynamicRegistry   *proof.ExternalSubstrate
-		dynamicPostgres   *proof.ExternalSubstrate
-		dynamicMySQL      *proof.ExternalSubstrate
-		dynamicMongo      *proof.ExternalSubstrate
-		dynamicAWS        *proof.ExternalSubstrate
-		dynamicGCP        *proof.ExternalSubstrate
-		dynamicAzure      *proof.ExternalSubstrate
-		dynamicKubernetes *proof.ExternalSubstrate
-		dynamicRedis      *proof.ExternalSubstrate
-	)
-	dynamicRegistry = proof.StartCommand(t, "dynamic_secret.registry")
-	dynamicPostgres = proof.StartCommand(t, "dynamic_secret.postgresql")
-	dynamicMySQL = proof.StartCommand(t, "dynamic_secret.mysql")
-	dynamicMongo = proof.StartCommand(t, "dynamic_secret.mongodb")
-	dynamicAWS = proof.StartCommand(t, "dynamic_secret.aws_iam")
-	dynamicGCP = proof.StartCommand(t, "dynamic_secret.gcp_iam")
-	dynamicAzure = proof.StartCommand(t, "dynamic_secret.azure_entra")
-	dynamicKubernetes = proof.StartCommand(t, "dynamic_secret.kubernetes")
-	dynamicRedis = proof.StartCommand(t, "dynamic_secret.redis")
+	// Each real database is a separate bulkhead. Wait for its native health
+	// proof before starting the next one so a full-family run cannot turn a
+	// Docker resource spike into nine false product failures.
+	dynamicRegistry, registryDB := dodStartDatabaseSecretSubstrate(t, "dynamic_secret.registry")
+	dynamicPostgres, postgresDB := dodStartDatabaseSecretSubstrate(t, "dynamic_secret.postgresql")
+	dynamicMySQL, mysqlDB := dodStartDatabaseSecretSubstrate(t, "dynamic_secret.mysql")
+	dynamicMongo, mongoDB := dodStartDatabaseSecretSubstrate(t, "dynamic_secret.mongodb")
+	dynamicRedis, redisDB := dodStartDatabaseSecretSubstrate(t, "dynamic_secret.redis")
+	dynamicAWS := proof.StartCommand(t, "dynamic_secret.aws_iam")
+	dynamicGCP := proof.StartCommand(t, "dynamic_secret.gcp_iam")
+	dynamicAzure := proof.StartCommand(t, "dynamic_secret.azure_entra")
+	dynamicKubernetes := proof.StartCommand(t, "dynamic_secret.kubernetes")
 
 	secretDir := t.TempDir()
 	fileRef := func(name string, value []byte) string { return dodSecretIntegrationFile(t, secretDir, name, value) }
@@ -216,11 +208,6 @@ func dodRunAllDynamicSecretProductionAssembly(t *testing.T) {
 	cfg.Secrets.KEKFile = filepath.Join(t.TempDir(), "secrets-kek.bin")
 	cfg.Audit.SigningKeyFile = filepath.Join(t.TempDir(), "audit-signing-key.pem")
 	cfg.CA.CertFile = filepath.Join(t.TempDir(), "issuing-ca.pem")
-	registryDB := dodSecretSubstrateConfig(t, dynamicRegistry)
-	postgresDB := dodSecretSubstrateConfig(t, dynamicPostgres)
-	mysqlDB := dodSecretSubstrateConfig(t, dynamicMySQL)
-	mongoDB := dodSecretSubstrateConfig(t, dynamicMongo)
-	redisDB := dodSecretSubstrateConfig(t, dynamicRedis)
 	dynamicAWSEndpoint := dodParentSubstrateLoopbackBridge(t, dynamicAWS.Endpoint())
 	dynamicGCPEndpoint := dodParentSubstrateLoopbackBridge(t, dynamicGCP.Endpoint())
 	dynamicAzureEndpoint := dodParentSubstrateLoopbackBridge(t, dynamicAzure.Endpoint())
@@ -677,6 +664,12 @@ type dodSubstrateConfig struct {
 	Addr     string `json:"addr"`
 	Database string `json:"database"`
 	Password string `json:"password"`
+}
+
+func dodStartDatabaseSecretSubstrate(t *testing.T, entryID string) (*proof.ExternalSubstrate, dodSubstrateConfig) {
+	t.Helper()
+	external := proof.StartCommand(t, entryID)
+	return external, dodSecretSubstrateConfig(t, external)
 }
 
 func dodSecretSubstrateConfig(t *testing.T, external *proof.ExternalSubstrate) dodSubstrateConfig {

@@ -407,7 +407,7 @@ func (r *linuxRuntimeExecutor) prepare(ctx context.Context, repo string, profile
 	return image, nil
 }
 
-func (r *linuxRuntimeExecutor) run(ctx context.Context, repo, cacheDir string, profile BuildProfile, args []string) commandResult {
+func (r *linuxRuntimeExecutor) run(ctx context.Context, repo, cacheDir string, profile BuildProfile, args []string) (result commandResult) {
 	if r == nil || profile.RuntimeRunnerImage == "" {
 		return commandResult{Err: fmt.Errorf("pinned runtime runner was not prepared"), ExitCode: -1}
 	}
@@ -430,11 +430,22 @@ func (r *linuxRuntimeExecutor) run(ctx context.Context, repo, cacheDir string, p
 			return commandResult{Err: fmt.Errorf("pinned runtime %s directory: %w", name, err), ExitCode: -1}
 		}
 	}
+	cacheMountDir, err := runtimeRunnerCacheMountDir(cacheDir, runtime.GOOS, uid)
+	if err != nil {
+		return commandResult{Err: fmt.Errorf("pinned runtime cache mount boundary: %w", err), ExitCode: -1}
+	}
+	defer func() {
+		if _, err := runtimeRunnerCacheMountDir(cacheDir, runtime.GOOS, uid); err != nil {
+			boundaryErr := fmt.Errorf("pinned runtime cache mount boundary changed during execution: %w", err)
+			result.Err = errors.Join(result.Err, boundaryErr)
+			result.ExitCode = -1
+		}
+	}()
 	socket, _, err := runtimeDockerSocket(ctx, repo)
 	if err != nil {
 		return commandResult{Err: err, ExitCode: -1}
 	}
-	for _, path := range []string{repo, cacheDir, receiptDir, socket} {
+	for _, path := range []string{repo, cacheDir, cacheMountDir, receiptDir, socket} {
 		if !filepath.IsAbs(path) || strings.ContainsAny(path, ",\r\n\x00") {
 			return commandResult{Err: fmt.Errorf("runtime runner mount path %q is unsafe", path), ExitCode: -1}
 		}
@@ -462,7 +473,7 @@ func (r *linuxRuntimeExecutor) run(ctx context.Context, repo, cacheDir string, p
 	dockerArgs = append(dockerArgs,
 		"--workdir", repo,
 		"--mount", "type=bind,src="+repo+",dst="+repo+",readonly",
-		"--mount", "type=bind,src="+cacheDir+",dst="+cacheDir,
+		"--mount", "type=bind,src="+cacheMountDir+",dst="+cacheMountDir,
 		"--mount", "type=bind,src="+socket+",dst=/var/run/docker.sock",
 		"--mount", "type=bind,src="+passwdFile+",dst=/etc/passwd,readonly",
 		"--mount", "type=bind,src="+groupFile+",dst=/etc/group,readonly",
@@ -709,6 +720,45 @@ func validateRuntimeRunnerWritableDir(path string, owner uint32) error {
 		return fmt.Errorf("%q is not owned by runner UID %d", path, owner)
 	}
 	return nil
+}
+
+func runtimeRunnerCacheMountDir(cacheDir, hostOS string, owner uint32) (string, error) {
+	if err := validateRuntimeRunnerWritableDir(cacheDir, owner); err != nil {
+		return "", fmt.Errorf("cache directory: %w", err)
+	}
+	if filepath.Clean(cacheDir) != cacheDir {
+		return "", fmt.Errorf("cache path %q is not clean", cacheDir)
+	}
+	switch hostOS {
+	case "linux":
+		return cacheDir, nil
+	case "darwin":
+		// Docker Desktop virtualizes the owner of a bind mount root as UID 0.
+		// Mount one dedicated private parent so the non-root cache remains a
+		// child with its real container-visible owner. Nothing else may share
+		// this writable parent, and the same boundary is checked after the run.
+		parent := filepath.Dir(cacheDir)
+		if parent == cacheDir || parent == string(filepath.Separator) {
+			return "", fmt.Errorf("cache %q has no dedicated private parent", cacheDir)
+		}
+		if err := validateRuntimeRunnerWritableDir(parent, owner); err != nil {
+			return "", fmt.Errorf("dedicated cache parent: %w", err)
+		}
+		entries, err := os.ReadDir(parent)
+		if err != nil {
+			return "", fmt.Errorf("read dedicated cache parent: %w", err)
+		}
+		if len(entries) != 1 || entries[0].Name() != filepath.Base(cacheDir) || !entries[0].IsDir() || entries[0].Type()&os.ModeSymlink != 0 {
+			names := make([]string, 0, len(entries))
+			for _, entry := range entries {
+				names = append(names, entry.Name())
+			}
+			return "", fmt.Errorf("dedicated cache parent %q contains %v, want only real directory %q", parent, names, filepath.Base(cacheDir))
+		}
+		return parent, nil
+	default:
+		return "", fmt.Errorf("pinned runtime cache mount does not support host OS %s", hostOS)
+	}
 }
 
 func runtimeRunnerGoVersion(repo string) (string, error) {

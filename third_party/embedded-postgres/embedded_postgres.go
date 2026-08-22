@@ -213,10 +213,8 @@ func encodeOptions(port uint32, parameters map[string]string) string {
 }
 
 func startPostgres(ep *EmbeddedPostgres) error {
-	postgresBinary := filepath.Join(ep.config.binariesPath, "bin/pg_ctl")
-	postgresProcess := exec.Command(postgresBinary, "start", "-w",
-		"-D", ep.config.dataPath,
-		"-o", encodeOptions(ep.config.port, ep.config.startParameters))
+	args := postgresStartArgs(ep.config, ep.syncedLogger.file.Name())
+	postgresProcess := exec.Command(args[0], args[1:]...)
 	postgresProcess.Stdout = ep.syncedLogger.file
 	postgresProcess.Stderr = ep.syncedLogger.file
 
@@ -228,6 +226,18 @@ func startPostgres(ep *EmbeddedPostgres) error {
 	}
 
 	return nil
+}
+
+func postgresStartArgs(config Config, logPath string) []string {
+	return []string{
+		filepath.Join(config.binariesPath, "bin/pg_ctl"), "start", "-w",
+		"-D", config.dataPath,
+		// pg_ctl otherwise discards the server process's stderr. Keep it in the
+		// same private temporary log already read into startup errors so a failed
+		// database never degrades into the unactionable "Examine the log output".
+		"-l", logPath,
+		"-o", encodeOptions(config.port, config.startParameters),
+	}
 }
 
 func stopPostgres(ep *EmbeddedPostgres) error {

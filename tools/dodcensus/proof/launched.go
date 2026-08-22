@@ -1121,9 +1121,18 @@ func validatePrivateDirectory(path string) error {
 	if err != nil {
 		return fmt.Errorf("inspect private launched directory: %w", err)
 	}
-	stat, ok := info.Sys().(*syscall.Stat_t)
-	if !ok || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm() != 0o700 || stat.Uid != uint32(os.Geteuid()) { // #nosec G115 -- bounded value packing in a developer tool, not a served binary (CWE-190)
-		return fmt.Errorf("launched directory is not a caller-owned, non-symlink 0700 directory")
+	metadata, ok := info.Sys().(*syscall.Stat_t)
+	ownerUID := "unavailable"
+	ownerMatches := false
+	if ok {
+		ownerUID = strconv.FormatUint(uint64(metadata.Uid), 10)
+		ownerMatches = metadata.Uid == uint32(os.Geteuid()) // #nosec G115 -- bounded process identity comparison (CWE-190)
+	}
+	if !ok || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm() != 0o700 || !ownerMatches {
+		return fmt.Errorf(
+			"launched directory %q is not a caller-owned, non-symlink 0700 directory: mode=%04o owner_uid=%s effective_uid=%d directory=%t symlink=%t",
+			path, info.Mode().Perm(), ownerUID, os.Geteuid(), info.IsDir(), info.Mode()&os.ModeSymlink != 0,
+		)
 	}
 	return nil
 }
