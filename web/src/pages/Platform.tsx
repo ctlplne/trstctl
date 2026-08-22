@@ -857,7 +857,7 @@ function SystemDisclosure({
 }) {
   return (
     <details
-      className="group rounded-panel border border-border bg-card shadow-elevation1"
+      className="group min-w-0 rounded-panel border border-border bg-card shadow-elevation1"
       open={open}
       onToggle={(event) => onToggle(event.currentTarget.open)}
     >
@@ -887,7 +887,7 @@ function SystemCheck({ label, value, issue }: { label: string; value: string; is
 function SystemTableRegion({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div
-      className="overflow-x-auto rounded-panel border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+      className="min-w-0 max-w-full overflow-x-auto rounded-panel border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
       role="region"
       aria-label={label}
       tabIndex={0}
@@ -1167,7 +1167,7 @@ export function AdminEditions() {
                 />
               </dl>
 
-              <details className="rounded-panel border border-border bg-background p-3">
+              <details className="min-w-0 rounded-panel border border-border bg-background p-3">
                 <summary className="cursor-pointer font-semibold">{t("source.packaging.edition.matrix.265d443ef4")}</summary>
                 <div className="mt-4 grid gap-4">
                   <SystemTableRegion label={t("source.packaging.edition.matrix.265d443ef4")}>
@@ -1220,7 +1220,7 @@ export function AdminEditions() {
               </details>
 
               <details
-                className="rounded-panel border border-border bg-background p-3"
+                className="min-w-0 rounded-panel border border-border bg-background p-3"
                 open={architectureOpen}
                 onToggle={(event) => setArchitectureOpen(event.currentTarget.open)}
               >

@@ -210,18 +210,26 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
     expect(screen.queryByRole("dialog", { name: "Add license" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add license" })).toHaveFocus();
 
-    await user.click(screen.getByText("Feature table", { exact: true }));
-    expect(await screen.findByRole("table", { name: "Feature table" })).toBeInTheDocument();
+    const featureSummary = screen.getByText("Feature table", { exact: true });
+    expect(featureSummary.closest("details")).toHaveClass("min-w-0");
+    await user.click(featureSummary);
+    const featureTable = await screen.findByRole("table", { name: "Feature table" });
+    expect(featureTable).toBeInTheDocument();
+    expect(featureTable.closest("[role='region']")).toHaveClass("min-w-0", "max-w-full");
     expect(screen.getByRole("row", { name: /Governance.*Enabled/i })).toBeInTheDocument();
     expect(apiMock.activeActiveIssuance).not.toHaveBeenCalled();
     expect(apiMock.platformDistribution).not.toHaveBeenCalled();
 
-    await user.click(screen.getByText("Entitlement evidence", { exact: true }));
+    const entitlementSummary = screen.getByText("Entitlement evidence", { exact: true });
+    expect(entitlementSummary.closest("details")).toHaveClass("min-w-0");
+    await user.click(entitlementSummary);
     expect(await screen.findByText("acme-prod")).toBeInTheDocument();
     expect(apiMock.activeActiveIssuance).not.toHaveBeenCalled();
     expect(apiMock.platformDistribution).not.toHaveBeenCalled();
 
-    await user.click(screen.getByText("Deployment architecture evidence", { exact: true }));
+    const architectureSummary = screen.getByText("Deployment architecture evidence", { exact: true });
+    expect(architectureSummary.closest("details")).toHaveClass("min-w-0");
+    await user.click(architectureSummary);
     await waitFor(() => expect(apiMock.activeActiveIssuance).toHaveBeenCalledTimes(1));
     expect(apiMock.platformDistribution).toHaveBeenCalledTimes(1);
     expect(await axe(view.container)).toHaveNoViolations();
