@@ -188,6 +188,23 @@ describe("DESIGN-ROUTE-040 People and roles", () => {
     expect(trigger).toHaveFocus();
   });
 
+  it("uses the full foreground token for small Add person labels and role guidance", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: "Add person" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Add person" });
+    for (const label of ["Subject", "Display name", "Email"]) {
+      const labelText = within(dialog).getByText(label, { exact: true });
+      expect(labelText).toHaveClass("text-foreground");
+      expect(labelText).not.toHaveClass("text-muted-foreground");
+    }
+    const fieldset = dialog.querySelector("fieldset");
+    expect(fieldset).not.toBeNull();
+    expect(fieldset?.querySelector("legend")).toHaveClass("text-foreground");
+    expect(fieldset?.querySelector(":scope > p")).toHaveClass("text-foreground");
+  });
+
   it("requires an explicit confirmation before offboarding and durably reloads membership", async () => {
     const user = userEvent.setup();
     renderPage();

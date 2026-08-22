@@ -713,8 +713,8 @@ export function AdminAccess() {
               <Input type="email" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} />
             </FormField>
             <fieldset className="grid gap-2 rounded-control border border-border p-3">
-              <legend className="px-1 text-sm font-medium text-muted-foreground">{translateNow("source.roles.c253370554")}</legend>
-              <p className="text-xs text-muted-foreground">{t("admin.access.rolesHint")}</p>
+              <legend className="px-1 text-sm font-medium text-foreground">{translateNow("source.roles.c253370554")}</legend>
+              <p className="text-xs text-foreground">{t("admin.access.rolesHint")}</p>
               {roleRows.length ? (
                 <div className="grid gap-2 sm:grid-cols-2">
                   {roleRows.map((role) => (
@@ -925,7 +925,7 @@ function OverviewFact({ icon, label, value, detail }: { icon?: ReactNode; label:
 function FormField({ label, hint, children }: { label: ReactNode; hint?: ReactNode; children: ReactNode }) {
   return (
     <label className="grid gap-1 text-sm">
-      <span className="font-medium text-muted-foreground">{label}</span>
+      <span className="font-medium text-foreground">{label}</span>
       {children}
       {hint ? <span className="text-xs text-muted-foreground">{hint}</span> : null}
     </label>
