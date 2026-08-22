@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
 import { Building2, ChevronDown, Gauge, Headphones, Network, Plus } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { AdminHeaderActions } from "@/components/AdminHeaderActions";
 import { PageHeader } from "@/components/PageHeader";
-import { StatusBadge } from "@/components/StatusBadge";
 import { DRPosturePanel } from "@/components/DRPosturePanel";
+import { DetailDrawer } from "@/components/DetailDrawer";
 import { IdempotencyResultProtectionPanel, TenantKeyDomainPanel, UsageEvidencePanel } from "@/components/TenantCustodyPanels";
 import { Eyebrow } from "@/components/typography";
 import { Button } from "@/components/ui/button";
@@ -898,9 +898,12 @@ function SystemTableRegion({ label, children }: { label: string; children: React
 }
 /* eslint-enable jsx-a11y/no-noninteractive-tabindex */
 
-/** /admin/editions — the console's one commercial surface (S-A3/DA-26):
- * offline license state, edition/feature rows, FIPS, distribution, and the
- * regional issuance posture. */
+/** /admin/editions — the console's one commercial surface (S-A3/DA-26).
+ * DESIGN-ROUTE-042 makes the verified plan/expiry answer the default read,
+ * then keeps signature, feature, entitlement, packaging, and deployment
+ * architecture evidence behind explicit disclosures. The only default API
+ * read is /editions; HA and distribution evidence are not fetched until the
+ * operator opens the nested architecture proof. */
 export function AdminEditions() {
   const { locale, timeZone, t } = useTranslation();
   const formatPolicy = useMemo<FormatPolicy>(() => ({ locale, timeZone }), [locale, timeZone]);
@@ -908,29 +911,61 @@ export function AdminEditions() {
   const [activeActiveIssuance, setActiveActiveIssuance] = useState<ActiveActiveIssuancePlan | null>(null);
   const [distribution, setDistribution] = useState<PlatformDistributionStatus | null>(null);
   const [editionsError, setEditionsError] = useState<string | null>(null);
+  const [architectureError, setArchitectureError] = useState<string | null>(null);
+  const [licenseAttempt, setLicenseAttempt] = useState(0);
+  const [architectureAttempt, setArchitectureAttempt] = useState(0);
+  const [architectureOpen, setArchitectureOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [open, setOpen] = useState({ signature: false, features: false, entitlements: false });
+  const addLicenseRef = useRef<HTMLButtonElement>(null);
   const packaging = editions?.packaging ?? defaultPackaging;
+  const licensedFeatures = editions?.features.filter((feature) => feature.licensed && feature.mode !== "off").length ?? 0;
 
   useEffect(() => {
     let active = true;
-    Promise.all([api.editions(), api.activeActiveIssuance()])
-      .then(([editionInfo, haIssuanceStatus]) => {
+    setEditionsError(null);
+    api
+      .editions()
+      .then((editionInfo) => {
         if (!active) return;
         setEditions(editionInfo);
-        setActiveActiveIssuance(haIssuanceStatus);
       })
-      .catch((err) => {
-        if (active) setEditionsError(err instanceof Error ? err.message : String(err));
+      .catch(() => {
+        if (!active) return;
+        setEditions(null);
+        setEditionsError(translateNow("admin.editions.readFailed"));
       });
-    Promise.resolve()
-      .then(() => api.platformDistribution())
-      .then((status) => {
-        if (active) setDistribution(status);
-      })
-      .catch(() => null);
     return () => {
       active = false;
     };
-  }, []);
+  }, [licenseAttempt, locale]);
+
+  useEffect(() => {
+    if (!architectureOpen) return;
+    let active = true;
+    setArchitectureError(null);
+    Promise.allSettled([api.platformDistribution(), api.activeActiveIssuance()]).then(([distributionResult, issuanceResult]) => {
+      if (!active) return;
+      if (distributionResult.status === "fulfilled") setDistribution(distributionResult.value);
+      if (issuanceResult.status === "fulfilled") setActiveActiveIssuance(issuanceResult.value);
+      if (distributionResult.status === "rejected" || issuanceResult.status === "rejected") {
+        setArchitectureError(translateNow("admin.editions.architectureReadFailed"));
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [architectureAttempt, architectureOpen, locale]);
+
+  const retryLicense = () => {
+    setEditions(null);
+    setLicenseAttempt((attempt) => attempt + 1);
+  };
+
+  const planToken = humanizeToken(editions?.tier ?? "community");
+  const planName = `${planToken.charAt(0).toUpperCase()}${planToken.slice(1)}`;
+  const answer = editions ? licenseAnswer(editions, planName, t) : t("admin.editions.unavailableAnswer");
+  const signatureSummary = editions?.state === "community" ? t("admin.editions.noSignedLicense") : t("admin.editions.signatureVerified");
 
   return (
     <section aria-labelledby="admin-editions-heading" className="grid gap-6">
@@ -938,382 +973,414 @@ export function AdminEditions() {
         titleId="admin-editions-heading"
         title={t("platform.tabs.editions")}
         description={t("admin.editions.description")}
-        actions={<AdminHeaderActions />}
+        technicalDetails={t("admin.editions.technical")}
+        actions={
+          <>
+            <Button ref={addLicenseRef} type="button" onClick={() => setGuideOpen(true)}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              {t("admin.editions.addLicense")}
+            </Button>
+            <AdminHeaderActions />
+          </>
+        }
       />
-      {editionsError && (
-        <p role="alert" className="rounded-control border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {editionsError}
-        </p>
-      )}
-      <div className="grid gap-6">
-        <section className="ui-panel p-comfortable" aria-labelledby="editions-heading">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 id="editions-heading" className="text-title font-semibold">
-                {translateNow("source.editions.c6a48dcca4")}
-              </h2>
-              <p className="mt-1 text-sm text-muted-foreground">{translateNow("source.offline.license.state.feature.rows.and.the.ee22ad090c")}</p>
+      <section className="ui-panel p-comfortable" aria-labelledby="license-answer-heading" aria-busy={!editions && !editionsError}>
+        {!editions && !editionsError ? (
+          <>
+            <Eyebrow as="p">{t("admin.system.currentAnswer")}</Eyebrow>
+            <h2 id="license-answer-heading" className="mt-2 text-title font-semibold">
+              {t("admin.editions.loading")}
+            </h2>
+          </>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <Eyebrow as="p">{t("admin.system.currentAnswer")}</Eyebrow>
+                <h2 id="license-answer-heading" className="mt-2 text-title font-semibold">
+                  {answer}
+                </h2>
+                {editions ? <p className="mt-2 text-sm text-muted-foreground">{signatureSummary}</p> : null}
+              </div>
+              {editions ? <span className={editionStateClass(editions.state)}>{editionStateLabel(editions.state)}</span> : null}
             </div>
-            <span className={editionStateClass(editions?.state)}>{editionStateLabel(editions?.state)}</span>
-          </div>
-          <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.6fr)]">
+            {editionsError ? (
+              <div className="mt-4 grid justify-items-start gap-3">
+                <p role="alert" className="rounded-control border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  {editionsError}
+                </p>
+                <Button type="button" variant="outline" onClick={retryLicense}>
+                  {t("admin.system.tryAgain")}
+                </Button>
+              </div>
+            ) : null}
+            {editions ? (
+              <dl className="mt-5 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-control border border-border bg-background p-3">
+                  <dt className="text-sm text-muted-foreground">{t("source.plan.fa8ed0bdab")}</dt>
+                  <dd className="mt-1 font-semibold">{planName}</dd>
+                </div>
+                <div className="rounded-control border border-border bg-background p-3">
+                  <dt className="text-sm text-muted-foreground">{t("admin.editions.featuresEnabled")}</dt>
+                  <dd className="mt-1 font-semibold">{t("admin.editions.featureCount", { enabled: licensedFeatures, total: editions.features.length })}</dd>
+                </div>
+                <div className="rounded-control border border-border bg-background p-3">
+                  <dt className="text-sm text-muted-foreground">{t("admin.access.expires")}</dt>
+                  <dd className="mt-1 font-semibold">
+                    {editions.expires_at ? formatDateTime(editions.expires_at, formatPolicy) : t("admin.editions.noExpiry")}
+                  </dd>
+                </div>
+              </dl>
+            ) : null}
+          </>
+        )}
+      </section>
+
+      <div className="grid gap-3">
+        <SystemDisclosure
+          summaryId="license-signature-summary"
+          title={t("admin.editions.signature")}
+          description={t("admin.editions.signatureDescription")}
+          open={open.signature}
+          onToggle={(signature) => setOpen((current) => ({ ...current, signature }))}
+        >
+          {editions ? (
+            <dl className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
+              <LicenseFact label={t("source.verification.j2dr000006")} value={signatureSummary} />
+              <LicenseFact label={t("secrets.sessions.method")} value={t("admin.editions.methodValue")} />
+              <LicenseFact label={t("admin.editions.licenseId")} value={editions.license_id || t("protocols.ari.notApplicable")} mono />
+              <LicenseFact
+                label={t("admin.editions.readOnlyAfter")}
+                value={editions.read_only_at ? formatDateTime(editions.read_only_at, formatPolicy) : t("protocols.ari.notApplicable")}
+              />
+              <p className="sm:col-span-2 xl:col-span-4 text-muted-foreground">{t("admin.editions.failClosedBoundary")}</p>
+            </dl>
+          ) : (
+            <p className="text-sm text-muted-foreground">{t("admin.editions.evidenceUnavailable")}</p>
+          )}
+        </SystemDisclosure>
+
+        <SystemDisclosure
+          summaryId="license-feature-summary"
+          title={t("admin.editions.featureTable")}
+          description={t("admin.editions.featureDescription")}
+          open={open.features}
+          onToggle={(features) => setOpen((current) => ({ ...current, features }))}
+        >
+          {editions ? (
+            <SystemTableRegion label={t("admin.editions.featureTable")}>
+              <table className="ui-table min-w-[34rem]">
+                <caption className="sr-only">{t("admin.editions.featureTable")}</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">{t("source.license.feature.de93785a58")}</th>
+                    <th scope="col">{t("source.license.tier.0c9a751553")}</th>
+                    <th scope="col">{t("caHierarchy.externalIssue.stateLabel")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {editions.features.map((feature) => (
+                    <tr key={feature.name}>
+                      <td>
+                        <span className="font-medium">{humanizeToken(feature.name)}</span>
+                        <span className="mt-1 block font-mono text-xs text-muted-foreground">{feature.name}</span>
+                      </td>
+                      <td>{humanizeToken(feature.tier)}</td>
+                      <td>{featureStateLabel(feature.licensed, feature.mode)}</td>
+                    </tr>
+                  ))}
+                  {editions.features.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="text-muted-foreground">
+                        {t("source.no.commercial.feature.rows.825b068dda")}
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </SystemTableRegion>
+          ) : (
+            <p className="text-sm text-muted-foreground">{t("admin.editions.evidenceUnavailable")}</p>
+          )}
+        </SystemDisclosure>
+
+        <SystemDisclosure
+          summaryId="license-entitlement-summary"
+          title={t("admin.editions.entitlementEvidence")}
+          description={t("admin.editions.entitlementDescription")}
+          open={open.entitlements}
+          onToggle={(entitlements) => setOpen((current) => ({ ...current, entitlements }))}
+        >
+          {editions ? (
             <div className="grid gap-4">
-              <div className="overflow-x-auto rounded-panel border border-border">
-                <table className="ui-table min-w-[42rem]">
-                  <caption className="sr-only">{translateNow("source.packaging.edition.matrix.265d443ef4")}</caption>
-                  <thead>
-                    <tr>
-                      {packaging.editions.map((edition) => (
-                        <th scope="col" key={edition.id}>
-                          {edition.column}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      {packaging.editions.map((edition) => (
-                        <td key={edition.id}>{edition.name}</td>
-                      ))}
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div className="overflow-x-auto rounded-panel border border-border">
-                <table className="ui-table min-w-[36rem]">
-                  <caption>{t("platform.editions.referencePrices")}</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">{t("platform.editions.priceBand")}</th>
-                      <th scope="col">{t("platform.editions.annualPrice")}</th>
-                      <th scope="col">{t("platform.editions.unit")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {packaging.reference_price_bands.map((band) => {
-                      const labelKey = priceBandLabelKeys[band.id as keyof typeof priceBandLabelKeys];
-                      return (
-                        <tr key={band.id}>
-                          <td>{labelKey ? t(labelKey) : band.label}</td>
-                          <td>{formatCurrencyPolicy(band.annual_usd, formatPolicy, { maximumFractionDigits: 0 })}</td>
-                          <td>{band.unit}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-                <p className="px-3 pb-3 text-sm text-muted-foreground">{packaging.non_production_support_posture}</p>
-              </div>
-              <div className="overflow-x-auto rounded-panel border border-border">
-                <table className="ui-table min-w-[32rem]">
-                  <caption className="sr-only">{translateNow("source.edition.feature.table.9690596a9d")}</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">{translateNow("source.feature.3d377ae910")}</th>
-                      <th scope="col">{translateNow("source.tier.cb9e8664ed")}</th>
-                      <th scope="col">{translateNow("source.state.a3b50c4767")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(editions?.features ?? []).map((feature) => (
-                      <tr key={feature.name}>
-                        <td className="font-mono text-xs">{feature.name}</td>
-                        <td>{feature.tier}</td>
-                        <td>{featureStateLabel(feature.licensed, feature.mode)}</td>
-                      </tr>
-                    ))}
-                    {editions && editions.features.length === 0 ? (
-                      <tr>
-                        <td colSpan={3} className="text-muted-foreground">
-                          {translateNow("source.no.commercial.feature.rows.825b068dda")}
-                        </td>
-                      </tr>
-                    ) : null}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            <dl className="grid gap-2 text-sm">
-              <div>
-                <dt className="font-medium text-muted-foreground">{translateNow("source.tier.cb9e8664ed")}</dt>
-                <dd className="text-base font-semibold">{(editions?.tier ?? "community").toUpperCase()}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-muted-foreground">{translateNow("source.customer.bf3763383a")}</dt>
-                <dd>{editions?.customer ?? translateNow("source.community.core.9de2dc1902")}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-muted-foreground">{translateNow("source.expiry.6956d81401")}</dt>
-                <dd>{formatOptionalDate(editions?.expires_at, formatPolicy)}</dd>
-              </div>
-              {editions?.deployment_entitlement ? (
-                <>
-                  <div>
-                    <dt className="font-medium text-muted-foreground">{t("platform.editions.environment")}</dt>
-                    <dd>
-                      {editions.deployment_entitlement.environment === "non_production"
-                        ? t("platform.editions.nonProduction")
-                        : t("platform.editions.production")}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="font-medium text-muted-foreground">{t("platform.editions.deploymentId")}</dt>
-                    <dd className="font-mono text-xs">{editions.deployment_entitlement.deployment_id || "-"}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-medium text-muted-foreground">{t("platform.editions.billingUnit")}</dt>
-                    <dd>{t("platform.editions.productionUnits", { count: editions.deployment_entitlement.production_units_consumed })}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-medium text-muted-foreground">{t("platform.editions.nonProduction")}</dt>
-                    <dd>
-                      {t("platform.editions.nonProductionSlots", {
+              <dl className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
+                <LicenseFact
+                  label={t("source.provider.col.name.l3prov0013")}
+                  value={editions.customer || (editions.tier === "community" ? planName : t("protocols.ari.notApplicable"))}
+                />
+                <LicenseFact
+                  label={t("platform.editions.environment")}
+                  value={
+                    editions.deployment_entitlement?.environment === "non_production"
+                      ? t("platform.editions.nonProduction")
+                      : editions.deployment_entitlement?.environment === "production"
+                        ? t("platform.editions.production")
+                        : t("protocols.ari.notApplicable")
+                  }
+                />
+                <LicenseFact
+                  label={t("platform.editions.deploymentId")}
+                  value={editions.deployment_entitlement?.deployment_id || t("protocols.ari.notApplicable")}
+                  mono
+                />
+                <LicenseFact label={t("platform.editions.useRights")} value={(editions.rights ?? ["self_host"]).map(humanizeToken).join(", ")} />
+                {editions.deployment_entitlement ? (
+                  <>
+                    <LicenseFact
+                      label={t("platform.editions.billingUnit")}
+                      value={t("platform.editions.productionUnits", { count: editions.deployment_entitlement.production_units_consumed })}
+                    />
+                    <LicenseFact
+                      label={t("platform.editions.nonProduction")}
+                      value={t("platform.editions.nonProductionSlots", {
                         remaining: editions.deployment_entitlement.non_production_slots_remaining,
                         total: editions.deployment_entitlement.bundled_non_production_deployments,
                       })}
-                    </dd>
-                  </div>
-                </>
-              ) : null}
-              <div>
-                <dt className="font-medium text-muted-foreground">{t("platform.editions.useRights")}</dt>
-                <dd>{(editions?.rights ?? ["self_host"]).map((right) => right.replaceAll("_", " ")).join(", ")}</dd>
-              </div>
-              {editions?.tier === "provider" ? (
-                <div>
-                  <dt className="font-medium text-muted-foreground">{t("platform.editions.managedCustomerBand")}</dt>
-                  <dd>
-                    {editions.managed_customer_band
-                      ? formatNumberPolicy(editions.managed_customer_band, formatPolicy)
-                      : translateNow("source.negotiated.unlimited.9939fd4cf1")}
-                  </dd>
-                </div>
-              ) : null}
-              <div>
-                <dt className="font-medium text-muted-foreground">{translateNow("source.fips.posture.4051e94687")}</dt>
-                <dd className="grid gap-1">
-                  <span>
-                    {editions?.fips?.module_active
-                      ? translateNow("source.fips.module.active.76cb6077b6")
-                      : translateNow("source.fips.module.inactive.fac8ddb35b")}
-                    {editions?.fips?.required ? translateNow("source.required.cdc2689fe2") : ""}
-                    {editions?.fips?.self_test_passed
-                      ? translateNow("source.self.test.passed.c28b5c9b12")
-                      : translateNow("source.self.test.not.confirmed.03a528b202")}
-                  </span>
-                  {editions?.fips?.validated_module_path ? (
-                    <span>
-                      {editions.fips.standard ?? translateNow("source.fips.140.3.b95c3c39f5")} ·{" "}
-                      {editions.fips.module ?? translateNow("source.go.cryptographic.module.0acf566e1e")} ·{" "}
-                      {editions.fips.build_target ?? translateNow("source.make.fips.build.ce51354815")}
-                    </span>
-                  ) : null}
-                  {editions?.fips?.ci_gate ? <span>{editions.fips.ci_gate}</span> : null}
-                  {editions?.fips?.product_certification_residual ? (
-                    <span className="text-muted-foreground">{editions.fips.product_certification_residual}</span>
-                  ) : null}
-                </dd>
-              </div>
-            </dl>
-          </div>
-        </section>
-
-        <div className="grid gap-4 xl:grid-cols-2">
-          <section className="ui-panel grid content-start gap-3 p-comfortable" aria-labelledby="platform-region-heading">
-            <h2 id="platform-region-heading" className="text-title font-semibold">
-              {translateNow("source.multi.region.posture.e57c514674")}
-            </h2>
-            <p className="text-sm text-muted-foreground">{translateNow("source.passive.read.state.model.projections.can.b.9f2d6a2da6")}</p>
-            <p className="text-sm text-muted-foreground">{translateNow("source.background.jobs.perform.access.token.revoc.5f46484521")}</p>
-            {/* TRACE-014 source anchor: served worker */}
-          </section>
-          {distribution && (
-            <section className="ui-panel grid content-start gap-3 p-comfortable" aria-labelledby="distribution-posture-heading">
-              <h2 id="distribution-posture-heading" className="text-title font-semibold">
-                {t("parity.distributionPosture_10c8b4")}
-              </h2>
-              <dl className="grid gap-2 text-sm">
-                <div>
-                  <dt className="font-medium text-muted-foreground">{t("parity.productionMode_1737a4")}</dt>
-                  <dd>{humanizeToken(distribution.production_mode)}</dd>
-                </div>
-                <div>
-                  <dt className="font-medium text-muted-foreground">{t("parity.controlPlaneLineage_513399")}</dt>
-                  <dd>{humanizeToken(distribution.control_plane_lineage)}</dd>
-                </div>
-                <div>
-                  <dt className="font-medium text-muted-foreground">{t("parity.builtInGuarantees_21db16")}</dt>
-                  <dd className="flex flex-wrap gap-2">
-                    <StatusBadge
-                      value={distribution.offline_license_verifier ? "included" : "absent"}
-                      label={distribution.offline_license_verifier ? "Licenses verified offline" : "No offline license verifier"}
-                      tone={distribution.offline_license_verifier ? "success" : "neutral"}
                     />
-                    <StatusBadge
-                      value={distribution.core_audit_and_export ? "included" : "absent"}
-                      label={distribution.core_audit_and_export ? "Audit log and export in core" : "Audit and export not in core"}
-                      tone={distribution.core_audit_and_export ? "success" : "neutral"}
-                    />
-                  </dd>
-                </div>
-                <div>
-                  <dt className="font-medium text-muted-foreground">{t("parity.runModes_6fced8")}</dt>
-                  <dd className="grid gap-1">
-                    {(distribution.run_modes ?? []).map((mode) => (
-                      <span key={mode.id}>
-                        <span className="font-medium">{mode.label}</span>
-                        <span className="text-muted-foreground"> — {mode.intended_use}</span>
-                      </span>
-                    ))}
-                    {(distribution.run_modes ?? []).length === 0 && <span className="text-muted-foreground">-</span>}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="font-medium text-muted-foreground">{t("parity.supportedHostArchives_38c6c0")}</dt>
-                  <dd className="grid gap-1">
-                    {(distribution.supported_host_archives ?? []).map((archive) => (
-                      <span key={`${archive.os_arch}-${archive.postgres_version}`} className="font-mono text-xs">
-                        {archive.os_arch} {translateNow("source.postgresql.17197ea102")} {archive.postgres_version}
-                        {archive.evaluation_only ? translateNow("source.evaluation.only.7e42530821") : ""}
-                      </span>
-                    ))}
-                    {(distribution.supported_host_archives ?? []).length === 0 && <span className="text-muted-foreground">-</span>}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="font-medium text-muted-foreground">{t("parity.airGap_a0134a")}</dt>
-                  <dd>{airGapSummary(distribution.air_gap)}</dd>
-                </div>
+                  </>
+                ) : null}
+                {editions.tier === "provider" ? (
+                  <LicenseFact
+                    label={t("platform.editions.managedCustomerBand")}
+                    value={editions.managed_customer_band ? formatNumberPolicy(editions.managed_customer_band, formatPolicy) : t("admin.editions.negotiated")}
+                  />
+                ) : null}
+                <LicenseFact
+                  label={t("source.fips.posture.4051e94687")}
+                  value={`${t(editions.fips?.module_active ? "source.fips.module.active.76cb6077b6" : "source.fips.module.inactive.fac8ddb35b")} ${
+                    editions.fips?.module_active
+                      ? ""
+                      : t(editions.fips?.self_test_passed ? "source.self.test.passed.c28b5c9b12" : "source.self.test.not.confirmed.03a528b202")
+                  }`.trim()}
+                />
               </dl>
-            </section>
-          )}
-        </div>
 
-        <section className="ui-panel p-comfortable" aria-labelledby="regional-issuance-heading">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Network className="h-4 w-4 text-status-success" aria-hidden="true" />
-              <h2 id="regional-issuance-heading" className="text-title font-semibold">
-                {t("platform.ha.heading")}
-              </h2>
-            </div>
-            <span className={scaleServedClass(activeActiveIssuance?.served)}>
-              {activeActiveIssuance?.served ? t("platform.ha.active") : t("platform.ha.unavailable")}
-            </span>
-          </div>
-          <p className="mt-3 text-sm text-muted-foreground">{t("platform.ha.description")}</p>
-          <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(18rem,0.45fr)_minmax(0,1fr)]">
-            <dl className="grid content-start gap-2 text-sm">
-              <div>
-                <dt className="font-medium text-muted-foreground">{t("platform.ha.topology")}</dt>
-                <dd>{activeActiveIssuance?.topology ?? "-"}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-muted-foreground">{t("platform.ha.writeModel")}</dt>
-                <dd>{activeActiveIssuance?.write_model ?? "-"}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-muted-foreground">{t("platform.ha.rpoRto")}</dt>
-                <dd>
-                  {t("platform.ha.rpoRtoValue", {
-                    rpo: formatOptionalNumber(activeActiveIssuance?.rpo_seconds, formatPolicy),
-                    rto: formatOptionalNumber(activeActiveIssuance?.rto_seconds, formatPolicy),
-                  })}
-                </dd>
-              </div>
-              <div>
-                <dt className="font-medium text-muted-foreground">{t("platform.ha.invariants")}</dt>
-                <dd className="font-mono text-xs">{(activeActiveIssuance?.architecture_invariants ?? []).join(", ") || "-"}</dd>
-              </div>
-            </dl>
-            <div className="grid gap-4">
-              <div className="overflow-x-auto rounded-panel border border-border">
-                <table className="ui-table min-w-[44rem]">
-                  <caption className="sr-only">{t("platform.ha.regionCaption")}</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">{t("platform.ha.region")}</th>
-                      <th scope="col">{t("platform.ha.role")}</th>
-                      <th scope="col">{t("platform.ha.writeScope")}</th>
-                      <th scope="col">{t("platform.ha.health")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(activeActiveIssuance?.regions ?? []).slice(0, 3).map((region) => (
-                      <tr key={region.id} className="align-top">
-                        <td>
-                          <span className="font-medium">{region.region}</span>
-                          <span className="mt-1 block font-mono text-xs text-muted-foreground">{region.id}</span>
-                        </td>
-                        <td>{region.role}</td>
-                        <td>{region.writable_scope}</td>
-                        <td>{region.health_signal}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="grid gap-4 xl:grid-cols-2">
-                <div className="overflow-x-auto rounded-panel border border-border">
-                  <table className="ui-table min-w-[34rem]">
-                    <caption className="sr-only">{t("platform.ha.fenceCaption")}</caption>
-                    <thead>
-                      <tr>
-                        <th scope="col">{t("platform.ha.fence")}</th>
-                        <th scope="col">{t("platform.ha.scope")}</th>
-                        <th scope="col">{t("platform.ha.mechanism")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(activeActiveIssuance?.tenant_write_fences ?? []).map((fence) => (
-                        <tr key={fence.id} className="align-top">
-                          <td className="font-medium">{fence.id}</td>
-                          <td>{fence.scope}</td>
-                          <td>{fence.mechanism}</td>
+              <details className="rounded-panel border border-border bg-background p-3">
+                <summary className="cursor-pointer font-semibold">{t("source.packaging.edition.matrix.265d443ef4")}</summary>
+                <div className="mt-4 grid gap-4">
+                  <SystemTableRegion label={t("source.packaging.edition.matrix.265d443ef4")}>
+                    <table className="ui-table min-w-[36rem]">
+                      <caption className="sr-only">{t("source.packaging.edition.matrix.265d443ef4")}</caption>
+                      <thead>
+                        <tr>
+                          {packaging.editions.map((edition) => (
+                            <th scope="col" key={edition.id}>
+                              {edition.column}
+                            </th>
+                          ))}
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="overflow-x-auto rounded-panel border border-border">
-                  <table className="ui-table min-w-[28rem]">
-                    <caption className="sr-only">{t("platform.ha.failoverCaption")}</caption>
-                    <thead>
-                      <tr>
-                        <th scope="col">{t("platform.ha.step")}</th>
-                        <th scope="col">{t("platform.ha.action")}</th>
-                        <th scope="col">{t("platform.ha.gate")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(activeActiveIssuance?.failover_runbook ?? []).map((step) => (
-                        <tr key={step.id} className="align-top">
-                          <td className="font-medium">{step.id}</td>
-                          <td>{step.action}</td>
-                          <td>{step.gate}</td>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          {packaging.editions.map((edition) => (
+                            <td key={edition.id}>{edition.name}</td>
+                          ))}
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </tbody>
+                    </table>
+                  </SystemTableRegion>
+                  <SystemTableRegion label={t("platform.editions.referencePrices")}>
+                    <table className="ui-table min-w-[36rem]">
+                      <caption>{t("platform.editions.referencePrices")}</caption>
+                      <thead>
+                        <tr>
+                          <th scope="col">{t("platform.editions.priceBand")}</th>
+                          <th scope="col">{t("platform.editions.annualPrice")}</th>
+                          <th scope="col">{t("platform.editions.unit")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {packaging.reference_price_bands.map((band) => {
+                          const labelKey = priceBandLabelKeys[band.id as keyof typeof priceBandLabelKeys];
+                          return (
+                            <tr key={band.id}>
+                              <td>{labelKey ? t(labelKey) : band.label}</td>
+                              <td>{formatCurrencyPolicy(band.annual_usd, formatPolicy, { maximumFractionDigits: 0 })}</td>
+                              <td>{band.unit}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </SystemTableRegion>
+                  <p className="text-sm text-muted-foreground">{packaging.non_production_support_posture}</p>
                 </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {(activeActiveIssuance?.release_gates ?? []).map((gate) => (
-                  <span key={gate.id} className="rounded-control border border-border bg-muted px-2 py-1 font-mono text-xs">
-                    {gate.id}
-                  </span>
-                ))}
-              </div>
-              <div className="grid gap-2 text-sm md:grid-cols-2">
-                {(activeActiveIssuance?.residuals ?? []).slice(0, 2).map((residual) => (
-                  <p key={residual} className="rounded-panel border border-border bg-muted/40 p-3 text-muted-foreground">
-                    {residual}
-                  </p>
-                ))}
-              </div>
+              </details>
+
+              <details
+                className="rounded-panel border border-border bg-background p-3"
+                open={architectureOpen}
+                onToggle={(event) => setArchitectureOpen(event.currentTarget.open)}
+              >
+                <summary className="cursor-pointer font-semibold">{t("admin.editions.architectureEvidence")}</summary>
+                <div className="mt-4 grid gap-4">
+                  {!distribution && !activeActiveIssuance && !architectureError ? <p>{t("app.loading")}</p> : null}
+                  {architectureError ? (
+                    <div className="grid justify-items-start gap-3">
+                      <p role="alert" className="text-sm text-destructive">
+                        {architectureError}
+                      </p>
+                      <Button type="button" variant="outline" onClick={() => setArchitectureAttempt((attempt) => attempt + 1)}>
+                        {t("admin.system.tryAgain")}
+                      </Button>
+                    </div>
+                  ) : null}
+                  {distribution ? <DistributionEvidence status={distribution} /> : null}
+                  {activeActiveIssuance ? <RegionalIssuanceEvidence plan={activeActiveIssuance} formatPolicy={formatPolicy} /> : null}
+                </div>
+              </details>
             </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">{t("admin.editions.evidenceUnavailable")}</p>
+          )}
+        </SystemDisclosure>
+      </div>
+
+      <DetailDrawer
+        open={guideOpen}
+        onClose={() => setGuideOpen(false)}
+        returnFocusRef={addLicenseRef}
+        title={t("admin.editions.addLicense")}
+        description={t("admin.editions.guideVerify")}
+      >
+        <div className="grid gap-5 text-sm">
+          <ol className="grid list-decimal gap-3 ps-5">
+            <li>{t("admin.editions.guideStepFile")}</li>
+            <li>{t("admin.editions.guideStepIdentity")}</li>
+            <li>{t("admin.editions.guideStepRestart")}</li>
+          </ol>
+          <div className="grid gap-2 rounded-panel border border-border bg-muted/40 p-3">
+            {licenseRuntimeBindings.map((binding) => (
+              <code key={binding}>{binding}</code>
+            ))}
           </div>
-        </section>
+          <p className="rounded-control border border-status-info/30 bg-status-info/10 p-3 text-muted-foreground">{t("admin.editions.guideBrowserBoundary")}</p>
+          <p className="text-muted-foreground">{t("admin.editions.guideRecovery")}</p>
+        </div>
+      </DetailDrawer>
+    </section>
+  );
+}
+
+const licenseRuntimeBindings = ["TRSTCTL_LICENSE_FILE", "TRSTCTL_LICENSE_DEPLOYMENT_ID", "TRSTCTL_LICENSE_ENVIRONMENT"] as const;
+
+function LicenseFact({ label, value, mono = false }: { label: string; value: ReactNode; mono?: boolean }) {
+  return (
+    <div className="rounded-control border border-border bg-background p-3">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className={mono ? "mt-1 break-all font-mono text-xs" : "mt-1 font-medium"}>{value}</dd>
+    </div>
+  );
+}
+
+function licenseAnswer(editions: EditionsInfo, planName: string, t: ReturnType<typeof useTranslation>["t"]): string {
+  if (editions.state === "active") return t("admin.editions.activeAnswer", { plan: planName });
+  if (editions.state === "grace") return t("admin.editions.graceAnswer", { plan: planName });
+  if (editions.state === "read_only") return t("admin.editions.readOnlyAnswer", { plan: planName });
+  return t("admin.editions.communityAnswer");
+}
+
+function DistributionEvidence({ status }: { status: PlatformDistributionStatus }) {
+  const { t } = useTranslation();
+  return (
+    <section className="rounded-panel border border-border p-3" aria-labelledby="distribution-posture-heading">
+      <h3 id="distribution-posture-heading" className="text-body font-semibold">
+        {t("parity.distributionPosture_10c8b4")}
+      </h3>
+      <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+        <LicenseFact label={t("parity.productionMode_1737a4")} value={humanizeToken(status.production_mode)} />
+        <LicenseFact label={t("parity.controlPlaneLineage_513399")} value={humanizeToken(status.control_plane_lineage)} />
+        <LicenseFact
+          label={t("parity.builtInGuarantees_21db16")}
+          value={
+            status.offline_license_verifier && status.core_audit_and_export
+              ? t("admin.editions.coreGuaranteesPresent")
+              : t("admin.editions.coreGuaranteesIncomplete")
+          }
+        />
+        <LicenseFact label={t("parity.airGap_a0134a")} value={airGapSummary(status.air_gap)} />
+      </dl>
+    </section>
+  );
+}
+
+function RegionalIssuanceEvidence({ plan, formatPolicy }: { plan: ActiveActiveIssuancePlan; formatPolicy: FormatPolicy }) {
+  const { t } = useTranslation();
+  return (
+    <section className="rounded-panel border border-border p-3" aria-labelledby="regional-issuance-heading">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Network className="h-4 w-4 text-status-success" aria-hidden="true" />
+          <h3 id="regional-issuance-heading" className="text-body font-semibold">
+            {t("platform.ha.heading")}
+          </h3>
+        </div>
+        <span className={scaleServedClass(plan.served)}>{plan.served ? t("platform.ha.active") : t("platform.ha.unavailable")}</span>
+      </div>
+      <p className="mt-2 text-sm text-muted-foreground">{t("platform.ha.description")}</p>
+      <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+        <LicenseFact label={t("platform.ha.topology")} value={plan.topology ?? "-"} />
+        <LicenseFact label={t("platform.ha.writeModel")} value={plan.write_model ?? "-"} />
+        <LicenseFact
+          label={t("platform.ha.rpoRto")}
+          value={t("platform.ha.rpoRtoValue", {
+            rpo: formatOptionalNumber(plan.rpo_seconds, formatPolicy),
+            rto: formatOptionalNumber(plan.rto_seconds, formatPolicy),
+          })}
+        />
+        <LicenseFact label={t("platform.ha.invariants")} value={(plan.architecture_invariants ?? []).join(", ") || "-"} mono />
+      </dl>
+      {(plan.regions ?? []).length > 0 ? (
+        <div className="mt-4">
+          <SystemTableRegion label={t("platform.ha.regionCaption")}>
+            <table className="ui-table min-w-[44rem]">
+              <caption className="sr-only">{t("platform.ha.regionCaption")}</caption>
+              <thead>
+                <tr>
+                  <th scope="col">{t("platform.ha.region")}</th>
+                  <th scope="col">{t("platform.ha.role")}</th>
+                  <th scope="col">{t("platform.ha.writeScope")}</th>
+                  <th scope="col">{t("platform.ha.health")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {plan.regions.slice(0, 3).map((region) => (
+                  <tr key={region.id}>
+                    <td>
+                      {region.region}
+                      <span className="block font-mono text-xs text-muted-foreground">{region.id}</span>
+                    </td>
+                    <td>{region.role}</td>
+                    <td>{region.writable_scope}</td>
+                    <td>{region.health_signal}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </SystemTableRegion>
+        </div>
+      ) : null}
+      <div className="mt-4 flex flex-wrap gap-2">
+        {(plan.tenant_write_fences ?? []).map((fence) => (
+          <span key={fence.id} className="rounded-control border border-border bg-muted px-2 py-1 font-mono text-xs">
+            {fence.id}
+          </span>
+        ))}
+        {(plan.release_gates ?? []).map((gate) => (
+          <span key={gate.id} className="rounded-control border border-border bg-muted px-2 py-1 font-mono text-xs">
+            {gate.id}
+          </span>
+        ))}
       </div>
     </section>
   );
@@ -1322,11 +1389,6 @@ export function AdminEditions() {
 function formatOptionalNumber(value: number | undefined, policy: FormatPolicy): string {
   if (value == null || Number.isNaN(value)) return "-";
   return formatNumberPolicy(value, policy);
-}
-
-function formatOptionalDate(value: string | undefined, policy: FormatPolicy): string {
-  if (!value) return "-";
-  return formatDateTime(value, policy);
 }
 
 function formatOptionalCurrency(value: number | undefined, policy: FormatPolicy): string {

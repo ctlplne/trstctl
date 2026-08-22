@@ -932,8 +932,18 @@ describe("i18n boundary", () => {
       // backend paths, traces, credentials, or connection strings. Genuine
       // served lifecycle evidence remains exact. Machine-authored translations
       // remain flagged for human language review.
-      "es-ES": "0902c486b372f3bc5a550ddd28171d176727a9a251c228b36e15cc281bd315a6",
-      "de-DE": "2e7c2f614a43512ebabfda5bb5af03115cdcb232ecbd4824d1b528114d26c6df",
+      // QA design g42 re-pin: Plan and license now gives the current plan,
+      // enabled-feature count, signature state, and expiry before exact
+      // feature and entitlement evidence; safe installation, fail-closed
+      // recovery, and lazy architecture proof keep their security qualifiers.
+      // Machine-authored translations remain flagged for human language review.
+      // QA design g42 size re-pin: repeated labels reuse the existing reviewed
+      // vocabulary, while concise install and evidence copy keeps every
+      // signature, custody, binding, process-agreement, and recovery boundary.
+      // The same repair removes 111 source-unreferenced historical messages;
+      // the permanent source-reference gate proves no reachable value dropped.
+      "es-ES": "28dfd6c2cc595391ba1969aaa5a3833eaf5a6120d1476b1859d9a2aaf75ad51f",
+      "de-DE": "9a6ce341af133170c773482bbb8977e824bd7af69c7972e6c315d79acdc850a0",
     });
   });
 

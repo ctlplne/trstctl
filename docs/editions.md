@@ -1,4 +1,4 @@
-# Editions
+# Plan and license
 
 trstctl is an MPL-2.0 open-core Machine Identity Security Control Plane. The
 product line keeps core credential issuance, enrollment,
@@ -17,6 +17,33 @@ for 1–10 managed customers, $30,000 for 11–50, and $72,000 for 51–250; 250
 is negotiated. The MSP controls its downstream hosting and support prices.
 Certificates, SVIDs, secrets, API keys, tokens, rotations, and nodes are never
 automatic billing units. See [Pricing](pricing.md) for support and renewal terms.
+
+## Console journey
+
+Open **Plan and license** at `/admin/editions` to answer two questions first:
+which signed features this deployment may use, and when that permission ends.
+The opening card shows the current plan, enabled-feature count, expiry, and a
+plain-language state such as Community, Active, Grace, or Read-only. The page
+makes only the Editions API read needed for that answer.
+
+The deeper proof remains available without putting it in the operator's way:
+
+1. **Signature verification** explains whether the offline Ed25519 signature
+   verified and when the deployment becomes read-only.
+2. **Feature table** maps each exact feature ID to its required plan and current
+   mode.
+3. **Entitlement evidence** shows the customer, deployment binding, environment,
+   use rights, FIPS posture, and optional packaging evidence. Deployment
+   distribution and active-active issuance evidence are fetched only after the
+   nested architecture disclosure is opened.
+
+**Add license** is an operator guide, not a browser upload. A private license is
+installed as an operator-controlled `0600` file, bound to the signed deployment
+ID and environment, then supplied to both the control plane and isolated signer
+at startup. Restart those two processes together. This avoids browser custody of
+the license and prevents the control plane and signer from temporarily applying
+different rights. Read or verification failures are shown with sanitized,
+fail-closed language and a safe retry; raw server errors are not displayed.
 
 ## Buyer Matrix
 

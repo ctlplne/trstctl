@@ -32,6 +32,7 @@ const { apiMock } = vi.hoisted(() => ({
     sealTenantKeyDomain: vi.fn(),
     unsealTenantKeyDomain: vi.fn(),
     activeActiveIssuance: vi.fn(),
+    platformDistribution: vi.fn(),
   },
 }));
 
@@ -118,6 +119,15 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
       release_gates: [],
       residuals: [],
     });
+    apiMock.platformDistribution.mockResolvedValue({
+      production_mode: "self_hosted",
+      control_plane_lineage: "one binary lineage",
+      offline_license_verifier: true,
+      core_audit_and_export: true,
+      run_modes: [],
+      supported_host_archives: [],
+      air_gap: {},
+    });
   });
 
   it("serves each /admin route under its own H1", async () => {
@@ -130,7 +140,7 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
     system.unmount();
 
     renderAt("/admin/editions");
-    expect(await screen.findByRole("heading", { level: 1, name: "Editions & license" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Plan and license" })).toBeInTheDocument();
   });
 
   it("redirects bare /platform to /admin/access", async () => {
@@ -145,7 +155,143 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
 
   it("redirects /platform?tab=editions to /admin/editions", async () => {
     renderAt("/platform?tab=editions");
-    expect(await screen.findByRole("heading", { level: 1, name: "Editions & license" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Plan and license" })).toBeInTheDocument();
+  });
+
+  it("answers plan and license first, guides safe installation, and defers expert evidence", async () => {
+    apiMock.editions.mockResolvedValue({
+      tier: "enterprise",
+      state: "active",
+      customer: "Acme Robotics",
+      license_id: "lic_acme_01",
+      expires_at: "2035-12-31T23:59:59Z",
+      read_only_at: "2036-01-31T23:59:59Z",
+      rights: ["self_host"],
+      features: [
+        { name: "governance", tier: "enterprise", licensed: true, mode: "enabled" },
+        { name: "provider_plane", tier: "provider", licensed: false, mode: "off" },
+      ],
+      deployment_entitlement: {
+        deployment_id: "acme-prod",
+        environment: "production",
+        production_units_consumed: 1,
+        bundled_non_production_deployments: 3,
+        registered_non_production_deployments: 1,
+        non_production_slots_remaining: 2,
+        legacy_unbound: false,
+      },
+      fips: { module_active: false, required: false, self_test_passed: true },
+    });
+    const user = userEvent.setup();
+    const view = renderAt("/admin/editions");
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Plan and license" })).toBeInTheDocument();
+    expect(screen.getByText("Which features are enabled and when the signed license expires.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add license" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Enterprise plan is active" })).toBeInTheDocument();
+    expect(screen.getByText("Signed license verified at startup")).toBeInTheDocument();
+    expect(screen.getByText("Signature verification", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText("Feature table", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText("Entitlement evidence", { exact: true })).toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    await waitFor(() => expect(apiMock.editions).toHaveBeenCalledTimes(1));
+    expect(apiMock.activeActiveIssuance).not.toHaveBeenCalled();
+    expect(apiMock.platformDistribution).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Add license" }));
+    const guide = await screen.findByRole("dialog", { name: "Add license" });
+    expect(within(guide).getByText(/trstctl verifies the Ed25519 signature before startup completes/i)).toBeInTheDocument();
+    expect(within(guide).getByText(/The browser never uploads or stores the license file/i)).toBeInTheDocument();
+    expect(within(guide).getByText("TRSTCTL_LICENSE_FILE", { exact: true })).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Add license" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add license" })).toHaveFocus();
+
+    await user.click(screen.getByText("Feature table", { exact: true }));
+    expect(await screen.findByRole("table", { name: "Feature table" })).toBeInTheDocument();
+    expect(screen.getByRole("row", { name: /Governance.*Enabled/i })).toBeInTheDocument();
+    expect(apiMock.activeActiveIssuance).not.toHaveBeenCalled();
+    expect(apiMock.platformDistribution).not.toHaveBeenCalled();
+
+    await user.click(screen.getByText("Entitlement evidence", { exact: true }));
+    expect(await screen.findByText("acme-prod")).toBeInTheDocument();
+    expect(apiMock.activeActiveIssuance).not.toHaveBeenCalled();
+    expect(apiMock.platformDistribution).not.toHaveBeenCalled();
+
+    await user.click(screen.getByText("Deployment architecture evidence", { exact: true }));
+    await waitFor(() => expect(apiMock.activeActiveIssuance).toHaveBeenCalledTimes(1));
+    expect(apiMock.platformDistribution).toHaveBeenCalledTimes(1);
+    expect(await axe(view.container)).toHaveNoViolations();
+  });
+
+  it("fails closed with sanitized recovery when license truth cannot be read", async () => {
+    apiMock.editions.mockRejectedValue(new Error("/etc/trstctl/license.json signature bytes=secret"));
+    renderAt("/admin/editions");
+
+    expect(await screen.findByRole("heading", { name: "License status unavailable" })).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("Plan and license could not be read. No license state was assumed.");
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/\/etc\/trstctl|signature bytes|secret/i);
+    expect(screen.queryByText(/Community plan is active/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps backend details out of lazy deployment-architecture failures", async () => {
+    const user = userEvent.setup();
+    apiMock.platformDistribution.mockRejectedValue(new Error("postgresql://operator:password@db/internal trace=secret"));
+    renderAt("/admin/editions");
+
+    await user.click(await screen.findByText("Entitlement evidence", { exact: true }));
+    await user.click(screen.getByText("Deployment architecture evidence", { exact: true }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Some deployment architecture evidence could not be read. The license answer above is unchanged.",
+    );
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/postgresql|operator:password|trace=secret|\/internal/i);
+    expect(apiMock.activeActiveIssuance).toHaveBeenCalledTimes(1);
+    expect(apiMock.platformDistribution).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    {
+      state: "community" as const,
+      tier: "community" as const,
+      answer: "Community plan is active",
+      signature: "No signed license installed",
+      expiry: "No expiry — Community",
+    },
+    {
+      state: "grace" as const,
+      tier: "enterprise" as const,
+      answer: "Enterprise plan has expired and is in grace",
+      signature: "Signed license verified at startup",
+      expiry: "Dec 31, 2035, 11:59 PM",
+    },
+    {
+      state: "read_only" as const,
+      tier: "provider" as const,
+      answer: "Provider plan is read-only",
+      signature: "Signed license verified at startup",
+      expiry: "Dec 31, 2035, 11:59 PM",
+    },
+  ])("states license truth plainly for $state", async ({ state, tier, answer, signature, expiry }) => {
+    apiMock.editions.mockResolvedValue({
+      tier,
+      state,
+      customer: state === "community" ? undefined : "State fixture",
+      license_id: state === "community" ? undefined : `lic_${state}`,
+      expires_at: state === "community" ? undefined : "2035-12-31T23:59:59Z",
+      rights: ["self_host"],
+      features: [],
+      fips: { module_active: false, required: false, self_test_passed: true },
+    });
+
+    renderAt("/admin/editions");
+    expect(await screen.findByRole("heading", { name: answer })).toBeInTheDocument();
+    expect(screen.getByText(signature)).toBeInTheDocument();
+    expect(screen.getByText(expiry)).toBeInTheDocument();
+    expect(apiMock.activeActiveIssuance).not.toHaveBeenCalled();
+    expect(apiMock.platformDistribution).not.toHaveBeenCalled();
   });
 
   it("redirects an unknown /platform tab to /admin/access", async () => {

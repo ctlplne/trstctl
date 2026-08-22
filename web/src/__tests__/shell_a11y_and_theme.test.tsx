@@ -560,10 +560,10 @@ describe("app shell accessibility and theme", () => {
     await user.click(opener);
     palette = await screen.findByRole("dialog", { name: "Command palette" });
     search = within(palette).getByRole("searchbox", { name: "Search routes and inventory" });
-    await user.type(search, "editions");
+    await user.type(search, "license");
     await user.keyboard("{Enter}");
 
-    expect(await screen.findByRole("heading", { name: "Editions & license" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Plan and license" })).toBeInTheDocument();
   });
 
   it("opens the keyboard shortcuts overlay from ? and the help button", async () => {

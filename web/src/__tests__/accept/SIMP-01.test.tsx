@@ -20,6 +20,7 @@ const { apiMock } = vi.hoisted(() => ({
     scaleOrchestration: vi.fn(),
     platformSystem: vi.fn(),
     activeActiveIssuance: vi.fn(),
+    platformDistribution: vi.fn(),
     provisionManagedTenant: vi.fn(),
     upsertMember: vi.fn(),
     offboardMember: vi.fn(),
@@ -276,6 +277,15 @@ describe("SIMP-01 Platform served-data reduction", () => {
       evidence_refs: ["internal/perf/contract.go"],
       architecture_invariants: ["AN-1", "AN-2", "AN-4", "AN-5", "AN-6", "AN-7", "AN-8"],
     });
+    apiMock.platformDistribution.mockResolvedValue({
+      production_mode: "self_hosted",
+      control_plane_lineage: "one binary lineage",
+      offline_license_verifier: true,
+      core_audit_and_export: true,
+      run_modes: [],
+      supported_host_archives: [],
+      air_gap: {},
+    });
     apiMock.logout.mockResolvedValue(undefined);
   });
 
@@ -294,9 +304,10 @@ describe("SIMP-01 Platform served-data reduction", () => {
     expect(screen.queryByRole("heading", { name: "Editions" })).not.toBeInTheDocument();
     system.unmount();
 
-    // /admin/editions is where license state and the edition matrix live.
+    // /admin/editions is where the answer-first plan and license journey lives.
     renderAdminPage("editions");
-    expect(await screen.findByRole("heading", { name: "Editions" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Plan and license" })).toBeInTheDocument();
+    expect(screen.getByText("Feature table", { exact: true })).toBeInTheDocument();
   });
 
   it("keeps each admin route fetch-scoped to what it renders (C-A1)", async () => {
@@ -358,15 +369,24 @@ describe("SIMP-01 Platform served-data reduction", () => {
     expect(apiMock.activeActiveIssuance).not.toHaveBeenCalled();
     system.unmount();
 
-    // /admin/editions carries the HA/regional disclosure with the license rows.
+    // /admin/editions answers from the license read alone. Deployment proof is
+    // nested and does not load until the operator asks for it.
     for (const mock of Object.values(apiMock)) mock.mockClear();
     renderAdminPage("editions");
+    expect(await screen.findByRole("heading", { name: "Plan and license" })).toBeInTheDocument();
+    await waitFor(() => expect(apiMock.editions).toHaveBeenCalledTimes(1));
+    expect(apiMock.activeActiveIssuance).not.toHaveBeenCalled();
+    expect(apiMock.platformDistribution).not.toHaveBeenCalled();
+    await user.click(screen.getByText("Entitlement evidence", { exact: true }));
+    await user.click(screen.getByText("Deployment architecture evidence", { exact: true }));
     expect(await screen.findByRole("heading", { name: "Regional issuance HA" })).toBeInTheDocument();
     expect(screen.getByText("CAP-SCALE-02 active")).toBeInTheDocument();
     expect(screen.getByText("idempotency")).toBeInTheDocument();
     expect(apiMock.members).not.toHaveBeenCalled();
     expect(apiMock.scaleOrchestration).not.toHaveBeenCalled();
     expect(apiMock.platformSystem).not.toHaveBeenCalled();
+    expect(apiMock.activeActiveIssuance).toHaveBeenCalledTimes(1);
+    expect(apiMock.platformDistribution).toHaveBeenCalledTimes(1);
   });
 
   it("renders loading, request failure, partial migration, and empty protection states", async () => {

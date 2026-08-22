@@ -21,6 +21,7 @@ const { apiMock } = vi.hoisted(() => ({
     scaleOrchestration: vi.fn(),
     platformSystem: vi.fn(),
     activeActiveIssuance: vi.fn(),
+    platformDistribution: vi.fn(),
     provisionManagedTenant: vi.fn(),
     upsertMember: vi.fn(),
     offboardMember: vi.fn(),
@@ -323,6 +324,15 @@ describe("WIRE-12 Platform served admin surface", () => {
       evidence_refs: ["internal/perf/contract.go"],
       architecture_invariants: ["AN-1", "AN-2", "AN-4", "AN-5", "AN-6", "AN-7", "AN-8"],
     });
+    apiMock.platformDistribution.mockResolvedValue({
+      production_mode: "self_hosted",
+      control_plane_lineage: "one binary lineage",
+      offline_license_verifier: true,
+      core_audit_and_export: true,
+      run_modes: [],
+      supported_host_archives: [],
+      air_gap: {},
+    });
     apiMock.logout.mockResolvedValue(undefined);
   });
 
@@ -330,24 +340,31 @@ describe("WIRE-12 Platform served admin surface", () => {
     const user = userEvent.setup();
     // Editions/licensing/commercial rows are quarantined to their own route (S-A3/DA-26, C-A1).
     const editionsPage = renderAdminPage("editions");
-    expect(await screen.findByRole("heading", { name: "Editions" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Plan and license" })).toBeInTheDocument();
     await waitFor(() => expect(apiMock.editions).toHaveBeenCalledTimes(1));
-    expect(apiMock.activeActiveIssuance).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("ENTERPRISE")).toBeInTheDocument();
+    expect(apiMock.activeActiveIssuance).not.toHaveBeenCalled();
+    expect(apiMock.platformDistribution).not.toHaveBeenCalled();
+    expect(screen.getByRole("heading", { name: "Enterprise plan is active" })).toBeInTheDocument();
+    await user.click(screen.getByText("Entitlement evidence", { exact: true }));
     expect(screen.getByText("Acme Robotics")).toBeInTheDocument();
     expect(screen.getByText("self host")).toBeInTheDocument();
     expect(screen.getAllByText("Non-production").length).toBeGreaterThan(0);
     expect(screen.getByText("acme-stage")).toBeInTheDocument();
     expect(screen.getByText("0 production units")).toBeInTheDocument();
     expect(screen.getByText("2 of 3 non-production slots remaining")).toBeInTheDocument();
+    await user.click(screen.getByText("Packaging edition matrix", { exact: true, selector: "summary" }));
     expect(screen.getByRole("row", { name: /Enterprise Standard.*\$15,000/i })).toBeInTheDocument();
     expect(screen.getByRole("row", { name: /Provider 51–250.*\$72,000/i })).toBeInTheDocument();
     expect(screen.getByRole("row", { name: /Free Enterprise self-host Provider \/ MSP/i })).toBeInTheDocument();
+    await user.click(screen.getByText("Feature table", { exact: true }));
     expect(screen.getByRole("row", { name: /fips enterprise Enabled/i })).toBeInTheDocument();
     expect(screen.getByText(/FIPS module inactive/i)).toBeInTheDocument();
     expect(screen.getByText(/self-test passed/i)).toBeInTheDocument();
     // Regional issuance HA is an edition-gated capability disclosed with the license matrix.
-    expect(screen.getByRole("heading", { name: "Regional issuance HA" })).toBeInTheDocument();
+    await user.click(screen.getByText("Deployment architecture evidence", { exact: true }));
+    expect(await screen.findByRole("heading", { name: "Regional issuance HA" })).toBeInTheDocument();
+    expect(apiMock.activeActiveIssuance).toHaveBeenCalledTimes(1);
+    expect(apiMock.platformDistribution).toHaveBeenCalledTimes(1);
     expect(screen.getByText("CAP-SCALE-02 active")).toBeInTheDocument();
     expect(screen.getByText("regional-smoke")).toBeInTheDocument();
     editionsPage.unmount();

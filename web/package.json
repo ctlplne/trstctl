@@ -12,7 +12,7 @@
     "dev": "vite",
     "gen:api": "node scripts/gen-api-types.mjs",
     "gen:i18n-runtime": "node scripts/gen-i18n-runtime-catalogs.mjs",
-    "i18n:check": "node --test scripts/extract-i18n-messages.test.mjs && node scripts/extract-i18n-messages.mjs --check && npm run gen:i18n-runtime -- --check",
+    "i18n:check": "node --test scripts/extract-i18n-messages.test.mjs && node scripts/extract-i18n-messages.mjs --check && node scripts/check-unused-source-messages.mjs && npm run gen:i18n-runtime -- --check",
     "i18n:extract": "node scripts/extract-i18n-messages.mjs",
     "build": "npm run gen:api -- --check && npm run gen:i18n-runtime -- --check && tsc -p tsconfig.build.json && vite build",
     "preview": "vite preview",

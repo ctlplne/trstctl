@@ -1535,9 +1535,8 @@ export const messages = {
     description: "Calm nav label + H1 for /admin/system: whether this control plane is securely configured (DESIGN-ROUTE-041).",
   },
   "platform.tabs.editions": {
-    defaultMessage: "Editions & license",
-    description:
-      "Nav label + H1 for /admin/editions: offline license state, edition/feature rows, and commercial packaging — the one commercial surface (S-A3/DA-26, C-A1).",
+    defaultMessage: "Plan and license",
+    description: "Calm nav label + H1 for /admin/editions: enabled features, signed-license validity, and entitlement evidence (DESIGN-ROUTE-042).",
   },
   "admin.access.description": {
     defaultMessage: "Who can use the control plane and what each role permits.",
@@ -1917,8 +1916,102 @@ export const messages = {
   "platform.tenantSeal.cancel": { defaultMessage: "Cancel", description: "Cancel tenant seal confirmation." },
   "platform.tenantSeal.confirm": { defaultMessage: "Confirm seal", description: "Confirm tenant seal action." },
   "admin.editions.description": {
-    defaultMessage: "Offline license state, edition and feature rows, FIPS posture, and distribution.",
-    description: "Page description for /admin/editions.",
+    defaultMessage: "Which features are enabled and when the signed license expires.",
+    description: "Answer-first page description for /admin/editions.",
+  },
+  "admin.editions.technical": {
+    defaultMessage: "Signature, feature, and entitlement proof stays below. Deployment architecture loads on request.",
+    description: "Progressive-disclosure boundary for Plan and license.",
+  },
+  "admin.editions.addLicense": { defaultMessage: "Add license", description: "Open the safe offline-license installation guide." },
+  "admin.editions.loading": { defaultMessage: "Reading the signed license…", description: "Loading state for the default license read." },
+  "admin.editions.readFailed": {
+    defaultMessage: "Plan and license could not be read. No license state was assumed.",
+    description: "Sanitized, fail-closed license read error.",
+  },
+  "admin.editions.featuresEnabled": { defaultMessage: "Features enabled", description: "Enabled-feature answer metric." },
+  "admin.editions.featureCount": { defaultMessage: "{enabled} of {total} enabled", description: "Enabled license feature count." },
+  "admin.editions.noExpiry": { defaultMessage: "No expiry — Community", description: "Community has no signed commercial license expiry." },
+  "admin.editions.activeAnswer": { defaultMessage: "{plan} plan is active", description: "Answer for an active signed plan." },
+  "admin.editions.graceAnswer": {
+    defaultMessage: "{plan} plan has expired and is in grace",
+    description: "Answer during the bounded post-expiry grace period.",
+  },
+  "admin.editions.readOnlyAnswer": { defaultMessage: "{plan} plan is read-only", description: "Answer after the signed license grace period." },
+  "admin.editions.communityAnswer": { defaultMessage: "Community plan is active", description: "Answer when no signed license is installed." },
+  "admin.editions.unavailableAnswer": { defaultMessage: "License status unavailable", description: "Fail-closed answer when license truth cannot be read." },
+  "admin.editions.signatureVerified": {
+    defaultMessage: "Signed license verified at startup",
+    description: "Truth derived from successful startup verification of a non-Community license.",
+  },
+  "admin.editions.noSignedLicense": { defaultMessage: "No signed license installed", description: "Community signature posture." },
+  "admin.editions.signature": { defaultMessage: "Signature verification", description: "First Plan and license disclosure label." },
+  "admin.editions.signatureDescription": {
+    defaultMessage: "How startup checked the signature and when access becomes read-only.",
+    description: "Signature disclosure summary.",
+  },
+  "admin.editions.methodValue": { defaultMessage: "Offline Ed25519", description: "License signature verification method." },
+  "admin.editions.licenseId": { defaultMessage: "License ID", description: "Signed license identifier label." },
+  "admin.editions.readOnlyAfter": { defaultMessage: "Read-only after", description: "End of the bounded license grace period." },
+  "admin.editions.failClosedBoundary": {
+    defaultMessage: "A bad signature, signing key, deployment binding, or validity window stops startup. The UI cannot bypass it.",
+    description: "ELI5 fail-closed offline-license trust boundary.",
+  },
+  "admin.editions.evidenceUnavailable": {
+    defaultMessage: "Evidence is unavailable until the license read succeeds.",
+    description: "Fail-closed disclosure body.",
+  },
+  "admin.editions.featureTable": { defaultMessage: "Feature table", description: "Second Plan and license disclosure label." },
+  "admin.editions.featureDescription": {
+    defaultMessage: "Each gated feature, its plan, and whether this process can use it.",
+    description: "Feature disclosure summary.",
+  },
+  "admin.editions.entitlementEvidence": { defaultMessage: "Entitlement evidence", description: "Third Plan and license disclosure label." },
+  "admin.editions.entitlementDescription": {
+    defaultMessage: "Owner, deployment binding, use rights, capacity, packaging, and deployment proof.",
+    description: "Entitlement disclosure summary.",
+  },
+  "admin.editions.negotiated": { defaultMessage: "Negotiated or unlimited", description: "Provider customer band when the signed claim is zero." },
+  "admin.editions.architectureEvidence": {
+    defaultMessage: "Deployment architecture evidence",
+    description: "Nested lazy HA and distribution evidence disclosure.",
+  },
+  "admin.editions.architectureReadFailed": {
+    defaultMessage: "Some deployment architecture evidence could not be read. The license answer above is unchanged.",
+    description: "Sanitized partial failure for lazy distribution and HA evidence.",
+  },
+  "admin.editions.coreGuaranteesPresent": {
+    defaultMessage: "Offline verification, audit, and export present",
+    description: "Distribution core guarantees are present.",
+  },
+  "admin.editions.coreGuaranteesIncomplete": {
+    defaultMessage: "Core guarantee evidence is incomplete",
+    description: "Distribution core guarantee evidence is incomplete.",
+  },
+  "admin.editions.guideVerify": {
+    defaultMessage: "trstctl verifies the Ed25519 signature before startup completes. A bad signature or binding stops startup.",
+    description: "ELI5 description of secure license activation.",
+  },
+  "admin.editions.guideStepFile": {
+    defaultMessage: "Save the signed JSON where only the trstctl service account can read it (0600).",
+    description: "License guide file-custody step.",
+  },
+  "admin.editions.guideStepIdentity": {
+    defaultMessage: "Set its path, deployment ID, and production or non-production environment.",
+    description: "License guide binding step.",
+  },
+  "admin.editions.guideStepRestart": {
+    defaultMessage: "Restart control plane and isolated signer together, then confirm plan, expiry, and features here.",
+    description: "License guide activation and verification step.",
+  },
+  "admin.editions.guideBrowserBoundary": {
+    defaultMessage: "The browser never uploads or stores the license file. Rights remain in deployment configuration so both processes agree.",
+    description: "Why the UI guides instead of accepting a security-sensitive upload.",
+  },
+  "admin.editions.guideRecovery": {
+    defaultMessage:
+      "If startup rejects it, keep the last working configuration and ask for a corrected signed file. Never bypass signature or deployment checks.",
+    description: "Fail-safe license installation recovery.",
   },
   "identities.decommission.heading": {
     defaultMessage: "Decommission by signal",
@@ -3264,7 +3357,7 @@ export const messages = {
     description: "Module-band link to change history scoped to the active module (S-B4).",
   },
   "nav.module.upsell": {
-    defaultMessage: "This module requires a commercial edition — view Editions & license",
+    defaultMessage: "This module requires a commercial edition — view Plan and license",
     description: "Tooltip on a locked module's upsell row in the switcher (S-B5).",
   },
   "nav.module.upsellBadge": {
@@ -9413,10 +9506,6 @@ export const messages = {
     defaultMessage: "off",
     description: "B6: segment opt-in state (the default).",
   },
-  "source.edge.attested.key.b6edge00014": {
-    defaultMessage: "Attested key",
-    description: "B6: digest of the TPM-vouched key the delegation was minted over.",
-  },
   "source.edge.reconcile.note.b6edge00015": {
     defaultMessage:
       "Issuances made while a host is unreachable become visible only when its journal reconciles; a delegation listing none may still be issuing. Reconciled leaves outside the delegation's constraints are recorded as violations, visibly.",
@@ -9485,10 +9574,6 @@ export const messages = {
   "source.sequencing.m2seq00008": {
     defaultMessage: "Sequencing",
     description: "M2: what to do with this row, and what its numbers do not prove.",
-  },
-  "source.no.location.m2seq00009": {
-    defaultMessage: "no location recorded",
-    description: "M2: the CBOM could not place this usage, so it has no graph position.",
   },
   "cryptoReadiness.export.changed": {
     defaultMessage: "Readiness changed while exporting. The table is refreshing; export again from the new digest.",
@@ -13105,14 +13190,6 @@ export const messages = {
     defaultMessage: "Approve issue",
     description: "DA-14 sweep: migrated hardcoded copy from src/lib/approvalQueue.ts.",
   },
-  "source.approve.revoke.80c949285d": {
-    defaultMessage: "Approve revoke",
-    description: "DA-14 sweep: migrated hardcoded copy from src/lib/approvalQueue.ts.",
-  },
-  "source.approve.rotate.cdbd42f3c6": {
-    defaultMessage: "Approve rotate",
-    description: "DA-14 sweep: migrated hardcoded copy from src/lib/approvalQueue.ts.",
-  },
   "source.approved.2687f86ed6": {
     defaultMessage: "approved",
     description: "DA-14 sweep: migrated hardcoded copy from src/lib/statusVocab.ts.",
@@ -13263,10 +13340,6 @@ export const messages = {
     defaultMessage: "Crypto asset",
     description: "DA-14 sweep: migrated hardcoded copy from src/components/GraphView.tsx.",
   },
-  "source.ct.log.drift.monitoring.82c2bb4d3f": {
-    defaultMessage: "CT-log & drift monitoring",
-    description: "DA-14 sweep: migrated hardcoded copy from src/components/discovery/index.tsx.",
-  },
   "source.customer.uri.8360e5ff63": {
     defaultMessage: "Customer URI",
     description: "DA-14 sweep: migrated hardcoded copy from src/lib/issuerCatalog.ts.",
@@ -13367,10 +13440,6 @@ export const messages = {
     defaultMessage: "failed",
     description: "DA-14 sweep: migrated hardcoded copy from src/lib/statusVocab.ts.",
   },
-  "source.folder.prefix.2d63670e07": {
-    defaultMessage: "Folder prefix",
-    description: "DA-14 sweep: migrated hardcoded copy from src/components/secrets/index.tsx.",
-  },
   "source.gcp.project.id.11dc9b119c": {
     defaultMessage: "GCP Project ID",
     description: "DA-14 sweep: migrated hardcoded copy from src/lib/issuerCatalog.ts.",
@@ -13403,21 +13472,9 @@ export const messages = {
     defaultMessage: "hmac:",
     description: "DA-14 sweep: migrated hardcoded copy from src/components/secrets/transit.tsx.",
   },
-  "source.import.secrets.a657cdf701": {
-    defaultMessage: "Import secrets",
-    description: "DA-14 sweep: migrated hardcoded copy from src/components/secrets/index.tsx.",
-  },
-  "source.imported.321f179c80": {
-    defaultMessage: "Imported",
-    description: "DA-14 sweep: migrated hardcoded copy from src/components/secrets/index.tsx.",
-  },
   "source.into.the.event.log.5f4b11117b": {
     defaultMessage: "into the event log.",
     description: "DA-14 sweep: migrated hardcoded copy from src/components/breakglass/index.tsx.",
-  },
-  "source.issuance.pipeline.83471535a2": {
-    defaultMessage: "Issuance pipeline",
-    description: "DA-14 sweep: migrated hardcoded copy from src/components/issuance/index.tsx.",
   },
   "source.issuance.profiles.b2e6724c77": {
     defaultMessage: "Issuance profiles",
@@ -13647,10 +13704,6 @@ export const messages = {
     defaultMessage: "prod/db/url",
     description: "DA-14 sweep: migrated hardcoded copy from src/components/secrets/index.tsx.",
   },
-  "source.prod.imported.b9342ac821": {
-    defaultMessage: "prod/imported",
-    description: "DA-14 sweep: migrated hardcoded copy from src/components/secrets/index.tsx.",
-  },
   "source.product.type.f123dc0e0e": {
     defaultMessage: "Product Type",
     description: "DA-14 sweep: migrated hardcoded copy from src/lib/issuerCatalog.ts.",
@@ -13780,10 +13833,6 @@ export const messages = {
     defaultMessage: "Secret references",
     description: "DA-14 sweep: migrated hardcoded copy from src/components/secrets/index.tsx.",
   },
-  "source.secrets.cdefff020a": {
-    defaultMessage: "secrets:",
-    description: "DA-14 sweep: migrated hardcoded copy from src/components/secrets/index.tsx.",
-  },
   "source.sectigo.certificate.manager.for.dv.ov.and.99478bb1bf": {
     defaultMessage: "Sectigo Certificate Manager for DV, OV, and EV issuance.",
     description: "DA-14 sweep: migrated hardcoded copy from src/lib/issuerCatalog.ts.",
@@ -13807,10 +13856,6 @@ export const messages = {
   "source.service.account.json.b9f92e30b9": {
     defaultMessage: "Service Account JSON",
     description: "DA-14 sweep: migrated hardcoded copy from src/lib/issuerCatalog.ts.",
-  },
-  "source.shadow.inventory.fd12d94cc1": {
-    defaultMessage: "Shadow inventory",
-    description: "DA-14 sweep: migrated hardcoded copy from src/components/discovery/index.tsx.",
   },
   "source.show.keyboard.shortcuts.3d0ced5dc6": {
     defaultMessage: "Show keyboard shortcuts",
@@ -14002,17 +14047,9 @@ export const messages = {
     defaultMessage: "Add row",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Discovery.tsx.",
   },
-  "source.adjust.filters.refresh.the.queue.or.move.t.4a4fa7f45b": {
-    defaultMessage: "Adjust filters, refresh the queue, or move to the approval and certificate worklists that create operations.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Operations.tsx.",
-  },
   "source.advanced.json.import.c72cfacdf6": {
     defaultMessage: "Advanced JSON import",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Discovery.tsx.",
-  },
-  "source.advanced.runtime.diagnostics.c1b601f9f3": {
-    defaultMessage: "Advanced runtime diagnostics",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Assistant.tsx.",
   },
   "source.affected.19b6357dad": {
     defaultMessage: "affected",
@@ -14105,21 +14142,6 @@ export const messages = {
   "source.migration.h2mig00001": {
     defaultMessage: "Move to trstctl",
   },
-  "source.migration.description.h2mig00002": {
-    defaultMessage: "What can move now, what blocks cutover, and how to roll back.",
-  },
-  "source.migration.plan.h2mig00003": {
-    defaultMessage: "Migration plan",
-  },
-  "source.migration.assess.h2mig00004": {
-    defaultMessage: "Assess plan",
-  },
-  "source.migration.readonly.h2mig00005": {
-    defaultMessage: "Assessment changes nothing. Review before starting.",
-  },
-  "source.migration.counts.h2mig00008": {
-    defaultMessage: "Migratable: {value1}/{value2} members.",
-  },
   "source.migration.waves.h2mig00009": {
     defaultMessage: "Waves",
   },
@@ -14162,10 +14184,6 @@ export const messages = {
   "source.api.key.identity.bc78809131": {
     defaultMessage: "API key identity",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Identities.tsx.",
-  },
-  "source.api.token.metadata.d3e4dba811": {
-    defaultMessage: "API token metadata",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
   },
   "source.app.db.password.917cb98f9d": {
     defaultMessage: "app/db/password",
@@ -14211,16 +14229,8 @@ export const messages = {
     defaultMessage: "Artifact type",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/CodeSigning.tsx, src/pages/Privacy.tsx.",
   },
-  "source.assistant.391e405152": {
-    defaultMessage: "Assistant",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Assistant.tsx.",
-  },
   "source.assistant.answer.ba33c88efb": {
     defaultMessage: "Assistant answer",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Assistant.tsx.",
-  },
-  "source.assistant.workflow.8962351a8a": {
-    defaultMessage: "Assistant workflow",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Assistant.tsx.",
   },
   "source.attempts.06e70139fc": {
@@ -14250,10 +14260,6 @@ export const messages = {
   "source.audit.and.key.boundary.1ff2138216": {
     defaultMessage: "Audit and key boundary",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/CodeSigning.tsx.",
-  },
-  "source.audit.bb6aea2873": {
-    defaultMessage: "Audit",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Audit.tsx, src/pages/Graph.tsx.",
   },
   "source.audit.evidence.74dbcfd2a3": {
     defaultMessage: "Audit evidence",
@@ -14311,10 +14317,6 @@ export const messages = {
     defaultMessage:
       "AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and PKCS#11 HSM keys stay inside their provider. This panel shows public metadata and drives custody actions by key id.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
-  },
-  "source.background.jobs.perform.access.token.revoc.5f46484521": {
-    defaultMessage: "Background jobs perform access-token revocation and audit projection work while write promotion remains an operator-controlled runbook.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
   },
   "source.batches.467629e63d": {
     defaultMessage: "batches",
@@ -14484,10 +14486,6 @@ export const messages = {
     defaultMessage: "Preview signed destruction record",
     description: "H4: disclose the public offline record inline.",
   },
-  "source.ca.hierarchy.73e4cbcaf4": {
-    defaultMessage: "CA hierarchy",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
-  },
   "source.ca.key.ceremony.244faa4ab3": {
     defaultMessage: "CA key ceremony",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
@@ -14528,10 +14526,6 @@ export const messages = {
     defaultMessage: "Cancel",
     description:
       "DA-14 sweep: migrated hardcoded copy from src/pages/Agents.tsx, src/pages/CAHierarchy.tsx, src/pages/Certificates.tsx, src/pages/Connectors.tsx, src/pages/Identities.tsx, src/pages/Operations.tsx, src/pages/Owners.tsx, src/pages/Platform.tsx, src/pages/Privacy.tsx, src/pages/Protocols.tsx, src/pages/Secrets.tsx.",
-  },
-  "source.cancel.is.not.available.for.this.operation.0210a0d77e": {
-    defaultMessage: "Cancel is not available for this operation yet. Use the owning workflow to stop or roll it back.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Operations.tsx.",
   },
   "source.candidate.ca.fingerprint.78e53d126d": {
     defaultMessage: "Candidate CA fingerprint",
@@ -14641,14 +14635,6 @@ export const messages = {
     defaultMessage: "Ciphertext",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
-  "source.cited.evidence.ca23c85308": {
-    defaultMessage: "Cited evidence",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Assistant.tsx.",
-  },
-  "source.claims.1c85c12229": {
-    defaultMessage: "Claims",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
-  },
   "source.clear.filters.7179ea0035": {
     defaultMessage: "Clear filters",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
@@ -14676,10 +14662,6 @@ export const messages = {
   "source.code.and.ci.secret.scanning.bridge.27c18d763b": {
     defaultMessage: "Code and CI secret scanning bridge",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
-  "source.code.signing.4871711be4": {
-    defaultMessage: "Code signing",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CodeSigning.tsx.",
   },
   "source.common.name.2d129020eb": {
     defaultMessage: "Common name",
@@ -14724,10 +14706,6 @@ export const messages = {
   "source.compute.hmac.4809a2f350": {
     defaultMessage: "Compute HMAC",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
-  "source.config.json.eaa2c019f1": {
-    defaultMessage: "Config JSON",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Connectors.tsx.",
   },
   "source.configure.6defafa2ca": {
     defaultMessage: "Configure",
@@ -14777,10 +14755,6 @@ export const messages = {
     defaultMessage: "Connector registry",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Connectors.tsx.",
   },
-  "source.connector.targets.fb63eee9b5": {
-    defaultMessage: "Connector targets",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Connectors.tsx.",
-  },
   "source.connector.workflow.failed.9b83125cd7": {
     defaultMessage: "Connector workflow failed",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Connectors.tsx.",
@@ -14821,10 +14795,6 @@ export const messages = {
     defaultMessage: "Copy once",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/secrets/SecretsPageParts.tsx.",
   },
-  "source.copy.or.download.now.the.serial.certificat.3760ad67db": {
-    defaultMessage: "Copy or download now. The serial, certificate, and private key are cleared when dismissed.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
   "source.copy.this.generated.credential.now.renew.a.811264cbb9": {
     defaultMessage: "Copy this generated credential now. Renew and revoke actions keep only lease metadata.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
@@ -14853,10 +14823,6 @@ export const messages = {
     defaultMessage: "Could not load owners",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Owners.tsx.",
   },
-  "source.could.not.load.tools.2e7b9eae6f": {
-    defaultMessage: "Could not load tools:",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Assistant.tsx.",
-  },
   "source.could.not.mint.enrollment.token.7b0b6374e9": {
     defaultMessage: "Could not mint enrollment token",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Agents.tsx.",
@@ -14880,14 +14846,6 @@ export const messages = {
   "source.create.a.signer.backed.successor.before.ac.c0163adb05": {
     defaultMessage: "Create a signer-backed successor before activating rotation.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
-  },
-  "source.create.connector.target.bb8ec59505": {
-    defaultMessage: "Create connector target",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Connectors.tsx.",
-  },
-  "source.create.discovery.source.0371fe8d52": {
-    defaultMessage: "Create discovery source",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Discovery.tsx.",
   },
   "source.create.endpoint.binding.dd5b21a786": {
     defaultMessage: "Create endpoint binding",
@@ -14937,10 +14895,6 @@ export const messages = {
     defaultMessage: "Create source to run",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Discovery.tsx.",
   },
-  "source.create.target.00cf884cbc": {
-    defaultMessage: "Create target",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Connectors.tsx.",
-  },
   "source.create.the.first.workload.identity.and.iss.e199fc813f": {
     defaultMessage: "Create the first workload identity and issue it with an operator credential.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Wizard.tsx.",
@@ -14969,10 +14923,6 @@ export const messages = {
   "source.credential.name.911c43d9f0": {
     defaultMessage: "Credential name",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/RequestCredential.tsx.",
-  },
-  "source.credentials.issued.per.month.11bd254ee7": {
-    defaultMessage: "credentials issued per month",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Dashboard.tsx.",
   },
   "source.crypto.agility.means.the.system.can.see.we.6ff0a0d217": {
     defaultMessage:
@@ -15025,17 +14975,9 @@ export const messages = {
     defaultMessage: "current session subject",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Policy.tsx.",
   },
-  "source.customer.bf3763383a": {
-    defaultMessage: "Customer",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
-  },
   "source.cypher.style.query.9e70f5d770": {
     defaultMessage: "Cypher-style query",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
-  },
-  "source.dashboard.67b6964686": {
-    defaultMessage: "Dashboard",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Dashboard.tsx.",
   },
   "source.data.cec3a9b89b": {
     defaultMessage: "Data",
@@ -15117,10 +15059,6 @@ export const messages = {
     defaultMessage: "Deployment",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Operations.tsx.",
   },
-  "source.deployment.connectors.6bdaa16cc0": {
-    defaultMessage: "Deployment connectors",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Connectors.tsx.",
-  },
   "source.deployment.location.5a9f62f9fc": {
     defaultMessage: "Deployment location",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Certificates.tsx.",
@@ -15148,10 +15086,6 @@ export const messages = {
   "source.discover.d4a33d5b78": {
     defaultMessage: "Discover",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Dashboard.tsx.",
-  },
-  "source.discovery.80fc402133": {
-    defaultMessage: "Discovery",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Discovery.tsx.",
   },
   "source.discovery.findings.unavailable.8112281292": {
     defaultMessage: "Discovery findings unavailable",
@@ -15252,10 +15186,6 @@ export const messages = {
     defaultMessage: "Edge types",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
   },
-  "source.edit.464c4ffd01": {
-    defaultMessage: "Edit",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Owners.tsx.",
-  },
   "source.edit.dns.01.provider.config.1daa884c33": {
     defaultMessage: "Edit DNS-01 provider config",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Protocols.tsx.",
@@ -15263,14 +15193,6 @@ export const messages = {
   "source.edit.scep.policy.5719a7d8ab": {
     defaultMessage: "Edit SCEP policy",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Protocols.tsx.",
-  },
-  "source.edition.feature.table.9690596a9d": {
-    defaultMessage: "Edition feature table",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
-  },
-  "source.editions.c6a48dcca4": {
-    defaultMessage: "Editions",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
   },
   "source.egress.66a3afae15": {
     defaultMessage: "Egress",
@@ -15315,10 +15237,6 @@ export const messages = {
   "source.enrollment.protocol.surfaces.de695f7aa5": {
     defaultMessage: "Enrollment protocol surfaces",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Protocols.tsx.",
-  },
-  "source.enrollment.token.6c86be7863": {
-    defaultMessage: "Enrollment token",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Agents.tsx.",
   },
   "source.enterprise.sla.target.table.dfd20c29f8": {
     defaultMessage: "Enterprise SLA target table",
@@ -15432,10 +15350,6 @@ export const messages = {
     defaultMessage: "Expires",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx, src/pages/Workloads.tsx, src/pages/secrets/SecretsPageParts.tsx.",
   },
-  "source.expiry.6956d81401": {
-    defaultMessage: "Expiry",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
-  },
   "source.expiry.bands.cbfe64f7cb": {
     defaultMessage: "Expiry bands",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Dashboard.tsx.",
@@ -15511,10 +15425,6 @@ export const messages = {
   "source.failed.targets.4ffa850540": {
     defaultMessage: "Failed targets",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Incidents.tsx.",
-  },
-  "source.feature.3d377ae910": {
-    defaultMessage: "Feature",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
   },
   "source.file.50009ce1da": {
     defaultMessage: "File",
@@ -15640,10 +15550,6 @@ export const messages = {
     defaultMessage: "Grounded means the answer cites tenant evidence returned by the API.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Assistant.tsx.",
   },
-  "source.grounded.query.2a3d813fd7": {
-    defaultMessage: "Grounded query",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Assistant.tsx.",
-  },
   "source.guided.builder.16111a6ae3": {
     defaultMessage: "Guided form",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Profiles.tsx.",
@@ -15724,10 +15630,6 @@ export const messages = {
     defaultMessage: "Idempotent credential request",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/RequestCredential.tsx.",
   },
-  "source.identities.8d4d8fef65": {
-    defaultMessage: "Identities",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Identities.tsx.",
-  },
   "source.identity.999f23fcd7": {
     defaultMessage: "Identity",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Connectors.tsx, src/pages/Policy.tsx, src/pages/SSHTrust.tsx.",
@@ -15788,10 +15690,6 @@ export const messages = {
     defaultMessage: "Incident response help",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Incidents.tsx.",
   },
-  "source.incidents.bfe8689315": {
-    defaultMessage: "Incidents",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Incidents.tsx.",
-  },
   "source.ingest.certificate.6c25a63cd4": {
     defaultMessage: "Ingest certificate",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Certificates.tsx.",
@@ -15826,10 +15724,6 @@ export const messages = {
   },
   "source.issuance.rate.91f4b7ff0d": {
     defaultMessage: "Issuance rate",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Dashboard.tsx.",
-  },
-  "source.issuance.trend.b53089f166": {
-    defaultMessage: "Issuance trend",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Dashboard.tsx.",
   },
   "source.issue.48dc76dfa2": {
@@ -16102,10 +15996,6 @@ export const messages = {
     defaultMessage: "Loading comparison...",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Profiles.tsx.",
   },
-  "source.loading.connector.workflow.f8e0fc1515": {
-    defaultMessage: "Loading connector workflow...",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Connectors.tsx.",
-  },
   "source.loading.delivery.evidence.7f2cdadedd": {
     defaultMessage: "Loading delivery evidence...",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Identities.tsx.",
@@ -16222,10 +16112,6 @@ export const messages = {
     defaultMessage: "Manual rotation and delete",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
-  "source.mappings.f64ec16b0d": {
-    defaultMessage: "Mappings",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
-  },
   "source.mark.managed.61a3f9305a": {
     defaultMessage: "Mark managed",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Posture.tsx.",
@@ -16240,10 +16126,6 @@ export const messages = {
   },
   "source.mcp.53f13ae99e": {
     defaultMessage: "MCP",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Assistant.tsx.",
-  },
-  "source.mcp.tools.1a32c98e7f": {
-    defaultMessage: "MCP tools",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Assistant.tsx.",
   },
   "source.message.2f77668a9d": {
@@ -16280,18 +16162,6 @@ export const messages = {
     defaultMessage: "Mint a one-time enrollment token and wait for the first in-network agent.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Wizard.tsx.",
   },
-  "source.mint.a.one.time.enrollment.token.install.a.d9cbac0c9e": {
-    defaultMessage: "Mint a one-time enrollment token, install an agent inside the tenant network, then refresh this page when it registers.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Agents.tsx.",
-  },
-  "source.mint.api.token.f6cf0efff0": {
-    defaultMessage: "Mint API token",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
-  },
-  "source.mint.ced97cc4a3": {
-    defaultMessage: "Mint",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
-  },
   "source.mint.enrollment.token.b50d28fa1d": {
     defaultMessage: "Mint enrollment token",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Agents.tsx, src/pages/Wizard.tsx.",
@@ -16311,10 +16181,6 @@ export const messages = {
   "source.move.to.beb8194bc4": {
     defaultMessage: "Move to",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Identities.tsx.",
-  },
-  "source.multi.region.posture.e57c514674": {
-    defaultMessage: "Multi-region posture",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
   },
   "source.mutation.c26ee0e4b9": {
     defaultMessage: "Mutation",
@@ -16340,14 +16206,6 @@ export const messages = {
   "source.native.store.f4e7459e0a": {
     defaultMessage: "native store",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
-  "source.new.identity.51c2e7c139": {
-    defaultMessage: "New identity",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Identities.tsx.",
-  },
-  "source.new.profile.fcf4f3f4d5": {
-    defaultMessage: "New profile",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Profiles.tsx.",
   },
   "source.new.request.5977ded363": {
     defaultMessage: "New request",
@@ -16381,10 +16239,6 @@ export const messages = {
     defaultMessage: "No active profiles",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/RequestCredential.tsx.",
   },
-  "source.no.agents.enrolled.yet.345799ad5d": {
-    defaultMessage: "No agents enrolled yet",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Agents.tsx.",
-  },
   "source.no.attested.svid.has.been.issued.in.this.b.8fee10fc2a": {
     defaultMessage: "No attested SVID has been issued in this browser session.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Workloads.tsx.",
@@ -16412,10 +16266,6 @@ export const messages = {
   "source.no.certificates.yet.f1e2ab559a": {
     defaultMessage: "No certificates yet",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Certificates.tsx.",
-  },
-  "source.no.citations.returned.4c4de9598c": {
-    defaultMessage: "No citations returned.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Assistant.tsx.",
   },
   "source.no.commercial.feature.rows.825b068dda": {
     defaultMessage: "No commercial feature rows.",
@@ -16501,10 +16351,6 @@ export const messages = {
     defaultMessage: "No heartbeat timestamp",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Agents.tsx.",
   },
-  "source.no.identities.currently.require.an.issue.r.3200466dfb": {
-    defaultMessage: "No identities currently require an issue, rotate, or revoke approval.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Approvals.tsx.",
-  },
   "source.no.identities.yet.c8697bd1bc": {
     defaultMessage: "No identities yet",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Identities.tsx.",
@@ -16540,10 +16386,6 @@ export const messages = {
   "source.no.nodes.or.edges.exist.for.this.tenant.ye.1643ac2e72": {
     defaultMessage: "No nodes or edges exist for this tenant yet. Ingest certificates or issue identities first.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
-  },
-  "source.no.operations.found.7472e6ceb1": {
-    defaultMessage: "No operations found",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Operations.tsx.",
   },
   "source.no.pending.approvals.261de9be5f": {
     defaultMessage: "No pending approvals",
@@ -16601,10 +16443,6 @@ export const messages = {
     defaultMessage: "Not browser-readable",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Protocols.tsx.",
   },
-  "source.notifications.788011833a": {
-    defaultMessage: "Notifications",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Notifications.tsx.",
-  },
   "source.offboard.9053e68ef6": {
     defaultMessage: "Offboard",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Agents.tsx, src/pages/Platform.tsx.",
@@ -16612,10 +16450,6 @@ export const messages = {
   "source.offboard.agent.f673bf87e3": {
     defaultMessage: "Offboard agent",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Agents.tsx.",
-  },
-  "source.offboard.member.8a27787595": {
-    defaultMessage: "Offboard member",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
   },
   "source.offboard.reason.6c2b7a820c": {
     defaultMessage: "Offboard reason",
@@ -16629,21 +16463,9 @@ export const messages = {
     defaultMessage: "Offboarded by",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Agents.tsx.",
   },
-  "source.offline.license.state.feature.rows.and.the.ee22ad090c": {
-    defaultMessage: "Offline license state, feature rows, and the live crypto posture.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
-  },
-  "source.oidc.mapping.status.358515bade": {
-    defaultMessage: "OIDC mapping status",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
-  },
   "source.oidc.mapping.status.and.api.token.administ.565d8d27fd": {
     defaultMessage:
       "OIDC mapping status and access-key administration are shown in People and roles. This card only reflects the browser session and CSRF posture.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
-  },
-  "source.onboard.member.a6dfe12142": {
-    defaultMessage: "Onboard member",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
   },
   "source.one.time.share.token.20234cd9a0": {
@@ -16666,10 +16488,6 @@ export const messages = {
     defaultMessage: "Open audit explorer",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Policy.tsx.",
   },
-  "source.open.expiring.certificates.45cc9bb64d": {
-    defaultMessage: "Open expiring certificates",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Operations.tsx.",
-  },
   "source.open.posture.71199986c4": {
     defaultMessage: "Open posture",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Discovery.tsx.",
@@ -16685,10 +16503,6 @@ export const messages = {
   "source.openssl.verify.64d6554ef1": {
     defaultMessage: "OpenSSL verify",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Protocols.tsx.",
-  },
-  "source.operations.queue.42686cb416": {
-    defaultMessage: "Operations queue",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Operations.tsx.",
   },
   "source.operations.unavailable.b176555a53": {
     defaultMessage: "Operations unavailable",
@@ -16734,10 +16548,6 @@ export const messages = {
   "source.owner.id.768c061c71": {
     defaultMessage: "owner id",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Risk.tsx.",
-  },
-  "source.owner.id.da58f15949": {
-    defaultMessage: "Owner id",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/RequestCredential.tsx.",
   },
   "source.owner.kind.eb9923cec7": {
     defaultMessage: "Owner kind",
@@ -17027,10 +16837,6 @@ export const messages = {
     defaultMessage: "Page size",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Certificates.tsx.",
   },
-  "source.passive.read.state.model.projections.can.b.9f2d6a2da6": {
-    defaultMessage: "Passive-read-state model: projections can be read from follower regions while the write path stays on one writable region per tenant.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
-  },
   "source.path.62fa5a5b0d": {
     defaultMessage: "Path",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Profiles.tsx, src/pages/Secrets.tsx.",
@@ -17051,14 +16857,6 @@ export const messages = {
     defaultMessage: "pending ·",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Policy.tsx.",
   },
-  "source.permission.boundary.c0d351ef86": {
-    defaultMessage: "permission boundary",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Assistant.tsx.",
-  },
-  "source.permissions.abccc78cc9": {
-    defaultMessage: "Permissions",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
-  },
   "source.pki.as.a.secret.e349ae9d0f": {
     defaultMessage: "PKI as a secret",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
@@ -17078,10 +16876,6 @@ export const messages = {
   "source.policy.decisions.988b13232e": {
     defaultMessage: "Policy decisions",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Audit.tsx.",
-  },
-  "source.postgresql.17197ea102": {
-    defaultMessage: "· PostgreSQL",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
   },
   "source.postgresql.cc52d03280": {
     defaultMessage: "PostgreSQL",
@@ -17618,10 +17412,6 @@ export const messages = {
     defaultMessage: "Protocol status check failed",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Protocols.tsx.",
   },
-  "source.protocols.1019490835": {
-    defaultMessage: "Protocols",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Protocols.tsx.",
-  },
   "source.provider.472590ae97": {
     defaultMessage: "Provider",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Protocols.tsx, src/pages/Secrets.tsx, src/pages/secrets/SecretsPageParts.tsx.",
@@ -17645,10 +17435,6 @@ export const messages = {
   "source.public.key.der.606443a2d8": {
     defaultMessage: "Public key (DER)",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/CodeSigning.tsx.",
-  },
-  "source.query.b80a37564f": {
-    defaultMessage: "Query",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Assistant.tsx.",
   },
   "source.query.rca.and.mcp.fail.closed.when.disable.255478de84": {
     defaultMessage:
@@ -17682,10 +17468,6 @@ export const messages = {
   "source.rca.answers.are.sufficient.or.insufficient.5a9397d141": {
     defaultMessage:
       "RCA answers are sufficient or insufficient based on cited evidence. Hostile record text is rendered as inert text, and next actions stay links or text until a remediation workflow exists.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Assistant.tsx.",
-  },
-  "source.rca.d93580ed3a": {
-    defaultMessage: "RCA",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Assistant.tsx.",
   },
   "source.rca.evidence.workspace.418f458f5f": {
@@ -17890,21 +17672,9 @@ export const messages = {
     defaultMessage: "Reveal failed",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
-  "source.reveal.once.81d2e1991a": {
-    defaultMessage: "Reveal once",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
-  "source.reveal.once.api.token.8cfd65d574": {
-    defaultMessage: "Reveal-once API token",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
-  },
   "source.reveal.once.key.issuance.61c20133fa": {
     defaultMessage: "Reveal-once key issuance",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
-  "source.review.approvals.51320f88b0": {
-    defaultMessage: "Review approvals",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Operations.tsx.",
   },
   "source.reviewer.63c2827d64": {
     defaultMessage: "· reviewer",
@@ -17983,10 +17753,6 @@ export const messages = {
     defaultMessage: "Role",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx, src/pages/Secrets.tsx, src/pages/secrets/SecretsPageParts.tsx.",
   },
-  "source.role.catalog.d2bfa0ab0e": {
-    defaultMessage: "Role catalog",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
-  },
   "source.roles.c253370554": {
     defaultMessage: "Roles",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
@@ -18006,10 +17772,6 @@ export const messages = {
   "source.rollback.plan.952efc8286": {
     defaultMessage: "Rollback plan",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/SSHTrust.tsx.",
-  },
-  "source.root.cause.analysis.fde4017d48": {
-    defaultMessage: "Root-cause analysis",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Assistant.tsx.",
   },
   "source.rotate.c3613b1704": {
     defaultMessage: "Rotate",
@@ -18110,10 +17872,6 @@ export const messages = {
   "source.sans.7a15c9b7f6": {
     defaultMessage: "SANs",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Certificates.tsx.",
-  },
-  "source.save.1509f561f2": {
-    defaultMessage: "Save",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
   },
   "source.save.the.one.time.token.with.0600.permissi.b35e2c6935": {
     defaultMessage:
@@ -18219,10 +17977,6 @@ export const messages = {
   },
   "source.secrets.api.unavailable.or.disabled.90f9a5c4b4": {
     defaultMessage: "Secrets API unavailable or disabled",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
-  "source.secrets.d8707d411d": {
-    defaultMessage: "Secrets",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
   "source.select.2a78025de6": {
@@ -18462,10 +18216,6 @@ export const messages = {
     defaultMessage: "spiffe-helper",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Protocols.tsx.",
   },
-  "source.ssh.ca.and.krl.status.f38597dc96": {
-    defaultMessage: "SSH CA and KRL status",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/SSHTrust.tsx.",
-  },
   "source.ssh.certificate.identity.d5833485f8": {
     defaultMessage: "SSH certificate identity",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Identities.tsx.",
@@ -18614,10 +18364,6 @@ export const messages = {
       "Templates define what a Windows PKI may issue. An in-domain network relay reads each template, its publishing CAs, and the SIDs granted enrollment rights.",
     description: "F1: AD CS certificate template posture panel on the Posture page.",
   },
-  "source.adcs.loading.f1adcs0003": {
-    defaultMessage: "Loading template posture",
-    description: "F1: AD CS certificate template posture panel on the Posture page.",
-  },
   "source.adcs.error.f1adcs0004": {
     defaultMessage: "Could not load AD CS template posture",
     description: "F1: AD CS certificate template posture panel on the Posture page.",
@@ -18673,22 +18419,6 @@ export const messages = {
   },
   "source.adcs.observed.f1adcs0017": {
     defaultMessage: "Observed",
-    description: "F1: AD CS certificate template posture panel on the Posture page.",
-  },
-  "source.adcs.sev.critical.f1adcs0018": {
-    defaultMessage: "Critical",
-    description: "F1: AD CS certificate template posture panel on the Posture page.",
-  },
-  "source.adcs.sev.high.f1adcs0019": {
-    defaultMessage: "High",
-    description: "F1: AD CS certificate template posture panel on the Posture page.",
-  },
-  "source.adcs.sev.medium.f1adcs0020": {
-    defaultMessage: "Medium",
-    description: "F1: AD CS certificate template posture panel on the Posture page.",
-  },
-  "source.adcs.sev.none.f1adcs0021": {
-    defaultMessage: "Clean",
     description: "F1: AD CS certificate template posture panel on the Posture page.",
   },
   "source.adcs.observedby.f1adcs0022": {
@@ -18954,10 +18684,6 @@ export const messages = {
     defaultMessage: "Tenant ID from session",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
   },
-  "source.tenant.members.7c3b607c20": {
-    defaultMessage: "Tenant members",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
-  },
   "source.test.532eaabd95": {
     defaultMessage: "Test",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx, src/pages/Connectors.tsx.",
@@ -19019,10 +18745,6 @@ export const messages = {
   "source.this.json.is.sent.to.the.profile.workflow.37a80f1c5b": {
     defaultMessage: "This exact JSON is stored as the versioned issuance profile. The server validates it before the rule can issue anything.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Profiles.tsx.",
-  },
-  "source.this.month.5510b12a58": {
-    defaultMessage: "this month",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Dashboard.tsx.",
   },
   "source.this.plaintext.was.decoded.locally.from.th.fbd3275222": {
     defaultMessage: "This plaintext was decoded locally from the transit response. Dismiss clears it from the page.",
@@ -19104,10 +18826,6 @@ export const messages = {
   },
   "source.tools.are.7c933884d0": {
     defaultMessage: "Tools are",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Assistant.tsx.",
-  },
-  "source.tools.f9d35d4377": {
-    defaultMessage: "tools",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Assistant.tsx.",
   },
   "source.track.and.renew.certificates.f0f36882b6": {
@@ -19255,10 +18973,6 @@ export const messages = {
     defaultMessage: "was reachable, and the value was not rendered.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
-  "source.was.returned.for.this.secret.dismiss.clear.67402c3c18": {
-    defaultMessage: "was returned for this secret. Dismiss clears it from the page.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
   "source.watched.domains.0a60ff7e19": {
     defaultMessage: "Watched domains",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Posture.tsx.",
@@ -19375,10 +19089,6 @@ export const messages = {
     defaultMessage: "authenticated session",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:274.",
   },
-  "source.cancel.value1.64342fbae8": {
-    defaultMessage: "Cancel {value1}",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Operations.tsx:306.",
-  },
   "source.cap.k8s.04.8591b21c0c": {
     defaultMessage: "CAP-K8S-04",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Workloads.tsx:351.",
@@ -19406,10 +19116,6 @@ export const messages = {
   "source.commercial.support.terms.control.legal.sla.dd90f4015f": {
     defaultMessage: "Commercial support terms control legal SLA credits and named contacts.",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:447.",
-  },
-  "source.community.core.9de2dc1902": {
-    defaultMessage: "community core",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:746.",
   },
   "source.community.f354ee99e2": {
     defaultMessage: "community",
@@ -19495,10 +19201,6 @@ export const messages = {
     defaultMessage: "Edit {value1}",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Connectors.tsx:318.",
   },
-  "source.evaluation.only.7e42530821": {
-    defaultMessage: "· evaluation only",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:842.",
-  },
   "source.export.audit.evidence.c3f3b4ad52": {
     defaultMessage: "Export audit evidence",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Policy.tsx:979.",
@@ -19527,10 +19229,6 @@ export const messages = {
     defaultMessage: "Filtering...",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Privacy.tsx:358.",
   },
-  "source.fips.140.3.b95c3c39f5": {
-    defaultMessage: "FIPS 140-3",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:772.",
-  },
   "source.fips.module.active.76cb6077b6": {
     defaultMessage: "FIPS module active",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:766.",
@@ -19542,10 +19240,6 @@ export const messages = {
   "source.generated.credential.for.lease.value1.814b0bc937": {
     defaultMessage: "Generated credential for lease {value1}",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Secrets.tsx:2592.",
-  },
-  "source.go.cryptographic.module.0acf566e1e": {
-    defaultMessage: "Go Cryptographic Module",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:772.",
   },
   "source.graph.node.value1.3c48c6439b": {
     defaultMessage: "Graph node {value1}",
@@ -19676,10 +19370,6 @@ export const messages = {
     defaultMessage: "Local signing authority",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:2256.",
   },
-  "source.make.fips.build.ce51354815": {
-    defaultMessage: "make fips-build",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:773.",
-  },
   "source.mark.managed.value1.ba545156d1": {
     defaultMessage: "Mark managed {value1}",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Posture.tsx:583.",
@@ -19707,10 +19397,6 @@ export const messages = {
   "source.next.1ff57a29d7": {
     defaultMessage: "Next",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/components/wizard/StepShell.tsx:97.",
-  },
-  "source.no.9390298f3f": {
-    defaultMessage: "no",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:1383.",
   },
   "source.no.cited.evidence.e48d4838c2": {
     defaultMessage: "No cited evidence",
@@ -19777,14 +19463,6 @@ export const messages = {
     defaultMessage: "off",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:546.",
   },
-  "source.open.session.b205bb47f8": {
-    defaultMessage: "Open session",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:1660.",
-  },
-  "source.opening.b19bb6f448": {
-    defaultMessage: "Opening...",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:1660.",
-  },
   "source.orphaned.6f1aaf37cc": {
     defaultMessage: "orphaned",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Risk.tsx:960.",
@@ -19845,10 +19523,6 @@ export const messages = {
     defaultMessage: "read-only",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Assistant.tsx:233.",
   },
-  "source.read.only.tools.dd28b5cb26": {
-    defaultMessage: "Read-only tools",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Assistant.tsx:345.",
-  },
   "source.reconcile.break.glass.bundles.b664752d57": {
     defaultMessage: "Reconcile break-glass bundles",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/components/breakglass/index.tsx:119.",
@@ -19885,10 +19559,6 @@ export const messages = {
     defaultMessage: "Renewing…",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Certificates.tsx:1611, src/pages/Certificates.tsx:1688.",
   },
-  "source.required.cdc2689fe2": {
-    defaultMessage: "· required",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:767.",
-  },
   "source.required.d0a3630555": {
     defaultMessage: "required",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:572.",
@@ -19904,14 +19574,6 @@ export const messages = {
   "source.retiring.value1.discards.the.credential.re.7f368527a3": {
     defaultMessage: "Retiring “{value1}” discards the credential record. This cannot be undone.",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Identities.tsx:636.",
-  },
-  "source.retry.2.b933ea8d98": {
-    defaultMessage: "retry(2)",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Dashboard.tsx:439.",
-  },
-  "source.reveal.once.value.for.value1.72f4f14f8d": {
-    defaultMessage: "Reveal-once value for {value1}",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Secrets.tsx:1313.",
   },
   "source.revoke.key.value1.2e6b1284fb": {
     defaultMessage: "Revoke key {value1}",
@@ -20172,14 +19834,6 @@ export const messages = {
   "source.view.value1.version.value2.bcb23df652": {
     defaultMessage: "View {value1} version {value2}",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Profiles.tsx:101.",
-  },
-  "source.write.capable.tools.f7a38bfb1e": {
-    defaultMessage: "Write-capable tools",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Assistant.tsx:345.",
-  },
-  "source.yes.8a798890fe": {
-    defaultMessage: "yes",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:1383.",
   },
   "source.yes.value1.0cb667502c": {
     defaultMessage: "Yes, {value1}",
