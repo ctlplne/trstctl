@@ -1812,6 +1812,10 @@ export const messages = {
     description: "L2 invoice-evidence panel description.",
   },
   "platform.usageEvidence.loading": { defaultMessage: "Loading usage evidence.", description: "L2 evidence loading state." },
+  "platform.usageEvidence.requestFailed": {
+    defaultMessage: "Usage evidence could not be loaded. Check the dates, your access, and the connection, then try again.",
+    description: "Generic usage-evidence request failure that does not expose backend details.",
+  },
   "platform.usageEvidence.periodStart": { defaultMessage: "Period start", description: "L2 evidence period start field." },
   "platform.usageEvidence.periodEnd": { defaultMessage: "Period end", description: "L2 evidence period end field." },
   "platform.usageEvidence.pull": { defaultMessage: "Pull evidence", description: "L2 evidence submit button." },
@@ -1851,6 +1855,10 @@ export const messages = {
   },
   "platform.tenantSeal.loading": { defaultMessage: "Loading tenant custody status.", description: "Tenant key-domain loading state." },
   "platform.tenantSeal.requestFailed": { defaultMessage: "Tenant custody status is unavailable", description: "Tenant key-domain request failure heading." },
+  "platform.tenantSeal.requestRecovery": {
+    defaultMessage: "Check your access and connection, then refresh the status.",
+    description: "Generic tenant key-domain request recovery that does not expose backend details.",
+  },
   "platform.tenantSeal.refresh": { defaultMessage: "Refresh status", description: "Refresh tenant key-domain status action." },
   "platform.tenantSeal.stateLegacy": { defaultMessage: "Deployment-key protected", description: "Legacy tenant custody state." },
   "platform.tenantSeal.stateMigrating": { defaultMessage: "Migration running", description: "Tenant key-domain migration state." },

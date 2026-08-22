@@ -927,8 +927,13 @@ describe("i18n boundary", () => {
       // keeps configuration/dependency/exception evidence intentional, and
       // never turns a failed read into a readiness claim. Machine-authored
       // translations remain flagged for human language review.
-      "es-ES": "9b3eb95b7f939b4eb6c4ca801f73491814eae477afcae5bbd9a1e76587d93eab",
-      "de-DE": "183ca3490f062428f7697fd4df62dec464a1cf78a9a141b3222e76de356b9795",
+      // QA design g41 privacy re-pin: request failures in the lazy custody and
+      // usage-evidence panels now give generic next steps without echoing
+      // backend paths, traces, credentials, or connection strings. Genuine
+      // served lifecycle evidence remains exact. Machine-authored translations
+      // remain flagged for human language review.
+      "es-ES": "0902c486b372f3bc5a550ddd28171d176727a9a251c228b36e15cc281bd315a6",
+      "de-DE": "2e7c2f614a43512ebabfda5bb5af03115cdcb232ecbd4824d1b528114d26c6df",
     });
   });
 

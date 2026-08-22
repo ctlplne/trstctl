@@ -133,20 +133,20 @@ export function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
   const [status, setStatus] = useState<TenantKeyDomainStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [requestError, setRequestError] = useState<string | null>(null);
+  const [requestFailed, setRequestFailed] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [wrapperID, setWrapperID] = useState("");
   const [sealConfirmOpen, setSealConfirmOpen] = useState(false);
 
   async function refreshStatus() {
     setLoading(true);
-    setRequestError(null);
+    setRequestFailed(false);
     try {
       const next = await api.tenantKeyDomain();
       setStatus(next);
       if (!wrapperID && next.wrapper_id) setWrapperID(next.wrapper_id);
-    } catch (err) {
-      setRequestError(err instanceof Error ? err.message : String(err));
+    } catch {
+      setRequestFailed(true);
     } finally {
       setLoading(false);
     }
@@ -160,10 +160,10 @@ export function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
         if (!active) return;
         setStatus(next);
         setWrapperID((current) => current || next.wrapper_id || "");
-        setRequestError(null);
+        setRequestFailed(false);
       })
-      .catch((err) => {
-        if (active) setRequestError(err instanceof Error ? err.message : String(err));
+      .catch(() => {
+        if (active) setRequestFailed(true);
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -178,14 +178,14 @@ export function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
     const exactWrapperID = wrapperID.trim();
     if (!exactWrapperID) return;
     setBusy(true);
-    setRequestError(null);
+    setRequestFailed(false);
     setNotice(null);
     try {
       const next = await api.migrateTenantKeyDomain({ wrapper_kind: "local_file", wrapper_id: exactWrapperID });
       setStatus(next);
       setNotice(t("platform.tenantSeal.noticeMigrated"));
-    } catch (err) {
-      setRequestError(err instanceof Error ? err.message : String(err));
+    } catch {
+      setRequestFailed(true);
     } finally {
       setBusy(false);
     }
@@ -194,15 +194,15 @@ export function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
   async function seal() {
     setSealConfirmOpen(false);
     setBusy(true);
-    setRequestError(null);
+    setRequestFailed(false);
     setNotice(null);
     try {
       await api.sealTenantKeyDomain();
       setNotice(t("platform.tenantSeal.noticeQueued"));
       const next = await api.tenantKeyDomain();
       setStatus(next);
-    } catch (err) {
-      setRequestError(err instanceof Error ? err.message : String(err));
+    } catch {
+      setRequestFailed(true);
     } finally {
       setBusy(false);
     }
@@ -210,14 +210,14 @@ export function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
 
   async function unseal() {
     setBusy(true);
-    setRequestError(null);
+    setRequestFailed(false);
     setNotice(null);
     try {
       const next = await api.unsealTenantKeyDomain();
       setStatus(next);
       setNotice(t("platform.tenantSeal.noticeUnsealed"));
-    } catch (err) {
-      setRequestError(err instanceof Error ? err.message : String(err));
+    } catch {
+      setRequestFailed(true);
     } finally {
       setBusy(false);
     }
@@ -273,10 +273,10 @@ export function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
           {t("platform.tenantSeal.loading")}
         </p>
       ) : null}
-      {requestError ? (
+      {requestFailed ? (
         <div className="mt-4 rounded-control border border-destructive/30 bg-destructive/10 p-3 text-sm" role="alert">
           <p className="font-semibold text-destructive">{t("platform.tenantSeal.requestFailed")}</p>
-          <p className="mt-1 break-words text-muted-foreground">{requestError}</p>
+          <p className="mt-1 text-muted-foreground">{t("platform.tenantSeal.requestRecovery")}</p>
           <Button type="button" variant="outline" className="mt-3" onClick={() => void refreshStatus()} disabled={loading || busy}>
             <RefreshCw className="h-4 w-4" aria-hidden="true" />
             {t("platform.tenantSeal.refresh")}
@@ -432,19 +432,19 @@ export function UsageEvidencePanel() {
   const { t } = useTranslation();
   const [doc, setDoc] = useState<UsageEvidence | null>(null);
   const [loading, setLoading] = useState(false);
-  const [requestError, setRequestError] = useState<string | null>(null);
+  const [requestFailed, setRequestFailed] = useState(false);
   const [periodStart, setPeriodStart] = useState(defaultPeriodStart);
   const [periodEnd, setPeriodEnd] = useState(defaultPeriodEnd);
 
   async function pull(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
-    setRequestError(null);
+    setRequestFailed(false);
     try {
       setDoc(await api.usageEvidence(`${periodStart}T00:00:00Z`, `${periodEnd}T00:00:00Z`));
-    } catch (err) {
+    } catch {
       setDoc(null);
-      setRequestError(err instanceof Error ? err.message : String(err));
+      setRequestFailed(true);
     } finally {
       setLoading(false);
     }
@@ -483,9 +483,9 @@ export function UsageEvidencePanel() {
       </form>
 
       {loading && <p className="mt-3 text-caption text-muted-foreground">{t("platform.usageEvidence.loading")}</p>}
-      {requestError && (
+      {requestFailed && (
         <p role="alert" className="mt-3 rounded-control border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {requestError}
+          {t("platform.usageEvidence.requestFailed")}
         </p>
       )}
 

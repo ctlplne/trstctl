@@ -5489,6 +5489,8 @@ const deDECatalog = {
   "platform.usageEvidence.description":
     "Gemessene Nutzung dieses Mandanten als das Dokument, auf dessen Grundlage ein Anbieter abrechnet. Lesen Sie den Abrechnungsstatus vor den Zahlen: Ein Zeitraum, den der Messspeicher nicht durchgehend abdecken konnte, ist eine Teilansicht und keine Rechnung.",
   "platform.usageEvidence.loading": "Nutzungsnachweis wird geladen.",
+  "platform.usageEvidence.requestFailed":
+    "Der Nutzungsnachweis konnte nicht geladen werden. Prüfen Sie Zeitraum, Zugriff und Verbindung und versuchen Sie es erneut.",
   "platform.usageEvidence.periodStart": "Beginn des Zeitraums",
   "platform.usageEvidence.periodEnd": "Ende des Zeitraums",
   "platform.usageEvidence.pull": "Nachweis abrufen",
@@ -5512,6 +5514,7 @@ const deDECatalog = {
     "Verschieben Sie diesen Mandanten hinter einen eigenen, vom Betreiber kontrollierten Wrapper und machen Sie seine geschützten Daten kryptografisch unzugänglich, ohne benachbarte Mandanten anzuhalten.",
   "platform.tenantSeal.loading": "Mandanten-Verwahrungsstatus wird geladen.",
   "platform.tenantSeal.requestFailed": "Der Mandanten-Verwahrungsstatus ist nicht verfügbar",
+  "platform.tenantSeal.requestRecovery": "Prüfen Sie Ihren Zugriff und Ihre Verbindung und aktualisieren Sie dann den Status.",
   "platform.tenantSeal.refresh": "Status aktualisieren",
   "platform.tenantSeal.stateLegacy": "Durch Bereitstellungsschlüssel geschützt",
   "platform.tenantSeal.stateMigrating": "Migration läuft",

@@ -5464,6 +5464,7 @@ const esESCatalog = {
   "platform.usageEvidence.description":
     "Uso medido de esta cuenta, como el documento a partir del cual factura un proveedor. Lea el estado de facturaci\u00f3n antes que las cifras: un periodo que el almac\u00e9n de medici\u00f3n no pudo cubrir de principio a fin es una vista parcial, no una factura.",
   "platform.usageEvidence.loading": "Cargando la evidencia de uso.",
+  "platform.usageEvidence.requestFailed": "No se pudo cargar la evidencia de uso. Revise las fechas, el acceso y la conexión, y vuelva a intentarlo.",
   "platform.usageEvidence.periodStart": "Inicio del periodo",
   "platform.usageEvidence.periodEnd": "Fin del periodo",
   "platform.usageEvidence.pull": "Obtener evidencia",
@@ -5487,6 +5488,7 @@ const esESCatalog = {
     "Mueva este tenant detrás de su propia envoltura controlada por el operador y haga que sus datos protegidos no se puedan descifrar sin detener los tenants vecinos.",
   "platform.tenantSeal.loading": "Cargando el estado de custodia del tenant.",
   "platform.tenantSeal.requestFailed": "El estado de custodia del tenant no está disponible",
+  "platform.tenantSeal.requestRecovery": "Compruebe el acceso y la conexión, y luego actualice el estado.",
   "platform.tenantSeal.refresh": "Actualizar estado",
   "platform.tenantSeal.stateLegacy": "Protegido por la clave del despliegue",
   "platform.tenantSeal.stateMigrating": "Migración en curso",
