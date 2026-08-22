@@ -320,7 +320,7 @@ not this file.
 | `internal/server/unvaulted_secret_posture_served_test.go:151` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/unvaulted_secret_posture_served_test.go:152` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/store/agent_bootstrap_token_test.go:67` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/store/approved_target_fences.go:228` | SQL column identifiers only; this constant contains no credential material. |
+| `internal/store/approved_target_fences.go:229` | SQL column identifiers only; this constant contains no credential material. |
 | `internal/store/dynamic_secret_lease.go:579` | sealed_credential is a SQL column name, not a hardcoded credential (CWE-798). |
 | `internal/store/privacy_erasure_preparation.go:153` | SQL column identifiers only; this constant contains no credential material. |
 | `internal/store/secret_rotation_schedule_privacy.go:694` | SQL authority columns are names, not embedded credentials (CWE-798). |
