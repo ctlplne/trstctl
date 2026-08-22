@@ -52,4 +52,12 @@ describe("docs IA parity (S-R2)", () => {
     expect(src).toMatch(/Detect &amp; respond/);
     expect(src).toMatch(/Editions &amp; license/);
   });
+
+  it("documents bare /platform as the API-free Platform setup doorway", () => {
+    const consoleDoc = readFileSync(path.join(dir, "web-console.md"), "utf8");
+    const demo = readFileSync(path.join(dir, "demo-click-through.html"), "utf8");
+    expect(consoleDoc).toMatch(/`\/platform`[^\n]*Platform setup/);
+    expect(consoleDoc).toMatch(/loads no protected detail/i);
+    expect(demo).toMatch(/Open <strong>Platform setup<\/strong>/);
+  });
 });

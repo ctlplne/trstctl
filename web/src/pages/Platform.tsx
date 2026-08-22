@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { Navigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { Building2, ChevronDown, Gauge, Headphones, Network, Plus } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { AdminHeaderActions } from "@/components/AdminHeaderActions";
@@ -8,7 +8,7 @@ import { DRPosturePanel } from "@/components/DRPosturePanel";
 import { DetailDrawer } from "@/components/DetailDrawer";
 import { IdempotencyResultProtectionPanel, TenantKeyDomainPanel, UsageEvidencePanel } from "@/components/TenantCustodyPanels";
 import { Eyebrow } from "@/components/typography";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { formatCurrency as formatCurrencyPolicy, formatDateTime, formatNumber as formatNumberPolicy, type FormatPolicy } from "@/i18n/format";
 import {
@@ -83,16 +83,77 @@ const priceBandLabelKeys = {
   "provider-51-250": "platform.editions.provider51To250",
 } as const;
 
-/** C-A1 (07-closeout plan): the /platform tab grab-bag became three real
- * routes — /admin/access, /admin/system, /admin/editions — each deep-linkable
- * and individually fetch-scoped. /platform stays registered forever as a
- * redirector so historical deep links, docs, and muscle memory keep working. */
+/** C-A1 keeps protected admin detail split into independently fetch-scoped
+ * routes. Bare /platform is the calm, API-free readiness doorway; historical
+ * ?tab= deep links still redirect so bookmarks and docs do not break. */
 export function PlatformRedirect() {
   const [searchParams] = useSearchParams();
   const tab = searchParams.get("tab");
+  if (tab === null) return <PlatformOverview />;
   if (tab === "posture") return <Navigate to="/admin/system" replace />;
   if (tab === "editions") return <Navigate to="/admin/editions" replace />;
   return <Navigate to="/admin/access" replace />;
+}
+
+function PlatformOverview() {
+  const { t } = useTranslation();
+  const areas = [
+    {
+      href: "/admin/access",
+      icon: Building2,
+      title: t("platform.tabs.access"),
+      body: t("admin.access.description"),
+      action: t("platform.overview.accessAction"),
+    },
+    {
+      href: "/admin/system",
+      icon: Gauge,
+      title: t("platform.tabs.posture"),
+      body: t("admin.system.description"),
+      action: t("platform.overview.systemAction"),
+    },
+    {
+      href: "/admin/editions",
+      icon: Network,
+      title: t("platform.tabs.editions"),
+      body: t("admin.editions.description"),
+      action: t("platform.overview.editionsAction"),
+    },
+  ];
+
+  return (
+    <section aria-labelledby="platform-overview-heading" className="grid gap-6">
+      <PageHeader
+        titleId="platform-overview-heading"
+        title={t("platform.overview.title")}
+        description={t("platform.overview.description")}
+        technicalDetails={t("platform.overview.technical")}
+        actions={
+          <Link className={buttonVariants()} to="/admin/system">
+            {t("platform.overview.primaryAction")}
+          </Link>
+        }
+      />
+
+      <div className="grid gap-3 lg:grid-cols-3">
+        {areas.map((area) => {
+          const Icon = area.icon;
+          return (
+            <article key={area.href} className="ui-panel grid content-start gap-3 p-comfortable">
+              <Icon className="h-5 w-5 text-brand-accent" aria-hidden="true" />
+              <div>
+                <h2 className="font-semibold">{area.title}</h2>
+                <p className="mt-1 text-sm text-muted-foreground">{area.body}</p>
+              </div>
+              <Link className={buttonVariants({ variant: "outline" })} to={area.href}>
+                {area.action}
+              </Link>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
 }
 
 export function AdminSystem() {

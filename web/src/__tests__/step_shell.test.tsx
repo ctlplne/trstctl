@@ -23,6 +23,13 @@ describe("StepShell quiet mobile progress", () => {
     expect(compact).toHaveTextContent("Decision 5");
     expect(compact).not.toHaveTextContent("Decision 1");
     expect(compact).not.toHaveTextContent("Decision 6");
-    expect(within(compact).getByText("Decision 4").closest("li")).toHaveAttribute("aria-current", "step");
+    const current = within(compact).getByText("Decision 4").closest("li");
+    expect(current).toHaveAttribute("aria-current", "step");
+    expect(current).toHaveClass("text-foreground");
+
+    const full = screen.getByTestId("full-step-progress");
+    const fullCurrent = within(full).getByText("Decision 4").closest("li");
+    expect(fullCurrent?.firstElementChild).toHaveClass("text-foreground");
+    expect(fullCurrent?.firstElementChild).not.toHaveClass("text-brand-accent");
   });
 });

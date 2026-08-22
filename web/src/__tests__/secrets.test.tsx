@@ -792,6 +792,7 @@ describe("secrets surface", () => {
     renderSecrets("/secrets/access");
     expect(await screen.findByRole("heading", { name: "Auth methods" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Issued sessions" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Issued sessions" })).toHaveAttribute("tabindex", "0");
     expect(screen.queryByText(/isn't in the console yet/)).not.toBeInTheDocument();
 
     // Sync and platform-integration posture live on the Sync workspace tab.

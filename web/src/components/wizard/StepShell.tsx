@@ -130,7 +130,7 @@ export function StepShell({
 
 function stepStateClass(state: "current" | "done" | "upcoming") {
   if (state === "done") return "border-status-success/40 bg-status-success/10 text-status-success";
-  if (state === "current") return "border-brand-accent/50 bg-brand-accent/10 text-brand-accent";
+  if (state === "current") return "border-brand-accent/50 bg-brand-accent/10 text-foreground";
   return "border-border bg-muted/40 text-muted-foreground";
 }
 

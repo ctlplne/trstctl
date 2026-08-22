@@ -139,7 +139,7 @@ export function ReadinessPanel({
         <span className="text-[2.25rem] font-semibold leading-none tabular-nums">{pct}%</span>
         <span className="text-body text-muted-foreground">{translateNow("source.of.certificates.auto.renew.02d35aa265")}</span>
       </div>
-      <p className="mt-1 text-caption text-risk-high">
+      <p className="mt-1 text-caption text-status-warning">
         {manualAtRisk} {translateNow("source.manual.certs.expiring.within.47.days.e57062b5bf")}
       </p>
       <Meter

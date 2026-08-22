@@ -3,6 +3,7 @@ import { MDMDevicesPanel } from "@/components/MDMDevicesPanel";
 import { Copy, X } from "lucide-react";
 import { Dialog } from "@/components/Dialog";
 import { PageHeader } from "@/components/PageHeader";
+import { ScrollableRegion, ScrollableTableRegion } from "@/components/ScrollableTableRegion";
 import { useCan } from "@/components/rbac";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -708,7 +709,7 @@ export function Protocols() {
         <h2 id="protocol-table-heading" className="mb-3 text-title font-semibold">
           {translateNow("source.protocol.register.6109f4cf46")}
         </h2>
-        <div className="ui-panel overflow-x-auto">
+        <ScrollableTableRegion className="ui-panel" label={translateNow("source.enrollment.protocol.surfaces.de695f7aa5")}>
           <table className="ui-table min-w-[56rem]">
             <caption className="sr-only">{translateNow("source.enrollment.protocol.surfaces.de695f7aa5")}</caption>
             <thead>
@@ -755,7 +756,7 @@ export function Protocols() {
               })}
             </tbody>
           </table>
-        </div>
+        </ScrollableTableRegion>
         <div className="mt-3">
           {statusLoading && <LoadingState>{translateNow("source.checking.protocol.responders.b300fe1dfa")}</LoadingState>}
           {statusError && <ErrorState title={translateNow("source.protocol.status.check.failed.d6b8e1268d")}>{statusError}</ErrorState>}
@@ -769,7 +770,7 @@ export function Protocols() {
         <h2 id="dns-provider-heading" className="mb-3 text-title font-semibold">
           {t("protocols.dns01.heading")}
         </h2>
-        <div className="ui-panel overflow-x-auto">
+        <ScrollableTableRegion className="ui-panel" label={t("protocols.dns01.caption")}>
           <table className="ui-table min-w-[62rem]">
             <caption className="sr-only">{t("protocols.dns01.caption")}</caption>
             <thead>
@@ -830,7 +831,7 @@ export function Protocols() {
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollableTableRegion>
         {statusLoading && <LoadingState>{t("protocols.dns01.loading")}</LoadingState>}
         {!statusLoading && !statusError && dnsProviders.length === 0 && (
           <ErrorState title={t("protocols.dns01.unavailableTitle")}>{t("protocols.dns01.empty")}</ErrorState>
@@ -907,7 +908,7 @@ export function Protocols() {
         <h2 id="dns-config-heading" className="mb-3 text-title font-semibold">
           {t("protocols.dns01.configHeading")}
         </h2>
-        <div className="ui-panel overflow-x-auto">
+        <ScrollableTableRegion className="ui-panel" label={t("protocols.dns01.configCaption")}>
           <table className="ui-table min-w-[76rem]">
             <caption className="sr-only">{t("protocols.dns01.configCaption")}</caption>
             <thead>
@@ -993,7 +994,7 @@ export function Protocols() {
               })}
             </tbody>
           </table>
-        </div>
+        </ScrollableTableRegion>
         {statusLoading && <LoadingState>{t("protocols.dns01.configLoading")}</LoadingState>}
         {!statusLoading && !statusError && dnsProviderConfigs.length === 0 && (
           <NeutralEmptyState title={t("protocols.dns01.configEmptyTitle")} body={t("protocols.dns01.configEmpty")} />
@@ -1005,7 +1006,7 @@ export function Protocols() {
           {t("protocols.mdm.heading")}
         </h2>
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_18rem]">
-          <div className="ui-panel overflow-x-auto">
+          <ScrollableTableRegion className="ui-panel" label={t("protocols.mdm.caption")}>
             <table className="ui-table min-w-[72rem]">
               <caption className="sr-only">{t("protocols.mdm.caption")}</caption>
               <thead>
@@ -1086,7 +1087,7 @@ export function Protocols() {
                 })}
               </tbody>
             </table>
-          </div>
+          </ScrollableTableRegion>
           <div className="ui-panel p-3 text-sm">
             <p className="font-medium">{t("protocols.mdm.telemetry")}</p>
             <dl className="mt-3 grid grid-cols-2 gap-2 text-caption">
@@ -1150,7 +1151,12 @@ export function Protocols() {
                           {translateNow("source.copy.e21f935f11")}
                         </Button>
                       </div>
-                      <code className="block overflow-x-auto rounded bg-muted px-3 py-2 text-xs">{snippet.command}</code>
+                      <ScrollableRegion
+                        className="bg-muted px-3 py-2"
+                        label={translateNow("source.copy.value1.value2.command.fbc14f63f6", { value1: protocol.name, value2: snippet.label })}
+                      >
+                        <code className="block min-w-max text-xs">{snippet.command}</code>
+                      </ScrollableRegion>
                       {copied === copiedKey && (
                         <p className="mt-2 text-xs text-muted-foreground">{translateNow("source.copied.command.without.token.material.6c656e4f88")}</p>
                       )}

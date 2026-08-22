@@ -8,9 +8,9 @@ import { AuthProvider } from "@/auth/AuthProvider";
 import { AppRoutes } from "@/App";
 
 /* C-A1 (07-closeout plan): /platform's tab grab-bag became three real routes.
- * This suite is the card's permanent guard: the redirects must keep every
- * historical /platform?tab= deep link working forever, and each route must
- * carry its own H1 (naming parity is asserted separately by naming_parity). */
+ * This suite is the permanent guard: bare /platform is an API-free readiness
+ * doorway, historical /platform?tab= deep links keep working forever, and each
+ * admin route carries its own H1 (naming parity is asserted separately). */
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -143,9 +143,17 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "Plan and license" })).toBeInTheDocument();
   });
 
-  it("redirects bare /platform to /admin/access", async () => {
+  it("answers platform readiness at bare /platform without fetching protected detail", async () => {
     renderAt("/platform");
-    expect(await screen.findByRole("heading", { level: 1, name: "People and roles" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Platform setup" })).toBeInTheDocument();
+    expect(screen.getByText("What still must be configured before production.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Fix first requirement" })).toHaveAttribute("href", "/admin/system");
+    expect(screen.getByRole("link", { name: "Review people and roles" })).toHaveAttribute("href", "/admin/access");
+    expect(screen.getByRole("link", { name: "Review system health" })).toHaveAttribute("href", "/admin/system");
+    expect(screen.getByRole("link", { name: "Review plan and license" })).toHaveAttribute("href", "/admin/editions");
+    expect(apiMock.platformSystem).not.toHaveBeenCalled();
+    expect(apiMock.editions).not.toHaveBeenCalled();
+    expect(apiMock.accessRoles).not.toHaveBeenCalled();
   });
 
   it("redirects /platform?tab=posture to /admin/system", async () => {

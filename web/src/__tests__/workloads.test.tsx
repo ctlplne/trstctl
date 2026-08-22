@@ -69,6 +69,7 @@ describe("workload identity disclosure surface", () => {
     expect(screen.getByText("Workload attestation chain")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Create trust source" })).toBeInTheDocument();
     expect(screen.getByText("No attester trust source has been configured.")).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Attester trust sources" })).toHaveAttribute("tabindex", "0");
     expect(screen.getByRole("button", { name: "Issue attested SVID" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Issue attested SVID" })).toBeDisabled();
     expect(screen.getByText("Add a trusted attester before issuing a workload identity.")).toBeInTheDocument();
@@ -76,6 +77,7 @@ describe("workload identity disclosure surface", () => {
     expect(screen.getByLabelText("Attestation proof payload (base64)")).toBeInTheDocument();
     expect(screen.getByLabelText("Workload public key")).toBeInTheDocument();
     expect(screen.getByText("No attested SVID has been issued in this browser session.")).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Attested SVID outcomes" })).toHaveAttribute("tabindex", "0");
     expect(screen.getByText("Raw attestation evidence stays out of the browser")).toBeInTheDocument();
     expect(screen.getByText(/Returned certificate PEM and claim maps are discarded/i)).toBeInTheDocument();
     expect(screen.queryByText("Workload attestation fixtures")).not.toBeInTheDocument();

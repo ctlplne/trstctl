@@ -1,7 +1,12 @@
 /* eslint-disable jsx-a11y/no-noninteractive-tabindex -- Wide table regions need focus so keyboard users can scroll clipped columns. */
 import type { ReactNode } from "react";
 
-export function ScrollableTableRegion({ children, className = "", label }: { children: ReactNode; className?: string; label: string }) {
+type ScrollableRegionProps = { children: ReactNode; className?: string; label: string };
+
+/** A named keyboard stop for horizontally clipped content. Native horizontal
+ * scrolling is pointer-friendly but otherwise leaves keyboard users unable to
+ * reach columns or commands beyond the viewport. */
+export function ScrollableRegion({ children, className = "", label }: ScrollableRegionProps) {
   return (
     <div
       aria-label={label}
@@ -13,3 +18,5 @@ export function ScrollableTableRegion({ children, className = "", label }: { chi
     </div>
   );
 }
+
+export { ScrollableRegion as ScrollableTableRegion };

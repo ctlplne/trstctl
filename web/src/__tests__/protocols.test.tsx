@@ -359,6 +359,15 @@ describe("protocol surface", () => {
     expect(screen.getByRole("region", { name: "Machine request methods" })).toHaveClass("min-w-0", "[&>*]:min-w-0");
     expect(screen.getByRole("region", { name: "Client setup" })).toHaveClass("min-w-0", "[&>*]:min-w-0");
     expect(screen.getByRole("region", { name: "ACME" })).toHaveClass("min-w-0");
+    for (const label of [
+      "Enrollment protocol surfaces",
+      "ACME DNS-01 provider coverage",
+      "Tenant DNS-01 provider configurations",
+      "MDM SCEP enrollment policies",
+      "Copy ACME certbot command",
+    ]) {
+      expect(screen.getByRole("group", { name: label })).toHaveAttribute("tabindex", "0");
+    }
   });
 
   it("renders ACME setup with live responder status", async () => {

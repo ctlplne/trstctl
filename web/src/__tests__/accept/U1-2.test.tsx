@@ -27,7 +27,7 @@ describe("U1-2 47-day renewal readiness panel", () => {
     render(<ReadinessPanel certificates={certificates} rotationRuns={rotationRuns} />);
 
     expect(screen.getByText("67%")).toBeInTheDocument();
-    expect(screen.getByText(/1 manual certs expiring within 47 days/)).toBeInTheDocument();
+    expect(screen.getByText(/1 manual certs expiring within 47 days/)).toHaveClass("text-status-warning");
     expect(screen.getByRole("img", { name: "Auto-renew vs manual" })).toBeInTheDocument();
   });
 });

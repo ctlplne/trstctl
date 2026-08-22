@@ -7,6 +7,7 @@ import { DataGridToolbar } from "@/components/DataGridToolbar";
 import { DetailDrawer } from "@/components/DetailDrawer";
 import { Dialog } from "@/components/Dialog";
 import { PageHeader } from "@/components/PageHeader";
+import { ScrollableTableRegion } from "@/components/ScrollableTableRegion";
 import { IdentityPicker } from "@/components/IdentityPicker";
 import { ModuleKpiStrip } from "@/components/ModuleKpiStrip";
 import { useCan } from "@/components/rbac";
@@ -2029,7 +2030,7 @@ export function Secrets() {
             {authMethods === null ? (
               <p className="text-sm text-muted-foreground">{t("secrets.methods.unavailable")}</p>
             ) : (
-              <div className="overflow-x-auto rounded-panel border border-border">
+              <ScrollableTableRegion className="rounded-panel" label={t("secrets.methods.heading")}>
                 <table className="ui-table min-w-[52rem]">
                   <caption className="sr-only">{t("secrets.methods.heading")}</caption>
                   <thead>
@@ -2084,7 +2085,7 @@ export function Secrets() {
                     )}
                   </tbody>
                 </table>
-              </div>
+              </ScrollableTableRegion>
             )}
           </section>
 
@@ -2099,7 +2100,7 @@ export function Secrets() {
             {machineSessions === null ? (
               <p className="text-sm text-muted-foreground">{t("secrets.sessions.unavailable")}</p>
             ) : (
-              <div className="overflow-x-auto rounded-panel border border-border">
+              <ScrollableTableRegion className="rounded-panel" label={t("secrets.sessions.heading")}>
                 <table className="ui-table min-w-[52rem]">
                   <caption className="sr-only">{t("secrets.sessions.heading")}</caption>
                   <thead>
@@ -2149,7 +2150,7 @@ export function Secrets() {
                     )}
                   </tbody>
                 </table>
-              </div>
+              </ScrollableTableRegion>
             )}
           </section>
         </div>

@@ -261,7 +261,7 @@ export const navModules: NavModule[] = navSpaces.map((space) => ({
 }));
 
 /** globalBand: routes that belong to no space. After S-C1 this is only the
- * Home plane (Dashboard + Journeys) plus the legacy /platform redirector —
+ * Home plane (Dashboard + Journeys) plus the API-free /platform doorway —
  * everything else lives in exactly one space. */
 export const globalBandRoutes: string[] = ["/", "/journeys", "/platform"];
 
@@ -365,7 +365,8 @@ export const appRoutePaths = [
   "/admin/access",
   "/admin/system",
   "/admin/editions",
-  // C-A1: /platform stays registered as a permanent redirector to /admin/*.
+  // C-A1: /platform stays registered as a readiness doorway; historical
+  // ?tab= links redirect to their split /admin/* destinations.
   "/platform",
   "/styleguide",
   "/journeys",

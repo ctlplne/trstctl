@@ -946,8 +946,13 @@ describe("i18n boundary", () => {
       // again says that follower regions serve projected reads while exactly
       // one region may write for a tenant. Machine-authored es/de — FLAGGED
       // FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "1dac32fcc4c5848e650c4c22ad130f142d5bbce326890f97c0a06a14e0d364f7",
-      "de-DE": "51f637d03bf8c694bb4d839929132c377608fd42447324a266537675420c18e8",
+      // QA design g43 Route 003 re-pin: the API-free Platform setup doorway
+      // names the three production-readiness boundaries and sends operators
+      // to the separately scoped access, health, and signed-license pages.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
+      // release.
+      "es-ES": "88c7bb36d6aa6cf0805a8bb339b7e1281433a5f5da3102a9cf011ce4b853c27d",
+      "de-DE": "17bdc238545db3bc5e766390265f6a408aba99061960cf1d2dce2d2ba830819d",
     });
   });
 

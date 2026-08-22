@@ -501,6 +501,15 @@ const deDECatalog = {
   "platform.tabs.access": "Personen und Rollen",
   "platform.tabs.posture": "Systemzustand",
   "platform.tabs.editions": "Plan und Lizenz",
+  // DESIGN-ROUTE-003 machine-authored translations; human linguistic review required before release.
+  "platform.overview.title": "Plattform einrichten",
+  "platform.overview.description": "Was vor dem Produktionseinsatz noch konfiguriert werden muss.",
+  "platform.overview.technical":
+    "Dieser Einstieg lädt keine geschützten Details. Personen, Laufzeitnachweise und Fakten zur signierten Lizenz bleiben auf getrennten, mandantengebundenen Seiten und werden erst beim Öffnen geladen.",
+  "platform.overview.primaryAction": "Erste Anforderung beheben",
+  "platform.overview.accessAction": "Personen und Rollen prüfen",
+  "platform.overview.systemAction": "Systemzustand prüfen",
+  "platform.overview.editionsAction": "Plan und Lizenz prüfen",
   // DESIGN-ROUTE-041 machine-authored translations; human linguistic review required before release.
   "admin.system.currentAnswer": "Aktuelle Antwort",
   "admin.system.fixFirstIssue": "Erstes Problem beheben",

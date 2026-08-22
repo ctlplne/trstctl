@@ -712,9 +712,11 @@ describe("app shell accessibility and theme", () => {
     expect(screen.queryByRole("textbox", { name: /tenant/i })).not.toBeInTheDocument();
   });
 
-  it("shows people, roles, and lazy expert data from served APIs (via the /platform redirect)", async () => {
+  it("opens people and roles from the API-free /platform readiness doorway", async () => {
     const user = userEvent.setup();
     renderShell(["/platform"]);
+    expect(await screen.findByRole("heading", { name: "Platform setup" })).toBeInTheDocument();
+    await user.click(screen.getByRole("link", { name: "Review people and roles" }));
     expect(await screen.findByRole("heading", { name: "People and roles" })).toBeInTheDocument();
 
     expect(apiMock.oidcMappingStatus).not.toHaveBeenCalled();

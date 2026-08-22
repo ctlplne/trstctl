@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Ban, Plus, RefreshCw, RotateCw, Trash2 } from "lucide-react";
 import { ErrorState, UnavailableState } from "@/components/StatePrimitives";
 import { PageHeader } from "@/components/PageHeader";
+import { ScrollableTableRegion } from "@/components/ScrollableTableRegion";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Num } from "@/components/typography";
@@ -850,7 +851,7 @@ export function Workloads() {
         </div>
 
         {trustSourceError && <ErrorState title={t("workloads.attestation.errorTitle")}>{trustSourceError}</ErrorState>}
-        <div className="ui-panel overflow-x-auto">
+        <ScrollableTableRegion className="ui-panel" label={t("workloads.attestation.caption")}>
           <table className="ui-table min-w-[64rem]">
             <caption className="sr-only">{t("workloads.attestation.caption")}</caption>
             <thead>
@@ -920,7 +921,7 @@ export function Workloads() {
               )}
             </tbody>
           </table>
-        </div>
+        </ScrollableTableRegion>
 
         <form aria-labelledby="attested-issue-heading" className="ui-panel grid gap-3 p-comfortable" onSubmit={issueAttestedSVID}>
           <div>
@@ -966,7 +967,7 @@ export function Workloads() {
         </form>
         {attestationError && <ErrorState title={t("workloads.attestation.issueErrorTitle")}>{attestationError}</ErrorState>}
         <AttesterBreakdown rows={attestedSVIDs} failures={attestationFailures} />
-        <div className="ui-panel overflow-x-auto">
+        <ScrollableTableRegion className="ui-panel" label={t("workloads.attestation.outcomesCaption")}>
           <table className="ui-table min-w-[58rem]">
             <caption className="sr-only">{t("workloads.attestation.outcomesCaption")}</caption>
             <thead>
@@ -1000,7 +1001,7 @@ export function Workloads() {
               )}
             </tbody>
           </table>
-        </div>
+        </ScrollableTableRegion>
         <UnavailableState title={translateNow("source.raw.attestation.evidence.stays.out.of.the.6ffaf184fc")}>
           {translateNow("source.submitted.proof.fields.are.cleared.after.i.b9215d2471")}
         </UnavailableState>

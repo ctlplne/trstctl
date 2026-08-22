@@ -576,9 +576,11 @@ offers requeue only for failed delivery. Toasts report real success and failure.
   PR/ticket/CAB-backed request, evidence refs, and approve/deny by a distinct
   reviewer. The panel stores metadata and evidence references only, never credential
   values.
-- Administration is three routes (the old `/platform` grab-bag split; every
-  historical `/platform` tab deep link redirects permanently): **Access
-  administration** (`/admin/access`) covers members, roles, OIDC mapping, tokens,
+- **Platform setup** (`/platform`) is an API-free production-readiness doorway. It
+  loads no protected detail and points to the first system check plus the three
+  separately scoped administration pages. Historical tab-query deep links still
+  redirect to their matching page. **People and roles** (`/admin/access`) covers
+  members, roles, OIDC mapping, tokens,
   offboarding, and JIT sessions; **System health** (`/admin/system`) answers
   whether the control plane is securely configured, then keeps exact checks,
   configuration evidence, dependency health, and exceptions available on demand; it is the
@@ -688,7 +690,7 @@ remain fail-closed when the surface is disabled. The route is backed by
 | `/admin/editions`   | Plan and license                |
 | `/assistant`        | Product help                    |
 | `/wizard`           | Wizard (not in rail)            |
-| `/platform`         | redirects to `/admin/*`         |
+| `/platform`         | Platform setup                  |
 
 ## Use it
 

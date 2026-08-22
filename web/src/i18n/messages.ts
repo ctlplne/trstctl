@@ -1538,6 +1538,23 @@ export const messages = {
     defaultMessage: "Plan and license",
     description: "Calm nav label + H1 for /admin/editions: enabled features, signed-license validity, and entitlement evidence (DESIGN-ROUTE-042).",
   },
+  "platform.overview.title": { defaultMessage: "Platform setup", description: "H1 for the API-free platform readiness doorway." },
+  "platform.overview.description": {
+    defaultMessage: "What still must be configured before production.",
+    description: "Answer-first summary on the platform readiness doorway.",
+  },
+  "platform.overview.technical": {
+    defaultMessage:
+      "This doorway loads no protected detail. People, runtime evidence, and signed-license facts stay on separate tenant-scoped pages and load only when you open them.",
+    description: "Security and data-loading boundary for the platform doorway.",
+  },
+  "platform.overview.primaryAction": {
+    defaultMessage: "Fix first requirement",
+    description: "Primary platform-readiness action leading to the fail-safe system check.",
+  },
+  "platform.overview.accessAction": { defaultMessage: "Review people and roles", description: "Link to the human access administration page." },
+  "platform.overview.systemAction": { defaultMessage: "Review system health", description: "Link to the system health page." },
+  "platform.overview.editionsAction": { defaultMessage: "Review plan and license", description: "Link to the plan and signed-license page." },
   "admin.access.description": {
     defaultMessage: "Who can use the control plane and what each role permits.",
     description: "Answer-first page description for /admin/access.",

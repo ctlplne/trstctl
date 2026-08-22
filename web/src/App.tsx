@@ -136,8 +136,8 @@ export function AppRoutes() {
             <Route path="admin/access" element={<AdminAccess />} />
             <Route path="admin/system" element={<AdminSystem />} />
             <Route path="admin/editions" element={<AdminEditions />} />
-            {/* C-A1: /platform (and its historical ?tab= deep links) redirects
-              permanently to the split /admin/* routes. */}
+            {/* C-A1: bare /platform is an API-free readiness doorway; its
+              historical ?tab= deep links redirect to split /admin/* routes. */}
             <Route path="platform" element={<PlatformRedirect />} />
             <Route path="styleguide" element={<Styleguide />} />
             <Route path="journeys" element={<Journeys />} />

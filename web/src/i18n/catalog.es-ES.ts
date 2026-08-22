@@ -489,6 +489,15 @@ const esESCatalog = {
   "platform.tabs.access": "Personas y roles",
   "platform.tabs.posture": "Estado del sistema",
   "platform.tabs.editions": "Plan y licencia",
+  // DESIGN-ROUTE-003 machine-authored translations; human linguistic review required before release.
+  "platform.overview.title": "Configuración de la plataforma",
+  "platform.overview.description": "Lo que aún debe configurarse antes de producción.",
+  "platform.overview.technical":
+    "Esta puerta no carga detalles protegidos. Las personas, las pruebas de ejecución y los datos de la licencia firmada permanecen en páginas separadas y limitadas al inquilino, y solo se cargan al abrirlas.",
+  "platform.overview.primaryAction": "Corregir el primer requisito",
+  "platform.overview.accessAction": "Revisar personas y roles",
+  "platform.overview.systemAction": "Revisar el estado del sistema",
+  "platform.overview.editionsAction": "Revisar plan y licencia",
   // DESIGN-ROUTE-041 machine-authored translations; human linguistic review required before release.
   "admin.system.description": "Si el plano de control está configurado de forma segura para este entorno.",
   "admin.system.currentAnswer": "Respuesta actual",
