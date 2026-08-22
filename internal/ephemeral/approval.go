@@ -20,6 +20,13 @@ import (
 
 const approvalIssuedStatePrefix = "issued:sha256:"
 
+// approvedCertificateRecordDelay is the largest gap allowed between the signer
+// creating an approved certificate and the control plane durably recording its
+// event. X.509 timestamps lose sub-second precision, so the separate one-second
+// allowance below covers encoding while this budget covers bounded SQL/event-log
+// work. A larger stall still fails closed while the certificate is unrecorded.
+const approvedCertificateRecordDelay = 5 * time.Second
+
 // ErrApprovalCertificateLifetime distinguishes a valid retained target whose
 // original event time is required from malformed command/certificate content.
 // The command path may perform an outside-transaction history lookup only for
@@ -176,7 +183,7 @@ func (b ApprovalBinding) ValidateCertificate(certificateDER []byte, source strin
 	approvedTTL := time.Duration(b.TTLSeconds) * time.Second
 	approvedBackdate := time.Duration(b.NotBeforeBackdateSeconds) * time.Second
 	if !eventTime.Before(info.NotAfter) || info.NotBefore.After(eventTime.Add(time.Second)) ||
-		eventTime.Sub(info.NotBefore) > approvedBackdate+time.Second ||
+		eventTime.Sub(info.NotBefore) > approvedBackdate+approvedCertificateRecordDelay+time.Second ||
 		info.NotAfter.Sub(info.NotBefore) > approvedTTL+approvedBackdate+time.Second ||
 		info.NotAfter.After(eventTime.Add(approvedTTL+time.Second)) {
 		return certinfo.Info{}, ErrApprovalCertificateLifetime

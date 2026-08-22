@@ -44,6 +44,24 @@ func TestApprovalBindingValidatesSignedCertificateLifetimeAndIdentity(t *testing
 	if _, err := binding.ValidateCertificate(certDER, "ephemeral:k8s_sat", eventTime); err != nil {
 		t.Fatalf("validate exact approved certificate: %v", err)
 	}
+	notBefore, notAfter, err := crypto.CertValidity(certDER)
+	if err != nil {
+		t.Fatalf("read approved certificate validity: %v", err)
+	}
+	delayedRecordTime := notBefore.Add(time.Duration(binding.NotBeforeBackdateSeconds)*time.Second + 3*time.Second)
+	if !delayedRecordTime.Before(notAfter) {
+		t.Fatalf("fixture record time %s is not before certificate expiry %s", delayedRecordTime, notAfter)
+	}
+	if _, err := binding.ValidateCertificate(certDER, "ephemeral:k8s_sat", delayedRecordTime); err != nil {
+		t.Fatalf("bounded post-sign record delay was rejected: %v", err)
+	}
+	stalledRecordTime := notBefore.Add(time.Duration(binding.NotBeforeBackdateSeconds)*time.Second + 7*time.Second)
+	if !stalledRecordTime.Before(notAfter) {
+		t.Fatalf("fixture stalled record time %s is not before certificate expiry %s", stalledRecordTime, notAfter)
+	}
+	if _, err := binding.ValidateCertificate(certDER, "ephemeral:k8s_sat", stalledRecordTime); err == nil {
+		t.Fatal("certificate recorded after the bounded post-sign window was accepted")
+	}
 
 	shorterAuthority := binding
 	shorterAuthority.TTLSeconds = 1
