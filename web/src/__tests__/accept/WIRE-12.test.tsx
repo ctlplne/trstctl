@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { AdminAccess, AdminEditions, AdminSystem } from "@/pages/Platform";
@@ -326,6 +327,7 @@ describe("WIRE-12 Platform served admin surface", () => {
   });
 
   it("renders remaining Platform admin data from served access endpoints and hides unbacked status panels", async () => {
+    const user = userEvent.setup();
     // Editions/licensing/commercial rows are quarantined to their own route (S-A3/DA-26, C-A1).
     const editionsPage = renderAdminPage("editions");
     expect(await screen.findByRole("heading", { name: "Editions" })).toBeInTheDocument();
@@ -375,12 +377,18 @@ describe("WIRE-12 Platform served admin surface", () => {
 
     renderAdminPage("access");
     await waitFor(() => expect(apiMock.accessRoles).toHaveBeenCalledTimes(1));
-    expect(apiMock.oidcMappingStatus).toHaveBeenCalledTimes(1);
     expect(apiMock.members).toHaveBeenCalledWith({ includeOffboarded: true, limit: 50 });
-    expect(apiMock.apiTokens).toHaveBeenCalledWith({ includeRevoked: true, limit: 50 });
+    expect(apiMock.oidcMappingStatus).not.toHaveBeenCalled();
+    expect(apiMock.apiTokens).not.toHaveBeenCalled();
+    expect(apiMock.pamSessions).not.toHaveBeenCalled();
     expect(await screen.findAllByText("platform-owner")).not.toHaveLength(0);
+    await user.click(screen.getByText("SSO groups and role bindings", { exact: true }));
+    await waitFor(() => expect(apiMock.oidcMappingStatus).toHaveBeenCalledTimes(1));
     expect(screen.getByText("platform-admins")).toBeInTheDocument();
     expect(screen.getAllByText("admin@example.test").length).toBeGreaterThan(0);
+    await user.click(screen.getByText("Sessions and access keys", { exact: true }));
+    await waitFor(() => expect(apiMock.apiTokens).toHaveBeenCalledWith({ includeRevoked: true, limit: 50 }));
+    expect(apiMock.pamSessions).toHaveBeenCalledWith({ limit: 20 });
     expect(screen.getByText("automation-client")).toBeInTheDocument();
 
     expect(screen.queryByRole("heading", { name: "Single-binary runtime" })).not.toBeInTheDocument();
@@ -407,17 +415,21 @@ describe("WIRE-12 Platform served admin surface", () => {
 
     renderAdminPage("access");
 
-    expect(await screen.findByRole("heading", { name: "Access administration" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "People and roles" })).toBeInTheDocument();
     expect((await screen.findAllByText("legacy-member@example.test")).length).toBeGreaterThan(0);
   });
 
   it("explains when privileged access sessions are not enabled", async () => {
+    const user = userEvent.setup();
     apiMock.pamSessions.mockRejectedValue(
       new ApiError(503, JSON.stringify({ title: "Service Unavailable", status: 503, detail: "PAM broker is not enabled" })),
     );
 
     renderAdminPage("access");
 
+    expect(await screen.findByRole("heading", { name: "People and roles" })).toBeInTheDocument();
+    expect(apiMock.pamSessions).not.toHaveBeenCalled();
+    await user.click(screen.getByText("Sessions and access keys", { exact: true }));
     expect(await screen.findByText("Privileged access sessions are unavailable")).toBeInTheDocument();
     expect(screen.getByText("PAM broker is not enabled")).toBeInTheDocument();
   });

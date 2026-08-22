@@ -221,7 +221,7 @@ describe("Clarity/Console design-system foundation", () => {
     // useResource. This budget only goes DOWN. If this fails with a HIGHER
     // count, a new raw control was added: use the primitives. If it fails
     // with a LOWER count, you migrated some — lower the budget in this change.
-    const budget = { input: 258, select: 63, textarea: 69 };
+    const budget = { input: 244, select: 62, textarea: 67 };
     const counts = { input: 0, select: 0, textarea: 0 };
     const walkPages = (dir: string) => {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {

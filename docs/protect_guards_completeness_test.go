@@ -652,10 +652,12 @@ func TestJourney006Trace014ConsoleDisclosesLibraryGaps(t *testing.T) {
 	// loose cable; this checks that the labeled cable is plugged into the page.
 	messages := read(t, "../web/src/i18n/messages.ts")
 	platform := read(t, "../web/src/pages/Platform.tsx")
-	access := read(t, "../web/src/pages/AdminAccess.tsx")
-	requireAllContained(t, "JOURNEY-006/TRACE-014", "web/src/pages/AdminAccess.tsx", access,
+	access := read(t, "../web/src/pages/AdminAccessJourney.tsx")
+	requireAllContained(t, "JOURNEY-006/TRACE-014", "web/src/pages/AdminAccessJourney.tsx", access,
 		`"platform.tabs.access"`,
-		`"source.oidc.mapping.status.358515bade"`,
+		`api.oidcMappingStatus()`,
+		`onToggle={loadSSOWhenOpened}`,
+		`onToggle={loadSessionsWhenOpened}`,
 		`<UnavailableState title={t("admin.access.pamUnavailableTitle")}>{pamUnavailable}</UnavailableState>`,
 	)
 	requireAllContained(t, "JOURNEY-006/TRACE-014", "web/src/pages/Platform.tsx", platform,
@@ -663,19 +665,20 @@ func TestJourney006Trace014ConsoleDisclosesLibraryGaps(t *testing.T) {
 		"served worker",
 	)
 	requireAllContained(t, "JOURNEY-006/TRACE-014", "web/src/i18n/messages.ts", messages,
-		"Access administration",
+		"People and roles",
 		`"admin.access.pamUnavailableTitle"`,
 		"Privileged access sessions are unavailable",
 		"OIDC mapping status",
 		"Passive-read-state model",
 		"one writable region per tenant",
 	)
-	// The access page remains a served surface, but its privileged-session
-	// request can independently return an exact problem response (for example,
-	// a deployment without that capability). One scoped disclosure is honest;
-	// replacing the whole page with a generic future-state panel is not.
-	if got := strings.Count(access, "<UnavailableState"); got != 1 {
-		t.Errorf("JOURNEY-006/TRACE-014: AdminAccess unavailable disclosures = %d, want exactly the scoped privileged-session disclosure", got)
+	// People and roles remains a live surface, while each named disclosure owns
+	// its honest empty/unavailable state: no people, no SSO mappings, no access
+	// keys, no sessions, optional PAM unavailable, and no eligible offboard
+	// target. ELI5: six precise empty boxes are truthful; one giant generic
+	// "future" box would hide which read actually has no data.
+	if got := strings.Count(access, "<UnavailableState"); got != 6 {
+		t.Errorf("JOURNEY-006/TRACE-014: AdminAccess unavailable disclosures = %d, want six scoped people/SSO/key/session/offboard disclosures", got)
 	}
 	if strings.Contains(strings.ToLower(access+platform), "not served yet") {
 		t.Error("JOURNEY-006/TRACE-014: admin pages should name exact served or unavailable evidence, not generic future-state copy")

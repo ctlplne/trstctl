@@ -35,6 +35,7 @@ const { apiMock } = vi.hoisted(() => ({
     upsertMember: vi.fn(),
     offboardMember: vi.fn(),
     apiTokens: vi.fn(),
+    pamSessions: vi.fn(),
     createAPIToken: vi.fn(),
     revokeAPIToken: vi.fn(),
     logout: vi.fn(),
@@ -165,6 +166,7 @@ describe("app shell accessibility and theme", () => {
         },
       ],
     });
+    apiMock.pamSessions.mockResolvedValue({ items: [] });
     apiMock.editions.mockResolvedValue({
       tier: "community",
       state: "community",
@@ -689,8 +691,8 @@ describe("app shell accessibility and theme", () => {
     renderShell(["/admin/editions"]);
     await screen.findByText("u@example.test");
 
-    await user.click(screen.getByRole("link", { name: /^Access administration$/i }));
-    expect(await screen.findByRole("heading", { name: "Access administration" })).toBeInTheDocument();
+    await user.click(screen.getByRole("link", { name: /^People and roles$/i }));
+    expect(await screen.findByRole("heading", { name: "People and roles" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("link", { name: /^System posture$/i }));
     expect(await screen.findByRole("heading", { name: "System posture" })).toBeInTheDocument();
@@ -707,20 +709,27 @@ describe("app shell accessibility and theme", () => {
     expect(screen.queryByRole("textbox", { name: /tenant/i })).not.toBeInTheDocument();
   });
 
-  it("shows access administration from served data (via the /platform redirect)", async () => {
+  it("shows people, roles, and lazy expert data from served APIs (via the /platform redirect)", async () => {
+    const user = userEvent.setup();
     renderShell(["/platform"]);
-    expect(await screen.findByRole("heading", { name: "Access administration" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "People and roles" })).toBeInTheDocument();
+
+    expect(apiMock.oidcMappingStatus).not.toHaveBeenCalled();
+    expect(apiMock.apiTokens).not.toHaveBeenCalled();
+    expect(apiMock.pamSessions).not.toHaveBeenCalled();
+    await user.click(screen.getByText("SSO groups and role bindings", { exact: true }));
 
     expect((await screen.findAllByText("operator")).length).toBeGreaterThan(0);
     expect(screen.getByText("ra-officer")).toBeInTheDocument();
     expect(screen.getByText("pki-approvers")).toBeInTheDocument();
     expect(screen.getAllByText("approver-one").length).toBeGreaterThan(0);
     expect(screen.getAllByText("offboarded").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("revoked").length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "Offboard" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Mint" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Offboard person" })).toBeInTheDocument();
     expect(screen.getByRole("main")).toHaveTextContent("access:write");
     expect(screen.getByRole("main")).toHaveTextContent("certs:issue");
+    await user.click(screen.getByText("Sessions and access keys", { exact: true }));
+    expect((await screen.findAllByText("revoked")).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Create access key" })).toBeInTheDocument();
     expect(screen.queryByText("graph:read")).not.toBeInTheDocument();
     expect(screen.queryByText("secrets:write")).not.toBeInTheDocument();
     expect(screen.queryByText(/without tenant existence details/i)).not.toBeInTheDocument();
@@ -728,7 +737,7 @@ describe("app shell accessibility and theme", () => {
 
   it("hides the static API capability table", async () => {
     renderShell(["/admin/access"]);
-    await screen.findByRole("heading", { name: "Access administration" });
+    await screen.findByRole("heading", { name: "People and roles" });
 
     expect(screen.queryByRole("heading", { name: "API capability view" })).not.toBeInTheDocument();
     expect(screen.queryByText(/capability groups/i)).not.toBeInTheDocument();
@@ -744,7 +753,7 @@ describe("app shell accessibility and theme", () => {
 
     expect(screen.getByText(/Plaintext local preview/i)).toBeInTheDocument();
     expect(screen.getByText(/No private cert\/key bytes are exposed/i)).toBeInTheDocument();
-    expect(screen.getByText(/OIDC mapping status and API-token administration/i)).toBeInTheDocument();
+    expect(screen.getByText(/OIDC mapping status and access-key administration/i)).toBeInTheDocument();
     expect(screen.getByText(/browser session and CSRF posture/i)).toBeInTheDocument();
     expect(screen.queryByText(/BEGIN PRIVATE KEY/)).not.toBeInTheDocument();
     expect(screen.queryByText(/BEGIN CERTIFICATE/)).not.toBeInTheDocument();
@@ -752,7 +761,7 @@ describe("app shell accessibility and theme", () => {
 
   it("hides static CLI companion commands", async () => {
     renderShell(["/admin/access"]);
-    await screen.findByRole("heading", { name: "Access administration" });
+    await screen.findByRole("heading", { name: "People and roles" });
 
     expect(screen.queryByRole("heading", { name: "CLI companion" })).not.toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/trstctl-cli|Authorization: Bearer|trst_[A-Za-z0-9]/);
@@ -760,7 +769,7 @@ describe("app shell accessibility and theme", () => {
 
   it("hides unbacked runtime, plugin, and passive federation disclosures", async () => {
     renderShell(["/admin/access"]);
-    await screen.findByRole("heading", { name: "Access administration" });
+    await screen.findByRole("heading", { name: "People and roles" });
 
     expect(screen.queryByRole("heading", { name: "Single-binary runtime" })).not.toBeInTheDocument();
     expect(screen.queryByText("Runtime status view coming soon")).not.toBeInTheDocument();

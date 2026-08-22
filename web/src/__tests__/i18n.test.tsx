@@ -902,8 +902,23 @@ describe("i18n boundary", () => {
       // boundaries, and loads runtime or MCP expert detail only on demand.
       // Spanish and German preserve the read-only and tenant-role negations.
       // Machine-authored translations remain flagged for human language review.
-      "es-ES": "475825944a43bc00c63a1c766dbd12e60a5e97300c0c85c884815068829e22f6",
-      "de-DE": "1fe6a12736223ec8a261451a2b4ab4780809241b62c0e0ab3207a0d2015a8011",
+      // QA design g40 re-pin: People and roles now leads with the plain answer,
+      // reads only the required roster and role catalog by default, and keeps
+      // exact SSO, permission, access-key, privileged-session, certification,
+      // destructive-confirmation, and durable-readback language behind named
+      // disclosures or focused dialogs. PostgreSQL, SSH, tenant_id, RLS, and
+      // base64 remain byte-identical technical nouns. Machine-authored es/de —
+      // FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
+      // QA design g40 vocabulary re-pin: customer copy now says available or
+      // configured and confirms changes in the current roster; internal
+      // served/not-served API language remains outside the rendered journey.
+      // Machine-authored translations remain flagged for human review.
+      // QA design g40 role-choice re-pin: Add person now offers explicit
+      // catalog-backed choices and fails closed with a refresh instruction
+      // when no current role exists; nobody must type internal role syntax.
+      // Machine-authored translations remain flagged for human review.
+      "es-ES": "629dfac97f45558f935b3dd7cb9896073e88cccb85693438ffea4cbcc4004929",
+      "de-DE": "881b46965381e6f117438ca74cab4f660787a03752019602635d724471c8b35b",
     });
   });
 

@@ -121,7 +121,7 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
 
   it("serves each /admin route under its own H1", async () => {
     const access = renderAt("/admin/access");
-    expect(await screen.findByRole("heading", { level: 1, name: "Access administration" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "People and roles" })).toBeInTheDocument();
     access.unmount();
 
     const system = renderAt("/admin/system");
@@ -134,7 +134,7 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
 
   it("redirects bare /platform to /admin/access", async () => {
     renderAt("/platform");
-    expect(await screen.findByRole("heading", { level: 1, name: "Access administration" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "People and roles" })).toBeInTheDocument();
   });
 
   it("redirects /platform?tab=posture to /admin/system", async () => {
@@ -149,12 +149,12 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
 
   it("redirects an unknown /platform tab to /admin/access", async () => {
     renderAt("/platform?tab=nonsense");
-    expect(await screen.findByRole("heading", { level: 1, name: "Access administration" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "People and roles" })).toBeInTheDocument();
   });
 
   it("keeps editions and commercial framing off Access and System (S-A3 re-asserted per route)", async () => {
     const access = renderAt("/admin/access");
-    await screen.findByRole("heading", { level: 1, name: "Access administration" });
+    await screen.findByRole("heading", { level: 1, name: "People and roles" });
     expect(screen.queryByRole("heading", { name: "Editions" })).not.toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/Upgrade to Enterprise|Contact sales/i);
     access.unmount();

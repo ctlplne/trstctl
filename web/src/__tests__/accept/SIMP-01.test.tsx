@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { AdminAccess, AdminEditions, AdminSystem } from "@/pages/Platform";
@@ -23,6 +24,7 @@ const { apiMock } = vi.hoisted(() => ({
     upsertMember: vi.fn(),
     offboardMember: vi.fn(),
     apiTokens: vi.fn(),
+    pamSessions: vi.fn(),
     createAPIToken: vi.fn(),
     logout: vi.fn(),
   },
@@ -83,6 +85,7 @@ describe("SIMP-01 Platform served-data reduction", () => {
         },
       ],
     });
+    apiMock.pamSessions.mockResolvedValue({ items: [] });
     apiMock.editions.mockResolvedValue({
       tier: "community",
       state: "community",
@@ -279,7 +282,7 @@ describe("SIMP-01 Platform served-data reduction", () => {
   it("quarantines editions & license on its own route, off Access and System (S-A3/DA-26, C-A1)", async () => {
     // /admin/access shows no license/edition framing.
     const access = renderAdminPage("access");
-    await screen.findByRole("heading", { name: "Access administration" });
+    await screen.findByRole("heading", { name: "People and roles" });
     expect(screen.queryByRole("heading", { name: "Editions" })).not.toBeInTheDocument();
     access.unmount();
 
@@ -295,20 +298,27 @@ describe("SIMP-01 Platform served-data reduction", () => {
   });
 
   it("keeps each admin route fetch-scoped to what it renders (C-A1)", async () => {
+    const user = userEvent.setup();
     // /admin/access loads only access-admin data.
     const access = renderAdminPage("access");
-    expect(await screen.findByRole("heading", { name: "Access administration" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "People and roles" })).toBeInTheDocument();
     await waitFor(() => expect(apiMock.accessRoles).toHaveBeenCalledTimes(1));
-    expect(apiMock.oidcMappingStatus).toHaveBeenCalledTimes(1);
     expect(apiMock.members).toHaveBeenCalledWith({ includeOffboarded: true, limit: 50 });
-    expect(apiMock.apiTokens).toHaveBeenCalledWith({ includeRevoked: true, limit: 50 });
+    expect(apiMock.oidcMappingStatus).not.toHaveBeenCalled();
+    expect(apiMock.apiTokens).not.toHaveBeenCalled();
+    expect(apiMock.pamSessions).not.toHaveBeenCalled();
     expect(apiMock.enterpriseSupportStatus).not.toHaveBeenCalled();
     expect(apiMock.scaleOrchestration).not.toHaveBeenCalled();
     expect(apiMock.platformSystem).not.toHaveBeenCalled();
     expect(apiMock.activeActiveIssuance).not.toHaveBeenCalled();
     expect(screen.getAllByText("access-admin").length).toBeGreaterThan(0);
+    await user.click(screen.getByText("SSO groups and role bindings", { exact: true }));
+    await waitFor(() => expect(apiMock.oidcMappingStatus).toHaveBeenCalledTimes(1));
     expect(await screen.findByText("access-admins")).toBeInTheDocument();
     expect(screen.getAllByText("access-admin@example.test").length).toBeGreaterThan(0);
+    await user.click(screen.getByText("Sessions and access keys", { exact: true }));
+    await waitFor(() => expect(apiMock.apiTokens).toHaveBeenCalledWith({ includeRevoked: true, limit: 50 }));
+    expect(apiMock.pamSessions).toHaveBeenCalledWith({ limit: 20 });
     expect(screen.getByText("ops-automation")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "API capability view" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "CLI companion" })).not.toBeInTheDocument();
