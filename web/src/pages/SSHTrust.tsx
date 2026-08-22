@@ -242,7 +242,7 @@ export function SSHTrust() {
     <section aria-labelledby="ssh-heading" className="grid gap-6">
       <PageHeader
         titleId="ssh-heading"
-        title={translateNow("source.ssh.trust.8a25c0e13c")}
+        title={t("nav.item.sshTrust")}
         description={t(status ? "sshTrust.page.answerReady" : "sshTrust.page.answerUnavailable")}
         technicalDetails={t("sshTrust.page.details")}
         actions={

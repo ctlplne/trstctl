@@ -356,7 +356,7 @@ describe("protocol surface", () => {
   it("keeps wide protocol tables inside the page at narrow viewports (AUD-125)", async () => {
     await renderProtocols();
 
-    expect(screen.getByRole("region", { name: "Machine request methods" })).toHaveClass("min-w-0", "[&>*]:min-w-0");
+    expect(screen.getByRole("region", { name: "How machines request credentials" })).toHaveClass("min-w-0", "[&>*]:min-w-0");
     expect(screen.getByRole("region", { name: "Client setup" })).toHaveClass("min-w-0", "[&>*]:min-w-0");
     expect(screen.getByRole("region", { name: "ACME" })).toHaveClass("min-w-0");
     for (const label of [
@@ -374,7 +374,7 @@ describe("protocol surface", () => {
     const writeText = installClipboardSpy();
     await renderProtocols();
 
-    expect(screen.getByRole("heading", { name: "Machine request methods" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "How machines request credentials" })).toBeInTheDocument();
     expect(screen.getAllByText("ACME directory, account, order, challenge, and certificate issuance flow").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Protocol enabled").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Tenant binding").length).toBeGreaterThan(0);

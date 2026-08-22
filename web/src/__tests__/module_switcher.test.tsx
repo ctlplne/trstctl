@@ -113,7 +113,7 @@ describe("space switcher (S-C1)", () => {
     // permitted route and the sidebar re-scopes.
     await screen.findByRole("heading", { level: 1, name: "Workloads" });
     const nav = screen.getByRole("navigation", { name: /Primary/i });
-    await waitFor(() => expect(within(nav).getByRole("link", { name: /SSH trust/i })).toBeInTheDocument());
+    await waitFor(() => expect(within(nav).getByRole("link", { name: /SSH access/i })).toBeInTheDocument());
     expect(within(nav).queryByRole("link", { name: /Certificate authorities/i })).not.toBeInTheDocument();
     expect(within(rail).getByRole("button", { name: "Workload & SSH" })).toHaveAttribute("aria-current", "true");
   });

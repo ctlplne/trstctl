@@ -11,8 +11,14 @@ describe("served styleguide", () => {
     vi.useFakeTimers();
     render(<Styleguide />);
 
-    expect(screen.getByRole("heading", { name: "Styleguide" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Design system" })).toBeInTheDocument();
+    expect(screen.getByText("Internal component, state, content, and accessibility contract.")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Color tokens" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Browse patterns" }));
+    expect(screen.getByRole("tab", { name: "Components" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("heading", { name: "Buttons" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Tokens" }));
 
     const tokens = screen.getByRole("tab", { name: "Tokens" });
     tokens.focus();

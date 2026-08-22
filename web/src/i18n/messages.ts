@@ -790,6 +790,10 @@ export const messages = {
     defaultMessage: "Review →",
     description: "Dashboard action for opening the prioritized risk worklist.",
   },
+  "dashboard.attention.reviewTopIssue": {
+    defaultMessage: "Review top issue",
+    description: "Primary dashboard action when at least one urgent credential needs attention.",
+  },
   "dashboard.moreActions": {
     defaultMessage: "More actions",
     description: "Dashboard disclosure containing secondary discovery and rotation actions.",
@@ -2775,6 +2779,10 @@ export const messages = {
     defaultMessage: "Refresh status",
     description: "Button that re-checks journey step completion from served data.",
   },
+  "journeys.continue": {
+    defaultMessage: "Continue journey",
+    description: "Primary page action that moves focus to the selected journey workspace.",
+  },
   "journeys.doc": {
     defaultMessage: "Reference walkthrough",
     description: "Label before the path of the long-form journey doc.",
@@ -4587,7 +4595,7 @@ export const messages = {
     description: "Metadata label for an imported existing CA serial number.",
   },
   "nav.item.protocols": {
-    defaultMessage: "Machine request methods",
+    defaultMessage: "How machines request credentials",
     description: "Primary navigation item.",
   },
   "protocols.action.setUpNext": {
@@ -4659,7 +4667,7 @@ export const messages = {
     description: "Primary navigation item.",
   },
   "nav.item.sshTrust": {
-    defaultMessage: "SSH trust",
+    defaultMessage: "SSH access",
     description: "Primary navigation item.",
   },
   "sshTrust.attested.description": {
@@ -4668,7 +4676,7 @@ export const messages = {
     description: "Description for the attestation-gated SSH user certificate form.",
   },
   "sshTrust.page.answerReady": {
-    defaultMessage: "See which machines still use standing SSH keys, then replace them with short-lived, approved SSH certificates.",
+    defaultMessage: "See who and what can connect over SSH, then replace standing keys with short-lived, approved certificates.",
     description: "Plain-language answer shown when the SSH trust workflow is ready.",
   },
   "sshTrust.page.answerUnavailable": {
@@ -10963,11 +10971,11 @@ export const messages = {
     description: "Heading for workload attestation and trust-source controls.",
   },
   "workloads.page.answerReady": {
-    defaultMessage: "Workloads can prove where they run and receive short-lived identities from an enabled trust source.",
+    defaultMessage: "See where each app runs, how that location is proved, and which short-lived identity the app receives from an enabled trust source.",
     description: "Plain-language workload identity answer when an attester is enabled.",
   },
   "workloads.page.answerNeedsTrust": {
-    defaultMessage: "Choose what may prove a workload first. After that, the workload can receive a short-lived identity.",
+    defaultMessage: "Choose what may prove where an app runs. After that, the app can receive a short-lived identity instead of a standing secret.",
     description: "Plain-language workload identity answer when no attester is enabled.",
   },
   "workloads.page.details": {
@@ -18252,10 +18260,6 @@ export const messages = {
   "source.ssh.public.key.c9be6a369e": {
     defaultMessage: "SSH public key",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx, src/pages/SSHTrust.tsx.",
-  },
-  "source.ssh.trust.8a25c0e13c": {
-    defaultMessage: "SSH trust",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/SSHTrust.tsx.",
   },
   "source.ssh.workflow.failed.e76cbdb07c": {
     defaultMessage: "SSH workflow failed",

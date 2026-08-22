@@ -34,7 +34,7 @@ const esESCatalog = {
   "pageHeader.closeDetails": "Ocultar evidencia exacta",
   "pageHeader.proveFallback":
     "Los identificadores exactos, los hechos de política, el historial de eventos y la evidencia de recuperación siguen disponibles en este espacio de trabajo.",
-  "sshTrust.page.answerReady": "Vea qué máquinas aún usan claves SSH permanentes y reemplácelas por certificados SSH de corta duración aprobados.",
+  "sshTrust.page.answerReady": "Vea quién y qué puede conectarse por SSH y reemplace las claves permanentes por certificados aprobados de corta duración.",
   "sshTrust.page.answerUnavailable": "La confianza SSH aún no está configurada. Abra la guía antes de cambiar cualquier host.",
   "sshTrust.page.details":
     "Este espacio de trabajo publica la CA SSH del inquilino, la versión KRL, los verificadores habilitados, la evidencia del despliegue, las restricciones del certificado, la revocación y los registros de retiro de hosts.",
@@ -47,8 +47,9 @@ const esESCatalog = {
   "sshTrust.readiness.readyBody": "La CA y la lista de revocación están disponibles. Registre un plan canario antes de cambiar la confianza de los hosts.",
   "sshTrust.rollout.recordOnly": "Este formulario registra la evidencia revisada del despliegue. No ejecuta comandos ni cambia sshd en ningún host.",
   "workloads.page.answerReady":
-    "Las cargas de trabajo pueden demostrar dónde se ejecutan y recibir identidades de corta duración de una fuente de confianza habilitada.",
-  "workloads.page.answerNeedsTrust": "Primero elija qué puede demostrar una carga de trabajo. Después podrá recibir una identidad de corta duración.",
+    "Vea dónde se ejecuta cada aplicación, cómo se demuestra ese lugar y qué identidad de corta duración recibe de una fuente de confianza habilitada.",
+  "workloads.page.answerNeedsTrust":
+    "Elija qué puede demostrar dónde se ejecuta una aplicación. Después podrá recibir una identidad de corta duración en vez de un secreto permanente.",
   "workloads.page.details":
     "Las fuentes de confianza de verificadores por inquilino validan evidencia de Kubernetes, nube, GitHub o TPM antes de que el servidor emita un X.509-SVID. Las pruebas y claves privadas no se conservan como evidencia del navegador.",
   "workloads.page.setupAction": "Configurar identidad de carga de trabajo",
@@ -265,6 +266,7 @@ const esESCatalog = {
     "No se puede mostrar un total seguro. Abra la lista de riesgos o vuelva a intentarlo cuando se recuperen las proyecciones.",
   "dashboard.attention.listLabel": "Credenciales de mayor prioridad",
   "dashboard.attention.review": "Revisar →",
+  "dashboard.attention.reviewTopIssue": "Revisar el problema principal",
   "dashboard.moreActions": "Más acciones",
   "dashboard.estateSummary": "{credentials} credenciales registradas · {agents} agentes en línea · {expiring} certificados vencen esta semana",
   "dashboard.exploreMetrics": "Explorar todas las métricas",
@@ -810,6 +812,7 @@ const esESCatalog = {
     "El censo de rutas publicado verifica cada paso requerido. Esta es evidencia de ingeniería, no una afirmación de que un cliente real completó el recorrido.",
   "journeys.open": "Llévame allí",
   "journeys.refresh": "Actualizar estado",
+  "journeys.continue": "Continuar el recorrido",
   "journeys.doc": "Guía de referencia",
   "journeys.status.done": "Hecho",
   "journeys.status.pending": "Pendiente",
@@ -1304,7 +1307,7 @@ const esESCatalog = {
   "caHierarchy.existing.placeholderCeremonyID": "ID de ceremonia",
   "caHierarchy.existing.kind": "Tipo",
   "caHierarchy.existing.serial": "Serie",
-  "nav.item.protocols": "Métodos de solicitud para máquinas",
+  "nav.item.protocols": "Cómo solicitan credenciales las máquinas",
   "protocols.action.setUpNext": "Configurar el siguiente método",
   "protocols.readiness.checking": "Comprobando los métodos de solicitud de las máquinas…",
   "protocols.readiness.unavailable": "La disponibilidad de los métodos no está disponible.",
@@ -1323,7 +1326,7 @@ const esESCatalog = {
   "nav.item.enrollmentProtocols": "Protocolos de inscripción",
   "nav.item.spiffe": "SPIFFE",
   "nav.item.sshCa": "CA SSH",
-  "nav.item.sshTrust": "Confianza SSH",
+  "nav.item.sshTrust": "Acceso SSH",
   "sshTrust.attested.description":
     "Los certificados de usuario SSH de corta duración requieren evidencia de atestación, un aprobador, restricciones de principal, TTL, source-address y force-command. Bloquear la autoaprobación es una regla estricta, no una pista de la interfaz.",
   "sshTrust.attested.approver": "Aprobador",
@@ -4848,7 +4851,6 @@ const esESCatalog = {
   "source.ssh.deployment.and.trust.rollout.098d316f31": "Despliegue de SSH y propagación de confianza",
   "source.ssh.key.identity.b8252e7aa8": "Identidad de clave SSH",
   "source.ssh.public.key.c9be6a369e": "Clave pública SSH",
-  "source.ssh.trust.8a25c0e13c": "Confianza SSH",
   "source.ssh.workflow.failed.e76cbdb07c": "El flujo de trabajo de SSH ha fallado",
   "source.stale.heartbeat.d8742526e2": "Señal de actividad desactualizada",
   "source.start.a.ceremony.to.see.its.purpose.approv.9f9d9ee9fd": "Inicie una ceremonia para ver su propósito, umbral de aprobación y estado.",

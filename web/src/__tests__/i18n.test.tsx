@@ -951,8 +951,14 @@ describe("i18n boundary", () => {
       // to the separately scoped access, health, and signed-license pages.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
       // release.
-      "es-ES": "88c7bb36d6aa6cf0805a8bb339b7e1281433a5f5da3102a9cf011ce4b853c27d",
-      "de-DE": "17bdc238545db3bc5e766390265f6a408aba99061960cf1d2dce2d2ba830819d",
+      // QA design g43 final-language re-pin: Home and guided setup now name the
+      // actual next action, Workloads and SSH explain who or what receives a
+      // short-lived identity, and the protocol/SSH page names stay identical in
+      // the rail, H1, and browser title. Every safety qualifier remains intact.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
+      // release.
+      "es-ES": "848586b1df223b052726b9cf1a7f023faba5ba0ca54196876fc3598602937c67",
+      "de-DE": "8e0739157fd3e1ed08e7d8396370cbfd6e720c8a919b707b0f37373b6a5fb623",
     });
   });
 

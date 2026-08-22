@@ -1,0 +1,1 @@
+import{H as e}from"./index-B69t31hJ.js";function t(t,n,...r){let i=e[t];return typeof i==`function`?i(...r):Promise.resolve(n)}export{t};

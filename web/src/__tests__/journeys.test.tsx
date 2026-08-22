@@ -130,6 +130,8 @@ describe("journeys hub", () => {
     // Detector-backed progress: the issuer exists, so first-certificate shows 1 of 4.
     const firstCert = screen.getByRole("button", { name: /First certificate/ });
     expect(await within(firstCert).findByText("1 of 4 steps done")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Continue journey" }));
+    expect(document.activeElement).toHaveAttribute("id", "journey-workspace");
 
     // Command-heavy journeys count all steps too (no more "0 of 0").
     const fleet = screen.getByRole("button", { name: /Automate fleet TLS/ });

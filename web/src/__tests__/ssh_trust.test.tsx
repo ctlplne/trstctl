@@ -106,7 +106,7 @@ describe("SSH trust served workflow surface", () => {
     const user = userEvent.setup();
     renderSSHTrust();
 
-    expect(screen.getByRole("heading", { name: "SSH trust" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "SSH access" })).toBeInTheDocument();
     expect(await screen.findByText("ssh-ed25519 AAAA trstctl-ca")).toBeInTheDocument();
     expect(screen.getByRole("table", { name: "SSH standing access inventory" })).toHaveTextContent("/home/alice/.ssh/authorized_keys");
     expect(screen.getByText(/1 standing.*1 orphaned/)).toBeInTheDocument();

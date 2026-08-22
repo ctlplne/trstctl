@@ -98,10 +98,15 @@ export function Journeys() {
         description={t("journeys.description")}
         technicalDetails={t("journeys.technicalDetails")}
         actions={
-          <Button type="button" variant="outline" loading={checking} onClick={() => void refreshStatus()}>
-            <RefreshCw className="h-4 w-4" aria-hidden="true" />
-            {t("journeys.refresh")}
-          </Button>
+          <>
+            <Button type="button" onClick={() => document.getElementById("journey-workspace")?.focus()}>
+              {t("journeys.continue")}
+            </Button>
+            <Button type="button" variant="outline" loading={checking} onClick={() => void refreshStatus()}>
+              <RefreshCw className="h-4 w-4" aria-hidden="true" />
+              {t("journeys.refresh")}
+            </Button>
+          </>
         }
       />
 
@@ -133,7 +138,11 @@ export function Journeys() {
           </div>
         </nav>
 
-        <div className="grid min-w-0 content-start gap-4">
+        <div
+          id="journey-workspace"
+          tabIndex={-1}
+          className="grid min-w-0 content-start gap-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+        >
           <StepShell
             steps={shellSteps}
             currentIndex={step}

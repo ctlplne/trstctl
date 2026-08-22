@@ -507,6 +507,8 @@ describe("auth + dashboards", () => {
     const dash = await screen.findByRole("region", { name: "Home" });
     expect(await within(dash).findByRole("heading", { name: "1 credential needs attention." })).toBeInTheDocument();
     expect(within(dash).getByRole("list", { name: "Highest-priority credentials" })).toHaveTextContent("contextual-critical-1");
+    expect(within(dash).getByRole("link", { name: "Review top issue" })).toHaveAttribute("href", "/risk?sort=score");
+    expect(within(within(dash).getByRole("group", { name: "Do next" })).getAllByRole("link")).toHaveLength(1);
 
     // Expiring ≤7d: exactly one fixture cert expires within 7 days.
     const expiring = kpiTile(dash, /Expiring ≤7d/);

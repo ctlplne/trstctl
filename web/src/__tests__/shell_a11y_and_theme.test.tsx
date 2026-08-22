@@ -607,7 +607,7 @@ describe("app shell accessibility and theme", () => {
     for (const group of ["Inventory", "Issue & automate"]) {
       expect(within(nav).getAllByText(group).length).toBeGreaterThan(0);
     }
-    for (const link of ["Request a certificate", "Machine request methods", "Certificate authorities", "Certificate rules", "Software signing"]) {
+    for (const link of ["Request a certificate", "How machines request credentials", "Certificate authorities", "Certificate rules", "Software signing"]) {
       expect(within(nav).getByRole("link", { name: new RegExp(link) })).toBeInTheDocument();
     }
 

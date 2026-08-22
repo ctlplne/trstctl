@@ -174,7 +174,7 @@ const certificateDesignTargets = [
   },
   {
     to: "/codesign",
-    answer: /sign a software digest.*without uploading.*private key/i,
+    answer: /release digests.*where the keys stay.*verifies each signature.*software and private key never enter this browser/i,
     proof: /artifact digest.*signing mode.*policy.*signature receipt.*audit/i,
     primary: "Sign artifact",
   },

@@ -85,7 +85,7 @@ export function CodeSigning() {
       <PageHeader
         titleId="codesign-heading"
         title={t("nav.item.codeSigning")}
-        description="Sign a software digest without uploading the software or exposing a private key. Use a managed signing key or an approved keyless identity."
+        description="See which release digests can be signed, where the keys stay, and how someone verifies each signature. The software and private key never enter this browser."
         technicalDetails="Exact evidence includes the artifact digest, signing mode, managed key or provider identity, policy and approval decision, signature receipt, timestamp or transparency proof, signer identity, and immutable audit event."
       />
 

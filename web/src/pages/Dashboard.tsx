@@ -261,9 +261,15 @@ export function Dashboard() {
         description={t("dashboard.homeDescription")}
         technicalDetails={t("dashboard.homeTechnicalDetails")}
         actions={
-          <ActionLink to="/request" icon={<KeyRound className="h-4 w-4" aria-hidden="true" />} primary>
-            {translateNow("source.issue.credential.ab0616c48f")}
-          </ActionLink>
+          attentionRows.length > 0 ? (
+            <ActionLink to="/risk?sort=score" icon={<ShieldAlert className="h-4 w-4" aria-hidden="true" />} primary>
+              {t("dashboard.attention.reviewTopIssue")}
+            </ActionLink>
+          ) : (
+            <ActionLink to="/request" icon={<KeyRound className="h-4 w-4" aria-hidden="true" />} primary>
+              {translateNow("source.issue.credential.ab0616c48f")}
+            </ActionLink>
+          )
         }
       />
 

@@ -35,6 +35,7 @@ describe("workload identity disclosure surface", () => {
     renderWorkloads();
 
     expect(screen.getByRole("heading", { name: "Workloads" })).toBeInTheDocument();
+    expect(screen.getByText(/where an app runs.*short-lived identity instead of a standing secret/i)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Workload identity needs a trust source" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Set up workload identity" })).toHaveAttribute("href", "#attestation-heading");
     expect(await screen.findByText("CAP-K8S-04")).toBeInTheDocument();

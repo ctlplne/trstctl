@@ -80,10 +80,15 @@ export function Styleguide() {
     <section aria-labelledby="styleguide-heading">
       <PageHeader
         titleId="styleguide-heading"
-        title="Styleguide"
-        eyebrow="Design system"
-        description="The living spec: every token and primitive below renders from the real implementation. If it looks right here, it ships right."
-        technicalDetails="Token values, accessibility tests, primitive contracts, and implementation examples live together on this route."
+        title="Design system"
+        eyebrow="Internal reference"
+        description="Internal component, state, content, and accessibility contract."
+        technicalDetails="This is the living specification: token values, accessibility tests, primitive contracts, and implementation examples render from the real implementation."
+        actions={
+          <Button type="button" onClick={() => setTab("components")}>
+            Browse patterns
+          </Button>
+        }
       />
 
       <PageTabs

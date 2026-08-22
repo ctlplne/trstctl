@@ -39,7 +39,7 @@ const deDECatalog = {
   "pageHeader.proveFallback":
     "Exakte Kennungen, Richtlinienfakten, Ereignisverlauf und Wiederherstellungsnachweise bleiben in diesem Arbeitsbereich verfügbar.",
   "sshTrust.page.answerReady":
-    "Sehen Sie, welche Maschinen noch dauerhafte SSH-Schlüssel verwenden, und ersetzen Sie sie durch genehmigte kurzlebige SSH-Zertifikate.",
+    "Sehen Sie, wer und was sich über SSH verbinden darf, und ersetzen Sie dauerhafte Schlüssel durch genehmigte kurzlebige Zertifikate.",
   "sshTrust.page.answerUnavailable": "SSH-Vertrauen ist noch nicht eingerichtet. Öffnen Sie die Anleitung, bevor Sie einen Host ändern.",
   "sshTrust.page.details":
     "Dieser Arbeitsbereich zeigt die Mandanten-SSH-CA, KRL-Version, aktivierten Prüfer, Rollout-Nachweise, Zertifikatsgrenzen, Sperrungen und Host-Ausmusterungen.",
@@ -51,8 +51,10 @@ const deDECatalog = {
   "sshTrust.readiness.readyHeading": "SSH-Vertrauen ist bereit",
   "sshTrust.readiness.readyBody": "CA und Sperrliste sind verfügbar. Erfassen Sie einen Canary-Plan, bevor Sie das Host-Vertrauen ändern.",
   "sshTrust.rollout.recordOnly": "Dieses Formular erfasst den geprüften Rollout-Nachweis. Es führt keine Befehle aus und ändert sshd auf keinem Host.",
-  "workloads.page.answerReady": "Workloads können ihren Ausführungsort belegen und kurzlebige Identitäten aus einer aktivierten Vertrauensquelle erhalten.",
-  "workloads.page.answerNeedsTrust": "Wählen Sie zuerst, was einen Workload belegen darf. Danach kann er eine kurzlebige Identität erhalten.",
+  "workloads.page.answerReady":
+    "Sehen Sie, wo jede Anwendung läuft, wie dieser Ort belegt wird und welche kurzlebige Identität sie aus einer aktivierten Vertrauensquelle erhält.",
+  "workloads.page.answerNeedsTrust":
+    "Wählen Sie, was den Ausführungsort einer Anwendung belegen darf. Danach kann sie statt eines dauerhaften Geheimnisses eine kurzlebige Identität erhalten.",
   "workloads.page.details":
     "Mandantenbezogene Prüfer-Vertrauensquellen validieren Kubernetes-, Cloud-, GitHub- oder TPM-Nachweise, bevor der Server ein X.509-SVID ausstellt. Nachweise und private Schlüssel werden nicht als Browser-Belege gespeichert.",
   "workloads.page.setupAction": "Workload-Identität einrichten",
@@ -271,6 +273,7 @@ const deDECatalog = {
     "Es kann keine sichere Summe angezeigt werden. Öffnen Sie die Risikoliste oder versuchen Sie es erneut, sobald die Projektionen wiederhergestellt sind.",
   "dashboard.attention.listLabel": "Zugangsdaten mit höchster Priorität",
   "dashboard.attention.review": "Prüfen →",
+  "dashboard.attention.reviewTopIssue": "Wichtigstes Problem prüfen",
   "dashboard.moreActions": "Weitere Aktionen",
   "dashboard.estateSummary": "{credentials} Zugangsdaten erfasst · {agents} Agenten online · {expiring} Zertifikate laufen diese Woche ab",
   "dashboard.exploreMetrics": "Alle Kennzahlen untersuchen",
@@ -823,6 +826,7 @@ const deDECatalog = {
     "Der ausgelieferte Routenzensus prüft jeden erforderlichen Schritt. Dies ist ein technischer Nachweis, keine Behauptung, dass ein echter Kunde die Journey abgeschlossen hat.",
   "journeys.open": "Bring mich hin",
   "journeys.refresh": "Status aktualisieren",
+  "journeys.continue": "Geführten Ablauf fortsetzen",
   "journeys.doc": "Referenz-Walkthrough",
   "journeys.status.done": "Erledigt",
   "journeys.status.pending": "Ausstehend",
@@ -1317,7 +1321,7 @@ const deDECatalog = {
   "caHierarchy.existing.placeholderCeremonyID": "Zeremonien-ID",
   "caHierarchy.existing.kind": "Art",
   "caHierarchy.existing.serial": "Seriennummer",
-  "nav.item.protocols": "Anforderungsmethoden für Maschinen",
+  "nav.item.protocols": "Wie Maschinen Zugangsdaten anfordern",
   "protocols.action.setUpNext": "Nächste Methode einrichten",
   "protocols.readiness.checking": "Maschinen-Anfragemethoden werden geprüft…",
   "protocols.readiness.unavailable": "Die Bereitschaft der Methoden ist nicht verfügbar.",
@@ -1336,7 +1340,7 @@ const deDECatalog = {
   "nav.item.enrollmentProtocols": "Enrollment-Protokolle",
   "nav.item.spiffe": "SPIFFE",
   "nav.item.sshCa": "SSH-CA",
-  "nav.item.sshTrust": "SSH-Vertrauen",
+  "nav.item.sshTrust": "SSH-Zugriff",
   "sshTrust.attested.description":
     "Kurzlebige SSH-Benutzerzertifikate erfordern Attestierungsnachweise, einen Freigebenden, Principal-Beschränkungen, TTL, Quelladressen- und Force-Command-Richtlinie. Blockierte Selbstfreigabe ist eine harte Regel, kein UI-Hinweis.",
   "sshTrust.attested.approver": "Freigebender",
@@ -4873,7 +4877,6 @@ const deDECatalog = {
   "source.ssh.deployment.and.trust.rollout.098d316f31": "SSH-Bereitstellung und Trust-Rollout",
   "source.ssh.key.identity.b8252e7aa8": "SSH-Schlüsselidentität",
   "source.ssh.public.key.c9be6a369e": "Öffentlicher SSH-Schlüssel",
-  "source.ssh.trust.8a25c0e13c": "SSH-Vertrauen",
   "source.ssh.workflow.failed.e76cbdb07c": "SSH-Workflow fehlgeschlagen",
   "source.stale.heartbeat.d8742526e2": "Veralteter Heartbeat",
   "source.start.a.ceremony.to.see.its.purpose.approv.9f9d9ee9fd": "Starten Sie eine Zeremonie, um deren Zweck, Genehmigungsschwelle und Status anzuzeigen.",

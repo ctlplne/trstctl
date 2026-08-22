@@ -38,6 +38,7 @@ describe("code signing console", () => {
       </MemoryRouter>,
     );
     expect(screen.getByRole("heading", { name: "Software signing" })).toBeInTheDocument();
+    expect(screen.getByText(/where the keys stay, and how someone verifies each signature/i)).toBeInTheDocument();
     await user.type(screen.getByLabelText("Artifact digest"), "sha256:000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
     await user.type(screen.getByLabelText("Managed key id"), "key-1");
     await user.click(screen.getByRole("button", { name: "Sign artifact" }));
