@@ -1045,16 +1045,18 @@ export function AdminEditions() {
           onToggle={(signature) => setOpen((current) => ({ ...current, signature }))}
         >
           {editions ? (
-            <dl className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
-              <LicenseFact label={t("source.verification.j2dr000006")} value={signatureSummary} />
-              <LicenseFact label={t("secrets.sessions.method")} value={t("admin.editions.methodValue")} />
-              <LicenseFact label={t("admin.editions.licenseId")} value={editions.license_id || t("protocols.ari.notApplicable")} mono />
-              <LicenseFact
-                label={t("admin.editions.readOnlyAfter")}
-                value={editions.read_only_at ? formatDateTime(editions.read_only_at, formatPolicy) : t("protocols.ari.notApplicable")}
-              />
-              <p className="sm:col-span-2 xl:col-span-4 text-muted-foreground">{t("admin.editions.failClosedBoundary")}</p>
-            </dl>
+            <div className="grid gap-3">
+              <dl className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
+                <LicenseFact label={t("source.verification.j2dr000006")} value={signatureSummary} />
+                <LicenseFact label={t("secrets.sessions.method")} value={t("admin.editions.methodValue")} />
+                <LicenseFact label={t("admin.editions.licenseId")} value={editions.license_id || t("protocols.ari.notApplicable")} mono />
+                <LicenseFact
+                  label={t("admin.editions.readOnlyAfter")}
+                  value={editions.read_only_at ? formatDateTime(editions.read_only_at, formatPolicy) : t("protocols.ari.notApplicable")}
+                />
+              </dl>
+              <p className="text-sm text-muted-foreground">{t("admin.editions.failClosedBoundary")}</p>
+            </div>
           ) : (
             <p className="text-sm text-muted-foreground">{t("admin.editions.evidenceUnavailable")}</p>
           )}

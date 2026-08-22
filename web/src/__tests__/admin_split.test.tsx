@@ -198,6 +198,9 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
     expect(apiMock.activeActiveIssuance).not.toHaveBeenCalled();
     expect(apiMock.platformDistribution).not.toHaveBeenCalled();
 
+    await user.click(screen.getByText("Signature verification", { exact: true }));
+    expect(screen.getByText(/The UI cannot bypass it/i)).toBeInTheDocument();
+
     await user.click(screen.getByRole("button", { name: "Add license" }));
     const guide = await screen.findByRole("dialog", { name: "Add license" });
     expect(within(guide).getByText(/trstctl verifies the Ed25519 signature before startup completes/i)).toBeInTheDocument();
