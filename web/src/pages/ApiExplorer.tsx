@@ -1077,7 +1077,7 @@ export function ApiExplorer() {
                     )}
                   </section>
 
-                  <section className="min-w-0" aria-labelledby="api-request-preview-heading">
+                  <div className="min-w-0">
                     <h3 id="api-request-preview-heading" className="mb-2 text-body font-semibold">
                       {t("apiExplorer.requestPreview")}
                     </h3>
@@ -1086,7 +1086,7 @@ export function ApiExplorer() {
                       labelledBy="api-request-preview-heading"
                       value={prepared.request?.preview ?? `${methodLabel(selected.method)} ${selected.path}\n\n${t("apiExplorer.fixValidation")}`}
                     />
-                  </section>
+                  </div>
                   {prepared.issues.length > 0 && (
                     <div role="alert" className="rounded-control border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                       <p className="font-medium">{t("apiExplorer.validationFailed")}</p>

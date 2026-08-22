@@ -189,6 +189,9 @@ describe("DESIGN-002 answer-first API playground", () => {
     expect(screen.getByText("Headers, body, and exact request", { exact: true }).closest("details")).not.toHaveAttribute("open");
     expect(screen.getByText("OpenAPI schema and code examples", { exact: true }).closest("details")).not.toHaveAttribute("open");
     expect(apiMock.createAPIToken).not.toHaveBeenCalled();
+
+    await user.click(screen.getByText("Headers, body, and exact request", { exact: true }));
+    expect(screen.getAllByRole("region", { name: "Request preview" })).toHaveLength(1);
   });
 
   it("names empty and failed contract states and can retry without inventing operations", async () => {
