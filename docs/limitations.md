@@ -2923,7 +2923,8 @@ artifact the running binary serves:
   identity table, licensed incident execution (`/incidents` — replacement
   issue/deploy, fleet reissuance, revocation queue, connector receipt,
   rollback evidence, remediation playbooks, response dispatch, sealed audit
-  bundle), and the Assistant/RCA/MCP console (`/assistant`). Deliberately
+  bundle), and Product help (`/assistant`) with grounded questions, cause
+  investigation, and on-demand read-only MCP tools. Deliberately
   API-only surfaces stay labeled until they get their own UI, including the
   bounded break-glass reconciliation workflow — a UI boundary, not a claim
   that the underlying API is library-only.

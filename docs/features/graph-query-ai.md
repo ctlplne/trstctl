@@ -128,6 +128,15 @@ entry.
 
 ## Use it
 
+In the web console, open **Product help** at `/assistant`. The calm overview performs
+no AI-runtime or MCP-tool request. Select **Ask a question** to open the read-only
+workspace, then ask in plain language. Open **Evidence and request details** only when
+you need an exact subject or source scope. **Investigate a cause** uses the same
+tenant-scoped evidence path for root-cause analysis. **Use read-only tools** and
+**Runtime and privacy details** load their server-owned boundaries only when selected.
+If `ai.enable_api` is off, these expert controls fail closed; the overview does not
+pretend the feature is available.
+
 The graph is served — explore relationships and blast radius:
 
 ```sh

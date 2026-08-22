@@ -897,8 +897,13 @@ describe("i18n boundary", () => {
       // "served contract" phrase with an available-request explanation.
       // Machine-authored Spanish and German remain flagged for human language
       // review before release.
-      "es-ES": "cc21c9710ac4705c40b940ec6175f79d7fb938eed1c87f92b08a893c63a09c7a",
-      "de-DE": "d186f2a7898d13294ca5e56e5e4b9786bf27bdc54865c95c7eb8375b520f4c09",
+      // QA design g39 re-pin: Product help now opens with one plain-language
+      // question action, names its source/permission/privacy/reference
+      // boundaries, and loads runtime or MCP expert detail only on demand.
+      // Spanish and German preserve the read-only and tenant-role negations.
+      // Machine-authored translations remain flagged for human language review.
+      "es-ES": "475825944a43bc00c63a1c766dbd12e60a5e97300c0c85c884815068829e22f6",
+      "de-DE": "1fe6a12736223ec8a261451a2b4ab4780809241b62c0e0ab3207a0d2015a8011",
     });
   });
 

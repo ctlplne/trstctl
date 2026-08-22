@@ -594,17 +594,31 @@ offers requeue only for failed delivery. Toasts report real success and failure.
   configured connector/upstream-CA/dynamic-secret backend, enroll an agent, then
   complete. Lease credential material is never retained in component state.
 
-### Assistant (`/assistant`)
+### Product help (`/assistant`)
 
-Assistant is grounded AI over the served control plane, gated by a
-runtime-diagnostics disclosure (enabled state, model, egress mode/policy, redaction
-boundary, refusal gate, endpoint host): Query answers questions against
-certificates, owners, graph, CBOM, and audit-log evidence with citations; RCA does
-root-cause analysis the same way; and MCP invokes read-only tools, only when the
-server reports the tool set as read-only. Every answer reports whether it is
-grounded and sufficient. Backed by `/api/v1/ai/status`, `/api/v1/mcp/tools`, `/api/v1/ai/query`,
-`/api/v1/ai/rca`, and `/api/v1/mcp/tools/{tool}`. See
-[Graph, query & AI](features/graph-query-ai.md).
+**Product help** opens with one **Ask a question** action. The opening page explains
+what answers can read, how tenant and role permissions limit every record, and how
+exact record references let an operator check the result. It does not contact the AI
+runtime or load the Model Context Protocol (MCP) tool catalog until the operator opens
+the corresponding workspace or detail. A server with Product help disabled therefore
+shows a calm overview instead of an unrelated availability error before the user asks
+for help.
+
+After **Ask a question**, the default form accepts plain language and reads only
+certificates, owners, dependency links, cryptography inventory, and change-history
+evidence allowed by the caller's tenant and role. Advanced subject and evidence-scope
+controls stay under **Evidence and request details**. **Investigate a cause** keeps the
+grounded root-cause workflow, and **Use read-only tools** loads MCP tools only on demand.
+If the server reports write-capable MCP tools, the generic subject form remains
+disabled; an operation-specific, permission-checked workflow is required instead.
+
+Every answer says whether its evidence is grounded and sufficient and lists its
+sources and exact `surface#record` references. **Runtime and privacy details** loads
+the served enabled state, model, egress mode, personal-data policy, redaction boundary,
+residual refusal gate, and endpoint host. Query, cause investigation, and tool calls
+remain fail-closed when the surface is disabled. The route is backed by
+`/api/v1/ai/status`, `/api/v1/mcp/tools`, `/api/v1/ai/query`, `/api/v1/ai/rca`, and
+`/api/v1/mcp/tools/{tool}`. See [Graph, query & AI](features/graph-query-ai.md).
 
 ## Cross-cutting console capabilities
 
@@ -665,7 +679,7 @@ grounded and sufficient. Backed by `/api/v1/ai/status`, `/api/v1/mcp/tools`, `/a
 | `/admin/access`     | Access admin                    |
 | `/admin/system`     | System posture                  |
 | `/admin/editions`   | Editions                        |
-| `/assistant`        | Assistant                       |
+| `/assistant`        | Product help                    |
 | `/wizard`           | Wizard (not in rail)            |
 | `/platform`         | redirects to `/admin/*`         |
 

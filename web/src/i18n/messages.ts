@@ -67,8 +67,8 @@ export const messages = {
     description: "Unavailable-state heading when privileged access sessions cannot be loaded.",
   },
   "assistant.toolsUnavailableTitle": {
-    defaultMessage: "MCP tools are unavailable",
-    description: "Unavailable-state heading when the assistant cannot load its MCP tool catalog.",
+    defaultMessage: "Read-only tools are unavailable",
+    description: "Unavailable-state heading when Product help cannot load its MCP tool catalog.",
   },
   "credentialChip.copy": {
     defaultMessage: "Copy {label}",
@@ -4748,8 +4748,112 @@ export const messages = {
     description: "Safe generic error for migration assessment and run controls.",
   },
   "nav.item.assistant": {
-    defaultMessage: "Assistant",
+    defaultMessage: "Product help",
     description: "Primary navigation item.",
+  },
+  "assistant.design.title": {
+    defaultMessage: "Product help",
+    description: "Calm page title for grounded product help.",
+  },
+  "assistant.design.answer": {
+    defaultMessage: "How to complete a task or understand a term without leaving context.",
+    description: "Answer-first summary for Product help.",
+  },
+  "assistant.design.technicalDetails": {
+    defaultMessage: "Sources, permissions, privacy boundary, exact references.",
+    description: "Exact evidence layers retained on Product help.",
+  },
+  "assistant.design.askQuestion": {
+    defaultMessage: "Ask a question",
+    description: "Primary Product help action and plain query workflow label.",
+  },
+  "assistant.design.startTitle": {
+    defaultMessage: "Start with the outcome you need",
+    description: "Product help overview heading.",
+  },
+  "assistant.design.startBody": {
+    defaultMessage: "Ask in your own words. Product help can explain a term, find tenant evidence, or show why something needs attention without changing it.",
+    description: "Plain-language overview of Product help capabilities and read-only behavior.",
+  },
+  "assistant.design.sourcesTitle": {
+    defaultMessage: "Sources",
+    description: "Product help source-boundary label.",
+  },
+  "assistant.design.sourcesBody": {
+    defaultMessage: "Answers can use certificates, owners, dependency links, cryptography inventory, and change history.",
+    description: "Plain-language list of grounded Product help sources.",
+  },
+  "assistant.design.permissionsTitle": {
+    defaultMessage: "Permissions",
+    description: "Product help permission-boundary label.",
+  },
+  "assistant.design.permissionsBody": {
+    defaultMessage: "Your tenant and role filter every record before Product help can read it.",
+    description: "Plain-language tenant and RBAC boundary for Product help.",
+  },
+  "assistant.design.referencesTitle": {
+    defaultMessage: "Exact references",
+    description: "Product help evidence-reference label.",
+  },
+  "assistant.design.referencesBody": {
+    defaultMessage: "Each grounded answer keeps the record references needed to check the result yourself.",
+    description: "Plain-language explanation of citations retained with answers.",
+  },
+  "assistant.design.workspaceTitle": {
+    defaultMessage: "Ask Product help",
+    description: "Focused Product help query-workspace heading.",
+  },
+  "assistant.design.workspaceBoundary": {
+    defaultMessage: "Product help reads only evidence your role can access. It does not issue, rotate, revoke, deploy, or change a credential.",
+    description: "Read-only and permission boundary shown before Product help controls.",
+  },
+  "assistant.design.workflowLabel": {
+    defaultMessage: "Product help modes",
+    description: "Accessible label for Product help workflow choices.",
+  },
+  "assistant.design.investigateCause": {
+    defaultMessage: "Investigate a cause",
+    description: "Plain-language label for grounded root-cause analysis.",
+  },
+  "assistant.design.useReadOnlyTools": {
+    defaultMessage: "Use read-only tools",
+    description: "Plain-language label for policy-exposed MCP investigation tools.",
+  },
+  "assistant.design.queryTitle": {
+    defaultMessage: "Answer from tenant evidence",
+    description: "Grounded Product help query card title.",
+  },
+  "assistant.design.evidenceDetails": {
+    defaultMessage: "Evidence and request details",
+    description: "Progressive disclosure for advanced query scope controls.",
+  },
+  "assistant.design.runtimeDetails": {
+    defaultMessage: "Runtime and privacy details",
+    description: "Lazy disclosure for Product help model, egress, and redaction posture.",
+  },
+  "assistant.design.retryRuntime": {
+    defaultMessage: "Retry runtime check",
+    description: "Retry action after Product help runtime status cannot be read.",
+  },
+  "assistant.design.readOnlyBoundary": {
+    defaultMessage: "Read-only tool boundary",
+    description: "ELI5 heading for the MCP tool safety boundary.",
+  },
+  "assistant.design.toolsLoadFailure": {
+    defaultMessage: "Could not load read-only tools",
+    description: "Safe fallback detail when Product help tool discovery fails.",
+  },
+  "assistant.design.retryTools": {
+    defaultMessage: "Retry tool check",
+    description: "Retry action after Product help tool discovery fails.",
+  },
+  "assistant.design.references": {
+    defaultMessage: "Sources and exact references",
+    description: "Answer heading above grounded record citations.",
+  },
+  "assistant.design.noReferences": {
+    defaultMessage: "No exact references were returned.",
+    description: "Honest no-evidence state for an ungrounded Product help answer.",
   },
   "assistant.mcp.writeToolsNeedControls": {
     defaultMessage: "Write-capable MCP tools require operation-specific controls",

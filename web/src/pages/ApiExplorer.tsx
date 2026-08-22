@@ -936,9 +936,7 @@ export function ApiExplorer() {
           <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)]">
             <div className="grid min-w-0 gap-4">
               <section className="ui-panel min-w-0 p-comfortable" aria-labelledby="api-operation-detail-heading">
-                <Eyebrow as="p">
-                  {isUnsafe(selected.method) ? t("apiExplorer.changesData") : t("apiExplorer.safeStartingPoint")}
-                </Eyebrow>
+                <Eyebrow as="p">{isUnsafe(selected.method) ? t("apiExplorer.changesData") : t("apiExplorer.safeStartingPoint")}</Eyebrow>
                 <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h3 id="api-operation-detail-heading" className="text-title font-semibold">

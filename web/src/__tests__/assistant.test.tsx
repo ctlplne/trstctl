@@ -35,6 +35,11 @@ function renderAssistant() {
   );
 }
 
+async function openProductHelp(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByRole("button", { name: "Ask a question" }));
+  await screen.findByRole("heading", { name: "Ask Product help" });
+}
+
 describe("assistant console workflow", () => {
   beforeEach(() => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
@@ -57,6 +62,47 @@ describe("assistant console workflow", () => {
     });
   });
 
+  it("opens as calm Product help with one primary action and no eager expert probes", async () => {
+    const user = userEvent.setup();
+    renderAssistant();
+
+    expect(await screen.findByRole("heading", { name: "Product help" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Product help" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByText("How to complete a task or understand a term without leaving context.")).toBeInTheDocument();
+    expect(screen.getByText("Sources, permissions, privacy boundary, exact references.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ask a question" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Question")).not.toBeInTheDocument();
+    expect(screen.queryByText("Read-only tools are unavailable")).not.toBeInTheDocument();
+    expect(apiMock.aiStatus).not.toHaveBeenCalled();
+    expect(apiMock.mcpTools).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Ask a question" }));
+
+    expect(await screen.findByRole("heading", { name: "Ask Product help" })).toHaveFocus();
+    expect(screen.getByLabelText("Question")).toBeInTheDocument();
+    expect(screen.getByText(/reads only evidence your role can access/i)).toBeInTheDocument();
+    expect(apiMock.aiStatus).not.toHaveBeenCalled();
+    expect(apiMock.mcpTools).not.toHaveBeenCalled();
+  });
+
+  it("loads runtime and read-only tool boundaries only when their expert controls open", async () => {
+    const user = userEvent.setup();
+    renderAssistant();
+
+    await user.click(await screen.findByRole("button", { name: "Ask a question" }));
+    expect(apiMock.aiStatus).not.toHaveBeenCalled();
+    expect(apiMock.mcpTools).not.toHaveBeenCalled();
+
+    await user.click(screen.getByText("Runtime and privacy details"));
+    expect(await screen.findByRole("heading", { name: "AI runtime boundary" })).toBeInTheDocument();
+    expect(apiMock.aiStatus).toHaveBeenCalledTimes(1);
+    expect(apiMock.mcpTools).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Use read-only tools" }));
+    expect(await screen.findByRole("heading", { name: /Read-only tool boundary/ })).toBeInTheDocument();
+    expect(apiMock.mcpTools).toHaveBeenCalledTimes(1);
+  });
+
   it("routes operators to a grounded query workflow with cited evidence", async () => {
     apiMock.aiQuery.mockResolvedValue({
       text: "CN=payments.example.com should rotate first.",
@@ -67,11 +113,11 @@ describe("assistant console workflow", () => {
     const user = userEvent.setup();
     renderAssistant();
 
-    expect(await screen.findByRole("heading", { name: "Assistant" })).toBeInTheDocument();
-    // Assistant is now a surfaced sidebar destination (audit U1), shown as the current page.
-    expect(screen.getByRole("link", { name: /Assistant/i })).toHaveAttribute("aria-current", "page");
+    expect(await screen.findByRole("heading", { name: "Product help" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Product help" })).toHaveAttribute("aria-current", "page");
     expect(screen.queryByRole("heading", { name: "AI runtime boundary" })).not.toBeInTheDocument();
-    await user.click(screen.getByText("Advanced runtime diagnostics"));
+    await openProductHelp(user);
+    await user.click(screen.getByText("Runtime and privacy details"));
     expect(await screen.findByRole("heading", { name: "AI runtime boundary" })).toBeInTheDocument();
     expect(await screen.findByText("not configured")).toBeInTheDocument();
     expect(screen.getByText(/Redaction boundary: default-redactor/)).toBeInTheDocument();
@@ -110,12 +156,32 @@ describe("assistant console workflow", () => {
     const user = userEvent.setup();
     renderAssistant();
 
-    await user.click(await screen.findByText("Advanced runtime diagnostics"));
+    await openProductHelp(user);
+    await user.click(screen.getByText("Runtime and privacy details"));
     expect(await screen.findByText("local: llama3.1")).toBeInTheDocument();
     expect(screen.getByText("local-endpoint")).toBeInTheDocument();
     expect(screen.getByText("127.0.0.1:11434")).toBeInTheDocument();
     expect(screen.getByText(/residual refusal gate: active/i)).toBeInTheDocument();
     expect(apiMock.aiStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats an unreadable runtime boundary as unknown and recovers only after a successful retry", async () => {
+    apiMock.aiStatus.mockRejectedValueOnce(new Error("model endpoint included a private token"));
+    const user = userEvent.setup();
+    renderAssistant();
+
+    await openProductHelp(user);
+    await user.click(screen.getByText("Runtime and privacy details"));
+
+    expect(await screen.findByText("AI runtime status unavailable")).toBeInTheDocument();
+    expect(screen.queryByText("not configured")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Redaction boundary:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/private token/)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Retry runtime check" }));
+
+    expect(await screen.findByText("not configured")).toBeInTheDocument();
+    expect(apiMock.aiStatus).toHaveBeenCalledTimes(2);
   });
 
   it.each([
@@ -141,7 +207,8 @@ describe("assistant console workflow", () => {
     const user = userEvent.setup();
     renderAssistant();
 
-    await user.click(await screen.findByText("Advanced runtime diagnostics"));
+    await openProductHelp(user);
+    await user.click(screen.getByText("Runtime and privacy details"));
     expect(await screen.findByText("Personal data")).toBeInTheDocument();
     expect(screen.getByText(label)).toBeInTheDocument();
     expect(screen.getByText(detail)).toBeInTheDocument();
@@ -158,8 +225,8 @@ describe("assistant console workflow", () => {
     const user = userEvent.setup();
     renderAssistant();
 
-    await screen.findByRole("heading", { name: "Assistant" });
-    await user.click(screen.getByRole("button", { name: "RCA" }));
+    await openProductHelp(user);
+    await user.click(screen.getByRole("button", { name: "Investigate a cause" }));
     expect(screen.getByText("RCA evidence workspace")).toBeInTheDocument();
     await user.type(screen.getByLabelText("Question"), "Why is the service high risk?");
     await user.click(screen.getByRole("button", { name: /^Analyze$/i }));
@@ -167,7 +234,7 @@ describe("assistant console workflow", () => {
     expect(await screen.findByText(/Residual secret material: \[redacted\]/)).toBeInTheDocument();
     expect(screen.getByText("No cited evidence")).toBeInTheDocument();
     expect(screen.getByText("Insufficient")).toBeInTheDocument();
-    expect(screen.getByText("No citations returned.")).toBeInTheDocument();
+    expect(screen.getByText("No exact references were returned.")).toBeInTheDocument();
   });
 
   it("shows permission errors without leaking backend problem details", async () => {
@@ -176,7 +243,7 @@ describe("assistant console workflow", () => {
     const user = userEvent.setup();
     renderAssistant();
 
-    await screen.findByRole("heading", { name: "Assistant" });
+    await openProductHelp(user);
     await user.type(screen.getByLabelText("Question"), "Show another tenant.");
     await user.click(screen.getByRole("button", { name: /^Ask$/i }));
 
@@ -190,12 +257,12 @@ describe("assistant console workflow", () => {
     const user = userEvent.setup();
     renderAssistant();
 
-    await screen.findByRole("heading", { name: "Assistant" });
-    await user.click(screen.getByText("Advanced runtime diagnostics"));
+    await openProductHelp(user);
+    await user.click(screen.getByText("Runtime and privacy details"));
     await user.type(screen.getByLabelText("Question"), "Can you answer?");
     await user.click(screen.getByRole("button", { name: /^Ask$/i }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Assistant surface is not enabled.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Product help is not enabled.");
     expect(screen.getByText(/fail closed when disabled/i)).toBeInTheDocument();
   });
 
@@ -204,21 +271,40 @@ describe("assistant console workflow", () => {
     const user = userEvent.setup();
     renderAssistant();
 
-    await screen.findByRole("heading", { name: "Assistant" });
-    await user.click(screen.getByRole("button", { name: "MCP tools" }));
+    await openProductHelp(user);
+    await user.click(screen.getByRole("button", { name: "Use read-only tools" }));
 
-    expect(screen.getByRole("heading", { name: /MCP permission boundary/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Read-only tool boundary/ })).toBeInTheDocument();
     expect(await screen.findByText("No MCP tools are available for this tenant.")).toBeInTheDocument();
   });
 
   it("explains when the MCP tool surface is not enabled", async () => {
     const { ApiError } = await import("@/lib/api");
     apiMock.mcpTools.mockRejectedValue(new ApiError(503, JSON.stringify({ title: "Service Unavailable", status: 503, detail: "AI surface is not enabled" })));
+    const user = userEvent.setup();
 
     renderAssistant();
 
-    expect(await screen.findByText("MCP tools are unavailable")).toBeInTheDocument();
+    await openProductHelp(user);
+    await user.click(screen.getByRole("button", { name: "Use read-only tools" }));
+    expect(await screen.findByText("Read-only tools are unavailable")).toBeInTheDocument();
     expect(screen.getByText("AI surface is not enabled")).toBeInTheDocument();
+  });
+
+  it("recovers read-only tool discovery only after an explicit successful retry", async () => {
+    const { ApiError } = await import("@/lib/api");
+    apiMock.mcpTools.mockRejectedValueOnce(new ApiError(503, JSON.stringify({ detail: "AI surface is not enabled" })));
+    const user = userEvent.setup();
+    renderAssistant();
+
+    await openProductHelp(user);
+    await user.click(screen.getByRole("button", { name: "Use read-only tools" }));
+    expect(await screen.findByText("Read-only tools are unavailable")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Retry tool check" }));
+
+    expect(await screen.findByLabelText("Tool")).toBeInTheDocument();
+    expect(apiMock.mcpTools).toHaveBeenCalledTimes(2);
   });
 
   it("does not route write-capable MCP tools through the read-only subject form", async () => {
@@ -235,8 +321,8 @@ describe("assistant console workflow", () => {
     const user = userEvent.setup();
     renderAssistant();
 
-    await screen.findByRole("heading", { name: "Assistant" });
-    await user.click(screen.getByRole("button", { name: "MCP tools" }));
+    await openProductHelp(user);
+    await user.click(screen.getByRole("button", { name: "Use read-only tools" }));
 
     if (screen.queryByLabelText("Tool")) {
       await screen.findByDisplayValue("issue_certificate");
@@ -264,8 +350,8 @@ describe("assistant console workflow", () => {
     const user = userEvent.setup();
     renderAssistant();
 
-    await screen.findByRole("heading", { name: "Assistant" });
-    await user.click(screen.getByRole("button", { name: "MCP tools" }));
+    await openProductHelp(user);
+    await user.click(screen.getByRole("button", { name: "Use read-only tools" }));
     expect(screen.getByText(/Tools are read-only/)).toBeInTheDocument();
     await screen.findByLabelText("Tool");
     await user.type(screen.getByLabelText("Subject"), "payments");

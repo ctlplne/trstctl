@@ -68,7 +68,7 @@ describe("POL-04 login and assistant polish", () => {
     expect(screen.getByText(/sample data in this browser/i)).toBeInTheDocument();
   });
 
-  it("collapses Assistant diagnostics by default and explains acronyms and answer badges", async () => {
+  it("collapses Product help diagnostics by default and explains acronyms and answer badges", async () => {
     apiMock.aiQuery.mockResolvedValue({
       text: "Rotate the payment certificate first.",
       citations: ["certificates#cert-1"],
@@ -78,17 +78,21 @@ describe("POL-04 login and assistant polish", () => {
     const user = userEvent.setup();
     renderAt("/assistant");
 
-    expect(await screen.findByRole("heading", { name: "Assistant" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Product help" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "AI runtime boundary" })).not.toBeInTheDocument();
-    expect(screen.getByText("Advanced runtime diagnostics").closest("details")).not.toHaveAttribute("open");
+    await user.click(screen.getByRole("button", { name: "Ask a question" }));
+    expect(screen.getByText("Runtime and privacy details").closest("details")).not.toHaveAttribute("open");
 
     expect(screen.getByTitle(/Cryptographic Bill of Materials/i)).toHaveTextContent("CBOM");
-    expect(screen.getAllByTitle(/Model Context Protocol/i).length).toBeGreaterThan(0);
 
-    await user.click(screen.getByText("Advanced runtime diagnostics"));
+    await user.click(screen.getByText("Runtime and privacy details"));
     expect(await screen.findByRole("heading", { name: "AI runtime boundary" })).toBeInTheDocument();
     expect(screen.getByText("local: llama3.1")).toBeInTheDocument();
     expect(screen.getByText("127.0.0.1:11434")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Use read-only tools" }));
+    expect(screen.getAllByTitle(/Model Context Protocol/i).length).toBeGreaterThan(0);
+    await user.click(screen.getByRole("button", { name: "Ask a question" }));
 
     await user.type(screen.getByLabelText("Question"), "What should rotate first?");
     await user.click(screen.getByRole("button", { name: /^Ask$/i }));
