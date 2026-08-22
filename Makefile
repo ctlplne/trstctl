@@ -57,9 +57,14 @@ GO_COVER_PACKAGES ?= ./clients/...,./cmd/...,./deploy/...,./docs/...,./internal/
 GO_PACKAGE_DIRS ?= $(GO_PACKAGES)
 # These packages boot real embedded PostgreSQL/JetStream spines. Run them in a
 # serial lane so the all-package race/coverage gate does not make independent
-# database bootstraps contend for the same host resources. No test is skipped.
+# database bootstraps contend for the same host resources. The live mutation
+# latency/throughput test is still run under both race and coverage, but in two
+# separate processes: combining both instrumenters changes the measured wall
+# time enough to turn the instrumentation into the bottleneck. No assertion or
+# production SLO is skipped or lowered.
 LIVE_PERF_PACKAGES := ./internal/perf ./scripts/perf/cmd/capacitycalibrate ./scripts/perf/cmd/perfgate ./scripts/perf/cmd/soakcapture ./scripts/perf/cmd/spineburst
 LIVE_PERF_IMPORT_RE := $(MODULE)/(internal/perf|scripts/perf/cmd/(capacitycalibrate|perfgate|soakcapture|spineburst))
+LIVE_PERF_SLO_TEST := ^TestPerfLiveMutationHotPathsMeetSLOFromFreshStack$$
 # internal/server has one deliberately large fairness/restart acceptance proof.
 # Keep that proof and every assertion, but give it an independent package clock;
 # otherwise its cost plus the rest of the server suite exceeds Go's same 10m
@@ -92,6 +97,7 @@ COVERPROFILE_MAIN := $(COVERPROFILE).main
 COVERPROFILE_SERVER := $(COVERPROFILE).server
 COVERPROFILE_SERVER_ROTATION_CURSOR := $(COVERPROFILE).server-rotation-cursor
 COVERPROFILE_LIVE_PERF := $(COVERPROFILE).liveperf
+COVERPROFILE_LIVE_PERF_SLO := $(COVERPROFILE).liveperf-slo
 AUDIT_OUTPUTS ?= ../trustctl-audit/outputs
 
 # Minimum coverage (percent) for the assembled control plane's core lifecycle
@@ -182,9 +188,13 @@ test: ## Run all tests (race + coverage) and enforce the coverage minimum
 	@$(GO) test -race -count=1 -p=1 -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_SERVER) -skip '$(SERVER_ROTATION_CURSOR_TEST)' -timeout=10m ./internal/server
 	@echo ">> go test internal/server row-501 fairness shard (race + merged first-party coverage)"
 	@$(GO) test -race -count=1 -p=1 -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_SERVER_ROTATION_CURSOR) -run '$(SERVER_ROTATION_CURSOR_TEST)' -timeout=10m ./internal/server
-	@echo ">> go test live perf packages (serial)"
-	@$(GO) test -race -count=1 -p=1 -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_LIVE_PERF) $(LIVE_PERF_PACKAGES)
-	@{ head -n 1 $(COVERPROFILE_MAIN); tail -n +2 $(COVERPROFILE_MAIN); tail -n +2 $(COVERPROFILE_SERVER); tail -n +2 $(COVERPROFILE_SERVER_ROTATION_CURSOR); tail -n +2 $(COVERPROFILE_LIVE_PERF); } > $(COVERPROFILE)
+	@echo ">> go test live perf packages (serial race + coverage correctness lane)"
+	@$(GO) test -race -count=1 -p=1 -skip '$(LIVE_PERF_SLO_TEST)' -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_LIVE_PERF) $(LIVE_PERF_PACKAGES)
+	@echo ">> go test live mutation SLO (coverage-only measurement lane)"
+	@$(GO) test -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_LIVE_PERF_SLO) ./internal/perf
+	@echo ">> go test live mutation SLO (race-only measurement lane)"
+	@$(GO) test -race -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' ./internal/perf
+	@{ head -n 1 $(COVERPROFILE_MAIN); tail -n +2 $(COVERPROFILE_MAIN); tail -n +2 $(COVERPROFILE_SERVER); tail -n +2 $(COVERPROFILE_SERVER_ROTATION_CURSOR); tail -n +2 $(COVERPROFILE_LIVE_PERF); tail -n +2 $(COVERPROFILE_LIVE_PERF_SLO); } > $(COVERPROFILE)
 	@set -euo pipefail; grep -v -E '\.pb\.go:' $(COVERPROFILE) | scripts/ci/coverage-normalize.sh - $(COVERPROFILE).nogen
 	@total=$$($(GO) tool cover -func=$(COVERPROFILE).nogen | awk '/^total:/ {print $$3}' | tr -d '%'); \
 	echo ">> coverage: $$total% (minimum $(COVERAGE_MIN)%, generated *.pb.go excluded)"; \

@@ -218,12 +218,16 @@ func TestMakeTestBoundsMainGraphAndSerializesRealPerformancePackages(t *testing.
 	for _, want := range []string{
 		"LIVE_PERF_PACKAGES := ./internal/perf ",
 		"LIVE_PERF_IMPORT_RE := $(MODULE)/(internal/perf|scripts/perf/cmd/",
+		"LIVE_PERF_SLO_TEST := ^TestPerfLiveMutationHotPathsMeetSLOFromFreshStack$$",
 		"parallelism=\"$$(scripts/ci/go-package-parallelism.sh)\"",
 		"$(GO) test -race -count=1 -p=$$parallelism -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_MAIN) $$pkgs",
-		"$(GO) test -race -count=1 -p=1 -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_LIVE_PERF) $(LIVE_PERF_PACKAGES)",
+		"$(GO) test -race -count=1 -p=1 -skip '$(LIVE_PERF_SLO_TEST)' -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_LIVE_PERF) $(LIVE_PERF_PACKAGES)",
+		"$(GO) test -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_LIVE_PERF_SLO) ./internal/perf",
+		"$(GO) test -race -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' ./internal/perf",
 		"$(GO) test -tags trstctl_core $(GO_TEST_EXACT_FLAG) -p=$$parallelism $$pkgs",
 		"$(GO) test -tags trstctl_core $(GO_TEST_EXACT_FLAG) -p=1 $(LIVE_PERF_PACKAGES)",
 		"tail -n +2 $(COVERPROFILE_LIVE_PERF)",
+		"tail -n +2 $(COVERPROFILE_LIVE_PERF_SLO)",
 	} {
 		if !strings.Contains(mk, want) {
 			t.Errorf("Makefile performance test topology missing %q", want)
@@ -234,6 +238,31 @@ func TestMakeTestBoundsMainGraphAndSerializesRealPerformancePackages(t *testing.
 	}
 	if got := strings.Count(mk, "parallelism=\"$$(scripts/ci/go-package-parallelism.sh)\""); got != 2 {
 		t.Errorf("Makefile derives descriptor-bounded package parallelism in %d main lanes, want test and editions-gate", got)
+	}
+}
+
+func TestMakeTestDoesNotMeasureLiveSLOUnderCombinedRaceAndCoverage(t *testing.T) {
+	mk := read(t, "../Makefile")
+	testStart := strings.Index(mk, ".PHONY: test\n")
+	wallStart := strings.Index(mk, ".PHONY: perf-live-wall\n")
+	if testStart < 0 || wallStart <= testStart {
+		t.Fatal("cannot isolate the Makefile test target")
+	}
+	testBlock := mk[testStart:wallStart]
+	for _, want := range []string{
+		"-race -count=1 -p=1 -skip '$(LIVE_PERF_SLO_TEST)' -covermode=atomic",
+		"-count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' -covermode=atomic",
+		"-race -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' ./internal/perf",
+	} {
+		if !strings.Contains(testBlock, want) {
+			t.Errorf("split live SLO instrumentation contract missing %q", want)
+		}
+	}
+	if strings.Contains(testBlock, "-race -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' -covermode") {
+		t.Fatal("live SLO measurement recombined race and coverage instrumentation")
+	}
+	if got := strings.Count(testBlock, "-run '$(LIVE_PERF_SLO_TEST)'"); got != 2 {
+		t.Fatalf("live SLO exact measurement lanes = %d, want race-only plus coverage-only", got)
 	}
 }
 

@@ -19,12 +19,15 @@ release evidence.
 
 The served live-load profile boots the local eval perf stack, drives each
 HTTP-addressable `PERF-SLO-*` hot path through its production route family, and
-exercises the signer path through the generated signer gRPC service over an
-in-memory `bufconn` transport. The projection row drives the event replay/apply
-loop directly because it is a worker surface, not an HTTP endpoint. That keeps the
-committed receipt runnable in restricted CI while still rejecting perf-only route
-names such as `/perf/live/*` and protobuf-only signer shortcuts. Customer load runs
-should swap the signer transport to their production UDS or mTLS placement.
+exercises the signer path through the generated signer gRPC service in a separate
+child process over a real Unix-domain socket. The stack uses an actual loopback HTTP
+listener, bundled PostgreSQL, and embedded file-backed JetStream. The projection
+row drives the event replay/apply loop directly because it is a worker surface, not
+an HTTP endpoint. In plain terms: the harness enters through the same doors and
+crosses the same process and storage boundaries as the product; it rejects test-only
+HTTP routes, `httptest`, `bufconn`, and in-process signer shortcuts. Customer load
+runs should repeat the profile with their production PostgreSQL, JetStream, and UDS
+or mTLS signer placement.
 
 ```sh
 make perf-live
@@ -41,6 +44,17 @@ the heavier spine evidence.
 The live profile is still a local eval-stack receipt, not a promise that one vendor
 SKU will satisfy every production tenant shape; customer capacity reviews should run
 the same profile against their chosen datastore, signer placement, and connector mix.
+
+`make test` keeps correctness instrumentation separate from performance truth. The
+serial live packages run under race detection plus whole-repository atomic coverage,
+while the exact live mutation SLO runs again in a race-only process and a
+coverage-only process. Both exact runs retain the unchanged latency, throughput,
+error, queue, and lag assertions. Combining race and whole-repository coverage in
+the same measurement process is intentionally forbidden because the two
+instrumenters multiply request wall time and can become the measured bottleneck.
+The release-candidate SLO authority remains the uncached, uninstrumented
+`make perf-live-wall` / `make perf-live` run; CI executes `make perf-live` on its
+scheduled performance runner and retains the JSON receipt.
 
 The shipped Prometheus alert pack mirrors this table. The
 `trstctl-slo-hot-paths` rule group in `deploy/observability/alerts.yml` records p99
