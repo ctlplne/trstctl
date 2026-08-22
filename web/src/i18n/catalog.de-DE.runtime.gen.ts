@@ -19,6 +19,7 @@ const translatedValues = [
   "Exakte Nachweise ausblenden",
   "Exakte Kennungen, Richtlinienfakten, Ereignisverlauf und Wiederherstellungsnachweise bleiben in diesem Arbeitsbereich verfügbar.",
   "Sitzungen mit privilegiertem Zugriff sind nicht verfügbar",
+  "In dieser Bereitstellung ist kein Broker für privilegierten Zugriff aktiviert. Personen, Rollen und Zugriffsschlüssel-Metadaten funktionieren weiterhin.",
   "Schreibgeschützte Tools sind nicht verfügbar",
   "{label} kopieren",
   "In die Zwischenablage kopiert",

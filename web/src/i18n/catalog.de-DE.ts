@@ -16,6 +16,8 @@ const deDECatalog = {
     "Diese Steuerungsebene läuft, aber Browser-SSO ist deaktiviert. Konfigurieren Sie Browser-SSO und laden Sie die Seite neu, oder verwenden Sie ein bereichsbeschränktes API-Token mit trstctl-cli.",
   "auth.browserLoginDisabled.title": "Browser-Anmeldung ist nicht konfiguriert",
   "admin.access.pamUnavailableTitle": "Sitzungen mit privilegiertem Zugriff sind nicht verfügbar",
+  "admin.access.pamUnavailableBody":
+    "In dieser Bereitstellung ist kein Broker für privilegierten Zugriff aktiviert. Personen, Rollen und Zugriffsschlüssel-Metadaten funktionieren weiterhin.",
   "assistant.toolsUnavailableTitle": "Schreibgeschützte Tools sind nicht verfügbar",
   "platform.dr.history.title": "Signierter Übungsverlauf",
   "platform.dr.history.aria": "Verlauf signierter Wiederherstellungsübungen",

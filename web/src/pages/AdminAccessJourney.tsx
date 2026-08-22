@@ -16,7 +16,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { formatDateTime, type FormatPolicy } from "@/i18n/format";
-import { api, type APIToken, type Member, type OIDCMappingStatus, type PAMSession, type PAMSessionRequest, type RoleList } from "@/lib/api";
+import { ApiError, api, type APIToken, type Member, type OIDCMappingStatus, type PAMSession, type PAMSessionRequest, type RoleList } from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
 import type { StatusTone } from "@/lib/statusVocab";
 
@@ -144,7 +144,7 @@ export function AdminAccess() {
       setRoles(roleCatalog);
       setMembers(memberPage.items ?? []);
     } catch (err) {
-      setOverviewError(apiProblemMessage(err, tRef.current("admin.access.loadFailed")));
+      setOverviewError(accessProblemMessage(err, tRef.current("admin.access.loadFailed")));
     } finally {
       setOverviewLoading(false);
     }
@@ -162,7 +162,7 @@ export function AdminAccess() {
       setOIDC(await api.oidcMappingStatus());
       setSSOLoaded(true);
     } catch (err) {
-      setSSOError(apiProblemMessage(err, t("admin.access.ssoFailed")));
+      setSSOError(accessProblemMessage(err, t("admin.access.ssoFailed")));
     } finally {
       setSSOLoading(false);
     }
@@ -175,13 +175,13 @@ export function AdminAccess() {
     setPAMUnavailable(null);
     const [tokenResult, pamResult] = await Promise.allSettled([api.apiTokens({ includeRevoked: true, limit: 50 }), api.pamSessions({ limit: 20 })]);
     if (tokenResult.status === "fulfilled") setTokens(tokenResult.value.items ?? []);
-    else setSessionDetailsError(apiProblemMessage(tokenResult.reason, t("admin.access.sessionsFailed")));
+    else setSessionDetailsError(accessProblemMessage(tokenResult.reason, t("admin.access.sessionsFailed")));
     if (pamResult.status === "fulfilled") {
       setPAMRows(pamResult.value.items ?? []);
       setPAMCursor(pamResult.value.next_cursor);
     } else {
       setPAMRows(null);
-      setPAMUnavailable(apiProblemMessage(pamResult.reason, t("admin.access.pamUnavailableTitle")));
+      setPAMUnavailable(accessProblemMessage(pamResult.reason, t("admin.access.pamUnavailableTitle")));
     }
     setSessionDetailsLoaded(true);
     setSessionDetailsLoading(false);
@@ -203,7 +203,7 @@ export function AdminAccess() {
       setPAMRows((current) => [...(current ?? []), ...(page.items ?? [])]);
       setPAMCursor(page.next_cursor);
     } catch (err) {
-      setPAMUnavailable(apiProblemMessage(err, t("admin.access.pamUnavailableTitle")));
+      setPAMUnavailable(accessProblemMessage(err, t("admin.access.pamUnavailableTitle")));
     } finally {
       setPAMLoadingMore(false);
     }
@@ -229,7 +229,7 @@ export function AdminAccess() {
       setMemberEmail("");
       setAddPersonOpen(false);
     } catch (err) {
-      setMemberFormError(apiProblemMessage(err, t("admin.access.loadFailed")));
+      setMemberFormError(accessProblemMessage(err, t("admin.access.loadFailed")));
     } finally {
       setBusy(false);
     }
@@ -249,7 +249,7 @@ export function AdminAccess() {
       setNotice(t("admin.access.keyCreatedNotice", { subject: created.subject }));
       setTokenSubject("");
     } catch (err) {
-      setTokenFormError(apiProblemMessage(err, t("admin.access.sessionsFailed")));
+      setTokenFormError(accessProblemMessage(err, t("admin.access.sessionsFailed")));
     } finally {
       setBusy(false);
     }
@@ -272,7 +272,7 @@ export function AdminAccess() {
       setOffboardConfirmed(false);
       setOffboardOpen(false);
     } catch (err) {
-      setOffboardFormError(apiProblemMessage(err, t("admin.access.loadFailed")));
+      setOffboardFormError(accessProblemMessage(err, t("admin.access.loadFailed")));
     } finally {
       setBusy(false);
     }
@@ -335,7 +335,7 @@ export function AdminAccess() {
       setPAMRows((current) => [created, ...(current ?? []).filter((item) => item.id !== created.id)]);
       setPAMForm(defaultPAMSessionForm);
     } catch (err) {
-      setPAMFormError(apiProblemMessage(err, t("admin.access.pamUnavailableTitle")));
+      setPAMFormError(accessProblemMessage(err, t("admin.access.sessionOpenFailed")));
     } finally {
       setPAMBusy(false);
     }
@@ -378,7 +378,7 @@ export function AdminAccess() {
         {overviewLoading ? <LoadingState>{t("admin.access.loadingOverview")}</LoadingState> : null}
         {overviewError ? (
           <ErrorState title={t("admin.access.loadFailed")}>
-            <p>{overviewError}</p>
+            <ProblemDetail message={overviewError} fallback={t("admin.access.loadFailed")} />
             <Button type="button" size="sm" variant="outline" className="mt-2" onClick={() => void loadOverview()}>
               {t("admin.access.retry")}
             </Button>
@@ -430,7 +430,7 @@ export function AdminAccess() {
           {ssoLoading ? <LoadingState>{t("admin.access.ssoLoading")}</LoadingState> : null}
           {ssoError ? (
             <ErrorState title={t("admin.access.ssoFailed")}>
-              <p>{ssoError}</p>
+              <ProblemDetail message={ssoError} fallback={t("admin.access.ssoFailed")} />
               <Button type="button" size="sm" variant="outline" className="mt-2" onClick={() => void loadSSODetails(true)}>
                 {t("admin.access.retry")}
               </Button>
@@ -561,7 +561,7 @@ export function AdminAccess() {
           {sessionDetailsLoading ? <LoadingState>{t("admin.access.sessionsLoading")}</LoadingState> : null}
           {sessionDetailsError ? (
             <ErrorState title={t("admin.access.sessionsFailed")}>
-              <p>{sessionDetailsError}</p>
+              <ProblemDetail message={sessionDetailsError} fallback={t("admin.access.sessionsFailed")} />
               <Button type="button" size="sm" variant="outline" className="mt-2" onClick={() => void loadSessionDetails(true)}>
                 {t("admin.access.retry")}
               </Button>
@@ -647,7 +647,12 @@ export function AdminAccess() {
                   />
                 ) : null}
                 {pamRows && pamRows.length === 0 ? <UnavailableState title={t("admin.access.noSessions")} /> : null}
-                {pamUnavailable ? <UnavailableState title={t("admin.access.pamUnavailableTitle")}>{pamUnavailable}</UnavailableState> : null}
+                {pamUnavailable ? (
+                  <UnavailableState title={t("admin.access.pamUnavailableTitle")}>
+                    <p>{t("admin.access.pamUnavailableBody")}</p>
+                    {pamUnavailable === t("admin.access.pamUnavailableTitle") ? null : <p className="mt-1">{pamUnavailable}</p>}
+                  </UnavailableState>
+                ) : null}
               </section>
             </div>
           ) : null}
@@ -693,7 +698,11 @@ export function AdminAccess() {
             </p>
           </header>
           <form onSubmit={(event) => void onboardMember(event)} className="grid gap-3 p-5">
-            {memberFormError ? <ErrorState title={t("admin.access.loadFailed")}>{memberFormError}</ErrorState> : null}
+            {memberFormError ? (
+              <ErrorState title={t("admin.access.loadFailed")}>
+                <ProblemDetail message={memberFormError} fallback={t("admin.access.loadFailed")} />
+              </ErrorState>
+            ) : null}
             <FormField label={translateNow("source.subject.6897128384")}>
               <Input value={memberSubject} onChange={(event) => setMemberSubject(event.target.value)} required />
             </FormField>
@@ -772,7 +781,11 @@ export function AdminAccess() {
             </div>
           ) : (
             <form onSubmit={(event) => void mintToken(event)} className="grid gap-3 p-5">
-              {tokenFormError ? <ErrorState title={t("admin.access.sessionsFailed")}>{tokenFormError}</ErrorState> : null}
+              {tokenFormError ? (
+                <ErrorState title={t("admin.access.sessionsFailed")}>
+                  <ProblemDetail message={tokenFormError} fallback={t("admin.access.sessionsFailed")} />
+                </ErrorState>
+              ) : null}
               <FormField label={translateNow("source.subject.6897128384")}>
                 <Input value={tokenSubject} onChange={(event) => setTokenSubject(event.target.value)} required />
               </FormField>
@@ -815,7 +828,11 @@ export function AdminAccess() {
             </p>
           </header>
           <form onSubmit={(event) => void offboardMember(event)} className="grid gap-3 p-5">
-            {offboardFormError ? <ErrorState title={t("admin.access.loadFailed")}>{offboardFormError}</ErrorState> : null}
+            {offboardFormError ? (
+              <ErrorState title={t("admin.access.loadFailed")}>
+                <ProblemDetail message={offboardFormError} fallback={t("admin.access.loadFailed")} />
+              </ErrorState>
+            ) : null}
             <FormField label={t("admin.access.person")}>
               <Select value={offboardSubject} onChange={(event) => setOffboardSubject(event.target.value)} required>
                 <option value="">{t("admin.access.person")}</option>
@@ -887,7 +904,7 @@ function AccessDisclosure({
         </span>
         <ChevronDown className="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
       </summary>
-      <div className="grid gap-5 border-t border-border p-comfortable">{children}</div>
+      <div className="hidden gap-5 border-t border-border p-comfortable group-open:grid">{children}</div>
     </details>
   );
 }
@@ -913,6 +930,10 @@ function FormField({ label, hint, children }: { label: ReactNode; hint?: ReactNo
       {hint ? <span className="text-xs text-muted-foreground">{hint}</span> : null}
     </label>
   );
+}
+
+function ProblemDetail({ message, fallback }: { message: string; fallback: string }) {
+  return message === fallback ? null : <p>{message}</p>;
 }
 
 function PAMDetailDialog({ session, formatPolicy, onClose }: { session: PAMSession; formatPolicy: FormatPolicy; onClose: () => void }) {
@@ -1039,7 +1060,11 @@ function PAMFormDialog({
         </div>
       ) : (
         <form onSubmit={(event) => void onSubmit(event)} className="grid gap-3 p-5">
-          {error ? <ErrorState title={t("admin.access.sessionOpenFailed")}>{error}</ErrorState> : null}
+          {error ? (
+            <ErrorState title={t("admin.access.sessionOpenFailed")}>
+              <ProblemDetail message={error} fallback={t("admin.access.sessionOpenFailed")} />
+            </ErrorState>
+          ) : null}
           <div className="grid gap-3 md:grid-cols-2">
             <FormField label={t("admin.access.targetType")}>
               <Select value={form.target_type} onChange={(event) => setForm({ ...form, target_type: event.target.value as PAMSessionRequest["target_type"] })}>
@@ -1131,6 +1156,16 @@ function csvList(value: string): string[] {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+/** Denied and server-failed access reads can carry tenant names, group names,
+ * token prefixes, or internal broker topology in RFC 7807 detail. Keep those
+ * diagnostics in restricted logs and show the route's scoped, actionable
+ * fallback. Validation/conflict details and 429 retry guidance remain useful
+ * to the operator and still use the shared problem renderer. */
+function accessProblemMessage(error: unknown, fallback: string): string {
+  if (error instanceof ApiError && (error.status === 401 || error.status === 403 || error.status >= 500)) return fallback;
+  return apiProblemMessage(error, fallback);
 }
 
 function formatOptionalDate(value: string | undefined, policy: FormatPolicy): string {

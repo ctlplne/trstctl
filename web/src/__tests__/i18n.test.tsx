@@ -917,8 +917,13 @@ describe("i18n boundary", () => {
       // catalog-backed choices and fails closed with a refresh instruction
       // when no current role exists; nobody must type internal role syntax.
       // Machine-authored translations remain flagged for human review.
-      "es-ES": "629dfac97f45558f935b3dd7cb9896073e88cccb85693438ffea4cbcc4004929",
-      "de-DE": "881b46965381e6f117438ca74cab4f660787a03752019602635d724471c8b35b",
+      // QA design g40 live-security re-pin: the optional privileged-access
+      // failure now uses static ELI5 guidance instead of rendering an
+      // unrestricted backend 503 detail. People, roles, and key metadata are
+      // explicitly named as still working. Machine-authored translations
+      // remain flagged for human review.
+      "es-ES": "47c0186241bd8f49c309f8272b10efcea56a342d941cade7724b033a93be9368",
+      "de-DE": "e5c407df07a6f44c0570706f894c4fdde48609d7f09f4c79b18e45a41207e0da",
     });
   });
 

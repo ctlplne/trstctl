@@ -12,6 +12,8 @@ const esESCatalog = {
     "Este plano de control está en ejecución, pero el SSO del navegador está desactivado. Configure el SSO del navegador y vuelva a cargar, o use un token de API con ámbito con trstctl-cli.",
   "auth.browserLoginDisabled.title": "El inicio de sesión en el navegador no está configurado",
   "admin.access.pamUnavailableTitle": "Las sesiones de acceso privilegiado no están disponibles",
+  "admin.access.pamUnavailableBody":
+    "Este despliegue no tiene habilitado un intermediario de acceso privilegiado. Las personas, los roles y los metadatos de las claves de acceso siguen funcionando.",
   "assistant.toolsUnavailableTitle": "Las herramientas de solo lectura no están disponibles",
   "platform.dr.history.title": "Historial de simulacros firmados",
   "platform.dr.history.aria": "Historial de simulacros de restauración firmados",

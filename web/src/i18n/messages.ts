@@ -66,6 +66,10 @@ export const messages = {
     defaultMessage: "Privileged access sessions are unavailable",
     description: "Unavailable-state heading when privileged access sessions cannot be loaded.",
   },
+  "admin.access.pamUnavailableBody": {
+    defaultMessage: "This deployment has no privileged-access broker enabled. People, roles, and access-key metadata still work.",
+    description: "Safe static explanation when the optional privileged-access broker is unavailable.",
+  },
   "assistant.toolsUnavailableTitle": {
     defaultMessage: "Read-only tools are unavailable",
     description: "Unavailable-state heading when Product help cannot load its MCP tool catalog.",

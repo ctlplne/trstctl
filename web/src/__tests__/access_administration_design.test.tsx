@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { axe } from "vitest-axe";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { IntlProvider } from "@/i18n/I18nProvider";
+import { ApiError } from "@/lib/api";
 import { AdminAccess } from "@/pages/AdminAccess";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -106,6 +107,35 @@ describe("DESIGN-ROUTE-040 People and roles", () => {
     expect(apiMock.oidcMappingStatus).not.toHaveBeenCalled();
     expect(apiMock.apiTokens).not.toHaveBeenCalled();
     expect(apiMock.pamSessions).not.toHaveBeenCalled();
+  });
+
+  it("keeps every expert disclosure visually hidden until its summary is opened", async () => {
+    renderPage();
+    await screen.findByRole("heading", { level: 1, name: "People and roles" });
+
+    for (const title of ["SSO groups and role bindings", "Sessions and access keys", "Certification history"]) {
+      const details = screen.getByText(title, { exact: true }).closest("details");
+      expect(details).not.toHaveAttribute("open");
+      expect(details?.querySelector(":scope > div")).toHaveClass("hidden", "group-open:grid");
+    }
+  });
+
+  it("does not render private backend details from denied or unavailable access reads", async () => {
+    const user = userEvent.setup();
+    apiMock.oidcMappingStatus.mockRejectedValue(new ApiError(403, JSON.stringify({ detail: "tenant t2 has a confidential admin group" })));
+    apiMock.apiTokens.mockRejectedValue(new ApiError(403, JSON.stringify({ detail: "token prefix qa-secret-prefix exists" })));
+    apiMock.pamSessions.mockRejectedValue(new ApiError(503, JSON.stringify({ detail: "broker internal host pam.private.local" })));
+    renderPage();
+    await screen.findByRole("heading", { level: 1, name: "People and roles" });
+
+    await user.click(screen.getByText("SSO groups and role bindings", { exact: true }));
+    expect(await screen.findByText("SSO group mappings are unavailable", { exact: true })).toBeInTheDocument();
+    expect(screen.queryByText(/tenant t2|confidential admin group/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByText("Sessions and access keys", { exact: true }));
+    expect(await screen.findByText("Access-key metadata is unavailable", { exact: true })).toBeInTheDocument();
+    expect(await screen.findByText("Privileged access sessions are unavailable", { exact: true })).toBeInTheDocument();
+    expect(screen.queryByText(/qa-secret-prefix|pam\.private\.local/i)).not.toBeInTheDocument();
   });
 
   it("loads exact SSO, role, session, key, and certification evidence only when requested", async () => {

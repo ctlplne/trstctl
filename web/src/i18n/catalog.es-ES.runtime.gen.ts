@@ -19,6 +19,7 @@ const translatedValues = [
   "Ocultar evidencia exacta",
   "Los identificadores exactos, los hechos de política, el historial de eventos y la evidencia de recuperación siguen disponibles en este espacio de trabajo.",
   "Las sesiones de acceso privilegiado no están disponibles",
+  "Este despliegue no tiene habilitado un intermediario de acceso privilegiado. Las personas, los roles y los metadatos de las claves de acceso siguen funcionando.",
   "Las herramientas de solo lectura no están disponibles",
   "Copiar {label}",
   "Copiado al portapapeles",

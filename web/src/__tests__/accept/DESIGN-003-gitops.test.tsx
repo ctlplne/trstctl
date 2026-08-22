@@ -95,8 +95,10 @@ describe("DESIGN-003 GitOps workflow", () => {
     expect(apiMock.notificationRoutingPolicies).toHaveBeenCalledTimes(1);
 
     const manifest = screen.getByLabelText("Declarative manifest") as HTMLTextAreaElement;
-    expect(manifest.value).toContain('"kind": "TrstctlProfile"');
-    expect(manifest.value).toContain('"name": "server-tls"');
+    await waitFor(() => {
+      expect(manifest.value).toContain('"kind": "TrstctlProfile"');
+      expect(manifest.value).toContain('"name": "server-tls"');
+    });
 
     await user.selectOptions(screen.getByLabelText("Manifest type"), "discovery-source");
     expect((screen.getByLabelText("Declarative manifest") as HTMLTextAreaElement).value).toContain('"kind": "TrstctlDiscoverySource"');

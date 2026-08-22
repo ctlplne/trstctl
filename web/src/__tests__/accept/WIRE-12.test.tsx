@@ -431,7 +431,8 @@ describe("WIRE-12 Platform served admin surface", () => {
     expect(apiMock.pamSessions).not.toHaveBeenCalled();
     await user.click(screen.getByText("Sessions and access keys", { exact: true }));
     expect(await screen.findByText("Privileged access sessions are unavailable")).toBeInTheDocument();
-    expect(screen.getByText("PAM broker is not enabled")).toBeInTheDocument();
+    expect(screen.getByText("This deployment has no privileged-access broker enabled. People, roles, and access-key metadata still work.")).toBeInTheDocument();
+    expect(screen.queryByText("PAM broker is not enabled")).not.toBeInTheDocument();
   });
 
   it("removes the unserved Platform fixture arrays and unavailable-state disclosures", () => {
