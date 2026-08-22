@@ -182,6 +182,16 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
       },
       fips: { module_active: false, required: false, self_test_passed: true },
     });
+    apiMock.activeActiveIssuance.mockResolvedValue({
+      served: true,
+      topology: "active-active",
+      write_model: "tenant fenced",
+      regions: [{ id: "region-a", region: "us-east", role: "primary", writable_scope: "tenant-a", health_signal: "healthy" }],
+      tenant_write_fences: [],
+      failover_runbook: [],
+      release_gates: [],
+      residuals: [],
+    });
     const user = userEvent.setup();
     const view = renderAt("/admin/editions");
 
@@ -232,6 +242,9 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
     await user.click(architectureSummary);
     await waitFor(() => expect(apiMock.activeActiveIssuance).toHaveBeenCalledTimes(1));
     expect(apiMock.platformDistribution).toHaveBeenCalledTimes(1);
+    const regionalHeading = await screen.findByRole("heading", { name: "Regional issuance HA" });
+    expect(regionalHeading.closest("section")).toHaveClass("min-w-0");
+    expect(screen.getByRole("table", { name: "Regional issuance ingress table" }).closest("[role='region']")).toHaveClass("min-w-0", "max-w-full");
     expect(await axe(view.container)).toHaveNoViolations();
   });
 

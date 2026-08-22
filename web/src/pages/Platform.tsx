@@ -1295,7 +1295,7 @@ function licenseAnswer(editions: EditionsInfo, planName: string, t: ReturnType<t
 function DistributionEvidence({ status }: { status: PlatformDistributionStatus }) {
   const { t } = useTranslation();
   return (
-    <section className="rounded-panel border border-border p-3" aria-labelledby="distribution-posture-heading">
+    <section className="min-w-0 rounded-panel border border-border p-3" aria-labelledby="distribution-posture-heading">
       <h3 id="distribution-posture-heading" className="text-body font-semibold">
         {t("parity.distributionPosture_10c8b4")}
       </h3>
@@ -1319,7 +1319,7 @@ function DistributionEvidence({ status }: { status: PlatformDistributionStatus }
 function RegionalIssuanceEvidence({ plan, formatPolicy }: { plan: ActiveActiveIssuancePlan; formatPolicy: FormatPolicy }) {
   const { t } = useTranslation();
   return (
-    <section className="rounded-panel border border-border p-3" aria-labelledby="regional-issuance-heading">
+    <section className="min-w-0 rounded-panel border border-border p-3" aria-labelledby="regional-issuance-heading">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-2">
           <Network className="h-4 w-4 text-status-success" aria-hidden="true" />
@@ -1343,7 +1343,7 @@ function RegionalIssuanceEvidence({ plan, formatPolicy }: { plan: ActiveActiveIs
         <LicenseFact label={t("platform.ha.invariants")} value={(plan.architecture_invariants ?? []).join(", ") || "-"} mono />
       </dl>
       {(plan.regions ?? []).length > 0 ? (
-        <div className="mt-4">
+        <div className="mt-4 min-w-0">
           <SystemTableRegion label={t("platform.ha.regionCaption")}>
             <table className="ui-table min-w-[44rem]">
               <caption className="sr-only">{t("platform.ha.regionCaption")}</caption>
