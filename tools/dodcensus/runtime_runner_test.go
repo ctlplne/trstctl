@@ -167,7 +167,7 @@ func TestRuntimeRunnerWritableDirRequiresPrivateHostOwnership(t *testing.T) {
 
 func TestRuntimeRunnerCacheMountKeepsDarwinCacheBelowPrivateBoundary(t *testing.T) {
 	parent := t.TempDir()
-	if err := os.Chmod(parent, 0o700); err != nil {
+	if err := os.Chmod(parent, 0o700); err != nil { // #nosec G302 -- private fixture-directory mode is the behavior under test (CWE-276)
 		t.Fatal(err)
 	}
 	cache := filepath.Join(parent, "go-build")
