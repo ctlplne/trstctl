@@ -244,6 +244,9 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
     expect(apiMock.platformDistribution).toHaveBeenCalledTimes(1);
     const regionalHeading = await screen.findByRole("heading", { name: "Regional issuance HA" });
     expect(regionalHeading.closest("section")).toHaveClass("min-w-0");
+    expect(
+      screen.getByText("Passive-read-state model: projections can be read from follower regions while the write path stays on one writable region per tenant."),
+    ).toBeInTheDocument();
     expect(screen.getByRole("table", { name: "Regional issuance ingress table" }).closest("[role='region']")).toHaveClass("min-w-0", "max-w-full");
     expect(await axe(view.container)).toHaveNoViolations();
   });

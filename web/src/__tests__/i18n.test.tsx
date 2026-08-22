@@ -942,8 +942,12 @@ describe("i18n boundary", () => {
       // signature, custody, binding, process-agreement, and recovery boundary.
       // The same repair removes 111 source-unreferenced historical messages;
       // the permanent source-reference gate proves no reachable value dropped.
-      "es-ES": "28dfd6c2cc595391ba1969aaa5a3833eaf5a6120d1476b1859d9a2aaf75ad51f",
-      "de-DE": "9a6ce341af133170c773482bbb8977e824bd7af69c7972e6c315d79acdc850a0",
+      // QA design g42 protected-journey re-pin: the regional-issuance evidence
+      // again says that follower regions serve projected reads while exactly
+      // one region may write for a tenant. Machine-authored es/de — FLAGGED
+      // FOR HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "1dac32fcc4c5848e650c4c22ad130f142d5bbce326890f97c0a06a14e0d364f7",
+      "de-DE": "51f637d03bf8c694bb4d839929132c377608fd42447324a266537675420c18e8",
     });
   });
 

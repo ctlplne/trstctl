@@ -2460,6 +2460,7 @@ const translatedValues = [
   "CAP-SCALE-02 aktiv",
   "regionale Ausstellung nicht verfügbar",
   "Regionaler Ingress kann Ausstellungsverkehr annehmen, während Idempotenz, Event-Append, Outbox, Leader-Wahl und Signer-Isolation jede Tenant-Mutation eingezäunt halten.",
+  "Passives Lesestatusmodell: Projektionen können aus Folgeregionen gelesen werden, während der Schreibpfad für jeden Mandanten in genau einer schreibbaren Region bleibt.",
   "Topologie",
   "Schreibmodell",
   "RPO / RTO",

@@ -2444,6 +2444,8 @@ const esESCatalog = {
   "platform.ha.unavailable": "emisión regional no disponible",
   "platform.ha.description":
     "Los ingresos regionales pueden aceptar tráfico de emisión mientras idempotencia, append de eventos, outbox, elección de líder y aislamiento del firmante mantienen cada mutación de tenant cercada.",
+  "source.passive.read.state.model.projections.can.b.9f2d6a2da6":
+    "Modelo de estado de lectura pasiva: las proyecciones se pueden leer desde regiones seguidoras mientras la ruta de escritura permanece en una sola región escribible por tenant.",
   "platform.ha.topology": "Topología",
   "platform.ha.writeModel": "Modelo de escritura",
   "platform.ha.rpoRto": "RPO / RTO",

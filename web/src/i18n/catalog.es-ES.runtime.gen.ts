@@ -2460,6 +2460,7 @@ const translatedValues = [
   "CAP-SCALE-02 activo",
   "emisión regional no disponible",
   "Los ingresos regionales pueden aceptar tráfico de emisión mientras idempotencia, append de eventos, outbox, elección de líder y aislamiento del firmante mantienen cada mutación de tenant cercada.",
+  "Modelo de estado de lectura pasiva: las proyecciones se pueden leer desde regiones seguidoras mientras la ruta de escritura permanece en una sola región escribible por tenant.",
   "Topología",
   "Modelo de escritura",
   "RPO / RTO",

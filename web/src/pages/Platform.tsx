@@ -1330,6 +1330,9 @@ function RegionalIssuanceEvidence({ plan, formatPolicy }: { plan: ActiveActiveIs
         <span className={scaleServedClass(plan.served)}>{plan.served ? t("platform.ha.active") : t("platform.ha.unavailable")}</span>
       </div>
       <p className="mt-2 text-sm text-muted-foreground">{t("platform.ha.description")}</p>
+      {/* TRACE-014 source anchor: follower regions expose a served worker's
+          projected read state; they never become a second tenant writer. */}
+      <p className="mt-2 text-sm text-muted-foreground">{t("source.passive.read.state.model.projections.can.b.9f2d6a2da6")}</p>
       <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
         <LicenseFact label={t("platform.ha.topology")} value={plan.topology ?? "-"} />
         <LicenseFact label={t("platform.ha.writeModel")} value={plan.write_model ?? "-"} />

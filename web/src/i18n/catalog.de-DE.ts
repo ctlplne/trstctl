@@ -2461,6 +2461,8 @@ const deDECatalog = {
   "platform.ha.unavailable": "regionale Ausstellung nicht verfügbar",
   "platform.ha.description":
     "Regionaler Ingress kann Ausstellungsverkehr annehmen, während Idempotenz, Event-Append, Outbox, Leader-Wahl und Signer-Isolation jede Tenant-Mutation eingezäunt halten.",
+  "source.passive.read.state.model.projections.can.b.9f2d6a2da6":
+    "Passives Lesestatusmodell: Projektionen können aus Folgeregionen gelesen werden, während der Schreibpfad für jeden Mandanten in genau einer schreibbaren Region bleibt.",
   "platform.ha.topology": "Topologie",
   "platform.ha.writeModel": "Schreibmodell",
   "platform.ha.rpoRto": "RPO / RTO",

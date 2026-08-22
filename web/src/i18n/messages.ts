@@ -8575,6 +8575,10 @@ export const messages = {
       "Regional ingress can accept issuance traffic while idempotency, event append, outbox, leader election, and signer isolation keep each tenant mutation fenced.",
     description: "Short description of the regional HA issuance safety model.",
   },
+  "source.passive.read.state.model.projections.can.b.9f2d6a2da6": {
+    defaultMessage: "Passive-read-state model: projections can be read from follower regions while the write path stays on one writable region per tenant.",
+    description: "Explains that follower regions serve read state without becoming independent writers.",
+  },
   "platform.ha.topology": {
     defaultMessage: "Topology",
     description: "Metric label for regional issuance topology.",
