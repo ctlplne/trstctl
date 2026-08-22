@@ -884,8 +884,14 @@ describe("i18n boundary", () => {
       // attestations, or retention jobs. Its sidebar label and keyboard-scroll
       // regions use the same reviewed language. Machine-authored Spanish and
       // German remain flagged for human language review.
-      "es-ES": "7fe3bdd695b65f84c58e9e8d6d030bf2d9f524ca03103c7611848189f447f6d2",
-      "de-DE": "0d1886da3c7b0396da8e4aea71cd91234568bfd62120a02ce6a9e37f86680c0b",
+      // QA design g37 re-pin: Connect other tools now explains inbound,
+      // outbound, and repeatable automation paths before exposing enrollment,
+      // SDK, IaC, GitOps, permission, plugin, webhook, and durable-delivery
+      // evidence. The real-workflow chooser and route label use the same
+      // production-locale language. Machine-authored Spanish and German remain
+      // flagged for human language review.
+      "es-ES": "e20db5a482b20af57d61fa699270440742cbd317381bc8fbac61cfcc378da6f8",
+      "de-DE": "8f64509f711c469441790e0dc10f2c7944954d75b952f976fa0db41d19785632",
     });
   });
 

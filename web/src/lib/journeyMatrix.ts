@@ -43,7 +43,7 @@ const routeCatalog = {
   identities: { path: "/identities", heading: "Machine identities" },
   migration: { path: "/migration", heading: "Move to trstctl" },
   incidents: { path: "/incidents", heading: "Security incidents" },
-  integrate: { path: "/integrate", heading: "Integrate" },
+  integrate: { path: "/integrate", heading: "Connect other tools" },
   operations: { path: "/operations", heading: "Jobs and queues" },
   platform: { path: "/platform", heading: "Access administration" },
   policy: { path: "/policy", heading: "Rules and approvals" },

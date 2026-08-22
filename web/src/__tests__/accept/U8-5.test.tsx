@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Integrate } from "@/pages/Integrate";
 
@@ -26,12 +27,15 @@ describe("U8-5 integrate hub", () => {
   });
 
   it("lists enrollment protocols, SDKs, and IaC artifacts with copyable references", async () => {
+    const user = userEvent.setup();
     render(
       <MemoryRouter>
         <Integrate />
       </MemoryRouter>,
     );
-    expect(screen.getByRole("heading", { name: "Integrate" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Connect other tools" })).toBeInTheDocument();
+    expect(screen.queryByText("ACME")).not.toBeInTheDocument();
+    await user.click(screen.getByText("Enrollment, SDKs, and infrastructure code", { exact: true }));
     expect(screen.getByText("ACME")).toBeInTheDocument();
     expect(screen.getByText("EST")).toBeInTheDocument();
     expect(screen.getByText("SCEP")).toBeInTheDocument();
@@ -40,6 +44,6 @@ describe("U8-5 integrate hub", () => {
     expect(screen.getByText("SPIRE upstream authority")).toBeInTheDocument();
     // copyable references
     expect(screen.getAllByRole("button", { name: /^Copy / }).length).toBeGreaterThan(5);
-    await waitFor(() => expect(apiMock.profiles).toHaveBeenCalledTimes(1));
+    expect(apiMock.profiles).not.toHaveBeenCalled();
   });
 });

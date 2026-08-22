@@ -88,6 +88,7 @@ describe("DESIGN-003 GitOps workflow", () => {
     const user = userEvent.setup();
     renderIntegrate();
 
+    await user.click(screen.getByText("GitOps declarations and drift", { exact: true }));
     expect(await screen.findByRole("heading", { name: "GitOps workflow" })).toBeInTheDocument();
     await waitFor(() => expect(apiMock.profiles).toHaveBeenCalledTimes(1));
     expect(apiMock.discoverySources).toHaveBeenCalledWith({ limit: 50 });

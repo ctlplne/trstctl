@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+/* eslint-disable jsx-a11y/no-noninteractive-tabindex -- The wide GitOps comparison viewport must be keyboard-scrollable. */
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { BookOpen, Clipboard, Download, ShieldCheck } from "lucide-react";
+import { ArrowRight, BookOpen, Clipboard, Download, ShieldCheck } from "lucide-react";
+import { Dialog } from "@/components/Dialog";
 import { PageHeader } from "@/components/PageHeader";
 import { SectionCard } from "@/components/dashboard";
 import { Button } from "@/components/ui/button";
@@ -37,6 +39,14 @@ interface DriftRow {
   declared: string;
   status: DriftStatus;
 }
+
+type IntegrateDisclosure = "developer" | "gitops" | "delivery";
+
+const closedDisclosures: Record<IntegrateDisclosure, boolean> = {
+  developer: false,
+  gitops: false,
+  delivery: false,
+};
 
 const manifestTypes: Array<{ value: ManifestType; labelKey: MessageKey }> = [
   { value: "profile", labelKey: "integrate.gitops.manifest.profile" },
@@ -92,7 +102,7 @@ export function Integrate() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [sources, setSources] = useState<DiscoverySource[]>([]);
   const [policies, setPolicies] = useState<NotificationRoutingPolicy[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [manifestType, setManifestType] = useState<ManifestType>("profile");
   const [profileID, setProfileID] = useState("");
@@ -102,8 +112,14 @@ export function Integrate() {
   const [validationBusy, setValidationBusy] = useState(false);
   const [validationError, setValidationError] = useState("");
   const [validationResult, setValidationResult] = useState<PolicyDryRun | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [open, setOpen] = useState<Record<IntegrateDisclosure, boolean>>(closedDisclosures);
+  const gitOpsRequested = useRef(false);
+  const addButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
+    if (!open.gitops || gitOpsRequested.current) return;
+    gitOpsRequested.current = true;
     let active = true;
     setLoading(true);
     setLoadError("");
@@ -115,7 +131,10 @@ export function Integrate() {
         setPolicies(nextPolicies.items ?? []);
       })
       .catch((err: unknown) => {
-        if (active) setLoadError(describeIntegrateError(err, formatMessage("integrate.gitops.loadUnavailable", undefined, locale)));
+        if (active) {
+          gitOpsRequested.current = false;
+          setLoadError(describeIntegrateError(err, formatMessage("integrate.gitops.loadUnavailable", undefined, locale)));
+        }
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -123,7 +142,7 @@ export function Integrate() {
     return () => {
       active = false;
     };
-  }, [locale]);
+  }, [locale, open.gitops]);
 
   useEffect(() => {
     if (!profileID && profiles[0]) setProfileID(profiles[0].id);
@@ -197,201 +216,334 @@ export function Integrate() {
         titleId="integrate-heading"
         title={t("integrate.title")}
         description={t("integrate.description")}
+        technicalDetails={t("integrate.design.technicalDetails")}
         actions={
-          <Link
-            to="/integrate/api"
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:border-brand-accent/40 hover:bg-muted/60"
-          >
-            <BookOpen className="h-4 w-4" aria-hidden="true" />
-            {t("nav.item.apiExplorer")}
-          </Link>
+          <Button ref={addButtonRef} type="button" onClick={() => setAddOpen(true)}>
+            {t("integrate.design.primaryAction")}
+          </Button>
         }
       />
 
-      <SectionCard title={t("integrate.protocols.title")} description={t("integrate.protocols.description")}>
-        <ul className="grid gap-3">
-          {protocols.map((protocol) => (
-            <li key={protocol.name} className="grid gap-1">
-              <span className="text-sm font-medium">{protocol.name}</span>
-              <CopyRef value={protocol.reference} />
-              <span className="text-caption text-muted-foreground">{protocol.note}</span>
-            </li>
-          ))}
-        </ul>
-      </SectionCard>
+      <section aria-labelledby="integrate-map-heading" className="ui-panel grid gap-4 p-comfortable">
+        <div className="grid gap-1">
+          <h2 id="integrate-map-heading" className="text-title font-semibold">
+            {t("integrate.design.summaryTitle")}
+          </h2>
+          <p className="max-w-3xl text-body text-muted-foreground">{t("integrate.design.summaryDescription")}</p>
+        </div>
+        <dl className="grid gap-3 md:grid-cols-3">
+          <IntegrationFact label={t("integrate.design.inboundLabel")} value={t("integrate.design.inboundValue")} />
+          <IntegrationFact label={t("integrate.design.outboundLabel")} value={t("integrate.design.outboundValue")} />
+          <IntegrationFact label={t("integrate.design.automationLabel")} value={t("integrate.design.automationValue")} />
+        </dl>
+      </section>
 
-      <SectionCard title={t("integrate.sdks.title")} description={t("integrate.sdks.description")}>
-        <ul className="grid gap-3 md:grid-cols-2">
-          {sdks.map((sdk) => (
-            <li key={sdk.name} className="grid gap-1">
-              <span className="text-sm font-medium">{sdk.name}</span>
-              <CopyRef value={sdk.reference} />
-            </li>
-          ))}
-        </ul>
-      </SectionCard>
-
-      <SectionCard title={t("integrate.gitops.title")} description={t("integrate.gitops.description")}>
+      <IntegrationDisclosurePanel
+        title={t("integrate.design.disclosure.developer")}
+        open={open.developer}
+        onToggle={(value) => setOpen((current) => ({ ...current, developer: value }))}
+      >
         <div className="grid min-w-0 gap-4">
-          {loadError && (
-            <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning-foreground" role="status">
-              {loadError}
-            </div>
-          )}
-          <div className="grid gap-3 lg:grid-cols-[minmax(11rem,14rem)_minmax(0,1fr)]">
-            <label className="grid gap-1 text-sm">
-              <span className="font-medium">{t("integrate.gitops.manifestType")}</span>
-              <select
-                className="ui-input"
-                value={manifestType}
-                onChange={(event) => {
-                  setManifestType(event.target.value as ManifestType);
-                  setValidationError("");
-                  setValidationResult(null);
-                }}
-              >
-                {manifestTypes.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {t(option.labelKey)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {manifestType !== "install-values" && (
+          <SectionCard title={t("integrate.protocols.title")} description={t("integrate.protocols.description")}>
+            <ul className="grid gap-3">
+              {protocols.map((protocol) => (
+                <li key={protocol.name} className="grid gap-1">
+                  <span className="text-sm font-medium">{protocol.name}</span>
+                  <CopyRef value={protocol.reference} />
+                  <span className="text-caption text-muted-foreground">{protocol.note}</span>
+                </li>
+              ))}
+            </ul>
+          </SectionCard>
+
+          <SectionCard title={t("integrate.sdks.title")} description={t("integrate.sdks.description")}>
+            <ul className="grid gap-3 md:grid-cols-2">
+              {sdks.map((sdk) => (
+                <li key={sdk.name} className="grid gap-1">
+                  <span className="text-sm font-medium">{sdk.name}</span>
+                  <CopyRef value={sdk.reference} />
+                </li>
+              ))}
+            </ul>
+          </SectionCard>
+
+          <SectionCard title={t("integrate.iac.title")} description={t("integrate.iac.description")}>
+            <ul className="grid gap-3">
+              {iac.map((entry) => (
+                <li key={entry.name} className="grid gap-1">
+                  <span className="text-sm font-medium">{entry.name}</span>
+                  <CopyRef value={entry.reference} />
+                </li>
+              ))}
+            </ul>
+          </SectionCard>
+
+          <Link className="inline-flex items-center gap-2 text-sm font-medium underline" to="/integrate/api">
+            <BookOpen className="h-4 w-4" aria-hidden="true" />
+            {t("integrate.design.openApiExplorer")}
+          </Link>
+        </div>
+      </IntegrationDisclosurePanel>
+
+      <IntegrationDisclosurePanel
+        title={t("integrate.design.disclosure.gitops")}
+        open={open.gitops}
+        onToggle={(value) => setOpen((current) => ({ ...current, gitops: value }))}
+      >
+        <SectionCard title={t("integrate.gitops.title")} description={t("integrate.gitops.description")}>
+          <div className="grid min-w-0 gap-4">
+            {loadError && (
+              <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning-foreground" role="status">
+                {loadError}
+              </div>
+            )}
+            <div className="grid gap-3 lg:grid-cols-[minmax(11rem,14rem)_minmax(0,1fr)]">
               <label className="grid gap-1 text-sm">
-                <span className="font-medium">{t("integrate.gitops.liveObject")}</span>
+                <span className="font-medium">{t("integrate.gitops.manifestType")}</span>
                 <select
                   className="ui-input"
-                  value={selectedObjectID(manifestType, profileID, sourceID, policyID)}
-                  onChange={(event) => updateSelectedObject(manifestType, event.target.value, setProfileID, setSourceID, setPolicyID)}
+                  value={manifestType}
+                  onChange={(event) => {
+                    setManifestType(event.target.value as ManifestType);
+                    setValidationError("");
+                    setValidationResult(null);
+                  }}
                 >
-                  {objectOptions(manifestType, profiles, sources, policies).map((option) => (
+                  {manifestTypes.map((option) => (
                     <option key={option.value} value={option.value}>
-                      {option.label}
+                      {t(option.labelKey)}
                     </option>
                   ))}
                 </select>
               </label>
-            )}
-          </div>
-
-          {loading && <p className="text-sm text-muted-foreground">{t("integrate.gitops.loading")}</p>}
-
-          <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(22rem,0.9fr)]">
-            <label className="grid gap-1 text-sm">
-              <span className="font-medium">{t("integrate.gitops.declarativeManifest")}</span>
-              <textarea
-                className="min-h-80 resize-y rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-                spellCheck={false}
-                value={manifestText}
-                onChange={(event) => {
-                  setManifestText(event.target.value);
-                  setValidationError("");
-                  setValidationResult(null);
-                }}
-              />
-            </label>
-
-            <div className="grid min-w-0 content-start gap-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <Button type="button" onClick={() => void validateDeclaration()} disabled={validationBusy || !manifestText.trim()}>
-                  <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-                  {validationBusy ? t("integrate.gitops.validating") : t("integrate.gitops.validateDeclaration")}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    void globalThis.navigator?.clipboard?.writeText(manifestText);
-                  }}
-                  disabled={!manifestText.trim()}
-                >
-                  <Clipboard className="h-4 w-4" aria-hidden="true" />
-                  {t("integrate.gitops.copyDeclaration")}
-                </Button>
-                <a
-                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:border-brand-accent/40 hover:bg-muted/60"
-                  href={exportHref}
-                  download={downloadName(manifestType)}
-                >
-                  <Download className="h-4 w-4" aria-hidden="true" />
-                  {t("integrate.gitops.exportDeclaration")}
-                </a>
-                <Link className="text-sm underline" to="/integrate/api?operation=dryRunPolicy">
-                  {t("integrate.gitops.openApiExplorer")}
-                </Link>
-              </div>
-
-              {parsedManifest.error && <p className="text-sm text-destructive">{parsedManifest.error}</p>}
-              {validationError && <p className="text-sm text-destructive">{validationError}</p>}
-              {validationResult && (
-                <section className="rounded-md border border-border p-3 text-sm" role="status" aria-label={t("integrate.gitops.validationResult")}>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-medium">{validationResult.valid ? t("integrate.gitops.valid") : t("integrate.gitops.invalid")}</p>
-                    <span className="font-mono text-xs text-muted-foreground">{validationResult.audit_event}</span>
-                  </div>
-                  <dl className="mt-3 grid gap-2 sm:grid-cols-2">
-                    <Metric label={t("integrate.gitops.decision")} value={validationResult.allow ? "allow" : validationResult.deny ? "deny" : "none"} />
-                    <Metric label={t("integrate.gitops.moduleDigest")} value={validationResult.module_sha256} mono />
-                    <Metric label={t("integrate.gitops.query")} value={validationResult.query} mono />
-                    <Metric label={t("integrate.gitops.idempotency")} value={validationResult.idempotency_key} mono />
-                  </dl>
-                </section>
+              {manifestType !== "install-values" && (
+                <label className="grid gap-1 text-sm">
+                  <span className="font-medium">{t("integrate.gitops.liveObject")}</span>
+                  <select
+                    className="ui-input"
+                    value={selectedObjectID(manifestType, profileID, sourceID, policyID)}
+                    onChange={(event) => updateSelectedObject(manifestType, event.target.value, setProfileID, setSourceID, setPolicyID)}
+                  >
+                    {objectOptions(manifestType, profiles, sources, policies).map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               )}
+            </div>
 
-              <div className="overflow-x-auto rounded-md border border-border">
-                <table className="ui-table min-w-[40rem]">
-                  <caption className="sr-only">{t("integrate.gitops.driftComparison")}</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">{t("integrate.gitops.path")}</th>
-                      <th scope="col">{t("integrate.gitops.live")}</th>
-                      <th scope="col">{t("integrate.gitops.declared")}</th>
-                      <th scope="col">{t("integrate.gitops.status")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {driftRows.length > 0 ? (
-                      driftRows.map((row) => (
-                        <tr key={row.path} className="align-top">
-                          <td className="font-mono text-xs">{row.path}</td>
-                          <td className="font-mono text-xs">{row.live}</td>
-                          <td className="font-mono text-xs">{row.declared}</td>
-                          <td>{row.status}</td>
-                        </tr>
-                      ))
-                    ) : (
+            {loading && <p className="text-sm text-muted-foreground">{t("integrate.gitops.loading")}</p>}
+
+            <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(22rem,0.9fr)]">
+              <label className="grid gap-1 text-sm">
+                <span className="font-medium">{t("integrate.gitops.declarativeManifest")}</span>
+                <textarea
+                  className="min-h-80 resize-y rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+                  spellCheck={false}
+                  value={manifestText}
+                  onChange={(event) => {
+                    setManifestText(event.target.value);
+                    setValidationError("");
+                    setValidationResult(null);
+                  }}
+                />
+              </label>
+
+              <div className="grid min-w-0 content-start gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button type="button" onClick={() => void validateDeclaration()} disabled={validationBusy || !manifestText.trim()}>
+                    <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+                    {validationBusy ? t("integrate.gitops.validating") : t("integrate.gitops.validateDeclaration")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      void globalThis.navigator?.clipboard?.writeText(manifestText);
+                    }}
+                    disabled={!manifestText.trim()}
+                  >
+                    <Clipboard className="h-4 w-4" aria-hidden="true" />
+                    {t("integrate.gitops.copyDeclaration")}
+                  </Button>
+                  <a
+                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:border-brand-accent/40 hover:bg-muted/60"
+                    href={exportHref}
+                    download={downloadName(manifestType)}
+                  >
+                    <Download className="h-4 w-4" aria-hidden="true" />
+                    {t("integrate.gitops.exportDeclaration")}
+                  </a>
+                  <Link className="text-sm underline" to="/integrate/api?operation=dryRunPolicy">
+                    {t("integrate.gitops.openApiExplorer")}
+                  </Link>
+                </div>
+
+                {parsedManifest.error && <p className="text-sm text-destructive">{parsedManifest.error}</p>}
+                {validationError && <p className="text-sm text-destructive">{validationError}</p>}
+                {validationResult && (
+                  <section className="rounded-md border border-border p-3 text-sm" role="status" aria-label={t("integrate.gitops.validationResult")}>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="font-medium">{validationResult.valid ? t("integrate.gitops.valid") : t("integrate.gitops.invalid")}</p>
+                      <span className="font-mono text-xs text-muted-foreground">{validationResult.audit_event}</span>
+                    </div>
+                    <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <Metric label={t("integrate.gitops.decision")} value={validationResult.allow ? "allow" : validationResult.deny ? "deny" : "none"} />
+                      <Metric label={t("integrate.gitops.moduleDigest")} value={validationResult.module_sha256} mono />
+                      <Metric label={t("integrate.gitops.query")} value={validationResult.query} mono />
+                      <Metric label={t("integrate.gitops.idempotency")} value={validationResult.idempotency_key} mono />
+                    </dl>
+                  </section>
+                )}
+
+                <div className="overflow-x-auto rounded-md border border-border" role="region" aria-label={t("integrate.design.gitopsScrollArea")} tabIndex={0}>
+                  <table className="ui-table min-w-[40rem]">
+                    <caption className="sr-only">{t("integrate.gitops.driftComparison")}</caption>
+                    <thead>
                       <tr>
-                        <td colSpan={4} className="text-muted-foreground">
-                          {t("integrate.gitops.noComparableDeclaration")}
-                        </td>
+                        <th scope="col">{t("integrate.gitops.path")}</th>
+                        <th scope="col">{t("integrate.gitops.live")}</th>
+                        <th scope="col">{t("integrate.gitops.declared")}</th>
+                        <th scope="col">{t("integrate.gitops.status")}</th>
                       </tr>
-                    )}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {driftRows.length > 0 ? (
+                        driftRows.map((row) => (
+                          <tr key={row.path} className="align-top">
+                            <td className="font-mono text-xs">{row.path}</td>
+                            <td className="font-mono text-xs">{row.live}</td>
+                            <td className="font-mono text-xs">{row.declared}</td>
+                            <td>{row.status}</td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={4} className="text-muted-foreground">
+                            {t("integrate.gitops.noComparableDeclaration")}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-caption text-muted-foreground">
+                  {t("integrate.gitops.driftSummary", {
+                    count: driftCount,
+                    fields: driftCount === 1 ? t("integrate.gitops.fieldSingular") : t("integrate.gitops.fieldPlural"),
+                  })}
+                </p>
               </div>
-              <p className="text-caption text-muted-foreground">
-                {t("integrate.gitops.driftSummary", {
-                  count: driftCount,
-                  fields: driftCount === 1 ? t("integrate.gitops.fieldSingular") : t("integrate.gitops.fieldPlural"),
-                })}
-              </p>
             </div>
           </div>
-        </div>
-      </SectionCard>
+        </SectionCard>
+      </IntegrationDisclosurePanel>
 
-      <SectionCard title={t("integrate.iac.title")} description={t("integrate.iac.description")}>
-        <ul className="grid gap-3">
-          {iac.map((entry) => (
-            <li key={entry.name} className="grid gap-1">
-              <span className="text-sm font-medium">{entry.name}</span>
-              <CopyRef value={entry.reference} />
-            </li>
-          ))}
-        </ul>
-      </SectionCard>
+      <IntegrationDisclosurePanel
+        title={t("integrate.design.disclosure.delivery")}
+        open={open.delivery}
+        onToggle={(value) => setOpen((current) => ({ ...current, delivery: value }))}
+      >
+        <SectionCard title={t("integrate.design.deliveryTitle")} description={t("integrate.design.deliveryDescription")}>
+          <dl className="grid gap-3 md:grid-cols-2">
+            <IntegrationFact label={t("integrate.design.scopeLabel")} value={t("integrate.design.scopeValue")} />
+            <IntegrationFact label={t("integrate.design.webhookLabel")} value={t("integrate.design.webhookValue")} />
+            <IntegrationFact label={t("integrate.design.capabilityLabel")} value={t("integrate.design.capabilityValue")} />
+            <IntegrationFact label={t("integrate.design.outboxLabel")} value={t("integrate.design.outboxValue")} />
+          </dl>
+          <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm">
+            <Link className="font-medium underline" to="/connectors">
+              {t("integrate.design.reviewDestinations")}
+            </Link>
+            <Link className="font-medium underline" to="/notifications">
+              {t("integrate.design.reviewDelivery")}
+            </Link>
+            <Link className="font-medium underline" to="/integrate/api">
+              {t("integrate.design.reviewScopes")}
+            </Link>
+          </div>
+        </SectionCard>
+      </IntegrationDisclosurePanel>
+
+      <Dialog
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        titleId="add-integration-title"
+        descriptionId="add-integration-description"
+        returnFocusRef={addButtonRef}
+        panelClassName="relative mx-auto mt-[8vh] grid max-h-[84vh] w-[min(94vw,42rem)] gap-4 overflow-y-auto rounded-panel border border-border bg-background p-5 shadow-elevation3"
+      >
+        <div className="grid gap-1">
+          <h2 id="add-integration-title" className="text-title font-semibold">
+            {t("integrate.design.primaryAction")}
+          </h2>
+          <p id="add-integration-description" className="text-sm text-muted-foreground">
+            {t("integrate.design.addDescription")}
+          </p>
+        </div>
+        <div className="grid gap-2">
+          <AddIntegrationLink to="/connectors" label={t("integrate.design.addDestination")} description={t("integrate.design.addDestinationDescription")} />
+          <AddIntegrationLink to="/notifications" label={t("integrate.design.addAlerts")} description={t("integrate.design.addAlertsDescription")} />
+          <AddIntegrationLink to="/secrets/sync" label={t("integrate.design.addSecretSync")} description={t("integrate.design.addSecretSyncDescription")} />
+          <AddIntegrationLink to="/ca-hierarchy" label={t("integrate.design.addCA")} description={t("integrate.design.addCADescription")} />
+          <AddIntegrationLink to="/integrate/api" label={t("integrate.design.addAPI")} description={t("integrate.design.addAPIDescription")} />
+        </div>
+        <div className="flex justify-end">
+          <Button type="button" variant="ghost" onClick={() => setAddOpen(false)}>
+            {t("integrate.design.close")}
+          </Button>
+        </div>
+      </Dialog>
     </section>
+  );
+}
+
+function IntegrationDisclosurePanel({
+  children,
+  onToggle,
+  open,
+  title,
+}: {
+  children: ReactNode;
+  onToggle: (open: boolean) => void;
+  open: boolean;
+  title: string;
+}) {
+  return (
+    <details
+      className="min-w-0 rounded-panel border border-border bg-card shadow-elevation1"
+      open={open}
+      onToggle={(event) => onToggle(event.currentTarget.open)}
+    >
+      <summary className="cursor-pointer px-4 py-3 font-semibold text-foreground">{title}</summary>
+      {open ? <div className="min-w-0 border-t border-border p-4">{children}</div> : null}
+    </details>
+  );
+}
+
+function IntegrationFact({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="min-w-0 rounded-control border border-border bg-muted/20 p-3">
+      <dt className="text-caption font-medium text-muted-foreground">{label}</dt>
+      <dd className="mt-1 break-words text-sm font-medium text-foreground">{value}</dd>
+    </div>
+  );
+}
+
+function AddIntegrationLink({ description, label, to }: { description: string; label: string; to: string }) {
+  return (
+    <Link
+      className="group flex min-w-0 items-center justify-between gap-3 rounded-control border border-border p-3 hover:border-brand-accent/50 hover:bg-muted/40"
+      to={to}
+    >
+      <span className="min-w-0">
+        <span className="block font-medium text-foreground">{label}</span>
+        <span className="mt-0.5 block text-caption text-muted-foreground">{description}</span>
+      </span>
+      <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground group-hover:text-foreground" aria-hidden="true" />
+    </Link>
   );
 }
 

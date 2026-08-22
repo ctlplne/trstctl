@@ -454,12 +454,23 @@ key-based revocation publishing an updated KRL, and host retirement. See
 `/api/v1/ssh/trust-rollouts`, `/api/v1/ssh/attested-user-certs`,
 `/api/v1/ssh/certificates/revoke`, and `/api/v1/ssh/hosts/retire`.
 
-### Integrate hub (`/integrate`)
+### Connect other tools (`/integrate`)
 
-One place to wire trstctl into a stack: copyable ACME/EST/SCEP enrollment URLs per
-issuance profile, the language SDKs (Go, TypeScript, Python, Java), and
-infrastructure-as-code integrations — Terraform provider, cert-manager issuer, and
-SPIRE upstream authority. Every reference points at a served surface. See
+Connect other tools first explains the direction of each connection: devices and
+services send credential requests to trstctl; trstctl sends credentials, alerts,
+and events outward; SDKs, GitOps, and infrastructure code make the setup
+repeatable. Its single **Add integration** action is a chooser, not a fake form. It
+links to the real destination, alert/webhook, secret-sync, CA, or runnable-API
+configuration screen.
+
+The detailed enrollment and developer surfaces remain available in three closed
+sections. They preserve copyable ACME/EST/SCEP URLs, the Go, TypeScript, Python,
+and Java SDKs, Terraform provider, cert-manager issuer, SPIRE upstream authority,
+live GitOps manifest generation, policy dry-run, and drift comparison. GitOps live
+state is not fetched until that section opens. The permissions and delivery section
+explains API scopes, signed webhooks, plugin capability grants, and outbox-backed
+retries with receipts in plain language. Every reference points at a served
+surface. See
 [Enrollment protocols](features/enrollment-protocols.md),
 [Client SDKs](features/client-sdks.md), and
 [Terraform provider](terraform-provider.md).
@@ -637,7 +648,7 @@ grounded and sufficient. Backed by `/api/v1/ai/status`, `/api/v1/mcp/tools`, `/a
 | `/audit` | Change history |
 | `/privacy` | Evidence privacy |
 | `/connectors` | Where credentials are installed |
-| `/integrate` | Integrate |
+| `/integrate` | Connect other tools |
 | `/integrate/api` | API Explorer |
 | `/admin/access` | Access admin |
 | `/admin/system` | System posture |

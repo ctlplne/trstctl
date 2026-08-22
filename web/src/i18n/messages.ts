@@ -5945,8 +5945,8 @@ export const messages = {
     description: "Primary navigation item.",
   },
   "nav.item.integrate": {
-    defaultMessage: "Integrate",
-    description: "Primary navigation item. Matches the Integrate page H1 (integrate.title) for naming parity (S-A2).",
+    defaultMessage: "Connect other tools",
+    description: "Primary navigation item. Matches the Connect other tools page H1 for naming parity.",
   },
   "nav.item.apiExplorer": {
     defaultMessage: "API explorer",
@@ -11154,12 +11154,172 @@ export const messages = {
     description: "Error text with transport detail when request execution fails before a response.",
   },
   "integrate.title": {
-    defaultMessage: "Integrate",
-    description: "Integrate route page title.",
+    defaultMessage: "Connect other tools",
+    description: "Connect other tools route page title.",
   },
   "integrate.description": {
-    defaultMessage: "Wire trstctl into your stack: enrollment protocols, language SDKs, and infrastructure-as-code, each with a copyable reference.",
-    description: "Integrate route page description.",
+    defaultMessage: "Which external systems can send or receive trstctl data.",
+    description: "Plain-language opening answer for the Connect other tools route.",
+  },
+  "integrate.design.technicalDetails": {
+    defaultMessage: "Scopes, webhooks, plugin capabilities, outbox delivery.",
+    description: "Exact-detail layer named by the whole-product design contract.",
+  },
+  "integrate.design.primaryAction": {
+    defaultMessage: "Add integration",
+    description: "Single primary action that opens the real integration-workflow chooser.",
+  },
+  "integrate.design.summaryTitle": {
+    defaultMessage: "How information moves",
+    description: "Heading for the plain-language integration direction map.",
+  },
+  "integrate.design.summaryDescription": {
+    defaultMessage: "Pick the direction first. Then trstctl sends you to the real configuration screen for that kind of connection.",
+    description: "Explains the integration hub without assuming protocol knowledge.",
+  },
+  "integrate.design.inboundLabel": {
+    defaultMessage: "Systems send to trstctl",
+    description: "Integration map label for inbound systems.",
+  },
+  "integrate.design.inboundValue": {
+    defaultMessage: "Devices and services request credentials through ACME, EST, SCEP, or the API.",
+    description: "Plain-language inbound integration summary.",
+  },
+  "integrate.design.outboundLabel": {
+    defaultMessage: "trstctl sends to systems",
+    description: "Integration map label for outbound systems.",
+  },
+  "integrate.design.outboundValue": {
+    defaultMessage: "Credentials go to destinations. Alerts and events go to people or tools.",
+    description: "Plain-language outbound integration summary.",
+  },
+  "integrate.design.automationLabel": {
+    defaultMessage: "Automation keeps it repeatable",
+    description: "Integration map label for automation.",
+  },
+  "integrate.design.automationValue": {
+    defaultMessage: "SDKs, GitOps, and infrastructure code reproduce the same setup safely.",
+    description: "Plain-language automation integration summary.",
+  },
+  "integrate.design.disclosure.developer": {
+    defaultMessage: "Enrollment, SDKs, and infrastructure code",
+    description: "Progressive disclosure for developer and enrollment references.",
+  },
+  "integrate.design.disclosure.gitops": {
+    defaultMessage: "GitOps declarations and drift",
+    description: "Progressive disclosure for live GitOps controls.",
+  },
+  "integrate.design.disclosure.delivery": {
+    defaultMessage: "Permissions and reliable delivery",
+    description: "Progressive disclosure for integration security and delivery evidence.",
+  },
+  "integrate.design.openApiExplorer": {
+    defaultMessage: "Open the runnable API explorer",
+    description: "Link from developer integration evidence to the API explorer.",
+  },
+  "integrate.design.gitopsScrollArea": {
+    defaultMessage: "GitOps drift comparison scroll area",
+    description: "Accessible label for the keyboard-scrollable GitOps comparison viewport.",
+  },
+  "integrate.design.deliveryTitle": {
+    defaultMessage: "What each connection is allowed to do",
+    description: "Heading for integration security and delivery facts.",
+  },
+  "integrate.design.deliveryDescription": {
+    defaultMessage: "The safe boundary is part of the connection, not an expert-only afterthought.",
+    description: "Plain-language description for integration security evidence.",
+  },
+  "integrate.design.scopeLabel": {
+    defaultMessage: "Permission scope",
+    description: "Integration safety label for API permission scopes.",
+  },
+  "integrate.design.scopeValue": {
+    defaultMessage: "A scope is a permission boundary",
+    description: "ELI5 explanation of an API scope.",
+  },
+  "integrate.design.webhookLabel": {
+    defaultMessage: "Webhooks",
+    description: "Integration safety label for webhooks.",
+  },
+  "integrate.design.webhookValue": {
+    defaultMessage: "Signed event messages leave through configured channels; delivery attempts stay reviewable.",
+    description: "ELI5 explanation of webhook delivery.",
+  },
+  "integrate.design.capabilityLabel": {
+    defaultMessage: "Plugin capabilities",
+    description: "Integration safety label for plugin capabilities.",
+  },
+  "integrate.design.capabilityValue": {
+    defaultMessage: "A plugin receives only the host abilities explicitly granted to it.",
+    description: "ELI5 explanation of plugin capability grants.",
+  },
+  "integrate.design.outboxLabel": {
+    defaultMessage: "Outbox delivery",
+    description: "Integration safety label for outbox delivery.",
+  },
+  "integrate.design.outboxValue": {
+    defaultMessage: "Outbound work is recorded before it is sent, then retried with receipts instead of being silently lost.",
+    description: "ELI5 explanation of durable outbox delivery.",
+  },
+  "integrate.design.reviewDestinations": {
+    defaultMessage: "Review credential destinations",
+    description: "Link to connector targets and delivery evidence.",
+  },
+  "integrate.design.reviewDelivery": {
+    defaultMessage: "Review alerts and webhooks",
+    description: "Link to notification channels and delivery evidence.",
+  },
+  "integrate.design.reviewScopes": {
+    defaultMessage: "Review API scopes",
+    description: "Link to the API explorer and exact operation scopes.",
+  },
+  "integrate.design.addDescription": {
+    defaultMessage: "Choose what should connect. You will continue in its real configuration screen; this chooser does not save pretend settings.",
+    description: "Explains the add-integration chooser boundary.",
+  },
+  "integrate.design.addDestination": {
+    defaultMessage: "Send credentials to a destination",
+    description: "Add-integration choice for deployment connectors.",
+  },
+  "integrate.design.addDestinationDescription": {
+    defaultMessage: "Configure a server, load balancer, cloud store, or other deployment target.",
+    description: "Description of the connector-target workflow.",
+  },
+  "integrate.design.addAlerts": {
+    defaultMessage: "Send alerts and events",
+    description: "Add-integration choice for notification channels.",
+  },
+  "integrate.design.addAlertsDescription": {
+    defaultMessage: "Configure email, chat, SIEM, PagerDuty, Opsgenie, or a signed webhook.",
+    description: "Description of the alert-delivery workflow.",
+  },
+  "integrate.design.addSecretSync": {
+    defaultMessage: "Sync secrets to another platform",
+    description: "Add-integration choice for secret sync.",
+  },
+  "integrate.design.addSecretSyncDescription": {
+    defaultMessage: "Configure a sealed, outbox-backed secret destination.",
+    description: "Description of the secret-sync workflow.",
+  },
+  "integrate.design.addCA": {
+    defaultMessage: "Connect a certificate authority",
+    description: "Add-integration choice for external certificate authorities.",
+  },
+  "integrate.design.addCADescription": {
+    defaultMessage: "Configure an upstream CA or review the local signing hierarchy.",
+    description: "Description of the CA-integration workflow.",
+  },
+  "integrate.design.addAPI": {
+    defaultMessage: "Build an API integration",
+    description: "Add-integration choice for custom API automation.",
+  },
+  "integrate.design.addAPIDescription": {
+    defaultMessage: "Inspect exact permissions, edit a request, and run it against this tenant.",
+    description: "Description of the API-integration workflow.",
+  },
+  "integrate.design.close": {
+    defaultMessage: "Close",
+    description: "Close action for the add-integration chooser.",
   },
   "integrate.copy.copy": {
     defaultMessage: "Copy",
