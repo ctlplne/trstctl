@@ -10838,7 +10838,7 @@ export const messages = {
     description: "Plain-language error title shown when the API playground cannot load its contract.",
   },
   "apiExplorer.loadFailedHelp": {
-    defaultMessage: "No request can run until trstctl can read the served OpenAPI contract. Check access, then try again.",
+    defaultMessage: "No request can run until trstctl can read the list of available API requests. Check access, then try again.",
     description: "Recovery guidance when the API contract cannot load.",
   },
   "apiExplorer.loadFailedDetails": {
@@ -10926,7 +10926,7 @@ export const messages = {
     description: "Progressive disclosure for exact contract and code evidence.",
   },
   "apiExplorer.openSchema": {
-    defaultMessage: "Open served OpenAPI schema",
+    defaultMessage: "View API schema",
     description: "Link label for the exact served OpenAPI contract.",
   },
   "apiExplorer.stepTwo": {

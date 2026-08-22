@@ -481,8 +481,8 @@ API playground first answers one question: how to try a safe request and underst
 the response. Its default screen runs nothing. It explains the three-step path —
 start with a read-only operation, create temporary least-privilege access, then read
 a plain-language result — and exposes one **Try request** action. Opening the
-workspace selects a read-only operation that has no required inputs when the served
-contract provides one. Creating access and sending the request remain separate,
+workspace selects a read-only operation that has no required inputs when the API
+lists one. Creating access and sending the request remain separate,
 explicit actions.
 
 The full OpenAPI surface remains reachable without putting hundreds of operations

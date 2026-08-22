@@ -2886,7 +2886,7 @@ const deDECatalog = {
   "apiExplorer.loading": "API-Vertrag wird geladen.",
   "apiExplorer.loadFailed": "Der API-Vertrag ist nicht verfügbar",
   "apiExplorer.loadFailedHelp":
-    "Es kann keine Anfrage laufen, bis trstctl den bereitgestellten OpenAPI-Vertrag lesen kann. Zugriff prüfen und erneut versuchen.",
+    "Es kann keine Anfrage laufen, bis trstctl die Liste der verfügbaren API-Anfragen lesen kann. Zugriff prüfen und erneut versuchen.",
   "apiExplorer.loadFailedDetails": "Exakter Ladefehler",
   "apiExplorer.reload": "Erneut laden",
   "apiExplorer.empty": "Keine API-Operationen verfügbar.",
@@ -2910,7 +2910,7 @@ const deDECatalog = {
   "apiExplorer.resultLimit": "Die ersten {shown} von {count} Treffern werden gezeigt. Name, Pfad oder Berechtigung eingeben, um die Liste einzugrenzen.",
   "apiExplorer.requestDetailsDisclosure": "Header, Body und exakte Anfrage",
   "apiExplorer.schemaExamplesDisclosure": "OpenAPI-Schema und Codebeispiele",
-  "apiExplorer.openSchema": "Bereitgestelltes OpenAPI-Schema öffnen",
+  "apiExplorer.openSchema": "API-Schema ansehen",
   "apiExplorer.stepTwo": "Schritt 2",
   "apiExplorer.stepThree": "Schritt 3",
   "apiExplorer.operations": "Operationen",

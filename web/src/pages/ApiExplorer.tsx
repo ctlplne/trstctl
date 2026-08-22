@@ -4,6 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Clipboard, KeyRound, Loader2, Play, RefreshCw } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { PageHeader } from "@/components/PageHeader";
+import { Eyebrow } from "@/components/typography";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field";
@@ -935,9 +936,9 @@ export function ApiExplorer() {
           <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)]">
             <div className="grid min-w-0 gap-4">
               <section className="ui-panel min-w-0 p-comfortable" aria-labelledby="api-operation-detail-heading">
-                <p className="text-caption font-medium uppercase tracking-wide text-muted-foreground">
+                <Eyebrow as="p">
                   {isUnsafe(selected.method) ? t("apiExplorer.changesData") : t("apiExplorer.safeStartingPoint")}
-                </p>
+                </Eyebrow>
                 <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h3 id="api-operation-detail-heading" className="text-title font-semibold">
@@ -1120,7 +1121,7 @@ export function ApiExplorer() {
 
             <div className="grid min-w-0 gap-4">
               <section className="ui-panel min-w-0 p-comfortable" aria-labelledby="api-runner-heading">
-                <p className="text-caption font-medium uppercase tracking-wide text-muted-foreground">{t("apiExplorer.stepTwo")}</p>
+                <Eyebrow as="p">{t("apiExplorer.stepTwo")}</Eyebrow>
                 <h3 id="api-runner-heading" className="mt-1 text-title font-semibold">
                   {t("apiExplorer.runner")}
                 </h3>
@@ -1210,7 +1211,7 @@ export function ApiExplorer() {
               </section>
 
               <section className="ui-panel p-comfortable" aria-labelledby="api-response-heading">
-                <p className="text-caption font-medium uppercase tracking-wide text-muted-foreground">{t("apiExplorer.stepThree")}</p>
+                <Eyebrow as="p">{t("apiExplorer.stepThree")}</Eyebrow>
                 <h3 id="api-response-heading" className="mt-1 text-title font-semibold">
                   {t("apiExplorer.response")}
                 </h3>

@@ -890,8 +890,15 @@ describe("i18n boundary", () => {
       // evidence. The real-workflow chooser and route label use the same
       // production-locale language. Machine-authored Spanish and German remain
       // flagged for human language review.
-      "es-ES": "e20db5a482b20af57d61fa699270440742cbd317381bc8fbac61cfcc378da6f8",
-      "de-DE": "8f64509f711c469441790e0dc10f2c7944954d75b952f976fa0db41d19785632",
+      // QA design g38 re-pin: API playground now explains a safe request,
+      // temporary least-privilege access, result-first responses, recovery,
+      // and progressive exact request/schema evidence in all production
+      // locales. The full-suite vocabulary follow-up replaces the internal
+      // "served contract" phrase with an available-request explanation.
+      // Machine-authored Spanish and German remain flagged for human language
+      // review before release.
+      "es-ES": "cc21c9710ac4705c40b940ec6175f79d7fb938eed1c87f92b08a893c63a09c7a",
+      "de-DE": "d186f2a7898d13294ca5e56e5e4b9786bf27bdc54865c95c7eb8375b520f4c09",
     });
   });
 

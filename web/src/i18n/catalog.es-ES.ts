@@ -2870,7 +2870,7 @@ const esESCatalog = {
   "apiExplorer.loading": "Cargando el contrato de la API.",
   "apiExplorer.loadFailed": "El contrato de la API no está disponible",
   "apiExplorer.loadFailedHelp":
-    "No se puede ejecutar ninguna solicitud hasta que trstctl lea el contrato OpenAPI servido. Comprueba el acceso e inténtalo de nuevo.",
+    "No se puede ejecutar ninguna solicitud hasta que trstctl lea la lista de solicitudes de API disponibles. Comprueba el acceso e inténtalo de nuevo.",
   "apiExplorer.loadFailedDetails": "Error de carga exacto",
   "apiExplorer.reload": "Intentar cargar de nuevo",
   "apiExplorer.empty": "No hay operaciones de API disponibles.",
@@ -2895,7 +2895,7 @@ const esESCatalog = {
   "apiExplorer.resultLimit": "Se muestran las primeras {shown} de {count} coincidencias. Añade un nombre, una ruta o un permiso para acotar la lista.",
   "apiExplorer.requestDetailsDisclosure": "Cabeceras, cuerpo y solicitud exacta",
   "apiExplorer.schemaExamplesDisclosure": "Esquema OpenAPI y ejemplos de código",
-  "apiExplorer.openSchema": "Abrir el esquema OpenAPI servido",
+  "apiExplorer.openSchema": "Ver el esquema de la API",
   "apiExplorer.stepTwo": "Paso 2",
   "apiExplorer.stepThree": "Paso 3",
   "apiExplorer.operations": "Operaciones",
