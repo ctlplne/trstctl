@@ -487,8 +487,46 @@ const esESCatalog = {
   "discovery.run.unbound": "Sin vincular",
   // DESIGN-ROUTE-040 machine-authored translations; human linguistic review required before release.
   "platform.tabs.access": "Personas y roles",
-  "platform.tabs.posture": "Postura del sistema",
+  "platform.tabs.posture": "Estado del sistema",
   "platform.tabs.editions": "Ediciones y licencia",
+  // DESIGN-ROUTE-041 machine-authored translations; human linguistic review required before release.
+  "admin.system.description": "Si el plano de control está configurado de forma segura para este entorno.",
+  "admin.system.currentAnswer": "Respuesta actual",
+  "admin.system.fixFirstIssue": "Corregir el primer problema",
+  "admin.system.healthChecking": "Comprobando el estado del sistema",
+  "admin.system.healthCheckingBody":
+    "Se leen las dependencias básicas y la protección de reintentos. No se afirma que esté listo hasta que termine la comprobación.",
+  "admin.system.healthUnknown": "El estado del sistema es desconocido",
+  "admin.system.healthUnknownBody":
+    "La lectura falló, así que esta página no hará suposiciones. Inténtelo de nuevo; si vuelve a fallar, revise los registros del plano de control.",
+  "admin.system.healthReady": "Los servicios básicos están listos",
+  "admin.system.healthReadyBody":
+    "La lectura básica no encontró un problema inmediato. Abra las pruebas inferiores antes de afirmar que está listo para producción.",
+  "admin.system.healthIssueOne": "1 problema requiere atención",
+  "admin.system.healthIssues": "{count} problemas requieren atención",
+  "admin.system.healthIssuesBody":
+    "Las comprobaciones encontraron trabajo pendiente. Corrija el primer problema y vuelva aquí hasta obtener una respuesta clara.",
+  "admin.system.checks": "Comprobaciones",
+  "admin.system.checksDescription": "La lectura fiable mínima: dependencias básicas, aislamiento del firmante, protección de reintentos y fallos de entrega.",
+  "admin.system.configurationEvidence": "Pruebas de configuración",
+  "admin.system.configurationDescription":
+    "Custodia criptográfica del tenant, protección de resultados de reintento y pruebas de medición. Ábralo antes de cambiar el estado de protección.",
+  "admin.system.dependencyHealth": "Estado de las dependencias",
+  "admin.system.dependencyDescription": "Pruebas de copia y restauración, entrega, límites de ejecución y controles de capacidad.",
+  "admin.system.exceptions": "Excepciones",
+  "admin.system.exceptionsDescription": "Pruebas exclusivas de soporte y proveedor. Estos detalles no cambian la respuesta de estado básica.",
+  "admin.system.tryAgain": "Intentar de nuevo",
+  "admin.system.dependenciesCheck": "Dependencias básicas",
+  "admin.system.dependenciesReady": "{ready} de {total} listas",
+  "admin.system.signerCheck": "Aislamiento del firmante",
+  "admin.system.retryProtectionCheck": "Protección del resultado de reintento",
+  "admin.system.deliveryCheck": "Entrega verificada",
+  "admin.system.deliveryFailures": "{count} fallos",
+  "admin.system.healthReadFailed": "No se pudo leer el estado del sistema.",
+  "admin.system.detailReadFailed":
+    "No se pudieron cargar algunas pruebas expertas. No se cambió la configuración. Revise los registros del plano de control y vuelva a intentarlo.",
+  "admin.system.provisionFailed":
+    "El tenant gestionado no fue confirmado. Revise los registros del plano del proveedor antes de reintentar con una solicitud nueva.",
   "admin.access.description": "Quién puede usar el plano de control y qué permite cada rol.",
   "admin.access.technical":
     "La membresía y cada cambio permanecen dentro del tenant. Las reclamaciones SSO, los grupos, los permisos, las sesiones, los metadatos de claves y el historial de revisiones exactos siguen disponibles abajo.",
@@ -579,7 +617,6 @@ const esESCatalog = {
   "admin.access.started": "Iniciada",
   "admin.access.target": "Destino",
   "admin.access.expires": "Caduca",
-  "admin.system.description": "Divulgaciones de postura de solo lectura: empaquetado, límite de tenant, transporte, escala, soporte y la oferta gestionada.",
   "admin.editions.description": "Estado de licencia sin conexión, filas de ediciones y funciones, postura FIPS y distribución.",
   "identities.decommission.heading": "Retirada por señal",
   "request.csr.generate": "Genere una en ese host:",
@@ -861,7 +898,7 @@ const esESCatalog = {
   "journeys.prod.tls.title": "Servir con su propio certificado",
   "journeys.prod.tls.body": "Apunte el servidor a sus archivos de certificado y clave antes de que algo dependa de él.",
   "journeys.prod.health.title": "Vigilar preparación y métricas",
-  "journeys.prod.health.body": "readyz comprueba db, nats y el firmador; Prometheus raspa /metrics — Postura del sistema resume el runtime.",
+  "journeys.prod.health.body": "readyz comprueba db, nats y el firmador; Prometheus raspa /metrics — Estado del sistema resume el runtime.",
   "journeys.prod.backup.title": "Ensayar copia y restauración",
   "journeys.prod.backup.body": "Las copias completas cifradas solo cuentan cuando la restauración se ha ensayado de verdad.",
   "journeys.prod.audit.title": "Exportar evidencia de auditoría",

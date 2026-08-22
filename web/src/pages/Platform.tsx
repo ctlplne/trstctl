@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
-import { Building2, Gauge, Headphones, Network, Plus } from "lucide-react";
+import { Building2, ChevronDown, Gauge, Headphones, Network, Plus } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { AdminHeaderActions } from "@/components/AdminHeaderActions";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { DRPosturePanel } from "@/components/DRPosturePanel";
 import { IdempotencyResultProtectionPanel, TenantKeyDomainPanel, UsageEvidencePanel } from "@/components/TenantCustodyPanels";
+import { Eyebrow } from "@/components/typography";
 import { Button } from "@/components/ui/button";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { formatCurrency as formatCurrencyPolicy, formatDateTime, formatNumber as formatNumberPolicy, type FormatPolicy } from "@/i18n/format";
@@ -124,25 +125,43 @@ export function AdminSystem() {
   const [hostedPlan, setHostedPlan] = useState("enterprise");
   const [hostedSupportTier, setHostedSupportTier] = useState("24x7");
   const [hostedSLOTier, setHostedSLOTier] = useState("99.95");
+  const [systemAttempt, setSystemAttempt] = useState(0);
+  const [open, setOpen] = useState({ checks: true, configuration: false, dependencies: false, exceptions: false });
   const packaging = editions?.packaging ?? defaultPackaging;
 
   useEffect(() => {
+    if (!open.exceptions) return;
     let active = true;
-    Promise.all([api.editions(), api.enterpriseSupportStatus(), api.managedOfferingStatus(), api.scaleOrchestration()])
-      .then(([editionInfo, supportStatus, managedStatus, scaleStatus]) => {
+    Promise.all([api.editions(), api.enterpriseSupportStatus(), api.managedOfferingStatus()])
+      .then(([editionInfo, supportStatus, managedStatus]) => {
         if (!active) return;
         setEditions(editionInfo);
         setEnterpriseSupport(supportStatus);
         setManagedOffering(managedStatus);
-        setScaleOrchestration(scaleStatus);
       })
-      .catch((err) => {
-        if (active) setSystemError(err instanceof Error ? err.message : String(err));
+      .catch(() => {
+        if (active) setSystemError(translateNow("admin.system.detailReadFailed"));
       });
     return () => {
       active = false;
     };
-  }, []);
+  }, [open.exceptions]);
+
+  useEffect(() => {
+    if (!open.dependencies) return;
+    let active = true;
+    api
+      .scaleOrchestration()
+      .then((scaleStatus) => {
+        if (active) setScaleOrchestration(scaleStatus);
+      })
+      .catch(() => {
+        if (active) setSystemError(translateNow("admin.system.detailReadFailed"));
+      });
+    return () => {
+      active = false;
+    };
+  }, [open.dependencies]);
 
   useEffect(() => {
     let active = true;
@@ -154,9 +173,9 @@ export function AdminSystem() {
         setSystemReadout(readout);
         setProtectionError(null);
       })
-      .catch((err) => {
+      .catch(() => {
         if (!active) return;
-        setProtectionError(err instanceof Error ? err.message : String(err));
+        setProtectionError(translateNow("admin.system.healthReadFailed"));
       })
       .finally(() => {
         if (active) setProtectionLoading(false);
@@ -164,9 +183,10 @@ export function AdminSystem() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [systemAttempt]);
 
   useEffect(() => {
+    if (!open.dependencies) return;
     let active = true;
     // Optional-method guard (see lib/optionalApi): a client without this method
     // must leave the panel absent, not blank the Platform page.
@@ -176,14 +196,14 @@ export function AdminSystem() {
         setDRPosture(posture);
         setDRError(null);
       })
-      .catch((err) => {
+      .catch(() => {
         if (!active) return;
-        setDRError(err instanceof Error ? err.message : String(err));
+        setDRError(translateNow("admin.system.detailReadFailed"));
       });
     return () => {
       active = false;
     };
-  }, []);
+  }, [open.dependencies]);
 
   async function provisionHostedTenant(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -205,11 +225,40 @@ export function AdminSystem() {
       setSystemNotice(`Provisioned managed tenant ${created.name}`);
       setHostedTenantID("");
       setHostedTenantName("");
-    } catch (err) {
-      setSystemError(err instanceof Error ? err.message : String(err));
+    } catch {
+      setSystemError(t("admin.system.provisionFailed"));
     } finally {
       setSystemBusy(false);
     }
+  }
+
+  const dependencies = systemReadout?.dependencies ?? [];
+  const dependencyIssues = dependencies.filter((dependency) => !dependency.ready);
+  const resultProtectionState = systemReadout?.idempotency_results?.state;
+  const resultProtectionNeedsWork = Boolean(systemReadout && resultProtectionState !== "complete");
+  const deliveryIssues = systemReadout?.deployment?.verify_failed ?? 0;
+  const issueCount = dependencyIssues.length + (resultProtectionNeedsWork ? 1 : 0) + deliveryIssues;
+  const healthTitle = protectionLoading
+    ? t("admin.system.healthChecking")
+    : protectionError
+      ? t("admin.system.healthUnknown")
+      : issueCount === 0
+        ? t("admin.system.healthReady")
+        : issueCount === 1
+          ? t("admin.system.healthIssueOne")
+          : t("admin.system.healthIssues", { count: String(issueCount) });
+  const healthBody = protectionLoading
+    ? t("admin.system.healthCheckingBody")
+    : protectionError
+      ? t("admin.system.healthUnknownBody")
+      : issueCount === 0
+        ? t("admin.system.healthReadyBody")
+        : t("admin.system.healthIssuesBody");
+
+  function openFirstIssue() {
+    const target = protectionError ? "checks" : dependencyIssues.length > 0 || deliveryIssues > 0 ? "dependencies" : "configuration";
+    setOpen((current) => ({ ...current, [target]: true }));
+    window.setTimeout(() => document.getElementById(`admin-system-${target}-summary`)?.focus(), 0);
   }
 
   return (
@@ -230,473 +279,624 @@ export function AdminSystem() {
           {systemNotice}
         </p>
       )}
-      <div className="grid gap-6">
-        <TenantKeyDomainPanel canWrite={Boolean(user?.permissions?.includes("keys:write"))} />
-        <IdempotencyResultProtectionPanel readout={systemReadout} loading={protectionLoading} requestError={protectionError} />
-        <UsageEvidencePanel />
+      <section className="ui-panel grid gap-4 border-s-4 border-s-brand-accent p-comfortable" aria-labelledby="system-health-answer-heading" aria-live="polite">
+        <div className="grid gap-1">
+          <Eyebrow as="p">{t("admin.system.currentAnswer")}</Eyebrow>
+          <h2 id="system-health-answer-heading" className="text-heading font-semibold">
+            {healthTitle}
+          </h2>
+          <p className="max-w-3xl text-sm text-muted-foreground">{healthBody}</p>
+        </div>
+        <div>
+          <Button type="button" onClick={openFirstIssue}>
+            {t("admin.system.fixFirstIssue")}
+          </Button>
+        </div>
+      </section>
 
-        <DRPosturePanel posture={drPosture} error={drError} formatPolicy={formatPolicy} />
+      <div className="grid gap-3">
+        <SystemDisclosure
+          summaryId="admin-system-checks-summary"
+          title={t("admin.system.checks")}
+          description={t("admin.system.checksDescription")}
+          open={open.checks}
+          onToggle={(value) => setOpen((current) => ({ ...current, checks: value }))}
+        >
+          <div className="grid gap-4">
+            {protectionLoading ? (
+              <p role="status" className="text-sm text-muted-foreground">
+                {t("admin.system.healthCheckingBody")}
+              </p>
+            ) : null}
+            {protectionError ? (
+              <div role="alert" className="rounded-control border border-destructive/30 bg-destructive/10 p-3 text-sm">
+                <p className="font-semibold text-destructive">{t("admin.system.healthUnknown")}</p>
+                <p className="mt-1 text-muted-foreground">{t("admin.system.healthUnknownBody")}</p>
+                <Button type="button" variant="outline" className="mt-3" onClick={() => setSystemAttempt((attempt) => attempt + 1)}>
+                  {t("admin.system.tryAgain")}
+                </Button>
+              </div>
+            ) : null}
+            {systemReadout ? (
+              <dl className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
+                <SystemCheck
+                  label={t("admin.system.dependenciesCheck")}
+                  value={t("admin.system.dependenciesReady", {
+                    ready: String(dependencies.length - dependencyIssues.length),
+                    total: String(dependencies.length),
+                  })}
+                  issue={dependencyIssues.length > 0}
+                />
+                <SystemCheck label={t("admin.system.signerCheck")} value={systemReadout.signer_mode} issue={systemReadout.signer_mode === "none"} />
+                <SystemCheck
+                  label={t("admin.system.retryProtectionCheck")}
+                  value={resultProtectionState ? resultProtectionState.replaceAll("_", " ") : t("platform.idempotency.stateUnavailable")}
+                  issue={resultProtectionNeedsWork}
+                />
+                <SystemCheck
+                  label={t("admin.system.deliveryCheck")}
+                  value={t("admin.system.deliveryFailures", { count: String(deliveryIssues) })}
+                  issue={deliveryIssues > 0}
+                />
+              </dl>
+            ) : null}
+          </div>
+        </SystemDisclosure>
 
-        {/* D3: issued / delivered / verified.
+        <SystemDisclosure
+          summaryId="admin-system-configuration-summary"
+          title={t("admin.system.configurationEvidence")}
+          description={t("admin.system.configurationDescription")}
+          open={open.configuration}
+          onToggle={(value) => setOpen((current) => ({ ...current, configuration: value }))}
+        >
+          <div className="grid gap-6">
+            <TenantKeyDomainPanel canWrite={Boolean(user?.permissions?.includes("keys:write"))} />
+            <IdempotencyResultProtectionPanel readout={systemReadout} loading={protectionLoading} requestError={protectionError} />
+            <UsageEvidencePanel />
+          </div>
+        </SystemDisclosure>
+
+        <SystemDisclosure
+          summaryId="admin-system-dependencies-summary"
+          title={t("admin.system.dependencyHealth")}
+          description={t("admin.system.dependencyDescription")}
+          open={open.dependencies}
+          onToggle={(value) => setOpen((current) => ({ ...current, dependencies: value }))}
+        >
+          <div className="grid gap-6">
+            <DRPosturePanel posture={drPosture} error={drError} formatPolicy={formatPolicy} />
+
+            {/* D3: issued / delivered / verified.
             Delivered is this pipeline's account of what it did; verified is
             what a client actually gets. Only a TLS handshake establishes the
             second, so they are counted separately and the panel leads with the
             one that is not self-reported. */}
-        {systemReadout?.deployment && systemReadout.deployment.delivered > 0 ? (
-          <section className="ui-panel p-comfortable" aria-labelledby="deployment-truth-heading">
-            <h2 id="deployment-truth-heading" className="text-title font-semibold">
-              {translateNow("source.deployment.truth.d3tri00001")}
-            </h2>
-            <p className="mt-1 max-w-3xl text-caption text-muted-foreground">{translateNow("source.deployment.truth.help.d3tri00002")}</p>
-            <dl className="mt-4 grid gap-4 sm:grid-cols-4">
-              <div>
-                <dt className="text-caption font-medium text-muted-foreground">{translateNow("source.delivered.d3tri00003")}</dt>
-                <dd className="text-title font-semibold tabular-nums">{systemReadout.deployment.delivered}</dd>
-              </div>
-              <div>
-                <dt className="text-caption font-medium text-muted-foreground">{translateNow("source.verified.serving.d3tri00004")}</dt>
-                <dd className="text-title font-semibold tabular-nums text-status-success">
-                  {systemReadout.deployment.verified}
-                  <span className="ml-1 text-body font-normal text-muted-foreground">({systemReadout.deployment.verified_percent}%)</span>
-                </dd>
-              </div>
-              <div>
-                <dt className="text-caption font-medium text-muted-foreground">{translateNow("source.serving.something.else.d3tri00005")}</dt>
-                <dd
-                  className={
-                    systemReadout.deployment.verify_failed > 0
-                      ? "text-title font-semibold tabular-nums text-destructive"
-                      : "text-title font-semibold tabular-nums"
-                  }
-                >
-                  {systemReadout.deployment.verify_failed}
-                </dd>
-              </div>
-              {/* Unverified is the honest middle: not a failure, not a pass.
+            {systemReadout?.deployment && systemReadout.deployment.delivered > 0 ? (
+              <section className="ui-panel p-comfortable" aria-labelledby="deployment-truth-heading">
+                <h2 id="deployment-truth-heading" className="text-title font-semibold">
+                  {translateNow("source.deployment.truth.d3tri00001")}
+                </h2>
+                <p className="mt-1 max-w-3xl text-caption text-muted-foreground">{translateNow("source.deployment.truth.help.d3tri00002")}</p>
+                <dl className="mt-4 grid gap-4 sm:grid-cols-4">
+                  <div>
+                    <dt className="text-caption font-medium text-muted-foreground">{translateNow("source.delivered.d3tri00003")}</dt>
+                    <dd className="text-title font-semibold tabular-nums">{systemReadout.deployment.delivered}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-caption font-medium text-muted-foreground">{translateNow("source.verified.serving.d3tri00004")}</dt>
+                    <dd className="text-title font-semibold tabular-nums text-status-success">
+                      {systemReadout.deployment.verified}
+                      <span className="ml-1 text-body font-normal text-muted-foreground">({systemReadout.deployment.verified_percent}%)</span>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-caption font-medium text-muted-foreground">{translateNow("source.serving.something.else.d3tri00005")}</dt>
+                    <dd
+                      className={
+                        systemReadout.deployment.verify_failed > 0
+                          ? "text-title font-semibold tabular-nums text-destructive"
+                          : "text-title font-semibold tabular-nums"
+                      }
+                    >
+                      {systemReadout.deployment.verify_failed}
+                    </dd>
+                  </div>
+                  {/* Unverified is the honest middle: not a failure, not a pass.
                   Nobody has looked. On a fresh install every target is here. */}
-              <div>
-                <dt className="text-caption font-medium text-muted-foreground">{translateNow("source.not.checked.d3tri00006")}</dt>
-                <dd className="text-title font-semibold tabular-nums text-muted-foreground">{systemReadout.deployment.unverified}</dd>
-              </div>
-            </dl>
-          </section>
-        ) : null}
+                  <div>
+                    <dt className="text-caption font-medium text-muted-foreground">{translateNow("source.not.checked.d3tri00006")}</dt>
+                    <dd className="text-title font-semibold tabular-nums text-muted-foreground">{systemReadout.deployment.unverified}</dd>
+                  </div>
+                </dl>
+              </section>
+            ) : null}
 
-        <div className="grid gap-4 lg:grid-cols-4">
-          <section className="ui-panel p-comfortable" aria-labelledby="packaging-heading">
-            <h2 id="packaging-heading" className="text-title font-semibold">
-              {translateNow("source.packaging.0d62bb01df")}
-            </h2>
-            <dl className="mt-3 grid gap-2 text-sm">
-              <div>
-                <dt className="font-medium text-muted-foreground">{translateNow("source.category.292c06f004")}</dt>
-                <dd>{packaging.category_label}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-muted-foreground">{translateNow("source.billable.unit.2373d1d5f8")}</dt>
-                <dd className="font-mono text-xs">{packaging.billable_unit}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-muted-foreground">{translateNow("source.provider.unit.7e58335a9f")}</dt>
-                <dd className="font-mono text-xs">{packaging.provider_billing_unit}</dd>
-              </div>
-            </dl>
-            <p className="mt-3 text-sm text-muted-foreground">
-              {translateNow("source.no.per.certificate.or.ephemeral.identity.b.c797515fce")} {packaging.certificate_counters_classification}.
-            </p>
-          </section>
+            <div className="grid gap-4 lg:grid-cols-4">
+              <section className="ui-panel p-comfortable" aria-labelledby="packaging-heading">
+                <h2 id="packaging-heading" className="text-title font-semibold">
+                  {translateNow("source.packaging.0d62bb01df")}
+                </h2>
+                <dl className="mt-3 grid gap-2 text-sm">
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.category.292c06f004")}</dt>
+                    <dd>{packaging.category_label}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.billable.unit.2373d1d5f8")}</dt>
+                    <dd className="font-mono text-xs">{packaging.billable_unit}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.provider.unit.7e58335a9f")}</dt>
+                    <dd className="font-mono text-xs">{packaging.provider_billing_unit}</dd>
+                  </div>
+                </dl>
+                <p className="mt-3 text-sm text-muted-foreground">
+                  {translateNow("source.no.per.certificate.or.ephemeral.identity.b.c797515fce")} {packaging.certificate_counters_classification}.
+                </p>
+              </section>
 
-          <section className="ui-panel p-comfortable" aria-labelledby="tenant-heading">
-            <h2 id="tenant-heading" className="text-title font-semibold">
-              {translateNow("source.tenant.boundary.4b458df962")}
-            </h2>
-            <dl className="mt-3 grid gap-2 text-sm">
-              <div>
-                <dt className="font-medium text-muted-foreground">{translateNow("source.subject.6897128384")}</dt>
-                <dd>{user?.email || user?.subject || "-"}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-muted-foreground">{translateNow("source.tenant.id.from.session.fb2bbbb246")}</dt>
-                <dd className="break-all font-mono text-xs">{user?.tenant_id || "-"}</dd>
-              </div>
-            </dl>
-            <p className="mt-3 text-sm text-muted-foreground">{translateNow("source.the.browser.never.chooses.a.tenant.id.thro.091c4e9bb3")}</p>
-          </section>
+              <section className="ui-panel p-comfortable" aria-labelledby="tenant-heading">
+                <h2 id="tenant-heading" className="text-title font-semibold">
+                  {translateNow("source.tenant.boundary.4b458df962")}
+                </h2>
+                <dl className="mt-3 grid gap-2 text-sm">
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.subject.6897128384")}</dt>
+                    <dd>{user?.email || user?.subject || "-"}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.tenant.id.from.session.fb2bbbb246")}</dt>
+                    <dd className="break-all font-mono text-xs">{user?.tenant_id || "-"}</dd>
+                  </div>
+                </dl>
+                <p className="mt-3 text-sm text-muted-foreground">{translateNow("source.the.browser.never.chooses.a.tenant.id.thro.091c4e9bb3")}</p>
+              </section>
 
-          <section className="ui-panel p-comfortable" aria-labelledby="transport-heading">
-            <h2 id="transport-heading" className="text-title font-semibold">
-              {translateNow("source.transport.aaead4abf5")}
-            </h2>
-            <p className="mt-3 text-sm font-medium">{transport.label}</p>
-            <p className="mt-1 text-sm text-muted-foreground">{transport.detail}</p>
-            {transport.warning && <p className="mt-2 text-sm font-medium text-status-warning">{transport.warning}</p>}
-          </section>
+              <section className="ui-panel p-comfortable" aria-labelledby="transport-heading">
+                <h2 id="transport-heading" className="text-title font-semibold">
+                  {translateNow("source.transport.aaead4abf5")}
+                </h2>
+                <p className="mt-3 text-sm font-medium">{transport.label}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{transport.detail}</p>
+                {transport.warning && <p className="mt-2 text-sm font-medium text-status-warning">{transport.warning}</p>}
+              </section>
 
-          <section className="ui-panel p-comfortable" aria-labelledby="auth-heading">
-            <h2 id="auth-heading" className="text-title font-semibold">
-              {translateNow("source.auth.session.0e46f553a4")}
-            </h2>
-            <dl className="mt-3 grid gap-2 text-sm">
-              <div>
-                <dt className="font-medium text-muted-foreground">{translateNow("source.mode.visible.to.ui.8520f90032")}</dt>
-                <dd>{preview ? translateNow("source.local.preview.session.04a12d6877") : translateNow("source.authenticated.session.e651c7182d")}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-muted-foreground">{translateNow("source.csrf.cookie.04ee351267")}</dt>
-                <dd>
-                  {csrfPresent
-                    ? translateNow("source.present.for.browser.mutations.f21c11a696")
-                    : translateNow("source.not.visible.in.this.browser.context.09390ab73b")}
-                </dd>
-              </div>
-            </dl>
-            <p className="mt-3 text-sm text-muted-foreground">{translateNow("source.oidc.mapping.status.and.api.token.administ.565d8d27fd")}</p>
-          </section>
-        </div>
-
-        <section className="ui-panel p-comfortable" aria-labelledby="scale-orchestration-heading">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Gauge className="h-4 w-4 text-status-success" aria-hidden="true" />
-              <h2 id="scale-orchestration-heading" className="text-title font-semibold">
-                {t("platform.scale.heading")}
-              </h2>
+              <section className="ui-panel p-comfortable" aria-labelledby="auth-heading">
+                <h2 id="auth-heading" className="text-title font-semibold">
+                  {translateNow("source.auth.session.0e46f553a4")}
+                </h2>
+                <dl className="mt-3 grid gap-2 text-sm">
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.mode.visible.to.ui.8520f90032")}</dt>
+                    <dd>{preview ? translateNow("source.local.preview.session.04a12d6877") : translateNow("source.authenticated.session.e651c7182d")}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.csrf.cookie.04ee351267")}</dt>
+                    <dd>
+                      {csrfPresent
+                        ? translateNow("source.present.for.browser.mutations.f21c11a696")
+                        : translateNow("source.not.visible.in.this.browser.context.09390ab73b")}
+                    </dd>
+                  </div>
+                </dl>
+                <p className="mt-3 text-sm text-muted-foreground">{translateNow("source.oidc.mapping.status.and.api.token.administ.565d8d27fd")}</p>
+              </section>
             </div>
-            <span className={scaleServedClass(scaleOrchestration?.served)}>
-              {scaleOrchestration?.served ? t("platform.scale.served") : t("platform.scale.unavailable")}
-            </span>
+
+            <section className="ui-panel p-comfortable" aria-labelledby="scale-orchestration-heading">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Gauge className="h-4 w-4 text-status-success" aria-hidden="true" />
+                  <h2 id="scale-orchestration-heading" className="text-title font-semibold">
+                    {t("platform.scale.heading")}
+                  </h2>
+                </div>
+                <span className={scaleServedClass(scaleOrchestration?.served)}>
+                  {scaleOrchestration?.served ? t("platform.scale.served") : t("platform.scale.unavailable")}
+                </span>
+              </div>
+              <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(18rem,0.5fr)_minmax(0,1fr)]">
+                <dl className="grid content-start gap-2 text-sm">
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{t("platform.scale.selectedTier")}</dt>
+                    <dd>
+                      {scaleOrchestration?.selected_capacity_tier?.id ?? "-"} ·{" "}
+                      {t("platform.scale.credentialsCount", {
+                        count: formatOptionalNumber(scaleOrchestration?.selected_capacity_tier?.managed_credentials, formatPolicy),
+                      })}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{t("platform.scale.eventsPerDay")}</dt>
+                    <dd>{formatOptionalNumber(scaleOrchestration?.estimated_daily_event_load, formatPolicy)}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{t("platform.scale.monthlyCost")}</dt>
+                    <dd>{formatOptionalCurrency(scaleOrchestration?.estimated_monthly_cost_usd, formatPolicy)}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{t("platform.scale.unitCost")}</dt>
+                    <dd>
+                      {formatOptionalUnitCost(
+                        scaleOrchestration?.unit_economics?.estimated_cost_per_credential_usd,
+                        t("platform.scale.credentialUnit"),
+                        formatPolicy,
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{t("platform.scale.signerModel")}</dt>
+                    <dd>{scaleOrchestration?.signer?.process_model ?? "-"}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{t("platform.scale.projectionFloor")}</dt>
+                    <dd>
+                      {t("platform.scale.projectionFloorValue", {
+                        rate: formatOptionalNumber(scaleOrchestration?.projection_replay?.replay_floor_events_per_second, formatPolicy),
+                        lag: formatOptionalNumber(scaleOrchestration?.projection_replay?.max_lag_events, formatPolicy),
+                      })}
+                    </dd>
+                  </div>
+                </dl>
+                <div className="grid gap-4">
+                  <SystemTableRegion label={t("platform.scale.executionCaption")}>
+                    <table className="ui-table min-w-[44rem]">
+                      <caption className="sr-only">{t("platform.scale.executionCaption")}</caption>
+                      <thead>
+                        <tr>
+                          <th scope="col">{t("platform.scale.lane")}</th>
+                          <th scope="col">{t("platform.scale.bulkhead")}</th>
+                          <th scope="col">{t("platform.scale.signal")}</th>
+                          <th scope="col">{t("platform.scale.slo")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(scaleOrchestration?.execution_lanes ?? []).slice(0, 6).map((lane) => (
+                          <tr key={lane.id} className="align-top">
+                            <td>
+                              <span className="font-medium">{lane.subsystem}</span>
+                              <span className="mt-1 block font-mono text-xs text-muted-foreground">{lane.id}</span>
+                            </td>
+                            <td className="font-mono text-xs">{lane.bulkhead_env.join(", ")}</td>
+                            <td>{lane.backpressure_signal}</td>
+                            <td>{lane.hot_path_slo}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </SystemTableRegion>
+                  <div className="grid gap-4 xl:grid-cols-2">
+                    <SystemTableRegion label={t("platform.scale.releaseCaption")}>
+                      <table className="ui-table min-w-[28rem]">
+                        <caption className="sr-only">{t("platform.scale.releaseCaption")}</caption>
+                        <thead>
+                          <tr>
+                            <th scope="col">{t("platform.scale.gate")}</th>
+                            <th scope="col">{t("platform.scale.artifact")}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(scaleOrchestration?.release_gates ?? []).map((gate) => (
+                            <tr key={gate.id}>
+                              <td className="font-medium">{gate.id}</td>
+                              <td className="font-mono text-xs">{gate.artifact}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </SystemTableRegion>
+                    <SystemTableRegion label={t("platform.scale.bandCaption")}>
+                      <table className="ui-table min-w-[28rem]">
+                        <caption className="sr-only">{t("platform.scale.bandCaption")}</caption>
+                        <thead>
+                          <tr>
+                            <th scope="col">{t("platform.scale.band")}</th>
+                            <th scope="col">{t("platform.scale.tier")}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(scaleOrchestration?.target_credential_bands ?? []).map((band) => (
+                            <tr key={band.id}>
+                              <td>
+                                <span className="font-medium">{band.managed_credential}</span>
+                                <span className="mt-1 block font-mono text-xs text-muted-foreground">{band.id}</span>
+                              </td>
+                              <td>{band.capacity_tier}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </SystemTableRegion>
+                  </div>
+                  <div className="grid gap-2 text-sm md:grid-cols-2">
+                    {(scaleOrchestration?.residuals ?? []).slice(0, 2).map((residual) => (
+                      <p key={residual} className="rounded-panel border border-border bg-muted/40 p-3 text-muted-foreground">
+                        {residual}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </section>
           </div>
-          <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(18rem,0.5fr)_minmax(0,1fr)]">
-            <dl className="grid content-start gap-2 text-sm">
-              <div>
-                <dt className="font-medium text-muted-foreground">{t("platform.scale.selectedTier")}</dt>
-                <dd>
-                  {scaleOrchestration?.selected_capacity_tier?.id ?? "-"} ·{" "}
-                  {t("platform.scale.credentialsCount", {
-                    count: formatOptionalNumber(scaleOrchestration?.selected_capacity_tier?.managed_credentials, formatPolicy),
-                  })}
-                </dd>
+        </SystemDisclosure>
+
+        <SystemDisclosure
+          summaryId="admin-system-exceptions-summary"
+          title={t("admin.system.exceptions")}
+          description={t("admin.system.exceptionsDescription")}
+          open={open.exceptions}
+          onToggle={(value) => setOpen((current) => ({ ...current, exceptions: value }))}
+        >
+          <div className="grid gap-6">
+            <section className="ui-panel p-comfortable" aria-labelledby="enterprise-support-heading">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Headphones className="h-4 w-4 text-status-success" aria-hidden="true" />
+                  <h2 id="enterprise-support-heading" className="text-title font-semibold">
+                    {translateNow("source.enterprise.support.b31b42b62d")}
+                  </h2>
+                </div>
+                <span className={supportModeClass(enterpriseSupport?.support_mode)}>{supportModeLabel(enterpriseSupport?.support_mode)}</span>
               </div>
-              <div>
-                <dt className="font-medium text-muted-foreground">{t("platform.scale.eventsPerDay")}</dt>
-                <dd>{formatOptionalNumber(scaleOrchestration?.estimated_daily_event_load, formatPolicy)}</dd>
+              <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(16rem,0.45fr)_minmax(0,1fr)]">
+                <dl className="grid content-start gap-2 text-sm">
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.capability.5faf58a69d")}</dt>
+                    <dd>{enterpriseSupport?.capability ?? translateNow("source.cap.model.04.d945df90f4")}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.license.feature.de93785a58")}</dt>
+                    <dd className="font-mono text-xs">{enterpriseSupport?.license_feature ?? translateNow("source.ha.support.6fd6a7fc16")}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.license.tier.0c9a751553")}</dt>
+                    <dd>{enterpriseSupport?.tier ?? editions?.tier ?? translateNow("source.community.f354ee99e2")}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.contract.boundary.67a4070e64")}</dt>
+                    <dd>{enterpriseSupport?.contract_boundary ?? translateNow("source.commercial.support.terms.control.legal.sla.dd90f4015f")}</dd>
+                  </div>
+                </dl>
+                <div className="grid gap-4">
+                  <SystemTableRegion label={translateNow("source.enterprise.support.tier.table.0b375fcc18")}>
+                    <table className="ui-table min-w-[44rem]">
+                      <caption className="sr-only">{translateNow("source.enterprise.support.tier.table.0b375fcc18")}</caption>
+                      <thead>
+                        <tr>
+                          <th scope="col">{translateNow("source.tier.cb9e8664ed")}</th>
+                          <th scope="col">{translateNow("source.coverage.523487a5de")}</th>
+                          <th scope="col">{translateNow("source.initial.sla.ee9124e35d")}</th>
+                          <th scope="col">{translateNow("source.updates.22e2bada8f")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(enterpriseSupport?.support_tiers ?? []).map((tier) => (
+                          <tr key={tier.id}>
+                            <td>
+                              <span className="font-medium">{tier.name}</span>
+                              <span className="mt-1 block font-mono text-xs text-muted-foreground">{tier.id}</span>
+                            </td>
+                            <td>{tier.coverage}</td>
+                            <td>{tier.initial_response_sla}</td>
+                            <td>{tier.update_cadence_sla}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </SystemTableRegion>
+                  <SystemTableRegion label={translateNow("source.enterprise.sla.target.table.dfd20c29f8")}>
+                    <table className="ui-table min-w-[44rem]">
+                      <caption className="sr-only">{translateNow("source.enterprise.sla.target.table.dfd20c29f8")}</caption>
+                      <thead>
+                        <tr>
+                          <th scope="col">{translateNow("source.severity.5e9f98120d")}</th>
+                          <th scope="col">{translateNow("source.applies.to.6687458bee")}</th>
+                          <th scope="col">{translateNow("source.response.9061383b8e")}</th>
+                          <th scope="col">{translateNow("source.escalation.35615b8245")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(enterpriseSupport?.sla_targets ?? []).map((target) => (
+                          <tr key={target.severity}>
+                            <td className="font-semibold">{target.severity}</td>
+                            <td>{target.applies_to}</td>
+                            <td>{target.initial_response_sla}</td>
+                            <td>{target.escalation}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </SystemTableRegion>
+                  <SystemTableRegion label={translateNow("source.professional.services.package.table.60626ecbca")}>
+                    <table className="ui-table min-w-[44rem]">
+                      <caption className="sr-only">{translateNow("source.professional.services.package.table.60626ecbca")}</caption>
+                      <thead>
+                        <tr>
+                          <th scope="col">{translateNow("source.service.d677190e0a")}</th>
+                          <th scope="col">{translateNow("source.model.5e2c614c23")}</th>
+                          <th scope="col">{translateNow("source.deliverables.c7ec4b92c2")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(enterpriseSupport?.professional_services ?? []).map((service) => (
+                          <tr key={service.id}>
+                            <td>
+                              <span className="font-medium">{service.name}</span>
+                              <span className="mt-1 block font-mono text-xs text-muted-foreground">{service.id}</span>
+                            </td>
+                            <td>{service.engagement_model}</td>
+                            <td>{service.deliverables.join("; ")}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </SystemTableRegion>
+                </div>
               </div>
-              <div>
-                <dt className="font-medium text-muted-foreground">{t("platform.scale.monthlyCost")}</dt>
-                <dd>{formatOptionalCurrency(scaleOrchestration?.estimated_monthly_cost_usd, formatPolicy)}</dd>
+            </section>
+
+            <section className="ui-panel p-comfortable" aria-labelledby="managed-offering-heading">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-status-success" aria-hidden="true" />
+                  <h2 id="managed-offering-heading" className="text-title font-semibold">
+                    {translateNow("source.managed.offering.f4e80765ae")}
+                  </h2>
+                </div>
+                <span className={providerPlaneClass(managedOffering?.provider_plane_mode)}>{providerPlaneLabel(managedOffering?.provider_plane_mode)}</span>
               </div>
-              <div>
-                <dt className="font-medium text-muted-foreground">{t("platform.scale.unitCost")}</dt>
-                <dd>
-                  {formatOptionalUnitCost(
-                    scaleOrchestration?.unit_economics?.estimated_cost_per_credential_usd,
-                    t("platform.scale.credentialUnit"),
-                    formatPolicy,
+              <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.75fr)_minmax(22rem,1fr)]">
+                <dl className="grid content-start gap-2 text-sm">
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.deployment.model.48b995f6f0")}</dt>
+                    <dd>{managedOffering?.deployment_model ?? "-"}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.provider.plane.47b8ba879c")}</dt>
+                    <dd>{managedOffering?.provider_plane_mode ?? translateNow("source.off.b4dc66dde8")}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.license.tier.0c9a751553")}</dt>
+                    <dd>{managedOffering?.tier ?? editions?.tier ?? translateNow("source.community.f354ee99e2")}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{t("platform.editions.billingUnit")}</dt>
+                    <dd>{managedOffering?.billing_unit ?? packaging.provider_billing_unit}</dd>
+                  </div>
+                  {(managedOffering?.tier ?? editions?.tier) === "provider" ? (
+                    <div>
+                      <dt className="font-medium text-muted-foreground">{t("platform.editions.managedCustomerBand")}</dt>
+                      <dd>
+                        {managedOffering?.managed_customer_band
+                          ? formatNumberPolicy(managedOffering.managed_customer_band, formatPolicy)
+                          : translateNow("source.negotiated.unlimited.9939fd4cf1")}
+                      </dd>
+                    </div>
+                  ) : null}
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.event.source.60dbb37270")}</dt>
+                    <dd>{managedOffering?.event_type ?? translateNow("source.tenant.registered.62865a2986")}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">{translateNow("source.mutation.idempotency.e5fe0e928c")}</dt>
+                    <dd>{managedOffering?.idempotency_required ? translateNow("source.required.d0a3630555") : "-"}</dd>
+                  </div>
+                  {lastManagedTenant && (
+                    <div>
+                      <dt className="font-medium text-muted-foreground">{translateNow("source.last.hosted.tenant.ddd9f6cf68")}</dt>
+                      <dd className="break-all">
+                        {lastManagedTenant.name} · {lastManagedTenant.tenant_id}
+                      </dd>
+                    </div>
                   )}
-                </dd>
+                </dl>
+                <form onSubmit={(event) => void provisionHostedTenant(event)} className="grid gap-3">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <label className="grid gap-1 text-sm">
+                      <span className="font-medium text-muted-foreground">{translateNow("source.hosted.id.16f3dc88ea")}</span>
+                      <input className="ui-input" value={hostedTenantID} onChange={(event) => setHostedTenantID(event.target.value)} required />
+                    </label>
+                    <label className="grid gap-1 text-sm">
+                      <span className="font-medium text-muted-foreground">{translateNow("source.hosted.name.af1e0d31be")}</span>
+                      <input className="ui-input" value={hostedTenantName} onChange={(event) => setHostedTenantName(event.target.value)} required />
+                    </label>
+                    <label className="grid gap-1 text-sm">
+                      <span className="font-medium text-muted-foreground">{translateNow("source.region.d3a008ef13")}</span>
+                      <input className="ui-input" value={hostedRegion} onChange={(event) => setHostedRegion(event.target.value)} />
+                    </label>
+                    <label className="grid gap-1 text-sm">
+                      <span className="font-medium text-muted-foreground">{translateNow("source.data.residency.4ab08acdfa")}</span>
+                      <input className="ui-input" value={hostedResidency} onChange={(event) => setHostedResidency(event.target.value)} />
+                    </label>
+                    <label className="grid gap-1 text-sm">
+                      <span className="font-medium text-muted-foreground">{translateNow("source.plan.fa8ed0bdab")}</span>
+                      <input className="ui-input" value={hostedPlan} onChange={(event) => setHostedPlan(event.target.value)} />
+                    </label>
+                    <label className="grid gap-1 text-sm">
+                      <span className="font-medium text-muted-foreground">{translateNow("source.support.tier.2dfba0f890")}</span>
+                      <input className="ui-input" value={hostedSupportTier} onChange={(event) => setHostedSupportTier(event.target.value)} />
+                    </label>
+                  </div>
+                  <label className="grid gap-1 text-sm">
+                    <span className="font-medium text-muted-foreground">{translateNow("source.slo.tier.9d31a12006")}</span>
+                    <input className="ui-input" value={hostedSLOTier} onChange={(event) => setHostedSLOTier(event.target.value)} />
+                  </label>
+                  <Button
+                    type="submit"
+                    disabled={systemBusy || !hostedTenantID.trim() || !hostedTenantName.trim() || managedOffering?.provider_plane_mode !== "enabled"}
+                  >
+                    <Plus className="h-4 w-4" aria-hidden="true" />
+                    {translateNow("source.provision.tenant.e6e411f04c")}
+                  </Button>
+                </form>
               </div>
-              <div>
-                <dt className="font-medium text-muted-foreground">{t("platform.scale.signerModel")}</dt>
-                <dd>{scaleOrchestration?.signer?.process_model ?? "-"}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-muted-foreground">{t("platform.scale.projectionFloor")}</dt>
-                <dd>
-                  {t("platform.scale.projectionFloorValue", {
-                    rate: formatOptionalNumber(scaleOrchestration?.projection_replay?.replay_floor_events_per_second, formatPolicy),
-                    lag: formatOptionalNumber(scaleOrchestration?.projection_replay?.max_lag_events, formatPolicy),
-                  })}
-                </dd>
-              </div>
-            </dl>
-            <div className="grid gap-4">
-              <div className="overflow-x-auto rounded-panel border border-border">
-                <table className="ui-table min-w-[44rem]">
-                  <caption className="sr-only">{t("platform.scale.executionCaption")}</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">{t("platform.scale.lane")}</th>
-                      <th scope="col">{t("platform.scale.bulkhead")}</th>
-                      <th scope="col">{t("platform.scale.signal")}</th>
-                      <th scope="col">{t("platform.scale.slo")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(scaleOrchestration?.execution_lanes ?? []).slice(0, 6).map((lane) => (
-                      <tr key={lane.id} className="align-top">
-                        <td>
-                          <span className="font-medium">{lane.subsystem}</span>
-                          <span className="mt-1 block font-mono text-xs text-muted-foreground">{lane.id}</span>
-                        </td>
-                        <td className="font-mono text-xs">{lane.bulkhead_env.join(", ")}</td>
-                        <td>{lane.backpressure_signal}</td>
-                        <td>{lane.hot_path_slo}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="grid gap-4 xl:grid-cols-2">
-                <div className="overflow-x-auto rounded-panel border border-border">
-                  <table className="ui-table min-w-[28rem]">
-                    <caption className="sr-only">{t("platform.scale.releaseCaption")}</caption>
-                    <thead>
-                      <tr>
-                        <th scope="col">{t("platform.scale.gate")}</th>
-                        <th scope="col">{t("platform.scale.artifact")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(scaleOrchestration?.release_gates ?? []).map((gate) => (
-                        <tr key={gate.id}>
-                          <td className="font-medium">{gate.id}</td>
-                          <td className="font-mono text-xs">{gate.artifact}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="overflow-x-auto rounded-panel border border-border">
-                  <table className="ui-table min-w-[28rem]">
-                    <caption className="sr-only">{t("platform.scale.bandCaption")}</caption>
-                    <thead>
-                      <tr>
-                        <th scope="col">{t("platform.scale.band")}</th>
-                        <th scope="col">{t("platform.scale.tier")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(scaleOrchestration?.target_credential_bands ?? []).map((band) => (
-                        <tr key={band.id}>
-                          <td>
-                            <span className="font-medium">{band.managed_credential}</span>
-                            <span className="mt-1 block font-mono text-xs text-muted-foreground">{band.id}</span>
-                          </td>
-                          <td>{band.capacity_tier}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              <div className="grid gap-2 text-sm md:grid-cols-2">
-                {(scaleOrchestration?.residuals ?? []).slice(0, 2).map((residual) => (
-                  <p key={residual} className="rounded-panel border border-border bg-muted/40 p-3 text-muted-foreground">
-                    {residual}
-                  </p>
-                ))}
-              </div>
-            </div>
+            </section>
           </div>
-        </section>
-
-        <section className="ui-panel p-comfortable" aria-labelledby="enterprise-support-heading">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Headphones className="h-4 w-4 text-status-success" aria-hidden="true" />
-              <h2 id="enterprise-support-heading" className="text-title font-semibold">
-                {translateNow("source.enterprise.support.b31b42b62d")}
-              </h2>
-            </div>
-            <span className={supportModeClass(enterpriseSupport?.support_mode)}>{supportModeLabel(enterpriseSupport?.support_mode)}</span>
-          </div>
-          <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(16rem,0.45fr)_minmax(0,1fr)]">
-            <dl className="grid content-start gap-2 text-sm">
-              <div>
-                <dt className="font-medium text-muted-foreground">{translateNow("source.capability.5faf58a69d")}</dt>
-                <dd>{enterpriseSupport?.capability ?? translateNow("source.cap.model.04.d945df90f4")}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-muted-foreground">{translateNow("source.license.feature.de93785a58")}</dt>
-                <dd className="font-mono text-xs">{enterpriseSupport?.license_feature ?? translateNow("source.ha.support.6fd6a7fc16")}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-muted-foreground">{translateNow("source.license.tier.0c9a751553")}</dt>
-                <dd>{enterpriseSupport?.tier ?? editions?.tier ?? translateNow("source.community.f354ee99e2")}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-muted-foreground">{translateNow("source.contract.boundary.67a4070e64")}</dt>
-                <dd>{enterpriseSupport?.contract_boundary ?? translateNow("source.commercial.support.terms.control.legal.sla.dd90f4015f")}</dd>
-              </div>
-            </dl>
-            <div className="grid gap-4">
-              <div className="overflow-x-auto rounded-panel border border-border">
-                <table className="ui-table min-w-[44rem]">
-                  <caption className="sr-only">{translateNow("source.enterprise.support.tier.table.0b375fcc18")}</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">{translateNow("source.tier.cb9e8664ed")}</th>
-                      <th scope="col">{translateNow("source.coverage.523487a5de")}</th>
-                      <th scope="col">{translateNow("source.initial.sla.ee9124e35d")}</th>
-                      <th scope="col">{translateNow("source.updates.22e2bada8f")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(enterpriseSupport?.support_tiers ?? []).map((tier) => (
-                      <tr key={tier.id}>
-                        <td>
-                          <span className="font-medium">{tier.name}</span>
-                          <span className="mt-1 block font-mono text-xs text-muted-foreground">{tier.id}</span>
-                        </td>
-                        <td>{tier.coverage}</td>
-                        <td>{tier.initial_response_sla}</td>
-                        <td>{tier.update_cadence_sla}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="overflow-x-auto rounded-panel border border-border">
-                <table className="ui-table min-w-[44rem]">
-                  <caption className="sr-only">{translateNow("source.enterprise.sla.target.table.dfd20c29f8")}</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">{translateNow("source.severity.5e9f98120d")}</th>
-                      <th scope="col">{translateNow("source.applies.to.6687458bee")}</th>
-                      <th scope="col">{translateNow("source.response.9061383b8e")}</th>
-                      <th scope="col">{translateNow("source.escalation.35615b8245")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(enterpriseSupport?.sla_targets ?? []).map((target) => (
-                      <tr key={target.severity}>
-                        <td className="font-semibold">{target.severity}</td>
-                        <td>{target.applies_to}</td>
-                        <td>{target.initial_response_sla}</td>
-                        <td>{target.escalation}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="overflow-x-auto rounded-panel border border-border">
-                <table className="ui-table min-w-[44rem]">
-                  <caption className="sr-only">{translateNow("source.professional.services.package.table.60626ecbca")}</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">{translateNow("source.service.d677190e0a")}</th>
-                      <th scope="col">{translateNow("source.model.5e2c614c23")}</th>
-                      <th scope="col">{translateNow("source.deliverables.c7ec4b92c2")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(enterpriseSupport?.professional_services ?? []).map((service) => (
-                      <tr key={service.id}>
-                        <td>
-                          <span className="font-medium">{service.name}</span>
-                          <span className="mt-1 block font-mono text-xs text-muted-foreground">{service.id}</span>
-                        </td>
-                        <td>{service.engagement_model}</td>
-                        <td>{service.deliverables.join("; ")}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="ui-panel p-comfortable" aria-labelledby="managed-offering-heading">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Building2 className="h-4 w-4 text-status-success" aria-hidden="true" />
-              <h2 id="managed-offering-heading" className="text-title font-semibold">
-                {translateNow("source.managed.offering.f4e80765ae")}
-              </h2>
-            </div>
-            <span className={providerPlaneClass(managedOffering?.provider_plane_mode)}>{providerPlaneLabel(managedOffering?.provider_plane_mode)}</span>
-          </div>
-          <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.75fr)_minmax(22rem,1fr)]">
-            <dl className="grid content-start gap-2 text-sm">
-              <div>
-                <dt className="font-medium text-muted-foreground">{translateNow("source.deployment.model.48b995f6f0")}</dt>
-                <dd>{managedOffering?.deployment_model ?? "-"}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-muted-foreground">{translateNow("source.provider.plane.47b8ba879c")}</dt>
-                <dd>{managedOffering?.provider_plane_mode ?? translateNow("source.off.b4dc66dde8")}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-muted-foreground">{translateNow("source.license.tier.0c9a751553")}</dt>
-                <dd>{managedOffering?.tier ?? editions?.tier ?? translateNow("source.community.f354ee99e2")}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-muted-foreground">{t("platform.editions.billingUnit")}</dt>
-                <dd>{managedOffering?.billing_unit ?? packaging.provider_billing_unit}</dd>
-              </div>
-              {(managedOffering?.tier ?? editions?.tier) === "provider" ? (
-                <div>
-                  <dt className="font-medium text-muted-foreground">{t("platform.editions.managedCustomerBand")}</dt>
-                  <dd>
-                    {managedOffering?.managed_customer_band
-                      ? formatNumberPolicy(managedOffering.managed_customer_band, formatPolicy)
-                      : translateNow("source.negotiated.unlimited.9939fd4cf1")}
-                  </dd>
-                </div>
-              ) : null}
-              <div>
-                <dt className="font-medium text-muted-foreground">{translateNow("source.event.source.60dbb37270")}</dt>
-                <dd>{managedOffering?.event_type ?? translateNow("source.tenant.registered.62865a2986")}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-muted-foreground">{translateNow("source.mutation.idempotency.e5fe0e928c")}</dt>
-                <dd>{managedOffering?.idempotency_required ? translateNow("source.required.d0a3630555") : "-"}</dd>
-              </div>
-              {lastManagedTenant && (
-                <div>
-                  <dt className="font-medium text-muted-foreground">{translateNow("source.last.hosted.tenant.ddd9f6cf68")}</dt>
-                  <dd className="break-all">
-                    {lastManagedTenant.name} · {lastManagedTenant.tenant_id}
-                  </dd>
-                </div>
-              )}
-            </dl>
-            <form onSubmit={(event) => void provisionHostedTenant(event)} className="grid gap-3">
-              <div className="grid gap-3 md:grid-cols-2">
-                <label className="grid gap-1 text-sm">
-                  <span className="font-medium text-muted-foreground">{translateNow("source.hosted.id.16f3dc88ea")}</span>
-                  <input className="ui-input" value={hostedTenantID} onChange={(event) => setHostedTenantID(event.target.value)} required />
-                </label>
-                <label className="grid gap-1 text-sm">
-                  <span className="font-medium text-muted-foreground">{translateNow("source.hosted.name.af1e0d31be")}</span>
-                  <input className="ui-input" value={hostedTenantName} onChange={(event) => setHostedTenantName(event.target.value)} required />
-                </label>
-                <label className="grid gap-1 text-sm">
-                  <span className="font-medium text-muted-foreground">{translateNow("source.region.d3a008ef13")}</span>
-                  <input className="ui-input" value={hostedRegion} onChange={(event) => setHostedRegion(event.target.value)} />
-                </label>
-                <label className="grid gap-1 text-sm">
-                  <span className="font-medium text-muted-foreground">{translateNow("source.data.residency.4ab08acdfa")}</span>
-                  <input className="ui-input" value={hostedResidency} onChange={(event) => setHostedResidency(event.target.value)} />
-                </label>
-                <label className="grid gap-1 text-sm">
-                  <span className="font-medium text-muted-foreground">{translateNow("source.plan.fa8ed0bdab")}</span>
-                  <input className="ui-input" value={hostedPlan} onChange={(event) => setHostedPlan(event.target.value)} />
-                </label>
-                <label className="grid gap-1 text-sm">
-                  <span className="font-medium text-muted-foreground">{translateNow("source.support.tier.2dfba0f890")}</span>
-                  <input className="ui-input" value={hostedSupportTier} onChange={(event) => setHostedSupportTier(event.target.value)} />
-                </label>
-              </div>
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium text-muted-foreground">{translateNow("source.slo.tier.9d31a12006")}</span>
-                <input className="ui-input" value={hostedSLOTier} onChange={(event) => setHostedSLOTier(event.target.value)} />
-              </label>
-              <Button
-                type="submit"
-                disabled={systemBusy || !hostedTenantID.trim() || !hostedTenantName.trim() || managedOffering?.provider_plane_mode !== "enabled"}
-              >
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                {translateNow("source.provision.tenant.e6e411f04c")}
-              </Button>
-            </form>
-          </div>
-        </section>
+        </SystemDisclosure>
       </div>
     </section>
   );
 }
+
+function SystemDisclosure({
+  summaryId,
+  title,
+  description,
+  open,
+  onToggle,
+  children,
+}: {
+  summaryId: string;
+  title: string;
+  description: string;
+  open: boolean;
+  onToggle: (open: boolean) => void;
+  children: ReactNode;
+}) {
+  return (
+    <details
+      className="group rounded-panel border border-border bg-card shadow-elevation1"
+      open={open}
+      onToggle={(event) => onToggle(event.currentTarget.open)}
+    >
+      <summary id={summaryId} className="flex cursor-pointer list-none items-start justify-between gap-4 p-comfortable marker:hidden">
+        <span>
+          <span className="block text-body font-semibold">{title}</span>
+          <span className="mt-1 block max-w-3xl text-sm text-muted-foreground">{description}</span>
+        </span>
+        <ChevronDown className="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
+      </summary>
+      <div className="border-t border-border p-comfortable">{open ? children : null}</div>
+    </details>
+  );
+}
+
+function SystemCheck({ label, value, issue }: { label: string; value: string; issue: boolean }) {
+  return (
+    <div className="rounded-control border border-border bg-background p-3">
+      <dt className="font-medium text-muted-foreground">{label}</dt>
+      <dd className={issue ? "mt-1 font-semibold text-status-warning" : "mt-1 font-semibold text-status-success"}>{value}</dd>
+    </div>
+  );
+}
+
+/* eslint-disable jsx-a11y/no-noninteractive-tabindex -- Narrow viewports need
+   a named keyboard stop for horizontally scrollable expert evidence. */
+function SystemTableRegion({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div
+      className="overflow-x-auto rounded-panel border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+      role="region"
+      aria-label={label}
+      tabIndex={0}
+    >
+      {children}
+    </div>
+  );
+}
+/* eslint-enable jsx-a11y/no-noninteractive-tabindex */
 
 /** /admin/editions — the console's one commercial surface (S-A3/DA-26):
  * offline license state, edition/feature rows, FIPS, distribution, and the

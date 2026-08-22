@@ -125,7 +125,7 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
     access.unmount();
 
     const system = renderAt("/admin/system");
-    expect(await screen.findByRole("heading", { level: 1, name: "System posture" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "System health" })).toBeInTheDocument();
     system.unmount();
 
     renderAt("/admin/editions");
@@ -139,7 +139,7 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
 
   it("redirects /platform?tab=posture to /admin/system", async () => {
     renderAt("/platform?tab=posture");
-    expect(await screen.findByRole("heading", { level: 1, name: "System posture" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "System health" })).toBeInTheDocument();
   });
 
   it("redirects /platform?tab=editions to /admin/editions", async () => {
@@ -152,6 +152,37 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "People and roles" })).toBeInTheDocument();
   });
 
+  it("answers system health first and loads exact evidence only when the operator asks", async () => {
+    const user = userEvent.setup();
+    const view = renderAt("/admin/system");
+
+    expect(await screen.findByRole("heading", { level: 1, name: "System health" })).toBeInTheDocument();
+    expect(screen.getByText("Whether the control plane is securely configured for this environment.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Fix first issue" })).toBeInTheDocument();
+    expect(screen.getByText("Checks")).toBeInTheDocument();
+    expect(screen.getByText("Configuration evidence")).toBeInTheDocument();
+    expect(screen.getByText("Dependency health")).toBeInTheDocument();
+    expect(screen.getByText("Exceptions")).toBeInTheDocument();
+
+    await waitFor(() => expect(apiMock.platformSystem).toHaveBeenCalledTimes(1));
+    expect(apiMock.tenantKeyDomain).not.toHaveBeenCalled();
+    expect(apiMock.editions).not.toHaveBeenCalled();
+    expect(apiMock.enterpriseSupportStatus).not.toHaveBeenCalled();
+    expect(apiMock.managedOfferingStatus).not.toHaveBeenCalled();
+    expect(apiMock.scaleOrchestration).not.toHaveBeenCalled();
+    expect(screen.queryByRole("heading", { name: "Tenant cryptographic custody" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Managed offering" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Fix first issue" }));
+    expect(await screen.findByRole("heading", { name: "Tenant cryptographic custody" })).toBeInTheDocument();
+    await waitFor(() => expect(apiMock.tenantKeyDomain).toHaveBeenCalledTimes(1));
+    expect(apiMock.enterpriseSupportStatus).not.toHaveBeenCalled();
+    expect(apiMock.managedOfferingStatus).not.toHaveBeenCalled();
+
+    expect(await axe(view.container)).toHaveNoViolations();
+  });
+
   it("keeps editions and commercial framing off Access and System (S-A3 re-asserted per route)", async () => {
     const access = renderAt("/admin/access");
     await screen.findByRole("heading", { level: 1, name: "People and roles" });
@@ -160,7 +191,7 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
     access.unmount();
 
     renderAt("/admin/system");
-    await screen.findByRole("heading", { level: 1, name: "System posture" });
+    await screen.findByRole("heading", { level: 1, name: "System health" });
     expect(screen.queryByRole("heading", { name: "Editions" })).not.toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/Upgrade to Enterprise|Contact sales/i);
   });
@@ -226,6 +257,7 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
 
     const user = userEvent.setup();
     const view = renderAt("/admin/system");
+    await user.click(await screen.findByRole("button", { name: "Fix first issue" }));
     expect(await screen.findByRole("heading", { name: "Tenant cryptographic custody" })).toBeInTheDocument();
     expect(await screen.findByText("Deployment-key protected")).toBeInTheDocument();
     await user.type(screen.getByRole("textbox", { name: /Configured local wrapper ID/ }), "tenant-a-custody");
@@ -276,7 +308,9 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
       remote_wrapper_state: "disabled_in_core_local_custody",
       recovery: "Retry with a new Idempotency-Key; the exhausted key keeps replaying its receipt.",
     });
+    const user = userEvent.setup();
     const view = renderAt("/admin/system");
+    await user.click(await screen.findByRole("button", { name: "Fix first issue" }));
     expect(await screen.findByText("Tenant seal worker exhausted its retry budget before the seal committed.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Retry seal with a new request" })).toBeInTheDocument();
     expect(screen.getAllByText(/Retry with a new Idempotency-Key/)).toHaveLength(2);

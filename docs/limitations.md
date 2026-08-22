@@ -2210,7 +2210,7 @@ than sending an operator looking for a credential that was never there.
   reuses the same probes as `/readyz`, so the console and a load balancer
   cannot disagree about whether the spine is up; it reports no addresses,
   DSNs, or configuration values. The same response and the
-  **System posture** console page include `idempotency_results`: RLS-scoped
+  **System health** console page, under **Configuration evidence**, includes `idempotency_results`: RLS-scoped
   counts of legacy, sealed, pending, and indeterminate mutation responses,
   plus the explicit fleet-readiness assertion and whether PostgreSQL has the
   validated sealed-only floor. Result bytes and raw datastore errors never

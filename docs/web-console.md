@@ -579,7 +579,9 @@ offers requeue only for failed delivery. Toasts report real success and failure.
 - Administration is three routes (the old `/platform` grab-bag split; every
   historical `/platform` tab deep link redirects permanently): **Access
   administration** (`/admin/access`) covers members, roles, OIDC mapping, tokens,
-  offboarding, and JIT sessions; **System posture** (`/admin/system`) is the
+  offboarding, and JIT sessions; **System health** (`/admin/system`) answers
+  whether the control plane is securely configured, then keeps exact checks,
+  configuration evidence, dependency health, and exceptions available on demand; it is the
   read-only packaging, tenant, transport, scale, and support disclosure; and
   **Editions & license** (`/admin/editions`) is the one commercial surface — license
   state, edition/feature rows, FIPS posture, and `GET /api/v1/editions` packaging.
@@ -677,7 +679,7 @@ remain fail-closed when the surface is disabled. The route is backed by
 | `/integrate`        | Connect other tools             |
 | `/integrate/api`    | API playground                  |
 | `/admin/access`     | Access admin                    |
-| `/admin/system`     | System posture                  |
+| `/admin/system`     | System health                   |
 | `/admin/editions`   | Editions                        |
 | `/assistant`        | Product help                    |
 | `/wizard`           | Wizard (not in rail)            |

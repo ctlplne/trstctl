@@ -922,8 +922,13 @@ describe("i18n boundary", () => {
       // unrestricted backend 503 detail. People, roles, and key metadata are
       // explicitly named as still working. Machine-authored translations
       // remain flagged for human review.
-      "es-ES": "47c0186241bd8f49c309f8272b10efcea56a342d941cade7724b033a93be9368",
-      "de-DE": "e5c407df07a6f44c0570706f894c4fdde48609d7f09f4c79b18e45a41207e0da",
+      // QA design g41 re-pin: System health now states whether the control
+      // plane is securely configured, names unknown and attention states,
+      // keeps configuration/dependency/exception evidence intentional, and
+      // never turns a failed read into a readiness claim. Machine-authored
+      // translations remain flagged for human language review.
+      "es-ES": "9b3eb95b7f939b4eb6c4ca801f73491814eae477afcae5bbd9a1e76587d93eab",
+      "de-DE": "183ca3490f062428f7697fd4df62dec464a1cf78a9a141b3222e76de356b9795",
     });
   });
 

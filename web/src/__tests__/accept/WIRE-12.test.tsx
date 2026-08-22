@@ -352,12 +352,18 @@ describe("WIRE-12 Platform served admin surface", () => {
     expect(screen.getByText("regional-smoke")).toBeInTheDocument();
     editionsPage.unmount();
 
-    // Posture disclosures render on /admin/system.
+    // System health answers first; exact posture disclosures stay lazy.
     const systemPage = renderAdminPage("system");
+    expect(await screen.findByRole("heading", { name: "System health" })).toBeInTheDocument();
+    expect(apiMock.enterpriseSupportStatus).not.toHaveBeenCalled();
+    expect(apiMock.managedOfferingStatus).not.toHaveBeenCalled();
+    expect(apiMock.scaleOrchestration).not.toHaveBeenCalled();
+    await user.click(screen.getByText("Dependency health", { exact: true }));
     expect(await screen.findByText("tenant-platform")).toBeInTheDocument();
+    await waitFor(() => expect(apiMock.scaleOrchestration).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByText("Exceptions", { exact: true }));
     await waitFor(() => expect(apiMock.enterpriseSupportStatus).toHaveBeenCalledTimes(1));
     expect(apiMock.managedOfferingStatus).toHaveBeenCalledTimes(1);
-    expect(apiMock.scaleOrchestration).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("heading", { name: "Packaging" })).toBeInTheDocument();
     expect(screen.getByText("Machine Identity Security Control Plane")).toBeInTheDocument();
     expect(screen.getByText("control_plane_deployment")).toBeInTheDocument();

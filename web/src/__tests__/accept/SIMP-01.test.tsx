@@ -280,6 +280,7 @@ describe("SIMP-01 Platform served-data reduction", () => {
   });
 
   it("quarantines editions & license on its own route, off Access and System (S-A3/DA-26, C-A1)", async () => {
+    const user = userEvent.setup();
     // /admin/access shows no license/edition framing.
     const access = renderAdminPage("access");
     await screen.findByRole("heading", { name: "People and roles" });
@@ -288,6 +289,7 @@ describe("SIMP-01 Platform served-data reduction", () => {
 
     // /admin/system keeps deployment posture but not the license/edition rows.
     const system = renderAdminPage("system");
+    await user.click(await screen.findByText("Dependency health", { exact: true }));
     expect(await screen.findByRole("heading", { name: "Tenant boundary" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Editions" })).not.toBeInTheDocument();
     system.unmount();
@@ -327,22 +329,30 @@ describe("SIMP-01 Platform served-data reduction", () => {
     expect(document.body.textContent).not.toMatch(/certs:issue|graph:read|secrets:write|static capability|fixture|coming soon|not served yet/i);
     access.unmount();
 
-    // /admin/system renders the posture disclosures without token/member reads.
+    // /admin/system answers from one minimal read, then fetches each exact
+    // evidence layer only after the operator opens it.
     for (const mock of Object.values(apiMock)) mock.mockClear();
     const system = renderAdminPage("system");
+    expect(await screen.findByRole("heading", { name: "System health" })).toBeInTheDocument();
+    expect(apiMock.platformSystem).toHaveBeenCalledTimes(1);
+    expect(apiMock.scaleOrchestration).not.toHaveBeenCalled();
+    expect(apiMock.enterpriseSupportStatus).not.toHaveBeenCalled();
+    expect(apiMock.managedOfferingStatus).not.toHaveBeenCalled();
+    await user.click(screen.getByText("Configuration evidence", { exact: true }));
+    expect(screen.getByRole("heading", { name: "Idempotency result protection" })).toBeInTheDocument();
+    expect(await screen.findByText("Sealed-only enforced")).toBeInTheDocument();
+    await user.click(screen.getByText("Dependency health", { exact: true }));
     expect(await screen.findByRole("heading", { name: "Tenant boundary" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Transport" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Auth session" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Managed offering" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Enterprise support" })).toBeInTheDocument();
-    expect(screen.getByText("CAP-MODEL-04")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Scale orchestration" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Idempotency result protection" })).toBeInTheDocument();
-    expect(await screen.findByText("Sealed-only enforced")).toBeInTheDocument();
     expect(screen.getAllByText("7").length).toBeGreaterThan(0);
-    expect(apiMock.platformSystem).toHaveBeenCalledTimes(1);
     expect(await screen.findByText("CAP-SCALE-01 active")).toBeInTheDocument();
     expect(screen.getByText("SCALE-1M")).toBeInTheDocument();
+    await user.click(screen.getByText("Exceptions", { exact: true }));
+    expect(await screen.findByRole("heading", { name: "Managed offering" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Enterprise support" })).toBeInTheDocument();
+    expect(screen.getByText("CAP-MODEL-04")).toBeInTheDocument();
     expect(apiMock.members).not.toHaveBeenCalled();
     expect(apiMock.apiTokens).not.toHaveBeenCalled();
     expect(apiMock.activeActiveIssuance).not.toHaveBeenCalled();
@@ -360,13 +370,16 @@ describe("SIMP-01 Platform served-data reduction", () => {
   });
 
   it("renders loading, request failure, partial migration, and empty protection states", async () => {
+    const user = userEvent.setup();
     apiMock.platformSystem.mockReturnValue(new Promise(() => {}));
     const loading = renderAdminPage("system");
+    await user.click(await screen.findByText("Configuration evidence", { exact: true }));
     expect(await screen.findByText("Loading result-protection status.")).toBeInTheDocument();
     loading.unmount();
 
     apiMock.platformSystem.mockRejectedValue(new Error("database detail must not render"));
     const failed = renderAdminPage("system");
+    await user.click(await screen.findByText("Configuration evidence", { exact: true }));
     expect(await screen.findByText("Result-protection status is unavailable")).toBeInTheDocument();
     expect(screen.queryByText(/database detail/)).not.toBeInTheDocument();
     failed.unmount();
@@ -395,6 +408,7 @@ describe("SIMP-01 Platform served-data reduction", () => {
       },
     });
     const partial = renderAdminPage("system");
+    await user.click(await screen.findByText("Configuration evidence", { exact: true }));
     expect((await screen.findAllByText("Migration incomplete")).length).toBeGreaterThan(0);
     expect(screen.getByText(/Stop old writers and restart an upgraded node/)).toBeInTheDocument();
     expect(screen.queryByText("backend detail")).not.toBeInTheDocument();
@@ -423,6 +437,7 @@ describe("SIMP-01 Platform served-data reduction", () => {
       },
     });
     renderAdminPage("system");
+    await user.click(await screen.findByText("Configuration evidence", { exact: true }));
     expect(await screen.findByText("This tenant has no cached mutation results yet.")).toBeInTheDocument();
   });
 

@@ -1531,8 +1531,8 @@ export const messages = {
     description: "Calm nav label + H1 for /admin/access: who can use the control plane and what each role permits (DESIGN-ROUTE-040).",
   },
   "platform.tabs.posture": {
-    defaultMessage: "System posture",
-    description: "Nav label + H1 for /admin/system: read-only packaging, regional, scale, and support disclosures (C-A1 split from /platform).",
+    defaultMessage: "System health",
+    description: "Calm nav label + H1 for /admin/system: whether this control plane is securely configured (DESIGN-ROUTE-041).",
   },
   "platform.tabs.editions": {
     defaultMessage: "Editions & license",
@@ -1682,8 +1682,67 @@ export const messages = {
   "admin.access.target": { defaultMessage: "Target", description: "Privileged-session target label." },
   "admin.access.expires": { defaultMessage: "Expires", description: "Privileged-session expiry time label." },
   "admin.system.description": {
-    defaultMessage: "Read-only posture disclosures: packaging, tenant boundary, transport, scale, support, and the managed offering.",
-    description: "Page description for /admin/system.",
+    defaultMessage: "Whether the control plane is securely configured for this environment.",
+    description: "Answer-first page description for /admin/system.",
+  },
+  "admin.system.currentAnswer": { defaultMessage: "Current answer", description: "Eyebrow above the current System health answer." },
+  "admin.system.fixFirstIssue": { defaultMessage: "Fix first issue", description: "Primary action that opens the evidence for the first health issue." },
+  "admin.system.healthChecking": { defaultMessage: "Checking system health", description: "Health summary while the minimal read is loading." },
+  "admin.system.healthCheckingBody": {
+    defaultMessage: "Reading core dependencies and retry protection. No readiness claim is made until this check finishes.",
+    description: "Plain-language boundary while System health loads.",
+  },
+  "admin.system.healthUnknown": { defaultMessage: "System health is unknown", description: "Fail-safe answer when the minimal health read fails." },
+  "admin.system.healthUnknownBody": {
+    defaultMessage: "The health read failed, so this page will not guess. Try again; if it still fails, inspect the control-plane logs.",
+    description: "Safe recovery copy that does not print a raw backend error.",
+  },
+  "admin.system.healthReady": { defaultMessage: "Core services are ready", description: "Health answer when the minimal served checks have no issue." },
+  "admin.system.healthReadyBody": {
+    defaultMessage: "The core health read found no immediate problem. Open the evidence below before making a production-readiness claim.",
+    description: "Honest boundary for a green minimal health read.",
+  },
+  "admin.system.healthIssueOne": { defaultMessage: "1 issue needs attention", description: "Health answer for one served issue." },
+  "admin.system.healthIssues": { defaultMessage: "{count} issues need attention", description: "Health answer for multiple served issues." },
+  "admin.system.healthIssuesBody": {
+    defaultMessage: "The checks found work to do. Fix the first issue, then return here until the answer is clear.",
+    description: "Plain recovery sequence for a non-green health answer.",
+  },
+  "admin.system.checks": { defaultMessage: "Checks", description: "First System health disclosure label." },
+  "admin.system.checksDescription": {
+    defaultMessage: "The smallest trustworthy read: core dependencies, signer isolation, retry protection, and delivery failures.",
+    description: "Scope of the default-open health checks.",
+  },
+  "admin.system.configurationEvidence": { defaultMessage: "Configuration evidence", description: "System health configuration disclosure label." },
+  "admin.system.configurationDescription": {
+    defaultMessage: "Tenant cryptographic custody, retry-result protection, and metering evidence. Open this before changing protection state.",
+    description: "Scope and safety boundary for configuration evidence.",
+  },
+  "admin.system.dependencyHealth": { defaultMessage: "Dependency health", description: "System health dependency disclosure label." },
+  "admin.system.dependencyDescription": {
+    defaultMessage: "Backup and restore proof, delivery truth, runtime boundaries, and capacity controls.",
+    description: "Scope of dependency evidence.",
+  },
+  "admin.system.exceptions": { defaultMessage: "Exceptions", description: "System health exceptions disclosure label." },
+  "admin.system.exceptionsDescription": {
+    defaultMessage: "Support and provider-only evidence. These details do not change the core health answer.",
+    description: "Scope and commercial boundary for exceptional evidence.",
+  },
+  "admin.system.tryAgain": { defaultMessage: "Try again", description: "Retry the minimal System health read." },
+  "admin.system.dependenciesCheck": { defaultMessage: "Core dependencies", description: "Health check label for served dependencies." },
+  "admin.system.dependenciesReady": { defaultMessage: "{ready} of {total} ready", description: "Ready dependency count." },
+  "admin.system.signerCheck": { defaultMessage: "Signer isolation", description: "Health check label for signer process mode." },
+  "admin.system.retryProtectionCheck": { defaultMessage: "Retry-result protection", description: "Health check label for encrypted idempotency results." },
+  "admin.system.deliveryCheck": { defaultMessage: "Verified delivery", description: "Health check label for failed serving verification." },
+  "admin.system.deliveryFailures": { defaultMessage: "{count} failures", description: "Number of serving-verification failures." },
+  "admin.system.healthReadFailed": { defaultMessage: "System health could not be read.", description: "Sanitized internal state for the minimal read." },
+  "admin.system.detailReadFailed": {
+    defaultMessage: "Some expert evidence could not be loaded. No configuration change was made. Check the control-plane logs, then retry.",
+    description: "Sanitized error for an expert evidence read.",
+  },
+  "admin.system.provisionFailed": {
+    defaultMessage: "The managed tenant was not confirmed. Check the provider-plane logs before retrying with a new request.",
+    description: "Fail-safe managed-tenant provisioning error.",
   },
   "platform.idempotency.heading": {
     defaultMessage: "Idempotency result protection",
@@ -2985,7 +3044,7 @@ export const messages = {
   },
   "journeys.prod.health.title": { defaultMessage: "Watch readiness and metrics", description: "Production journey step title." },
   "journeys.prod.health.body": {
-    defaultMessage: "readyz checks db, nats, and signer; Prometheus scrapes /metrics — System posture summarizes the runtime.",
+    defaultMessage: "readyz checks db, nats, and signer; Prometheus scrapes /metrics — System health summarizes the runtime.",
     description: "Production journey step body.",
   },
   "journeys.prod.backup.title": { defaultMessage: "Rehearse backup and restore", description: "Production journey step title." },

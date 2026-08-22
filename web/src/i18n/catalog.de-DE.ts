@@ -499,8 +499,44 @@ const deDECatalog = {
   "discovery.run.unbound": "Nicht gebunden",
   // DESIGN-ROUTE-040 machine-authored translations; human linguistic review required before release.
   "platform.tabs.access": "Personen und Rollen",
-  "platform.tabs.posture": "Systemlage",
+  "platform.tabs.posture": "Systemzustand",
   "platform.tabs.editions": "Editionen & Lizenz",
+  // DESIGN-ROUTE-041 machine-authored translations; human linguistic review required before release.
+  "admin.system.currentAnswer": "Aktuelle Antwort",
+  "admin.system.fixFirstIssue": "Erstes Problem beheben",
+  "admin.system.healthChecking": "Systemzustand wird geprüft",
+  "admin.system.healthCheckingBody": "Kerndienste und Wiederholungsschutz werden gelesen. Bis zum Abschluss wird keine Bereitschaft behauptet.",
+  "admin.system.healthUnknown": "Systemzustand ist unbekannt",
+  "admin.system.healthUnknownBody":
+    "Die Zustandsabfrage ist fehlgeschlagen; diese Seite rät deshalb nicht. Versuchen Sie es erneut und prüfen Sie bei einem weiteren Fehler die Control-Plane-Protokolle.",
+  "admin.system.healthReady": "Kerndienste sind bereit",
+  "admin.system.healthReadyBody":
+    "Die Kernprüfung fand kein unmittelbares Problem. Öffnen Sie die Nachweise unten, bevor Sie Produktionsbereitschaft behaupten.",
+  "admin.system.healthIssueOne": "1 Problem erfordert Aufmerksamkeit",
+  "admin.system.healthIssues": "{count} Probleme erfordern Aufmerksamkeit",
+  "admin.system.healthIssuesBody":
+    "Die Prüfungen zeigen offene Arbeit. Beheben Sie zuerst das erste Problem und kehren Sie zurück, bis die Antwort eindeutig ist.",
+  "admin.system.checks": "Prüfungen",
+  "admin.system.checksDescription": "Die kleinste verlässliche Abfrage: Kerndienste, Signierer-Isolation, Wiederholungsschutz und Zustellfehler.",
+  "admin.system.configurationEvidence": "Konfigurationsnachweise",
+  "admin.system.configurationDescription":
+    "Kryptografische Tenant-Verwahrung, Schutz von Wiederholungsergebnissen und Messnachweise. Vor Änderungen am Schutzstatus öffnen.",
+  "admin.system.dependencyHealth": "Zustand der Abhängigkeiten",
+  "admin.system.dependencyDescription": "Sicherungs- und Wiederherstellungsnachweise, Zustellwahrheit, Laufzeitgrenzen und Kapazitätskontrollen.",
+  "admin.system.exceptions": "Ausnahmen",
+  "admin.system.exceptionsDescription": "Nachweise nur für Support und Provider. Diese Details ändern die Kernantwort nicht.",
+  "admin.system.tryAgain": "Erneut versuchen",
+  "admin.system.dependenciesCheck": "Kernabhängigkeiten",
+  "admin.system.dependenciesReady": "{ready} von {total} bereit",
+  "admin.system.signerCheck": "Signierer-Isolation",
+  "admin.system.retryProtectionCheck": "Schutz von Wiederholungsergebnissen",
+  "admin.system.deliveryCheck": "Verifizierte Zustellung",
+  "admin.system.deliveryFailures": "{count} Fehler",
+  "admin.system.healthReadFailed": "Der Systemzustand konnte nicht gelesen werden.",
+  "admin.system.detailReadFailed":
+    "Einige Expertennachweise konnten nicht geladen werden. Die Konfiguration wurde nicht geändert. Prüfen Sie die Control-Plane-Protokolle und versuchen Sie es erneut.",
+  "admin.system.provisionFailed":
+    "Der verwaltete Tenant wurde nicht bestätigt. Prüfen Sie die Provider-Plane-Protokolle, bevor Sie es mit einer neuen Anfrage erneut versuchen.",
   "admin.access.description": "Wer die Steuerungsebene nutzen darf und was jede Rolle erlaubt.",
   "admin.access.technical":
     "Mitgliedschaft und jede Änderung bleiben auf den Tenant begrenzt. Genaue SSO-Claims, Gruppenzuordnungen, Rollenrechte, Sitzungen, Schlüsselmetadaten und Prüfverläufe bleiben unten verfügbar.",
@@ -592,7 +628,7 @@ const deDECatalog = {
   "admin.access.started": "Gestartet",
   "admin.access.target": "Ziel",
   "admin.access.expires": "Läuft ab",
-  "admin.system.description": "Schreibgeschützte Lageberichte: Paketierung, Tenant-Grenze, Transport, Skalierung, Support und das Managed-Angebot.",
+  "admin.system.description": "Ob die Steuerungsebene für diese Umgebung sicher konfiguriert ist.",
   "admin.editions.description": "Offline-Lizenzstatus, Editions- und Funktionszeilen, FIPS-Lage und Distribution.",
   "identities.decommission.heading": "Stilllegung per Signal",
   "request.csr.generate": "Erzeugen Sie eine auf diesem Host:",
@@ -875,7 +911,7 @@ const deDECatalog = {
   "journeys.prod.tls.title": "Über das eigene Zertifikat ausliefern",
   "journeys.prod.tls.body": "Den Server auf Ihre Zertifikats- und Schlüsseldateien richten, bevor irgendetwas anderes davon abhängt.",
   "journeys.prod.health.title": "Readiness und Metriken beobachten",
-  "journeys.prod.health.body": "readyz prüft db, nats und signer; Prometheus liest /metrics — die Systemlage fasst die Laufzeit zusammen.",
+  "journeys.prod.health.body": "readyz prüft db, nats und signer; Prometheus liest /metrics — der Systemzustand fasst die Laufzeit zusammen.",
   "journeys.prod.backup.title": "Backup und Restore proben",
   "journeys.prod.backup.body": "Verschlüsselte Vollbackups zählen erst, wenn eine Wiederherstellung tatsächlich geprobt wurde.",
   "journeys.prod.audit.title": "Audit-Evidenz exportieren",

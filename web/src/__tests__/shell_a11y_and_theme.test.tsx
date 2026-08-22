@@ -694,14 +694,17 @@ describe("app shell accessibility and theme", () => {
     await user.click(screen.getByRole("link", { name: /^People and roles$/i }));
     expect(await screen.findByRole("heading", { name: "People and roles" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("link", { name: /^System posture$/i }));
-    expect(await screen.findByRole("heading", { name: "System posture" })).toBeInTheDocument();
+    await user.click(screen.getByRole("link", { name: /^System health$/i }));
+    expect(await screen.findByRole("heading", { name: "System health" })).toBeInTheDocument();
+    await user.click(screen.getByText("Dependency health", { exact: true }));
     expect(screen.getByRole("heading", { name: "Tenant boundary" })).toBeInTheDocument();
   });
 
   it("renders tenant context from the served session without an editable tenant input", async () => {
+    const user = userEvent.setup();
     renderShell(["/admin/system"]);
-    await screen.findByRole("heading", { name: "System posture" });
+    await screen.findByRole("heading", { name: "System health" });
+    await user.click(screen.getByText("Dependency health", { exact: true }));
 
     expect(screen.getByText("Tenant ID from session")).toBeInTheDocument();
     expect(within(screen.getByRole("main")).getByText("t1")).toBeInTheDocument();
@@ -748,8 +751,10 @@ describe("app shell accessibility and theme", () => {
   });
 
   it("shows honest auth and transport status without exposing key material", async () => {
+    const user = userEvent.setup();
     renderShell(["/admin/system"]);
-    await screen.findByRole("heading", { name: "System posture" });
+    await screen.findByRole("heading", { name: "System health" });
+    await user.click(screen.getByText("Dependency health", { exact: true }));
 
     expect(screen.getByText(/Plaintext local preview/i)).toBeInTheDocument();
     expect(screen.getByText(/No private cert\/key bytes are exposed/i)).toBeInTheDocument();
