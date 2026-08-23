@@ -1115,6 +1115,64 @@ func TestMigrationDataContentBackfills(t *testing.T) {
 		}
 	})
 
+	t.Run("0194_lifecycle_rotation_legacy_binding", func(t *testing.T) {
+		ctx := context.Background()
+		prefix, target := splitMigrationsAtVersion(t, 194)
+		dsn := createFreshMigrationDatabase(t)
+		pool, err := pgxpool.New(ctx, dsn)
+		if err != nil {
+			t.Fatalf("connect fresh content database: %v", err)
+		}
+		t.Cleanup(pool.Close)
+
+		applyMigrationFiles(t, ctx, pool, prefix)
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO lifecycle_rotation_runs
+			       (id, tenant_id, identity_id, status, trigger, predecessor_fingerprint,
+			        idempotency_key, created_at, updated_at)
+			VALUES ('10000000-0000-4000-8000-000000000194',
+			        '11111111-1111-1111-1111-111111111111',
+			        '10000000-0000-4000-8000-000000000195', 'running', 'scheduled',
+			        'sha256:legacy', 'legacy:194', now(), now())`); err != nil {
+			t.Fatalf("seed pre-0194 lifecycle row: %v", err)
+		}
+		applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+
+		var legacy bool
+		if err := pool.QueryRow(ctx, `
+			SELECT legacy_predecessor_binding
+			  FROM lifecycle_rotation_runs
+			 WHERE tenant_id = '11111111-1111-1111-1111-111111111111'
+			   AND id = '10000000-0000-4000-8000-000000000194'`).Scan(&legacy); err != nil {
+			t.Fatalf("read upgraded lifecycle marker: %v", err)
+		}
+		if !legacy {
+			t.Fatal("0194 did not mark the existing lifecycle row for bounded replay compatibility")
+		}
+
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO lifecycle_rotation_runs
+			       (id, tenant_id, identity_id, status, trigger, predecessor_fingerprint,
+			        idempotency_key, created_at, updated_at)
+			VALUES ('10000000-0000-4000-8000-000000000196',
+			        '11111111-1111-1111-1111-111111111111',
+			        '10000000-0000-4000-8000-000000000197', 'running', 'scheduled',
+			        'sha256:new', 'new:194', now(), now())`); err != nil {
+			t.Fatalf("seed post-0194 lifecycle row: %v", err)
+		}
+		var current bool
+		if err := pool.QueryRow(ctx, `
+			SELECT legacy_predecessor_binding
+			  FROM lifecycle_rotation_runs
+			 WHERE tenant_id = '11111111-1111-1111-1111-111111111111'
+			   AND id = '10000000-0000-4000-8000-000000000196'`).Scan(&current); err != nil {
+			t.Fatalf("read current lifecycle marker: %v", err)
+		}
+		if current {
+			t.Fatal("0194 weakened predecessor binding for a new lifecycle row")
+		}
+	})
+
 	t.Run("0153_secret_sync_target_order", testMigration0153SecretSyncTargetOrder)
 	t.Run("0143_lifecycle_rotation_event_order", func(t *testing.T) {
 		ctx := context.Background()

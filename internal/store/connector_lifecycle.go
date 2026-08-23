@@ -39,23 +39,24 @@ type ConnectorDeliveryReceipt struct {
 // outbox row, including enough rollback metadata for an operator to tie the
 // successor back to the retired public certificate.
 type RotationRun struct {
-	ID                     string
-	TenantID               string
-	IdentityID             string
-	OutboxID               *int64
-	Status                 string
-	Trigger                string
-	Reason                 string
-	PredecessorFingerprint string
-	SuccessorFingerprint   string
-	RollbackRef            string
-	Error                  string
-	IdempotencyKey         string
-	CreatedAt              time.Time
-	UpdatedAt              time.Time
-	CompletedAt            *time.Time
-	FirstEventSequence     uint64
-	LatestEventSequence    uint64
+	ID                       string
+	TenantID                 string
+	IdentityID               string
+	OutboxID                 *int64
+	Status                   string
+	Trigger                  string
+	Reason                   string
+	PredecessorFingerprint   string
+	SuccessorFingerprint     string
+	RollbackRef              string
+	Error                    string
+	IdempotencyKey           string
+	CreatedAt                time.Time
+	UpdatedAt                time.Time
+	CompletedAt              *time.Time
+	FirstEventSequence       uint64
+	LatestEventSequence      uint64
+	LegacyPredecessorBinding bool
 }
 
 // ApplyConnectorDeliveryRecordedTx projects a connector.delivery.recorded event.
@@ -131,13 +132,14 @@ func (s *Store) ApplyRotationRunRecordedTx(ctx context.Context, tx pgx.Tx, r Rot
 		        (id, tenant_id, identity_id, outbox_id, status, trigger, reason,
 		         predecessor_fingerprint, successor_fingerprint, rollback_ref, error,
 		         idempotency_key, created_at, updated_at, completed_at,
-		         first_event_sequence, latest_event_sequence)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+		         first_event_sequence, latest_event_sequence, legacy_predecessor_binding)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
 		 ON CONFLICT DO NOTHING`,
 		r.ID, r.TenantID, r.IdentityID, r.OutboxID, r.Status, r.Trigger, r.Reason,
 		r.PredecessorFingerprint, r.SuccessorFingerprint, r.RollbackRef, r.Error,
 		r.IdempotencyKey, r.CreatedAt, r.UpdatedAt, r.CompletedAt,
-		nullableRotationEventSequence(r.FirstEventSequence), nullableRotationEventSequence(r.LatestEventSequence))
+		nullableRotationEventSequence(r.FirstEventSequence), nullableRotationEventSequence(r.LatestEventSequence),
+		r.LegacyPredecessorBinding)
 	if err != nil {
 		return err
 	}
@@ -156,7 +158,7 @@ func (s *Store) ApplyRotationRunRecordedTx(ctx context.Context, tx pgx.Tx, r Rot
 		`SELECT id::text, tenant_id::text, identity_id::text, outbox_id, status, trigger, reason,
 		        predecessor_fingerprint, successor_fingerprint, rollback_ref, error,
 		        idempotency_key, created_at, updated_at, completed_at,
-		        first_event_sequence, latest_event_sequence
+		        first_event_sequence, latest_event_sequence, legacy_predecessor_binding
 		   FROM lifecycle_rotation_runs
 		  WHERE tenant_id = $1
 		    AND (id = $2 OR ($3::bigint IS NOT NULL AND outbox_id = $3))
@@ -200,6 +202,13 @@ func (s *Store) ApplyRotationRunRecordedTx(ctx context.Context, tx pgx.Tx, r Rot
 		// post-upgrade observation starts its ordered epoch without rewriting
 		// the row's already-established canonical ID or created_at.
 		desired.FirstEventSequence = r.FirstEventSequence
+	}
+	if desired.LatestEventSequence == 0 && rotationRunIsLegacyHistoricalReplay(r, existing) {
+		// The upgraded row may already contain the terminal result while the
+		// durable tail starts again at an older event. Enter the ordered epoch at
+		// that historical event without pulling the retained terminal result
+		// backwards; later replayed events advance latest_event_sequence normally.
+		desired.LatestEventSequence = r.LatestEventSequence
 	}
 	if rotationRunPrecedes(r, existing) {
 		desired.ID = r.ID
@@ -296,7 +305,15 @@ func rotationRunBindingDifferences(existing, incoming RotationRun) []string {
 	if existing.Reason != incoming.Reason {
 		differences = append(differences, "reason")
 	}
-	if existing.PredecessorFingerprint != incoming.PredecessorFingerprint {
+	// Migration 0194 marks only rows that existed before ordered replay was
+	// introduced. Some v0.5.x lifecycle events omitted this optional public
+	// fingerprint even though the old inline projector retained it in the row.
+	// Treat that one missing historical field as unknown, never as an empty
+	// replacement. Every new row remains strict, and a non-empty mismatch is
+	// always rejected.
+	legacyMissingPredecessor := existing.LegacyPredecessorBinding &&
+		existing.ID == incoming.ID && incoming.PredecessorFingerprint == ""
+	if existing.PredecessorFingerprint != incoming.PredecessorFingerprint && !legacyMissingPredecessor {
 		differences = append(differences, "predecessor_fingerprint")
 	}
 	if existing.IdempotencyKey != incoming.IdempotencyKey {
@@ -401,6 +418,9 @@ func rotationRunObservationOrder(candidate, existing RotationRun) (order int, se
 		}
 	}
 	if candidate.LatestEventSequence > 0 && existing.LatestEventSequence == 0 {
+		if rotationRunIsLegacyHistoricalReplay(candidate, existing) {
+			return rotationRunTimeOrder(candidate.UpdatedAt, existing.UpdatedAt), false
+		}
 		// A live post-upgrade event follows a legacy row whose checkpoint had
 		// already covered its history. Adopt the real local order from here on.
 		return 1, false
@@ -411,6 +431,11 @@ func rotationRunObservationOrder(candidate, existing RotationRun) (order int, se
 		return -1, true
 	}
 	return rotationRunTimeOrder(candidate.UpdatedAt, existing.UpdatedAt), false
+}
+
+func rotationRunIsLegacyHistoricalReplay(candidate, existing RotationRun) bool {
+	return existing.LegacyPredecessorBinding && candidate.ID == existing.ID &&
+		candidate.LatestEventSequence > 0 && !candidate.UpdatedAt.After(existing.UpdatedAt)
 }
 
 func nullableRotationEventSequence(sequence uint64) sql.NullInt64 {
@@ -461,7 +486,7 @@ func scanRotationRun(row pgx.Row, r *RotationRun) error {
 	err := row.Scan(&r.ID, &r.TenantID, &r.IdentityID, &outboxID, &r.Status, &r.Trigger, &r.Reason,
 		&r.PredecessorFingerprint, &r.SuccessorFingerprint, &r.RollbackRef, &r.Error,
 		&r.IdempotencyKey, &r.CreatedAt, &r.UpdatedAt, &r.CompletedAt,
-		&firstEventSequence, &latestEventSequence)
+		&firstEventSequence, &latestEventSequence, &r.LegacyPredecessorBinding)
 	if err != nil {
 		return err
 	}
@@ -528,7 +553,7 @@ func (s *Store) ListRotationRunsPage(ctx context.Context, tenantID, identityID, 
 			`SELECT id::text, tenant_id::text, identity_id::text, outbox_id, status, trigger, reason,
 			        predecessor_fingerprint, successor_fingerprint, rollback_ref, error,
 			        idempotency_key, created_at, updated_at, completed_at,
-			        first_event_sequence, latest_event_sequence
+			        first_event_sequence, latest_event_sequence, legacy_predecessor_binding
 			   FROM lifecycle_rotation_runs
 			  WHERE tenant_id = $1 AND id > $2
 			    AND ($3 = '' OR identity_id::text = $3)
@@ -558,7 +583,7 @@ func (s *Store) GetRotationRun(ctx context.Context, tenantID, id string) (Rotati
 			`SELECT id::text, tenant_id::text, identity_id::text, outbox_id, status, trigger, reason,
 			        predecessor_fingerprint, successor_fingerprint, rollback_ref, error,
 			        idempotency_key, created_at, updated_at, completed_at,
-			        first_event_sequence, latest_event_sequence
+			        first_event_sequence, latest_event_sequence, legacy_predecessor_binding
 			   FROM lifecycle_rotation_runs
 			  WHERE tenant_id = $1 AND id = $2`, tenantID, id), &r)
 	})

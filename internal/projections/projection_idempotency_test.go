@@ -238,6 +238,83 @@ func TestRotationRunProjectionConvergesByOutbox(t *testing.T) {
 	}
 }
 
+// TestRotationRunProjectionReplaysV05MissingPredecessor proves an upgrade from
+// v0.5.x can rebuild ordered projection state without discarding the public
+// predecessor binding retained by the legacy row. Only rows marked by migration
+// 0194 get this compatibility treatment; a non-empty mismatch still fails.
+func TestRotationRunProjectionReplaysV05MissingPredecessor(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "Acme"}); err != nil {
+		t.Fatalf("seed tenant: %v", err)
+	}
+
+	const (
+		runID      = "10000000-0000-4000-8000-000000000194"
+		identityID = "10000000-0000-4000-8000-000000000195"
+	)
+	outboxID := int64(194)
+	runningAt := time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)
+	completedAt := runningAt.Add(time.Second)
+	legacyCompletedAt := completedAt
+	legacy := store.RotationRun{
+		ID: runID, TenantID: tenantA, IdentityID: identityID, OutboxID: &outboxID,
+		Status: "succeeded", Trigger: "scheduled", Reason: "renewal window",
+		PredecessorFingerprint: "sha256:v05-old", SuccessorFingerprint: "sha256:v05-new",
+		RollbackRef: "restore sha256:v05-old", IdempotencyKey: "lifecycle.renew:v05",
+		CreatedAt: runningAt, UpdatedAt: completedAt, CompletedAt: &legacyCompletedAt,
+		LegacyPredecessorBinding: true,
+	}
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return s.ApplyRotationRunRecordedTx(ctx, tx, legacy)
+	}); err != nil {
+		t.Fatalf("seed pre-0194 projected row: %v", err)
+	}
+
+	projector := projections.New(s)
+	running := projections.LifecycleRotationRecorded{
+		ID: runID, IdentityID: identityID, OutboxID: &outboxID, Status: "running",
+		Trigger: "scheduled", Reason: "renewal window", IdempotencyKey: "lifecycle.renew:v05",
+	}
+	runningEvent := projectorEvent(t, projections.EventLifecycleRotationRecorded, running)
+	runningEvent.Sequence = 180
+	runningEvent.Time = runningAt
+	if err := projector.Apply(ctx, runningEvent); err != nil {
+		t.Fatalf("replay v0.5 running event with omitted predecessor: %v", err)
+	}
+
+	terminal := running
+	terminal.Status = "succeeded"
+	terminal.SuccessorFingerprint = "sha256:v05-new"
+	terminal.RollbackRef = "restore sha256:v05-old"
+	terminal.CompletedAt = &completedAt
+	terminalEvent := projectorEvent(t, projections.EventLifecycleRotationRecorded, terminal)
+	terminalEvent.Sequence = 181
+	terminalEvent.Time = completedAt
+	if err := projector.Apply(ctx, terminalEvent); err != nil {
+		t.Fatalf("replay v0.5 terminal event with omitted predecessor: %v", err)
+	}
+
+	got, err := s.GetRotationRun(ctx, tenantA, runID)
+	if err != nil {
+		t.Fatalf("get replayed v0.5 rotation run: %v", err)
+	}
+	if got.Status != "succeeded" || got.PredecessorFingerprint != legacy.PredecessorFingerprint ||
+		got.SuccessorFingerprint != terminal.SuccessorFingerprint || got.FirstEventSequence != 180 ||
+		got.LatestEventSequence != 181 || !got.LegacyPredecessorBinding {
+		t.Fatalf("replayed v0.5 rotation run = %+v, want retained binding and ordered terminal state", got)
+	}
+
+	changed := terminal
+	changed.PredecessorFingerprint = "sha256:different-old"
+	changedEvent := projectorEvent(t, projections.EventLifecycleRotationRecorded, changed)
+	changedEvent.Sequence = 182
+	changedEvent.Time = completedAt.Add(time.Second)
+	if err := projector.Apply(ctx, changedEvent); !errors.Is(err, store.ErrIdempotencyConflict) {
+		t.Fatalf("non-empty predecessor drift error = %v, want ErrIdempotencyConflict", err)
+	}
+}
+
 // TestRotationRunProjectionRejectsBindingDrift proves that convergence is not
 // a last-writer-wins rewrite. Either uniqueness boundary may locate the row,
 // but a changed command binding or a changed same-state observation must fail
