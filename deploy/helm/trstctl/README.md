@@ -36,19 +36,22 @@ RuntimeDefault`.
 
 The chart fails at template time if the required install inputs are missing. Provide
 external datastores, a stable KEK, and an independent signer authorization command,
-then install. The example path must name an executable that your control-plane image
-provides; it reads sign-intent JSON from stdin and returns a base64 token without
-exposing the signer verifier secret to the control plane:
+then install. The official trstctl image does not include your organization-specific
+approval executable. Build a derived control-plane image containing an
+**operator-provided signer authorization client** at the example path, while the
+actual approval provider and signer verifier secret stay outside the control-plane
+process. The client reads sign-intent JSON from stdin and returns one base64 token:
 
 <!-- helm-doc-render: chart-production -->
 ```bash
 helm install trstctl deploy/helm/trstctl \
   --namespace trstctl --create-namespace \
+  --set image.repository='registry.example/trstctl-with-auth-client' \
   --set image.digest='sha256:<release-image-digest>' \
   --set postgres.dsn='postgres://user:pass@pg-host:5432/trstctl?sslmode=require' \
   --set nats.url='nats://nats-host:4222' \
   --set kek.existingSecret=trstctl-kek \
-  --set signer.auth.tokenCommand=/usr/local/bin/trstctl-sign-approve
+  --set signer.auth.tokenCommand=/opt/trstctl-auth/bin/signer-token-provider
 ```
 
 For a single-replica evaluation only, opt into both single-replica NATS and the
@@ -71,8 +74,11 @@ Then:
 
 ```bash
 kubectl -n trstctl rollout status deploy/trstctl
-kubectl -n trstctl port-forward svc/trstctl 8443:8443   # https://localhost:8443 (-k)
+kubectl -n trstctl exec deploy/trstctl -c trstctl -- /usr/local/bin/trstctl --ready-check
 ```
+
+Reach the console through the hostname covered by `tls.existingSecret`; never
+turn off certificate verification to force a localhost port-forward to work.
 
 ## Key values
 

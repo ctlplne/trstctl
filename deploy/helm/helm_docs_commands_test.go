@@ -65,7 +65,7 @@ func TestAirGapOverlayRendersTelemetryExplicitlyDisabled(t *testing.T) {
 		"--set", "postgres.dsn=postgres://user:pass@pg.internal:5432/trstctl?sslmode=require",
 		"--set", "nats.url=nats://nats.internal:4222",
 		"--set", "kek.existingSecret=trstctl-kek",
-		"--set", "signer.auth.tokenCommand=/usr/local/bin/trstctl-sign-approve",
+		"--set", "signer.auth.tokenCommand=/opt/trstctl-auth/bin/signer-token-provider",
 	)
 	output, err := cmd.CombinedOutput()
 	if err != nil {

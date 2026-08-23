@@ -106,18 +106,21 @@ Visit <https://localhost:8443>, choose **Continue with SSO**, and the local IdP
 signs in `eval-admin@trstctl.local` for the evaluation tenant. Both the UI/API
 and the automatic IdP bind to host loopback; another machine cannot use this
 evaluation administrator. A fresh install lands on a **Get started** prompt
-that launches the setup wizard. The wizard has six screens: use the internal
-CA, activate the evaluation enrollment profile, issue the first certificate,
-prove configured integrations, enroll an agent, and complete setup.
+that launches the setup wizard. The wizard has six screens: prove signer
+health, activate the evaluation enrollment profile, issue the first certificate,
+optionally prove configured integrations, optionally connect an agent, and
+review setup.
 
 ## 3. Run the wizard (about 10 minutes)
 
-### Use the internal CA
+### Check signing health
 
-Continue with the signer-backed X.509 CA the server provisioned at boot. The
-first-certificate flow does not create an external issuer.
-External X.509 issuers require a certificate chain and are added after setup
-from the issuers/API surface.
+Choose **Check signing health**. The wizard reads the same separate-signer probe
+shown on System health plus the issuer catalog. A named issuer is reported only
+when a real catalog row exists. On a fresh blank stack, the UI says that the
+built-in setup issuer is selected and that the next certificate step is the
+end-to-end proof; it does not invent an “Internal CA” row. External X.509 issuers require a certificate chain and are added after setup from the
+issuers/API surface.
 
 ### Enable enrollment protocols
 
@@ -163,9 +166,15 @@ one-time credential in browser state. A core-only install can choose
 **Skip integration proof for now**; skipping does not claim an integration
 was proven.
 
-### Install an agent
+### Connect an agent (optional)
 
-The wizard mints a one-time bootstrap token. Save it to a file readable only
+Certificate operations are already usable at this point. Choose **Skip agent
+for now** if this evaluation should not inspect or deploy to a host; the review
+screen records that the optional step was deferred rather than claiming an
+agent exists.
+
+To add discovery and deployment now, mint a one-time bootstrap token. Save it
+to a file readable only
 by the installing user, then build the local evaluation CA bundle the agent
 pins — the HTTPS self-signed eval certificate (used for `/enroll/bootstrap`)
 plus the signer-custodied agent-channel CA (mTLS on `localhost:19443`):
@@ -192,8 +201,17 @@ trstctl-agent --enroll-url https://localhost:8443 \
   --inventory-private-key-roots /etc/ssl/private,/etc/ssh
 ```
 
-Recreating or restarting the Compose control-plane container with the same
-`trstctldata` volume keeps both CA pins valid. Capture the HTTPS certificate
+When you intentionally replace the control-plane container, use the Compose
+project so its network-namespace companions are replaced with it:
+
+```bash
+docker compose -f deploy/docker/docker-compose.yml up --detach --force-recreate trstctl
+```
+
+Do not replace only the container with `docker rm` plus `docker run`; that
+bypasses Compose's dependency restart wiring and can leave the local login
+bridge in the retired network namespace. Recreating through Compose with the
+same `trstctldata` volume keeps both CA pins valid. Capture the HTTPS certificate
 again and rebuild `./trstctl-ca.pem` only after you replace/delete that volume
 or intentionally rotate the internal TLS identity. A missing volume is a new
 identity and must not inherit trust from the old one.
@@ -209,9 +227,10 @@ getting the `trstctl-agent` binary on Linux, macOS, and Windows.
 
 ### Complete setup
 
-Confirm the internal CA, protocol profile, issued certificate,
-integration-proof status, and enrolled agent. The wizard latches closed in
-this browser and sends you to the certificate operations view.
+Review the proved signer/issuer state, protocol profile, issued certificate,
+integration-proof status, and either the enrolled agent or the explicit
+optional-step deferral. The wizard latches closed in this browser and sends you
+to the certificate operations view.
 
 ## Get your first API token
 

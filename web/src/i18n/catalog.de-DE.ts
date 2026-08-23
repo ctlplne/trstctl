@@ -748,9 +748,22 @@ const deDECatalog = {
   "wizard.protocols.summaryActive": "Eval-Profil aktiv",
   "wizard.protocols.summaryOperator": "Betreiberkonfiguriertes Profil",
   "wizard.protocols.next": "Weiter: Protokolle aktivieren",
+  "wizard.issuer.stepLabel": "Signierung prüfen",
+  "wizard.issuer.stepDescription": "Prüfen Sie den separaten Signer, bevor Sie ein Testzertifikat erstellen.",
+  "wizard.issuer.heading": "Zertifikatssignierung bestätigen",
+  "wizard.issuer.description":
+    "trstctl enthält einen eingebauten Setup-Aussteller. Prüfen Sie jetzt den separaten Signer; der nächste Zertifikatsschritt beweist den vollständigen Signierpfad. Verbinden Sie Ihre Produktions-CA später.",
+  "wizard.issuer.check": "Signierzustand prüfen",
+  "wizard.issuer.readyNamed": "{name} ist aufgeführt und die Zustandsprüfung des Signers war erfolgreich.",
+  "wizard.issuer.readyBuiltIn":
+    "Der Signer ist gesund. Der eingebaute Setup-Aussteller ist ausgewählt; der nächste Zertifikatsschritt beweist die Ende-zu-Ende-Signierung.",
+  "wizard.issuer.signerUnhealthy": "der separate Signer ist nicht gesund: {error}",
+  "wizard.issuer.signerMissing": "kein Signer-Zustand wurde zurückgegeben",
+  "wizard.issuer.error": "Die Signierbereitschaft konnte nicht bewiesen werden: {error}",
+  "wizard.issuer.builtinName": "Eingebauter Setup-Aussteller",
   "wizard.header.description": "Gehen Sie den nächsten sicheren Schritt zu einem gesunden Testzertifikat.",
   "wizard.header.technicalDetails":
-    "Der vollständige Pfad verbindet einen Aussteller, aktiviert Registrierungsprotokolle, stellt ein Zertifikat aus, prüft konfigurierte Integrationen, registriert einen Agenten und speichert den Abschluss in diesem Browser.",
+    "Der vollständige Pfad prüft den Signer, aktiviert Registrierungsprotokolle, stellt ein Zertifikat aus, prüft optional konfigurierte Integrationen, verbindet optional einen Agenten und speichert den Abschluss in diesem Browser.",
   "wizard.integrations.stepLabel": "Integrationen nachweisen",
   "wizard.integrations.stepDescription": "Connector-, Upstream-CA- und Dynamic-Secret-Operationen gegen von Ihnen konfigurierte Systeme ausführen.",
   "wizard.integrations.heading": "Konfigurierte Integrationen prüfen",
@@ -770,6 +783,22 @@ const deDECatalog = {
   "wizard.integrations.lease.provider": "Lease-Anbieter",
   "wizard.integrations.lease.role": "Lease-Rolle",
   "wizard.integrations.skip": "Integrationsnachweis vorerst überspringen",
+  "wizard.agent.stepLabel": "Agent verbinden (optional)",
+  "wizard.agent.stepDescription": "Fügen Sie jetzt Host-Erkennung und Auslieferung hinzu oder kehren Sie nach dem Zertifikat-Setup zurück.",
+  "wizard.agent.heading": "Agent verbinden (optional)",
+  "wizard.agent.description":
+    "Ein Agent lässt trstctl Anmeldedaten in einem Netzwerk erkennen und ausliefern. Zertifikatsvorgänge funktionieren ohne Agenten, daher können Sie das Setup jetzt abschließen und später einen Agenten verbinden. Sein einmaliges Enrollment-Token kann nur diesen Agenten registrieren; es kann keine Zertifikate ausstellen.",
+  "wizard.agent.commandIntro":
+    "Linux-Beispiel für den leeren Compose-Stack. Speichern Sie zuerst das Einmal-Token und das CA-Bundle neben diesem Befehl.",
+  "wizard.agent.commandLabel": "Ausführbarer Linux-Agentenbefehl",
+  "wizard.agent.skip": "Agent vorerst überspringen",
+  "wizard.agent.skipped":
+    "Kein Agent wurde registriert. Zertifikatsvorgänge sind bereit; verbinden Sie später einen Agenten, wenn Sie Erkennung oder Auslieferung benötigen.",
+  "wizard.agent.resume": "Stattdessen einen Agenten verbinden",
+  "wizard.agent.nextOptional": "Weiter: optionaler Agent",
+  "wizard.agent.nextReview": "Weiter: Setup prüfen",
+  "wizard.agent.summaryDeferred": "Optionaler Schritt verschoben",
+  "wizard.agent.summaryMissing": "Nicht registriert",
   "codesign.digest.placeholder": "sha256:<64 Hexadezimalzeichen>",
   "codesign.receipt.fulcioSAN": "Verifizierter Fulcio-SAN",
   "codesign.receipt.transparencyDestination": "Transparenzziel",
@@ -3836,8 +3865,6 @@ const deDECatalog = {
   "source.90d.3ba89ead35": ">90d",
   "source.a.broker.turns.an.agent.identity.plus.poli.5efe1642ad":
     "Ein Broker wandelt eine Agentenidentität und eine Richtlinie in eine kurzlebige Berechtigungsvergabe um. Übermitteln Sie den Nachweis einmalig und zeigen Sie nur die zurückgegebenen Identitätsmetadaten an.",
-  "source.a.fresh.trstctl.server.provisions.a.signer.a1ee587e50":
-    "Ein neuer trstctl-Server provisioniert beim Start eine interne, von einem Signierer unterstützte X.509-CA. Bestätigen Sie dies, bevor das erste Zertifikat ausgestellt wird.",
   "source.a.password.shared.secret.or.opaque.credent.b98b0c5e45":
     "Eine Identität für ein Kennwort, ein Shared Secret oder undurchsichtige Zugangsdaten, die separat vom Zertifikatsinventar verfolgt wird.",
   "source.a.safe.rollout.names.the.candidate.ca.targ.fdf82b1ab9":
@@ -4038,8 +4065,6 @@ const deDECatalog = {
   "source.configure.6defafa2ca": "Configure",
   "source.confirm.bulk.revoke.d613327838": "Massenwiderruf bestätigen",
   "source.confirm.high.blast.radius.ssh.trust.rollou.31dcb6c476": "Nachweise für das SSH-Vertrauens-Rollout mit hohem Auswirkungsradius bestätigen",
-  "source.confirm.the.signer.backed.internal.ca.or.c.b20abca15c":
-    "Bestätigen Sie die vom Signierer unterstützte interne CA oder verbinden Sie später eine übergeordnete Autorität.",
   "source.connect.an.issuer.c155ecb073": "Aussteller verbinden",
   "source.connect.first.issuer.ba893ce98c": "Ersten Aussteller verbinden",
   "source.connection.639a40e82b": "Connection",
@@ -4178,7 +4203,6 @@ const deDECatalog = {
   "source.endpoint.host.4f0d916bb9": "Endpunkt-Host",
   "source.engine.8e75ebbdb2": "Engine",
   "source.engine.native.store.d6b23ebfdb": "Engine: nativer Speicher",
-  "source.enroll.agent.8592144d44": "Agent registrieren",
   "source.enroll.an.agent.43dbb20757": "Einen Agenten registrieren",
   "source.enrollment.protocol.surfaces.de695f7aa5": "Oberflächen der Registrierungsprotokolle",
   "source.enterprise.sla.target.table.dfd20c29f8": "Tabelle der Enterprise-SLA-Ziele",
@@ -4305,7 +4329,6 @@ const deDECatalog = {
   "source.internet.tls.f6752ebc7d": "internet, tls",
   "source.interval.seconds.5f0f5b832a": "Intervall in Sekunden",
   "source.investigate.e264109347": "Investigate",
-  "source.is.ready.17f5581890": "ist bereit.",
   "source.issuance.rate.91f4b7ff0d": "Ausstellungsrate",
   "source.issue.48dc76dfa2": "Issue",
   "source.issue.a.lease.scoped.credential.from.a.con.9d8b9440ef":
@@ -4419,7 +4442,6 @@ const deDECatalog = {
   "source.minimum.score.e7461df96a": "Mindestpunktzahl",
   "source.mint.a.fresh.signer.backed.ca.key.and.cert.4f35946ce6":
     "Neuen, vom Signierdienst gestützten CA-Schlüssel und ein neues CA-Zertifikat für die ausgewählte Autorität erstellen, während die bisherige Ausstellungs-URL weiterhin zum aktiven Nachfolger weiterleitet.",
-  "source.mint.a.one.time.enrollment.token.and.wait.41e91b176b": "Einmaliges Registrierungs-Token erstellen und auf den ersten Agenten im Netzwerk warten.",
   "source.mint.enrollment.token.b50d28fa1d": "Registrierungs-Token generieren",
   "source.mode.visible.to.ui.8520f90032": "Modus für UI sichtbar",
   "source.model.5e2c614c23": "Model",
@@ -4810,8 +4832,6 @@ const deDECatalog = {
   "source.runs.appear.here.after.a.source.is.created.da81c4a3c9":
     "Ausführungen erscheinen hier, nachdem eine Quelle erstellt und ein Scan im Tenant-Bereich in die Warteschlange gestellt wurde.",
   "source.sans.7a15c9b7f6": "SANs",
-  "source.save.the.one.time.token.with.0600.permissi.b35e2c6935":
-    "Einmal-Token mit 0600-Berechtigungen speichern und dann den Agenten dort ausführen, wo er die Control Plane erreichen kann. Agenten-Registrierungstokens können keine Zertifikate ausstellen.",
   "source.scanner.71d4cf953e": "Scanner",
   "source.schedule.a.recurring.scan.once.a.source.ex.e7c14af000":
     "Einen wiederkehrenden Scan planen, sobald eine Quelle vorhanden ist, oder aktualisieren, um von einem anderen Operator erstellte Aufgaben zu übernehmen.",
@@ -5076,7 +5096,6 @@ const deDECatalog = {
   "source.updated.3a5ecca188": "Updated",
   "source.updates.22e2bada8f": "Updates",
   "source.urgency.03d37e9a53": "Urgency",
-  "source.use.internal.ca.2181607010": "Interne CA verwenden",
   "source.valid.before.8b8acd434a": "| gültig vor",
   "source.validity.9c3050e867": "Validity",
   "source.value.handling.f20f0a6806": "Umgang mit dem Wert",

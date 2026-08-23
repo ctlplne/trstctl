@@ -67,7 +67,7 @@ machine-credential management at most companies today.
 trstctl is the key register, the locksmith, and the courier. It finds every
 lock and key (discovery), cuts new keys (issuance), delivers them to the right
 doors (deployment), re-cuts them before they wear out (rotation), cancels lost
-ones (revocation), and logs everything tamper-proof (audit) — where the "keys"
+ones (revocation), and records a tamper-evident audit history — where the "keys"
 are [certificates](docs/glossary.md), SSH certs, [secrets](docs/glossary.md),
 tokens, and workload identities.
 
@@ -101,9 +101,10 @@ Three choices set trstctl apart:
   `GET /api/v1/nhi/posture/stale`) and gated AI/MCP surfaces
   (`POST /api/v1/ai/rca`, `GET /api/v1/mcp/tools`) that read the same
   tenant-scoped evidence.
-- **It's multi-tenant to the core.** Every row carries a tenant and is isolated by the
-  database itself (not by application code), so one deployment safely serves many
-  hard-isolated teams or customers. A single-org install is just the one-tenant case —
+- **It's multi-tenant to the core.** Every row carries a tenant and PostgreSQL
+  row-level security enforces the boundary in the database itself (not only in
+  application code), so one deployment can serve many RLS-isolated teams or
+  customers. A single-org install is just the one-tenant case —
   no separate code path to drift out of sync.
 
 ## What it answers
@@ -136,7 +137,7 @@ own instead of a half-dozen disconnected tools; regulated and
 sovereignty-conscious orgs (finance, healthcare, public sector, critical
 infrastructure) that need credential automation but cannot send anything to a
 third-party cloud; and MSPs or multi-team orgs that self-host once and serve
-many hard-isolated tenants from one control plane.
+many database-isolated tenants from one control plane.
 
 ## What it does
 
@@ -286,7 +287,8 @@ vendor-emulator, SoftHSM, and swtpm lifecycle receipts against the shipped
 control-plane and cgo signer artifacts.
 
 Running the bare `trstctl` binary instead uses bundled single-node PostgreSQL
-and embedded NATS: it downloads the pinned runtime once, verifies it against
+and embedded NATS: on first use it downloads the pinned PostgreSQL runtime,
+verifies it against
 `deploy/supply-chain/embedded-postgres.json` (`linux-amd64`, `linux-arm64v8`,
 `darwin-arm64v8`), and fails closed on an unpinned host archive.
 
@@ -306,8 +308,10 @@ trstctl is honest about its edges by design:
 - **It manages machines, not people.** It is *not* a human IAM/SSO product for your
   employees' accounts — it uses OIDC, SAML, or LDAP / Active Directory to log
   *operators* in, and complements your human identity provider rather than replacing it.
-- **It is self-hosted, not a SaaS.** Nothing phones home; you run it on your own
-  infrastructure.
+- **It is self-hosted, not a SaaS.** No product data or usage telemetry phones
+  home. You run it on your own infrastructure. The bare-binary evaluation path
+  can fetch its checksum-pinned PostgreSQL runtime on first use; pre-seed that
+  archive or use the air-gapped bundle when outbound downloads are not allowed.
 - **Its AI is grounded and read-only.** The assistant answers from cited evidence and
   never acts on its own; issuance, deployment, and remediation are gated by policy and,
   where configured, human approval.

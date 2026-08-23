@@ -66,10 +66,13 @@ docker push registry.airgap.local/trstctl:v0.5.4
 Install with private PostgreSQL and NATS endpoints. Replace the CIDRs in
 `manifests/values-airgap.yaml` with the cluster/VPC ranges that contain your
 datastores, DNS, and ingress controller. Production-style external NATS also
-requires an independent signer authorization executable in the control-plane
-image. The example path is a placeholder for your operator-controlled provider;
-it reads sign-intent JSON on stdin and writes one base64 token on stdout without
-mounting the signer verifier secret into the control plane:
+requires an independent approval provider and an operator-provided signer
+authorization client in the control-plane image. The official trstctl image in
+the bundle does not include that organization-specific client. Add it to a
+derived image before crossing the air gap, rescan and sign that image, and mirror
+it under the repository used below. The example client reads sign-intent JSON on
+stdin and writes one base64 token on stdout without mounting the signer verifier
+secret into the control plane:
 
 <!-- helm-doc-render: airgap-install -->
 ```bash
@@ -81,7 +84,7 @@ helm upgrade --install trstctl charts/trstctl \
   --set postgres.dsn='postgres://user:pass@pg.internal:5432/trstctl?sslmode=require' \
   --set nats.url='nats://nats.internal:4222' \
   --set kek.existingSecret=trstctl-kek \
-  --set signer.auth.tokenCommand=/usr/local/bin/trstctl-sign-approve
+  --set signer.auth.tokenCommand=/opt/trstctl-auth/bin/signer-token-provider
 ```
 
 The rendered control-plane ConfigMap sets:
@@ -110,7 +113,7 @@ Before opening the service to users, prove the no-phone-home posture:
      --set postgres.dsn='postgres://user:pass@pg.internal:5432/trstctl?sslmode=require' \
      --set nats.url='nats://nats.internal:4222' \
      --set kek.existingSecret=trstctl-kek \
-     --set signer.auth.tokenCommand=/usr/local/bin/trstctl-sign-approve |
+     --set signer.auth.tokenCommand=/opt/trstctl-auth/bin/signer-token-provider |
      grep -A20 'kind: NetworkPolicy'
    ```
 

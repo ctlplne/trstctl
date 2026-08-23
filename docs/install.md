@@ -12,24 +12,32 @@ Pick the platform you are installing on.
 
 ## Docker (control plane)
 
-The published image is distroless and unprivileged. Run it against your
-datastores by digest, after verifying the release image:
+The published image is distroless and unprivileged, but a single `docker run`
+is **not a complete production deployment**. A real control plane also needs a
+durable PostgreSQL database, replicated JetStream, persistent signer custody,
+stable TLS and key-encryption material, and an independent signer authorization
+provider. A disposable container would lose or misrepresent those boundaries.
+
+Use the supported blank Compose stack for a local evaluation. It starts the
+separate signer, PostgreSQL, NATS, local login, persistent named volumes, and
+the browser trust-publication path together:
+
+```bash
+docker compose -f deploy/docker/docker-compose.yml up --build --detach --wait --wait-timeout 180
+```
+
+For a pre-populated click-through environment, use
+`deploy/demo/docker-compose.yml`. Both Compose files are intentionally local
+evaluation profiles, not production templates. Use the Helm path below for a
+production control plane; it fails closed when a required security input is
+missing.
+
+Pin and verify every published image before either deployment path uses it:
 
 ```bash
 export TRSTCTL_IMAGE_REF='ghcr.io/ctlplne/trstctl@sha256:<release-image-digest>'
-
-docker run --rm -p 8443:8443 \
-  -e TRSTCTL_POSTGRES_MODE=external \
-  -e TRSTCTL_POSTGRES_DSN='postgres://user:pass@db:5432/trstctl?sslmode=require' \
-  -e TRSTCTL_NATS_MODE=external \
-  -e TRSTCTL_NATS_URL='nats://nats:4222' \
-  "$TRSTCTL_IMAGE_REF"
+scripts/verify-image.sh "$TRSTCTL_IMAGE_REF"
 ```
-
-For a self-contained blank evaluation that brings up Postgres and NATS for
-you, use the Compose stack from [Getting started](getting-started.md)
-(`deploy/docker/docker-compose.yml`); for a pre-populated demo with local SSO,
-the demo stack (`deploy/demo/docker-compose.yml`).
 
 Verify a published image before you run it — its keyless cosign signature and its
 CycloneDX SBOM attestation — with the helper:
@@ -70,21 +78,25 @@ PostgreSQL and NATS, behind a default-deny `NetworkPolicy`, with TLS on by
 default:
 
 Production-style external NATS requires an independent signer authorization
-command. The example assumes your control-plane image contains the executable at
-`/usr/local/bin/trstctl-sign-approve`; replace that path with your independently
-operated provider. It receives one sign-intent JSON document on stdin and returns
-one base64 authorization token on stdout. Do not give that provider's verifier
-secret to the control plane.
+provider plus an **operator-provided signer authorization client**. The official
+trstctl image does not include that organization-specific executable. Build a
+derived control-plane image that adds only your small client at
+`/opt/trstctl-auth/bin/signer-token-provider`, pin that derived image by digest,
+and operate the approval provider outside the control-plane process. The client
+receives one sign-intent JSON document on stdin and returns one base64 authorization
+token on stdout. It may call your approval service, but it must not contain the
+signer's verifier secret.
 
 <!-- helm-doc-render: production-install -->
 ```bash
 helm install trstctl deploy/helm/trstctl \
   --namespace trstctl --create-namespace \
+  --set image.repository='registry.example/trstctl-with-auth-client' \
   --set image.digest='sha256:<release-image-digest>' \
   --set postgres.dsn='postgres://user:pass@pg-host:5432/trstctl?sslmode=require' \
   --set nats.url='nats://nats-host:4222' \
   --set kek.existingSecret=trstctl-kek \
-  --set signer.auth.tokenCommand=/usr/local/bin/trstctl-sign-approve
+  --set signer.auth.tokenCommand=/opt/trstctl-auth/bin/signer-token-provider
 ```
 
 For a single-replica evaluation only, the co-resident authorizer is an explicit
@@ -105,8 +117,12 @@ helm install trstctl-eval deploy/helm/trstctl \
 
 ```bash
 kubectl -n trstctl rollout status deploy/trstctl
-kubectl -n trstctl port-forward svc/trstctl 8443:8443   # https://localhost:8443 (-k)
+kubectl -n trstctl exec deploy/trstctl -c trstctl -- /usr/local/bin/trstctl --ready-check
 ```
+
+Open the production console through the hostname covered by the certificate in
+`tls.existingSecret`. A localhost port-forward does not change certificate names;
+do not disable TLS verification to make that mismatch disappear.
 
 The release pipeline also publishes the packaged chart as a cosign-signed OCI
 artifact to GHCR, so you can verify the chart's provenance before installing —

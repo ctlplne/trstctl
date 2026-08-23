@@ -14,8 +14,8 @@ function onboardingSteps(t: ReturnType<typeof useTranslation>["t"]): CarouselSte
   return [
     {
       id: "issuer",
-      label: translateNow("source.connect.issuer.abc8382bc1"),
-      description: translateNow("source.confirm.the.signer.backed.internal.ca.or.c.b20abca15c"),
+      label: t("wizard.issuer.stepLabel"),
+      description: t("wizard.issuer.stepDescription"),
     },
     { id: "protocols", label: t("wizard.protocols.stepLabel"), description: t("wizard.protocols.stepDescription") },
     {
@@ -30,8 +30,8 @@ function onboardingSteps(t: ReturnType<typeof useTranslation>["t"]): CarouselSte
     },
     {
       id: "agent",
-      label: translateNow("source.enroll.agent.8592144d44"),
-      description: translateNow("source.mint.a.one.time.enrollment.token.and.wait.41e91b176b"),
+      label: t("wizard.agent.stepLabel"),
+      description: t("wizard.agent.stepDescription"),
     },
     {
       id: "complete",
@@ -53,10 +53,12 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
   const [stepIndex, setStepIndex] = useState(0);
   const [issuerReady, setIssuerReady] = useState(false);
   const [issuerName, setIssuerName] = useState<string | null>(null);
+  const [issuerProof, setIssuerProof] = useState<string | null>(null);
   const [protocolSummary, setProtocolSummary] = useState<string | null>(null);
   const [certificate, setCertificate] = useState<Identity | null>(null);
   const [integrationSummary, setIntegrationSummary] = useState<string | null>(null);
   const [agent, setAgent] = useState<Agent | null>(null);
+  const [agentDeferred, setAgentDeferred] = useState(false);
   const [completed, setCompleted] = useState(false);
 
   const currentStep = steps[stepIndex]?.id as WizardStepID;
@@ -65,16 +67,18 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
     (currentStep === "protocols" && Boolean(protocolSummary)) ||
     (currentStep === "certificate" && Boolean(certificate)) ||
     (currentStep === "integrations" && Boolean(integrationSummary)) ||
-    (currentStep === "agent" && Boolean(agent));
+    (currentStep === "agent" && (Boolean(agent) || agentDeferred));
 
   function resetWizard() {
     setStepIndex(0);
     setIssuerReady(false);
     setIssuerName(null);
+    setIssuerProof(null);
     setProtocolSummary(null);
     setCertificate(null);
     setIntegrationSummary(null);
     setAgent(null);
+    setAgentDeferred(false);
     setCompleted(false);
     resetOnboarding();
   }
@@ -143,8 +147,10 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
           <IssuerStep
             ready={issuerReady}
             issuerName={issuerName}
-            onReady={(name) => {
+            proof={issuerProof}
+            onReady={(name, proof) => {
               setIssuerName(name);
+              setIssuerProof(proof);
               setIssuerReady(true);
             }}
           />
@@ -152,7 +158,18 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
         {currentStep === "protocols" && <ProtocolProfileStep onReady={setProtocolSummary} />}
         {currentStep === "certificate" && <CertificateStep certificate={certificate} onIssued={setCertificate} />}
         {currentStep === "integrations" && certificate && <IntegrationProofStep identity={certificate} onReady={setIntegrationSummary} />}
-        {currentStep === "agent" && <AgentStep pollMs={pollMs} agent={agent} onAgent={setAgent} />}
+        {currentStep === "agent" && (
+          <AgentStep
+            pollMs={pollMs}
+            agent={agent}
+            deferred={agentDeferred}
+            onAgent={(nextAgent) => {
+              setAgent(nextAgent);
+              setAgentDeferred(false);
+            }}
+            onDefer={setAgentDeferred}
+          />
+        )}
         {currentStep === "complete" && (
           <CompleteStep
             certificateName={certificate?.name ?? null}
@@ -160,6 +177,7 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
             protocolSummary={protocolSummary}
             integrationSummary={integrationSummary}
             agent={agent}
+            agentDeferred={agentDeferred}
             onComplete={markComplete}
           />
         )}
@@ -268,7 +286,18 @@ function ProtocolProfileStep({ onReady }: { onReady: (summary: string) => void }
   );
 }
 
-function IssuerStep({ issuerName, onReady, ready }: { issuerName: string | null; onReady: (name: string) => void; ready: boolean }) {
+function IssuerStep({
+  issuerName,
+  onReady,
+  proof,
+  ready,
+}: {
+  issuerName: string | null;
+  onReady: (name: string, proof: string) => void;
+  proof: string | null;
+  ready: boolean;
+}) {
+  const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -276,10 +305,19 @@ function IssuerStep({ issuerName, onReady, ready }: { issuerName: string | null;
     setBusy(true);
     setError(null);
     try {
-      const issuers = await api.issuers();
-      onReady(issuers.find((issuer) => issuer.internal)?.name ?? issuers[0]?.name ?? "Internal CA");
+      const [system, issuers] = await Promise.all([api.platformSystem(), api.issuers()]);
+      const signer = system.dependencies.find((dependency) => dependency.name.toLowerCase() === "signer");
+      if (system.signer_mode === "none" || !signer?.ready) {
+        throw new Error(t("wizard.issuer.signerUnhealthy", { error: signer?.error ?? t("wizard.issuer.signerMissing") }));
+      }
+      const selected = issuers.find((issuer) => issuer.internal) ?? issuers[0];
+      if (selected) {
+        onReady(selected.name, t("wizard.issuer.readyNamed", { name: selected.name }));
+      } else {
+        onReady(t("wizard.issuer.builtinName"), t("wizard.issuer.readyBuiltIn"));
+      }
     } catch (err) {
-      setError(`Could not confirm issuer readiness: ${String(err instanceof Error ? err.message : err)}`);
+      setError(t("wizard.issuer.error", { error: String(err instanceof Error ? err.message : err) }));
     } finally {
       setBusy(false);
     }
@@ -291,20 +329,20 @@ function IssuerStep({ issuerName, onReady, ready }: { issuerName: string | null;
         <Server className="mt-1 h-5 w-5 shrink-0 text-brand-accent" aria-hidden="true" />
         <div>
           <h3 id="step-issuer-heading" className="text-title font-semibold">
-            {translateNow("source.connect.an.issuer.c155ecb073")}
+            {t("wizard.issuer.heading")}
           </h3>
-          <p className="mt-1 text-sm text-muted-foreground">{translateNow("source.a.fresh.trstctl.server.provisions.a.signer.a1ee587e50")}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{t("wizard.issuer.description")}</p>
         </div>
       </div>
       {ready ? (
         <p className="flex items-center gap-2 text-sm font-medium text-status-success">
           <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-          {issuerName} {translateNow("source.is.ready.17f5581890")}
+          {proof ?? t("wizard.issuer.readyNamed", { name: issuerName ?? t("wizard.issuer.builtinName") })}
         </p>
       ) : (
         <Button type="button" className="justify-self-start" onClick={() => void confirmIssuer()} disabled={busy}>
           {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-          {translateNow("source.use.internal.ca.2181607010")}
+          {t("wizard.issuer.check")}
         </Button>
       )}
       {error && (
@@ -697,7 +735,20 @@ function ProofStatus({ text }: { text: string }) {
   );
 }
 
-function AgentStep({ agent, onAgent, pollMs }: { agent: Agent | null; onAgent: (agent: Agent) => void; pollMs: number }) {
+function AgentStep({
+  agent,
+  deferred,
+  onAgent,
+  onDefer,
+  pollMs,
+}: {
+  agent: Agent | null;
+  deferred: boolean;
+  onAgent: (agent: Agent) => void;
+  onDefer: (deferred: boolean) => void;
+  pollMs: number;
+}) {
+  const { t } = useTranslation();
   const [token, setToken] = useState<EnrollmentToken | null>(null);
   const [agentIdentity, setAgentIdentity] = useState("");
   const [tokenIdentity, setTokenIdentity] = useState("");
@@ -723,6 +774,7 @@ function AgentStep({ agent, onAgent, pollMs }: { agent: Agent | null; onAgent: (
       const result = await api.createEnrollmentToken(allowedIdentity ? { allowed_identity: allowedIdentity } : undefined);
       setToken(result);
       setTokenIdentity(allowedIdentity);
+      onDefer(false);
     } catch (err) {
       setError(`Could not mint an enrollment token: ${String(err instanceof Error ? err.message : err)}`);
     } finally {
@@ -744,16 +796,20 @@ function AgentStep({ agent, onAgent, pollMs }: { agent: Agent | null; onAgent: (
   }
 
   const origin = typeof window !== "undefined" ? window.location.origin : "https://trstctl.example";
-  const enrollPath = token?.enroll_path || "/enroll/bootstrap";
-  const nameArg = (token ? tokenIdentity : agentIdentity).trim();
+  const connection = agentConnection(origin);
+  const nameArg = (token ? tokenIdentity : agentIdentity).trim() || "edge-agent-1";
   const command = [
     "trstctl-agent",
-    `--enroll-url ${origin}${enrollPath}`,
+    `--enroll-url ${shellArg(origin)}`,
     "--bootstrap-token-file ./trstctl-bootstrap-token",
-    "--server <control-plane-grpc:9443>",
-    `--name ${nameArg ? shellArg(nameArg) : "<agent-name>"}`,
+    `--server ${shellArg(connection.server)}`,
+    `--server-name ${shellArg(connection.serverName)}`,
+    `--name ${shellArg(nameArg)}`,
     "--ca-bundle ./trstctl-ca.pem",
-  ].join(" ");
+    "--inventory-cert-roots /etc/ssl,/etc/pki/tls/certs",
+    "--inventory-os-trust-roots /etc/ssl/certs",
+    "--inventory-private-key-roots /etc/ssl/private,/etc/ssh",
+  ].join(" \\\n  ");
 
   return (
     <section aria-labelledby="step-agent-heading" className="grid gap-4">
@@ -761,9 +817,9 @@ function AgentStep({ agent, onAgent, pollMs }: { agent: Agent | null; onAgent: (
         <ShieldCheck className="mt-1 h-5 w-5 shrink-0 text-brand-accent" aria-hidden="true" />
         <div>
           <h3 id="step-agent-heading" className="text-title font-semibold">
-            {translateNow("source.enroll.an.agent.43dbb20757")}
+            {t("wizard.agent.heading")}
           </h3>
-          <p className="mt-1 text-sm text-muted-foreground">{translateNow("source.save.the.one.time.token.with.0600.permissi.b35e2c6935")}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{t("wizard.agent.description")}</p>
         </div>
       </div>
       <div className="grid gap-2 sm:grid-cols-[minmax(12rem,18rem)_auto] sm:items-end">
@@ -790,7 +846,8 @@ function AgentStep({ agent, onAgent, pollMs }: { agent: Agent | null; onAgent: (
           <code className="mt-1 block break-all rounded-control bg-muted px-3 py-2 text-caption">{token.token}</code>
         </div>
       )}
-      <pre className="overflow-x-auto rounded-control border border-border bg-muted p-3 text-caption">
+      <p className="text-caption text-muted-foreground">{t("wizard.agent.commandIntro")}</p>
+      <pre className="overflow-x-auto rounded-control border border-border bg-muted p-3 text-caption" aria-label={t("wizard.agent.commandLabel")}>
         <code>{command}</code>
       </pre>
       {agent ? (
@@ -807,6 +864,18 @@ function AgentStep({ agent, onAgent, pollMs }: { agent: Agent | null; onAgent: (
       <Button type="button" variant="outline" className="justify-self-start" onClick={() => void check()}>
         {translateNow("source.check.for.agent.1649b814df")}
       </Button>
+      {deferred ? (
+        <div className="grid justify-items-start gap-2 border-s-2 border-border ps-3 text-sm text-muted-foreground">
+          <p>{t("wizard.agent.skipped")}</p>
+          <Button type="button" variant="ghost" onClick={() => onDefer(false)}>
+            {t("wizard.agent.resume")}
+          </Button>
+        </div>
+      ) : (
+        <Button type="button" variant="ghost" className="justify-self-start" onClick={() => onDefer(true)}>
+          {t("wizard.agent.skip")}
+        </Button>
+      )}
       {error && (
         <p role="alert" className="text-sm text-destructive">
           {error}
@@ -821,8 +890,17 @@ function shellArg(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
+function agentConnection(origin: string): { server: string; serverName: string } {
+  const url = new URL(origin);
+  const loopback = url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]";
+  return loopback
+    ? { server: "localhost:19443", serverName: "localhost" }
+    : { server: `${url.hostname}:9443`, serverName: url.hostname };
+}
+
 function CompleteStep({
   agent,
+  agentDeferred,
   certificateName,
   integrationSummary,
   issuerName,
@@ -830,12 +908,14 @@ function CompleteStep({
   onComplete,
 }: {
   agent: Agent | null;
+  agentDeferred: boolean;
   certificateName: string | null;
   integrationSummary: string | null;
   issuerName: string | null;
   protocolSummary: string | null;
   onComplete: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <section aria-labelledby="step-complete-heading" className="grid gap-4">
       <h3 id="step-complete-heading" className="flex items-center gap-2 text-title font-semibold">
@@ -847,7 +927,7 @@ function CompleteStep({
         <SummaryItem label="Protocols" value={protocolSummary ?? "Not configured"} />
         <SummaryItem label="Certificate" value={certificateName ?? "first-service"} />
         <SummaryItem label="Integrations" value={integrationSummary ?? "Not exercised"} />
-        <SummaryItem label="Agent" value={agent?.name ?? "not enrolled"} />
+        <SummaryItem label="Agent" value={agent?.name ?? t(agentDeferred ? "wizard.agent.summaryDeferred" : "wizard.agent.summaryMissing")} />
       </dl>
       <p className="text-sm text-muted-foreground">{translateNow("source.trstctl.will.track.this.credential.and.ale.258f3fc1df")}</p>
       <Button type="button" className="justify-self-start" onClick={onComplete}>
@@ -870,7 +950,7 @@ function nextLabel(step: WizardStepID, t: ReturnType<typeof useTranslation>["t"]
   if (step === "issuer") return t("wizard.protocols.next");
   if (step === "protocols") return "Next: issue certificate";
   if (step === "certificate") return "Next: prove integrations";
-  if (step === "integrations") return "Next: enroll agent";
-  if (step === "agent") return "Next: complete setup";
+  if (step === "integrations") return t("wizard.agent.nextOptional");
+  if (step === "agent") return t("wizard.agent.nextReview");
   return "Next";
 }

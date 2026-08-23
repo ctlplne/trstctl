@@ -847,7 +847,7 @@ func TestGettingStartedMatchesProduct(t *testing.T) {
 	if _, err := os.Stat(filepath.FromSlash("../deploy/docker/docker-compose.yml")); err != nil {
 		t.Fatalf("the Compose file getting-started cites must exist: %v", err)
 	}
-	for _, step := range []string{"use the internal ca", "install an agent", "first cert"} {
+	for _, step := range []string{"check signing health", "connect an agent (optional)", "first cert"} {
 		if !strings.Contains(lower, step) {
 			t.Errorf("getting-started should walk the wizard step %q", step)
 		}
@@ -2784,9 +2784,9 @@ func TestDesign001FirstCertificateDocsMatchServedRAGate(t *testing.T) {
 		t.Fatal("DESIGN-001: getting-started.md still says the served four-screen wizard has three steps")
 	}
 	assertInOrder(t, "getting-started.md wizard order", gettingStarted, []string{
-		"### Use the internal CA",
+		"### Check signing health",
 		"### Issue your first cert",
-		"### Install an agent",
+		"### Connect an agent (optional)",
 	})
 	assertInOrder(t, "Wizard.tsx served order", wizard, []string{
 		`id: "issuer"`,

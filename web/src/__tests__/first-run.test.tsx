@@ -7,6 +7,7 @@ import { Wizard } from "@/pages/Wizard";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     issuers: vi.fn(),
+    platformSystem: vi.fn(),
     protocolProfileStatus: vi.fn(),
     activateProtocolProfile: vi.fn(),
     issueCertificate: vi.fn(),
@@ -30,6 +31,7 @@ describe("first-run served capability journey", () => {
   beforeEach(() => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
     apiMock.issuers.mockResolvedValue([{ id: "issuer-1", name: "Internal CA", internal: true }]);
+    apiMock.platformSystem.mockResolvedValue({ signer_mode: "external", dependencies: [{ name: "signer", ready: true }] });
     apiMock.protocolProfileStatus.mockResolvedValue({
       profile: "eval",
       active: false,
@@ -93,8 +95,8 @@ describe("first-run served capability journey", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /use internal ca/i }));
-    await screen.findByText(/internal ca is ready/i);
+    await user.click(screen.getByRole("button", { name: /check signing health/i }));
+    await screen.findByText(/internal ca.*signer health check passed/i);
     await user.click(screen.getByRole("button", { name: /next: enable protocols/i }));
     await user.click(await screen.findByRole("button", { name: /activate eval protocol profile/i }));
     await screen.findByText(/eval protocol profile is active/i);
@@ -139,7 +141,7 @@ describe("first-run served capability journey", () => {
     await waitFor(() => expect(apiMock.issueDynamicLease).toHaveBeenCalledWith({ provider: "postgres", role: "readonly", ttl_seconds: 900 }));
     expect(screen.queryByText("must-not-be-rendered")).not.toBeInTheDocument();
 
-    await user.click(await screen.findByRole("button", { name: /next: enroll agent/i }));
+    await user.click(await screen.findByRole("button", { name: /next: optional agent/i }));
     await user.type(await screen.findByLabelText(/agent identity/i), "edge-01");
     await user.click(screen.getByRole("button", { name: /mint enrollment token/i }));
     await user.click(screen.getByRole("button", { name: /check (for agent|now)/i }));

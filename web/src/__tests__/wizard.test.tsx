@@ -8,6 +8,7 @@ const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     createIssuer: vi.fn(),
     issuers: vi.fn(),
+    platformSystem: vi.fn(),
     createEnrollmentToken: vi.fn(),
     agents: vi.fn(),
     issueCertificate: vi.fn(),
@@ -35,6 +36,10 @@ describe("first-run wizard", () => {
   beforeEach(() => {
     apiMock.createIssuer.mockReset();
     apiMock.issuers.mockReset().mockResolvedValue([{ id: "iss-1", name: "Internal CA", internal: true }]);
+    apiMock.platformSystem.mockReset().mockResolvedValue({
+      signer_mode: "external",
+      dependencies: [{ name: "signer", ready: true }],
+    });
     apiMock.createEnrollmentToken.mockReset().mockResolvedValue({ token: "BOOT-TOKEN-XYZ" });
     apiMock.agents.mockReset().mockResolvedValue([{ id: "ag-1", name: "edge-01", status: "online" }]);
     apiMock.issueCertificate.mockReset().mockResolvedValue({ id: "id-1", name: "payments", status: "issued" });
@@ -59,11 +64,12 @@ describe("first-run wizard", () => {
     // Step 1 — use the already-provisioned internal signer-backed CA. The wizard
     // must not post a name-only x509_ca issuer, because the served API rejects X.509
     // issuers without a certificate chain.
-    expect(screen.getByRole("heading", { name: /connect an issuer/i })).toBeInTheDocument();
-    expect(screen.getByText(/signer-backed internal x\.509 ca/i)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /use internal ca/i }));
+    expect(screen.getByRole("heading", { name: /confirm certificate signing/i })).toBeInTheDocument();
+    expect(screen.getByText(/built-in setup issuer/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /check signing health/i }));
     await waitFor(() => expect(apiMock.issuers).toHaveBeenCalled());
-    await waitFor(() => expect(screen.getByText(/internal ca is ready/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/internal ca.*signer health check passed/i)).toBeInTheDocument());
+    expect(apiMock.platformSystem).toHaveBeenCalledTimes(1);
     expect(apiMock.createIssuer).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: /next: enable protocols/i }));
 
@@ -86,7 +92,7 @@ describe("first-run wizard", () => {
     // Step 4 — configured integration proof is optional on a core-only install.
     expect(await screen.findByRole("heading", { name: /verify configured integrations/i })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /skip integration proof/i }));
-    await user.click(screen.getByRole("button", { name: /next: enroll agent/i }));
+    await user.click(screen.getByRole("button", { name: /next: optional agent/i }));
 
     // Step 5 — install an agent: a one-time token is minted and shown in the
     // install command, then the wizard detects the agent's registration.
@@ -94,9 +100,17 @@ describe("first-run wizard", () => {
     await user.click(screen.getByRole("button", { name: /mint enrollment token/i }));
     await waitFor(() => expect(apiMock.createEnrollmentToken).toHaveBeenCalledWith({ allowed_identity: "edge-01" }));
     expect(await screen.findByText(/BOOT-TOKEN-XYZ/)).toBeInTheDocument();
+    const command = screen.getByLabelText("Runnable Linux agent command").textContent ?? "";
+    expect(command).toContain("--enroll-url http://localhost");
+    expect(command).toContain("--server localhost:19443");
+    expect(command).toContain("--server-name localhost");
+    expect(command).toContain("--name edge-01");
+    expect(command).toContain("--inventory-cert-roots /etc/ssl,/etc/pki/tls/certs");
+    expect(command).not.toContain("/enroll/bootstrap");
+    expect(command).not.toContain("<");
     await user.click(screen.getByRole("button", { name: /check (for agent|now)/i }));
     expect(await screen.findByText(/Agent edge-01 registered/i)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /next: complete setup/i }));
+    await user.click(screen.getByRole("button", { name: /next: review setup/i }));
 
     expect(await screen.findByText(/ready for certificate operations/i)).toBeInTheDocument();
   });
@@ -105,8 +119,8 @@ describe("first-run wizard", () => {
     const user = userEvent.setup();
     renderWizard();
 
-    await user.click(screen.getByRole("button", { name: /use internal ca/i }));
-    await waitFor(() => expect(screen.getByText(/internal ca is ready/i)).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: /check signing health/i }));
+    await waitFor(() => expect(screen.getByText(/internal ca.*signer health check passed/i)).toBeInTheDocument());
     await user.click(screen.getByRole("button", { name: /next: enable protocols/i }));
     await screen.findByRole("heading", { name: /enable enrollment protocols/i });
     await user.click(screen.getByRole("button", { name: /activate eval protocol profile/i }));
@@ -117,10 +131,10 @@ describe("first-run wizard", () => {
     await user.click(await screen.findByRole("button", { name: /next: prove integrations/i }));
     await screen.findByRole("heading", { name: /verify configured integrations/i });
     await user.click(screen.getByRole("button", { name: /skip integration proof/i }));
-    await user.click(screen.getByRole("button", { name: /next: enroll agent/i }));
+    await user.click(screen.getByRole("button", { name: /next: optional agent/i }));
     await user.click(await screen.findByRole("button", { name: /check (for agent|now)/i }));
     await waitFor(() => expect(screen.getByText(/edge-01/)).toBeInTheDocument());
-    await user.click(screen.getByRole("button", { name: /next: complete setup/i }));
+    await user.click(screen.getByRole("button", { name: /next: review setup/i }));
     await user.click(screen.getByRole("button", { name: /complete setup/i }));
 
     expect(await screen.findByText(/alert before expiry/i)).toBeInTheDocument();
@@ -134,8 +148,8 @@ describe("first-run wizard", () => {
     const user = userEvent.setup();
     renderWizard();
 
-    await user.click(screen.getByRole("button", { name: /use internal ca/i }));
-    await waitFor(() => expect(screen.getByText(/internal ca is ready/i)).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: /check signing health/i }));
+    await waitFor(() => expect(screen.getByText(/internal ca.*signer health check passed/i)).toBeInTheDocument());
     await user.click(screen.getByRole("button", { name: /next: enable protocols/i }));
     await screen.findByRole("heading", { name: /enable enrollment protocols/i });
     await user.click(screen.getByRole("button", { name: /activate eval protocol profile/i }));
@@ -146,5 +160,54 @@ describe("first-run wizard", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/boom|could not|failed/i);
     expect(apiMock.createIssuer).not.toHaveBeenCalled();
+  });
+
+  it("does not invent an issuer row and explains exactly what an empty catalog proves", async () => {
+    apiMock.issuers.mockResolvedValueOnce([]);
+    const user = userEvent.setup();
+    renderWizard();
+
+    await user.click(screen.getByRole("button", { name: /check signing health/i }));
+
+    expect(await screen.findByText(/built-in setup issuer is selected/i)).toBeInTheDocument();
+    expect(screen.getByText(/next certificate step proves end-to-end signing/i)).toBeInTheDocument();
+    expect(screen.queryByText(/internal ca is ready/i)).not.toBeInTheDocument();
+  });
+
+  it("fails closed when the separate signer is not healthy", async () => {
+    apiMock.platformSystem.mockResolvedValueOnce({
+      signer_mode: "external",
+      dependencies: [{ name: "signer", ready: false, error: "unreachable" }],
+    });
+    const user = userEvent.setup();
+    renderWizard();
+
+    await user.click(screen.getByRole("button", { name: /check signing health/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/signer.*not healthy|could not prove signing/i);
+    expect(screen.getByRole("button", { name: /next: enable protocols/i })).toBeDisabled();
+  });
+
+  it("lets a blank install defer the optional agent without pretending one registered", async () => {
+    const user = userEvent.setup();
+    renderWizard();
+
+    await user.click(screen.getByRole("button", { name: /check signing health/i }));
+    await screen.findByText(/signer health check passed/i);
+    await user.click(screen.getByRole("button", { name: /next: enable protocols/i }));
+    await user.click(await screen.findByRole("button", { name: /activate eval protocol profile/i }));
+    await screen.findByText(/eval protocol profile is active/i);
+    await user.click(screen.getByRole("button", { name: /next: issue certificate/i }));
+    await user.click(await screen.findByRole("button", { name: /issue certificate/i }));
+    await user.click(await screen.findByRole("button", { name: /next: prove integrations/i }));
+    await user.click(await screen.findByRole("button", { name: /skip integration proof/i }));
+    await user.click(screen.getByRole("button", { name: /next: optional agent/i }));
+
+    await user.click(await screen.findByRole("button", { name: /skip agent for now/i }));
+    expect(screen.getByText(/no agent was enrolled/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /next: review setup/i }));
+
+    expect(await screen.findByText(/optional step deferred/i)).toBeInTheDocument();
+    expect(apiMock.createEnrollmentToken).not.toHaveBeenCalled();
   });
 });

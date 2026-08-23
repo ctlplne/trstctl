@@ -38,6 +38,7 @@ import {
 import { useAuth } from "@/auth/AuthProvider";
 import { CommandPalette } from "@/components/CommandPalette";
 import { BrandMark } from "@/components/BrandMark";
+import { Dialog } from "@/components/Dialog";
 import { ShortcutsHelp } from "@/components/ShortcutsHelp";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
@@ -454,6 +455,7 @@ export function AppShell() {
   const { locale, setLocale, t } = useTranslation();
   const isDesktop = useIsDesktop();
   const commandButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileNavButtonRef = useRef<HTMLButtonElement>(null);
   const shortcutsButtonRef = useRef<HTMLButtonElement>(null);
   const mainRef = useRef<HTMLElement>(null);
   const routeAnnouncement = useRouteFocus(mainRef, t);
@@ -516,6 +518,7 @@ export function AppShell() {
         <div className="flex min-w-0 items-center gap-2">
           {!isDesktop && (
             <Button
+              ref={mobileNavButtonRef}
               type="button"
               size="icon"
               variant="outline"
@@ -673,24 +676,33 @@ export function AppShell() {
         </div>
       )}
 
-      {!isDesktop && mobileNavOpen && (
-        <div className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm">
+      {!isDesktop && (
+        <Dialog
+          open={mobileNavOpen}
+          onClose={() => setMobileNavOpen(false)}
+          titleId="mobile-primary-navigation-title"
+          returnFocusRef={mobileNavButtonRef}
+          className="fixed inset-0 z-40"
+          overlayClassName="absolute inset-0 bg-background/80 backdrop-blur-sm"
+          panelClassName="h-full w-[min(20rem,calc(100vw-2rem))] overflow-y-auto border-e border-sidebar-active/40 bg-sidebar text-sidebar-foreground shadow-xl"
+          panelAnimation="drawer"
+        >
           <div
-            aria-label={t("shell.primaryNavigationDialog")}
-            aria-modal="true"
-            className="h-full w-[min(20rem,calc(100vw-2rem))] overflow-y-auto border-e border-sidebar-active/40 bg-sidebar text-sidebar-foreground shadow-xl"
-            role="dialog"
+            id={mobileNavId}
+            className="min-h-full"
           >
             <div className="flex h-14 items-center justify-between border-b border-border px-4">
-              <span className="text-sm font-semibold">{t("shell.navigation")}</span>
+              <h2 id="mobile-primary-navigation-title" className="text-sm font-semibold">
+                {t("shell.primaryNavigationDialog")}
+              </h2>
               <Button type="button" size="icon" variant="outline" aria-label={t("shell.closePrimaryNavigation")} onClick={() => setMobileNavOpen(false)}>
                 <X aria-hidden="true" className="h-4 w-4" />
               </Button>
             </div>
             <SpaceRail user={user} orientation="horizontal" onNavigate={() => setMobileNavOpen(false)} />
-            <PrimaryNav id={mobileNavId} user={user} onNavigate={() => setMobileNavOpen(false)} />
+            <PrimaryNav id={`${mobileNavId}-links`} user={user} onNavigate={() => setMobileNavOpen(false)} />
           </div>
-        </div>
+        </Dialog>
       )}
 
       <div className="flex min-w-0">

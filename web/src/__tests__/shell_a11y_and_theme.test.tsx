@@ -451,13 +451,25 @@ describe("app shell accessibility and theme", () => {
     const toggle = screen.getByRole("button", { name: "Open primary navigation" });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
 
+    toggle.focus();
     await user.click(toggle);
 
     expect(toggle).toHaveAttribute("aria-expanded", "true");
     const drawer = screen.getByRole("dialog", { name: "Primary navigation" });
+    const close = within(drawer).getByRole("button", { name: "Close primary navigation" });
     expect(within(drawer).getByRole("navigation", { name: /Primary/i })).toBeInTheDocument();
     expect(within(drawer).getByRole("link", { name: /^Home$/i })).toBeInTheDocument();
-    expect(within(drawer).getByRole("button", { name: "Close primary navigation" })).toBeInTheDocument();
+    expect(close).toHaveFocus();
+    const main = document.querySelector("main");
+    const pageContent = main?.parentElement;
+    expect(pageContent).toHaveAttribute("aria-hidden", "true");
+    expect(pageContent).toHaveProperty("inert", true);
+
+    const focusable = Array.from(drawer.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+    await user.tab({ shift: true });
+    expect(focusable.at(-1)).toHaveFocus();
+    await user.tab();
+    expect(close).toHaveFocus();
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(380);
 
     const results = await axe(container);
@@ -467,9 +479,11 @@ describe("app shell accessibility and theme", () => {
     expect(screen.queryByRole("dialog", { name: "Primary navigation" })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Open primary navigation" }));
-    const reopened = screen.getByRole("dialog", { name: "Primary navigation" });
-    await user.click(within(reopened).getByRole("button", { name: "Close primary navigation" }));
+    await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog", { name: "Primary navigation" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open primary navigation" })).toHaveFocus();
+    expect(pageContent).not.toHaveAttribute("aria-hidden");
+    expect(pageContent?.inert).not.toBe(true);
   });
 
   it("keeps the mobile header quiet by grouping identity and preferences in one menu", async () => {

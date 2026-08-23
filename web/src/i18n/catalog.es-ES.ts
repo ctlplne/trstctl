@@ -734,9 +734,22 @@ const esESCatalog = {
   "wizard.protocols.summaryActive": "Perfil de evaluación activo",
   "wizard.protocols.summaryOperator": "Perfil configurado por el operador",
   "wizard.protocols.next": "Siguiente: habilitar protocolos",
+  "wizard.issuer.stepLabel": "Comprobar la firma",
+  "wizard.issuer.stepDescription": "Compruebe que el firmante separado esté sano antes de crear un certificado de prueba.",
+  "wizard.issuer.heading": "Confirmar la firma de certificados",
+  "wizard.issuer.description":
+    "trstctl incluye un emisor de preparación integrado. Compruebe ahora el firmante separado; el siguiente paso con el certificado demuestra la ruta completa de firma. Conecte después su autoridad certificadora de producción.",
+  "wizard.issuer.check": "Comprobar la salud de firma",
+  "wizard.issuer.readyNamed": "{name} figura en el catálogo y la comprobación de salud del firmante pasó.",
+  "wizard.issuer.readyBuiltIn":
+    "La salud del firmante pasó. Se seleccionó el emisor de preparación integrado; el siguiente paso con el certificado demuestra la firma de extremo a extremo.",
+  "wizard.issuer.signerUnhealthy": "el firmante separado no está sano: {error}",
+  "wizard.issuer.signerMissing": "no se devolvió ningún resultado de salud del firmante",
+  "wizard.issuer.error": "No se pudo demostrar que la firma está lista: {error}",
+  "wizard.issuer.builtinName": "Emisor de preparación integrado",
   "wizard.header.description": "Dé el siguiente paso seguro hacia un certificado de prueba sano.",
   "wizard.header.technicalDetails":
-    "La ruta completa conecta un emisor, habilita protocolos de inscripción, emite un certificado, prueba las integraciones configuradas, inscribe un agente y registra la finalización en este navegador.",
+    "La ruta completa comprueba la salud del firmante, habilita protocolos de inscripción, emite un certificado, prueba opcionalmente las integraciones configuradas, conecta opcionalmente un agente y registra la finalización en este navegador.",
   "wizard.integrations.stepLabel": "Probar integraciones",
   "wizard.integrations.stepDescription": "Ejecute operaciones de conectores, CA ascendentes y secretos dinámicos contra los sistemas configurados.",
   "wizard.integrations.heading": "Verificar integraciones configuradas",
@@ -756,6 +769,22 @@ const esESCatalog = {
   "wizard.integrations.lease.provider": "Proveedor del arrendamiento",
   "wizard.integrations.lease.role": "Rol del arrendamiento",
   "wizard.integrations.skip": "Omitir por ahora la prueba de integraciones",
+  "wizard.agent.stepLabel": "Conectar un agente (opcional)",
+  "wizard.agent.stepDescription": "Añada ahora descubrimiento y despliegue en hosts, o vuelva después de preparar los certificados.",
+  "wizard.agent.heading": "Conectar un agente (opcional)",
+  "wizard.agent.description":
+    "Un agente permite que trstctl descubra y despliegue credenciales dentro de una red. Las operaciones de certificados funcionan sin uno, así que puede terminar la preparación ahora y conectar un agente después. Su token de inscripción de un solo uso solo puede registrar ese agente; no puede emitir certificados.",
+  "wizard.agent.commandIntro":
+    "Ejemplo de Linux para el entorno Compose vacío. Guarde primero el token de un solo uso y el paquete de CA junto a este comando.",
+  "wizard.agent.commandLabel": "Comando ejecutable del agente para Linux",
+  "wizard.agent.skip": "Omitir el agente por ahora",
+  "wizard.agent.skipped":
+    "No se inscribió ningún agente. Las operaciones de certificados están listas; conecte un agente después cuando necesite descubrimiento o despliegue.",
+  "wizard.agent.resume": "Conectar un agente en su lugar",
+  "wizard.agent.nextOptional": "Siguiente: agente opcional",
+  "wizard.agent.nextReview": "Siguiente: revisar la preparación",
+  "wizard.agent.summaryDeferred": "Paso opcional aplazado",
+  "wizard.agent.summaryMissing": "No inscrito",
   "codesign.digest.placeholder": "sha256:<64 caracteres hexadecimales>",
   "codesign.receipt.fulcioSAN": "SAN de Fulcio verificado",
   "codesign.receipt.transparencyDestination": "Destino de transparencia",
@@ -3821,8 +3850,6 @@ const esESCatalog = {
   "source.90d.3ba89ead35": ">90d",
   "source.a.broker.turns.an.agent.identity.plus.poli.5efe1642ad":
     "Un bróker convierte una identidad de agente y una política en una concesión de credenciales de corta duración. Envíe la prueba una vez y muestre únicamente los metadatos de identidad devueltos.",
-  "source.a.fresh.trstctl.server.provisions.a.signer.a1ee587e50":
-    "Un servidor trstctl nuevo aprovisiona una CA interna X.509 respaldada por un firmante al iniciar. Confírmelo antes de que se emita el primer certificado.",
   "source.a.password.shared.secret.or.opaque.credent.b98b0c5e45":
     "Una identidad de contraseña, secreto compartido o credencial opaca que se rastrea por separado del inventario de certificados.",
   "source.a.safe.rollout.names.the.candidate.ca.targ.fdf82b1ab9":
@@ -4023,8 +4050,6 @@ const esESCatalog = {
   "source.configure.6defafa2ca": "Configure",
   "source.confirm.bulk.revoke.d613327838": "Confirmar revocación masiva",
   "source.confirm.high.blast.radius.ssh.trust.rollou.31dcb6c476": "Confirmar la evidencia del despliegue de confianza SSH con alto radio de impacto",
-  "source.confirm.the.signer.backed.internal.ca.or.c.b20abca15c":
-    "Confirmar la CA interna respaldada por el firmante o conectar una autoridad superior más tarde.",
   "source.connect.an.issuer.c155ecb073": "Conectar un emisor",
   "source.connect.first.issuer.ba893ce98c": "Conectar el primer emisor",
   "source.connection.639a40e82b": "Connection",
@@ -4160,7 +4185,6 @@ const esESCatalog = {
   "source.endpoint.host.4f0d916bb9": "Host del punto de conexión",
   "source.engine.8e75ebbdb2": "Engine",
   "source.engine.native.store.d6b23ebfdb": "Motor: almacén nativo",
-  "source.enroll.agent.8592144d44": "Registrar agente",
   "source.enroll.an.agent.43dbb20757": "Registrar un agente",
   "source.enrollment.protocol.surfaces.de695f7aa5": "Interfaces de los protocolos de registro",
   "source.enterprise.sla.target.table.dfd20c29f8": "Tabla de objetivos de SLA empresarial",
@@ -4286,7 +4310,6 @@ const esESCatalog = {
   "source.internet.tls.f6752ebc7d": "internet, tls",
   "source.interval.seconds.5f0f5b832a": "Intervalo en segundos",
   "source.investigate.e264109347": "Investigate",
-  "source.is.ready.17f5581890": "está listo.",
   "source.issuance.rate.91f4b7ff0d": "Tasa de emisión",
   "source.issue.48dc76dfa2": "Issue",
   "source.issue.a.lease.scoped.credential.from.a.con.9d8b9440ef":
@@ -4397,7 +4420,6 @@ const esESCatalog = {
   "source.minimum.score.e7461df96a": "Puntuación mínima",
   "source.mint.a.fresh.signer.backed.ca.key.and.cert.4f35946ce6":
     "Generar una nueva clave y certificado de CA respaldados por el firmante para la autoridad seleccionada, mientras la URL de emisión anterior sigue enrutando al sucesor activo.",
-  "source.mint.a.one.time.enrollment.token.and.wait.41e91b176b": "Generar un token de inscripción de un solo uso y esperar al primer agente en la red.",
   "source.mint.enrollment.token.b50d28fa1d": "Generar token de inscripción",
   "source.mode.visible.to.ui.8520f90032": "Modo visible para la IU",
   "source.model.5e2c614c23": "Model",
@@ -4785,8 +4807,6 @@ const esESCatalog = {
   "source.runs.appear.here.after.a.source.is.created.da81c4a3c9":
     "Las ejecuciones aparecen aquí después de crear una fuente y poner en cola un análisis del ámbito del inquilino.",
   "source.sans.7a15c9b7f6": "SANs",
-  "source.save.the.one.time.token.with.0600.permissi.b35e2c6935":
-    "Guardar el token de un solo uso con permisos 0600 y, a continuación, ejecutar el agente donde pueda alcanzar el plano de control. Los tokens de inscripción del agente no pueden emitir certificados.",
   "source.scanner.71d4cf953e": "Scanner",
   "source.schedule.a.recurring.scan.once.a.source.ex.e7c14af000":
     "Programar un análisis recurrente una vez que exista una fuente o actualizar para recuperar el trabajo creado por otro operador.",
@@ -5051,7 +5071,6 @@ const esESCatalog = {
   "source.updated.3a5ecca188": "Updated",
   "source.updates.22e2bada8f": "Updates",
   "source.urgency.03d37e9a53": "Urgency",
-  "source.use.internal.ca.2181607010": "Usar CA interna",
   "source.valid.before.8b8acd434a": "| válido antes de",
   "source.validity.9c3050e867": "Validity",
   "source.value.handling.f20f0a6806": "Tratamiento del valor",

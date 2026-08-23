@@ -8,6 +8,7 @@ const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     createIssuer: vi.fn(),
     issuers: vi.fn(),
+    platformSystem: vi.fn(),
     createEnrollmentToken: vi.fn(),
     agents: vi.fn(),
     issueCertificate: vi.fn(),
@@ -36,6 +37,7 @@ describe("DESIGN-001 first-certificate onboarding cues", () => {
     vi.restoreAllMocks();
     for (const mock of Object.values(apiMock)) mock.mockReset();
     apiMock.issuers.mockResolvedValue([{ id: "iss-1", tenant_id: "t1", name: "Internal CA", kind: "x509_ca", internal: true }]);
+    apiMock.platformSystem.mockResolvedValue({ signer_mode: "external", dependencies: [{ name: "signer", ready: true }] });
     apiMock.createEnrollmentToken.mockResolvedValue({ token: "BOOT-TOKEN-DESIGN-001" });
     apiMock.agents.mockResolvedValue([{ id: "agent-1", tenant_id: "t1", name: "edge-01", status: "online" }]);
     apiMock.issueCertificate.mockResolvedValue({ id: "id-1", tenant_id: "t1", name: "payments", kind: "x509_certificate", status: "issued" });
@@ -57,8 +59,8 @@ describe("DESIGN-001 first-certificate onboarding cues", () => {
     const user = userEvent.setup();
     renderWizard();
 
-    expect(screen.getByRole("heading", { name: "Connect an issuer" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Use internal CA" }));
+    expect(screen.getByRole("heading", { name: "Confirm certificate signing" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Check signing health" }));
     await waitFor(() => expect(apiMock.issuers).toHaveBeenCalledTimes(1));
     await user.click(screen.getByRole("button", { name: "Next: enable protocols" }));
 
@@ -75,13 +77,13 @@ describe("DESIGN-001 first-certificate onboarding cues", () => {
     await user.click(screen.getByRole("button", { name: "Next: prove integrations" }));
     expect(await screen.findByRole("heading", { name: "Verify configured integrations" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Skip integration proof for now" }));
-    await user.click(screen.getByRole("button", { name: "Next: enroll agent" }));
+    await user.click(screen.getByRole("button", { name: "Next: optional agent" }));
 
-    expect(await screen.findByRole("heading", { name: "Enroll an agent" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Connect an agent (optional)", level: 3 })).toBeInTheDocument();
     await user.type(screen.getByLabelText("Agent identity"), "edge-01");
     await user.click(screen.getByRole("button", { name: "Mint enrollment token" }));
     await waitFor(() => expect(apiMock.createEnrollmentToken).toHaveBeenCalledWith({ allowed_identity: "edge-01" }));
     expect(await screen.findByText("BOOT-TOKEN-DESIGN-001")).toBeInTheDocument();
-    expect(screen.getByText(/agent enrollment tokens cannot issue certificates/i)).toBeInTheDocument();
+    expect(screen.getByText(/enrollment token.*cannot issue certificates/i)).toBeInTheDocument();
   });
 });

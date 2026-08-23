@@ -1082,7 +1082,7 @@ func readWorkflow(t *testing.T, name string) string {
 }
 
 func TestHelmLintAndTemplateUseRenderableProductionValues(t *testing.T) {
-	const tokenCommandSet = "--set signer.auth.tokenCommand=/usr/local/bin/trstctl-sign-approve" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
+	const tokenCommandSet = "--set signer.auth.tokenCommand=/opt/trstctl-auth/bin/signer-token-provider" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 
 	makefile, err := os.ReadFile(filepath.Join("..", "..", "Makefile"))
 	if err != nil {

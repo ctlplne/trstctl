@@ -2276,13 +2276,58 @@ export const messages = {
     defaultMessage: "Next: enable protocols",
     description: "First-run wizard button from issuer confirmation to protocol activation.",
   },
+  "wizard.issuer.stepLabel": {
+    defaultMessage: "Check signing",
+    description: "First-run step label for proving that the separate signer can be reached.",
+  },
+  "wizard.issuer.stepDescription": {
+    defaultMessage: "Prove the separate signer is healthy before creating one test certificate.",
+    description: "Plain-language description of the first-run signer health step.",
+  },
+  "wizard.issuer.heading": {
+    defaultMessage: "Confirm certificate signing",
+    description: "Heading for the first-run signer and issuer health proof.",
+  },
+  "wizard.issuer.description": {
+    defaultMessage:
+      "trstctl includes a built-in setup issuer. Check the separate signer now; the next certificate step proves the complete signing path. Connect your production certificate authority later.",
+    description: "Explains exactly what the first-run signer check does and does not prove.",
+  },
+  "wizard.issuer.check": {
+    defaultMessage: "Check signing health",
+    description: "Button that reads the served signer health and issuer catalog.",
+  },
+  "wizard.issuer.readyNamed": {
+    defaultMessage: "{name} is listed, and the signer health check passed.",
+    description: "Confirmation when a named issuer exists and the separate signer is healthy.",
+  },
+  "wizard.issuer.readyBuiltIn": {
+    defaultMessage: "Signer health passed. The built-in setup issuer is selected; the next certificate step proves end-to-end signing.",
+    description: "Bounded confirmation when the issuer catalog is empty but the built-in signer path is healthy.",
+  },
+  "wizard.issuer.signerUnhealthy": {
+    defaultMessage: "the separate signer is not healthy: {error}",
+    description: "Diagnostic used when the served system readout reports a failed signer dependency.",
+  },
+  "wizard.issuer.signerMissing": {
+    defaultMessage: "no signer health result was returned",
+    description: "Fail-closed reason when system readiness omitted the signer dependency.",
+  },
+  "wizard.issuer.error": {
+    defaultMessage: "Could not prove signing is ready: {error}",
+    description: "Error shown when the first-run signing proof cannot pass.",
+  },
+  "wizard.issuer.builtinName": {
+    defaultMessage: "Built-in setup issuer",
+    description: "Completion-summary name for the built-in setup issuer when no catalog row exists.",
+  },
   "wizard.header.description": {
     defaultMessage: "Take the next safe step toward one healthy test certificate.",
     description: "Description at the top of the first-run wizard.",
   },
   "wizard.header.technicalDetails": {
     defaultMessage:
-      "The full path connects an issuer, enables enrollment protocols, issues a certificate, proves configured integrations, enrolls an agent, and records completion in this browser.",
+      "The full path checks signer health, enables enrollment protocols, issues a certificate, optionally proves configured integrations, optionally connects an agent, and records completion in this browser.",
     description: "Exact first-run sequence retained behind the page-level Technical details disclosure.",
   },
   "wizard.integrations.stepLabel": {
@@ -2357,6 +2402,60 @@ export const messages = {
   "wizard.integrations.skip": {
     defaultMessage: "Skip integration proof for now",
     description: "Button that lets a core-only install defer configured integration verification.",
+  },
+  "wizard.agent.stepLabel": {
+    defaultMessage: "Connect an agent (optional)",
+    description: "First-run carousel label for optional agent enrollment.",
+  },
+  "wizard.agent.stepDescription": {
+    defaultMessage: "Add host discovery and deployment now, or return after certificate setup.",
+    description: "First-run carousel description for optional agent enrollment.",
+  },
+  "wizard.agent.heading": {
+    defaultMessage: "Connect an agent (optional)",
+    description: "Heading for optional first-run agent enrollment.",
+  },
+  "wizard.agent.description": {
+    defaultMessage:
+      "An agent lets trstctl discover and deploy credentials inside a network. Certificate operations work without one, so you can finish setup now and connect an agent later. Its one-time enrollment token can register that agent only; it cannot issue certificates.",
+    description: "Explains the value and optional nature of an agent in plain language.",
+  },
+  "wizard.agent.commandIntro": {
+    defaultMessage: "Linux example for the blank Compose stack. Save the one-time token and CA bundle beside this command first.",
+    description: "Context immediately before the runnable first-run agent command.",
+  },
+  "wizard.agent.commandLabel": {
+    defaultMessage: "Runnable Linux agent command",
+    description: "Accessible label for the first-run agent command block.",
+  },
+  "wizard.agent.skip": {
+    defaultMessage: "Skip agent for now",
+    description: "Button that explicitly defers optional agent enrollment.",
+  },
+  "wizard.agent.skipped": {
+    defaultMessage:
+      "No agent was enrolled. Certificate operations are ready; connect an agent later when you want discovery or deployment.",
+    description: "Neutral confirmation after optional agent enrollment is deferred.",
+  },
+  "wizard.agent.resume": {
+    defaultMessage: "Connect an agent instead",
+    description: "Button that reverses the optional-agent deferral.",
+  },
+  "wizard.agent.nextOptional": {
+    defaultMessage: "Next: optional agent",
+    description: "First-run wizard button from optional integrations to optional agent enrollment.",
+  },
+  "wizard.agent.nextReview": {
+    defaultMessage: "Next: review setup",
+    description: "First-run wizard button from optional agent enrollment to final review.",
+  },
+  "wizard.agent.summaryDeferred": {
+    defaultMessage: "Optional step deferred",
+    description: "Completion-summary value when the operator explicitly skipped agent enrollment.",
+  },
+  "wizard.agent.summaryMissing": {
+    defaultMessage: "Not enrolled",
+    description: "Completion-summary value when no agent was enrolled or explicitly deferred.",
   },
   "codesign.digest.placeholder": {
     defaultMessage: "sha256:<64 hexadecimal characters>",
@@ -14123,10 +14222,6 @@ export const messages = {
       "A broker turns an agent identity plus policy into a short credential lease. Submit proof once, then render only returned identity metadata.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Workloads.tsx.",
   },
-  "source.a.fresh.trstctl.server.provisions.a.signer.a1ee587e50": {
-    defaultMessage: "A fresh trstctl server provisions a signer-backed internal X.509 CA at boot. Confirm it before the first certificate is issued.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Wizard.tsx.",
-  },
   "source.a.password.shared.secret.or.opaque.credent.b98b0c5e45": {
     defaultMessage: "A password, shared secret, or opaque credential identity tracked separately from certificate inventory.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Identities.tsx.",
@@ -14868,10 +14963,6 @@ export const messages = {
     defaultMessage: "Confirm high-blast-radius SSH trust rollout evidence",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/SSHTrust.tsx.",
   },
-  "source.confirm.the.signer.backed.internal.ca.or.c.b20abca15c": {
-    defaultMessage: "Confirm the signer-backed internal CA or connect an upstream authority later.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Wizard.tsx.",
-  },
   "source.connect.an.issuer.c155ecb073": {
     defaultMessage: "Connect an issuer",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Certificates.tsx, src/pages/Wizard.tsx.",
@@ -15375,10 +15466,6 @@ export const messages = {
     defaultMessage: "Engine: native store",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
-  "source.enroll.agent.8592144d44": {
-    defaultMessage: "Enroll agent",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Wizard.tsx.",
-  },
   "source.enroll.an.agent.43dbb20757": {
     defaultMessage: "Enroll an agent",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Discovery.tsx, src/pages/Wizard.tsx.",
@@ -15867,10 +15954,6 @@ export const messages = {
     defaultMessage: "Investigate",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Posture.tsx.",
   },
-  "source.is.ready.17f5581890": {
-    defaultMessage: "is ready.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Wizard.tsx.",
-  },
   "source.issuance.rate.91f4b7ff0d": {
     defaultMessage: "Issuance rate",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Dashboard.tsx.",
@@ -16298,10 +16381,6 @@ export const messages = {
     defaultMessage:
       "Mint a fresh signer-backed CA key and certificate for the selected authority while the previous issue URL keeps routing to the active successor.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
-  },
-  "source.mint.a.one.time.enrollment.token.and.wait.41e91b176b": {
-    defaultMessage: "Mint a one-time enrollment token and wait for the first in-network agent.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Wizard.tsx.",
   },
   "source.mint.enrollment.token.b50d28fa1d": {
     defaultMessage: "Mint enrollment token",
@@ -18014,11 +18093,6 @@ export const messages = {
     defaultMessage: "SANs",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Certificates.tsx.",
   },
-  "source.save.the.one.time.token.with.0600.permissi.b35e2c6935": {
-    defaultMessage:
-      "Save the one-time token with 0600 permissions, then run the agent where it can reach the control plane. Agent enrollment tokens cannot issue certificates.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Wizard.tsx.",
-  },
   "source.scanner.71d4cf953e": {
     defaultMessage: "Scanner",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
@@ -19045,10 +19119,6 @@ export const messages = {
   "source.urgency.03d37e9a53": {
     defaultMessage: "Urgency",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Incidents.tsx.",
-  },
-  "source.use.internal.ca.2181607010": {
-    defaultMessage: "Use internal CA",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Wizard.tsx.",
   },
   "source.valid.before.8b8acd434a": {
     defaultMessage: "| valid before",
