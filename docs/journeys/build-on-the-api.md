@@ -1,7 +1,6 @@
 # Build on the API, CLI, and SDKs
 
 <!-- trstctl:journey-census:start -->
-
 !!! success "Served path — wiring census 81/81"
 
     The Definition-of-Done census reports **81/81 required capabilities served**: **12 of 81 census rows launch the shipped binary** and **69 of 81 are proved through the production-assembled handler**.
@@ -9,7 +8,6 @@
     This journey uses no separately proof-gated capability row; it stays on core served surfaces.
     Core surfaces guarded by route and journey tests: `openapi_contract`, `cli`, `generated_sdks`, `cursor_pagination`, `credential_graph`.
     This badge is generated from `wiring-census.json`; `make journey-census-check` fails closed if the census or this page drifts.
-
 <!-- trstctl:journey-census:end -->
 
 ## Goal
