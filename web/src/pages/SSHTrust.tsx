@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
+import { ProgressiveTaskList } from "@/components/ProgressiveTaskList";
 import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
@@ -81,6 +82,7 @@ function numericOrUndefined(input: string): number | undefined {
 
 export function SSHTrust() {
   const { t } = useTranslation();
+  const [activeTask, setActiveTask] = useState<"rollout" | "access" | "remove" | null>(null);
   const [status, setStatus] = useState<SSHStatus | null>(null);
   const [fleet, setFleet] = useState<SSHFleetInventory | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -247,9 +249,9 @@ export function SSHTrust() {
         technicalDetails={t("sshTrust.page.details")}
         actions={
           status ? (
-            <a className={buttonVariants()} href="#rollout-heading">
+            <Button type="button" onClick={() => setActiveTask("rollout")}>
               {t("sshTrust.page.rolloutAction")}
-            </a>
+            </Button>
           ) : (
             <Link className={buttonVariants()} to="/protocols">
               {t("sshTrust.page.setupAction")}
@@ -270,7 +272,12 @@ export function SSHTrust() {
         </UnavailableState>
       ) : null}
       {!status && !error && <LoadingState>{translateNow("source.loading.ssh.workflow.eee4586266")}</LoadingState>}
-      {actionResult && <output className="font-mono text-xs text-muted-foreground">{actionResult}</output>}
+      {actionResult && (
+        <details className="text-sm text-muted-foreground">
+          <summary className="cursor-pointer font-medium text-foreground">{t("pageHeader.openDetails")}</summary>
+          <output className="mt-2 block break-all font-mono text-xs">{actionResult}</output>
+        </details>
+      )}
 
       {status && (
         <section aria-labelledby="ssh-status-heading" className="grid gap-3 border-y border-border py-4">
@@ -280,31 +287,34 @@ export function SSHTrust() {
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("sshTrust.readiness.readyBody")}</p>
           </div>
-          <div className="ui-panel grid gap-3 md:grid-cols-4">
-            <div>
-              <p className="text-xs text-muted-foreground">{translateNow("source.workflow.available.3946309163")}</p>
-              <p className="font-mono text-sm">{status.served ? "true" : "false"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">{translateNow("source.krl.version.2381c27676")}</p>
-              <p className="font-mono text-sm">{status.krl_version}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">{translateNow("source.revoked.certs.267c0b721b")}</p>
-              <p className="font-mono text-sm">{status.revoked_count}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">{translateNow("source.attestors.2e3ad3c00b")}</p>
-              <p className="break-all font-mono text-sm">{attestors.join(", ")}</p>
-            </div>
-            <details className="md:col-span-4">
-              <summary className="cursor-pointer text-sm font-medium text-foreground">{t("sshTrust.advanced.authorityKeySummary")}</summary>
-              <div className="mt-2">
-                <p className="text-xs text-muted-foreground">{translateNow("source.authority.key.60329d7d7b")}</p>
-                <p className="break-all font-mono text-xs">{status.authority_key || translateNow("source.not.published.30839efda7")}</p>
+          <p className="text-sm text-muted-foreground">
+            {t("sshTrust.readiness.technicalSummary", { revoked: status.revoked_count, attestors: attestors.length })}
+          </p>
+          <details className="group text-sm">
+            <summary className="cursor-pointer font-medium text-foreground">{t("sshTrust.readiness.technicalDetails")}</summary>
+            <dl className="mt-3 grid gap-3 border-s border-border ps-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <dt className="text-xs text-muted-foreground">{translateNow("source.workflow.available.3946309163")}</dt>
+                <dd className="font-mono text-sm">{status.served ? "true" : "false"}</dd>
               </div>
-            </details>
-          </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">{translateNow("source.krl.version.2381c27676")}</dt>
+                <dd className="font-mono text-sm">{status.krl_version}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">{translateNow("source.revoked.certs.267c0b721b")}</dt>
+                <dd className="font-mono text-sm">{status.revoked_count}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">{translateNow("source.attestors.2e3ad3c00b")}</dt>
+                <dd className="break-all font-mono text-sm">{attestors.join(", ")}</dd>
+              </div>
+              <div className="sm:col-span-2 lg:col-span-4">
+                <dt className="text-xs text-muted-foreground">{t("sshTrust.advanced.authorityKeySummary")}</dt>
+                <dd className="break-all font-mono text-xs">{status.authority_key || translateNow("source.not.published.30839efda7")}</dd>
+              </div>
+            </dl>
+          </details>
         </section>
       )}
 
@@ -316,20 +326,13 @@ export function SSHTrust() {
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("sshTrust.fleet.description")}</p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="ui-panel p-3">
-              <p className="text-xs text-muted-foreground">{t("sshTrust.fleet.hostsOutsideCA")}</p>
-              <p className="font-mono text-lg">{fleet.hosts_not_under_ca}</p>
-            </div>
-            <div className="ui-panel p-3">
-              <p className="text-xs text-muted-foreground">{t("sshTrust.fleet.standingGrants")}</p>
-              <p className="font-mono text-lg">{fleet.standing_key_count}</p>
-            </div>
-            <div className="ui-panel p-3">
-              <p className="text-xs text-muted-foreground">{t("sshTrust.fleet.orphanedGrants")}</p>
-              <p className="font-mono text-lg">{fleet.orphaned_key_count}</p>
-            </div>
-          </div>
+          <p className="text-sm font-medium text-foreground">
+            {t("sshTrust.fleet.summary", {
+              hosts: fleet.host_count,
+              standing: fleet.standing_key_count,
+              orphaned: fleet.orphaned_key_count,
+            })}
+          </p>
           {fleetHosts.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t("sshTrust.fleet.empty")}</p>
           ) : (
@@ -361,174 +364,210 @@ export function SSHTrust() {
 
       {status && (
         <>
-          <section aria-labelledby="rollout-heading" className="grid gap-3 border-y border-border py-4">
-            <div>
-              <h2 id="rollout-heading" className="text-title font-semibold">
-                {translateNow("source.ssh.deployment.and.trust.rollout.098d316f31")}
-              </h2>
-              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.a.safe.rollout.names.the.candidate.ca.targ.fdf82b1ab9")}</p>
-              <p className="mt-1 max-w-3xl text-sm font-medium text-foreground">{t("sshTrust.rollout.recordOnly")}</p>
-            </div>
-            <form aria-label="Record SSH trust rollout" className="ui-panel grid gap-3 md:grid-cols-3" onSubmit={(event) => void recordRollout(event)}>
-              <label className="grid gap-1 text-sm">
-                {translateNow("source.discovery.source.f533df1c0c")}
-                <input
-                  className="ui-input"
-                  value={sourceId}
-                  onChange={(event) => setSourceId(event.target.value)}
-                  placeholder={translateNow("source.source.uuid.266dd280b0")}
-                />
-              </label>
-              <label className="grid gap-1 text-sm">
-                {translateNow("source.target.hosts.b345027096")}
-                <textarea className="ui-input min-h-20 font-mono text-xs" value={hosts} onChange={(event) => setHosts(event.target.value)} required />
-              </label>
-              <label className="grid gap-1 text-sm">
-                {translateNow("source.candidate.ca.fingerprint.78e53d126d")}
-                <input className="ui-input" value={fingerprint} onChange={(event) => setFingerprint(event.target.value)} required />
-              </label>
-              <label className="grid gap-1 text-sm">
-                {translateNow("source.reload.command.cf1acb1111")}
-                <input className="ui-input" value={reloadCommand} onChange={(event) => setReloadCommand(event.target.value)} required />
-              </label>
-              <label className="grid gap-1 text-sm">
-                {translateNow("source.health.command.5ad9864488")}
-                <input className="ui-input" value={healthCommand} onChange={(event) => setHealthCommand(event.target.value)} required />
-              </label>
-              <label className="grid gap-1 text-sm">
-                {translateNow("source.status.920e413c7d")}
-                <select
-                  className="ui-input"
-                  value={rolloutStatus}
-                  onChange={(event) => setRolloutStatus(event.target.value as SSHTrustRolloutRequest["status"])}
-                >
-                  {rolloutStatuses.map((value) => (
-                    <option key={value} value={value}>
-                      {value}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="grid gap-1 text-sm md:col-span-3">
-                {translateNow("source.rollback.plan.952efc8286")}
-                <textarea className="ui-input min-h-20" value={rollbackPlan} onChange={(event) => setRollbackPlan(event.target.value)} required />
-              </label>
-              <label className="flex items-center gap-2 text-sm md:col-span-3">
-                <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
-                {translateNow("source.confirm.high.blast.radius.ssh.trust.rollou.31dcb6c476")}
-              </label>
-              <Button
-                className="md:col-span-3"
-                type="submit"
-                disabled={
-                  !confirmed || splitHosts(hosts).length === 0 || !fingerprint.trim() || !reloadCommand.trim() || !healthCommand.trim() || !rollbackPlan.trim()
-                }
-              >
-                Record trust rollout
-              </Button>
-              {rollout && (
-                <div className="grid gap-2 md:col-span-3">
-                  <RolloutStepper status={rollout.status} />
-                  <output className="font-mono text-xs text-muted-foreground">{rollout.id}</output>
-                </div>
-              )}
-            </form>
-          </section>
+          <ProgressiveTaskList
+            heading={t("progressiveTasks.heading")}
+            description={t("progressiveTasks.description")}
+            activeTask={activeTask}
+            closeLabel={t("progressiveTasks.close")}
+            onTaskChange={(task) => setActiveTask(task as typeof activeTask)}
+            tasks={[
+              {
+                id: "rollout",
+                title: t("sshTrust.tasks.rollout.title"),
+                description: t("sshTrust.tasks.rollout.description"),
+                actionLabel: t("sshTrust.page.rolloutAction"),
+              },
+              {
+                id: "access",
+                title: t("sshTrust.tasks.access.title"),
+                description: t("sshTrust.tasks.access.description"),
+                actionLabel: t("sshTrust.tasks.access.action"),
+              },
+              {
+                id: "remove",
+                title: t("sshTrust.tasks.remove.title"),
+                description: t("sshTrust.tasks.remove.description"),
+                actionLabel: t("sshTrust.tasks.remove.action"),
+              },
+            ]}
+          />
 
-          <section aria-labelledby="jit-heading" className="grid gap-3 border-y border-border py-4">
-            <div>
-              <h2 id="jit-heading" className="text-title font-semibold">
-                {translateNow("source.attestation.gated.ssh.user.certs.d49d24e892")}
-              </h2>
-              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("sshTrust.attested.description")}</p>
-            </div>
-            <form
-              aria-label={translateNow("source.issue.attested.ssh.user.certificate.f7e0f6ef66")}
-              className="ui-panel grid gap-3 md:grid-cols-3"
-              onSubmit={(event) => void issueAttested(event)}
-            >
-              <label className="grid gap-1 text-sm">
-                {translateNow("source.attestation.method.1f0610be7c")}
-                <select className="ui-input" value={method} onChange={(event) => setMethod(event.target.value as SSHAttestedUserCertRequest["method"])}>
-                  {attestors.map((value) => (
-                    <option key={value} value={value}>
-                      {value}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="grid gap-1 text-sm">
-                {translateNow("source.key.id.d54d56ee0a")}
-                <input className="ui-input" value={keyId} onChange={(event) => setKeyId(event.target.value)} />
-              </label>
-              <label className="grid gap-1 text-sm">
-                {translateNow("source.ttl.seconds.862d08de5a")}
-                <input className="ui-input" inputMode="numeric" value={ttlSeconds} onChange={(event) => setTTLSeconds(event.target.value)} />
-              </label>
-              <label className="grid gap-1 text-sm">
-                {t("sshTrust.attested.approver")}
-                <input className="ui-input" value={approver} onChange={(event) => setApprover(event.target.value)} required />
-              </label>
-              <label className="grid gap-1 text-sm">
-                {t("sshTrust.attested.boundPrincipals")}
-                <textarea className="ui-input min-h-20 font-mono text-xs" value={principals} onChange={(event) => setPrincipals(event.target.value)} />
-              </label>
-              <label className="grid gap-1 text-sm">
-                {t("sshTrust.attested.sourceAddresses")}
-                <textarea
-                  className="ui-input min-h-20 font-mono text-xs"
-                  value={sourceAddresses}
-                  onChange={(event) => setSourceAddresses(event.target.value)}
-                />
-              </label>
-              <label className="grid gap-1 text-sm md:col-span-3">
-                {t("sshTrust.attested.forceCommand")}
-                <input className="ui-input font-mono text-xs" value={forceCommand} onChange={(event) => setForceCommand(event.target.value)} />
-              </label>
-              <label className="grid gap-1 text-sm md:col-span-3">
-                {translateNow("source.attestation.payload.base64.11bfdba122")}
-                <textarea
-                  className="ui-input min-h-24 font-mono text-xs"
-                  value={payloadBase64}
-                  onChange={(event) => setPayloadBase64(event.target.value)}
-                  required
-                />
-              </label>
-              <label className="grid gap-1 text-sm md:col-span-3">
-                {translateNow("source.ssh.public.key.c9be6a369e")}
-                <textarea className="ui-input min-h-24 font-mono text-xs" value={publicKey} onChange={(event) => setPublicKey(event.target.value)} required />
-              </label>
-              <Button className="md:col-span-3" type="submit" disabled={attestors.length === 0}>
-                {translateNow("source.issue.attested.ssh.cert.fba31f1beb")}
-              </Button>
-              {issuedCert && (
-                <div className="grid gap-2 md:col-span-3">
-                  <p className="font-mono text-xs text-muted-foreground">
-                    {translateNow("source.serial.0144b1defc")} {issuedCert.serial} {translateNow("source.subject.5dcd66f2ed")} {issuedCert.subject}{" "}
-                    {translateNow("source.valid.before.8b8acd434a")} {issuedCert.valid_before}
-                  </p>
-                  <p className="font-mono text-xs text-muted-foreground">
-                    {t("sshTrust.attested.resultConstraints", {
-                      approver: issuedCert.approver,
-                      principals: issuedCert.principals.join(", "),
-                      source: issuedCert.source_addresses?.join(", ") || "none",
-                      force: issuedCert.force_command || "none",
-                    })}
-                  </p>
+          {activeTask === "rollout" && (
+            <section id="task-panel-rollout" aria-labelledby="rollout-heading" className="grid gap-3 border-y border-border py-4">
+              <div>
+                <h2 id="rollout-heading" className="text-title font-semibold">
+                  {translateNow("source.ssh.deployment.and.trust.rollout.098d316f31")}
+                </h2>
+                <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.a.safe.rollout.names.the.candidate.ca.targ.fdf82b1ab9")}</p>
+                <p className="mt-1 max-w-3xl text-sm font-medium text-foreground">{t("sshTrust.rollout.recordOnly")}</p>
+              </div>
+              <form aria-label="Record SSH trust rollout" className="ui-panel grid gap-3 md:grid-cols-3" onSubmit={(event) => void recordRollout(event)}>
+                <label className="grid gap-1 text-sm">
+                  {translateNow("source.discovery.source.f533df1c0c")}
+                  <input
+                    className="ui-input"
+                    value={sourceId}
+                    onChange={(event) => setSourceId(event.target.value)}
+                    placeholder={translateNow("source.source.uuid.266dd280b0")}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  {translateNow("source.target.hosts.b345027096")}
+                  <textarea className="ui-input min-h-20 font-mono text-xs" value={hosts} onChange={(event) => setHosts(event.target.value)} required />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  {translateNow("source.candidate.ca.fingerprint.78e53d126d")}
+                  <input className="ui-input" value={fingerprint} onChange={(event) => setFingerprint(event.target.value)} required />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  {translateNow("source.reload.command.cf1acb1111")}
+                  <input className="ui-input" value={reloadCommand} onChange={(event) => setReloadCommand(event.target.value)} required />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  {translateNow("source.health.command.5ad9864488")}
+                  <input className="ui-input" value={healthCommand} onChange={(event) => setHealthCommand(event.target.value)} required />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  {translateNow("source.status.920e413c7d")}
+                  <select
+                    className="ui-input"
+                    value={rolloutStatus}
+                    onChange={(event) => setRolloutStatus(event.target.value as SSHTrustRolloutRequest["status"])}
+                  >
+                    {rolloutStatuses.map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="grid gap-1 text-sm md:col-span-3">
+                  {translateNow("source.rollback.plan.952efc8286")}
+                  <textarea className="ui-input min-h-20" value={rollbackPlan} onChange={(event) => setRollbackPlan(event.target.value)} required />
+                </label>
+                <label className="flex items-center gap-2 text-sm md:col-span-3">
+                  <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
+                  {translateNow("source.confirm.high.blast.radius.ssh.trust.rollou.31dcb6c476")}
+                </label>
+                <Button
+                  className="md:col-span-3"
+                  type="submit"
+                  disabled={
+                    !confirmed ||
+                    splitHosts(hosts).length === 0 ||
+                    !fingerprint.trim() ||
+                    !reloadCommand.trim() ||
+                    !healthCommand.trim() ||
+                    !rollbackPlan.trim()
+                  }
+                >
+                  Record trust rollout
+                </Button>
+                {rollout && (
+                  <div className="grid gap-2 md:col-span-3">
+                    <RolloutStepper status={rollout.status} />
+                    <output className="font-mono text-xs text-muted-foreground">{rollout.id}</output>
+                  </div>
+                )}
+              </form>
+            </section>
+          )}
+
+          {activeTask === "access" && (
+            <section id="task-panel-access" aria-labelledby="jit-heading" className="grid gap-3 border-y border-border py-4">
+              <div>
+                <h2 id="jit-heading" className="text-title font-semibold">
+                  {translateNow("source.attestation.gated.ssh.user.certs.d49d24e892")}
+                </h2>
+                <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("sshTrust.attested.description")}</p>
+              </div>
+              <form
+                aria-label={translateNow("source.issue.attested.ssh.user.certificate.f7e0f6ef66")}
+                className="ui-panel grid gap-3 md:grid-cols-3"
+                onSubmit={(event) => void issueAttested(event)}
+              >
+                <label className="grid gap-1 text-sm">
+                  {translateNow("source.attestation.method.1f0610be7c")}
+                  <select className="ui-input" value={method} onChange={(event) => setMethod(event.target.value as SSHAttestedUserCertRequest["method"])}>
+                    {attestors.map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="grid gap-1 text-sm">
+                  {translateNow("source.key.id.d54d56ee0a")}
+                  <input className="ui-input" value={keyId} onChange={(event) => setKeyId(event.target.value)} />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  {translateNow("source.ttl.seconds.862d08de5a")}
+                  <input className="ui-input" inputMode="numeric" value={ttlSeconds} onChange={(event) => setTTLSeconds(event.target.value)} />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  {t("sshTrust.attested.approver")}
+                  <input className="ui-input" value={approver} onChange={(event) => setApprover(event.target.value)} required />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  {t("sshTrust.attested.boundPrincipals")}
+                  <textarea className="ui-input min-h-20 font-mono text-xs" value={principals} onChange={(event) => setPrincipals(event.target.value)} />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  {t("sshTrust.attested.sourceAddresses")}
+                  <textarea
+                    className="ui-input min-h-20 font-mono text-xs"
+                    value={sourceAddresses}
+                    onChange={(event) => setSourceAddresses(event.target.value)}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm md:col-span-3">
+                  {t("sshTrust.attested.forceCommand")}
+                  <input className="ui-input font-mono text-xs" value={forceCommand} onChange={(event) => setForceCommand(event.target.value)} />
+                </label>
+                <label className="grid gap-1 text-sm md:col-span-3">
+                  {translateNow("source.attestation.payload.base64.11bfdba122")}
                   <textarea
                     className="ui-input min-h-24 font-mono text-xs"
-                    readOnly
-                    value={issuedCert.certificate}
-                    aria-label={translateNow("source.issued.ssh.certificate.3775bb2dee")}
+                    value={payloadBase64}
+                    onChange={(event) => setPayloadBase64(event.target.value)}
+                    required
                   />
-                </div>
-              )}
-            </form>
-          </section>
+                </label>
+                <label className="grid gap-1 text-sm md:col-span-3">
+                  {translateNow("source.ssh.public.key.c9be6a369e")}
+                  <textarea className="ui-input min-h-24 font-mono text-xs" value={publicKey} onChange={(event) => setPublicKey(event.target.value)} required />
+                </label>
+                <Button className="md:col-span-3" type="submit" disabled={attestors.length === 0}>
+                  {translateNow("source.issue.attested.ssh.cert.fba31f1beb")}
+                </Button>
+                {issuedCert && (
+                  <div className="grid gap-2 md:col-span-3">
+                    <p className="font-mono text-xs text-muted-foreground">
+                      {translateNow("source.serial.0144b1defc")} {issuedCert.serial} {translateNow("source.subject.5dcd66f2ed")} {issuedCert.subject}{" "}
+                      {translateNow("source.valid.before.8b8acd434a")} {issuedCert.valid_before}
+                    </p>
+                    <p className="font-mono text-xs text-muted-foreground">
+                      {t("sshTrust.attested.resultConstraints", {
+                        approver: issuedCert.approver,
+                        principals: issuedCert.principals.join(", "),
+                        source: issuedCert.source_addresses?.join(", ") || "none",
+                        force: issuedCert.force_command || "none",
+                      })}
+                    </p>
+                    <textarea
+                      className="ui-input min-h-24 font-mono text-xs"
+                      readOnly
+                      value={issuedCert.certificate}
+                      aria-label={translateNow("source.issued.ssh.certificate.3775bb2dee")}
+                    />
+                  </div>
+                )}
+              </form>
+            </section>
+          )}
 
-          <details className="group border-y border-border py-3">
-            <summary className="cursor-pointer font-semibold text-foreground marker:text-muted-foreground">{t("sshTrust.advanced.revocationSummary")}</summary>
-            <div className="mt-3 grid gap-4">
+          {activeTask === "remove" && (
+            <div id="task-panel-remove" className="grid gap-4">
               <section aria-labelledby="krl-heading" className="grid gap-3 border-y border-border py-4">
                 <div>
                   <h2 id="krl-heading" className="text-title font-semibold">
@@ -615,7 +654,7 @@ export function SSHTrust() {
                 </form>
               </section>
             </div>
-          </details>
+          )}
         </>
       )}
     </section>

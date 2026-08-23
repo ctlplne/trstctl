@@ -345,10 +345,12 @@ describe("CA hierarchy and custody surface", () => {
     renderCAHierarchy();
 
     expect(await screen.findByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("heading", { name: "Managed authorities" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Lineage" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Key custody" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Pending actions" })).toBeInTheDocument();
+    const overview = screen.getByRole("region", { name: "CA authority overview" });
+    expect(within(overview).getByRole("heading", { name: "Managed authorities" })).toBeInTheDocument();
+    expect(within(overview).getByText("Lineage")).toBeInTheDocument();
+    expect(within(overview).getByText("Key custody")).toBeInTheDocument();
+    expect(within(overview).getByText("Pending actions")).toBeInTheDocument();
+    expect(within(overview).queryAllByRole("article")).toHaveLength(0);
     expect(document.getElementById("ca-panel-overview")).not.toHaveClass("hidden");
     expect(document.getElementById("ca-panel-imports")).toHaveClass("hidden");
 
@@ -362,8 +364,10 @@ describe("CA hierarchy and custody surface", () => {
   });
 
   it("renders issuers with kind, chain, public key, and certificate links", async () => {
+    const user = userEvent.setup();
     renderCAHierarchy();
 
+    await user.click(await screen.findByText("Issuance counts and certificate rules"));
     expect(await screen.findByRole("heading", { name: "Certificate authorities" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Issuer visibility" })).toBeInTheDocument();
     expect((await screen.findAllByText("Root CA")).length).toBeGreaterThan(0);
@@ -375,8 +379,10 @@ describe("CA hierarchy and custody surface", () => {
   });
 
   it("renders public and private direct CA discovery inventory", async () => {
+    const user = userEvent.setup();
     renderCAHierarchy();
 
+    await user.click(await screen.findByText("Other discovered certificate authorities"));
     expect(await screen.findByRole("heading", { name: "CA discovery inventory" })).toBeInTheDocument();
     expect(apiMock.caDiscoveryInventory).toHaveBeenCalled();
     expect(screen.getAllByText("digicert-prod").length).toBeGreaterThan(0);
@@ -732,8 +738,9 @@ describe("CA hierarchy and custody surface", () => {
 
     renderCAHierarchy();
 
-    expect(await screen.findByText("External CA registry is unavailable")).toBeInTheDocument();
+    expect(await screen.findByText(/External CA registry is not connected/)).toBeInTheDocument();
     expect(screen.getByText("external CA registry is not enabled")).toBeInTheDocument();
+    expect(screen.queryByText("External CA registry is unavailable")).not.toBeInTheDocument();
   });
 
   it("requires explicit confirmation, requests signer-gated retirement, and downloads the projected record", async () => {

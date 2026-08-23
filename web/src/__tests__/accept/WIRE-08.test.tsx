@@ -71,6 +71,7 @@ describe("WIRE-08 transit operation wiring", () => {
     const user = userEvent.setup();
     renderSecrets("/secrets/engines");
 
+    await user.click(await screen.findByRole("button", { name: "Open encryption and signing" }));
     expect(await screen.findByRole("heading", { name: "Transit and KMIP" })).toBeInTheDocument();
     const transitForm = within(screen.getByRole("form", { name: "Transit encrypt and decrypt" }));
     await user.type(transitForm.getByLabelText("Key name"), "payments-pii");

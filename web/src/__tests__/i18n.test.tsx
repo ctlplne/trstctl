@@ -340,6 +340,18 @@ describe("i18n boundary", () => {
       // unavailable, lifecycle-derived health, and tenant-confined active
       // certificate counts. Machine-authored es/de — FLAGGED FOR HUMAN
       // TRANSLATION REVIEW before release.
+      // QA design g27 re-pin: SSH and Secrets now expose one operational task
+      // at a time, while exact SSH state and every previously served workflow
+      // remain reachable. Machine-authored es/de — FLAGGED FOR HUMAN
+      // TRANSLATION REVIEW before release.
+      // QA design g28 re-pin: the CA overview now uses a compact status strip,
+      // keeps discovery and issuance evidence collapsed, and treats a disabled
+      // optional external registry as expected absence. Machine-authored es/de
+      // — FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
+      // QA design g28 cleanup: three source-extracted strings retired with the
+      // old SSH authority label and two always-visible CA row actions were
+      // removed from all catalogs after the unused-message oracle proved that
+      // no rendered surface still references them.
       // AUD-37 AD CS evidence re-pin: twenty-three keys expose configured IIS
       // probes, CA restriction unknown-state honesty, exact endpoint evidence,
       // signed compliance references, and an explicit private-CIDR SSRF
@@ -993,8 +1005,8 @@ describe("i18n boundary", () => {
       // exact setup evidence stay available in the operations disclosure.
       // Dashboard risk reasons and task-list descriptions use plain language.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "e493a1a4e90bb026aec59a741980afff76a4599ca77e2eaf418c41a2d8a030d2",
-      "de-DE": "610cc082828756ba13f392bfaae337640769436e6d15107728f3d98df603bd41",
+      "es-ES": "76c133db41d218e7e7aa30dabeaf726bbe9e9c2cfb5d24f5514f2ab12745b6b2",
+      "de-DE": "dcf8499ef613995aa4a73d6faeea6fd57a020efcc94625cedaecbb31bc44ca7f",
     });
   });
 

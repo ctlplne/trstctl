@@ -1,1 +1,0 @@
-import{f as e}from"./utils-Cad9Oobn.js";var t=e();function n({children:e,className:n=``,label:r}){return(0,t.jsx)(`div`,{"aria-label":r,className:`${n} min-w-0 max-w-full overflow-x-auto rounded-md border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2`,role:`group`,tabIndex:0,children:e})}export{n as t};

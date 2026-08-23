@@ -78,6 +78,18 @@ export const messages = {
     defaultMessage: "Exact identifiers, policy facts, event history, and recovery evidence remain available in this workspace.",
     description: "Fallback explanation of where expert evidence remains after progressive disclosure.",
   },
+  "progressiveTasks.heading": {
+    defaultMessage: "Choose what you want to do",
+    description: "Heading above a short list that opens one operational workflow at a time.",
+  },
+  "progressiveTasks.description": {
+    defaultMessage: "Only the task you choose opens. Nothing changes until you review and submit it.",
+    description: "Safety explanation above progressively disclosed operational workflows.",
+  },
+  "progressiveTasks.close": {
+    defaultMessage: "Close",
+    description: "Action that closes the currently open operational workflow.",
+  },
   "admin.access.pamUnavailableTitle": {
     defaultMessage: "Privileged access sessions are unavailable",
     description: "Unavailable-state heading when privileged access sessions cannot be loaded.",
@@ -193,6 +205,22 @@ export const messages = {
   "caHierarchy.workspace.pendingEmpty": {
     defaultMessage: "No key ceremony is waiting for approval.",
     description: "CA hierarchy overview summary when no key ceremony is pending.",
+  },
+  "caHierarchy.workspace.refresh": {
+    defaultMessage: "Refresh status",
+    description: "Secondary action that reloads CA overview state.",
+  },
+  "caHierarchy.workspace.discoveryDetails": {
+    defaultMessage: "Other discovered certificate authorities",
+    description: "Collapsed disclosure for direct and external CA discovery evidence.",
+  },
+  "caHierarchy.workspace.issuanceDetails": {
+    defaultMessage: "Issuance counts and certificate rules",
+    description: "Collapsed disclosure for issuer metrics and certificate profiles.",
+  },
+  "caHierarchy.workspace.externalExpected": {
+    defaultMessage: "External CA registry is not connected. Local and imported authorities still work.",
+    description: "Neutral expected-absence explanation when optional external CA inventory is disabled.",
   },
   "incidents.workspace.label": {
     defaultMessage: "Incident response workspaces",
@@ -1355,6 +1383,66 @@ export const messages = {
     description: "Automatic secret sources technical-details summary.",
   },
   "secrets.route.enginesAction": { defaultMessage: "Add source", description: "Automatic secret sources primary action." },
+  "secrets.tasks.share.title": {
+    defaultMessage: "Share one value once",
+    description: "Plain task name for creating or redeeming a one-time secret link.",
+  },
+  "secrets.tasks.share.description": {
+    defaultMessage: "Create a link that stops working after its first successful view or when its time limit ends.",
+    description: "Outcome and safety summary for one-time secret sharing.",
+  },
+  "secrets.tasks.share.action": {
+    defaultMessage: "Open one-time sharing",
+    description: "Action that opens the one-time secret sharing workflow.",
+  },
+  "secrets.tasks.machineCredential.title": {
+    defaultMessage: "Give a machine temporary access",
+    description: "Plain task name for short-lived API keys and attestation-gated machine credentials.",
+  },
+  "secrets.tasks.machineCredential.description": {
+    defaultMessage: "Create a scoped credential that expires. The raw value is shown once and is not kept by this page.",
+    description: "Outcome and reveal-once safety summary for temporary machine credentials.",
+  },
+  "secrets.tasks.machineCredential.action": {
+    defaultMessage: "Open temporary access",
+    description: "Action that opens short-lived machine credential workflows.",
+  },
+  "secrets.tasks.dynamic.title": {
+    defaultMessage: "Create a temporary database or cloud credential",
+    description: "Plain task name for a dynamic secret lease.",
+  },
+  "secrets.tasks.dynamic.description": {
+    defaultMessage: "Ask a configured provider for a credential that expires and can be renewed or revoked.",
+    description: "Outcome summary for dynamic secret leases.",
+  },
+  "secrets.tasks.dynamic.action": {
+    defaultMessage: "Open temporary credential",
+    description: "Action that opens the dynamic secret lease workflow.",
+  },
+  "secrets.tasks.transit.title": {
+    defaultMessage: "Encrypt or sign without exposing the key",
+    description: "Plain task name for transit encryption, decryption, HMAC, signing, and rewrap operations.",
+  },
+  "secrets.tasks.transit.description": {
+    defaultMessage: "The server uses the protected key. Your app sends data to the operation and never receives the key itself.",
+    description: "Outcome and key-custody summary for transit cryptography.",
+  },
+  "secrets.tasks.transit.action": {
+    defaultMessage: "Open encryption and signing",
+    description: "Action that opens transit cryptography workflows.",
+  },
+  "secrets.tasks.pki.title": {
+    defaultMessage: "Create a short-lived certificate",
+    description: "Plain task name for issuing a certificate through the secrets workspace.",
+  },
+  "secrets.tasks.pki.description": {
+    defaultMessage: "Send a certificate signing request so the private key stays where the certificate will be used.",
+    description: "Outcome and key-custody summary for PKI-as-a-secret.",
+  },
+  "secrets.tasks.pki.action": {
+    defaultMessage: "Open certificate request",
+    description: "Action that opens the PKI-as-a-secret workflow.",
+  },
   "secrets.route.scanningAnswer": {
     defaultMessage: "Which repositories were checked and what needs removal.",
     description: "Secret scanning opening answer.",
@@ -5038,6 +5126,46 @@ export const messages = {
     defaultMessage: "The CA and revocation list are available. Record a canary plan before changing host trust.",
     description: "Explanation of the available SSH workflow.",
   },
+  "sshTrust.readiness.technicalSummary": {
+    defaultMessage: "{revoked} revoked certificates · {attestors} proof methods available",
+    description: "Compact SSH technical-state summary shown before exact details are opened.",
+  },
+  "sshTrust.readiness.technicalDetails": {
+    defaultMessage: "Show SSH technical status",
+    description: "Disclosure label for exact SSH service, KRL, attestor, and authority-key values.",
+  },
+  "sshTrust.tasks.rollout.title": {
+    defaultMessage: "Move hosts to short-lived trust",
+    description: "Plain task name for planning a standing-key to SSH-CA rollout.",
+  },
+  "sshTrust.tasks.rollout.description": {
+    defaultMessage: "Record a canary, health check, and rollback plan before anyone changes sshd on a host.",
+    description: "Outcome and safety summary for SSH trust rollout planning.",
+  },
+  "sshTrust.tasks.access.title": {
+    defaultMessage: "Give temporary SSH access",
+    description: "Plain task name for issuing an attestation-gated SSH user certificate.",
+  },
+  "sshTrust.tasks.access.description": {
+    defaultMessage: "Issue a short-lived certificate only after machine proof, a separate approver, and access limits are checked.",
+    description: "Outcome and safety summary for temporary SSH access.",
+  },
+  "sshTrust.tasks.access.action": {
+    defaultMessage: "Request SSH access",
+    description: "Action that opens the temporary SSH access workflow.",
+  },
+  "sshTrust.tasks.remove.title": {
+    defaultMessage: "Remove old SSH access",
+    description: "Plain task name for certificate revocation and standing-access retirement.",
+  },
+  "sshTrust.tasks.remove.description": {
+    defaultMessage: "Block a certificate or record that a host no longer accepts a standing key. Review the impact before submitting.",
+    description: "Outcome and safety summary for SSH revocation and host retirement.",
+  },
+  "sshTrust.tasks.remove.action": {
+    defaultMessage: "Remove access",
+    description: "Action that opens SSH revocation and retirement workflows.",
+  },
   "sshTrust.rollout.recordOnly": {
     defaultMessage: "This form records your reviewed rollout evidence. It does not run commands or change sshd on any host.",
     description: "Safety boundary for the SSH rollout evidence form.",
@@ -5093,6 +5221,10 @@ export const messages = {
   "sshTrust.fleet.empty": {
     defaultMessage: "No agent-reported SSH key locations yet.",
     description: "Empty state for SSH fleet inventory.",
+  },
+  "sshTrust.fleet.summary": {
+    defaultMessage: "{hosts} locations reported · {standing} standing grants · {orphaned} orphaned",
+    description: "Compact SSH inventory summary that replaces three equally weighted metric cards.",
   },
   "sshTrust.fleet.tableLabel": {
     defaultMessage: "SSH standing access inventory",
@@ -14648,10 +14780,6 @@ export const messages = {
     defaultMessage: "Auth session",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
   },
-  "source.authority.key.60329d7d7b": {
-    defaultMessage: "Authority key",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/SSHTrust.tsx.",
-  },
   "source.authority.key.cfdd3eeb4b": {
     defaultMessage: "authority key",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Protocols.tsx.",
@@ -19603,10 +19731,6 @@ export const messages = {
     defaultMessage: "Invoking",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Assistant.tsx:518.",
   },
-  "source.issue.leaf.from.value1.4525393020": {
-    defaultMessage: "Issue leaf from {value1}",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:1679.",
-  },
   "source.keep.value1.208d6f9b94": {
     defaultMessage: "keep: {value1}",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Incidents.tsx:1862.",
@@ -19965,10 +20089,6 @@ export const messages = {
   "source.sign.artifact.57261585fa": {
     defaultMessage: "Sign artifact",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CodeSigning.tsx:164.",
-  },
-  "source.sign.intermediate.csr.with.value1.4a29b8342b": {
-    defaultMessage: "Sign intermediate CSR with {value1}",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:1687.",
   },
   "source.signing.bdabe34a39": {
     defaultMessage: "Signing…",

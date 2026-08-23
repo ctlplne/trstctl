@@ -7,6 +7,7 @@ import { DataGridToolbar } from "@/components/DataGridToolbar";
 import { DetailDrawer } from "@/components/DetailDrawer";
 import { Dialog } from "@/components/Dialog";
 import { PageHeader } from "@/components/PageHeader";
+import { ProgressiveTaskList } from "@/components/ProgressiveTaskList";
 import { ScrollableTableRegion } from "@/components/ScrollableTableRegion";
 import { IdentityPicker } from "@/components/IdentityPicker";
 import { ModuleKpiStrip } from "@/components/ModuleKpiStrip";
@@ -254,6 +255,8 @@ export function Secrets() {
   const [redeemBusy, setRedeemBusy] = useState(false);
   const [redeemError, setRedeemError] = useState<string | null>(null);
   const [redeemed, setRedeemed] = useState<ShareValue | null>(null);
+  const [sharingTask, setSharingTask] = useState<"share" | "machine" | null>(null);
+  const [engineTask, setEngineTask] = useState<"dynamic" | "transit" | "pki" | null>(null);
 
   const [ephemeralSubject, setEphemeralSubject] = useState("");
   const [ephemeralScopes, setEphemeralScopes] = useState("");
@@ -1384,6 +1387,12 @@ export function Secrets() {
     }
   }
 
+  useEffect(() => {
+    if (tab === "sharing" && sharingTask === "share") {
+      document.getElementById("share-value")?.focus();
+    }
+  }, [sharingTask, tab]);
+
   // C-A1 precedent: historical /secrets?tab=<id> deep links redirect
   // permanently to the sub-routes; any other query params survive the hop.
   if (legacyTab !== "store") {
@@ -1409,6 +1418,10 @@ export function Secrets() {
                 if (tab === "store") {
                   if (createOpen) createNameRef.current?.focus();
                   else setCreateOpen(true);
+                  return;
+                }
+                if (tab === "sharing") {
+                  setSharingTask("share");
                   return;
                 }
                 if ("destination" in routeUX) {
@@ -2296,266 +2309,292 @@ export function Secrets() {
 
       {tab === "sharing" && (
         <div className="grid gap-6">
-          <section aria-labelledby="share-heading" className="grid gap-4 border-y border-border py-4">
-            <div>
-              <h2 id="share-heading" className="text-title font-semibold">
-                {translateNow("source.one.time.sharing.9db928cd78")}
-              </h2>
-              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-                Create returns a bearer token once. Redeem returns the value once; a later redeem is expected to fail closed.
-              </p>
-            </div>
-            <div className="grid gap-4 xl:grid-cols-2">
-              <form
-                aria-label={translateNow("source.create.one.time.share.fd95a197d6")}
-                onSubmit={(event) => void submitShare(event)}
-                className="grid content-start gap-3"
-              >
-                <label className="grid gap-1 text-sm">
-                  <span className="font-medium">{translateNow("source.value.to.share.fa56b0a913")}</span>
-                  <input
-                    id="share-value"
-                    className="rounded-md border border-border bg-background px-3 py-2"
-                    type="password"
-                    value={shareValueInput}
-                    onChange={(event) => setShareValueInput(event.target.value)}
-                    required
-                  />
-                </label>
-                <label className="grid gap-1 text-sm">
-                  <span className="font-medium">{translateNow("source.ttl.seconds.862d08de5a")}</span>
-                  <input
-                    className="rounded-md border border-border bg-background px-3 py-2"
-                    type="number"
-                    min="60"
-                    value={shareTTL}
-                    onChange={(event) => setShareTTL(event.target.value)}
-                  />
-                </label>
-                <Button type="submit" disabled={shareBusy || Boolean(loadError)}>
-                  {shareBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Share2 className="h-4 w-4" aria-hidden="true" />}
-                  {translateNow("source.create.share.bb7a8c7b6e")}
-                </Button>
-                {shareError && <ErrorState title={translateNow("source.share.create.failed.9078694d49")}>{shareError}</ErrorState>}
-              </form>
-              <form
-                aria-label={translateNow("source.redeem.one.time.share.2294329e1f")}
-                onSubmit={(event) => void submitRedeem(event)}
-                className="grid content-start gap-3"
-              >
-                <label className="grid gap-1 text-sm">
-                  <span className="font-medium">{translateNow("source.share.token.f3310a3b89")}</span>
-                  <input
-                    className="rounded-md border border-border bg-background px-3 py-2"
-                    value={redeemToken}
-                    onChange={(event) => setRedeemToken(event.target.value)}
-                    required
-                  />
-                </label>
-                <Button type="submit" variant="outline" disabled={redeemBusy || Boolean(loadError)}>
-                  {redeemBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
-                  {translateNow("source.redeem.share.1b54732322")}
-                </Button>
-                {redeemError && <ErrorState title={translateNow("source.share.redeem.failed.674fa95c57")}>{redeemError}</ErrorState>}
-              </form>
-            </div>
-            {shareToken && (
-              <RevealPanel title={translateNow("source.one.time.share.token.20234cd9a0")} onDismiss={() => setShareToken(null)} value={shareToken.token}>
-                {translateNow("source.expires.f6725f3af0")} {formatDate(shareToken.expires_at)}. The token is bearer material; copy it now, then dismiss.
-              </RevealPanel>
-            )}
-            {redeemed && (
-              <RevealPanel title={translateNow("source.redeemed.share.value.1455d94a16")} onDismiss={() => setRedeemed(null)} value={redeemed.value}>
-                {translateNow("source.this.value.is.the.exact.once.redeem.result.ed19b63953")}
-              </RevealPanel>
-            )}
-          </section>
+          <ProgressiveTaskList
+            heading={t("progressiveTasks.heading")}
+            description={t("progressiveTasks.description")}
+            activeTask={sharingTask}
+            closeLabel={t("progressiveTasks.close")}
+            onTaskChange={(task) => setSharingTask(task as typeof sharingTask)}
+            tasks={[
+              {
+                id: "share",
+                title: t("secrets.tasks.share.title"),
+                description: t("secrets.tasks.share.description"),
+                actionLabel: t("secrets.tasks.share.action"),
+              },
+              {
+                id: "machine",
+                title: t("secrets.tasks.machineCredential.title"),
+                description: t("secrets.tasks.machineCredential.description"),
+                actionLabel: t("secrets.tasks.machineCredential.action"),
+              },
+            ]}
+          />
 
-          <section aria-labelledby="ephemeral-api-heading" className="grid gap-4 border-y border-border py-4">
-            <div>
-              <h2 id="ephemeral-api-heading" className="text-title font-semibold">
-                {translateNow("source.ephemeral.api.keys.6c8f7c6a2c")}
-              </h2>
-              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-                Issue a scoped, short-lived key for a machine task. The server returns the raw token once; after dismissal this page keeps no copy.
-              </p>
-              {/* TRACE-005 source anchor: ephemeral API-key issuance is served; POST /api/v1/ephemeral/api-keys; trstctl-cli ephemeral api-keys issue; api_token.revoked */}
-            </div>
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)]">
-              <form
-                aria-label={translateNow("source.issue.ephemeral.api.key.d864784cc7")}
-                onSubmit={(event) => void submitEphemeralAPIKey(event)}
-                className="grid content-start gap-3"
-              >
-                <label className="grid gap-1 text-sm">
-                  <span className="font-medium">{translateNow("source.subject.6897128384")}</span>
-                  <input
-                    className="rounded-md border border-border bg-background px-3 py-2"
-                    value={ephemeralSubject}
-                    onChange={(event) => setEphemeralSubject(event.target.value)}
-                    placeholder={translateNow("source.ci.deploy.preview.d2c6100222")}
-                    required
-                  />
-                </label>
-                <label className="grid gap-1 text-sm">
-                  <span className="font-medium">{translateNow("source.scopes.0d5644ff52")}</span>
-                  <textarea
-                    className="min-h-24 rounded-md border border-border bg-background px-3 py-2"
-                    value={ephemeralScopes}
-                    onChange={(event) => setEphemeralScopes(event.target.value)}
-                    placeholder={translateNow("source.repo.payments.read.deploy.staging.write.169aa8250e")}
-                    required
-                  />
-                </label>
-                <label className="grid gap-1 text-sm">
-                  <span className="font-medium">{translateNow("source.ttl.seconds.862d08de5a")}</span>
-                  <input
-                    className="rounded-md border border-border bg-background px-3 py-2"
-                    type="number"
-                    min="60"
-                    value={ephemeralTTL}
-                    onChange={(event) => setEphemeralTTL(event.target.value)}
-                    required
-                  />
-                </label>
-                <Button type="submit" disabled={ephemeralBusy || Boolean(loadError)}>
-                  {ephemeralBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
-                  {translateNow("source.issue.api.key.3cdf19cbb9")}
-                </Button>
-                {ephemeralError && <ErrorState title={translateNow("source.ephemeral.api.key.issue.failed.b91df9889a")}>{ephemeralError}</ErrorState>}
-              </form>
-              <div className="ui-panel grid content-start gap-2 p-comfortable text-sm">
-                <h3 className="text-title font-semibold">{translateNow("source.reveal.once.key.issuance.61c20133fa")}</h3>
-                <p className="text-muted-foreground">{translateNow("source.send.the.subject.scopes.and.ttl.to.issue.a.9854a77221")}</p>
-              </div>
-            </div>
-            {ephemeralKey && (
-              <RevealPanel title={translateNow("source.ephemeral.api.key.59757a0857")} onDismiss={() => setEphemeralKey(null)} value={ephemeralKey.token}>
-                {translateNow("source.key.99a52df3ff")} <span className="font-mono text-xs">{ephemeralKey.id}</span> {translateNow("source.for.10c22bcf4c")}{" "}
-                {ephemeralKey.subject} {translateNow("source.expires.ab8a2845f1")} {formatDate(ephemeralKey.expires_at)}
-                {translateNow("source.scopes.c7bcf9d686")} {ephemeralKey.scopes.join(", ")}.
-              </RevealPanel>
-            )}
-            <div className="grid gap-4 border-t border-border pt-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)]">
-              <form
-                aria-label={t("parity.requestAttestationGatedEphemeralCredential_4ce3ce")}
-                onSubmit={(event) => void submitEphemeralCredential(event)}
-                className="grid content-start gap-3"
-              >
-                <label className="grid gap-1 text-body font-medium">
-                  {t("parity.requestId_63aa59")}
-                  <input
-                    className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
-                    value={credentialRequestID}
-                    onChange={(event) => setCredentialRequestID(event.target.value)}
-                    placeholder={t("parity.req7c2f9a_03dd4e")}
-                    required
-                  />
-                </label>
-                <label className="grid gap-1 text-body font-medium">
-                  {translateNow("source.attestation.method.1f0610be7c")}
-                  <input
-                    className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
-                    value={credentialMethod}
-                    onChange={(event) => setCredentialMethod(event.target.value)}
-                    placeholder={t("parity.tpmQuote_f72300")}
-                    required
-                  />
-                </label>
-                <label className="grid gap-1 text-body font-medium">
-                  {t("parity.attestationPayloadBase64_b7cf3a")}
-                  <textarea
-                    className="min-h-24 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs"
-                    value={credentialPayload}
-                    onChange={(event) => setCredentialPayload(event.target.value)}
-                    required
-                  />
-                </label>
-                <label className="grid gap-1 text-body font-medium">
-                  {t("parity.publicKeyPem_10749e")}
-                  <textarea
-                    className="min-h-24 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs"
-                    value={credentialPublicKey}
-                    onChange={(event) => setCredentialPublicKey(event.target.value)}
-                    placeholder={translateNow("source.begin.public.key.59a58325e8")}
-                    required
-                  />
-                </label>
-                <label className="grid gap-1 text-body font-medium">
-                  {t("parity.ttlSecondsOptional_68f1c5")}
-                  <input
-                    className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
-                    type="number"
-                    min="60"
-                    value={credentialTTL}
-                    onChange={(event) => setCredentialTTL(event.target.value)}
-                  />
-                </label>
-                <Button type="submit" disabled={credentialBusy || Boolean(loadError)}>
-                  {credentialBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
-                  {translateNow("source.request.credential.014a4a64ca")}
-                </Button>
-                {credentialError && <ErrorState title={t("parity.ephemeralCredentialRequestFailed_12be63")}>{credentialError}</ErrorState>}
-              </form>
-              <div className="ui-panel grid content-start gap-2 p-comfortable text-sm">
-                <h3 className="text-title font-semibold">{t("parity.attestationGatedCredentials_2887bd")}</h3>
-                <p className="text-muted-foreground">
-                  Submit workload attestation and a public key to mint a just-in-time credential. When approval quorum applies, the request waits for approvers;
-                  share the request ID with an approver to finish issuance.
+          {sharingTask === "share" && (
+            <section id="task-panel-share" aria-labelledby="share-heading" className="grid gap-4 border-y border-border py-4">
+              <div>
+                <h2 id="share-heading" className="text-title font-semibold">
+                  {translateNow("source.one.time.sharing.9db928cd78")}
+                </h2>
+                <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+                  Create returns a bearer token once. Redeem returns the value once; a later redeem is expected to fail closed.
                 </p>
               </div>
-            </div>
-            {credential && (
-              <div className="ui-panel grid gap-3 p-comfortable text-sm">
-                <div className="flex flex-wrap items-center gap-2">
-                  {credential.state === "issued" ? (
-                    <StatusBadge vocabulary="lifecycle" value="issued" label="Issued" tone="success" />
-                  ) : (
-                    <StatusBadge
-                      vocabulary="lifecycle"
-                      value="awaiting_approval"
-                      label={`Awaiting approval — ${credential.approvals} of ${credential.required_approvals} approvals`}
-                      tone="warning"
+              <div className="grid gap-4 xl:grid-cols-2">
+                <form
+                  aria-label={translateNow("source.create.one.time.share.fd95a197d6")}
+                  onSubmit={(event) => void submitShare(event)}
+                  className="grid content-start gap-3"
+                >
+                  <label className="grid gap-1 text-sm">
+                    <span className="font-medium">{translateNow("source.value.to.share.fa56b0a913")}</span>
+                    <input
+                      id="share-value"
+                      className="rounded-md border border-border bg-background px-3 py-2"
+                      type="password"
+                      value={shareValueInput}
+                      onChange={(event) => setShareValueInput(event.target.value)}
+                      required
                     />
-                  )}
-                  <span className="text-muted-foreground">
-                    {translateNow("source.subject.6897128384")} <span className="font-medium text-foreground">{credential.subject}</span>{" "}
-                    {translateNow("source.expires.1de5fe01e9")} {formatDate(credential.expires_at)}
-                  </span>
-                </div>
-                {credential.state === "awaiting_approval" && (
-                  <div className="grid gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-control border border-border bg-muted px-2.5 py-1.5 font-mono text-xs">{credential.request_id}</span>
-                      <Button type="button" size="sm" variant="outline" onClick={() => void copyCredentialField("request_id", credential.request_id)}>
-                        <Copy className="h-4 w-4" aria-hidden="true" />
-                        {t("parity.copyRequestId_a53908")}
-                      </Button>
-                      {credentialCopied === "request_id" && <span className="text-xs text-muted-foreground">{t("parity.copied_dd2ce2")}</span>}
-                    </div>
-                    <p className="text-muted-foreground">{t("parity.approversCanIssueThisFromThe_33b073")}</p>
-                  </div>
-                )}
-                {credential.state === "issued" && credential.certificate_pem && (
-                  <div className="grid gap-2">
-                    <pre className="max-h-48 overflow-auto rounded bg-muted px-3 py-2 font-mono text-xs">{credential.certificate_pem}</pre>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => void copyCredentialField("certificate", credential.certificate_pem ?? "")}
-                      >
-                        <Copy className="h-4 w-4" aria-hidden="true" />
-                        {t("parity.copyCertificate_59db8a")}
-                      </Button>
-                      {credentialCopied === "certificate" && <span className="text-xs text-muted-foreground">{t("parity.copied_dd2ce2")}</span>}
-                    </div>
-                  </div>
-                )}
+                  </label>
+                  <label className="grid gap-1 text-sm">
+                    <span className="font-medium">{translateNow("source.ttl.seconds.862d08de5a")}</span>
+                    <input
+                      className="rounded-md border border-border bg-background px-3 py-2"
+                      type="number"
+                      min="60"
+                      value={shareTTL}
+                      onChange={(event) => setShareTTL(event.target.value)}
+                    />
+                  </label>
+                  <Button type="submit" disabled={shareBusy || Boolean(loadError)}>
+                    {shareBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Share2 className="h-4 w-4" aria-hidden="true" />}
+                    {translateNow("source.create.share.bb7a8c7b6e")}
+                  </Button>
+                  {shareError && <ErrorState title={translateNow("source.share.create.failed.9078694d49")}>{shareError}</ErrorState>}
+                </form>
+                <form
+                  aria-label={translateNow("source.redeem.one.time.share.2294329e1f")}
+                  onSubmit={(event) => void submitRedeem(event)}
+                  className="grid content-start gap-3"
+                >
+                  <label className="grid gap-1 text-sm">
+                    <span className="font-medium">{translateNow("source.share.token.f3310a3b89")}</span>
+                    <input
+                      className="rounded-md border border-border bg-background px-3 py-2"
+                      value={redeemToken}
+                      onChange={(event) => setRedeemToken(event.target.value)}
+                      required
+                    />
+                  </label>
+                  <Button type="submit" variant="outline" disabled={redeemBusy || Boolean(loadError)}>
+                    {redeemBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
+                    {translateNow("source.redeem.share.1b54732322")}
+                  </Button>
+                  {redeemError && <ErrorState title={translateNow("source.share.redeem.failed.674fa95c57")}>{redeemError}</ErrorState>}
+                </form>
               </div>
-            )}
-          </section>
+              {shareToken && (
+                <RevealPanel title={translateNow("source.one.time.share.token.20234cd9a0")} onDismiss={() => setShareToken(null)} value={shareToken.token}>
+                  {translateNow("source.expires.f6725f3af0")} {formatDate(shareToken.expires_at)}. The token is bearer material; copy it now, then dismiss.
+                </RevealPanel>
+              )}
+              {redeemed && (
+                <RevealPanel title={translateNow("source.redeemed.share.value.1455d94a16")} onDismiss={() => setRedeemed(null)} value={redeemed.value}>
+                  {translateNow("source.this.value.is.the.exact.once.redeem.result.ed19b63953")}
+                </RevealPanel>
+              )}
+            </section>
+          )}
+
+          {sharingTask === "machine" && (
+            <section id="task-panel-machine" aria-labelledby="ephemeral-api-heading" className="grid gap-4 border-y border-border py-4">
+              <div>
+                <h2 id="ephemeral-api-heading" className="text-title font-semibold">
+                  {translateNow("source.ephemeral.api.keys.6c8f7c6a2c")}
+                </h2>
+                <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+                  Issue a scoped, short-lived key for a machine task. The server returns the raw token once; after dismissal this page keeps no copy.
+                </p>
+                {/* TRACE-005 source anchor: ephemeral API-key issuance is served; POST /api/v1/ephemeral/api-keys; trstctl-cli ephemeral api-keys issue; api_token.revoked */}
+              </div>
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)]">
+                <form
+                  aria-label={translateNow("source.issue.ephemeral.api.key.d864784cc7")}
+                  onSubmit={(event) => void submitEphemeralAPIKey(event)}
+                  className="grid content-start gap-3"
+                >
+                  <label className="grid gap-1 text-sm">
+                    <span className="font-medium">{translateNow("source.subject.6897128384")}</span>
+                    <input
+                      className="rounded-md border border-border bg-background px-3 py-2"
+                      value={ephemeralSubject}
+                      onChange={(event) => setEphemeralSubject(event.target.value)}
+                      placeholder={translateNow("source.ci.deploy.preview.d2c6100222")}
+                      required
+                    />
+                  </label>
+                  <label className="grid gap-1 text-sm">
+                    <span className="font-medium">{translateNow("source.scopes.0d5644ff52")}</span>
+                    <textarea
+                      className="min-h-24 rounded-md border border-border bg-background px-3 py-2"
+                      value={ephemeralScopes}
+                      onChange={(event) => setEphemeralScopes(event.target.value)}
+                      placeholder={translateNow("source.repo.payments.read.deploy.staging.write.169aa8250e")}
+                      required
+                    />
+                  </label>
+                  <label className="grid gap-1 text-sm">
+                    <span className="font-medium">{translateNow("source.ttl.seconds.862d08de5a")}</span>
+                    <input
+                      className="rounded-md border border-border bg-background px-3 py-2"
+                      type="number"
+                      min="60"
+                      value={ephemeralTTL}
+                      onChange={(event) => setEphemeralTTL(event.target.value)}
+                      required
+                    />
+                  </label>
+                  <Button type="submit" disabled={ephemeralBusy || Boolean(loadError)}>
+                    {ephemeralBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
+                    {translateNow("source.issue.api.key.3cdf19cbb9")}
+                  </Button>
+                  {ephemeralError && <ErrorState title={translateNow("source.ephemeral.api.key.issue.failed.b91df9889a")}>{ephemeralError}</ErrorState>}
+                </form>
+                <div className="ui-panel grid content-start gap-2 p-comfortable text-sm">
+                  <h3 className="text-title font-semibold">{translateNow("source.reveal.once.key.issuance.61c20133fa")}</h3>
+                  <p className="text-muted-foreground">{translateNow("source.send.the.subject.scopes.and.ttl.to.issue.a.9854a77221")}</p>
+                </div>
+              </div>
+              {ephemeralKey && (
+                <RevealPanel title={translateNow("source.ephemeral.api.key.59757a0857")} onDismiss={() => setEphemeralKey(null)} value={ephemeralKey.token}>
+                  {translateNow("source.key.99a52df3ff")} <span className="font-mono text-xs">{ephemeralKey.id}</span> {translateNow("source.for.10c22bcf4c")}{" "}
+                  {ephemeralKey.subject} {translateNow("source.expires.ab8a2845f1")} {formatDate(ephemeralKey.expires_at)}
+                  {translateNow("source.scopes.c7bcf9d686")} {ephemeralKey.scopes.join(", ")}.
+                </RevealPanel>
+              )}
+              <div className="grid gap-4 border-t border-border pt-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)]">
+                <form
+                  aria-label={t("parity.requestAttestationGatedEphemeralCredential_4ce3ce")}
+                  onSubmit={(event) => void submitEphemeralCredential(event)}
+                  className="grid content-start gap-3"
+                >
+                  <label className="grid gap-1 text-body font-medium">
+                    {t("parity.requestId_63aa59")}
+                    <input
+                      className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                      value={credentialRequestID}
+                      onChange={(event) => setCredentialRequestID(event.target.value)}
+                      placeholder={t("parity.req7c2f9a_03dd4e")}
+                      required
+                    />
+                  </label>
+                  <label className="grid gap-1 text-body font-medium">
+                    {translateNow("source.attestation.method.1f0610be7c")}
+                    <input
+                      className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                      value={credentialMethod}
+                      onChange={(event) => setCredentialMethod(event.target.value)}
+                      placeholder={t("parity.tpmQuote_f72300")}
+                      required
+                    />
+                  </label>
+                  <label className="grid gap-1 text-body font-medium">
+                    {t("parity.attestationPayloadBase64_b7cf3a")}
+                    <textarea
+                      className="min-h-24 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs"
+                      value={credentialPayload}
+                      onChange={(event) => setCredentialPayload(event.target.value)}
+                      required
+                    />
+                  </label>
+                  <label className="grid gap-1 text-body font-medium">
+                    {t("parity.publicKeyPem_10749e")}
+                    <textarea
+                      className="min-h-24 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs"
+                      value={credentialPublicKey}
+                      onChange={(event) => setCredentialPublicKey(event.target.value)}
+                      placeholder={translateNow("source.begin.public.key.59a58325e8")}
+                      required
+                    />
+                  </label>
+                  <label className="grid gap-1 text-body font-medium">
+                    {t("parity.ttlSecondsOptional_68f1c5")}
+                    <input
+                      className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                      type="number"
+                      min="60"
+                      value={credentialTTL}
+                      onChange={(event) => setCredentialTTL(event.target.value)}
+                    />
+                  </label>
+                  <Button type="submit" disabled={credentialBusy || Boolean(loadError)}>
+                    {credentialBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
+                    {translateNow("source.request.credential.014a4a64ca")}
+                  </Button>
+                  {credentialError && <ErrorState title={t("parity.ephemeralCredentialRequestFailed_12be63")}>{credentialError}</ErrorState>}
+                </form>
+                <div className="ui-panel grid content-start gap-2 p-comfortable text-sm">
+                  <h3 className="text-title font-semibold">{t("parity.attestationGatedCredentials_2887bd")}</h3>
+                  <p className="text-muted-foreground">
+                    Submit workload attestation and a public key to mint a just-in-time credential. When approval quorum applies, the request waits for
+                    approvers; share the request ID with an approver to finish issuance.
+                  </p>
+                </div>
+              </div>
+              {credential && (
+                <div className="ui-panel grid gap-3 p-comfortable text-sm">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {credential.state === "issued" ? (
+                      <StatusBadge vocabulary="lifecycle" value="issued" label="Issued" tone="success" />
+                    ) : (
+                      <StatusBadge
+                        vocabulary="lifecycle"
+                        value="awaiting_approval"
+                        label={`Awaiting approval — ${credential.approvals} of ${credential.required_approvals} approvals`}
+                        tone="warning"
+                      />
+                    )}
+                    <span className="text-muted-foreground">
+                      {translateNow("source.subject.6897128384")} <span className="font-medium text-foreground">{credential.subject}</span>{" "}
+                      {translateNow("source.expires.1de5fe01e9")} {formatDate(credential.expires_at)}
+                    </span>
+                  </div>
+                  {credential.state === "awaiting_approval" && (
+                    <div className="grid gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-control border border-border bg-muted px-2.5 py-1.5 font-mono text-xs">{credential.request_id}</span>
+                        <Button type="button" size="sm" variant="outline" onClick={() => void copyCredentialField("request_id", credential.request_id)}>
+                          <Copy className="h-4 w-4" aria-hidden="true" />
+                          {t("parity.copyRequestId_a53908")}
+                        </Button>
+                        {credentialCopied === "request_id" && <span className="text-xs text-muted-foreground">{t("parity.copied_dd2ce2")}</span>}
+                      </div>
+                      <p className="text-muted-foreground">{t("parity.approversCanIssueThisFromThe_33b073")}</p>
+                    </div>
+                  )}
+                  {credential.state === "issued" && credential.certificate_pem && (
+                    <div className="grid gap-2">
+                      <pre className="max-h-48 overflow-auto rounded bg-muted px-3 py-2 font-mono text-xs">{credential.certificate_pem}</pre>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void copyCredentialField("certificate", credential.certificate_pem ?? "")}
+                        >
+                          <Copy className="h-4 w-4" aria-hidden="true" />
+                          {t("parity.copyCertificate_59db8a")}
+                        </Button>
+                        {credentialCopied === "certificate" && <span className="text-xs text-muted-foreground">{t("parity.copied_dd2ce2")}</span>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+          )}
         </div>
       )}
 
@@ -2750,366 +2789,404 @@ export function Secrets() {
 
       {tab === "engines" && (
         <div className="grid gap-6">
-          <section aria-labelledby="dynamic-secrets-heading" className="grid gap-4 border-y border-border py-4">
-            <div>
-              <h2 id="dynamic-secrets-heading" className="text-title font-semibold">
-                {translateNow("source.dynamic.secrets.70f2c5b95c")}
-              </h2>
-              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.issue.a.lease.scoped.credential.from.a.con.9d8b9440ef")}</p>
-              {/* TRACE-005 source anchor: dynamic secret leases are served; POST /api/v1/secrets/leases; secrets:read */}
-            </div>
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]">
+          <ProgressiveTaskList
+            heading={t("progressiveTasks.heading")}
+            description={t("progressiveTasks.description")}
+            activeTask={engineTask}
+            closeLabel={t("progressiveTasks.close")}
+            onTaskChange={(task) => setEngineTask(task as typeof engineTask)}
+            tasks={[
+              {
+                id: "dynamic",
+                title: t("secrets.tasks.dynamic.title"),
+                description: t("secrets.tasks.dynamic.description"),
+                actionLabel: t("secrets.tasks.dynamic.action"),
+              },
+              {
+                id: "transit",
+                title: t("secrets.tasks.transit.title"),
+                description: t("secrets.tasks.transit.description"),
+                actionLabel: t("secrets.tasks.transit.action"),
+              },
+              {
+                id: "pki",
+                title: t("secrets.tasks.pki.title"),
+                description: t("secrets.tasks.pki.description"),
+                actionLabel: t("secrets.tasks.pki.action"),
+              },
+            ]}
+          />
+
+          {engineTask === "dynamic" && (
+            <section id="task-panel-dynamic" aria-labelledby="dynamic-secrets-heading" className="grid gap-4 border-y border-border py-4">
+              <div>
+                <h2 id="dynamic-secrets-heading" className="text-title font-semibold">
+                  {translateNow("source.dynamic.secrets.70f2c5b95c")}
+                </h2>
+                <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.issue.a.lease.scoped.credential.from.a.con.9d8b9440ef")}</p>
+                {/* TRACE-005 source anchor: dynamic secret leases are served; POST /api/v1/secrets/leases; secrets:read */}
+              </div>
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]">
+                <form
+                  aria-label={translateNow("source.issue.dynamic.secret.lease.e14a6cc2e8")}
+                  onSubmit={(event) => void submitDynamicLease(event)}
+                  className="grid content-start gap-3"
+                >
+                  <label className="grid gap-1 text-sm">
+                    <span className="font-medium">{translateNow("source.provider.472590ae97")}</span>
+                    <select
+                      className="rounded-md border border-border bg-background px-3 py-2"
+                      value={leaseProvider}
+                      onChange={(event) => setLeaseProvider(event.target.value)}
+                    >
+                      <option value="postgresql">{translateNow("source.postgresql.cc52d03280")}</option>
+                      <option value="aws-iam">{translateNow("source.aws.iam.c37b8156ed")}</option>
+                      <option value="kubernetes">{translateNow("source.kubernetes.a37d07fe30")}</option>
+                      <option value="redis">{translateNow("source.redis.a7f6415749")}</option>
+                    </select>
+                  </label>
+                  <label className="grid gap-1 text-sm">
+                    <span className="font-medium">{translateNow("source.role.14736a2eb9")}</span>
+                    <input
+                      className="rounded-md border border-border bg-background px-3 py-2"
+                      value={leaseRole}
+                      onChange={(event) => setLeaseRole(event.target.value)}
+                      placeholder={translateNow("source.readonly.reporting.ddf5aecb22")}
+                      required
+                    />
+                  </label>
+                  <label className="grid gap-1 text-sm">
+                    <span className="font-medium">{translateNow("source.ttl.seconds.862d08de5a")}</span>
+                    <input
+                      className="rounded-md border border-border bg-background px-3 py-2"
+                      type="number"
+                      min="60"
+                      value={leaseTTL}
+                      onChange={(event) => setLeaseTTL(event.target.value)}
+                      required
+                    />
+                  </label>
+                  <Button type="submit" disabled={leaseBusy === "issue" || Boolean(loadError)}>
+                    {leaseBusy === "issue" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <KeyRound className="h-4 w-4" aria-hidden="true" />
+                    )}
+                    {translateNow("source.issue.lease.96a70e0f64")}
+                  </Button>
+                </form>
+                <div className="ui-panel grid content-start gap-3 p-comfortable text-sm">
+                  <h3 className="text-title font-semibold">{translateNow("source.lease.state.70d08ad3df")}</h3>
+                  {lease ? (
+                    <>
+                      <DynamicLeaseMetadata lease={lease} />
+                      <label className="grid gap-1">
+                        <span className="font-medium">{translateNow("source.extend.seconds.ff4a8186f0")}</span>
+                        <input
+                          className="rounded-md border border-border bg-background px-3 py-2"
+                          type="number"
+                          min="60"
+                          value={leaseExtendSeconds}
+                          onChange={(event) => setLeaseExtendSeconds(event.target.value)}
+                        />
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => void renewDynamicLease()}
+                          disabled={leaseBusy === "renew" || lease.state === "revoked"}
+                        >
+                          {leaseBusy === "renew" ? (
+                            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                          ) : (
+                            <RotateCw className="h-4 w-4" aria-hidden="true" />
+                          )}
+                          {translateNow("source.renew.lease.b730aa5628")}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => void revokeDynamicLease()}
+                          disabled={leaseBusy === "revoke" || lease.state === "revoked"}
+                        >
+                          {leaseBusy === "revoke" ? (
+                            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" aria-hidden="true" />
+                          )}
+                          {translateNow("source.revoke.lease.a04f91a939")}
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-muted-foreground">{translateNow("source.no.dynamic.lease.issued.yet.da6fd9c373")}</p>
+                  )}
+                </div>
+              </div>
+              {leaseError && <ErrorState title={translateNow("source.dynamic.lease.operation.failed.115f5893e7")}>{leaseError}</ErrorState>}
+              {leaseCredential && (
+                <RevealPanel
+                  title={translateNow("source.generated.credential.for.lease.value1.814b0bc937", { value1: leaseCredential.id })}
+                  onDismiss={() => setLeaseCredential(null)}
+                  value={leaseCredential.credential}
+                >
+                  {translateNow("source.copy.this.generated.credential.now.renew.a.811264cbb9")}
+                </RevealPanel>
+              )}
+            </section>
+          )}
+
+          {engineTask === "transit" && (
+            <section id="task-panel-transit" aria-labelledby="transit-heading" className="grid gap-4 border-y border-border py-4">
+              <div>
+                <h2 id="transit-heading" className="text-title font-semibold">
+                  {translateNow("source.transit.and.kmip.bbf61786e0")}
+                </h2>
+                <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.transit.operations.keep.key.material.serve.be62c8b11a")}</p>
+              </div>
               <form
-                aria-label={translateNow("source.issue.dynamic.secret.lease.e14a6cc2e8")}
-                onSubmit={(event) => void submitDynamicLease(event)}
-                className="grid content-start gap-3"
+                aria-label={translateNow("source.transit.encrypt.and.decrypt.f3ae0fd83f")}
+                onSubmit={(event) => void encryptTransit(event)}
+                className="grid gap-3 xl:grid-cols-[14rem_minmax(0,1fr)]"
               >
                 <label className="grid gap-1 text-sm">
-                  <span className="font-medium">{translateNow("source.provider.472590ae97")}</span>
-                  <select
-                    className="rounded-md border border-border bg-background px-3 py-2"
-                    value={leaseProvider}
-                    onChange={(event) => setLeaseProvider(event.target.value)}
-                  >
-                    <option value="postgresql">{translateNow("source.postgresql.cc52d03280")}</option>
-                    <option value="aws-iam">{translateNow("source.aws.iam.c37b8156ed")}</option>
-                    <option value="kubernetes">{translateNow("source.kubernetes.a37d07fe30")}</option>
-                    <option value="redis">{translateNow("source.redis.a7f6415749")}</option>
-                  </select>
-                </label>
-                <label className="grid gap-1 text-sm">
-                  <span className="font-medium">{translateNow("source.role.14736a2eb9")}</span>
+                  <span className="font-medium">{translateNow("source.key.name.6f245e973f")}</span>
                   <input
                     className="rounded-md border border-border bg-background px-3 py-2"
-                    value={leaseRole}
-                    onChange={(event) => setLeaseRole(event.target.value)}
-                    placeholder={translateNow("source.readonly.reporting.ddf5aecb22")}
+                    value={transitKey}
+                    onChange={(event) => setTransitKey(event.target.value)}
+                    placeholder={translateNow("source.payments.pii.643f35ba95")}
                     required
                   />
                 </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="font-medium">{translateNow("source.aad.9adbaf62d8")}</span>
+                  <input
+                    className="rounded-md border border-border bg-background px-3 py-2"
+                    value={transitAAD}
+                    onChange={(event) => setTransitAAD(event.target.value)}
+                    placeholder={translateNow("source.optional.associated.data.52eba643ce")}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm xl:col-span-2">
+                  <span className="font-medium">{translateNow("source.plaintext.0707c5d972")}</span>
+                  <textarea
+                    className="min-h-24 rounded-md border border-border bg-background px-3 py-2"
+                    value={transitPlaintext}
+                    onChange={(event) => setTransitPlaintext(event.target.value)}
+                    placeholder={translateNow("source.local.plaintext.to.encrypt.a67b9e7b54")}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm xl:col-span-2">
+                  <span className="font-medium">{translateNow("source.ciphertext.47955e6673")}</span>
+                  <textarea
+                    className="min-h-24 rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+                    value={transitCiphertextInput}
+                    onChange={(event) => setTransitCiphertextInput(event.target.value)}
+                    placeholder={translateNow("source.encrypted.result.or.ciphertext.to.decrypt.88441adfe9")}
+                  />
+                </label>
+                <div className="flex flex-wrap gap-2 xl:col-span-2">
+                  <Button type="submit" disabled={transitBusy === "encrypt" || !transitPlaintext.trim() || Boolean(loadError)}>
+                    {transitBusy === "encrypt" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <KeyRound className="h-4 w-4" aria-hidden="true" />
+                    )}
+                    {translateNow("source.encrypt.4f03bf1cdf")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void decryptTransit()}
+                    disabled={transitBusy === "decrypt" || !transitCiphertextInput.trim() || Boolean(loadError)}
+                  >
+                    {transitBusy === "decrypt" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Eye className="h-4 w-4" aria-hidden="true" />
+                    )}
+                    {translateNow("source.decrypt.2e4629449b")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void rewrapTransit()}
+                    disabled={transitBusy === "rewrap" || !transitCiphertextInput.trim() || Boolean(loadError)}
+                  >
+                    {transitBusy === "rewrap" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <RotateCw className="h-4 w-4" aria-hidden="true" />
+                    )}
+                    {translateNow("source.rewrap.49c8c07065")}
+                  </Button>
+                </div>
+              </form>
+              <div className="grid gap-4 xl:grid-cols-2">
+                <div className="ui-panel grid gap-3 p-comfortable text-sm">
+                  <h3 className="text-title font-semibold">{translateNow("source.transit.result.7a54cd2a67")}</h3>
+                  {transitCiphertext ? (
+                    <dl className="grid gap-2">
+                      <div>
+                        <dt className="font-medium text-muted-foreground">{translateNow("source.ciphertext.47955e6673")}</dt>
+                        <dd className="break-all font-mono text-xs">{transitCiphertext.ciphertext}</dd>
+                      </div>
+                      <div>
+                        <dt className="font-medium text-muted-foreground">{translateNow("source.key.version.aa5d87c789")}</dt>
+                        <dd className="font-mono text-xs">v{transitCiphertext.version}</dd>
+                      </div>
+                    </dl>
+                  ) : (
+                    <p className="text-muted-foreground">{translateNow("source.no.transit.ciphertext.yet.f9d6c9870b")}</p>
+                  )}
+                </div>
+                <div className="ui-panel grid gap-3 p-comfortable text-sm">
+                  <h3 className="text-title font-semibold">{translateNow("source.hmac.and.signing.a21f893b5b")}</h3>
+                  <label className="grid gap-1">
+                    <span className="font-medium">{translateNow("source.message.2f77668a9d")}</span>
+                    <textarea
+                      className="min-h-20 rounded-md border border-border bg-background px-3 py-2"
+                      value={transitMessage}
+                      onChange={(event) => setTransitMessage(event.target.value)}
+                      placeholder={translateNow("source.message.bytes.to.mac.or.sign.1400a97072")}
+                    />
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => void hmacTransit()}
+                      disabled={transitBusy === "hmac" || !transitMessage.trim() || Boolean(loadError)}
+                    >
+                      {transitBusy === "hmac" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                      ) : (
+                        <KeyRound className="h-4 w-4" aria-hidden="true" />
+                      )}
+                      {translateNow("source.compute.hmac.4809a2f350")}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => void signTransit()}
+                      disabled={transitBusy === "sign" || !transitMessage.trim() || Boolean(loadError)}
+                    >
+                      {transitBusy === "sign" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                      ) : (
+                        <KeyRound className="h-4 w-4" aria-hidden="true" />
+                      )}
+                      {translateNow("source.sign.message.516e35c2fc")}
+                    </Button>
+                  </div>
+                  {transitHMACResult && <Snippet title={translateNow("source.hmac.32fd6f051c")} text={transitHMACResult.hmac} />}
+                  {transitSignature && (
+                    <Snippet
+                      title={translateNow("source.signature.f1a73e2204")}
+                      text={`${transitSignature.signature}\npublic_der: ${transitSignature.public_der}`}
+                    />
+                  )}
+                </div>
+              </div>
+              {transitError && <ErrorState title={translateNow("source.transit.operation.failed.22502fa40b")}>{transitError}</ErrorState>}
+              {transitPlaintextResult && (
+                <RevealPanel
+                  title={translateNow("source.decrypted.plaintext.675dd9b983")}
+                  onDismiss={() => setTransitPlaintextResult(null)}
+                  value={transitPlaintextResult}
+                >
+                  {translateNow("source.this.plaintext.was.decoded.locally.from.th.fbd3275222")}
+                </RevealPanel>
+              )}
+            </section>
+          )}
+
+          {engineTask === "pki" && (
+            <section id="task-panel-pki" aria-labelledby="pki-heading" className="grid gap-4 border-y border-border py-4">
+              <div>
+                <h2 id="pki-heading" className="text-title font-semibold">
+                  {translateNow("source.pki.as.a.secret.e349ae9d0f")}
+                </h2>
+                <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.issue.a.short.lived.certificate.bundle.and.68b22cee4d")}</p>
+              </div>
+              <form
+                aria-label={translateNow("source.issue.pki.secret.692ee4b6e2")}
+                onSubmit={(event) => void submitPKI(event)}
+                className="grid gap-3 md:grid-cols-2"
+              >
+                <label className="grid gap-1 text-sm">
+                  <span className="font-medium">{t("secrets.pki.custodyLabel")}</span>
+                  <Select
+                    className="rounded-md border border-border bg-background px-3 py-2"
+                    value={pkiMode}
+                    onChange={(event) => setPkiMode(event.target.value as "csr" | "legacy")}
+                  >
+                    <option value="csr">{t("secrets.pki.csrMode")}</option>
+                    <option value="legacy">{t("secrets.pki.legacyMode")}</option>
+                  </Select>
+                </label>
+                {pkiMode === "csr" ? (
+                  <label className="grid gap-1 text-sm md:col-span-2">
+                    <span className="font-medium">{t("request.csr.label")}</span>
+                    <Textarea
+                      className="min-h-36 rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+                      aria-label={t("request.csr.label")}
+                      value={pkiCSR}
+                      onChange={(event) => setPkiCSR(event.target.value)}
+                      placeholder={t("secrets.pki.csrPlaceholder")}
+                      required
+                    />
+                    <span className="text-xs text-muted-foreground">{t("secrets.pki.csrHelp")}</span>
+                  </label>
+                ) : (
+                  <label className="grid gap-1 text-sm">
+                    <span className="font-medium">{translateNow("source.common.name.2d129020eb")}</span>
+                    <input
+                      className="rounded-md border border-border bg-background px-3 py-2"
+                      value={pkiName}
+                      onChange={(event) => setPkiName(event.target.value)}
+                      placeholder={translateNow("source.svc.internal.e50a91019d")}
+                      required
+                    />
+                  </label>
+                )}
                 <label className="grid gap-1 text-sm">
                   <span className="font-medium">{translateNow("source.ttl.seconds.862d08de5a")}</span>
                   <input
                     className="rounded-md border border-border bg-background px-3 py-2"
                     type="number"
                     min="60"
-                    value={leaseTTL}
-                    onChange={(event) => setLeaseTTL(event.target.value)}
-                    required
+                    value={pkiTTL}
+                    onChange={(event) => setPkiTTL(event.target.value)}
                   />
                 </label>
-                <Button type="submit" disabled={leaseBusy === "issue" || Boolean(loadError)}>
-                  {leaseBusy === "issue" ? (
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <KeyRound className="h-4 w-4" aria-hidden="true" />
-                  )}
-                  {translateNow("source.issue.lease.96a70e0f64")}
+                <Button type="submit" className="self-end md:justify-self-start" disabled={pkiBusy || Boolean(loadError)}>
+                  {pkiBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
+                  {translateNow("source.issue.pki.secret.692ee4b6e2")}
                 </Button>
+                {pkiMode === "legacy" && (
+                  <p className="text-xs text-status-warning md:col-span-2">
+                    {t("secrets.pki.legacyWarning")}{" "}
+                    <Link className="underline" to="/audit?type=issuance.server_side_keygen">
+                      {t("secrets.pki.auditLink")}
+                    </Link>
+                  </p>
+                )}
               </form>
-              <div className="ui-panel grid content-start gap-3 p-comfortable text-sm">
-                <h3 className="text-title font-semibold">{translateNow("source.lease.state.70d08ad3df")}</h3>
-                {lease ? (
-                  <>
-                    <DynamicLeaseMetadata lease={lease} />
-                    <label className="grid gap-1">
-                      <span className="font-medium">{translateNow("source.extend.seconds.ff4a8186f0")}</span>
-                      <input
-                        className="rounded-md border border-border bg-background px-3 py-2"
-                        type="number"
-                        min="60"
-                        value={leaseExtendSeconds}
-                        onChange={(event) => setLeaseExtendSeconds(event.target.value)}
-                      />
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => void renewDynamicLease()}
-                        disabled={leaseBusy === "renew" || lease.state === "revoked"}
-                      >
-                        {leaseBusy === "renew" ? (
-                          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                        ) : (
-                          <RotateCw className="h-4 w-4" aria-hidden="true" />
-                        )}
-                        {translateNow("source.renew.lease.b730aa5628")}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => void revokeDynamicLease()}
-                        disabled={leaseBusy === "revoke" || lease.state === "revoked"}
-                      >
-                        {leaseBusy === "revoke" ? (
-                          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" aria-hidden="true" />
-                        )}
-                        {translateNow("source.revoke.lease.a04f91a939")}
-                      </Button>
-                    </div>
-                  </>
-                ) : (
-                  <p className="text-muted-foreground">{translateNow("source.no.dynamic.lease.issued.yet.da6fd9c373")}</p>
-                )}
-              </div>
-            </div>
-            {leaseError && <ErrorState title={translateNow("source.dynamic.lease.operation.failed.115f5893e7")}>{leaseError}</ErrorState>}
-            {leaseCredential && (
-              <RevealPanel
-                title={translateNow("source.generated.credential.for.lease.value1.814b0bc937", { value1: leaseCredential.id })}
-                onDismiss={() => setLeaseCredential(null)}
-                value={leaseCredential.credential}
-              >
-                {translateNow("source.copy.this.generated.credential.now.renew.a.811264cbb9")}
-              </RevealPanel>
-            )}
-          </section>
-
-          <section aria-labelledby="transit-heading" className="grid gap-4 border-y border-border py-4">
-            <div>
-              <h2 id="transit-heading" className="text-title font-semibold">
-                {translateNow("source.transit.and.kmip.bbf61786e0")}
-              </h2>
-              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.transit.operations.keep.key.material.serve.be62c8b11a")}</p>
-            </div>
-            <form
-              aria-label={translateNow("source.transit.encrypt.and.decrypt.f3ae0fd83f")}
-              onSubmit={(event) => void encryptTransit(event)}
-              className="grid gap-3 xl:grid-cols-[14rem_minmax(0,1fr)]"
-            >
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium">{translateNow("source.key.name.6f245e973f")}</span>
-                <input
-                  className="rounded-md border border-border bg-background px-3 py-2"
-                  value={transitKey}
-                  onChange={(event) => setTransitKey(event.target.value)}
-                  placeholder={translateNow("source.payments.pii.643f35ba95")}
-                  required
-                />
-              </label>
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium">{translateNow("source.aad.9adbaf62d8")}</span>
-                <input
-                  className="rounded-md border border-border bg-background px-3 py-2"
-                  value={transitAAD}
-                  onChange={(event) => setTransitAAD(event.target.value)}
-                  placeholder={translateNow("source.optional.associated.data.52eba643ce")}
-                />
-              </label>
-              <label className="grid gap-1 text-sm xl:col-span-2">
-                <span className="font-medium">{translateNow("source.plaintext.0707c5d972")}</span>
-                <textarea
-                  className="min-h-24 rounded-md border border-border bg-background px-3 py-2"
-                  value={transitPlaintext}
-                  onChange={(event) => setTransitPlaintext(event.target.value)}
-                  placeholder={translateNow("source.local.plaintext.to.encrypt.a67b9e7b54")}
-                />
-              </label>
-              <label className="grid gap-1 text-sm xl:col-span-2">
-                <span className="font-medium">{translateNow("source.ciphertext.47955e6673")}</span>
-                <textarea
-                  className="min-h-24 rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-                  value={transitCiphertextInput}
-                  onChange={(event) => setTransitCiphertextInput(event.target.value)}
-                  placeholder={translateNow("source.encrypted.result.or.ciphertext.to.decrypt.88441adfe9")}
-                />
-              </label>
-              <div className="flex flex-wrap gap-2 xl:col-span-2">
-                <Button type="submit" disabled={transitBusy === "encrypt" || !transitPlaintext.trim() || Boolean(loadError)}>
-                  {transitBusy === "encrypt" ? (
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <KeyRound className="h-4 w-4" aria-hidden="true" />
-                  )}
-                  {translateNow("source.encrypt.4f03bf1cdf")}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void decryptTransit()}
-                  disabled={transitBusy === "decrypt" || !transitCiphertextInput.trim() || Boolean(loadError)}
+              {pkiError && <ErrorState title={translateNow("source.pki.issue.failed.cb50a25278")}>{pkiError}</ErrorState>}
+              {pkiBundle && (
+                <RevealPanel
+                  title={translateNow("source.pki.bundle.value1.18184942ea", { value1: pkiBundle.serial })}
+                  onDismiss={() => setPkiBundle(null)}
+                  value={pkiBundle.private_key ? `${pkiBundle.certificate}\n${pkiBundle.private_key}` : pkiBundle.certificate}
                 >
-                  {transitBusy === "decrypt" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
-                  {translateNow("source.decrypt.2e4629449b")}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void rewrapTransit()}
-                  disabled={transitBusy === "rewrap" || !transitCiphertextInput.trim() || Boolean(loadError)}
-                >
-                  {transitBusy === "rewrap" ? (
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <RotateCw className="h-4 w-4" aria-hidden="true" />
-                  )}
-                  {translateNow("source.rewrap.49c8c07065")}
-                </Button>
-              </div>
-            </form>
-            <div className="grid gap-4 xl:grid-cols-2">
-              <div className="ui-panel grid gap-3 p-comfortable text-sm">
-                <h3 className="text-title font-semibold">{translateNow("source.transit.result.7a54cd2a67")}</h3>
-                {transitCiphertext ? (
-                  <dl className="grid gap-2">
-                    <div>
-                      <dt className="font-medium text-muted-foreground">{translateNow("source.ciphertext.47955e6673")}</dt>
-                      <dd className="break-all font-mono text-xs">{transitCiphertext.ciphertext}</dd>
-                    </div>
-                    <div>
-                      <dt className="font-medium text-muted-foreground">{translateNow("source.key.version.aa5d87c789")}</dt>
-                      <dd className="font-mono text-xs">v{transitCiphertext.version}</dd>
-                    </div>
-                  </dl>
-                ) : (
-                  <p className="text-muted-foreground">{translateNow("source.no.transit.ciphertext.yet.f9d6c9870b")}</p>
-                )}
-              </div>
-              <div className="ui-panel grid gap-3 p-comfortable text-sm">
-                <h3 className="text-title font-semibold">{translateNow("source.hmac.and.signing.a21f893b5b")}</h3>
-                <label className="grid gap-1">
-                  <span className="font-medium">{translateNow("source.message.2f77668a9d")}</span>
-                  <textarea
-                    className="min-h-20 rounded-md border border-border bg-background px-3 py-2"
-                    value={transitMessage}
-                    onChange={(event) => setTransitMessage(event.target.value)}
-                    placeholder={translateNow("source.message.bytes.to.mac.or.sign.1400a97072")}
-                  />
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => void hmacTransit()}
-                    disabled={transitBusy === "hmac" || !transitMessage.trim() || Boolean(loadError)}
-                  >
-                    {transitBusy === "hmac" ? (
-                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                    ) : (
-                      <KeyRound className="h-4 w-4" aria-hidden="true" />
-                    )}
-                    {translateNow("source.compute.hmac.4809a2f350")}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => void signTransit()}
-                    disabled={transitBusy === "sign" || !transitMessage.trim() || Boolean(loadError)}
-                  >
-                    {transitBusy === "sign" ? (
-                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                    ) : (
-                      <KeyRound className="h-4 w-4" aria-hidden="true" />
-                    )}
-                    {translateNow("source.sign.message.516e35c2fc")}
-                  </Button>
-                </div>
-                {transitHMACResult && <Snippet title={translateNow("source.hmac.32fd6f051c")} text={transitHMACResult.hmac} />}
-                {transitSignature && (
-                  <Snippet
-                    title={translateNow("source.signature.f1a73e2204")}
-                    text={`${transitSignature.signature}\npublic_der: ${transitSignature.public_der}`}
-                  />
-                )}
-              </div>
-            </div>
-            {transitError && <ErrorState title={translateNow("source.transit.operation.failed.22502fa40b")}>{transitError}</ErrorState>}
-            {transitPlaintextResult && (
-              <RevealPanel
-                title={translateNow("source.decrypted.plaintext.675dd9b983")}
-                onDismiss={() => setTransitPlaintextResult(null)}
-                value={transitPlaintextResult}
-              >
-                {translateNow("source.this.plaintext.was.decoded.locally.from.th.fbd3275222")}
-              </RevealPanel>
-            )}
-          </section>
-
-          <section aria-labelledby="pki-heading" className="grid gap-4 border-y border-border py-4">
-            <div>
-              <h2 id="pki-heading" className="text-title font-semibold">
-                {translateNow("source.pki.as.a.secret.e349ae9d0f")}
-              </h2>
-              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.issue.a.short.lived.certificate.bundle.and.68b22cee4d")}</p>
-            </div>
-            <form
-              aria-label={translateNow("source.issue.pki.secret.692ee4b6e2")}
-              onSubmit={(event) => void submitPKI(event)}
-              className="grid gap-3 md:grid-cols-2"
-            >
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium">{t("secrets.pki.custodyLabel")}</span>
-                <Select
-                  className="rounded-md border border-border bg-background px-3 py-2"
-                  value={pkiMode}
-                  onChange={(event) => setPkiMode(event.target.value as "csr" | "legacy")}
-                >
-                  <option value="csr">{t("secrets.pki.csrMode")}</option>
-                  <option value="legacy">{t("secrets.pki.legacyMode")}</option>
-                </Select>
-              </label>
-              {pkiMode === "csr" ? (
-                <label className="grid gap-1 text-sm md:col-span-2">
-                  <span className="font-medium">{t("request.csr.label")}</span>
-                  <Textarea
-                    className="min-h-36 rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-                    aria-label={t("request.csr.label")}
-                    value={pkiCSR}
-                    onChange={(event) => setPkiCSR(event.target.value)}
-                    placeholder={t("secrets.pki.csrPlaceholder")}
-                    required
-                  />
-                  <span className="text-xs text-muted-foreground">{t("secrets.pki.csrHelp")}</span>
-                </label>
-              ) : (
-                <label className="grid gap-1 text-sm">
-                  <span className="font-medium">{translateNow("source.common.name.2d129020eb")}</span>
-                  <input
-                    className="rounded-md border border-border bg-background px-3 py-2"
-                    value={pkiName}
-                    onChange={(event) => setPkiName(event.target.value)}
-                    placeholder={translateNow("source.svc.internal.e50a91019d")}
-                    required
-                  />
-                </label>
+                  {pkiBundle.private_key ? t("secrets.pki.legacyResult") : t("secrets.pki.csrResult")}
+                </RevealPanel>
               )}
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium">{translateNow("source.ttl.seconds.862d08de5a")}</span>
-                <input
-                  className="rounded-md border border-border bg-background px-3 py-2"
-                  type="number"
-                  min="60"
-                  value={pkiTTL}
-                  onChange={(event) => setPkiTTL(event.target.value)}
-                />
-              </label>
-              <Button type="submit" className="self-end md:justify-self-start" disabled={pkiBusy || Boolean(loadError)}>
-                {pkiBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
-                {translateNow("source.issue.pki.secret.692ee4b6e2")}
-              </Button>
-              {pkiMode === "legacy" && (
-                <p className="text-xs text-status-warning md:col-span-2">
-                  {t("secrets.pki.legacyWarning")}{" "}
-                  <Link className="underline" to="/audit?type=issuance.server_side_keygen">
-                    {t("secrets.pki.auditLink")}
-                  </Link>
-                </p>
-              )}
-            </form>
-            {pkiError && <ErrorState title={translateNow("source.pki.issue.failed.cb50a25278")}>{pkiError}</ErrorState>}
-            {pkiBundle && (
-              <RevealPanel
-                title={translateNow("source.pki.bundle.value1.18184942ea", { value1: pkiBundle.serial })}
-                onDismiss={() => setPkiBundle(null)}
-                value={pkiBundle.private_key ? `${pkiBundle.certificate}\n${pkiBundle.private_key}` : pkiBundle.certificate}
-              >
-                {pkiBundle.private_key ? t("secrets.pki.legacyResult") : t("secrets.pki.csrResult")}
-              </RevealPanel>
-            )}
-          </section>
+            </section>
+          )}
         </div>
       )}
 

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
 import { SSHTrust } from "@/pages/SSHTrust";
@@ -107,10 +107,19 @@ describe("SSH trust served workflow surface", () => {
     renderSSHTrust();
 
     expect(screen.getByRole("heading", { name: "SSH access" })).toBeInTheDocument();
-    expect(await screen.findByText("ssh-ed25519 AAAA trstctl-ca")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Choose what you want to do" })).toBeInTheDocument();
     expect(screen.getByRole("table", { name: "SSH standing access inventory" })).toHaveTextContent("/home/alice/.ssh/authorized_keys");
-    expect(screen.getByText(/1 standing.*1 orphaned/)).toBeInTheDocument();
+    expect(screen.getAllByText(/1 standing.*1 orphaned/)).toHaveLength(2);
+    expect(screen.queryByRole("form", { name: "Record SSH trust rollout" })).not.toBeInTheDocument();
+
+    const technicalDetails = screen.getByText("Show SSH technical status").closest("details") as HTMLDetailsElement;
+    expect(technicalDetails).not.toHaveAttribute("open");
+    await user.click(within(technicalDetails).getByText("Show SSH technical status"));
+    expect(technicalDetails).toHaveAttribute("open");
+    expect(screen.getByText("ssh-ed25519 AAAA trstctl-ca")).toBeInTheDocument();
     expect(screen.getByText("7")).toBeInTheDocument();
+    const chooser = screen.getByRole("heading", { name: "Choose what you want to do" }).closest("section") as HTMLElement;
+    await user.click(within(chooser).getByRole("button", { name: "Plan SSH trust rollout" }));
     expect(screen.getByRole("button", { name: "Record trust rollout" })).toBeDisabled();
 
     await user.click(screen.getByLabelText("Confirm high-blast-radius SSH trust rollout evidence"));
@@ -177,7 +186,8 @@ describe("SSH trust served workflow surface", () => {
     const user = userEvent.setup();
     renderSSHTrust();
 
-    await screen.findByText("ssh-ed25519 AAAA trstctl-ca");
+    const chooser = (await screen.findByRole("heading", { name: "Choose what you want to do" })).closest("section") as HTMLElement;
+    await user.click(within(chooser).getByRole("button", { name: "Request SSH access" }));
     await user.type(screen.getByLabelText("Attestation payload base64"), "eyJzdWIiOiJzYSJ9");
     await user.type(screen.getByLabelText("SSH public key"), "ssh-ed25519 AAAATEST user@example.test");
     await user.click(screen.getByRole("button", { name: "Issue attested SSH cert" }));
@@ -200,6 +210,7 @@ describe("SSH trust served workflow surface", () => {
     expect(screen.getByLabelText("SSH public key")).toHaveValue("");
     expect(await screen.findByLabelText("Issued SSH certificate")).toHaveValue("ssh-rsa-cert-v01@openssh.com AAAA");
     expect(screen.getByText(/approver ssh-approver/)).toBeInTheDocument();
+    await user.click(within(chooser).getByRole("button", { name: "Remove access" }));
     await user.click(screen.getByRole("button", { name: "Revoke and publish KRL" }));
 
     await waitFor(() =>

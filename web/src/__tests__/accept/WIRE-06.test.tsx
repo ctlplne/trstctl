@@ -70,6 +70,7 @@ describe("WIRE-06 ephemeral API-key issuance wiring", () => {
     const user = userEvent.setup();
     renderSecrets("/secrets/sharing");
 
+    await user.click(await screen.findByRole("button", { name: "Open temporary access" }));
     expect(await screen.findByRole("heading", { name: "Ephemeral API keys" })).toBeInTheDocument();
     const issueForm = within(screen.getByRole("form", { name: "Issue ephemeral API key" }));
     await user.type(issueForm.getByLabelText("Subject"), "ci/deploy-preview");

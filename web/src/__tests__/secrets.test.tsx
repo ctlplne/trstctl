@@ -737,7 +737,8 @@ describe("secrets surface", () => {
     expect(screen.getByLabelText("Value to share")).toHaveFocus();
   });
 
-  it("keeps the primary access and engine jobs first in DOM order for assistive technology", async () => {
+  it("keeps advanced access closed and opens one secret-engine task at a time", async () => {
+    const user = userEvent.setup();
     renderSecrets("/secrets/access");
     const grant = await screen.findByRole("heading", { name: "Grant workload access" });
     const developer = screen.getByRole("heading", { name: "Developer access" });
@@ -747,9 +748,15 @@ describe("secrets surface", () => {
 
     cleanup();
     renderSecrets("/secrets/engines");
-    const dynamic = await screen.findByRole("heading", { name: "Dynamic secrets" });
-    const pki = screen.getByRole("heading", { name: "PKI as a secret" });
-    expect(dynamic.compareDocumentPosition(pki) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const chooser = (await screen.findByRole("heading", { name: "Choose what you want to do" })).closest("section") as HTMLElement;
+    expect(screen.queryByRole("heading", { name: "Dynamic secrets" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "PKI as a secret" })).not.toBeInTheDocument();
+    await user.click(within(chooser).getByRole("button", { name: "Open temporary credential" }));
+    expect(screen.getByRole("heading", { name: "Dynamic secrets" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "PKI as a secret" })).not.toBeInTheDocument();
+    await user.click(within(chooser).getByRole("button", { name: "Open certificate request" }));
+    expect(screen.queryByRole("heading", { name: "Dynamic secrets" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "PKI as a secret" })).toBeInTheDocument();
   });
 
   it("refuses to imply delivery when no secret destination is configured", async () => {
@@ -1204,6 +1211,7 @@ describe("secrets surface", () => {
     const user = userEvent.setup();
     renderSecrets("/secrets/sharing");
 
+    await user.click(await screen.findByRole("button", { name: "Open temporary access" }));
     expect(await screen.findByRole("heading", { name: "Ephemeral API keys" })).toBeInTheDocument();
     expect(screen.getByText("Reveal-once key issuance")).toBeInTheDocument();
     expect(screen.getByText(/short-lived token/i)).toBeInTheDocument();
@@ -1265,6 +1273,7 @@ describe("secrets surface", () => {
 
     cleanup();
     renderSecrets("/secrets/engines");
+    await user.click(await screen.findByRole("button", { name: "Open temporary credential" }));
     expect(await screen.findByRole("heading", { name: "Dynamic secrets" })).toBeInTheDocument();
     expect(screen.getByText("No dynamic lease issued yet.")).toBeInTheDocument();
     const leaseForm = within(screen.getByRole("form", { name: "Issue dynamic secret lease" }));
@@ -1295,6 +1304,7 @@ describe("secrets surface", () => {
     const user = userEvent.setup();
     renderSecrets("/secrets/engines");
 
+    await user.click(await screen.findByRole("button", { name: "Open encryption and signing" }));
     expect(await screen.findByRole("heading", { name: "Transit and KMIP" })).toBeInTheDocument();
     const transitForm = within(screen.getByRole("form", { name: "Transit encrypt and decrypt" }));
     await user.type(transitForm.getByLabelText("Key name"), "payments-pii");
@@ -1363,6 +1373,7 @@ describe("secrets surface", () => {
     const user = userEvent.setup();
     renderSecrets("/secrets/engines");
 
+    await user.click(await screen.findByRole("button", { name: "Open certificate request" }));
     const pkiForm = within(await screen.findByRole("form", { name: "Issue PKI secret" }));
     expect(pkiForm.getByLabelText("Key custody")).toHaveValue("csr");
     await user.type(
@@ -1385,6 +1396,7 @@ describe("secrets surface", () => {
 
     cleanup();
     renderSecrets("/secrets/engines");
+    await user.click(await screen.findByRole("button", { name: "Open certificate request" }));
     const legacyForm = within(await screen.findByRole("form", { name: "Issue PKI secret" }));
     await user.selectOptions(legacyForm.getByLabelText("Key custody"), "legacy");
     await user.type(legacyForm.getByLabelText("Common name"), "legacy.internal");
@@ -1408,6 +1420,7 @@ describe("secrets surface", () => {
 
     cleanup();
     renderSecrets("/secrets/sharing");
+    await user.click(await screen.findByRole("button", { name: "Open one-time sharing" }));
     const shareForm = within(await screen.findByRole("form", { name: "Create one-time share" }));
     await user.type(shareForm.getByLabelText("Value to share"), "share-this-once");
     await user.click(shareForm.getByRole("button", { name: /create share/i }));

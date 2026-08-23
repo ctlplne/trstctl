@@ -804,6 +804,10 @@ export function CAHierarchy() {
     );
   }
 
+  const hasOverviewInventory = authorities.length > 0 || sortedIssuers.length > 0 || (caDiscovery?.items?.length ?? 0) > 0;
+  const showOverviewInventory = hasOverviewInventory || loading || Boolean(authoritiesError);
+  const externalRegistryExpectedAbsent = Boolean(externalCAError && /not enabled|not configured|disabled/i.test(externalCAError));
+
   return (
     <section aria-labelledby="ca-heading" className="grid gap-6">
       <PageHeader
@@ -812,16 +816,10 @@ export function CAHierarchy() {
         description="See who signs each certificate and whether every link in the trust chain is healthy. Sensitive key actions require multiple people, so one admin cannot change trust alone."
         technicalDetails="Exact evidence includes root and intermediate lineage, fingerprints and serial numbers, signer custody, ceremony quorum, authority state, retirement and rollover, trust distribution, and immutable audit events."
         actions={
-          <>
-            <Button type="button" onClick={() => selectTab("authorities")}>
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              {t("caHierarchy.action.addAuthority")}
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => void load()} disabled={loading}>
-              <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
-              {translateNow("source.refresh.0e91610117")}
-            </Button>
-          </>
+          <Button type="button" onClick={() => selectTab("authorities")}>
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            {t("caHierarchy.action.addAuthority")}
+          </Button>
         }
       />
 
@@ -847,13 +845,36 @@ export function CAHierarchy() {
           discovery={caDiscovery}
           loading={loading}
           managedKey={managedKey}
-          onOpen={selectTab}
+          onRefresh={() => void load()}
         />
-        {externalCAError && <UnavailableState title={t("caHierarchy.externalRegistryUnavailableTitle")}>{externalCAError}</UnavailableState>}
-      </div>
+        {externalCAError &&
+          (externalRegistryExpectedAbsent ? (
+            <p className="text-sm text-muted-foreground">
+              {t("caHierarchy.workspace.externalExpected")} <span className="font-mono text-xs">{externalCAError}</span>
+            </p>
+          ) : (
+            <UnavailableState title={t("caHierarchy.externalRegistryUnavailableTitle")}>{externalCAError}</UnavailableState>
+          ))}
 
-      <div className={tab === "overview" ? undefined : "hidden"}>
-        <CAOverview issuers={sortedIssuers} profiles={profiles} />
+        {!showOverviewInventory ? (
+          <EmptyState title={t("caHierarchy.discovery.emptyTitle")}>{t("caHierarchy.discovery.emptyBody")}</EmptyState>
+        ) : (
+          <>
+            <ServedAuthoritiesPanel authorities={authorities} error={authoritiesError} loading={loading} onShowDetail={setAuthorityDetail} />
+            <details id="ca-discovery-details" className="group border-y border-border py-4">
+              <summary className="cursor-pointer font-medium text-foreground">{t("caHierarchy.workspace.discoveryDetails")}</summary>
+              <div className="mt-4">
+                <CADiscoveryInventoryPanel inventory={caDiscovery} />
+              </div>
+            </details>
+            <details id="ca-issuance-details" className="group border-y border-border py-4">
+              <summary className="cursor-pointer font-medium text-foreground">{t("caHierarchy.workspace.issuanceDetails")}</summary>
+              <div className="mt-4">
+                <CAOverview issuers={sortedIssuers} profiles={profiles} />
+              </div>
+            </details>
+          </>
+        )}
       </div>
 
       <div {...tabPanelProps("ca", "authorities")} className={tab === "authorities" ? "grid gap-6" : "hidden"}>
@@ -868,21 +889,6 @@ export function CAHierarchy() {
           </Button>
         </div>
         <IssuerCatalog onConfigure={(type) => setIssuerDialogType(type)} />
-      </div>
-
-      <div className={tab === "overview" ? undefined : "hidden"}>
-        <CADiscoveryInventoryPanel inventory={caDiscovery} />
-      </div>
-
-      <div className={tab === "overview" ? undefined : "hidden"}>
-        <ServedAuthoritiesPanel
-          authorities={authorities}
-          error={authoritiesError}
-          loading={loading}
-          onIssueLeaf={setLeafTarget}
-          onShowDetail={setAuthorityDetail}
-          onSignCSR={setSignTarget}
-        />
       </div>
 
       <div className={tab === "authorities" ? undefined : "hidden"}>
@@ -1102,7 +1108,20 @@ export function CAHierarchy() {
       )}
       {leafTarget && <IssueLeafDialog authority={leafTarget} onClose={() => setLeafTarget(null)} />}
       {signTarget && <SignIntermediateCSRDialog authority={signTarget} onClose={() => setSignTarget(null)} />}
-      {authorityDetail && <AuthorityDetailDialog authority={authorityDetail} onClose={() => setAuthorityDetail(null)} />}
+      {authorityDetail && (
+        <AuthorityDetailDialog
+          authority={authorityDetail}
+          onClose={() => setAuthorityDetail(null)}
+          onIssueLeaf={() => {
+            setAuthorityDetail(null);
+            setLeafTarget(authorityDetail);
+          }}
+          onSignCSR={() => {
+            setAuthorityDetail(null);
+            setSignTarget(authorityDetail);
+          }}
+        />
+      )}
       {ceremonyDetail && <CeremonyDetailDialog ceremony={ceremonyDetail} onClose={() => setCeremonyDetail(null)} />}
     </section>
   );
@@ -1115,7 +1134,7 @@ function CAWorkspaceOverview({
   discovery,
   loading,
   managedKey,
-  onOpen,
+  onRefresh,
 }: {
   authorities: CAAuthority[];
   authoritiesError: string | null;
@@ -1123,7 +1142,7 @@ function CAWorkspaceOverview({
   discovery: CADiscovery | null;
   loading: boolean;
   managedKey: ManagedKey | null;
-  onOpen: (tab: CAWorkspaceTab) => void;
+  onRefresh: () => void;
 }) {
   const { t } = useTranslation();
   const roots = authorities.filter((authority) => !authority.parent_id).length;
@@ -1146,44 +1165,32 @@ function CAWorkspaceOverview({
     : t("caHierarchy.workspace.pendingEmpty");
 
   return (
-    <section aria-label={t("caHierarchy.workspace.overviewLabel")} className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-      <WorkspaceSummaryCard
-        heading={t("caHierarchy.workspace.authorityHealth")}
-        body={health}
-        action={t("caHierarchy.workspace.tabs.authorities")}
-        onOpen={() => onOpen("authorities")}
-      />
-      <WorkspaceSummaryCard
-        heading={t("caHierarchy.workspace.lineage")}
-        body={lineage}
-        action={t("caHierarchy.workspace.tabs.authorities")}
-        onOpen={() => onOpen("authorities")}
-      />
-      <WorkspaceSummaryCard
-        heading={t("caHierarchy.workspace.custody")}
-        body={custody}
-        action={t("caHierarchy.workspace.tabs.custody")}
-        onOpen={() => onOpen("custody")}
-      />
-      <WorkspaceSummaryCard
-        heading={t("caHierarchy.workspace.pendingActions")}
-        body={pending}
-        action={t("caHierarchy.workspace.tabs.lifecycle")}
-        onOpen={() => onOpen("lifecycle")}
-      />
+    <section aria-label={t("caHierarchy.workspace.overviewLabel")} className="grid gap-4 border-y border-border py-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-title font-semibold">{t("caHierarchy.workspace.authorityHealth")}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{health}</p>
+        </div>
+        <Button type="button" variant="ghost" size="sm" onClick={onRefresh} disabled={loading}>
+          <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
+          {t("caHierarchy.workspace.refresh")}
+        </Button>
+      </div>
+      <dl className="grid gap-4 text-sm md:grid-cols-3">
+        <div>
+          <dt className="font-medium text-foreground">{t("caHierarchy.workspace.lineage")}</dt>
+          <dd className="mt-1 text-muted-foreground">{lineage}</dd>
+        </div>
+        <div>
+          <dt className="font-medium text-foreground">{t("caHierarchy.workspace.custody")}</dt>
+          <dd className="mt-1 text-muted-foreground">{custody}</dd>
+        </div>
+        <div>
+          <dt className="font-medium text-foreground">{t("caHierarchy.workspace.pendingActions")}</dt>
+          <dd className="mt-1 text-muted-foreground">{pending}</dd>
+        </div>
+      </dl>
     </section>
-  );
-}
-
-function WorkspaceSummaryCard({ heading, body, action, onOpen }: { heading: string; body: string; action: string; onOpen: () => void }) {
-  return (
-    <article className="rounded-panel border border-border bg-card p-4">
-      <h2 className="text-body font-semibold">{heading}</h2>
-      <p className="mt-2 min-h-10 text-sm text-muted-foreground">{body}</p>
-      <Button type="button" variant="ghost" size="sm" className="mt-3 px-0" onClick={onOpen}>
-        {action}
-      </Button>
-    </article>
   );
 }
 
@@ -2078,18 +2085,13 @@ function ServedAuthoritiesPanel({
   authorities,
   error,
   loading,
-  onIssueLeaf,
   onShowDetail,
-  onSignCSR,
 }: {
   authorities: CAAuthority[];
   error: string | null;
   loading: boolean;
-  onIssueLeaf: (authority: CAAuthority) => void;
   onShowDetail: (authority: CAAuthority) => void;
-  onSignCSR: (authority: CAAuthority) => void;
 }) {
-  const { t } = useTranslation();
   const columns = useMemo<Array<DataGridColumn<CAAuthority>>>(
     () => [
       {
@@ -2100,41 +2102,15 @@ function ServedAuthoritiesPanel({
       },
       { id: "kind", header: "Kind", cell: (authority) => authority.kind },
       { id: "status", header: "Status", cell: (authority) => <StatusBadge vocabulary="certificate" value={authority.status} /> },
-      { id: "serial", header: "Serial", cell: (authority) => <span className="font-mono text-xs">{shortSerial(authority.serial)}</span> },
-      { id: "not_after", header: "Not after", cell: (authority) => authority.not_after || "-" },
       // H5: the band, not the raw date. A root 30 months out reads as fine
       // against a leaf yardstick and is already late against its own.
       { id: "horizon", header: translateNow("source.expiry.horizon.191bec0761"), cell: (authority) => <CAHorizonBadge authority={authority} /> },
       { id: "renew_by", header: translateNow("source.renew.or.re.key.by.00be37d4f2"), cell: (authority) => <CAHorizonRenewBy authority={authority} /> },
-      {
-        id: "issuance",
-        header: "Issuance",
-        cell: (authority) => (
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => onIssueLeaf(authority)}
-              aria-label={translateNow("source.issue.leaf.from.value1.4525393020", { value1: authority.common_name })}
-            >
-              {t("parity.issueLeaf_f1c3ee")}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => onSignCSR(authority)}
-              aria-label={translateNow("source.sign.intermediate.csr.with.value1.4a29b8342b", { value1: authority.common_name })}
-            >
-              {t("parity.signIntermediateCsr_cf1361")}
-            </Button>
-          </div>
-        ),
-      },
     ],
-    [onIssueLeaf, onSignCSR, t],
+    [],
   );
+
+  const { t } = useTranslation();
 
   return (
     <section aria-labelledby="served-authorities-heading" className="grid gap-3 border-y border-border py-4">
@@ -2525,7 +2501,17 @@ function SignIntermediateCSRDialog({ authority, onClose }: { authority: CAAuthor
   );
 }
 
-function AuthorityDetailDialog({ authority, onClose }: { authority: CAAuthority; onClose: () => void }) {
+function AuthorityDetailDialog({
+  authority,
+  onClose,
+  onIssueLeaf,
+  onSignCSR,
+}: {
+  authority: CAAuthority;
+  onClose: () => void;
+  onIssueLeaf: () => void;
+  onSignCSR: () => void;
+}) {
   const { t } = useTranslation();
   const titleId = "authority-detail-heading";
   return (
@@ -2560,8 +2546,14 @@ function AuthorityDetailDialog({ authority, onClose }: { authority: CAAuthority;
           <KeyValue label="Signer handle" value={authority.signer_handle || "-"} mono />
         </dl>
         <CertificatePEMBlock label="Certificate PEM" pem={authority.certificate_pem} />
-        <footer className="flex justify-end border-t border-border pt-4">
-          <Button type="button" variant="outline" onClick={onClose}>
+        <footer className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
+          <Button type="button" variant="outline" onClick={onSignCSR}>
+            {t("parity.signIntermediateCsr_cf1361")}
+          </Button>
+          <Button type="button" onClick={onIssueLeaf}>
+            {t("parity.issueLeaf_f1c3ee")}
+          </Button>
+          <Button type="button" variant="ghost" onClick={onClose}>
             {translateNow("source.close.7d9eb7acb1")}
           </Button>
         </footer>
