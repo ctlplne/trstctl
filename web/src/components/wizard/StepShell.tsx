@@ -54,7 +54,7 @@ export function StepShell({
       <div className="border-b border-border p-comfortable">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-caption font-medium uppercase text-muted-foreground">
+            <p className="text-caption font-medium text-muted-foreground">
               {translateNow("source.step.8e6a6cca7a")} {currentIndex + 1} {translateNow("source.of.28391d3bc6")} {steps.length}
             </p>
             <h2 className="mt-1 text-title font-semibold">{currentStep?.label}</h2>

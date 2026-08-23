@@ -64,7 +64,7 @@ export function RevocationCachePanel() {
                       <p className="mt-1 max-w-[18rem] break-all font-mono text-xs text-muted-foreground">{row.issuer_fingerprint}</p>
                     </td>
                     <td>
-                      <p className="font-mono text-xs uppercase">{row.protocol}</p>
+                      <p className="font-mono text-xs">{row.protocol}</p>
                       <p className="mt-1 font-mono text-xs text-muted-foreground">{row.local_path}</p>
                     </td>
                     <td>

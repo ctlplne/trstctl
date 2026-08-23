@@ -831,7 +831,7 @@ export function Incidents() {
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <caption className="sr-only">{t("incidents.ownerRemediation.caption")}</caption>
-              <thead className="text-xs uppercase text-muted-foreground">
+              <thead className="text-xs text-muted-foreground">
                 <tr>
                   <th scope="col" className="py-2 pr-4">
                     {t("incidents.ownerRemediation.identity")}

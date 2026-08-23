@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
@@ -10,6 +10,14 @@ const webRoot = process.cwd();
 const css = readFileSync(path.join(webRoot, "src/index.css"), "utf8");
 const shellSource = readFileSync(path.join(webRoot, "src/components/AppShell.tsx"), "utf8");
 const kpiSource = readFileSync(path.join(webRoot, "src/components/ModuleKpiStrip.tsx"), "utf8");
+
+function productTsxFiles(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const candidate = path.join(directory, entry.name);
+    if (entry.isDirectory()) return entry.name === "__tests__" ? [] : productTsxFiles(candidate);
+    return entry.name.endsWith(".tsx") && !entry.name.endsWith(".test.tsx") ? [candidate] : [];
+  });
+}
 
 describe("quiet confidence v2", () => {
   it("pins the approved warm-paper and forest palette as the light default", () => {
@@ -58,5 +66,14 @@ describe("quiet confidence v2", () => {
     const tableRule = css.slice(css.indexOf(".ui-table thead th"), css.indexOf(".ui-table tbody td"));
     expect(tableRule).not.toContain("text-transform: uppercase");
     expect(tableRule).not.toContain("letter-spacing: 0.04em");
+  });
+
+  it("does not force interface labels or technical identifiers into all caps", () => {
+    const offenders = [path.join(webRoot, "src/components"), path.join(webRoot, "src/pages")]
+      .flatMap(productTsxFiles)
+      .filter((file) => /className\s*=\s*["'][^"']*\buppercase\b/.test(readFileSync(file, "utf8")))
+      .map((file) => path.relative(webRoot, file));
+
+    expect(offenders).toEqual([]);
   });
 });

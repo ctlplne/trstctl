@@ -1192,7 +1192,7 @@ function IdentityDetailPanel({
     <section aria-labelledby="identity-detail-content-heading" className="text-sm">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-medium uppercase text-muted-foreground">{translateNow("source.identity.detail.f34a3c7053")}</p>
+          <p className="text-xs font-medium text-muted-foreground">{translateNow("source.identity.detail.f34a3c7053")}</p>
           <h2 id="identity-detail-content-heading" className="text-title font-semibold">
             {translateNow("source.detail.fields.6c69673d46")}
           </h2>

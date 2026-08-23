@@ -1077,7 +1077,7 @@ function transportLabel(asset: CBOMAsset): string {
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-panel border border-border bg-muted/20 px-3 py-2">
-      <dt className="text-xs font-medium uppercase text-muted-foreground">{label}</dt>
+      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
       <dd className="mt-1 text-title font-semibold">{value}</dd>
     </div>
   );

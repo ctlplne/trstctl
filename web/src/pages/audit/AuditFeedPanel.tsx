@@ -141,7 +141,7 @@ export function AuditFeedPanel() {
       cell: (feed) => (
         <span className="grid gap-1">
           <span className="font-medium">{feed.name}</span>
-          <span className="font-mono text-xs uppercase text-muted-foreground">{feed.provider}</span>
+          <span className="font-mono text-xs text-muted-foreground">{feed.provider}</span>
           <span className="break-all font-mono text-xs text-muted-foreground">{feed.endpoint_url}</span>
           <span className="font-mono text-xs text-muted-foreground">{feed.token_ref}</span>
         </span>

@@ -300,7 +300,7 @@ export function GraphLegend({
         </Button>
       </div>
       <fieldset className="mt-4 grid gap-2">
-        <legend className="text-xs font-semibold uppercase text-muted-foreground">{translateNow("source.node.kinds.ee50ba00ef")}</legend>
+        <legend className="text-xs font-semibold text-muted-foreground">{translateNow("source.node.kinds.ee50ba00ef")}</legend>
         {nodeKinds.map((kind) => {
           const style = graphNodeKindStyle(kind);
           return (
@@ -322,7 +322,7 @@ export function GraphLegend({
         })}
       </fieldset>
       <fieldset className="mt-4 grid gap-2">
-        <legend className="text-xs font-semibold uppercase text-muted-foreground">{translateNow("source.edge.types.396a236285")}</legend>
+        <legend className="text-xs font-semibold text-muted-foreground">{translateNow("source.edge.types.396a236285")}</legend>
         {edgeTypes.map((type) => (
           <label key={type} className="flex items-center gap-2">
             <input

@@ -830,7 +830,7 @@ export function Policy() {
 
             <ScrollableTableRegion label={t("policy.versions.tableLabel")}>
               <table className="min-w-full text-left text-sm" aria-label={t("policy.versions.tableLabel")}>
-                <thead className="border-b border-border text-xs uppercase text-muted-foreground">
+                <thead className="border-b border-border text-xs text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2">{t("policy.versions.descriptionLabel")}</th>
                     <th className="px-3 py-2">{t("policy.versions.status")}</th>

@@ -411,7 +411,7 @@ function RogueCertificatePanel({ posture }: { posture: RogueCertificatePosture }
         <div className="mt-4 overflow-x-auto">
           <table className="min-w-full text-left text-sm">
             <caption className="sr-only">{t("certificates.rogue.caption")}</caption>
-            <thead className="border-b border-border text-xs uppercase text-muted-foreground">
+            <thead className="border-b border-border text-xs text-muted-foreground">
               <tr>
                 <th scope="col" className="py-2 pr-4 font-medium">
                   {t("certificates.rogue.columnSubject")}

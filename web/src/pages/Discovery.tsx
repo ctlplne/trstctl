@@ -1333,7 +1333,7 @@ function StructuredSourceForm({
       <div className="grid gap-3">
         {rows.map((row, rowIndex) => (
           <fieldset key={rowIndex} className="grid gap-3 rounded-control border border-border p-3">
-            <legend className="px-1 text-xs font-semibold uppercase text-muted-foreground">
+            <legend className="px-1 text-xs font-semibold text-muted-foreground">
               {config.rowName} {rowIndex + 1}
             </legend>
             <div className="grid gap-3 md:grid-cols-2">

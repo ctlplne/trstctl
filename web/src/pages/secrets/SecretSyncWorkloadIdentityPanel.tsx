@@ -241,7 +241,7 @@ export function SecretSyncWorkloadIdentityPanel() {
         cell: (source) => (
           <span>
             <span className="block font-medium">{source.name}</span>
-            <span className="block font-mono text-xs uppercase text-muted-foreground">{source.provider}</span>
+            <span className="block font-mono text-xs text-muted-foreground">{source.provider}</span>
             <span className="block font-mono text-xs text-muted-foreground">{source.target_id}</span>
           </span>
         ),
