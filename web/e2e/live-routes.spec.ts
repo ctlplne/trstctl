@@ -69,7 +69,6 @@ async function sanitizedResponse(response: Response): Promise<RouteReceipt["http
 }
 
 function expectedPath(route: string): RegExp {
-  if (route === "/platform") return /^\/admin\/(?:access|system|editions)$/;
   return new RegExp(`^${route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`);
 }
 
@@ -162,7 +161,11 @@ async function auditRoute(page: Page, route: string): Promise<RouteReceipt> {
     });
 
     const alerts = (await main.getByRole("alert").allTextContents()).map((text) => text.replace(/\s+/g, " ").trim()).filter(Boolean);
-    const capabilityDisclosures = (await main.locator('[data-state-primitive="unavailable"]').allTextContents())
+    // Include exact error primitives even when they live inside a collapsed
+    // technical-details section. They remain user-discoverable, but role-based
+    // locators intentionally exclude closed <details> descendants and would
+    // otherwise misclassify a precisely explained 503 as unexplained.
+    const capabilityDisclosures = (await main.locator('[data-state-primitive="unavailable"], [data-state-primitive="error"]').allTextContents())
       .map((text) => text.replace(/\s+/g, " ").trim())
       .filter(Boolean);
     return {
