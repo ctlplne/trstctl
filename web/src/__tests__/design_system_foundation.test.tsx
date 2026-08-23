@@ -370,9 +370,10 @@ describe("Clarity/Console design-system foundation", () => {
 
     expect(screen.getByText("revoked")).toHaveAttribute("data-status-badge", "certificate");
     expect(screen.getByText("<7d critical")).toHaveClass("text-risk-critical");
-    expect(screen.getByText("Disclose")).toHaveClass("border-border", "bg-transparent", "text-muted-foreground");
+    expect(screen.getByText("Disclose")).toHaveClass("text-muted-foreground");
     expect(screen.getByText("Critical")).toHaveClass("text-risk-critical");
-    expect(screen.getByText("Critical")).toHaveClass("bg-risk-critical/10");
+    expect(screen.getByText("Critical")).not.toHaveClass("border", "rounded-control", "bg-risk-critical/10");
+    expect(container.querySelectorAll("[data-status-dot]")).toHaveLength(4);
     expect(describeStatus("agent", "online")).toMatchObject({ label: "online", tone: "success" });
     expect(expiryBandForDate(new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString())).toBe("critical");
 

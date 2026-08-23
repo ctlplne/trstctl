@@ -130,6 +130,10 @@ describe("journeys hub", () => {
     // Detector-backed progress: the issuer exists, so first-certificate shows 1 of 4.
     const firstCert = screen.getByRole("button", { name: /First certificate/ });
     expect(await within(firstCert).findByText("1 of 4 steps done")).toBeInTheDocument();
+    expect(screen.getByText("Start here")).toBeInTheDocument();
+    const morePaths = screen.getByText(`More guided paths (${journeys.length - 3})`).closest("details");
+    expect(morePaths).not.toHaveAttribute("open");
+    expect(morePaths).toContainElement(screen.getByRole("button", { name: /Automate fleet TLS/ }));
     expect(firstCert.querySelector(".line-clamp-2")).not.toBeInTheDocument();
     expect(screen.getByTestId("compact-step-progress").querySelector(".truncate")).not.toBeInTheDocument();
     expect(screen.getByTestId("full-step-progress").querySelector(".truncate")).not.toBeInTheDocument();
@@ -137,6 +141,8 @@ describe("journeys hub", () => {
     expect(document.activeElement).toHaveAttribute("id", "journey-workspace");
 
     // Command-heavy journeys count all steps too (no more "0 of 0").
+    await user.click(screen.getByText(`More guided paths (${journeys.length - 3})`));
+    expect(morePaths).toHaveAttribute("open");
     const fleet = screen.getByRole("button", { name: /Automate fleet TLS/ });
     expect(within(fleet).getByText("0 of 4 steps done")).toBeInTheDocument();
 

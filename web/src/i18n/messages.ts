@@ -1277,6 +1277,18 @@ export const messages = {
     defaultMessage: "Unassigned",
     description: "Visible state for a secret whose historical create event did not name an owner.",
   },
+  "secrets.store.viewMetadataFor": {
+    defaultMessage: "View metadata for {name}",
+    description: "Accessible action name on a secret name that opens its metadata-only drawer.",
+  },
+  "secrets.store.moreActionsFor": {
+    defaultMessage: "More actions for {name}",
+    description: "Accessible overflow-action button for one native secret.",
+  },
+  "secrets.store.actionsFor": {
+    defaultMessage: "Actions for {name}",
+    description: "Accessible label for a native secret's secondary action menu.",
+  },
   "secrets.store.lifecycleSummary": {
     defaultMessage: "Rotate, schedule, or delete",
     description: "Collapsed secret lifecycle controls summary.",
@@ -2817,6 +2829,14 @@ export const messages = {
   "journeys.listLabel": {
     defaultMessage: "Available journeys",
     description: "Accessible label for the journey picker list.",
+  },
+  "journeys.startHere": {
+    defaultMessage: "Start here",
+    description: "Short label above the three recommended guided setup paths.",
+  },
+  "journeys.morePaths": {
+    defaultMessage: "More guided paths ({count})",
+    description: "Collapsed disclosure label for guided paths beyond the three recommended choices.",
   },
   "journeys.progress": {
     defaultMessage: "{done} of {total} steps done",
@@ -15291,8 +15311,8 @@ export const messages = {
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Identities.tsx.",
   },
   "source.each.execution.or.playbook.run.is.a.projec.9af41ecb88": {
-    defaultMessage: "Each execution or playbook run is a projected event-sourced evidence pack with revocation, delivery, rollback, and audit state.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Incidents.tsx.",
+    defaultMessage: "Every response leaves a tamper-evident record of what changed, what was delivered, and what can be undone.",
+    description: "Plain-language summary above incident execution evidence; implementation details stay in the page's technical disclosure.",
   },
   "source.each.protocol.requires.an.enabled.flag.plu.a66867a87e": {
     defaultMessage:

@@ -776,8 +776,13 @@ describe("secrets surface", () => {
     expect(screen.getByText("app/db/password")).toBeInTheDocument();
     expect(screen.getByText("Payments platform")).toBeInTheDocument();
     expect(screen.getByText("production")).toBeInTheDocument();
-    expect(screen.getByText("native store")).toBeInTheDocument();
-    expect(screen.getByText("v3")).toBeInTheDocument();
+    const metadataTable = screen.getByRole("table", { name: "Native secret metadata" });
+    expect(within(metadataTable).getAllByRole("columnheader")).toHaveLength(5);
+    expect(within(metadataTable).queryByRole("columnheader", { name: "Engine" })).not.toBeInTheDocument();
+    expect(within(metadataTable).queryByRole("columnheader", { name: "Version" })).not.toBeInTheDocument();
+    expect(within(metadataTable).queryByRole("columnheader", { name: "Created" })).not.toBeInTheDocument();
+    expect(within(metadataTable).queryByText("native store")).not.toBeInTheDocument();
+    expect(within(metadataTable).queryByText("v3")).not.toBeInTheDocument();
     expect(screen.getByRole("form", { name: "Run connector rotation" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Scheduled rotations" })).toBeInTheDocument();
     expect(screen.queryByText("Scheduled rotation and downstream sync aren't in the console yet")).not.toBeInTheDocument();
@@ -827,7 +832,10 @@ describe("secrets surface", () => {
     expect(screen.getByText("app/db/password")).toBeInTheDocument();
 
     const metadataRow = screen.getAllByRole("row", { name: /app\/db\/password/i })[0];
-    await user.click(within(metadataRow).getByRole("button", { name: /view metadata/i }));
+    expect(within(metadataRow).getAllByRole("button")).toHaveLength(3);
+    expect(within(metadataRow).queryByRole("button", { name: /prepare rotate/i })).not.toBeInTheDocument();
+    expect(within(metadataRow).queryByRole("button", { name: /prepare delete/i })).not.toBeInTheDocument();
+    await user.click(within(metadataRow).getByRole("button", { name: /view metadata for app\/db\/password/i }));
     const drawer = screen.getByRole("dialog", { name: "Secret metadata" });
     expect(within(drawer).getByText("app/db/password")).toBeInTheDocument();
     expect(within(drawer).getByText("native store")).toBeInTheDocument();
@@ -858,7 +866,8 @@ describe("secrets surface", () => {
     await user.click(within(row).getByRole("button", { name: /reveal value/i }));
     expect(await screen.findByText("SUPER-SECRET")).toBeInTheDocument();
 
-    await user.click(within(row).getByRole("button", { name: /prepare rotate/i }));
+    await user.click(within(row).getByRole("button", { name: /more actions for app\/db\/password/i }));
+    await user.click(screen.getByRole("button", { name: /prepare rotate/i }));
     const rotateForm = within(screen.getByRole("form", { name: "Rotate secret" }));
     await user.type(rotateForm.getByLabelText("Replacement value"), "rotated-secret");
     await user.click(rotateForm.getByRole("button", { name: /rotate secret/i }));
@@ -870,7 +879,9 @@ describe("secrets surface", () => {
     expect(await screen.findByText(/rotated to version 4/i)).toBeInTheDocument();
     expect(screen.queryByText("rotated-secret")).not.toBeInTheDocument();
 
-    await user.click(within(screen.getAllByRole("row", { name: /app\/db\/password/i })[0]).getByRole("button", { name: /prepare delete/i }));
+    const updatedRow = screen.getAllByRole("row", { name: /app\/db\/password/i })[0];
+    await user.click(within(updatedRow).getByRole("button", { name: /more actions for app\/db\/password/i }));
+    await user.click(screen.getByRole("button", { name: /prepare delete/i }));
     const deleteForm = within(screen.getByRole("form", { name: "Delete secret" }));
     await user.type(deleteForm.getByLabelText("Type the exact secret name"), "app/db/password");
     await user.click(deleteForm.getByRole("button", { name: /delete secret/i }));
@@ -1105,7 +1116,9 @@ describe("secrets surface", () => {
     renderSecrets();
     await screen.findByText("app/db/password");
 
-    await user.click(within(screen.getAllByRole("row", { name: /app\/db\/password/i })[0]).getByRole("button", { name: /prepare rotate/i }));
+    const deniedRotateRow = screen.getAllByRole("row", { name: /app\/db\/password/i })[0];
+    await user.click(within(deniedRotateRow).getByRole("button", { name: /more actions for app\/db\/password/i }));
+    await user.click(screen.getByRole("button", { name: /prepare rotate/i }));
     const rotateForm = within(screen.getByRole("form", { name: "Rotate secret" }));
     await user.type(rotateForm.getByLabelText("Replacement value"), "approval-rotate-value");
     await user.click(rotateForm.getByRole("button", { name: /rotate secret/i }));
@@ -1138,7 +1151,9 @@ describe("secrets surface", () => {
     expect(await screen.findByText(/rotated to version 4 after approval/i)).toBeInTheDocument();
     expect(screen.queryByDisplayValue("approval-rotate-value")).not.toBeInTheDocument();
 
-    await user.click(within(screen.getAllByRole("row", { name: /app\/db\/password/i })[0]).getByRole("button", { name: /prepare delete/i }));
+    const deniedDeleteRow = screen.getAllByRole("row", { name: /app\/db\/password/i })[0];
+    await user.click(within(deniedDeleteRow).getByRole("button", { name: /more actions for app\/db\/password/i }));
+    await user.click(screen.getByRole("button", { name: /prepare delete/i }));
     const deleteForm = within(screen.getByRole("form", { name: "Delete secret" }));
     await user.type(deleteForm.getByLabelText("Type the exact secret name"), "app/db/password");
     await user.click(deleteForm.getByRole("button", { name: /delete secret/i }));

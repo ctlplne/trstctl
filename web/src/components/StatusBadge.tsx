@@ -2,18 +2,32 @@ import type { HTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 import { describeStatus, type StatusTone, type StatusVocabulary } from "@/lib/statusVocab";
 
-const toneClasses: Record<StatusTone, string> = {
-  operate: "border-status-info/30 bg-transparent text-status-info",
-  observe: "border-border bg-transparent text-foreground",
-  disclose: "border-border bg-transparent text-muted-foreground",
-  success: "border-status-success/30 bg-transparent text-status-success",
-  warning: "border-status-warning/30 bg-status-warning/10 text-status-warning",
-  critical: "border-risk-critical/30 bg-risk-critical/10 text-risk-critical",
-  high: "border-risk-high/30 bg-risk-high/10 text-risk-high",
-  medium: "border-risk-medium/30 bg-risk-medium/10 text-risk-medium",
-  low: "border-border bg-transparent text-muted-foreground",
-  neutral: "border-border bg-muted/40 text-muted-foreground",
-  info: "border-status-info/30 bg-transparent text-status-info",
+const toneTextClasses: Record<StatusTone, string> = {
+  operate: "text-status-info",
+  observe: "text-foreground",
+  disclose: "text-muted-foreground",
+  success: "text-status-success",
+  warning: "text-status-warning",
+  critical: "text-risk-critical",
+  high: "text-risk-high",
+  medium: "text-risk-medium",
+  low: "text-muted-foreground",
+  neutral: "text-muted-foreground",
+  info: "text-status-info",
+};
+
+const toneDotClasses: Record<StatusTone, string> = {
+  operate: "bg-status-info",
+  observe: "bg-foreground",
+  disclose: "bg-muted-foreground",
+  success: "bg-status-success",
+  warning: "bg-status-warning",
+  critical: "bg-risk-critical",
+  high: "bg-risk-high",
+  medium: "bg-risk-medium",
+  low: "bg-muted-foreground",
+  neutral: "bg-muted-foreground",
+  info: "bg-status-info",
 };
 
 export type StatusBadgeProps = HTMLAttributes<HTMLSpanElement> & {
@@ -34,9 +48,10 @@ export function StatusBadge({ className, value, vocabulary = "lifecycle", label,
     <span
       data-status-badge={vocabulary}
       data-status-value={normalizedValue}
-      className={cn("inline-flex min-h-7 items-center rounded-control border px-2 py-1 text-caption font-medium", toneClasses[resolvedTone], className)}
+      className={cn("inline-flex min-h-6 items-center gap-1.5 text-caption font-medium leading-none", toneTextClasses[resolvedTone], className)}
       {...props}
     >
+      <span aria-hidden="true" data-status-dot={resolvedTone} className={cn("h-1.5 w-1.5 shrink-0 rounded-full", toneDotClasses[resolvedTone])} />
       {label ?? described.label}
     </span>
   );

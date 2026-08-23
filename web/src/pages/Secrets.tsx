@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Eyebrow } from "@/components/typography";
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { Copy, Eye, KeyRound, Loader2, LogIn, RefreshCw, RotateCw, Share2, Trash2 } from "lucide-react";
+import { Copy, Eye, KeyRound, Loader2, LogIn, MoreHorizontal, RefreshCw, RotateCw, Share2, Trash2 } from "lucide-react";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DataGridToolbar } from "@/components/DataGridToolbar";
 import { DetailDrawer } from "@/components/DetailDrawer";
@@ -169,6 +169,7 @@ export function Secrets() {
   const [notice, setNotice] = useState<string | null>(null);
   const [secretSearch, setSecretSearch] = useState("");
   const [detailSecretName, setDetailSecretName] = useState<string | null>(null);
+  const [secretMenuName, setSecretMenuName] = useState<string | null>(null);
 
   const [createName, setCreateName] = useState("");
   const [createValue, setCreateValue] = useState("");
@@ -457,7 +458,21 @@ export function Secrets() {
 
   const secretColumns = useMemo<Array<DataGridColumn<SecretMeta>>>(
     () => [
-      { id: "name", header: "Name", sortable: true, cell: (item) => <span className="font-medium">{item.name}</span> },
+      {
+        id: "name",
+        header: "Secret",
+        sortable: true,
+        cell: (item) => (
+          <button
+            type="button"
+            aria-label={t("secrets.store.viewMetadataFor", { name: item.name })}
+            className="break-all text-start font-medium underline decoration-border underline-offset-4 hover:decoration-foreground"
+            onClick={() => setDetailSecretName(item.name)}
+          >
+            {item.name}
+          </button>
+        ),
+      },
       {
         id: "owner",
         header: translateNow("source.owner.4b1b8aa360"),
@@ -468,32 +483,66 @@ export function Secrets() {
         header: t("owners.readiness.environment"),
         cell: (item) => ownerByID.get(item.owner_id ?? "")?.environment || "—",
       },
-      { id: "engine", header: "Engine", cell: () => "native store" },
-      { id: "version", header: "Version", cell: (item) => <span className="font-mono text-xs">v{item.version}</span> },
       { id: "updated", header: "Updated", cell: (item) => formatDate(item.updated_at) },
-      { id: "created", header: "Created", cell: (item) => formatDate(item.created_at) },
       {
         id: "actions",
-        header: "Actions",
+        header: "Action",
         cell: (item) => (
-          <div className="flex flex-wrap gap-2">
+          <div className="relative flex flex-wrap items-start gap-1.5">
             <Button type="button" size="sm" variant="outline" onClick={() => void revealSecret(item.name)} disabled={revealBusy === item.name}>
               {revealBusy === item.name ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
               {t("secrets.store.revealValue")}
             </Button>
-            <Button type="button" size="sm" variant="outline" onClick={() => setRotateName(item.name)}>
-              <RotateCw className="h-4 w-4" aria-hidden="true" />
-              {translateNow("source.prepare.rotate.9534e0ec7e")}
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              aria-label={t("secrets.store.moreActionsFor", { name: item.name })}
+              aria-expanded={secretMenuName === item.name}
+              className="h-9 w-9"
+              onClick={() => setSecretMenuName((openName) => (openName === item.name ? null : item.name))}
+            >
+              <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
             </Button>
-            <Button type="button" size="sm" variant="outline" onClick={() => setDeleteName(item.name)}>
-              <Trash2 className="h-4 w-4" aria-hidden="true" />
-              {translateNow("source.prepare.delete.6d0f9a0ea2")}
-            </Button>
+            {secretMenuName === item.name && (
+              <div
+                role="group"
+                aria-label={t("secrets.store.actionsFor", { name: item.name })}
+                className="basis-full rounded-panel border border-border bg-card p-1 shadow-elevation1"
+              >
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="w-full justify-start"
+                  onClick={() => {
+                    setSecretMenuName(null);
+                    setRotateName(item.name);
+                  }}
+                >
+                  <RotateCw className="h-4 w-4" aria-hidden="true" />
+                  {translateNow("source.prepare.rotate.9534e0ec7e")}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="w-full justify-start text-risk-critical"
+                  onClick={() => {
+                    setSecretMenuName(null);
+                    setDeleteName(item.name);
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  {translateNow("source.prepare.delete.6d0f9a0ea2")}
+                </Button>
+              </div>
+            )}
           </div>
         ),
       },
     ],
-    [ownerByID, revealBusy, t],
+    [ownerByID, revealBusy, secretMenuName, t],
   );
 
   const scheduleColumns = useMemo<Array<DataGridColumn<SecretRotationSchedule>>>(
@@ -1524,8 +1573,6 @@ export function Secrets() {
                     columnChooser={columnChooser}
                   />
                 )}
-                onRowOpen={(item) => setDetailSecretName(item.name)}
-                rowActionLabel={() => "View metadata"}
               />
             )}
             {nextCursor && (

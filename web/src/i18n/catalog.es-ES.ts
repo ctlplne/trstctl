@@ -13,8 +13,7 @@ const esESCatalog = {
   "auth.browserLoginDisabled.title": "El inicio de sesión en el navegador no está configurado",
   "auth.login.eyebrow": "Credenciales para máquinas y aplicaciones",
   "auth.login.title": "Inicia sesión en trstctl",
-  "auth.login.body":
-    "Continúa con el proveedor de inicio de sesión configurado. Gestionarás identidades de máquina y las credenciales que utilizan.",
+  "auth.login.body": "Continúa con el proveedor de inicio de sesión configurado. Gestionarás identidades de máquina y las credenciales que utilizan.",
   "auth.login.action": "Continuar con SSO",
   "admin.access.pamUnavailableTitle": "Las sesiones de acceso privilegiado no están disponibles",
   "admin.access.pamUnavailableBody":
@@ -421,6 +420,9 @@ const esESCatalog = {
   "secrets.store.noOwnersHelp":
     "No hay registros de responsables disponibles. Este secreto se marcará como Sin asignar para que la brecha de propiedad siga visible.",
   "secrets.store.unassignedOwner": "Sin asignar",
+  "secrets.store.viewMetadataFor": "Ver metadatos de {name}",
+  "secrets.store.moreActionsFor": "Más acciones para {name}",
+  "secrets.store.actionsFor": "Acciones para {name}",
   "secrets.store.lifecycleSummary": "Rotar, programar o eliminar",
   "secrets.store.lifecycleSummaryHelp": "Controles avanzados del ciclo de vida con evidencia de aprobación y reversión",
   "secrets.store.revealValue": "Revelar valor",
@@ -823,6 +825,8 @@ const esESCatalog = {
   "journeys.technicalDetails":
     "Cada paso abre el espacio de trabajo exacto. Los pasos que podemos verificar usan resultados reales del inquilino; los pasos manuales quedan claramente marcados para que el operador los confirme.",
   "journeys.listLabel": "Recorridos disponibles",
+  "journeys.startHere": "Empieza aquí",
+  "journeys.morePaths": "Más recorridos guiados ({count})",
   "journeys.progress": "{done} de {total} pasos completados",
   "journeys.census.verified": "Ruta verificada · cableado publicado {passed}/{total}",
   "journeys.testingDetails": "Cómo probamos esto",
@@ -4138,7 +4142,7 @@ const esESCatalog = {
   "source.e.g.change.approved.in.cab.1234.6a0cc1f9e3": "p. ej. cambio aprobado en CAB-1234",
   "source.e.g.payments.api.b39781a2b3": "e.g. payments-api",
   "source.each.execution.or.playbook.run.is.a.projec.9af41ecb88":
-    "Cada ejecución individual o ejecución de un playbook es un paquete de evidencia proyectado y basado en eventos, con estado de revocación, entrega, reversión y auditoría.",
+    "Cada respuesta deja un registro a prueba de manipulaciones de lo que cambió, lo que se entregó y lo que se puede deshacer.",
   "source.each.protocol.requires.an.enabled.flag.plu.a66867a87e":
     "Cada protocolo requiere una marca habilitada más un ID de inquilino. El inicio rechaza un protocolo habilitado sin enlace de inquilino, y la emisión rechaza las solicitudes cuando ninguna CA o perfil emisor puede satisfacer la solicitud del protocolo.",
   "source.edge.types.396a236285": "Tipos de arista",

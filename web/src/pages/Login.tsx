@@ -31,9 +31,7 @@ export function Login() {
             <CardTitle>{translateNow(oidcAvailable ? "auth.login.title" : "auth.browserLoginDisabled.title")}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="mb-4 text-body text-muted-foreground">
-              {translateNow(oidcAvailable ? "auth.login.body" : "auth.browserLoginDisabled.body")}
-            </p>
+            <p className="mb-4 text-body text-muted-foreground">{translateNow(oidcAvailable ? "auth.login.body" : "auth.browserLoginDisabled.body")}</p>
             {oidcAvailable && (
               <Button className="min-h-11 w-full" onClick={beginLogin}>
                 {translateNow("auth.login.action")}

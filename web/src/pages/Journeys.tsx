@@ -88,6 +88,33 @@ export function Journeys() {
   const shellSteps: CarouselStep[] = useMemo(() => active.steps.map((s) => ({ id: s.id, label: t(s.titleKey), description: t(s.bodyKey) })), [active, t]);
   const current = active.steps[step];
   const currentDone = current ? stepDone(active, current, detected, marks) : false;
+  // Keep the active path visible for deep links, then add only two nearby
+  // recommendations. The remaining valid paths stay one disclosure away.
+  const recommendedJourneys = [active, ...journeys.filter((journey) => journey.id !== active.id).slice(0, 2)];
+  const otherJourneys = journeys.filter((journey) => !recommendedJourneys.some((recommended) => recommended.id === journey.id));
+
+  function renderJourneyChoice(journey: Journey) {
+    const progress = journeyProgress(journey, detected, marks);
+    const selected = journey.id === active.id;
+    return (
+      <button
+        key={journey.id}
+        type="button"
+        aria-pressed={selected}
+        onClick={() => selectJourney(journey.id)}
+        className={cn(
+          "grid w-full gap-1 border-s-2 px-3 py-3 text-start transition-colors duration-fast",
+          selected ? "border-primary bg-primary/10" : "border-transparent hover:bg-muted/60",
+        )}
+      >
+        <span className="text-body font-semibold">{t(journey.titleKey)}</span>
+        <span className="text-caption leading-snug text-muted-foreground">{t(journey.descriptionKey)}</span>
+        <span className="text-caption font-medium tabular-nums text-brand-accent">
+          {formatMessage("journeys.progress", { done: progress.done, total: progress.total })}
+        </span>
+      </button>
+    );
+  }
 
   return (
     <section aria-labelledby="journeys-heading" className="grid gap-6">
@@ -112,30 +139,14 @@ export function Journeys() {
 
       <div className="grid gap-6 lg:grid-cols-[minmax(15rem,19rem)_minmax(0,1fr)]">
         <nav aria-label={t("journeys.listLabel")} className="min-w-0 border-y border-border lg:border-e lg:border-y-0 lg:pe-5">
-          <div className="divide-y divide-border">
-            {journeys.map((journey) => {
-              const progress = journeyProgress(journey, detected, marks);
-              const selected = journey.id === active.id;
-              return (
-                <button
-                  key={journey.id}
-                  type="button"
-                  aria-pressed={selected}
-                  onClick={() => selectJourney(journey.id)}
-                  className={cn(
-                    "grid w-full gap-1 border-s-2 px-3 py-3 text-start transition-colors duration-fast",
-                    selected ? "border-primary bg-primary/10" : "border-transparent hover:bg-muted/60",
-                  )}
-                >
-                  <span className="text-body font-semibold">{t(journey.titleKey)}</span>
-                  <span className="text-caption leading-snug text-muted-foreground">{t(journey.descriptionKey)}</span>
-                  <span className="text-caption font-medium tabular-nums text-brand-accent">
-                    {formatMessage("journeys.progress", { done: progress.done, total: progress.total })}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          <p className="px-3 pb-2 pt-3 text-caption font-semibold text-muted-foreground">{t("journeys.startHere")}</p>
+          <div className="divide-y divide-border">{recommendedJourneys.map(renderJourneyChoice)}</div>
+          <details className="group border-t border-border">
+            <summary className="cursor-pointer list-none px-3 py-3 text-caption font-medium text-muted-foreground marker:hidden hover:text-foreground">
+              {formatMessage("journeys.morePaths", { count: otherJourneys.length })}
+            </summary>
+            <div className="divide-y divide-border border-t border-border">{otherJourneys.map(renderJourneyChoice)}</div>
+          </details>
         </nav>
 
         <div

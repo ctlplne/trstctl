@@ -17,8 +17,7 @@ const deDECatalog = {
   "auth.browserLoginDisabled.title": "Browser-Anmeldung ist nicht konfiguriert",
   "auth.login.eyebrow": "Zugangsdaten für Maschinen und Anwendungen",
   "auth.login.title": "Bei trstctl anmelden",
-  "auth.login.body":
-    "Fahren Sie mit dem konfigurierten Anmeldeanbieter fort. Danach verwalten Sie Maschinenidentitäten und deren Zugangsdaten.",
+  "auth.login.body": "Fahren Sie mit dem konfigurierten Anmeldeanbieter fort. Danach verwalten Sie Maschinenidentitäten und deren Zugangsdaten.",
   "auth.login.action": "Sicher mit SSO fortfahren",
   "admin.access.pamUnavailableTitle": "Sitzungen mit privilegiertem Zugriff sind nicht verfügbar",
   "admin.access.pamUnavailableBody":
@@ -433,6 +432,9 @@ const deDECatalog = {
   "secrets.store.noOwnersHelp":
     "Es sind keine Verantwortlichen verfügbar. Dieses Secret wird als Nicht zugewiesen markiert, damit die Eigentumslücke sichtbar bleibt.",
   "secrets.store.unassignedOwner": "Nicht zugewiesen",
+  "secrets.store.viewMetadataFor": "Metadaten für {name} anzeigen",
+  "secrets.store.moreActionsFor": "Weitere Aktionen für {name}",
+  "secrets.store.actionsFor": "Aktionen für {name}",
   "secrets.store.lifecycleSummary": "Rotieren, planen oder löschen",
   "secrets.store.lifecycleSummaryHelp": "Erweiterte Lebenszyklussteuerung mit Genehmigungs- und Rollback-Nachweisen",
   "secrets.store.revealValue": "Wert anzeigen",
@@ -837,6 +839,8 @@ const deDECatalog = {
   "journeys.technicalDetails":
     "Jeder Schritt öffnet den genauen Arbeitsbereich. Prüfbare Schritte verwenden aktuelle Mandantenergebnisse; manuelle Schritte bleiben für die Bestätigung durch den Betreiber klar gekennzeichnet.",
   "journeys.listLabel": "Verfügbare Journeys",
+  "journeys.startHere": "Hier starten",
+  "journeys.morePaths": "Weitere geführte Wege ({count})",
   "journeys.progress": "{done} von {total} Schritten erledigt",
   "journeys.census.verified": "Verifizierter Pfad · ausgelieferte Verdrahtung {passed}/{total}",
   "journeys.testingDetails": "So haben wir dies getestet",
@@ -4156,7 +4160,7 @@ const deDECatalog = {
   "source.e.g.change.approved.in.cab.1234.6a0cc1f9e3": "z. B. Änderung in CAB-1234 genehmigt",
   "source.e.g.payments.api.b39781a2b3": "e.g. payments-api",
   "source.each.execution.or.playbook.run.is.a.projec.9af41ecb88":
-    "Jede Ausführung oder jeder Playbook-Lauf ist ein projiziertes, ereignisbasiertes Nachweispaket mit Status für Widerruf, Auslieferung, Rollback und Audit.",
+    "Jede Reaktion hinterlässt einen manipulationssicheren Nachweis darüber, was geändert und ausgeliefert wurde und was rückgängig gemacht werden kann.",
   "source.each.protocol.requires.an.enabled.flag.plu.a66867a87e":
     "Jedes Protokoll erfordert ein Aktivierungskennzeichen und eine Tenant-ID. Der Start lehnt ein aktiviertes Protokoll ohne Tenant-Bindung ab, und die Ausstellung verweigert Anfragen, wenn keine ausstellende CA bzw. kein Profil die Protokollanfrage erfüllen kann.",
   "source.edge.types.396a236285": "Kantentypen",

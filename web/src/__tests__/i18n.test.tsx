@@ -972,8 +972,12 @@ describe("i18n boundary", () => {
       // now says Start response; a recorded history still says Continue
       // response. Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION
       // REVIEW before release.
-      "es-ES": "c66421146866a3ccb63b910d2ef9c92717ff9c61370568a5a219eebedb0593c2",
-      "de-DE": "f2ce1191579357a47a763790b9ba5f3f036fbcfc2e73317b67729e10f63d861b",
+      // Quiet-confidence v3 re-pin: setup paints only three recommended paths,
+      // secret metadata/actions use translated progressive disclosure, and
+      // incident evidence leads with a plain tamper-evidence promise. Machine-
+      // authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "a87b24d06ac030dcc280b2ad46d85a19543ad5be9edf8c7d4b533a365a140aae",
+      "de-DE": "39fd5cfa4f92e612ccd3202404c3535778b4a5efcc420a92aa7f35aafc142bd5",
     });
   });
 

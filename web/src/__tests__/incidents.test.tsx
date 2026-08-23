@@ -481,6 +481,8 @@ describe("incident response served execution surface", () => {
 
     expect(screen.getByRole("heading", { name: "Security incidents" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Execution evidence" })).toBeInTheDocument();
+    expect(screen.getByText("Every response leaves a tamper-evident record of what changed, what was delivered, and what can be undone.")).toBeInTheDocument();
+    expect(screen.queryByText(/projected event-sourced evidence pack/i)).not.toBeInTheDocument();
     expect((await screen.findAllByText("22222222-2222-2222-2222-222222222222")).length).toBeGreaterThanOrEqual(2);
     await user.click(screen.getByText("View exact response state"));
     expect(screen.getByRole("heading", { name: "Event timeline" })).toBeInTheDocument();
