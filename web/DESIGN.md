@@ -1,9 +1,10 @@
 # trstctl design system
 
-The console uses a quieter product expression of the trstctl brand: warm paper
-or ink-black blue surfaces, **gold** primary (`#ffd166`), and **mint** focus
-(`#5eead4`). Light is the default work surface; dark remains a fully supported
-operator preference. Sora is the UI face, DM Mono is reserved for exact machine
+The console uses the audit's quiet product expression of the trstctl brand:
+warm paper (`#f7f5ef`), warm white surfaces (`#fffefa`), forest action and
+identity (`#174f42`), and mint focus. Gold is reserved for caution instead of
+routine chrome. Light is the default work surface; dark remains a fully
+supported operator preference. Sora is the UI face, DM Mono is reserved for exact machine
 data, and Syne is reserved for the wordmark or a rare brand moment. The living
 spec renders at **`/styleguide`** — every swatch and component there comes from
 the real implementation.
@@ -15,28 +16,28 @@ the same change.
 
 ## Where things live
 
-| Layer                                                     | File                                                                                                                               |
-| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Tokens (colors, type, density, radius, elevation, motion) | `src/index.css` (`:root` + `.dark`)                                                                                                |
-| Tailwind mapping (every token becomes a utility)          | `tailwind.config.js`                                                                                                               |
-| Primitives                                                | `src/components/ui/` (Button, Card, Skeleton)                                                                                      |
-| Shared components                                         | `src/components/` (PageHeader, PageTabs, StatusBadge, CredentialChip, DataGrid, DetailDrawer, Dialog, EmptyState, StatePrimitives) |
-| Typography primitives (S-C9)                              | `src/components/typography.tsx` (Eyebrow — the one tracked micro-label; Num — inline mono tabular data values)                     |
-| Charts                                                    | `src/components/charts/` (StatTile, Meter, BucketBar, TimeBar, Stacked, Donut, Sparkline, AreaTrend + tone palette)                |
-| Contract tests                                            | `src/__tests__/design_system_foundation.test.tsx` (token presence, WCAG AA pairs, primitive reuse)                                 |
+| Layer                                                     | File                                                                                                                                          |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tokens (colors, type, density, radius, elevation, motion) | `src/index.css` (`:root` + `.dark`)                                                                                                           |
+| Tailwind mapping (every token becomes a utility)          | `tailwind.config.js`                                                                                                                          |
+| Primitives                                                | `src/components/ui/` (Button, Card, Skeleton)                                                                                                 |
+| Shared components                                         | `src/components/` (BrandMark, PageHeader, PageTabs, StatusBadge, CredentialChip, DataGrid, DetailDrawer, Dialog, EmptyState, StatePrimitives) |
+| Typography primitives (S-C9)                              | `src/components/typography.tsx` (Eyebrow — the one tracked micro-label; Num — inline mono tabular data values)                                |
+| Charts                                                    | `src/components/charts/` (StatTile, Meter, BucketBar, TimeBar, Stacked, Donut, Sparkline, AreaTrend + tone palette)                           |
+| Contract tests                                            | `src/__tests__/design_system_foundation.test.tsx` (token presence, WCAG AA pairs, primitive reuse)                                            |
 
 ## Rules
 
 1. **No raw colors.** Every color is a semantic token consumed as
    `hsl(var(--token))` or a Tailwind utility (`bg-primary`, `text-risk-high`).
    The foundation test fails the build on drift; keep it that way.
-2. **Gold means "act", mint means "focus" — in both themes.** The primary
-   button is gold with near-black ink in both themes (≈13:1). Focus
+2. **Forest means "act and identify"; mint means "focus".** The primary
+   button and circular product mark use the same forest channel in light mode.
+   Gold is caution only. Focus
    indicators ride the dedicated `--focus` token (`ring-focus` /
    `border-focus`, and the global `:focus-visible` outline), which stays in
-   the mint family in light mode too — `--brand-accent` is brand chrome, not
-   the focus channel (its light value is gold-family, which used to collapse
-   the two semantics). Selection uses the primary. Never introduce a second
+   the mint family in light mode too — `--brand-accent` is the same forest
+   family, not a parallel call-to-action hue. Selection uses the primary. Never introduce a second
    call-to-action color.
 3. **Destructive is a variant, not a className.** Revoke/delete/offboard
    actions use `variant="destructive"` (confirmations) or
@@ -106,7 +107,7 @@ the same change.
     or label/error markup. Existing raw `<input>`s migrate when their page is
     next touched — the raw-control budget in
     `design_system_foundation.test.tsx` only goes down. Native checkboxes and
-    radios ride the gold `accent-color` base rule until a Checkbox primitive
+    radios ride the forest `accent-color` base rule until a Checkbox primitive
     exists.
 15. **One panel, one table — the criteria (R-05).** `Card` is a meaningful
     boundary, not the default wrapper for every section:
@@ -212,7 +213,7 @@ npx tsc -p e2e/tsconfig.json --noEmit    # e2e suite types
 npx vitest run src/__tests__/design_system_foundation.test.tsx
 ```
 
-Then eyeball `/styleguide` in both themes (dark first — it's the flagship).
+Then eyeball `/styleguide` in both themes (light first — it is the default work surface).
 `make web` from the repository root rebuilds and verifies the embedded
 artifact — the built console under `internal/webui/dist` IS committed, so
 rebuild it in the change that alters the bundle.

@@ -30,9 +30,9 @@ export function PageHeader({
   const { t } = useTranslation();
 
   return (
-    <div className={cn("mb-6 border-b border-border pb-5", className)}>
+    <div className={cn("mb-7 border-b border-border/90 pb-5", className)}>
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-        <div className="min-w-0">
+        <div className="min-w-0 max-w-3xl">
           {eyebrow && (
             <Eyebrow as="p" className="mb-1.5">
               {eyebrow}
@@ -41,6 +41,10 @@ export function PageHeader({
           <h1 id={titleId} className="text-display font-bold tracking-tight text-foreground">
             {title}
           </h1>
+          <div className="mt-2 min-w-0" data-testid="page-depth-answer">
+            <span className="sr-only">{t("pageHeader.answer")}</span>
+            <p className="max-w-3xl text-body text-muted-foreground">{description ?? t("pageHeader.answerFallback")}</p>
+          </div>
         </div>
         {actions && (
           <div
@@ -49,26 +53,21 @@ export function PageHeader({
             role="group"
             data-testid="page-depth-operate"
           >
-            <Eyebrow className="w-full text-start">{t("pageHeader.operate")}</Eyebrow>
+            <span className="sr-only">{t("pageHeader.operate")}</span>
             {actions}
           </div>
         )}
       </div>
-
-      <div className="mt-4 grid gap-x-8 gap-y-3 text-body md:grid-cols-[minmax(0,1.6fr)_minmax(14rem,0.8fr)]">
-        <div className="min-w-0" data-testid="page-depth-answer">
-          <Eyebrow as="p">{t("pageHeader.answer")}</Eyebrow>
-          <p className="mt-1 max-w-3xl text-foreground">{description ?? t("pageHeader.answerFallback")}</p>
+      <details className="group mt-4 min-w-0" data-testid="page-depth-prove">
+        <summary className="inline-flex cursor-pointer list-none items-center text-caption text-muted-foreground marker:hidden hover:text-foreground">
+          <span className="font-medium">{t("pageHeader.prove")}</span>
+          <span className="ms-2 group-open:hidden">{t("pageHeader.openDetails")}</span>
+          <span className="ms-2 hidden group-open:inline">{t("pageHeader.closeDetails")}</span>
+        </summary>
+        <div className="mt-2 max-w-3xl border-s-2 border-border ps-3 text-caption leading-relaxed text-muted-foreground">
+          {technicalDetails ?? t("pageHeader.proveFallback")}
         </div>
-        <details className="group min-w-0" data-testid="page-depth-prove">
-          <summary className="cursor-pointer list-none text-muted-foreground marker:hidden hover:text-foreground">
-            <Eyebrow>{t("pageHeader.prove")}</Eyebrow>
-            <span className="ms-2 text-caption group-open:hidden">{t("pageHeader.openDetails")}</span>
-            <span className="ms-2 hidden text-caption group-open:inline">{t("pageHeader.closeDetails")}</span>
-          </summary>
-          <div className="mt-1 text-caption leading-relaxed text-muted-foreground">{technicalDetails ?? t("pageHeader.proveFallback")}</div>
-        </details>
-      </div>
+      </details>
     </div>
   );
 }

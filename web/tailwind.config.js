@@ -40,8 +40,8 @@ export default {
         },
       },
       fontFamily: {
-        // Type ported from trstctl.com: Sora for UI text, DM Mono for
-        // credential material and technical accents, Syne for display/brand.
+        // Quiet-confidence type: Sora for UI text, DM Mono only for machine
+        // data, and Syne only for the wordmark or a rare brand moment.
         sans: ['"Sora Variable"', "Sora", "ui-sans-serif", "-apple-system", "BlinkMacSystemFont", '"Segoe UI"', "Roboto", "Helvetica", "Arial", "sans-serif"],
         mono: ['"DM Mono"', "ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "monospace"],
         display: ['"Syne Variable"', "Syne", '"Sora Variable"', "Sora", "ui-sans-serif", "sans-serif"],

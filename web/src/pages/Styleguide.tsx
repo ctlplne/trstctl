@@ -15,14 +15,14 @@ import { Skeleton } from "@/components/ui/skeleton";
  * and primitive rendered from the real implementation, so what this page shows
  * is — by construction — what ships. The palette, type, and components are
  * adapted from trstctl.com into a quiet operator surface: light-first neutral
- * space, one gold action channel, mint focus, Sora UI copy, DM Mono machine
+ * space, one forest action channel, mint focus, Sora UI copy, DM Mono machine
  * data, and Syne only for the wordmark. See web/DESIGN.md for the rules. */
 
 const colorTokens: Array<{ group: string; tokens: Array<{ name: string; className: string }> }> = [
   {
     group: "Brand",
     tokens: [
-      { name: "primary (gold)", className: "bg-primary" },
+      { name: "primary (forest)", className: "bg-primary" },
       { name: "brand-accent", className: "bg-brand-accent" },
       { name: "sidebar rail", className: "bg-sidebar" },
     ],

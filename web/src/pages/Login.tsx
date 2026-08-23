@@ -3,6 +3,7 @@ import { Eyebrow } from "@/components/typography";
 import { Button } from "@/components/ui/button";
 import { beginLogin, useAuth } from "@/auth/AuthProvider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { BrandMark } from "@/components/BrandMark";
 import { translateNow } from "@/i18n/I18nProvider";
 
 export function Login() {
@@ -18,19 +19,14 @@ export function Login() {
     <main className="flex min-h-screen items-center justify-center bg-muted/30 p-6">
       <div className="w-full max-w-sm space-y-6">
         <div className="flex flex-col items-center gap-3 text-center">
-          <span aria-hidden="true" className="grid h-12 w-12 place-items-center rounded-panel bg-brand-accent text-brand-accent-foreground shadow-elevation2">
-            <svg viewBox="0 0 32 32" className="h-7 w-7" fill="none">
-              <path d="M8 11h16M16 6v20M11 21l5 4 5-4" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-              <circle cx="16" cy="16" r="4.2" stroke="currentColor" strokeWidth="1.8" />
-            </svg>
-          </span>
+          <BrandMark size="md" />
           <div>
             <Eyebrow as="p">{translateNow("source.machine.credential.access.bb586fcf38")}</Eyebrow>
             <h1 className="text-heading font-semibold tracking-tight">{translateNow("source.trstctl.74de2c6ee4")}</h1>
           </div>
         </div>
 
-        <Card className="shadow-elevation2">
+        <Card className="border-border/90 shadow-elevation1">
           <CardHeader>
             <CardTitle>{translateNow(oidcAvailable ? "source.sign.in.bfd402b2f6" : "auth.browserLoginDisabled.title")}</CardTitle>
           </CardHeader>

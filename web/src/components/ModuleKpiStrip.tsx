@@ -31,15 +31,18 @@ export function ModuleKpiStrip({ ariaLabel, kpis }: { ariaLabel: string; kpis: M
   const { formatNumber } = useTranslation();
   if (kpis.length === 0) return null;
   return (
-    <section aria-label={ariaLabel} className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+    <section
+      aria-label={ariaLabel}
+      className="grid grid-cols-2 divide-x divide-y divide-border border-y border-border bg-card/35 sm:grid-cols-3 lg:grid-cols-4"
+    >
       {kpis.map((kpi) => (
         <Link
           key={kpi.id}
           to={kpi.to}
-          className="group block rounded-panel border border-border bg-card p-comfortable transition-[box-shadow,border-color,transform] hover:-translate-y-0.5 hover:border-brand-accent/40 hover:shadow-elevation2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className="group block min-w-0 p-4 transition-colors hover:bg-muted/55 focus-visible:relative focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus"
         >
           <span className="block text-caption font-medium text-muted-foreground">{kpi.label}</span>
-          <span className="mt-1 block text-display font-semibold tracking-tight tabular-nums">
+          <span className="mt-1 block text-heading font-semibold tracking-tight tabular-nums">
             {typeof kpi.value === "number" ? formatNumber(kpi.value) : kpi.value}
           </span>
           {kpi.sub && <span className={cn("mt-0.5 block text-caption font-medium", toneClass[kpi.tone ?? "default"])}>{kpi.sub}</span>}

@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { CommandPalette } from "@/components/CommandPalette";
+import { BrandMark } from "@/components/BrandMark";
 import { ShortcutsHelp } from "@/components/ShortcutsHelp";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
@@ -125,7 +126,7 @@ type PrimaryNavProps = {
 function navItemClass(isActive: boolean): string {
   return cn(
     "flex min-h-9 items-center gap-2 rounded-control px-3 py-2 text-sm transition-colors",
-    isActive ? "bg-sidebar-active font-semibold text-primary" : "text-sidebar-foreground hover:bg-sidebar-hover hover:text-white",
+    isActive ? "bg-sidebar-active font-semibold text-brand-accent" : "text-sidebar-foreground hover:bg-sidebar-hover hover:text-foreground",
   );
 }
 
@@ -164,7 +165,7 @@ function SpaceRail({ user, onNavigate, orientation }: SpaceRailProps) {
   function railButtonClass(selected: boolean): string {
     return cn(
       "relative flex h-10 w-10 items-center justify-center rounded-control transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus",
-      selected ? "bg-sidebar-active text-primary" : "text-sidebar-foreground/70 hover:bg-sidebar-hover hover:text-white",
+      selected ? "bg-sidebar-active text-brand-accent" : "text-sidebar-foreground/70 hover:bg-sidebar-hover hover:text-foreground",
     );
   }
 
@@ -301,7 +302,7 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
                     <NavLink
                       to={to}
                       onClick={onNavigate}
-                      className="flex min-h-12 items-start gap-2 rounded-control px-3 py-2 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-hover hover:text-white"
+                      className="flex min-h-12 items-start gap-2 rounded-control px-3 py-2 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-hover hover:text-foreground"
                     >
                       <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
                       <span className="min-w-0 flex-1">
@@ -318,7 +319,7 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
         {activeSpace && (
           <li>
             {/* S-C1: the sidebar names the active space; the rail switches it. */}
-            <p className="px-3 pb-1 pt-0.5 text-sm font-bold text-white">{t(activeSpace.labelKey)}</p>
+            <p className="px-3 pb-1 pt-0.5 text-sm font-bold text-sidebar-foreground">{t(activeSpace.labelKey)}</p>
           </li>
         )}
         {visibleGroups.map((group) => {
@@ -509,7 +510,7 @@ export function AppShell() {
         {t("app.skipToMain")}
       </a>
 
-      <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background/85 px-4 backdrop-blur">
+      <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-card/90 px-4 backdrop-blur">
         <div className="flex min-w-0 items-center gap-2">
           {!isDesktop && (
             <Button
@@ -539,20 +540,9 @@ export function AppShell() {
               <Menu aria-hidden="true" className="h-4 w-4" />
             </Button>
           )}
-          <span
-            aria-hidden="true"
-            className="grid h-7 w-7 shrink-0 place-items-center rounded-control bg-brand-accent text-brand-accent-foreground shadow-elevation1"
-          >
-            <svg viewBox="0 0 32 32" className="h-4 w-4" fill="none">
-              <path d="M8 11h16M16 6v20M11 21l5 4 5-4" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-              <circle cx="16" cy="16" r="4.2" stroke="currentColor" strokeWidth="1.8" />
-            </svg>
-          </span>
+          <BrandMark />
           <span className="min-w-0 leading-tight">
             <span className="block truncate font-display text-sm font-bold tracking-tight">{t("app.brand.name")}</span>
-            <Eyebrow className="hidden truncate font-mono text-2xs font-medium tracking-wider text-muted-foreground sm:block">
-              {t("app.brand.subtitle")}
-            </Eyebrow>
           </span>
         </div>
         <div className="flex min-w-0 items-center gap-2">
@@ -760,7 +750,7 @@ export function AppShell() {
           />
         )}
 
-        <main id="main" ref={mainRef} className="min-w-0 flex-1 p-4 md:p-6" tabIndex={-1}>
+        <main id="main" ref={mainRef} className="mx-auto min-w-0 w-full max-w-[86rem] flex-1 p-4 md:p-7" tabIndex={-1}>
           {/* S-C3: pages are lazy chunks; the boundary announces while loading. */}
           <Suspense
             fallback={

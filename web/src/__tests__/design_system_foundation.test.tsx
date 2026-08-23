@@ -327,7 +327,8 @@ describe("Clarity/Console design-system foundation", () => {
   it("keeps tiny shell labels on live-audited contrast classes", () => {
     expect(appShellSource).not.toContain("text-sidebar-foreground/60");
     expect(appShellSource).toContain("text-sidebar-foreground/80");
-    expect(appShellSource).toContain("tracking-wider text-muted-foreground sm:block");
+    expect(appShellSource).toContain("<BrandMark");
+    expect(appShellSource).not.toContain("tracking-wider text-muted-foreground sm:block");
   });
 
   it("uses type, density, and elevation tokens in representative card primitives", () => {
