@@ -62,6 +62,11 @@ describe("quiet confidence v2", () => {
     expect(kpiSource).not.toContain("hover:shadow-elevation2");
   });
 
+  it("keeps action labels on one readable line", () => {
+    render(<Button>View details</Button>);
+    expect(screen.getByRole("button", { name: "View details" })).toHaveClass("whitespace-nowrap");
+  });
+
   it("keeps routine table hierarchy in sentence case", () => {
     const tableRule = css.slice(css.indexOf(".ui-table thead th"), css.indexOf(".ui-table tbody td"));
     expect(tableRule).not.toContain("text-transform: uppercase");
