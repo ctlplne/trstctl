@@ -131,6 +131,7 @@ describe("C10-4 certificate inventory filters", () => {
     expect(screen.getByRole("columnheader", { name: "Team" })).toBeInTheDocument();
     expect(screen.getAllByText("Platform Team").length).toBeGreaterThan(0);
 
+    await user.click(screen.getByRole("button", { name: "Filters" }));
     await user.selectOptions(screen.getByLabelText("Issuer filter"), "CN=Platform CA");
     await user.selectOptions(screen.getByLabelText("Profile filter"), "prod-web");
     await user.selectOptions(screen.getByLabelText("Team filter"), "team-platform");

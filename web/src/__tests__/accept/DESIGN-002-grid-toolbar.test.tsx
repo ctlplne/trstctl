@@ -76,6 +76,7 @@ describe("DESIGN-002 dense grid and toolbar consistency", () => {
     expect(within(grid).getByRole("button", { name: "Columns" })).toBeInTheDocument();
     expect(within(grid).getByRole("button", { name: "Save view" })).toBeDisabled();
 
+    await user.click(within(grid).getByRole("button", { name: "Filters" }));
     await user.selectOptions(within(grid).getByLabelText("Team filter"), "team-platform");
     await user.type(within(grid).getByLabelText("Saved view name"), "Prod web");
     await user.click(within(grid).getByRole("button", { name: "Save view" }));
@@ -111,6 +112,7 @@ describe("DESIGN-002 dense grid and toolbar consistency", () => {
 
     await user.click(screen.getByRole("tab", { name: "What was found" }));
     const findings = screen.getByRole("heading", { name: "Credentials to review" }).closest("section") as HTMLElement;
+    await user.click(within(findings).getByRole("button", { name: "Filters" }));
     expect(within(findings).getByLabelText("Triage status")).toBeInTheDocument();
     expect(within(findings).queryByText("abcdef1234...567890")).not.toBeInTheDocument();
     await user.click(within(findings).getByRole("button", { name: "Columns" }));

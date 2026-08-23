@@ -375,6 +375,7 @@ describe("SIMP-03 policy, audit, and compliance remediation", () => {
 
     await waitFor(() => expect(apiMock.auditEvents).toHaveBeenLastCalledWith({ type: "policy.decision", limit: 50 }));
     expect(await screen.findByText("policy.decision")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Filters" }));
     expect(screen.getByDisplayValue("policy.decision")).toBeInTheDocument();
     expect(screen.getByText("cert/payments")).toBeInTheDocument();
     expect(screen.getAllByText("ra@example.test").length).toBeGreaterThan(0);

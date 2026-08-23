@@ -560,6 +560,9 @@ describe("discovery control-plane surface", () => {
     expect(await within(tokenRow as HTMLTableRowElement).findByText("Dismissed")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Close" }));
 
+    const findingsSection = screen.getByRole("heading", { name: "Credentials to review" }).closest("section");
+    expect(findingsSection).toBeTruthy();
+    await user.click(within(findingsSection as HTMLElement).getByRole("button", { name: "Filters" }));
     await user.selectOptions(screen.getByLabelText("Owner"), "platform");
     await user.selectOptions(screen.getByLabelText("Team"), "certops");
     await user.selectOptions(screen.getByLabelText("Tag"), "follow-up");
@@ -571,8 +574,6 @@ describe("discovery control-plane surface", () => {
     expect(params.get("tag")).toBe("follow-up");
     expect(params.get("triage")).toBe("managed");
     expect(screen.getByText("10.0.0.10:443")).toBeInTheDocument();
-    const findingsSection = screen.getByRole("heading", { name: "Credentials to review" }).closest("section");
-    expect(findingsSection).toBeTruthy();
     expect(within(findingsSection as HTMLElement).queryByText("github:user/payments-ci/pat")).not.toBeInTheDocument();
   });
 

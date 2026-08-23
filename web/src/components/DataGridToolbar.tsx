@@ -78,14 +78,8 @@ export function DataGridToolbar({
         {columnChooser}
         {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
       </div>
-      {filters && (
-        <div
-          id={filtersId}
-          hidden={!filtersOpen}
-          role="group"
-          aria-label={filterLabel}
-          className="flex flex-wrap items-end gap-3 border-y border-border bg-muted/20 px-3 py-3"
-        >
+      {filters && filtersOpen && (
+        <div id={filtersId} role="group" aria-label={filterLabel} className="flex flex-wrap items-end gap-3 border-y border-border bg-muted/20 px-3 py-3">
           {filters}
         </div>
       )}

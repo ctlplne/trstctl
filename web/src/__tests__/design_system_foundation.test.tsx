@@ -451,7 +451,7 @@ describe("shared DataGrid", () => {
     expect(screen.getByRole("searchbox", { name: "Search credential rows" })).toBeInTheDocument();
     const filters = screen.getByRole("button", { name: "Filters" });
     expect(filters).toHaveAttribute("aria-expanded", "false");
-    expect(screen.getByText("Owner filter")).not.toBeVisible();
+    expect(screen.queryByText("Owner filter")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /bulk rotate/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /columns/i })).toBeInTheDocument();
 

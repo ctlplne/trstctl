@@ -357,6 +357,7 @@ describe("operational console surface", () => {
     await user.click(await screen.findByRole("button", { name: "Search activity" }));
     expect(await screen.findByText("identity.requested")).toBeInTheDocument();
 
+    await user.click(screen.getByRole("button", { name: "Filters" }));
     await user.type(screen.getByLabelText("Type"), "identity.issued");
     await user.type(screen.getByLabelText("Search activity"), "payments");
     await user.type(screen.getByLabelText("Since"), "2026-06-17T00:00:00Z");
