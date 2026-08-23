@@ -327,6 +327,7 @@ describe("operational console surface", () => {
     await user.click(screen.getByRole("button", { name: "Search activity" }));
     expect(await screen.findByText("identity.issued")).toBeInTheDocument();
     expect(screen.getByRole("table", { name: "Tenant audit events" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "View options" }));
     expect(screen.getByRole("button", { name: /Columns/i })).toBeInTheDocument();
 
     await user.click(screen.getByText("Signatures and evidence export", { exact: true }));

@@ -428,6 +428,50 @@ export const messages = {
     defaultMessage: "Inventory",
     description: "Certificates page tab: the primary certificate table.",
   },
+  "certificates.inventoryAnswer.noneTitle": {
+    defaultMessage: "No certificates expire this week.",
+    description: "Calm certificate inventory answer when no certificate expires within seven days.",
+  },
+  "certificates.inventoryAnswer.oneTitle": {
+    defaultMessage: "1 certificate needs attention this week.",
+    description: "Certificate inventory answer when exactly one certificate expires within seven days.",
+  },
+  "certificates.inventoryAnswer.manyTitle": {
+    defaultMessage: "{count} certificates need attention this week.",
+    description: "Certificate inventory answer when multiple certificates expire within seven days.",
+  },
+  "certificates.inventoryAnswer.noneBody": {
+    defaultMessage: "The inventory is ready to review by owner, date, or status.",
+    description: "Next-step guidance when no certificate expires within seven days.",
+  },
+  "certificates.inventoryAnswer.attentionBody": {
+    defaultMessage: "Review the earliest expiry first. Exact fields and renewal controls remain available in the table and certificate details.",
+    description: "Next-step guidance when certificates expire within seven days.",
+  },
+  "certificates.inventory.loadedOne": {
+    defaultMessage: "1 certificate loaded",
+    description: "Certificate inventory result count when one row is loaded.",
+  },
+  "certificates.inventory.loadedMany": {
+    defaultMessage: "{count} certificates loaded",
+    description: "Certificate inventory result count when zero or multiple rows are loaded.",
+  },
+  "certificates.inventory.filterOne": {
+    defaultMessage: "1 active filter",
+    description: "Certificate inventory filter disclosure summary when one filter is active.",
+  },
+  "certificates.inventory.filterMany": {
+    defaultMessage: "{count} active filters",
+    description: "Certificate inventory filter disclosure summary when multiple filters are active.",
+  },
+  "certificates.inventory.view": {
+    defaultMessage: "View",
+    description: "Certificate row action for a healthy record.",
+  },
+  "certificates.inventory.review": {
+    defaultMessage: "Review",
+    description: "Certificate row action for a record that needs attention.",
+  },
   "certificates.lifecycle.replaceViaRequest": {
     defaultMessage: "Replace via request →",
     description: "Certificate row action for an unmanaged certificate: link to the self-service request flow.",
@@ -3310,12 +3354,12 @@ export const messages = {
     description: "Mobile drawer title.",
   },
   "shell.openCommandPalette": {
-    defaultMessage: "Open command palette",
-    description: "Command palette trigger label.",
+    defaultMessage: "Open task search",
+    description: "Plain-language label for the global task and object search trigger.",
   },
   "shell.searchOrJump": {
-    defaultMessage: "Search or jump",
-    description: "Command palette compact trigger text.",
+    defaultMessage: "Search or start a task",
+    description: "Global task and object search trigger text.",
   },
   "shell.tenantContext": {
     defaultMessage: "Tenant context",
@@ -3378,8 +3422,8 @@ export const messages = {
     description: "Primary nav section label above the S-B2 product module switcher.",
   },
   "nav.module.auditLens": {
-    defaultMessage: "Change history (this module)",
-    description: "Module-band link to change history scoped to the active module (S-B4).",
+    defaultMessage: "Changes in this space",
+    description: "Plain-language link to change history scoped to the active product space (S-B4).",
   },
   "nav.module.upsell": {
     defaultMessage: "This module requires a commercial edition — view Plan and license",
@@ -6420,24 +6464,24 @@ export const messages = {
     description: "Primary navigation item.",
   },
   "command.title": {
-    defaultMessage: "Command palette",
-    description: "Command palette dialog title.",
+    defaultMessage: "What do you need?",
+    description: "Outcome-first title for the global task and object search dialog.",
   },
   "command.description": {
-    defaultMessage: "Jump to routes or search certificate, identity, and secret metadata.",
-    description: "Command palette dialog description.",
+    defaultMessage: "Start a task, open a page, or find a certificate, identity, or secret.",
+    description: "Plain-language description of global task, page, and object search.",
   },
   "command.close": {
-    defaultMessage: "Close command palette",
-    description: "Command palette close button label.",
+    defaultMessage: "Close task search",
+    description: "Close button label for global task search.",
   },
   "command.searchLabel": {
-    defaultMessage: "Search routes and inventory",
-    description: "Command palette search field accessible label.",
+    defaultMessage: "Search or start a task",
+    description: "Global task and object search field accessible label.",
   },
   "command.searchPlaceholder": {
-    defaultMessage: "Search routes, certificates, identities, or secrets",
-    description: "Command palette search field placeholder.",
+    defaultMessage: "Try “issue a certificate” or search by name",
+    description: "Example-led placeholder for global task and object search.",
   },
   "command.sourcesUnavailable": {
     defaultMessage: "Some inventory sources are temporarily unavailable.",
@@ -6448,23 +6492,23 @@ export const messages = {
     description: "Command palette loading status.",
   },
   "command.routes": {
-    defaultMessage: "Routes",
-    description: "Command palette route section title (S-C6: also the heading for routes outside any space).",
+    defaultMessage: "Pages",
+    description: "Task-search page section title (S-C6: also the heading for pages outside any space).",
   },
   "command.action.rotateSecret": {
     defaultMessage: "Rotate a secret",
     description: "Command palette verb (S-C6): jump to the secret store's rotation controls.",
   },
   "command.action.rotateSecretDescription": {
-    defaultMessage: "Open the secret store with rollback-safe rotation",
+    defaultMessage: "Open Secrets and rotate with a rollback point",
     description: "Command palette verb description for Rotate a secret.",
   },
   "command.action.grantAccess": {
-    defaultMessage: "Grant workload access",
+    defaultMessage: "Give a workload access",
     description: "Command palette verb (S-C6): jump to the machine-access grant console.",
   },
   "command.action.grantAccessDescription": {
-    defaultMessage: "Mint a scoped, reveal-once workload credential",
+    defaultMessage: "Give one workload only the access it needs; the credential is shown once",
     description: "Command palette verb description for Grant workload access.",
   },
   "command.action.sshUserCert": {
@@ -6472,15 +6516,15 @@ export const messages = {
     description: "Command palette verb (S-C6): jump to attestation-gated SSH user-cert issuance.",
   },
   "command.action.sshUserCertDescription": {
-    defaultMessage: "Open SSH trust for an attestation-gated user cert",
+    defaultMessage: "Check the request, then issue a short-lived SSH certificate",
     description: "Command palette verb description for Issue SSH user certificate.",
   },
   "command.action.blastRadius": {
-    defaultMessage: "Preview blast radius",
+    defaultMessage: "See what could be affected",
     description: "Command palette verb (S-C6): jump to the credential graph explorer.",
   },
   "command.action.blastRadiusDescription": {
-    defaultMessage: "Pick a credential on the graph and see what it reaches",
+    defaultMessage: "Choose a credential and trace the systems that depend on it",
     description: "Command palette verb description for Preview blast radius.",
   },
   "command.inventory": {
@@ -6488,12 +6532,12 @@ export const messages = {
     description: "Command palette inventory section title.",
   },
   "command.noResults": {
-    defaultMessage: "No routes or inventory matched.",
+    defaultMessage: "Nothing matched. Try a task like “issue a certificate” or search by name.",
     description: "Command palette empty state.",
   },
   "command.routeDescription": {
-    defaultMessage: "Route · {group}",
-    description: "Command palette description for a route command.",
+    defaultMessage: "Page · {group}",
+    description: "Task-search description for a page result.",
   },
   "command.enter": {
     defaultMessage: "Enter",
@@ -13710,8 +13754,8 @@ export const messages = {
     description: "DA-14 sweep: migrated hardcoded copy from src/components/CommandPalette.tsx.",
   },
   "source.open.command.palette.c022b19a38": {
-    defaultMessage: "Open command palette",
-    description: "DA-14 sweep: migrated hardcoded copy from src/components/ShortcutsHelp.tsx.",
+    defaultMessage: "Open task search",
+    description: "Plain-language keyboard shortcut label for global task and object search.",
   },
   "source.open.the.self.service.request.workflow.a5dd4f8af7": {
     defaultMessage: "Open the self-service request workflow",

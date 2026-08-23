@@ -12,9 +12,11 @@ export type DataGridToolbarProps = {
   filters?: ReactNode;
   filterLabel?: string;
   filterSummary?: string;
+  resultSummary?: ReactNode;
   bulkActions?: ReactNode;
   savedViews?: ReactNode;
   columnChooser?: ReactNode;
+  viewOptionsLabel?: string;
   actions?: ReactNode;
   className?: string;
 };
@@ -29,14 +31,19 @@ export function DataGridToolbar({
   filters,
   filterLabel = "Filters",
   filterSummary,
+  resultSummary,
   bulkActions,
   savedViews,
   columnChooser,
+  viewOptionsLabel = "View options",
   actions,
   className,
 }: DataGridToolbarProps) {
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [viewOptionsOpen, setViewOptionsOpen] = useState(false);
   const filtersId = useId();
+  const viewOptionsId = useId();
+  const hasViewOptions = Boolean(savedViews || columnChooser);
 
   return (
     <div className={cn("grid w-full gap-3", className)}>
@@ -64,7 +71,13 @@ export function DataGridToolbar({
             type="button"
             aria-controls={filtersId}
             aria-expanded={filtersOpen}
-            onClick={() => setFiltersOpen((open) => !open)}
+            onClick={() => {
+              setFiltersOpen((open) => {
+                const next = !open;
+                if (next) setViewOptionsOpen(false);
+                return next;
+              });
+            }}
             className="inline-flex min-h-9 items-center gap-2 rounded-control border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted/60"
           >
             <SlidersHorizontal className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
@@ -74,13 +87,41 @@ export function DataGridToolbar({
           </button>
         )}
         {bulkActions && <div className="flex flex-wrap items-center gap-2">{bulkActions}</div>}
-        {savedViews}
-        {columnChooser}
+        {hasViewOptions && (
+          <button
+            type="button"
+            aria-controls={viewOptionsId}
+            aria-expanded={viewOptionsOpen}
+            onClick={() => {
+              setViewOptionsOpen((open) => {
+                const next = !open;
+                if (next) setFiltersOpen(false);
+                return next;
+              });
+            }}
+            className="inline-flex min-h-9 items-center gap-2 rounded-control border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted/60"
+          >
+            {viewOptionsLabel}
+            <ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform", viewOptionsOpen && "rotate-180")} aria-hidden="true" />
+          </button>
+        )}
         {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+        {resultSummary ? <span className="ms-auto text-caption text-muted-foreground">{resultSummary}</span> : null}
       </div>
       {filters && filtersOpen && (
         <div id={filtersId} role="group" aria-label={filterLabel} className="flex flex-wrap items-end gap-3 border-y border-border bg-muted/20 px-3 py-3">
           {filters}
+        </div>
+      )}
+      {hasViewOptions && viewOptionsOpen && (
+        <div
+          id={viewOptionsId}
+          role="group"
+          aria-label={viewOptionsLabel}
+          className="flex flex-wrap items-end gap-3 border-y border-border bg-muted/20 px-3 py-3"
+        >
+          {savedViews}
+          {columnChooser}
         </div>
       )}
     </div>

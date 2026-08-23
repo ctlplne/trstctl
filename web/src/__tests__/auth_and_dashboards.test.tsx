@@ -443,8 +443,8 @@ describe("auth + dashboards", () => {
     expect(within(nav).queryByRole("link", { name: /unmanaged credentials/i })).not.toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: /^Change history$/i })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /Open command palette/i }));
-    const dialog = await screen.findByRole("dialog", { name: "Command palette" });
+    await user.click(screen.getByRole("button", { name: /Open task search/i }));
+    const dialog = await screen.findByRole("dialog", { name: "What do you need?" });
     expect(within(dialog).getByRole("button", { name: /Issue credential/i })).toBeInTheDocument();
     expect(within(dialog).queryByRole("button", { name: /Run discovery scan/i })).not.toBeInTheDocument();
     expect(within(dialog).queryByRole("button", { name: /Connect issuer/i })).not.toBeInTheDocument();
@@ -648,11 +648,12 @@ describe("auth + dashboards", () => {
   });
 
   // ---------------------------------------------------------------- S-N1 ----
-  // The expiring worklist must not dead-end: managed rows carry Renew wired to
-  // the identity lifecycle transition; unmanaged rows degrade honestly
+  // The expiring worklist must not dead-end: the calm default table carries one
+  // state-aware row action, then the detail drawer exposes Renew for managed
+  // identities while unmanaged rows degrade honestly
   // (02-findings DA-05, upgraded to Blocker in the 2026-07-13 live pass).
 
-  it("offers Renew on managed certificate rows and starts the identity renewal (S-N1)", async () => {
+  it("offers Renew from managed certificate details and starts the identity renewal (S-N1)", async () => {
     apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "user-1", tenant_id: "t1" });
     apiMock.certificatePage.mockResolvedValue({
       items: [
@@ -664,21 +665,46 @@ describe("auth + dashboards", () => {
     apiMock.identities.mockResolvedValue([
       { id: "id-1", name: "payments-api.example.test", kind: "x509_certificate", status: "deployed", owner_id: "o1", target_id: "t" },
     ]);
+    apiMock.getCertificate.mockImplementation(async (id: string) => {
+      const certificate = {
+        c1: { id: "c1", tenant_id: "t1", subject: "CN=payments-api.example.test", issuer: "CN=CA", status: "active", fingerprint: "f1" },
+        c2: { id: "c2", tenant_id: "t1", subject: "CN=orphan.example.test", issuer: "CN=orphan.example.test", status: "active", fingerprint: "f2" },
+        c3: { id: "c3", tenant_id: "t1", subject: "CN=gone.example.test", issuer: "CN=CA", status: "revoked", fingerprint: "f3" },
+      }[id];
+      if (!certificate) throw new Error(`unexpected certificate ${id}`);
+      return certificate;
+    });
     const user = userEvent.setup();
 
     renderAt("/certificates");
     await screen.findByText("CN=payments-api.example.test");
 
-    // Managed row: Renew is present and dispatches the lifecycle transition.
-    const renew = await screen.findByRole("button", { name: /Renew payments-api\.example\.test/i });
+    // The default row stays quiet. Its one review action opens the exact record,
+    // where Renew dispatches the lifecycle transition.
+    const managedRow = screen.getByText("CN=payments-api.example.test").closest("tr");
+    expect(managedRow).not.toBeNull();
+    await user.click(within(managedRow!).getByRole("button", { name: /view|review/i }));
+    const managedDialog = await screen.findByRole("dialog", { name: /certificate details/i });
+    const renew = await within(managedDialog).findByRole("button", { name: /Renew payments-api\.example\.test/i });
     await user.click(renew);
     await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("id-1", "renewing", expect.stringContaining("certificate inventory")));
+    await user.click(within(managedDialog).getByRole("button", { name: "Close" }));
 
-    // Unmanaged active row degrades honestly to a replace path, not silence.
-    expect(screen.getByRole("link", { name: /Replace via request/i })).toHaveAttribute("href", "/request");
+    // An unmanaged active record degrades honestly to a replace path, not silence.
+    const orphanRow = screen.getByText("CN=orphan.example.test").closest("tr");
+    expect(orphanRow).not.toBeNull();
+    await user.click(within(orphanRow!).getByRole("button", { name: /view|review/i }));
+    const orphanDialog = await screen.findByRole("dialog", { name: /certificate details/i });
+    expect(within(orphanDialog).getByRole("link", { name: /Replace via request/i })).toHaveAttribute("href", "/request");
+    await user.click(within(orphanDialog).getByRole("button", { name: "Close" }));
 
-    // Revoked rows get no lifecycle affordance.
-    expect(screen.queryByRole("button", { name: /Renew gone\.example\.test/i })).not.toBeInTheDocument();
+    // Revoked records get no lifecycle affordance in their detail drawer.
+    const revokedRow = screen.getByText("CN=gone.example.test").closest("tr");
+    expect(revokedRow).not.toBeNull();
+    await user.click(within(revokedRow!).getByRole("button", { name: /view|review/i }));
+    const revokedDialog = await screen.findByRole("dialog", { name: /certificate details/i });
+    expect(within(revokedDialog).queryByRole("button", { name: /Renew gone\.example\.test/i })).not.toBeInTheDocument();
+    expect(within(revokedDialog).queryByRole("link", { name: /Replace via request/i })).not.toBeInTheDocument();
   });
 
   it("lands the certificate inventory on an expiry-filtered worklist from the URL", async () => {

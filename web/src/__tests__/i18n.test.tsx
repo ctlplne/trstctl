@@ -256,8 +256,8 @@ describe("i18n boundary", () => {
     expect(negotiateLocale(["de"])).toBe("de-DE");
     expect(negotiateLocale(["ar-SA"])).toBe("ar-XB");
     expect(directionForLocale("he-IL")).toBe("rtl");
-    expect(formatMessage("command.routeDescription", { group: "Platform" })).toBe("Route · Platform");
-    expect(formatMessage("command.routeDescription", { group: "Plataforma" }, "es-ES")).toBe("Ruta · Plataforma");
+    expect(formatMessage("command.routeDescription", { group: "Platform" })).toBe("Page · Platform");
+    expect(formatMessage("command.routeDescription", { group: "Plataforma" }, "es-ES")).toBe("Página · Plataforma");
     expect(formatDate("2026-06-20T12:00:00Z", { locale: "en-US", timeZone: defaultTimeZone })).toMatch(/Jun/);
     expect(formatNumber(1234, { locale: "en-US", timeZone: defaultTimeZone })).toBe("1,234");
     expect(formatPlural(1, { one: "node", other: "nodes" })).toBe("node");
@@ -964,8 +964,12 @@ describe("i18n boundary", () => {
       // steps first while preserving the complete sequence on request.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
       // release.
-      "es-ES": "8806f41226d61ba8a6688c4c436a99d65133e923ae4716a8a0a8d60d4a5681c6",
-      "de-DE": "2e4a22e494a36541bae53fbf5cf2cc46494f25b8344a65e61b4a02a656a04089",
+      // Quiet-confidence working-view re-pin: task search uses outcome-first
+      // verbs, and the certificate inventory gives a one-sentence weekly
+      // answer before progressive table controls. Machine-authored es/de —
+      // FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "f8c1c5b6ede33b5cf1a0069a7858abfa6fc4d4d6c67a99cfed9a407f965508dc",
+      "de-DE": "72ee8bd0b2b4f9a0ca144f8be82bd42acde5f7ba7fc708aabac4aa770a2abd8d",
     });
   });
 

@@ -124,7 +124,7 @@ type PrimaryNavProps = {
 
 function navItemClass(isActive: boolean): string {
   return cn(
-    "flex min-h-9 items-center gap-2 rounded-control px-3 py-2 text-sm transition-colors",
+    "flex min-h-9 items-start gap-2 rounded-control px-3 py-2 text-sm leading-snug transition-colors",
     isActive ? "bg-sidebar-active font-semibold text-brand-accent" : "text-sidebar-foreground hover:bg-sidebar-hover hover:text-foreground",
   );
 }
@@ -277,8 +277,8 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
                 return (
                   <li key={`primary-${to}`}>
                     <NavLink to={to} end={end} onClick={onNavigate} className={({ isActive }) => navItemClass(isActive)}>
-                      <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
-                      <span className="min-w-0 flex-1 truncate">{t(labelKey)}</span>
+                      <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span className="min-w-0 flex-1 break-words">{t(labelKey)}</span>
                     </NavLink>
                   </li>
                 );
@@ -305,8 +305,8 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
                     >
                       <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate">{label}</span>
-                        <span className="block truncate text-xs font-normal text-sidebar-foreground/80">{description}</span>
+                        <span className="block break-words leading-snug">{label}</span>
+                        <span className="mt-0.5 block break-words text-xs font-normal leading-snug text-sidebar-foreground/80">{description}</span>
                       </span>
                     </NavLink>
                   </li>
@@ -348,8 +348,8 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
                   return (
                     <li key={`${group.labelKey}-${to}-${labelKey}`}>
                       <NavLink to={to} end={end} onClick={onNavigate} className={({ isActive }) => navItemClass(isActive && !suppressed)}>
-                        <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
-                        <span className="min-w-0 flex-1 truncate">{label}</span>
+                        <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+                        <span className="min-w-0 flex-1 break-words">{label}</span>
                       </NavLink>
                     </li>
                   );
@@ -364,8 +364,8 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
                 lens into the ONE shared audit stream (Platform hosts the
                 unscoped Audit row itself, so it needs no extra lens). */}
             <NavLink to={`/audit?module=${activeSpace.id}`} onClick={onNavigate} className={navItemClass(false)}>
-              <AuditLensIcon aria-hidden="true" className="h-4 w-4 shrink-0" />
-              <span className="min-w-0 flex-1 truncate">{t("nav.module.auditLens")}</span>
+              <AuditLensIcon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+              <span className="min-w-0 flex-1 break-words">{t("nav.module.auditLens")}</span>
             </NavLink>
           </li>
         )}

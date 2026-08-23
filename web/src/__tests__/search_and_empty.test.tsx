@@ -404,12 +404,16 @@ describe("certificate inventory gap closure", () => {
 
     renderCerts();
 
-    expect(await screen.findByText("<7d critical")).toBeInTheDocument();
-    expect(screen.getByText("revoked")).toBeInTheDocument();
-    expect(screen.getByText("keyCompromise")).toBeInTheDocument();
+    // Revocation outranks an expiry warning in the calm default table. The exact
+    // time and reason stay one click away in the detail evidence.
+    expect(await screen.findByText("revoked")).toBeInTheDocument();
+    expect(screen.queryByText("<7d critical")).not.toBeInTheDocument();
+    expect(screen.queryByText("keyCompromise")).not.toBeInTheDocument();
     expect(screen.queryByText(/^active$/i)).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /view details/i }));
+    const revokedRow = screen.getByText("CN=revoked.example.com").closest("tr");
+    expect(revokedRow).not.toBeNull();
+    await user.click(within(revokedRow!).getByRole("button", { name: /view|review/i }));
 
     const dialog = await screen.findByRole("dialog", { name: /certificate details/i });
     expect(within(dialog).getByText("Revoked at")).toBeInTheDocument();
@@ -442,7 +446,9 @@ describe("certificate inventory gap closure", () => {
     const user = userEvent.setup();
     renderCerts();
 
-    await user.click(await screen.findByRole("button", { name: /view details/i }));
+    const certificateRow = (await screen.findByText("CN=api.example.com")).closest("tr");
+    expect(certificateRow).not.toBeNull();
+    await user.click(within(certificateRow!).getByRole("button", { name: /view|review/i }));
 
     expect(apiMock.getCertificate).toHaveBeenCalledWith("c1");
     const dialog = await screen.findByRole("dialog", { name: /certificate details/i });

@@ -73,11 +73,13 @@ describe("DESIGN-002 dense grid and toolbar consistency", () => {
     expect(await screen.findByText("CN=payments.example.test")).toBeInTheDocument();
     const grid = screen.getByLabelText("Inventoried certificates");
     expect(within(grid).getByRole("searchbox", { name: "Search loaded rows" })).toBeInTheDocument();
+    await user.click(within(grid).getByRole("button", { name: "View options" }));
     expect(within(grid).getByRole("button", { name: "Columns" })).toBeInTheDocument();
     expect(within(grid).getByRole("button", { name: "Save view" })).toBeDisabled();
 
     await user.click(within(grid).getByRole("button", { name: "Filters" }));
     await user.selectOptions(within(grid).getByLabelText("Team filter"), "team-platform");
+    await user.click(within(grid).getByRole("button", { name: "View options" }));
     await user.type(within(grid).getByLabelText("Saved view name"), "Prod web");
     await user.click(within(grid).getByRole("button", { name: "Save view" }));
 
@@ -106,6 +108,7 @@ describe("DESIGN-002 dense grid and toolbar consistency", () => {
       if (surface.tab) await user.click(screen.getByRole("tab", { name: surface.tab }));
       const section = screen.getByRole("heading", { name: surface.heading }).closest("section");
       expect(section).toBeTruthy();
+      await user.click(within(section as HTMLElement).getByRole("button", { name: "View options" }));
       expect(within(section as HTMLElement).getByRole("button", { name: "Columns" })).toBeInTheDocument();
       expect(within(section as HTMLElement).getByRole("button", { name: "Save view" })).toBeInTheDocument();
     }
@@ -115,6 +118,7 @@ describe("DESIGN-002 dense grid and toolbar consistency", () => {
     await user.click(within(findings).getByRole("button", { name: "Filters" }));
     expect(within(findings).getByLabelText("Triage status")).toBeInTheDocument();
     expect(within(findings).queryByText("abcdef1234...567890")).not.toBeInTheDocument();
+    await user.click(within(findings).getByRole("button", { name: "View options" }));
     await user.click(within(findings).getByRole("button", { name: "Columns" }));
     await user.click(within(findings).getByRole("checkbox", { name: /Fingerprint/ }));
     expect(within(findings).getByText("abcdef1234...567890")).toBeInTheDocument();

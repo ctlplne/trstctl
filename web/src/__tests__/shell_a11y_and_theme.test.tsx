@@ -443,10 +443,10 @@ describe("app shell accessibility and theme", () => {
 
     expect(screen.queryByRole("navigation", { name: /Primary/i })).not.toBeInTheDocument();
     expect(screen.getByRole("main")).toHaveClass("min-w-0");
-    const mobileCommandOpener = screen.getAllByRole("button", { name: "Open command palette" })[0];
+    const mobileCommandOpener = screen.getAllByRole("button", { name: "Open task search" })[0];
     await user.click(mobileCommandOpener);
-    const palette = await screen.findByRole("dialog", { name: "Command palette" });
-    await user.click(within(palette).getByRole("button", { name: "Close command palette" }));
+    const palette = await screen.findByRole("dialog", { name: "What do you need?" });
+    await user.click(within(palette).getByRole("button", { name: "Close task search" }));
 
     const toggle = screen.getByRole("button", { name: "Open primary navigation" });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
@@ -527,8 +527,8 @@ describe("app shell accessibility and theme", () => {
 
     fireEvent.keyDown(document, { key: "k", metaKey: true });
 
-    let palette = await screen.findByRole("dialog", { name: "Command palette" });
-    let search = within(palette).getByRole("searchbox", { name: "Search routes and inventory" });
+    let palette = await screen.findByRole("dialog", { name: "What do you need?" });
+    let search = within(palette).getByRole("searchbox", { name: "Search or start a task" });
     expect(search).toHaveFocus();
     await user.type(search, "payments");
 
@@ -537,7 +537,7 @@ describe("app shell accessibility and theme", () => {
     expect(within(palette).getByRole("button", { name: /payments-worker.*Identity/i })).toBeInTheDocument();
     expect(within(palette).getByRole("button", { name: /payments\/db\/password.*Secret/i })).toBeInTheDocument();
 
-    const close = within(palette).getByRole("button", { name: "Close command palette" });
+    const close = within(palette).getByRole("button", { name: "Close task search" });
     close.focus();
     await user.tab({ shift: true });
     const focusableButtons = within(palette).getAllByRole("button");
@@ -549,20 +549,20 @@ describe("app shell accessibility and theme", () => {
     expect(await axe(container)).toHaveNoViolations();
 
     await user.keyboard("{Escape}");
-    expect(screen.queryByRole("dialog", { name: "Command palette" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "What do you need?" })).not.toBeInTheDocument();
 
-    const opener = screen.getByRole("button", { name: "Open command palette" });
+    const opener = screen.getByRole("button", { name: "Open task search" });
     await user.click(opener);
-    palette = await screen.findByRole("dialog", { name: "Command palette" });
-    search = within(palette).getByRole("searchbox", { name: "Search routes and inventory" });
+    palette = await screen.findByRole("dialog", { name: "What do you need?" });
+    search = within(palette).getByRole("searchbox", { name: "Search or start a task" });
     expect(search).toHaveFocus();
     await user.keyboard("{Escape}");
-    expect(screen.queryByRole("dialog", { name: "Command palette" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "What do you need?" })).not.toBeInTheDocument();
     expect(opener).toHaveFocus();
 
     await user.click(opener);
-    palette = await screen.findByRole("dialog", { name: "Command palette" });
-    search = within(palette).getByRole("searchbox", { name: "Search routes and inventory" });
+    palette = await screen.findByRole("dialog", { name: "What do you need?" });
+    search = within(palette).getByRole("searchbox", { name: "Search or start a task" });
     await user.type(search, "license");
     await user.keyboard("{Enter}");
 
@@ -577,7 +577,7 @@ describe("app shell accessibility and theme", () => {
     await user.keyboard("?");
 
     let overlay = screen.getByRole("dialog", { name: "Keyboard shortcuts" });
-    expect(within(overlay).getByText("Open command palette")).toBeInTheDocument();
+    expect(within(overlay).getByText("Open task search")).toBeInTheDocument();
     expect(within(overlay).getByText("Show keyboard shortcuts")).toBeInTheDocument();
     expect(await axe(container)).toHaveNoViolations();
 

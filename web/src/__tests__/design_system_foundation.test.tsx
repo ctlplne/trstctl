@@ -453,7 +453,8 @@ describe("shared DataGrid", () => {
     expect(filters).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByText("Owner filter")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /bulk rotate/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /columns/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View options" })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("button", { name: /columns/i })).not.toBeInTheDocument();
 
     await user.click(filters);
     expect(filters).toHaveAttribute("aria-expanded", "true");
@@ -463,6 +464,7 @@ describe("shared DataGrid", () => {
     expect(screen.getByText("worker")).toBeInTheDocument();
     expect(screen.queryByText("payments-api")).not.toBeInTheDocument();
 
+    await user.click(screen.getByRole("button", { name: "View options" }));
     await user.click(screen.getByRole("button", { name: /columns/i }));
     await user.click(screen.getByLabelText("Owner"));
     expect(screen.getByRole("columnheader", { name: /owner/i })).toBeInTheDocument();
@@ -480,6 +482,7 @@ describe("shared DataGrid", () => {
       </MemoryRouter>,
     );
 
+    await user.click(screen.getByRole("button", { name: "View options" }));
     await user.click(screen.getByRole("button", { name: /columns/i }));
     await user.click(screen.getByLabelText("Status"));
     expect(screen.queryByRole("columnheader", { name: /status/i })).not.toBeInTheDocument();
@@ -495,6 +498,7 @@ describe("shared DataGrid", () => {
     await user.click(screen.getByRole("button", { name: "Filters" }));
     await user.selectOptions(screen.getByLabelText("Owner view filter"), "platform");
     await user.click(screen.getByRole("button", { name: /name/i }));
+    await user.click(screen.getByRole("button", { name: "View options" }));
     await user.type(screen.getByLabelText("Saved view name"), "Platform focus");
     await user.click(screen.getByRole("button", { name: "Save view" }));
 
@@ -504,9 +508,11 @@ describe("shared DataGrid", () => {
     expect(stored).not.toContain("payments-api");
     expect(stored).not.toContain("worker");
 
+    await user.click(screen.getByRole("button", { name: "Filters" }));
     await user.selectOptions(screen.getByLabelText("Owner view filter"), "all");
     expect(screen.getByText("worker")).toBeInTheDocument();
 
+    await user.click(screen.getByRole("button", { name: "View options" }));
     await user.click(screen.getByRole("button", { name: "Restore view Platform focus" }));
     expect(screen.queryByText("worker")).not.toBeInTheDocument();
     expect(screen.getByText("payments-api")).toBeInTheDocument();

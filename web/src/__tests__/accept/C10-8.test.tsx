@@ -65,8 +65,8 @@ describe("C10-8 command palette search and actions", () => {
     const user = userEvent.setup();
     renderPalette();
 
-    const palette = screen.getByRole("dialog", { name: "Command palette" });
-    const search = within(palette).getByRole("searchbox", { name: "Search routes and inventory" });
+    const palette = screen.getByRole("dialog", { name: "What do you need?" });
+    const search = within(palette).getByRole("searchbox", { name: "Search or start a task" });
 
     await user.type(search, "payments");
     expect(apiMock.certificatePage).not.toHaveBeenCalled();

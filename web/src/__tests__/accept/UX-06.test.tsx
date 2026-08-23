@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DataGridToolbar } from "@/components/DataGridToolbar";
@@ -13,7 +14,8 @@ const columns: Array<DataGridColumn<Row>> = [
 ];
 
 describe("UX-06 DataGrid optional view controls", () => {
-  it("keeps saved views and the column chooser hidden unless the page opts in", () => {
+  it("keeps saved views and the column chooser behind one calm disclosure when a page opts in", async () => {
+    const user = userEvent.setup();
     const plain = render(
       <MemoryRouter>
         <DataGrid ariaLabel="Plain credential rows" rows={rows} columns={columns} getRowId={(row) => row.id} />
@@ -42,6 +44,14 @@ describe("UX-06 DataGrid optional view controls", () => {
     );
 
     expect(screen.getByRole("table", { name: "Configured credential rows" })).toBeInTheDocument();
+    const viewOptions = screen.getByRole("button", { name: "View options" });
+    expect(viewOptions).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("button", { name: /columns/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Saved view name")).not.toBeInTheDocument();
+
+    await user.click(viewOptions);
+
+    expect(viewOptions).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("button", { name: /columns/i })).toBeInTheDocument();
     expect(screen.getByLabelText("Saved view name")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save view" })).toBeInTheDocument();

@@ -58,9 +58,9 @@ describe("UX-01 coverage route removal", () => {
       expect(link).not.toHaveAttribute("href", expect.stringContaining("/coverage"));
     }
 
-    await user.click(screen.getByRole("button", { name: "Open command palette" }));
-    const palette = await screen.findByRole("dialog", { name: "Command palette" });
-    const search = within(palette).getByRole("searchbox", { name: "Search routes and inventory" });
+    await user.click(screen.getByRole("button", { name: "Open task search" }));
+    const palette = await screen.findByRole("dialog", { name: "What do you need?" });
+    const search = within(palette).getByRole("searchbox", { name: "Search or start a task" });
     await user.type(search, "coverage");
 
     await waitFor(() => expect(within(palette).queryByRole("button", { name: /coverage/i })).not.toBeInTheDocument());

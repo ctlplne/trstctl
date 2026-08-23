@@ -1222,28 +1222,42 @@ export function Certificates() {
           {tab === "inventory" && (
             <div {...tabPanelProps("certs", "inventory")} className="grid gap-4">
               {health && (
-                <ModuleKpiStrip
-                  ariaLabel="Certificates & PKI module metrics"
-                  kpis={[
-                    {
-                      id: "expiring-30d",
-                      label: t("moduleKpi.certificates.expiring30d"),
-                      value: health.summary.expiring_30d,
-                      to: "/certificates?expiry=30d",
-                      tone: health.summary.expiring_30d > 0 ? "warn" : "ok",
-                      sub: health.summary.expiring_30d > 0 ? t("moduleKpi.certificates.renewSoon") : undefined,
-                    },
-                    {
-                      id: "expiring-7d",
-                      label: t("moduleKpi.certificates.expiring7d"),
-                      value: health.summary.expiring_7d,
-                      to: "/certificates?expiry=7d",
-                      tone: health.summary.expiring_7d > 0 ? "crit" : "ok",
-                    },
-                    { id: "active", label: t("moduleKpi.certificates.active"), value: health.summary.active, to: "/certificates" },
-                    { id: "ca-hierarchy", label: t("moduleKpi.certificates.authorities"), value: t("moduleKpi.view"), to: "/ca-hierarchy" },
-                  ]}
-                />
+                <>
+                  <section aria-labelledby="certificate-inventory-answer" className="border-s-2 border-border ps-3">
+                    <h2 id="certificate-inventory-answer" className="text-body font-semibold text-foreground">
+                      {health.summary.expiring_7d === 0
+                        ? t("certificates.inventoryAnswer.noneTitle")
+                        : health.summary.expiring_7d === 1
+                          ? t("certificates.inventoryAnswer.oneTitle")
+                          : t("certificates.inventoryAnswer.manyTitle", { count: formatCount(health.summary.expiring_7d) })}
+                    </h2>
+                    <p className="mt-1 text-caption text-muted-foreground">
+                      {health.summary.expiring_7d === 0 ? t("certificates.inventoryAnswer.noneBody") : t("certificates.inventoryAnswer.attentionBody")}
+                    </p>
+                  </section>
+                  <ModuleKpiStrip
+                    ariaLabel="Certificates & PKI module metrics"
+                    kpis={[
+                      {
+                        id: "expiring-30d",
+                        label: t("moduleKpi.certificates.expiring30d"),
+                        value: health.summary.expiring_30d,
+                        to: "/certificates?expiry=30d",
+                        tone: health.summary.expiring_30d > 0 ? "warn" : "ok",
+                        sub: health.summary.expiring_30d > 0 ? t("moduleKpi.certificates.renewSoon") : undefined,
+                      },
+                      {
+                        id: "expiring-7d",
+                        label: t("moduleKpi.certificates.expiring7d"),
+                        value: health.summary.expiring_7d,
+                        to: "/certificates?expiry=7d",
+                        tone: health.summary.expiring_7d > 0 ? "crit" : "ok",
+                      },
+                      { id: "active", label: t("moduleKpi.certificates.active"), value: health.summary.active, to: "/certificates" },
+                      { id: "ca-hierarchy", label: t("moduleKpi.certificates.authorities"), value: t("moduleKpi.view"), to: "/ca-hierarchy" },
+                    ]}
+                  />
+                </>
               )}
               <BulkActionBar count={selectedIds.size} onClear={() => setSelectedIds(new Set())} className="sticky top-0 z-10 mb-3 shadow-elevation1">
                 <Button
@@ -1290,6 +1304,12 @@ export function Certificates() {
                     searchPlaceholder="Subject, issuer, serial, fingerprint..."
                     searchValue={query}
                     onSearchChange={setQuery}
+                    filterSummary={certificateFilterSummary(issuerFilter, profileFilter, teamFilter, environmentFilter, expiry)}
+                    resultSummary={
+                      filtered.length === 1
+                        ? t("certificates.inventory.loadedOne")
+                        : t("certificates.inventory.loadedMany", { count: formatCount(filtered.length) })
+                    }
                     filters={
                       <>
                         <label className="grid gap-1 text-sm font-medium" htmlFor="cert-issuer-filter">
@@ -1394,7 +1414,7 @@ export function Certificates() {
                   />
                 )}
                 onRowOpen={(c) => void openDetail(c)}
-                rowActionLabel={() => "View details"}
+                rowActionLabel={certificateRowActionLabel}
               />
 
               <div className="mt-4 flex items-center gap-3">
@@ -1679,6 +1699,8 @@ function lifecycleColumn(context: LifecycleColumnContext): DataGridColumn<Certif
   return {
     id: "lifecycle",
     header: "Lifecycle",
+    hiddenByDefault: true,
+    className: "whitespace-nowrap align-middle",
     cell: (c) => {
       const identity = renewableIdentityFor(c, context.identityByCN);
       if (identity) {
@@ -1714,42 +1736,70 @@ function certificateColumns(ownerByID: Map<string, Owner>, lifecycle?: DataGridC
       id: "subject",
       header: "Subject",
       sortable: true,
-      cell: (c) => <span className="font-medium">{c.subject}</span>,
+      className: "min-w-64 align-middle",
+      cell: (c) => (
+        <span title={c.subject} className="block max-w-80 truncate font-medium">
+          {c.subject}
+        </span>
+      ),
     },
     {
       id: "issuer",
       header: "Issuer",
-      cell: (c) => c.issuer ?? "-",
+      hiddenByDefault: true,
+      className: "min-w-52 align-middle",
+      cell: (c) =>
+        c.issuer ? (
+          <span title={c.issuer} className="block max-w-64 truncate">
+            {c.issuer}
+          </span>
+        ) : (
+          "-"
+        ),
     },
     {
       id: "profile",
       header: "Profile",
+      hiddenByDefault: true,
+      className: "whitespace-nowrap align-middle",
       cell: (c) => certificateProfile(c) || <span className="text-muted-foreground">-</span>,
     },
     {
       id: "team",
       header: "Team",
+      className: "min-w-36 align-middle",
       cell: (c) => certificateTeamLabel(c, ownerByID) || <span className="text-muted-foreground">-</span>,
     },
     {
       id: "algorithm",
       header: "Algorithm",
+      hiddenByDefault: true,
+      className: "whitespace-nowrap align-middle",
       cell: (c) => c.key_algorithm || "-",
     },
     {
       id: "expires",
       header: "Expires",
       sortable: true,
+      className: "whitespace-nowrap align-middle",
       cell: (c) => formatDate(c.not_after),
     },
     {
       id: "expiry-band",
-      header: "Band",
-      cell: (c) => <StatusBadge vocabulary="expiry" value={expiryBandForDate(c.not_after)} />,
+      header: "Needs attention",
+      className: "whitespace-nowrap align-middle",
+      cell: (c) =>
+        c.status === "active" ? (
+          <StatusBadge vocabulary="expiry" value={expiryBandForDate(c.not_after)} />
+        ) : (
+          <StatusBadge vocabulary="certificate" value={c.status} />
+        ),
     },
     {
       id: "status",
       header: "Status",
+      hiddenByDefault: true,
+      className: "whitespace-nowrap align-middle",
       cell: (c) => (
         <div className="grid gap-1">
           <StatusBadge vocabulary="certificate" value={c.status} />
@@ -1759,6 +1809,24 @@ function certificateColumns(ownerByID: Map<string, Owner>, lifecycle?: DataGridC
     },
   ];
   return lifecycle ? [...base, lifecycle] : base;
+}
+
+function certificateRowActionLabel(certificate: Certificate): string {
+  if (certificate.status !== "active") return translateNow("certificates.inventory.review");
+  const expiry = expiryBandForDate(certificate.not_after);
+  return expiry === "healthy" || expiry === "planned" ? translateNow("certificates.inventory.view") : translateNow("certificates.inventory.review");
+}
+
+function certificateFilterSummary(
+  issuer: FacetFilter,
+  profile: FacetFilter,
+  team: FacetFilter,
+  environment: FacetFilter,
+  expiry: ExpiryFilter,
+): string | undefined {
+  const active = [issuer, profile, team, environment, expiry].filter((value) => value !== "all").length;
+  if (active === 0) return undefined;
+  return active === 1 ? translateNow("certificates.inventory.filterOne") : translateNow("certificates.inventory.filterMany", { count: formatCount(active) });
 }
 
 function uniqueOptions(values: Array<string | undefined>, selected: FacetFilter): string[] {
