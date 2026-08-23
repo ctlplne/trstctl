@@ -1114,7 +1114,7 @@ not this file.
 | `internal/secretscan/gitleaks.go:164` | reads the report file this process asked gitleaks to write in its own tempdir (CWE-22) |
 | `internal/secretscan/gitleaks.go:421` | the operator's own scanner config, already validated as a path this process was told to use (CWE-22) |
 | `internal/secretscan/gitleaks_options_test.go:132` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/secretscan/secretscan_test.go:123` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/secretscan/secretscan_test.go:124` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/agentchannel.go:122` | operator-configured agent CA certificate path from this server's own config (CWE-22) |
 | `internal/server/backup.go:132` | operator-configured public trust anchor path (CWE-22) |
 | `internal/server/backup.go:196` | operator-invoked backup/restore over its own configured directory (CWE-22) |
