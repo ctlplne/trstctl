@@ -327,6 +327,8 @@ const esESCatalog = {
   "secrets.grant.statusRevoked": "revocado",
   "secrets.grant.revoke": "Revocar",
   "secrets.grant.ledgerEmpty": "Aún no hay tokens concedidos.",
+  "secrets.access.machineAdministration": "Administración del acceso de máquinas",
+  "secrets.access.developerTools": "Herramientas para desarrolladores",
   "secrets.methods.heading": "Métodos de autenticación",
   "secrets.methods.description":
     "Los métodos de inicio de sesión que acepta este tenant — declarados en la configuración del servidor y proyectados aquí. Deshabilitar un método rechaza nuevos inicios de sesión de inmediato.",

@@ -94,7 +94,7 @@ describe("JOURNEY-001 workload owner attested onboarding", () => {
       jwks: { keys: [{ kid: "journey-k2" }] },
       reason: "jwks rollover",
     });
-    await waitFor(() => expect(within(trustSourceRow!).getByText("2")).toBeInTheDocument());
+    await waitFor(() => expect(trustSourceRow).toHaveTextContent(/Version 2 · Last rotated/));
 
     fireEvent.change(screen.getByLabelText("Attestation proof payload (base64)"), { target: { value: "c2F0LWpvdXJuZXktMg==" } });
     fireEvent.change(screen.getByLabelText("Workload public key"), { target: { value: "-----BEGIN PUBLIC KEY-----\nSVID-ROTATED\n-----END PUBLIC KEY-----" } });

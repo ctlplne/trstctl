@@ -1039,6 +1039,14 @@ export const messages = {
     defaultMessage: "No granted tokens yet.",
     description: "Grant console ledger: empty state row.",
   },
+  "secrets.access.machineAdministration": {
+    defaultMessage: "Machine login administration",
+    description: "Closed disclosure summary for advanced machine-login methods and issued sessions.",
+  },
+  "secrets.access.developerTools": {
+    defaultMessage: "Developer tools",
+    description: "Closed disclosure summary for CLI and SDK secret-access tools.",
+  },
   "secrets.methods.heading": {
     defaultMessage: "Auth methods",
     description: "Secrets Access tab: heading of the configured machine-auth methods console (C-S4/DA-02).",

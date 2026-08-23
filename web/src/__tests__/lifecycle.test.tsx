@@ -146,6 +146,8 @@ describe("lifecycle actions from the UI", () => {
 
     const table = await screen.findByRole("table", { name: /credential identities/i });
     expect(table).toBeInTheDocument();
+    expect(within(table).getAllByRole("columnheader")).toHaveLength(6);
+    expect(within(table).queryByRole("columnheader", { name: "Credential type" })).not.toBeInTheDocument();
     expect(screen.getByText("issued")).toHaveAttribute("data-status-badge", "lifecycle");
     expect(screen.getAllByText("Owner record unavailable").length).toBeGreaterThan(0);
 

@@ -2079,19 +2079,17 @@ function FindingTable({
 
   const columns: Array<DataGridColumn<DiscoveryFinding>> = [
     {
-      id: "status",
-      header: t("discovery.findings.columnStatus"),
-      cell: (finding) => <TriagePill status={findingTriageStatus(finding)} />,
-    },
-    {
-      id: "kind",
-      header: t("discovery.findings.columnKind"),
-      cell: (finding) => discoveryFindingKindLabel(t, finding.kind),
-    },
-    {
       id: "reference",
-      header: t("discovery.findings.columnReference"),
-      cell: (finding) => <span className="font-medium">{finding.ref}</span>,
+      header: translateNow("source.credential.b1c42b3ce1"),
+      cell: (finding) => (
+        <span className="grid gap-1">
+          <span className="font-medium">{finding.ref}</span>
+          <span className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <TriagePill status={findingTriageStatus(finding)} />
+            <span>{discoveryFindingKindLabel(t, finding.kind)}</span>
+          </span>
+        </span>
+      ),
     },
     {
       id: "fingerprint",
@@ -2120,17 +2118,17 @@ function FindingTable({
     {
       id: "source",
       header: t("discovery.findings.columnSource"),
-      cell: (finding) => sourceByID.get(finding.source_id)?.name ?? t("discovery.findings.unknownSource"),
+      cell: (finding) => (
+        <span className="grid gap-0.5">
+          <span>{sourceByID.get(finding.source_id)?.name ?? t("discovery.findings.unknownSource")}</span>
+          <span className="text-xs text-muted-foreground">{formatDateTime(finding.discovered_at)}</span>
+        </span>
+      ),
     },
     {
       id: "risk",
       header: t("discovery.findings.columnRisk"),
       cell: (finding) => finding.risk_score ?? 0,
-    },
-    {
-      id: "discovered",
-      header: t("discovery.findings.columnDiscovered"),
-      cell: (finding) => formatDateTime(finding.discovered_at),
     },
   ];
 

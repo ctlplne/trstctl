@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { Workloads } from "@/pages/Workloads";
 
@@ -70,7 +70,12 @@ describe("workload identity disclosure surface", () => {
     expect(screen.getByText("Workload attestation chain")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Create trust source" })).toBeInTheDocument();
     expect(screen.getByText("No attester trust source has been configured.")).toBeInTheDocument();
-    expect(screen.getByRole("group", { name: "Attester trust sources" })).toHaveAttribute("tabindex", "0");
+    const trustSources = screen.getByRole("group", { name: "Attester trust sources" });
+    expect(trustSources).toHaveAttribute("tabindex", "0");
+    const trustSourceTable = within(trustSources).getByRole("table", { name: "Attester trust sources" });
+    expect(within(trustSourceTable).getAllByRole("columnheader")).toHaveLength(5);
+    expect(within(trustSourceTable).queryByRole("columnheader", { name: "Version" })).not.toBeInTheDocument();
+    expect(within(trustSourceTable).queryByRole("columnheader", { name: "Last rotated" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Issue attested SVID" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Issue attested SVID" })).toBeDisabled();
     expect(screen.getByText("Add a trusted attester before issuing a workload identity.")).toBeInTheDocument();

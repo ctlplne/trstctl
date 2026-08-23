@@ -860,15 +860,13 @@ export function Workloads() {
                 <th scope="col">{t("workloads.attestation.methodColumn")}</th>
                 <th scope="col">{t("workloads.attestation.issuer")}</th>
                 <th scope="col">{t("workloads.attestation.statusColumn")}</th>
-                <th scope="col">{t("workloads.attestation.versionColumn")}</th>
-                <th scope="col">{t("workloads.attestation.lastRotatedColumn")}</th>
                 <th scope="col">{t("workloads.leases.actionsColumn")}</th>
               </tr>
             </thead>
             <tbody>
               {attesterTrustSources.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-muted-foreground">
+                  <td colSpan={5} className="text-muted-foreground">
                     {t("workloads.attestation.empty")}
                   </td>
                 </tr>
@@ -884,14 +882,18 @@ export function Workloads() {
                     <td>{source.method}</td>
                     <td className="max-w-[16rem] truncate">{source.issuer || source.audience || "-"}</td>
                     <td>
-                      {trustSourceStatusBadge(source, {
-                        revoked: t("workloads.attestation.statusRevoked"),
-                        disabled: t("workloads.attestation.statusDisabled"),
-                        enabled: t("workloads.attestation.statusEnabled"),
-                      })}
+                      <div className="grid gap-1">
+                        {trustSourceStatusBadge(source, {
+                          revoked: t("workloads.attestation.statusRevoked"),
+                          disabled: t("workloads.attestation.statusDisabled"),
+                          enabled: t("workloads.attestation.statusEnabled"),
+                        })}
+                        <span className="text-xs text-muted-foreground">
+                          {t("workloads.attestation.versionColumn")} {source.rotation_version} · {t("workloads.attestation.lastRotatedColumn")}{" "}
+                          {formatDate(source.last_rotated_at || source.updated_at)}
+                        </span>
+                      </div>
                     </td>
-                    <td>{source.rotation_version}</td>
-                    <td>{formatDate(source.last_rotated_at || source.updated_at)}</td>
                     <td>
                       <div className="flex flex-wrap gap-2">
                         <Button

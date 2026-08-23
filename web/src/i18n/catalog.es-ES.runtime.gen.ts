@@ -274,6 +274,8 @@ const translatedValues = [
   "revocado",
   "Revocar",
   "Aún no hay tokens concedidos.",
+  "Administración del acceso de máquinas",
+  "Herramientas para desarrolladores",
   "Métodos de autenticación",
   "Los métodos de inicio de sesión que acepta este tenant — declarados en la configuración del servidor y proyectados aquí. Deshabilitar un método rechaza nuevos inicios de sesión de inmediato.",
   "Nombre",

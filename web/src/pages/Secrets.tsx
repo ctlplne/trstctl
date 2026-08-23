@@ -2052,237 +2052,245 @@ export function Secrets() {
               )}
             </section>
           )}
-          <section aria-labelledby="machine-login-heading" className="grid gap-4 border-y border-border py-4">
-            <div>
-              <h2 id="machine-login-heading" className="text-title font-semibold">
-                {translateNow("source.machine.login.e25f8c4843")}
-              </h2>
-              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.exchange.a.machine.credential.for.a.scoped.db8919fe53")}</p>
-            </div>
-            <form
-              aria-label={translateNow("source.machine.login.test.7f62ed2b92")}
-              onSubmit={(event) => void submitLogin(event)}
-              className="grid gap-3 md:grid-cols-[12rem_minmax(0,1fr)_auto]"
-            >
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium">{translateNow("source.method.52a0f9b65b")}</span>
-                <input
-                  className="rounded-md border border-border bg-background px-3 py-2"
-                  value={loginMethod}
-                  onChange={(event) => setLoginMethod(event.target.value)}
-                  required
-                />
-              </label>
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium">{translateNow("source.credential.b1c42b3ce1")}</span>
-                <input
-                  className="rounded-md border border-border bg-background px-3 py-2"
-                  type="password"
-                  value={loginCredential}
-                  onChange={(event) => setLoginCredential(event.target.value)}
-                  required
-                />
-              </label>
-              <Button type="submit" className="self-end" disabled={loginBusy || Boolean(loadError)}>
-                {loginBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <LogIn className="h-4 w-4" aria-hidden="true" />}
-                {translateNow("source.test.login.c5e0ad20c3")}
-              </Button>
-            </form>
-            {loginError && <ErrorState title={translateNow("source.machine.login.failed.01826fdfc8")}>{loginError}</ErrorState>}
-            {session && <MachineSession session={session} />}
-          </section>
+          <details className="group border-y border-border py-4">
+            <summary className="cursor-pointer text-title font-semibold text-foreground">{t("secrets.access.machineAdministration")}</summary>
+            <div className="grid gap-6 pt-4">
+              <section aria-labelledby="machine-login-heading" className="grid gap-4">
+                <div>
+                  <h2 id="machine-login-heading" className="text-title font-semibold">
+                    {translateNow("source.machine.login.e25f8c4843")}
+                  </h2>
+                  <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.exchange.a.machine.credential.for.a.scoped.db8919fe53")}</p>
+                </div>
+                <form
+                  aria-label={translateNow("source.machine.login.test.7f62ed2b92")}
+                  onSubmit={(event) => void submitLogin(event)}
+                  className="grid gap-3 md:grid-cols-[12rem_minmax(0,1fr)_auto]"
+                >
+                  <label className="grid gap-1 text-sm">
+                    <span className="font-medium">{translateNow("source.method.52a0f9b65b")}</span>
+                    <input
+                      className="rounded-md border border-border bg-background px-3 py-2"
+                      value={loginMethod}
+                      onChange={(event) => setLoginMethod(event.target.value)}
+                      required
+                    />
+                  </label>
+                  <label className="grid gap-1 text-sm">
+                    <span className="font-medium">{translateNow("source.credential.b1c42b3ce1")}</span>
+                    <input
+                      className="rounded-md border border-border bg-background px-3 py-2"
+                      type="password"
+                      value={loginCredential}
+                      onChange={(event) => setLoginCredential(event.target.value)}
+                      required
+                    />
+                  </label>
+                  <Button type="submit" className="self-end" disabled={loginBusy || Boolean(loadError)}>
+                    {loginBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <LogIn className="h-4 w-4" aria-hidden="true" />}
+                    {translateNow("source.test.login.c5e0ad20c3")}
+                  </Button>
+                </form>
+                {loginError && <ErrorState title={translateNow("source.machine.login.failed.01826fdfc8")}>{loginError}</ErrorState>}
+                {session && <MachineSession session={session} />}
+              </section>
 
-          {/* C-S4 (DA-02 faithful): the auth-method console over the C-S2/C-S3
+              {/* C-S4 (DA-02 faithful): the auth-method console over the C-S2/C-S3
               endpoints. The DA-02 dead-end placeholder is dead —
               methods (with the per-tenant disable overlay) and the issued-
               session ledger are served surfaces now. Methods stay declared in
               server config: the console projects and overlays, it never edits
               config. */}
-          <section aria-labelledby="auth-methods-heading" className="grid gap-4 border-y border-border py-4">
-            <div>
-              <h2 id="auth-methods-heading" className="text-title font-semibold">
-                {t("secrets.methods.heading")}
-              </h2>
-              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("secrets.methods.description")}</p>
-            </div>
-            {methodError && <ErrorState title={t("secrets.methods.failedTitle")}>{methodError}</ErrorState>}
-            {authMethods === null ? (
-              <p className="text-sm text-muted-foreground">{t("secrets.methods.unavailable")}</p>
-            ) : (
-              <ScrollableTableRegion className="rounded-panel" label={t("secrets.methods.heading")}>
-                <table className="ui-table min-w-[52rem]">
-                  <caption className="sr-only">{t("secrets.methods.heading")}</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">{t("secrets.methods.name")}</th>
-                      <th scope="col">{t("secrets.methods.type")}</th>
-                      <th scope="col">{t("secrets.methods.issuer")}</th>
-                      <th scope="col">{t("secrets.methods.audience")}</th>
-                      <th scope="col">{t("secrets.methods.scopes")}</th>
-                      <th scope="col">{t("secrets.methods.source")}</th>
-                      <th scope="col">{t("secrets.methods.status")}</th>
-                      {canAdminMethods && <th scope="col">{t("secrets.methods.actions")}</th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {authMethods.map((method) => (
-                      <tr key={method.name} className="align-top">
-                        <td className="font-medium">{method.name}</td>
-                        <td className="font-mono text-xs">{method.type}</td>
-                        <td className="break-all font-mono text-xs">{method.issuer || "—"}</td>
-                        <td className="break-all font-mono text-xs">{method.audience || "—"}</td>
-                        <td className="font-mono text-xs">
-                          {method.scopes?.length
-                            ? method.scopes.join(", ")
-                            : method.scopes_by_principal
-                              ? t("secrets.methods.perPrincipal", { count: String(Object.keys(method.scopes_by_principal).length) })
-                              : "—"}
-                        </td>
-                        <td>{method.source}</td>
-                        <td>{method.disabled ? t("secrets.methods.disabled") : t("secrets.methods.enabled")}</td>
-                        {canAdminMethods && (
-                          <td>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              disabled={methodBusy === method.name}
-                              onClick={() => void toggleAuthMethod(method.name, !method.disabled)}
-                            >
-                              {method.disabled ? t("secrets.methods.enable") : t("secrets.methods.disable")}
-                            </Button>
-                          </td>
-                        )}
-                      </tr>
-                    ))}
-                    {authMethods.length === 0 && (
-                      <tr>
-                        <td colSpan={canAdminMethods ? 8 : 7} className="text-muted-foreground">
-                          {t("secrets.methods.empty")}
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </ScrollableTableRegion>
-            )}
-          </section>
-
-          <section aria-labelledby="machine-sessions-heading" className="grid gap-4 border-y border-border py-4">
-            <div>
-              <h2 id="machine-sessions-heading" className="text-title font-semibold">
-                {t("secrets.sessions.heading")}
-              </h2>
-              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("secrets.sessions.description")}</p>
-            </div>
-            {sessionError && <ErrorState title={t("secrets.sessions.failedTitle")}>{sessionError}</ErrorState>}
-            {machineSessions === null ? (
-              <p className="text-sm text-muted-foreground">{t("secrets.sessions.unavailable")}</p>
-            ) : (
-              <ScrollableTableRegion className="rounded-panel" label={t("secrets.sessions.heading")}>
-                <table className="ui-table min-w-[52rem]">
-                  <caption className="sr-only">{t("secrets.sessions.heading")}</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">{t("secrets.sessions.principal")}</th>
-                      <th scope="col">{t("secrets.sessions.method")}</th>
-                      <th scope="col">{t("secrets.sessions.scopes")}</th>
-                      <th scope="col">{t("secrets.sessions.status")}</th>
-                      <th scope="col">{t("secrets.sessions.issued")}</th>
-                      <th scope="col">{t("secrets.sessions.expires")}</th>
-                      {canAdminMethods && <th scope="col">{t("secrets.sessions.actions")}</th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {machineSessions.map((row) => (
-                      <tr key={row.id} className="align-top">
-                        <td className="font-medium">{row.principal}</td>
-                        <td className="font-mono text-xs">{row.method}</td>
-                        <td className="font-mono text-xs">{row.scopes?.join(", ") || "—"}</td>
-                        <td>{row.status}</td>
-                        <td>{formatDate(row.issued_at)}</td>
-                        <td>{formatDate(row.expires_at)}</td>
-                        {canAdminMethods && (
-                          <td>
-                            {row.status === "active" && (
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                disabled={sessionBusy === row.id}
-                                onClick={() => void revokeMachineSessionRow(row.id)}
-                              >
-                                <Trash2 className="h-4 w-4" aria-hidden="true" />
-                                {t("secrets.sessions.revoke")}
-                              </Button>
+              <section aria-labelledby="auth-methods-heading" className="grid gap-4 border-t border-border pt-4">
+                <div>
+                  <h2 id="auth-methods-heading" className="text-title font-semibold">
+                    {t("secrets.methods.heading")}
+                  </h2>
+                  <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("secrets.methods.description")}</p>
+                </div>
+                {methodError && <ErrorState title={t("secrets.methods.failedTitle")}>{methodError}</ErrorState>}
+                {authMethods === null ? (
+                  <p className="text-sm text-muted-foreground">{t("secrets.methods.unavailable")}</p>
+                ) : (
+                  <ScrollableTableRegion className="rounded-panel" label={t("secrets.methods.heading")}>
+                    <table className="ui-table min-w-[52rem]">
+                      <caption className="sr-only">{t("secrets.methods.heading")}</caption>
+                      <thead>
+                        <tr>
+                          <th scope="col">{t("secrets.methods.name")}</th>
+                          <th scope="col">{t("secrets.methods.type")}</th>
+                          <th scope="col">{t("secrets.methods.issuer")}</th>
+                          <th scope="col">{t("secrets.methods.audience")}</th>
+                          <th scope="col">{t("secrets.methods.scopes")}</th>
+                          <th scope="col">{t("secrets.methods.source")}</th>
+                          <th scope="col">{t("secrets.methods.status")}</th>
+                          {canAdminMethods && <th scope="col">{t("secrets.methods.actions")}</th>}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {authMethods.map((method) => (
+                          <tr key={method.name} className="align-top">
+                            <td className="font-medium">{method.name}</td>
+                            <td className="font-mono text-xs">{method.type}</td>
+                            <td className="break-all font-mono text-xs">{method.issuer || "—"}</td>
+                            <td className="break-all font-mono text-xs">{method.audience || "—"}</td>
+                            <td className="font-mono text-xs">
+                              {method.scopes?.length
+                                ? method.scopes.join(", ")
+                                : method.scopes_by_principal
+                                  ? t("secrets.methods.perPrincipal", { count: String(Object.keys(method.scopes_by_principal).length) })
+                                  : "—"}
+                            </td>
+                            <td>{method.source}</td>
+                            <td>{method.disabled ? t("secrets.methods.disabled") : t("secrets.methods.enabled")}</td>
+                            {canAdminMethods && (
+                              <td>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={methodBusy === method.name}
+                                  onClick={() => void toggleAuthMethod(method.name, !method.disabled)}
+                                >
+                                  {method.disabled ? t("secrets.methods.enable") : t("secrets.methods.disable")}
+                                </Button>
+                              </td>
                             )}
-                          </td>
+                          </tr>
+                        ))}
+                        {authMethods.length === 0 && (
+                          <tr>
+                            <td colSpan={canAdminMethods ? 8 : 7} className="text-muted-foreground">
+                              {t("secrets.methods.empty")}
+                            </td>
+                          </tr>
                         )}
-                      </tr>
-                    ))}
-                    {machineSessions.length === 0 && (
-                      <tr>
-                        <td colSpan={canAdminMethods ? 7 : 6} className="text-muted-foreground">
-                          {t("secrets.sessions.empty")}
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </ScrollableTableRegion>
-            )}
-          </section>
+                      </tbody>
+                    </table>
+                  </ScrollableTableRegion>
+                )}
+              </section>
+
+              <section aria-labelledby="machine-sessions-heading" className="grid gap-4 border-t border-border pt-4">
+                <div>
+                  <h2 id="machine-sessions-heading" className="text-title font-semibold">
+                    {t("secrets.sessions.heading")}
+                  </h2>
+                  <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("secrets.sessions.description")}</p>
+                </div>
+                {sessionError && <ErrorState title={t("secrets.sessions.failedTitle")}>{sessionError}</ErrorState>}
+                {machineSessions === null ? (
+                  <p className="text-sm text-muted-foreground">{t("secrets.sessions.unavailable")}</p>
+                ) : (
+                  <ScrollableTableRegion className="rounded-panel" label={t("secrets.sessions.heading")}>
+                    <table className="ui-table min-w-[52rem]">
+                      <caption className="sr-only">{t("secrets.sessions.heading")}</caption>
+                      <thead>
+                        <tr>
+                          <th scope="col">{t("secrets.sessions.principal")}</th>
+                          <th scope="col">{t("secrets.sessions.method")}</th>
+                          <th scope="col">{t("secrets.sessions.scopes")}</th>
+                          <th scope="col">{t("secrets.sessions.status")}</th>
+                          <th scope="col">{t("secrets.sessions.issued")}</th>
+                          <th scope="col">{t("secrets.sessions.expires")}</th>
+                          {canAdminMethods && <th scope="col">{t("secrets.sessions.actions")}</th>}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {machineSessions.map((row) => (
+                          <tr key={row.id} className="align-top">
+                            <td className="font-medium">{row.principal}</td>
+                            <td className="font-mono text-xs">{row.method}</td>
+                            <td className="font-mono text-xs">{row.scopes?.join(", ") || "—"}</td>
+                            <td>{row.status}</td>
+                            <td>{formatDate(row.issued_at)}</td>
+                            <td>{formatDate(row.expires_at)}</td>
+                            {canAdminMethods && (
+                              <td>
+                                {row.status === "active" && (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={sessionBusy === row.id}
+                                    onClick={() => void revokeMachineSessionRow(row.id)}
+                                  >
+                                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                                    {t("secrets.sessions.revoke")}
+                                  </Button>
+                                )}
+                              </td>
+                            )}
+                          </tr>
+                        ))}
+                        {machineSessions.length === 0 && (
+                          <tr>
+                            <td colSpan={canAdminMethods ? 7 : 6} className="text-muted-foreground">
+                              {t("secrets.sessions.empty")}
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </ScrollableTableRegion>
+                )}
+              </section>
+            </div>
+          </details>
         </div>
       )}
 
       {tab === "access" && (
         <div className="grid gap-6">
-          <section aria-labelledby="developer-heading" className="grid gap-4 border-y border-border py-4">
-            <div>
-              <h2 id="developer-heading" className="text-title font-semibold">
-                {translateNow("source.developer.access.e62e23a3a2")}
-              </h2>
-              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.sdk.and.cli.examples.contain.only.names.te.f056ba97a8")}</p>
-            </div>
-            <div className="grid gap-3 lg:grid-cols-2">
-              <Snippet
-                title={translateNow("source.cli.injector.1f36b02aea")}
-                text={`trstctl secrets get ${selectedMeta?.name ?? "app/db/password"} --tenant current --format env --exec ./service`}
-              />
-              <Snippet
-                title={translateNow("source.typescript.sdk.40e0532135")}
-                text={`const secret = await client.secrets.get("${selectedMeta?.name ?? "app/db/password"}");\nprocess.env.DB_PASSWORD = secret.value; // keep in process memory only`}
-              />
-            </div>
-            <form
-              aria-label={translateNow("source.secret.access.test.e467205dc5")}
-              onSubmit={(event) => void runAccessTest(event)}
-              className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]"
-            >
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium">{translateNow("source.secret.name.5cdf573b89")}</span>
-                <input
-                  className="rounded-md border border-border bg-background px-3 py-2"
-                  value={accessName}
-                  onChange={(event) => setAccessName(event.target.value)}
-                  placeholder={translateNow("source.app.db.password.917cb98f9d")}
-                  required
+          <details className="group border-y border-border py-4">
+            <summary className="cursor-pointer text-title font-semibold text-foreground">{t("secrets.access.developerTools")}</summary>
+            <section aria-labelledby="developer-heading" className="grid gap-4 pt-4">
+              <div>
+                <h2 id="developer-heading" className="text-title font-semibold">
+                  {translateNow("source.developer.access.e62e23a3a2")}
+                </h2>
+                <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.sdk.and.cli.examples.contain.only.names.te.f056ba97a8")}</p>
+              </div>
+              <div className="grid gap-3 lg:grid-cols-2">
+                <Snippet
+                  title={translateNow("source.cli.injector.1f36b02aea")}
+                  text={`trstctl secrets get ${selectedMeta?.name ?? "app/db/password"} --tenant current --format env --exec ./service`}
                 />
-              </label>
-              <Button type="submit" className="self-end" variant="outline" disabled={accessBusy || Boolean(loadError)}>
-                {accessBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
-                {translateNow("source.run.access.test.0a1ca1e976")}
-              </Button>
-            </form>
-            {accessError && <ErrorState title={translateNow("source.access.test.failed.e280577658")}>{accessError}</ErrorState>}
-            {accessResult && (
-              <p role="status" className="rounded-control border border-status-success/30 bg-status-success/10 px-3 py-2 text-sm text-status-success">
-                {translateNow("source.access.test.passed.for.e4a15ad68a")} {accessResult.name}; version{" "}
-                {accessResult.version ?? translateNow("source.latest.5e1e2bcac3")}{" "}
-                {translateNow("source.was.reachable.and.the.value.was.not.render.830c77edbc")}
-              </p>
-            )}
-          </section>
+                <Snippet
+                  title={translateNow("source.typescript.sdk.40e0532135")}
+                  text={`const secret = await client.secrets.get("${selectedMeta?.name ?? "app/db/password"}");\nprocess.env.DB_PASSWORD = secret.value; // keep in process memory only`}
+                />
+              </div>
+              <form
+                aria-label={translateNow("source.secret.access.test.e467205dc5")}
+                onSubmit={(event) => void runAccessTest(event)}
+                className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]"
+              >
+                <label className="grid gap-1 text-sm">
+                  <span className="font-medium">{translateNow("source.secret.name.5cdf573b89")}</span>
+                  <input
+                    className="rounded-md border border-border bg-background px-3 py-2"
+                    value={accessName}
+                    onChange={(event) => setAccessName(event.target.value)}
+                    placeholder={translateNow("source.app.db.password.917cb98f9d")}
+                    required
+                  />
+                </label>
+                <Button type="submit" className="self-end" variant="outline" disabled={accessBusy || Boolean(loadError)}>
+                  {accessBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
+                  {translateNow("source.run.access.test.0a1ca1e976")}
+                </Button>
+              </form>
+              {accessError && <ErrorState title={translateNow("source.access.test.failed.e280577658")}>{accessError}</ErrorState>}
+              {accessResult && (
+                <p role="status" className="rounded-control border border-status-success/30 bg-status-success/10 px-3 py-2 text-sm text-status-success">
+                  {translateNow("source.access.test.passed.for.e4a15ad68a")} {accessResult.name}; version{" "}
+                  {accessResult.version ?? translateNow("source.latest.5e1e2bcac3")}{" "}
+                  {translateNow("source.was.reachable.and.the.value.was.not.render.830c77edbc")}
+                </p>
+              )}
+            </section>
+          </details>
         </div>
       )}
 

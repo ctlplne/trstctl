@@ -372,6 +372,11 @@ describe("discovery control-plane surface", () => {
     const findingsSection = screen.getByRole("heading", { name: "Credentials to review" }).closest("section");
     expect(findingsSection).toBeTruthy();
     expect(Boolean((findingsSection as HTMLElement).compareDocumentPosition(exactMonitoring as HTMLElement) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    const findingsTable = within(findingsSection as HTMLElement).getByRole("table", { name: "Discovery findings" });
+    expect(within(findingsTable).getAllByRole("columnheader")).toHaveLength(5);
+    expect(within(findingsTable).queryByRole("columnheader", { name: "Status" })).not.toBeInTheDocument();
+    expect(within(findingsTable).queryByRole("columnheader", { name: "Credential type" })).not.toBeInTheDocument();
+    expect(within(findingsTable).queryByRole("columnheader", { name: "Discovered" })).not.toBeInTheDocument();
 
     const certRow = screen.getByText("10.0.0.10:443").closest("tr");
     expect(certRow).toBeTruthy();

@@ -274,6 +274,8 @@ const translatedValues = [
   "widerrufen",
   "Widerrufen",
   "Noch keine gewährten Token.",
+  "Maschinenanmeldung verwalten",
+  "Entwicklerwerkzeuge",
   "Auth-Methoden",
   "Die Login-Methoden, die dieser Tenant akzeptiert — in der Serverkonfiguration deklariert und hier projiziert. Das Deaktivieren einer Methode weist neue Logins sofort ab.",
   null,

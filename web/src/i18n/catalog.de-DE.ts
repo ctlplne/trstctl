@@ -339,6 +339,8 @@ const deDECatalog = {
   "secrets.grant.statusRevoked": "widerrufen",
   "secrets.grant.revoke": "Widerrufen",
   "secrets.grant.ledgerEmpty": "Noch keine gewährten Token.",
+  "secrets.access.machineAdministration": "Maschinenanmeldung verwalten",
+  "secrets.access.developerTools": "Entwicklerwerkzeuge",
   "secrets.methods.heading": "Auth-Methoden",
   "secrets.methods.description":
     "Die Login-Methoden, die dieser Tenant akzeptiert — in der Serverkonfiguration deklariert und hier projiziert. Das Deaktivieren einer Methode weist neue Logins sofort ab.",

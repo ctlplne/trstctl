@@ -742,6 +742,8 @@ describe("secrets surface", () => {
     const grant = await screen.findByRole("heading", { name: "Grant workload access" });
     const developer = screen.getByRole("heading", { name: "Developer access" });
     expect(grant.compareDocumentPosition(developer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText("Machine login administration").closest("details")).not.toHaveAttribute("open");
+    expect(screen.getByText("Developer tools").closest("details")).not.toHaveAttribute("open");
 
     cleanup();
     renderSecrets("/secrets/engines");
@@ -798,6 +800,7 @@ describe("secrets surface", () => {
     expect(await screen.findByRole("heading", { name: "Auth methods" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Issued sessions" })).toBeInTheDocument();
     expect(screen.getByRole("group", { name: "Issued sessions" })).toHaveAttribute("tabindex", "0");
+    expect(screen.getByText("Machine login administration").closest("details")).not.toHaveAttribute("open");
     expect(screen.queryByText(/isn't in the console yet/)).not.toBeInTheDocument();
 
     // Sync and platform-integration posture live on the Sync workspace tab.

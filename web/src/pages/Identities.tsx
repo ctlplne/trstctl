@@ -559,12 +559,12 @@ export function Identities() {
         id: "name",
         header: "Name",
         sortable: true,
-        cell: (identity) => <span className="font-medium">{identity.name}</span>,
-      },
-      {
-        id: "kind",
-        header: translateNow("identities.column.type"),
-        cell: (identity) => identityKindLabel(identity.kind),
+        cell: (identity) => (
+          <span className="grid gap-0.5">
+            <span className="font-medium">{identity.name}</span>
+            <span className="text-xs text-muted-foreground">{identityKindLabel(identity.kind)}</span>
+          </span>
+        ),
       },
       {
         id: "owner",

@@ -976,8 +976,11 @@ describe("i18n boundary", () => {
       // secret metadata/actions use translated progressive disclosure, and
       // incident evidence leads with a plain tamper-evidence promise. Machine-
       // authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "a87b24d06ac030dcc280b2ad46d85a19543ad5be9edf8c7d4b533a365a140aae",
-      "de-DE": "39fd5cfa4f92e612ccd3202404c3535778b4a5efcc420a92aa7f35aafc142bd5",
+      // Quiet-confidence v4 re-pin: advanced secret administration closes by
+      // default while remaining one click away. Machine-authored es/de —
+      // FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "2b09022c31baecd5a73e5e9077839cb94671d9e575abdc9f70e08cef11be3f20",
+      "de-DE": "2a7dec5d7d6c955b2ad26984f0b9c7a5ca99ad5422fd0e05034fe9209f4882e6",
     });
   });
 
