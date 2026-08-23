@@ -271,6 +271,7 @@ type composeFile struct {
 		NetworkMode string         `yaml:"network_mode"`
 		DependsOn   map[string]struct {
 			Condition string `yaml:"condition"`
+			Restart   bool   `yaml:"restart"`
 		} `yaml:"depends_on"`
 		Healthcheck struct {
 			Test yaml.Node `yaml:"test"`
@@ -338,6 +339,9 @@ func TestComposeBlankEvaluationHasASafeFirstOperatorLogin(t *testing.T) {
 	}
 	if got := cf.Services["oidc-loopback"].NetworkMode; got != "service:trstctl" {
 		t.Errorf("eval OIDC loopback proxy network_mode = %q, want service:trstctl", got)
+	}
+	if !cf.Services["oidc-loopback"].DependsOn["trstctl"].Restart {
+		t.Error("eval OIDC loopback proxy must restart when Compose replaces/restarts trstctl's network namespace")
 	}
 	for _, volume := range []string{"evaloidcprivate", "evaloidcpublic", "publictrust"} {
 		if _, ok := cf.Volumes[volume]; !ok {

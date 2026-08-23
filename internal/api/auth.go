@@ -503,7 +503,7 @@ func (a *API) authLDAPLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) issueLoginSession(w http.ResponseWriter, r *http.Request, claims auth.Claims, tenantID string, roles []string, clearCookies ...string) {
-	token, err := a.auth.Sessions.Issue(claims.Subject, tenantID, claims.Email, roles)
+	token, err := a.auth.Sessions.IssueContext(r.Context(), claims.Subject, tenantID, claims.Email, roles)
 	if err != nil {
 		a.writeError(w, err)
 		return
@@ -594,7 +594,14 @@ func (a *API) sessionRoleSummary(ctx context.Context, sess auth.Session) ([]stri
 }
 
 // authLogout clears the session and CSRF cookies.
-func (a *API) authLogout(w http.ResponseWriter, _ *http.Request) {
+func (a *API) authLogout(w http.ResponseWriter, r *http.Request) {
+	if a.auth != nil && a.auth.Sessions != nil {
+		if cookie, err := r.Cookie(sessionCookieName); err == nil {
+			if session, err := a.auth.Sessions.VerifyForLogoutContext(r.Context(), cookie.Value); err == nil {
+				_ = a.auth.Sessions.RevokeContext(r.Context(), session.TenantID, session.ID)
+			}
+		}
+	}
 	a.clearCookie(w, sessionCookieName)
 	a.clearCookie(w, csrfCookieName)
 	w.WriteHeader(http.StatusNoContent)
@@ -686,11 +693,13 @@ func (a *API) authOIDCBackChannelLogout(w http.ResponseWriter, r *http.Request) 
 		}
 		return
 	}
-	if claims.SID != "" {
-		_ = a.auth.Sessions.Revoke(claims.SID)
-	}
-	if claims.Subject != "" {
-		_ = a.auth.Sessions.RevokeSubject(claims.Subject)
+	for _, tenantID := range a.configuredAuthTenants() {
+		if claims.SID != "" {
+			_ = a.auth.Sessions.RevokeContext(r.Context(), tenantID, claims.SID)
+		}
+		if claims.Subject != "" {
+			_ = a.auth.Sessions.RevokeSubjectContext(r.Context(), tenantID, claims.Subject)
+		}
 	}
 	w.WriteHeader(http.StatusOK)
 }
@@ -733,11 +742,29 @@ func (a *API) sessionFrom(r *http.Request) (auth.Session, bool) {
 	if err != nil {
 		return auth.Session{}, false
 	}
-	sess, err := a.auth.Sessions.Verify(c.Value)
+	sess, err := a.auth.Sessions.VerifyContext(r.Context(), c.Value)
 	if err != nil {
 		return auth.Session{}, false
 	}
 	return sess, true
+}
+
+func (a *API) configuredAuthTenants() []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(a.auth.TenantMappings)+1)
+	add := func(tenantID string) {
+		if tenantID != "" && !seen[tenantID] {
+			seen[tenantID] = true
+			out = append(out, tenantID)
+		}
+	}
+	if a.auth.AllowDefaultTenant {
+		add(a.auth.DefaultTenant)
+	}
+	for _, mapping := range a.auth.TenantMappings {
+		add(mapping.TenantID)
+	}
+	return out
 }
 
 func (a *API) setTransientCookie(w http.ResponseWriter, name, value string) {

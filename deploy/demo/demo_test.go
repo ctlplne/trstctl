@@ -18,6 +18,7 @@ import (
 
 type composeDependency struct {
 	Condition string `yaml:"condition"`
+	Restart   bool   `yaml:"restart"`
 }
 
 type composeService struct {
@@ -118,11 +119,20 @@ func TestDemoComposeIsSeparatePrepopulatedStack(t *testing.T) {
 	if got := cf.Services["oidc-loopback"].NetworkMode; got != "service:trstctl" {
 		t.Fatalf("demo OIDC loopback proxy network_mode = %q, want service:trstctl for the validated loopback token endpoint", got)
 	}
+	if !cf.Services["oidc-loopback"].DependsOn["trstctl"].Restart {
+		t.Fatal("demo OIDC loopback proxy must restart when Compose replaces/restarts trstctl's network namespace")
+	}
 	if got := cf.Services["localstack-loopback"].NetworkMode; got != "service:trstctl" {
 		t.Fatalf("demo LocalStack loopback proxy network_mode = %q, want service:trstctl for the SSRF-guarded KMS endpoint", got)
 	}
+	if !cf.Services["localstack-loopback"].DependsOn["trstctl"].Restart {
+		t.Fatal("demo LocalStack control-plane proxy must restart with trstctl's network namespace")
+	}
 	if got := cf.Services["localstack-signer-loopback"].NetworkMode; got != "service:signer" {
 		t.Fatalf("demo signer LocalStack proxy network_mode = %q, want service:signer for the signer-local SSRF-guarded KMS endpoint", got)
+	}
+	if !cf.Services["localstack-signer-loopback"].DependsOn["signer"].Restart {
+		t.Fatal("demo LocalStack signer proxy must restart with the signer's network namespace")
 	}
 	signer := cf.Services["signer"]
 	if len(signer.Build) != 0 || signer.PullPolicy != "never" {

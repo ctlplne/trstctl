@@ -273,6 +273,11 @@ services:
     depends_on:
       trstctl:
         condition: service_started
+        # This bridge joins trstctl's network namespace. Compose must recreate it
+        # whenever an operator explicitly restarts or replaces that container;
+        # otherwise it keeps listening in the retired namespace and fresh SSO
+        # callbacks fail even though both services look healthy.
+        restart: true
       eval-oidc:
         condition: service_started
     command:

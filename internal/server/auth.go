@@ -84,11 +84,11 @@ func buildBrowserAuth(o config.OIDC, s config.SAML, l config.LDAP, secure bool, 
 	if err != nil {
 		return nil, err
 	}
-	samlCfg, err := buildSAMLAuthConfig(s, secure)
+	samlCfg, err := buildSAMLAuthConfig(s, secure, st)
 	if err != nil {
 		return nil, err
 	}
-	ldapCfg, err := buildLDAPAuthConfig(l, secure)
+	ldapCfg, err := buildLDAPAuthConfig(l, secure, st)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +144,7 @@ func buildOIDCAuthConfig(o config.OIDC, secure bool, httpClient *http.Client, st
 	if err != nil { // already validated, but keep Build self-contained
 		return nil, fmt.Errorf("server: auth.oidc.session_ttl: %w", err)
 	}
-	sessions := auth.NewSessionIssuer(secret, ttl)
+	sessions := newBrowserSessionIssuer(secret, ttl, st)
 
 	// Per-user → tenant mapping (TENANT-004 / RED-004): each authenticated user is
 	// mapped to its real tenant; an unmapped user is rejected (fail closed). The
@@ -223,7 +223,7 @@ func oidcClientSecretAAD(tenantID, ref string) []byte {
 	return []byte(tenantID + "/" + auth.OIDCClientSecretScope + "/" + ref + "/" + auth.OIDCClientSecretName)
 }
 
-func buildSAMLAuthConfig(s config.SAML, secure bool) (*api.AuthConfig, error) {
+func buildSAMLAuthConfig(s config.SAML, secure bool, stores ...*store.Store) (*api.AuthConfig, error) {
 	if !s.Enabled {
 		return nil, nil
 	}
@@ -251,7 +251,11 @@ func buildSAMLAuthConfig(s config.SAML, secure bool) (*api.AuthConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("server: auth.saml.session_ttl: %w", err)
 	}
-	sessions := auth.NewSessionIssuer(secret, ttl)
+	var st *store.Store
+	if len(stores) > 0 {
+		st = stores[0]
+	}
+	sessions := newBrowserSessionIssuer(secret, ttl, st)
 	mapper := tenantMapperFromSAMLConfig(s)
 	verifier := auth.SAMLVerifier{
 		Provider:         provider,
@@ -286,7 +290,7 @@ func buildSAMLAuthConfig(s config.SAML, secure bool) (*api.AuthConfig, error) {
 	return cfg, nil
 }
 
-func buildLDAPAuthConfig(l config.LDAP, secure bool) (*api.AuthConfig, error) {
+func buildLDAPAuthConfig(l config.LDAP, secure bool, stores ...*store.Store) (*api.AuthConfig, error) {
 	if !l.Enabled {
 		return nil, nil
 	}
@@ -313,7 +317,11 @@ func buildLDAPAuthConfig(l config.LDAP, secure bool) (*api.AuthConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("server: auth.ldap.timeout: %w", err)
 	}
-	sessions := auth.NewSessionIssuer(secret, ttl)
+	var st *store.Store
+	if len(stores) > 0 {
+		st = stores[0]
+	}
+	sessions := newBrowserSessionIssuer(secret, ttl, st)
 	mapper := tenantMapperFromLDAPConfig(l)
 	verifier := auth.LDAPVerifier{
 		URL:                l.URL,

@@ -147,7 +147,7 @@ func resetServerTestStore(t *testing.T, st *store.Store) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if _, err := st.SystemPool().Exec(ctx,
-		`TRUNCATE tenants, idempotency_keys, outbox, rate_limits,
+		`TRUNCATE tenants, browser_sessions, idempotency_keys, outbox, rate_limits,
 		          owners, issuers, identities, identity_transitions, deployment_target_revisions, deployment_targets,
 		          agents, agent_cert_revocations, agent_bootstrap_tokens, kubernetes_controller_posture, policy_bindings, tenant_members, attestations, api_tokens, certificates,
 		          ca_authorities, ca_key_ceremonies, ca_ceremony_approvals,

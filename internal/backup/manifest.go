@@ -180,6 +180,13 @@ var RecoveredFromPostgresBackup = []string{
 // Ephemeral state is not required for a correct restore (it regenerates).
 var Ephemeral = []string{
 	"rate_limits",
+	// Browser-session rows are shared runtime revocation/idle-time authority so
+	// normal replica changes and rolling restarts do not log an operator out.
+	// Disaster recovery may safely discard them: every restored browser must
+	// authenticate again, which fails closed and avoids extending a pre-disaster
+	// login into the recovered control plane. The PostgreSQL dump may carry these
+	// rows incidentally, but restore correctness never depends on them.
+	"browser_sessions",
 	// This durable deployment-local red light is recreated by migration and then
 	// managed by the restore coordinator. Copying it from the source PostgreSQL
 	// artifact would be wrong in both directions: an event-only target must remain

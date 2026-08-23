@@ -196,6 +196,7 @@ var TenantScopedTables = []string{
 	"read_model_snapshots",
 	"tenant_key_domains",
 	// Operational/system tenant-scoped tables.
+	"browser_sessions",
 	"idempotency_keys",
 	"outbox",
 	"rate_limits",

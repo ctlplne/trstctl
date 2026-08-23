@@ -298,6 +298,7 @@ services:
     depends_on:
       trstctl:
         condition: service_started
+        restart: true
       demo-oidc:
         condition: service_started
     command:
@@ -322,6 +323,7 @@ services:
     depends_on:
       trstctl:
         condition: service_started
+        restart: true
       localstack:
         condition: service_started
     command:
@@ -346,6 +348,7 @@ services:
     depends_on:
       signer:
         condition: service_started
+        restart: true
       localstack:
         condition: service_started
     command:

@@ -26,10 +26,11 @@ const (
 func authConfig() (api.AuthConfig, *auth.SessionIssuer) {
 	sessions := auth.NewSessionIssuer([]byte("test-secret-0123456789abcdef0123"), time.Hour)
 	cfg := api.AuthConfig{
-		AuthEndpoint:  "https://idp.example.test/authorize",
-		ClientID:      "trstctl-ui",
-		RedirectURI:   "https://app.example.test/auth/callback",
-		DefaultTenant: testTenant,
+		AuthEndpoint:       "https://idp.example.test/authorize",
+		ClientID:           "trstctl-ui",
+		RedirectURI:        "https://app.example.test/auth/callback",
+		DefaultTenant:      testTenant,
+		AllowDefaultTenant: true,
 		Exchange: func(_ context.Context, code, _ string) (string, error) {
 			if code == "good-code" {
 				return "id-token-good", nil
@@ -540,7 +541,7 @@ func TestAuthMeRejectsRevokedServerSideSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Verify before revoke: %v", err)
 	}
-	if err := sessions.Revoke(sess.ID); err != nil {
+	if err := sessions.RevokeContext(context.Background(), sess.TenantID, sess.ID); err != nil {
 		t.Fatalf("Revoke: %v", err)
 	}
 	req := httptest.NewRequest(http.MethodGet, "/auth/me", nil)

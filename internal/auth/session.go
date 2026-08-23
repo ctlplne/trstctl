@@ -3,6 +3,7 @@
 package auth
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -33,8 +34,7 @@ type Session struct {
 }
 
 type sessionCookie struct {
-	ID        string `json:"sid"`
-	ExpiresAt int64  `json:"exp"`
+	Session
 }
 
 type SessionRecord struct {
@@ -45,11 +45,11 @@ type SessionRecord struct {
 }
 
 type SessionStore interface {
-	Create(SessionRecord) error
-	Get(id string) (SessionRecord, error)
-	Revoke(id string, revokedAt time.Time) error
-	RevokeSubject(subject string, revokedAt time.Time) error
-	Touch(id string, seenAt time.Time) error
+	Create(context.Context, SessionRecord) error
+	Get(context.Context, string, string) (SessionRecord, error)
+	Revoke(context.Context, string, string, time.Time) error
+	RevokeSubject(context.Context, string, string, time.Time) error
+	Touch(context.Context, string, string, time.Time) error
 }
 
 type MemorySessionStore struct {
@@ -61,18 +61,20 @@ func NewMemorySessionStore() *MemorySessionStore {
 	return &MemorySessionStore{rows: map[string]SessionRecord{}}
 }
 
-func (s *MemorySessionStore) Create(rec SessionRecord) error {
+func sessionStoreKey(tenantID, id string) string { return tenantID + "\x00" + id }
+
+func (s *MemorySessionStore) Create(_ context.Context, rec SessionRecord) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	rec.Roles = append([]string(nil), rec.Roles...)
-	s.rows[rec.ID] = rec
+	s.rows[sessionStoreKey(rec.TenantID, rec.ID)] = rec
 	return nil
 }
 
-func (s *MemorySessionStore) Get(id string) (SessionRecord, error) {
+func (s *MemorySessionStore) Get(_ context.Context, tenantID, id string) (SessionRecord, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	rec, ok := s.rows[id]
+	rec, ok := s.rows[sessionStoreKey(tenantID, id)]
 	if !ok {
 		return SessionRecord{}, ErrSessionNotFound
 	}
@@ -80,23 +82,24 @@ func (s *MemorySessionStore) Get(id string) (SessionRecord, error) {
 	return rec, nil
 }
 
-func (s *MemorySessionStore) Revoke(id string, revokedAt time.Time) error {
+func (s *MemorySessionStore) Revoke(_ context.Context, tenantID, id string, revokedAt time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	rec, ok := s.rows[id]
+	key := sessionStoreKey(tenantID, id)
+	rec, ok := s.rows[key]
 	if !ok {
 		return ErrSessionNotFound
 	}
 	rec.RevokedAt = &revokedAt
-	s.rows[id] = rec
+	s.rows[key] = rec
 	return nil
 }
 
-func (s *MemorySessionStore) RevokeSubject(subject string, revokedAt time.Time) error {
+func (s *MemorySessionStore) RevokeSubject(_ context.Context, tenantID, subject string, revokedAt time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for id, rec := range s.rows {
-		if rec.Subject == subject && rec.RevokedAt == nil {
+		if rec.TenantID == tenantID && rec.Subject == subject && rec.RevokedAt == nil {
 			rec.RevokedAt = &revokedAt
 			s.rows[id] = rec
 		}
@@ -104,15 +107,16 @@ func (s *MemorySessionStore) RevokeSubject(subject string, revokedAt time.Time) 
 	return nil
 }
 
-func (s *MemorySessionStore) Touch(id string, seenAt time.Time) error {
+func (s *MemorySessionStore) Touch(_ context.Context, tenantID, id string, seenAt time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	rec, ok := s.rows[id]
+	key := sessionStoreKey(tenantID, id)
+	rec, ok := s.rows[key]
 	if !ok {
 		return ErrSessionNotFound
 	}
 	rec.LastSeenAt = seenAt
-	s.rows[id] = rec
+	s.rows[key] = rec
 	return nil
 }
 
@@ -149,22 +153,35 @@ func (s *SessionIssuer) now() time.Time {
 // Issue mints a signed session token for the subject in a tenant, carrying the
 // RBAC role names the user holds.
 func (s *SessionIssuer) Issue(subject, tenantID, email string, roles []string) (string, error) {
+	return s.IssueContext(context.Background(), subject, tenantID, email, roles)
+}
+
+// IssueContext mints a signed, opaque-ID cookie and records only a digest of its
+// random ID in the shared session store.
+func (s *SessionIssuer) IssueContext(ctx context.Context, subject, tenantID, email string, roles []string) (string, error) {
 	now := s.now()
 	id, err := randomSessionID()
 	if err != nil {
 		return "", err
 	}
 	expiresAt := now.Add(s.ttl)
-	if err := s.store.Create(SessionRecord{
+	storedID := crypto.SHA256Hex([]byte(id))
+	session := Session{
+		ID: id, Subject: subject, TenantID: tenantID, Email: email, Roles: append([]string(nil), roles...),
+		ExpiresAt: expiresAt.Unix(),
+	}
+	stored := session
+	stored.ID = storedID
+	if err := s.store.Create(ctx, SessionRecord{
 		Session: Session{
-			ID: id, Subject: subject, TenantID: tenantID, Email: email, Roles: roles,
+			ID: stored.ID, Subject: subject, TenantID: tenantID, Email: email, Roles: append([]string(nil), roles...),
 			ExpiresAt: expiresAt.Unix(),
 		},
 		CreatedAt: now, LastSeenAt: now,
 	}); err != nil {
 		return "", err
 	}
-	b, err := json.Marshal(sessionCookie{ID: id, ExpiresAt: expiresAt.Unix()})
+	b, err := json.Marshal(sessionCookie{Session: session})
 	if err != nil {
 		return "", err
 	}
@@ -174,7 +191,11 @@ func (s *SessionIssuer) Issue(subject, tenantID, email string, roles []string) (
 // Verify validates a session token's signature and expiry and returns the
 // session.
 func (s *SessionIssuer) Verify(token string) (Session, error) {
-	rec, err := s.verifySignedRecord(token)
+	return s.VerifyContext(context.Background(), token)
+}
+
+func (s *SessionIssuer) VerifyContext(ctx context.Context, token string) (Session, error) {
+	rec, err := s.verifySignedRecord(ctx, token)
 	if err != nil {
 		return Session{}, err
 	}
@@ -185,7 +206,7 @@ func (s *SessionIssuer) Verify(token string) (Session, error) {
 	if s.idleTimeout > 0 && !rec.LastSeenAt.IsZero() && !rec.LastSeenAt.Add(s.idleTimeout).After(now) {
 		return Session{}, ErrSessionExpired
 	}
-	_ = s.store.Touch(rec.ID, now)
+	_ = s.store.Touch(ctx, rec.TenantID, crypto.SHA256Hex([]byte(rec.ID)), now)
 	return rec.Session, nil
 }
 
@@ -195,14 +216,18 @@ func (s *SessionIssuer) Verify(token string) (Session, error) {
 // revoked the session. It does not refresh last-seen time and must never be
 // used to authorize any operation other than logout.
 func (s *SessionIssuer) VerifyForLogout(token string) (Session, error) {
-	rec, err := s.verifySignedRecord(token)
+	return s.VerifyForLogoutContext(context.Background(), token)
+}
+
+func (s *SessionIssuer) VerifyForLogoutContext(ctx context.Context, token string) (Session, error) {
+	rec, err := s.verifySignedRecord(ctx, token)
 	if err != nil {
 		return Session{}, err
 	}
 	return rec.Session, nil
 }
 
-func (s *SessionIssuer) verifySignedRecord(token string) (SessionRecord, error) {
+func (s *SessionIssuer) verifySignedRecord(ctx context.Context, token string) (SessionRecord, error) {
 	b, err := jose.VerifyHS256(s.secret, token)
 	if err != nil {
 		return SessionRecord{}, err
@@ -212,25 +237,37 @@ func (s *SessionIssuer) verifySignedRecord(token string) (SessionRecord, error) 
 		return SessionRecord{}, err
 	}
 	now := s.now()
-	if cookie.ID == "" || cookie.ExpiresAt <= now.Unix() {
+	if cookie.ID == "" || cookie.Subject == "" || cookie.TenantID == "" || cookie.ExpiresAt <= now.Unix() {
 		return SessionRecord{}, ErrSessionExpired
 	}
-	rec, err := s.store.Get(cookie.ID)
+	storedID := crypto.SHA256Hex([]byte(cookie.ID))
+	rec, err := s.store.Get(ctx, cookie.TenantID, storedID)
 	if err != nil {
 		return SessionRecord{}, err
 	}
 	if rec.ExpiresAt <= now.Unix() {
 		return SessionRecord{}, ErrSessionExpired
 	}
+	// The server-side row is revocation/idle authority; the signed cookie carries
+	// the authenticated display claims. Restore the raw ID only after both agree.
+	rec.Session = cookie.Session
 	return rec, nil
 }
 
 func (s *SessionIssuer) Revoke(id string) error {
-	return s.store.Revoke(id, s.now())
+	return errors.New("auth: tenant id is required to revoke a browser session")
+}
+
+func (s *SessionIssuer) RevokeContext(ctx context.Context, tenantID, id string) error {
+	return s.store.Revoke(ctx, tenantID, crypto.SHA256Hex([]byte(id)), s.now())
 }
 
 func (s *SessionIssuer) RevokeSubject(subject string) error {
-	return s.store.RevokeSubject(subject, s.now())
+	return errors.New("auth: tenant id is required to revoke browser sessions by subject")
+}
+
+func (s *SessionIssuer) RevokeSubjectContext(ctx context.Context, tenantID, subject string) error {
+	return s.store.RevokeSubject(ctx, tenantID, subject, s.now())
 }
 
 func randomSessionID() (string, error) {

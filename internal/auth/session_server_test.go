@@ -3,6 +3,7 @@
 package auth_test
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -27,7 +28,7 @@ func TestServerSideSessionRevocationRejectsNextVerify(t *testing.T) {
 	if sess.ID == "" || sess.Subject != "user-1" || sess.TenantID != "tenant-1" {
 		t.Fatalf("session = %+v", sess)
 	}
-	if err := issuer.Revoke(sess.ID); err != nil {
+	if err := issuer.RevokeContext(context.Background(), sess.TenantID, sess.ID); err != nil {
 		t.Fatalf("Revoke: %v", err)
 	}
 	if _, err := issuer.Verify(token); !errors.Is(err, auth.ErrSessionRevoked) {

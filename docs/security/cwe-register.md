@@ -51,11 +51,11 @@ not this file.
 |---|---|
 | `cmd/trstctl-agent/bootstrap_token_test.go:96` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `cmd/trstctl/main_test.go:371` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/demo/demo_test.go:77` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/demo/demo_test.go:78` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/deploycheck_test.go:1444` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/deploycheck_test.go:1446` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/deploycheck_test.go:1466` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/docker/dist_test.go:303` | names are non-secret evaluation OIDC configuration keys (CWE-798) |
+| `deploy/docker/dist_test.go:304` | names are non-secret evaluation OIDC configuration keys (CWE-798) |
 | `deploy/helm/helm_test.go:164` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/helm/helm_test.go:600` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/helm/helm_test.go:802` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -622,27 +622,27 @@ not this file.
 | `ee/provider/saml_authenticator.go:249` | this non-credential double-submit cookie must remain JavaScript-readable; strict and served-mode Secure still apply (CWE-614). |
 | `ee/provider/saml_authenticator.go:345` | short-lived HttpOnly state/request correlation; None is paired with Secure for the required cross-site SAML POST. |
 | `ee/provider/saml_authenticator.go:352` | expiry retains HttpOnly/Lax and uses insecure transport only in explicit loopback development mode (CWE-614). |
-| `internal/api/auth.go:747` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
-| `internal/api/auth.go:758` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
-| `internal/api/auth.go:770` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
-| `internal/api/auth.go:777` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
+| `internal/api/auth.go:774` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
+| `internal/api/auth.go:785` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
+| `internal/api/auth.go:797` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
+| `internal/api/auth.go:804` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
 | `internal/api/auth_hardening_test.go:21` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:198` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/auth_test.go:199` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/auth_test.go:200` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/auth_test.go:201` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:251` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:202` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/auth_test.go:252` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/auth_test.go:253` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/auth_test.go:254` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:401` | test cookie against the test's own local server (CWE-1004) (mismatch) |
-| `internal/api/auth_test.go:421` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:255` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:402` | test cookie against the test's own local server (CWE-1004) (mismatch) |
 | `internal/api/auth_test.go:422` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:449` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:423` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/auth_test.go:450` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:479` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:500` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:547` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:451` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:480` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:501` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:548` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/csrf_test.go:37` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/csrf_test.go:52` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/csrf_test.go:53` | test cookie against the test's own local server (CWE-1004) |
@@ -686,10 +686,10 @@ not this file.
 | `deploy/deploycheck_test.go:119` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/deploycheck_test.go:442` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/deploycheck_test.go:452` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `deploy/docker/dist_test.go:606` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `deploy/docker/dist_test.go:709` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `deploy/docker/dist_test.go:1005` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `deploy/docker/dist_test.go:1070` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `deploy/docker/dist_test.go:610` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `deploy/docker/dist_test.go:713` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `deploy/docker/dist_test.go:1009` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `deploy/docker/dist_test.go:1074` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/docker/reproducible_test.go:64` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/helm/airgap_bundle_test.go:34` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/helm/airgap_bundle_test.go:49` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -833,7 +833,7 @@ not this file.
 | `clients/embedded/est_client_test.go:73` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `clients/embedded/est_client_test.go:138` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `clients/embedded/est_client_test.go:199` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `deploy/docker/dist_test.go:949` | npm fixture tree in t.TempDir; mirrors a real package layout, nothing secret (CWE-276) |
+| `deploy/docker/dist_test.go:953` | npm fixture tree in t.TempDir; mirrors a real package layout, nothing secret (CWE-276) |
 | `internal/agent/destination/fs_unix_test.go:79` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/discovery/discovery_test.go:270` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/discovery/privatekey_test.go:27` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -938,7 +938,7 @@ not this file.
 | `cmd/trstctl/ee_attach.go:503` | operator-supplied path to their own IdP's JWKS (CWE-22) |
 | `cmd/trstctl/ee_attach.go:531` | operator-pinned local IdP metadata, validated as configuration. |
 | `deploy/demo/aud66_test.go:105` | fixed repository test path (CWE-22) |
-| `deploy/demo/demo_test.go:44` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/demo/demo_test.go:45` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/deploycheck_test.go:98` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/deploycheck_test.go:212` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/deploycheck_test.go:294` | test reads its own fixture/tempdir path (CWE-22) |
@@ -956,7 +956,7 @@ not this file.
 | `deploy/deploycheck_test.go:1286` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/deploycheck_test.go:1530` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/docker/dist_test.go:25` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/docker/dist_test.go:1021` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/docker/dist_test.go:1025` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/docker/reproducible_test.go:35` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/helm/airgap_bundle_test.go:62` | bundle is created inside this test's TempDir (CWE-22). |
 | `deploy/helm/airgap_bundle_test.go:69` | bundle is created inside this test's TempDir (CWE-22). |
@@ -1289,9 +1289,9 @@ not this file.
 | `cmd/trstctl-license/main.go:67` | writes the license PUBLIC key/inspection output; public material (CWE-276) |
 | `cmd/trstctl-license/main.go:148` | writes the license PUBLIC key/inspection output; public material (CWE-22, CWE-276) |
 | `cmd/trstctl/backup_cmd_test.go:31` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `deploy/docker/dist_test.go:952` | non-secret npm fixture manifest in t.TempDir (CWE-276) |
-| `deploy/docker/dist_test.go:955` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `deploy/docker/dist_test.go:961` | fake npm shim in a test tempdir must be executable (CWE-276) |
+| `deploy/docker/dist_test.go:956` | non-secret npm fixture manifest in t.TempDir (CWE-276) |
+| `deploy/docker/dist_test.go:959` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `deploy/docker/dist_test.go:965` | fake npm shim in a test tempdir must be executable (CWE-276) |
 | `docs/lint_gate_test.go:88` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/destination/fs_unix_test.go:57` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/discovery/discovery_test.go:273` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
