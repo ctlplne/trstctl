@@ -12,6 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
+import type { MessageKey } from "@/i18n/messages";
 import { ARIPosturePanel } from "@/pages/protocols/ARIPosturePanel";
 import { EABCredentialsPanel } from "@/pages/protocols/EABCredentialsPanel";
 import { RevocationCachePanel } from "@/pages/protocols/RevocationCachePanel";
@@ -49,6 +50,50 @@ interface ProtocolSurface {
   profile: string;
   snippets: ProtocolSnippet[];
 }
+
+interface ProtocolGuideCopy {
+  nameKey: MessageKey;
+  audienceKey: MessageKey;
+  outcomeKey: MessageKey;
+}
+
+const protocolGuideCopy: Record<string, ProtocolGuideCopy> = {
+  acme: {
+    nameKey: "protocols.guide.acme.name",
+    audienceKey: "protocols.guide.acme.audience",
+    outcomeKey: "protocols.guide.acme.outcome",
+  },
+  est: {
+    nameKey: "protocols.guide.est.name",
+    audienceKey: "protocols.guide.est.audience",
+    outcomeKey: "protocols.guide.est.outcome",
+  },
+  scep: {
+    nameKey: "protocols.guide.scep.name",
+    audienceKey: "protocols.guide.scep.audience",
+    outcomeKey: "protocols.guide.scep.outcome",
+  },
+  cmp: {
+    nameKey: "protocols.guide.cmp.name",
+    audienceKey: "protocols.guide.cmp.audience",
+    outcomeKey: "protocols.guide.cmp.outcome",
+  },
+  spiffe: {
+    nameKey: "protocols.guide.spiffe.name",
+    audienceKey: "protocols.guide.spiffe.audience",
+    outcomeKey: "protocols.guide.spiffe.outcome",
+  },
+  ssh: {
+    nameKey: "protocols.guide.ssh.name",
+    audienceKey: "protocols.guide.ssh.audience",
+    outcomeKey: "protocols.guide.ssh.outcome",
+  },
+  tsa: {
+    nameKey: "protocols.guide.tsa.name",
+    audienceKey: "protocols.guide.tsa.audience",
+    outcomeKey: "protocols.guide.tsa.outcome",
+  },
+};
 
 const protocolSurfaces: ProtocolSurface[] = [
   {
@@ -211,6 +256,7 @@ export function Protocols() {
   const [dnsEditConfig, setDNSEditConfig] = useState<ACMEDNS01ProviderConfig | null>(null);
   const [dnsDeleteConfig, setDNSDeleteConfig] = useState<ACMEDNS01ProviderConfig | null>(null);
   const [dnsPreflightConfig, setDNSPreflightConfig] = useState<ACMEDNS01ProviderConfig | null>(null);
+  const [operationsOpen, setOperationsOpen] = useState(false);
 
   // B7: upstream authorization staleness, fetched on its own so a deployment
   // without the surface still renders every other protocol panel.
@@ -300,6 +346,13 @@ export function Protocols() {
     const status = statusByProtocol.get(protocol.id);
     return !status?.enabled || !status.served;
   });
+
+  function openProtocolOperations(protocolId: string) {
+    setOperationsOpen(true);
+    window.setTimeout(() => {
+      document.getElementById(`protocol-row-${protocolId}`)?.scrollIntoView({ block: "center" });
+    }, 0);
+  }
 
   async function copySnippet(protocol: ProtocolSurface, snippet: ProtocolSnippet) {
     try {
@@ -433,16 +486,11 @@ export function Protocols() {
         description="Choose the safe doorway a machine uses to request and renew a certificate: ACME for servers, EST or SCEP for managed devices, and CMP for established PKI systems."
         technicalDetails="Exact evidence includes public endpoints, responder health, tenant and profile binding, authentication challenges, copy-paste client commands, enrollment diagnostics, signed relay health, and CRL or OCSP cache freshness."
         actions={
-          <a
-            href="#protocol-table-heading"
-            className="inline-flex h-9 items-center justify-center rounded-control bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-elevation1 hover:brightness-105"
-          >
-            {t("protocols.action.setUpNext")}
-          </a>
+          <Button type="button" onClick={() => openProtocolOperations(nextUnreadyMethod?.id ?? protocolSurfaces[0].id)}>
+            {nextUnreadyMethod ? t("protocols.action.setUpMethod", { method: nextUnreadyMethod.name }) : t("protocols.action.viewMethods")}
+          </Button>
         }
       />
-
-      <MDMDevicesPanel />
 
       <section aria-labelledby="method-readiness-heading" className="ui-panel grid gap-1 p-comfortable">
         <h2 id="method-readiness-heading" className="text-title font-semibold">
@@ -461,6 +509,48 @@ export function Protocols() {
                 ? t("protocols.readiness.next", { method: nextUnreadyMethod.name })
                 : t("protocols.readiness.allReady")}
         </p>
+      </section>
+
+      <section aria-labelledby="protocol-guide-heading" className="border-y border-border">
+        <div className="py-4">
+          <h2 id="protocol-guide-heading" className="text-title font-semibold">
+            {t("protocols.guide.heading")}
+          </h2>
+          <p className="mt-1 max-w-3xl text-body text-muted-foreground">{t("protocols.guide.description")}</p>
+        </div>
+        <ul className="divide-y divide-border" aria-label={t("protocols.guide.listLabel")}>
+          {protocolSurfaces.map((protocol) => {
+            const copy = protocolGuideCopy[protocol.id];
+            const status = statusByProtocol.get(protocol.id);
+            const ready = Boolean(status?.enabled && status.served);
+            const needsAttention = Boolean(status?.enabled && !status.served);
+            const statusLabel = statusLoading
+              ? t("protocols.guide.status.checking")
+              : statusError
+                ? t("protocols.guide.status.unavailable")
+                : ready
+                  ? t("protocols.guide.status.ready")
+                  : needsAttention
+                    ? t("protocols.guide.status.needsAttention")
+                    : t("protocols.guide.status.notSetUp");
+            const statusClass = ready ? "text-status-success" : needsAttention ? "text-status-warning" : "text-muted-foreground";
+            return (
+              <li key={protocol.id} className="grid gap-3 py-4 md:grid-cols-[minmax(0,1fr)_10rem_auto] md:items-center">
+                <div className="min-w-0">
+                  <h3 className="text-body font-semibold">
+                    {t(copy.nameKey)} <span className="font-normal text-muted-foreground">({protocol.name})</span>
+                  </h3>
+                  <p className="mt-1 text-caption font-medium text-muted-foreground">{t(copy.audienceKey)}</p>
+                  <p className="mt-1 text-body text-muted-foreground">{t(copy.outcomeKey)}</p>
+                </div>
+                <p className={`text-sm font-medium ${statusClass}`}>{statusLabel}</p>
+                <Button type="button" size="sm" variant="ghost" onClick={() => openProtocolOperations(protocol.id)}>
+                  {t("protocols.guide.action")}
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
       </section>
 
       {/* I4: what enrolments are failing and what to do about it. Rendered only
@@ -573,272 +663,287 @@ export function Protocols() {
         </section>
       ) : null}
 
-      <details data-testid="protocol-network-evidence" className="group border-y border-border py-3">
+      <details
+        data-testid="protocol-operational-details"
+        className="group border-y border-border py-3"
+        open={operationsOpen}
+        onToggle={(event) => setOperationsOpen(event.currentTarget.open)}
+      >
         <summary className="cursor-pointer list-none marker:hidden">
-          <span className="font-medium">{t("protocols.networkEvidence.summary")}</span>
-          <span className="ms-2 text-caption text-muted-foreground">
-            {relayTopologyError
-              ? t("protocols.networkEvidence.unavailable")
-              : relaySegments.length > 0
-                ? relaySegments.length === 1
-                  ? t("protocols.networkEvidence.countOne")
-                  : t("protocols.networkEvidence.countMany", { count: relaySegments.length })
-                : t("protocols.networkEvidence.empty")}
-          </span>
+          <span className="font-medium">{t("protocols.operations.summary")}</span>
+          <span className="ms-2 text-caption text-muted-foreground">{t("protocols.operations.description")}</span>
         </summary>
-        <div className="mt-4 grid gap-6">
-          <section aria-labelledby="enrollment-relay-topology-heading" aria-label={t("protocols.relays.heading")}>
-            <h2 id="enrollment-relay-topology-heading" className="text-title font-semibold">
-              {t("protocols.relays.heading")}
+        <div className="mt-5 grid min-w-0 gap-6 [&>*]:min-w-0">
+          <MDMDevicesPanel />
+
+          <details data-testid="protocol-network-evidence" className="group border-y border-border py-3">
+            <summary className="cursor-pointer list-none marker:hidden">
+              <span className="font-medium">{t("protocols.networkEvidence.summary")}</span>
+              <span className="ms-2 text-caption text-muted-foreground">
+                {relayTopologyError
+                  ? t("protocols.networkEvidence.unavailable")
+                  : relaySegments.length > 0
+                    ? relaySegments.length === 1
+                      ? t("protocols.networkEvidence.countOne")
+                      : t("protocols.networkEvidence.countMany", { count: relaySegments.length })
+                    : t("protocols.networkEvidence.empty")}
+              </span>
+            </summary>
+            <div className="mt-4 grid gap-6">
+              <section aria-labelledby="enrollment-relay-topology-heading" aria-label={t("protocols.relays.heading")}>
+                <h2 id="enrollment-relay-topology-heading" className="text-title font-semibold">
+                  {t("protocols.relays.heading")}
+                </h2>
+                <p className="mt-1 max-w-4xl text-caption text-muted-foreground">{t("protocols.relays.description")}</p>
+                {relayTopologyError ? (
+                  <div className="mt-3">
+                    <ErrorState title={t("protocols.relays.loadFailed")}>{relayTopologyError}</ErrorState>
+                  </div>
+                ) : relaySegments.length === 0 ? (
+                  <div role="status" className="mt-3 rounded-panel border border-border bg-muted/20 p-4">
+                    <p className="text-body font-semibold">{t("protocols.relays.emptyTitle")}</p>
+                    <p className="mt-1 text-caption text-muted-foreground">{t("protocols.relays.emptyBody")}</p>
+                  </div>
+                ) : (
+                  <div className="ui-panel mt-3 overflow-x-auto">
+                    <table className="ui-table min-w-[76rem]">
+                      <caption className="sr-only">{t("protocols.relays.caption")}</caption>
+                      <thead>
+                        <tr>
+                          <th scope="col">{t("protocols.relays.segment")}</th>
+                          <th scope="col">{t("protocols.relays.redundancy")}</th>
+                          <th scope="col">{t("protocols.relays.relay")}</th>
+                          <th scope="col">{t("protocols.relays.publicURL")}</th>
+                          <th scope="col">{t("protocols.relays.state")}</th>
+                          <th scope="col">{t("protocols.relays.upstreams")}</th>
+                          <th scope="col">{t("protocols.relays.evidence")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {relaySegments.flatMap((segment) =>
+                          segment.relays.map((relay, index) => {
+                            const proxy = relay.enrollment_proxy;
+                            return (
+                              <tr key={relay.id} className="align-top">
+                                {index === 0 ? (
+                                  <td rowSpan={segment.relays.length} className="font-medium">
+                                    {segment.name}
+                                  </td>
+                                ) : null}
+                                {index === 0 ? (
+                                  <td rowSpan={segment.relays.length}>
+                                    {segment.relays.length === 1
+                                      ? t("protocols.relays.oneRelay")
+                                      : t("protocols.relays.manyRelays", { count: segment.relays.length })}
+                                  </td>
+                                ) : null}
+                                <td>
+                                  <p className="font-medium">{relay.name}</p>
+                                  <p className="mt-1 font-mono text-xs text-muted-foreground">{relay.id}</p>
+                                </td>
+                                <td className="font-mono text-xs">{proxy.public_url}</td>
+                                <td>
+                                  <StatusBadge value={proxy.state} />
+                                  <p className="mt-1 max-w-[18rem] text-caption text-muted-foreground">{proxy.detail}</p>
+                                </td>
+                                <td className="text-xs">
+                                  <p>
+                                    {t("protocols.relays.upstreamHealth", {
+                                      healthy: proxy.healthy_upstreams,
+                                      unhealthy: proxy.unhealthy_upstreams,
+                                      unknown: proxy.unknown_upstreams,
+                                    })}
+                                  </p>
+                                  <p className="mt-1 text-muted-foreground">{t("protocols.relays.upstreamFailures", { count: proxy.upstream_failures })}</p>
+                                </td>
+                                <td className="text-xs">
+                                  <p>{t("protocols.relays.forwarded", { count: proxy.forwarded_requests })}</p>
+                                  <p>{t("protocols.relays.refused", { count: proxy.refused_requests })}</p>
+                                  <p className="mt-1 text-muted-foreground">
+                                    {proxy.last_forwarded_at
+                                      ? t("protocols.relays.lastForwarded", { at: formatDateTimePolicy(proxy.last_forwarded_at) })
+                                      : t("protocols.relays.lastForwarded", { at: t("protocols.relays.never") })}
+                                  </p>
+                                  <p className="text-muted-foreground">
+                                    {proxy.last_failover_at
+                                      ? t("protocols.relays.lastFailover", { at: formatDateTimePolicy(proxy.last_failover_at) })
+                                      : t("protocols.relays.lastFailover", { at: t("protocols.relays.never") })}
+                                  </p>
+                                  {proxy.reported_at ? (
+                                    <p className="text-muted-foreground">{t("protocols.relays.reported", { at: formatDateTimePolicy(proxy.reported_at) })}</p>
+                                  ) : null}
+                                </td>
+                              </tr>
+                            );
+                          }),
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
+
+              <RevocationCachePanel />
+            </div>
+          </details>
+
+          <section aria-labelledby="protocol-status-heading" className="border-y border-border py-4">
+            <h2 id="protocol-status-heading" className="text-title font-semibold">
+              {translateNow("source.protocol.responder.status.e57eff8ebc")}
             </h2>
-            <p className="mt-1 max-w-4xl text-caption text-muted-foreground">{t("protocols.relays.description")}</p>
-            {relayTopologyError ? (
-              <div className="mt-3">
-                <ErrorState title={t("protocols.relays.loadFailed")}>{relayTopologyError}</ErrorState>
+            <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+              <div className="ui-panel p-3 text-sm">
+                <p className="font-medium">{translateNow("source.read.only.responder.probe.23655af063")}</p>
+                <p className="mt-1 text-muted-foreground">{translateNow("source.the.register.checks.the.same.origin.protoc.851c152de8")}</p>
+                {statusCheckedAt && (
+                  <p className="mt-2 text-caption text-muted-foreground">
+                    {translateNow("source.checked.0efd92a335")} {formatDate(statusCheckedAt)}
+                  </p>
+                )}
               </div>
-            ) : relaySegments.length === 0 ? (
-              <div role="status" className="mt-3 rounded-panel border border-border bg-muted/20 p-4">
-                <p className="text-body font-semibold">{t("protocols.relays.emptyTitle")}</p>
-                <p className="mt-1 text-caption text-muted-foreground">{t("protocols.relays.emptyBody")}</p>
+              <div className="ui-panel p-3 text-sm">
+                <p className="font-medium">{translateNow("source.fail.closed.startup.and.issuance.posture.661fcb680a")}</p>
+                <p className="mt-1 text-muted-foreground">{translateNow("source.each.protocol.requires.an.enabled.flag.plu.a66867a87e")}</p>
               </div>
-            ) : (
-              <div className="ui-panel mt-3 overflow-x-auto">
-                <table className="ui-table min-w-[76rem]">
-                  <caption className="sr-only">{t("protocols.relays.caption")}</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">{t("protocols.relays.segment")}</th>
-                      <th scope="col">{t("protocols.relays.redundancy")}</th>
-                      <th scope="col">{t("protocols.relays.relay")}</th>
-                      <th scope="col">{t("protocols.relays.publicURL")}</th>
-                      <th scope="col">{t("protocols.relays.state")}</th>
-                      <th scope="col">{t("protocols.relays.upstreams")}</th>
-                      <th scope="col">{t("protocols.relays.evidence")}</th>
+            </div>
+          </section>
+
+          <section aria-labelledby="protocol-table-heading">
+            <h2 id="protocol-table-heading" className="mb-3 text-title font-semibold">
+              {translateNow("source.protocol.register.6109f4cf46")}
+            </h2>
+            <ScrollableTableRegion className="ui-panel" label={translateNow("source.enrollment.protocol.surfaces.de695f7aa5")}>
+              <table className="ui-table min-w-[56rem]">
+                <caption className="sr-only">{translateNow("source.enrollment.protocol.surfaces.de695f7aa5")}</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">{translateNow("source.protocol.cf0883343f")}</th>
+                    <th scope="col">{translateNow("source.capability.5faf58a69d")}</th>
+                    <th scope="col">{translateNow("source.tenant.binding.73a4b393b8")}</th>
+                    <th scope="col">{translateNow("source.auth.and.profile.gate.220561196c")}</th>
+                    <th scope="col">{translateNow("source.responder.status.85b7b015dc")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {protocolSurfaces.map((protocol) => {
+                    const status = statusByProtocol.get(protocol.id);
+                    return (
+                      <tr id={`protocol-row-${protocol.id}`} key={protocol.id} className="align-top scroll-mt-24">
+                        <td>
+                          <p className="font-medium">{protocol.name}</p>
+                        </td>
+                        <td>{protocol.capability}</td>
+                        <td>
+                          <ul className="grid gap-1">
+                            {protocol.requirements.map((requirement) => (
+                              <li key={requirement}>{requirement}</li>
+                            ))}
+                          </ul>
+                        </td>
+                        <td>
+                          <p>{protocol.auth}</p>
+                          <p className="mt-1 text-muted-foreground">{protocol.profile}</p>
+                        </td>
+                        <td>
+                          <ProtocolStatusBadge status={status} />
+                          <p className="mt-2 font-mono text-xs text-muted-foreground">{status?.endpoint ?? protocolEndpointFallback(protocol.id)}</p>
+                          {status?.status_code != null && (
+                            <p className="mt-1 text-caption text-muted-foreground">
+                              {translateNow("source.http.56d6f32151")} {status.status_code}
+                            </p>
+                          )}
+                          {status?.detail && <p className="mt-1 text-caption text-muted-foreground">{status.detail}</p>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </ScrollableTableRegion>
+            <div className="mt-3">
+              {statusLoading && <LoadingState>{translateNow("source.checking.protocol.responders.b300fe1dfa")}</LoadingState>}
+              {statusError && <ErrorState title={translateNow("source.protocol.status.check.failed.d6b8e1268d")}>{statusError}</ErrorState>}
+            </div>
+          </section>
+
+          <ARIPosturePanel />
+          <EABCredentialsPanel />
+
+          <section aria-labelledby="dns-provider-heading">
+            <h2 id="dns-provider-heading" className="mb-3 text-title font-semibold">
+              {t("protocols.dns01.heading")}
+            </h2>
+            <ScrollableTableRegion className="ui-panel" label={t("protocols.dns01.caption")}>
+              <table className="ui-table min-w-[62rem]">
+                <caption className="sr-only">{t("protocols.dns01.caption")}</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">{t("protocols.dns01.provider")}</th>
+                    <th scope="col">{t("protocols.dns01.kind")}</th>
+                    <th scope="col">{t("protocols.dns01.conformance")}</th>
+                    <th scope="col">{t("protocols.dns01.secretReferences")}</th>
+                    <th scope="col">{t("protocols.dns01.capabilityGrant")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dnsProviders.map((provider) => (
+                    <tr key={provider.name} className="align-top">
+                      <td>
+                        <p className="font-medium">{provider.display_name}</p>
+                        <p className="mt-1 font-mono text-xs text-muted-foreground">{provider.name}</p>
+                        <p className="mt-1 font-mono text-xs text-muted-foreground">{provider.provider_package}</p>
+                        <ProtocolServedBadge served={provider.served} servedLabel={t("protocols.dns01.served")} offLabel={t("protocols.dns01.off")} />
+                      </td>
+                      <td>{provider.kind}</td>
+                      <td>
+                        <p>{provider.conformance}</p>
+                        {provider.admission_state && (
+                          <p className="mt-1 text-caption text-muted-foreground">
+                            {t("protocols.dns01.admission")}: {provider.admission_state}
+                          </p>
+                        )}
+                        {provider.provenance && (
+                          <p className="mt-1 text-caption text-muted-foreground">
+                            {t("protocols.dns01.provenance")}: {provider.provenance}
+                          </p>
+                        )}
+                        {provider.propagation_preflight && (
+                          <p className="mt-1 text-caption text-muted-foreground">{t("protocols.dns01.propagationPreflight")}</p>
+                        )}
+                      </td>
+                      <td>
+                        <ul className="grid gap-1">
+                          {(provider.credential_reference_fields ?? []).map((field) => (
+                            <li key={field} className="font-mono text-xs">
+                              {field}
+                            </li>
+                          ))}
+                        </ul>
+                        {(provider.secret_fields ?? []).length === 0 && (
+                          <p className="mt-2 text-caption text-muted-foreground">{t("protocols.dns01.noRawSecretFields")}</p>
+                        )}
+                      </td>
+                      <td>
+                        <ul className="grid gap-1">
+                          {(provider.capabilities ?? []).map((capability) => (
+                            <li key={capability} className="font-mono text-xs">
+                              {capability}
+                            </li>
+                          ))}
+                        </ul>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {relaySegments.flatMap((segment) =>
-                      segment.relays.map((relay, index) => {
-                        const proxy = relay.enrollment_proxy;
-                        return (
-                          <tr key={relay.id} className="align-top">
-                            {index === 0 ? (
-                              <td rowSpan={segment.relays.length} className="font-medium">
-                                {segment.name}
-                              </td>
-                            ) : null}
-                            {index === 0 ? (
-                              <td rowSpan={segment.relays.length}>
-                                {segment.relays.length === 1
-                                  ? t("protocols.relays.oneRelay")
-                                  : t("protocols.relays.manyRelays", { count: segment.relays.length })}
-                              </td>
-                            ) : null}
-                            <td>
-                              <p className="font-medium">{relay.name}</p>
-                              <p className="mt-1 font-mono text-xs text-muted-foreground">{relay.id}</p>
-                            </td>
-                            <td className="font-mono text-xs">{proxy.public_url}</td>
-                            <td>
-                              <StatusBadge value={proxy.state} />
-                              <p className="mt-1 max-w-[18rem] text-caption text-muted-foreground">{proxy.detail}</p>
-                            </td>
-                            <td className="text-xs">
-                              <p>
-                                {t("protocols.relays.upstreamHealth", {
-                                  healthy: proxy.healthy_upstreams,
-                                  unhealthy: proxy.unhealthy_upstreams,
-                                  unknown: proxy.unknown_upstreams,
-                                })}
-                              </p>
-                              <p className="mt-1 text-muted-foreground">{t("protocols.relays.upstreamFailures", { count: proxy.upstream_failures })}</p>
-                            </td>
-                            <td className="text-xs">
-                              <p>{t("protocols.relays.forwarded", { count: proxy.forwarded_requests })}</p>
-                              <p>{t("protocols.relays.refused", { count: proxy.refused_requests })}</p>
-                              <p className="mt-1 text-muted-foreground">
-                                {proxy.last_forwarded_at
-                                  ? t("protocols.relays.lastForwarded", { at: formatDateTimePolicy(proxy.last_forwarded_at) })
-                                  : t("protocols.relays.lastForwarded", { at: t("protocols.relays.never") })}
-                              </p>
-                              <p className="text-muted-foreground">
-                                {proxy.last_failover_at
-                                  ? t("protocols.relays.lastFailover", { at: formatDateTimePolicy(proxy.last_failover_at) })
-                                  : t("protocols.relays.lastFailover", { at: t("protocols.relays.never") })}
-                              </p>
-                              {proxy.reported_at ? (
-                                <p className="text-muted-foreground">{t("protocols.relays.reported", { at: formatDateTimePolicy(proxy.reported_at) })}</p>
-                              ) : null}
-                            </td>
-                          </tr>
-                        );
-                      }),
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </table>
+            </ScrollableTableRegion>
+            {statusLoading && <LoadingState>{t("protocols.dns01.loading")}</LoadingState>}
+            {!statusLoading && !statusError && dnsProviders.length === 0 && (
+              <ErrorState title={t("protocols.dns01.unavailableTitle")}>{t("protocols.dns01.empty")}</ErrorState>
             )}
           </section>
 
-          <RevocationCachePanel />
-        </div>
-      </details>
-
-      <section aria-labelledby="protocol-status-heading" className="border-y border-border py-4">
-        <h2 id="protocol-status-heading" className="text-title font-semibold">
-          {translateNow("source.protocol.responder.status.e57eff8ebc")}
-        </h2>
-        <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-          <div className="ui-panel p-3 text-sm">
-            <p className="font-medium">{translateNow("source.read.only.responder.probe.23655af063")}</p>
-            <p className="mt-1 text-muted-foreground">{translateNow("source.the.register.checks.the.same.origin.protoc.851c152de8")}</p>
-            {statusCheckedAt && (
-              <p className="mt-2 text-caption text-muted-foreground">
-                {translateNow("source.checked.0efd92a335")} {formatDate(statusCheckedAt)}
-              </p>
-            )}
-          </div>
-          <div className="ui-panel p-3 text-sm">
-            <p className="font-medium">{translateNow("source.fail.closed.startup.and.issuance.posture.661fcb680a")}</p>
-            <p className="mt-1 text-muted-foreground">{translateNow("source.each.protocol.requires.an.enabled.flag.plu.a66867a87e")}</p>
-          </div>
-        </div>
-      </section>
-
-      <section aria-labelledby="protocol-table-heading">
-        <h2 id="protocol-table-heading" className="mb-3 text-title font-semibold">
-          {translateNow("source.protocol.register.6109f4cf46")}
-        </h2>
-        <ScrollableTableRegion className="ui-panel" label={translateNow("source.enrollment.protocol.surfaces.de695f7aa5")}>
-          <table className="ui-table min-w-[56rem]">
-            <caption className="sr-only">{translateNow("source.enrollment.protocol.surfaces.de695f7aa5")}</caption>
-            <thead>
-              <tr>
-                <th scope="col">{translateNow("source.protocol.cf0883343f")}</th>
-                <th scope="col">{translateNow("source.capability.5faf58a69d")}</th>
-                <th scope="col">{translateNow("source.tenant.binding.73a4b393b8")}</th>
-                <th scope="col">{translateNow("source.auth.and.profile.gate.220561196c")}</th>
-                <th scope="col">{translateNow("source.responder.status.85b7b015dc")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {protocolSurfaces.map((protocol) => {
-                const status = statusByProtocol.get(protocol.id);
-                return (
-                  <tr key={protocol.id} className="align-top">
-                    <td>
-                      <p className="font-medium">{protocol.name}</p>
-                    </td>
-                    <td>{protocol.capability}</td>
-                    <td>
-                      <ul className="grid gap-1">
-                        {protocol.requirements.map((requirement) => (
-                          <li key={requirement}>{requirement}</li>
-                        ))}
-                      </ul>
-                    </td>
-                    <td>
-                      <p>{protocol.auth}</p>
-                      <p className="mt-1 text-muted-foreground">{protocol.profile}</p>
-                    </td>
-                    <td>
-                      <ProtocolStatusBadge status={status} />
-                      <p className="mt-2 font-mono text-xs text-muted-foreground">{status?.endpoint ?? protocolEndpointFallback(protocol.id)}</p>
-                      {status?.status_code != null && (
-                        <p className="mt-1 text-caption text-muted-foreground">
-                          {translateNow("source.http.56d6f32151")} {status.status_code}
-                        </p>
-                      )}
-                      {status?.detail && <p className="mt-1 text-caption text-muted-foreground">{status.detail}</p>}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </ScrollableTableRegion>
-        <div className="mt-3">
-          {statusLoading && <LoadingState>{translateNow("source.checking.protocol.responders.b300fe1dfa")}</LoadingState>}
-          {statusError && <ErrorState title={translateNow("source.protocol.status.check.failed.d6b8e1268d")}>{statusError}</ErrorState>}
-        </div>
-      </section>
-
-      <ARIPosturePanel />
-      <EABCredentialsPanel />
-
-      <section aria-labelledby="dns-provider-heading">
-        <h2 id="dns-provider-heading" className="mb-3 text-title font-semibold">
-          {t("protocols.dns01.heading")}
-        </h2>
-        <ScrollableTableRegion className="ui-panel" label={t("protocols.dns01.caption")}>
-          <table className="ui-table min-w-[62rem]">
-            <caption className="sr-only">{t("protocols.dns01.caption")}</caption>
-            <thead>
-              <tr>
-                <th scope="col">{t("protocols.dns01.provider")}</th>
-                <th scope="col">{t("protocols.dns01.kind")}</th>
-                <th scope="col">{t("protocols.dns01.conformance")}</th>
-                <th scope="col">{t("protocols.dns01.secretReferences")}</th>
-                <th scope="col">{t("protocols.dns01.capabilityGrant")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {dnsProviders.map((provider) => (
-                <tr key={provider.name} className="align-top">
-                  <td>
-                    <p className="font-medium">{provider.display_name}</p>
-                    <p className="mt-1 font-mono text-xs text-muted-foreground">{provider.name}</p>
-                    <p className="mt-1 font-mono text-xs text-muted-foreground">{provider.provider_package}</p>
-                    <ProtocolServedBadge served={provider.served} servedLabel={t("protocols.dns01.served")} offLabel={t("protocols.dns01.off")} />
-                  </td>
-                  <td>{provider.kind}</td>
-                  <td>
-                    <p>{provider.conformance}</p>
-                    {provider.admission_state && (
-                      <p className="mt-1 text-caption text-muted-foreground">
-                        {t("protocols.dns01.admission")}: {provider.admission_state}
-                      </p>
-                    )}
-                    {provider.provenance && (
-                      <p className="mt-1 text-caption text-muted-foreground">
-                        {t("protocols.dns01.provenance")}: {provider.provenance}
-                      </p>
-                    )}
-                    {provider.propagation_preflight && <p className="mt-1 text-caption text-muted-foreground">{t("protocols.dns01.propagationPreflight")}</p>}
-                  </td>
-                  <td>
-                    <ul className="grid gap-1">
-                      {(provider.credential_reference_fields ?? []).map((field) => (
-                        <li key={field} className="font-mono text-xs">
-                          {field}
-                        </li>
-                      ))}
-                    </ul>
-                    {(provider.secret_fields ?? []).length === 0 && (
-                      <p className="mt-2 text-caption text-muted-foreground">{t("protocols.dns01.noRawSecretFields")}</p>
-                    )}
-                  </td>
-                  <td>
-                    <ul className="grid gap-1">
-                      {(provider.capabilities ?? []).map((capability) => (
-                        <li key={capability} className="font-mono text-xs">
-                          {capability}
-                        </li>
-                      ))}
-                    </ul>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </ScrollableTableRegion>
-        {statusLoading && <LoadingState>{t("protocols.dns01.loading")}</LoadingState>}
-        {!statusLoading && !statusError && dnsProviders.length === 0 && (
-          <ErrorState title={t("protocols.dns01.unavailableTitle")}>{t("protocols.dns01.empty")}</ErrorState>
-        )}
-      </section>
-
-      {/* B7: automating DNS-01 upstream removes the human from the validation
+          {/* B7: automating DNS-01 upstream removes the human from the validation
           cycle, and with them the human who used to notice when validation
           stopped working. An authority holding a valid authorization issues
           without a challenge, so a broken publish path stays invisible until
@@ -846,328 +951,330 @@ export function Protocols() {
           same original burst fails on the same day. This panel leads with the
           date each identifier last actually proved control, not the date it
           last issued, because those two diverge silently. */}
-      {upstreamAuthorizationsError && (
-        <section aria-labelledby="dns-upstream-error-heading">
-          <h2 id="dns-upstream-error-heading" className="mb-3 text-title font-semibold">
-            {t("protocols.dns01.upstreamHeading")}
-          </h2>
-          <ErrorState title={t("protocols.dns01.upstreamUnavailableTitle")}>{t("protocols.dns01.upstreamUnavailable")}</ErrorState>
-        </section>
-      )}
-      {(upstreamAuthorizations?.items ?? []).length > 0 && (
-        <section aria-labelledby="dns-upstream-heading">
-          <h2 id="dns-upstream-heading" className="mb-3 text-title font-semibold">
-            {t("protocols.dns01.upstreamHeading")}
-          </h2>
-          <p className="mb-3 max-w-4xl text-caption text-muted-foreground">{upstreamAuthorizations?.guidance}</p>
-          {(upstreamAuthorizations?.never_validated_count ?? 0) > 0 && (
-            <p className="mb-3 text-sm font-medium text-status-warning">
-              {t(
-                upstreamAuthorizations?.never_validated_count === 1
-                  ? "protocols.dns01.upstreamNeverValidatedOne"
-                  : "protocols.dns01.upstreamNeverValidatedMany",
-                { count: upstreamAuthorizations?.never_validated_count ?? 0 },
-              )}
-            </p>
+          {upstreamAuthorizationsError && (
+            <section aria-labelledby="dns-upstream-error-heading">
+              <h2 id="dns-upstream-error-heading" className="mb-3 text-title font-semibold">
+                {t("protocols.dns01.upstreamHeading")}
+              </h2>
+              <ErrorState title={t("protocols.dns01.upstreamUnavailableTitle")}>{t("protocols.dns01.upstreamUnavailable")}</ErrorState>
+            </section>
           )}
-          <div className="ui-panel overflow-x-auto">
-            <table className="ui-table min-w-[64rem]">
-              <caption className="sr-only">{t("protocols.dns01.upstreamCaption")}</caption>
-              <thead>
-                <tr>
-                  <th scope="col">{t("protocols.dns01.upstreamIdentifier")}</th>
-                  <th scope="col">{t("protocols.dns01.upstreamIssuer")}</th>
-                  <th scope="col">{t("protocols.dns01.upstreamLastValidated")}</th>
-                  <th scope="col">{t("protocols.dns01.upstreamLastReused")}</th>
-                  <th scope="col">{t("protocols.dns01.upstreamExpires")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(upstreamAuthorizations?.items ?? []).map((row) => (
-                  <tr key={`${row.issuer}:${row.identifier}`} className="align-top">
-                    <td className="font-mono text-xs">{row.identifier}</td>
-                    <td>{row.issuer}</td>
-                    <td>
-                      {row.never_validated ? (
-                        <span className="font-medium text-status-warning">{t("protocols.dns01.upstreamNeverValidated")}</span>
-                      ) : (
-                        <span>{formatDate(row.last_validated_at)}</span>
-                      )}
-                    </td>
-                    <td className="text-muted-foreground">{row.last_reused_at ? formatDate(row.last_reused_at) : "-"}</td>
-                    <td>{row.expires_at ? formatDate(row.expires_at) : t("protocols.dns01.upstreamNoStatedExpiry")}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-
-      <section aria-labelledby="dns-config-heading">
-        <h2 id="dns-config-heading" className="mb-3 text-title font-semibold">
-          {t("protocols.dns01.configHeading")}
-        </h2>
-        <ScrollableTableRegion className="ui-panel" label={t("protocols.dns01.configCaption")}>
-          <table className="ui-table min-w-[76rem]">
-            <caption className="sr-only">{t("protocols.dns01.configCaption")}</caption>
-            <thead>
-              <tr>
-                <th scope="col">{t("protocols.dns01.config")}</th>
-                <th scope="col">{t("protocols.dns01.provider")}</th>
-                <th scope="col">{t("protocols.dns01.zone")}</th>
-                <th scope="col">{t("protocols.dns01.policy")}</th>
-                <th scope="col">{t("protocols.dns01.secretReferences")}</th>
-                <th scope="col">{translateNow("source.actions.ff8059dc67")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {dnsProviderConfigs.map((config) => {
-                const refs = credentialReferenceNames(config);
-                return (
-                  <tr key={config.id} className="align-top">
-                    <td>
-                      <p className="font-medium">{config.name}</p>
-                      <p className="mt-1 font-mono text-xs text-muted-foreground">{config.id}</p>
-                      <p className="mt-2 text-caption text-muted-foreground">{config.secret_handling}</p>
-                    </td>
-                    <td className="font-mono text-xs">{config.provider}</td>
-                    <td>
-                      <p>{config.zone || t("protocols.dns01.zoneUnbound")}</p>
-                      {config.challenge_domain && <p className="mt-1 font-mono text-xs text-muted-foreground">{config.challenge_domain}</p>}
-                      {config.delegation_target && <p className="mt-1 font-mono text-xs text-muted-foreground">{config.delegation_target}</p>}
-                    </td>
-                    <td>
-                      <ul className="grid gap-1">
-                        <li>{(config.allowed_methods ?? []).join(", ") || t("protocols.dns01.noMethodPolicy")}</li>
-                        <li>{config.allow_wildcards ? t("protocols.dns01.wildcardsAllowed") : t("protocols.dns01.wildcardsDenied")}</li>
-                        <li>{config.allow_upstream_dv ? t("protocols.dns01.upstreamDVAllowed") : t("protocols.dns01.upstreamDVDenied")}</li>
-                        {config.caa_issuer_domain && (
-                          <li>
-                            {translateNow("source.caa.084696b5b2")} {config.caa_issuer_domain}
-                          </li>
-                        )}
-                      </ul>
-                    </td>
-                    <td>
-                      <ul className="grid gap-1">
-                        {refs.map((field) => (
-                          <li key={field} className="font-mono text-xs">
-                            {field}
-                          </li>
-                        ))}
-                      </ul>
-                    </td>
-                    <td>
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setDNSPreflightConfig(config)}
-                          aria-label={translateNow("source.preflight.check.value1.dd32be6184", { value1: config.name })}
-                        >
-                          {t("parity.preflightCheck_4a464a")}
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setDNSEditConfig(config)}
-                          aria-label={translateNow("source.edit.dns.01.config.value1.58a4415e35", { value1: config.name })}
-                        >
-                          {t("parity.edit_530164")}
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="destructive-outline"
-                          onClick={() => setDNSDeleteConfig(config)}
-                          aria-label={translateNow("source.delete.dns.01.config.value1.c275f568a2", { value1: config.name })}
-                        >
-                          {t("parity.delete_f6fdbe")}
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </ScrollableTableRegion>
-        {statusLoading && <LoadingState>{t("protocols.dns01.configLoading")}</LoadingState>}
-        {!statusLoading && !statusError && dnsProviderConfigs.length === 0 && (
-          <NeutralEmptyState title={t("protocols.dns01.configEmptyTitle")} body={t("protocols.dns01.configEmpty")} />
-        )}
-      </section>
-
-      <section aria-labelledby="mdm-scep-heading">
-        <h2 id="mdm-scep-heading" className="mb-3 text-title font-semibold">
-          {t("protocols.mdm.heading")}
-        </h2>
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_18rem]">
-          <ScrollableTableRegion className="ui-panel" label={t("protocols.mdm.caption")}>
-            <table className="ui-table min-w-[72rem]">
-              <caption className="sr-only">{t("protocols.mdm.caption")}</caption>
-              <thead>
-                <tr>
-                  <th scope="col">{t("protocols.mdm.policy")}</th>
-                  <th scope="col">{t("protocols.mdm.provider")}</th>
-                  <th scope="col">{t("protocols.mdm.profile")}</th>
-                  <th scope="col">{t("protocols.mdm.challenge")}</th>
-                  <th scope="col">{t("protocols.mdm.references")}</th>
-                  <th scope="col">{translateNow("source.actions.ff8059dc67")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(mdmSCEPStatus?.policies ?? []).map((policy) => {
-                  const refs = mdmReferenceNames(policy);
-                  return (
-                    <tr key={policy.id} className="align-top">
-                      <td>
-                        <p className="font-medium">{policy.name}</p>
-                        <p className="mt-1 font-mono text-xs text-muted-foreground">{policy.id}</p>
-                        <ProtocolServedBadge served={policy.enabled} servedLabel={t("protocols.mdm.enabled")} offLabel={t("protocols.mdm.disabled")} />
-                      </td>
-                      <td className="font-mono text-xs">{policy.provider}</td>
-                      <td>
-                        <p>{policy.scep_profile}</p>
-                        <p className="mt-1 font-mono text-xs text-muted-foreground">{policy.scep_endpoint}</p>
-                        {policy.expected_audience && <p className="mt-1 font-mono text-xs text-muted-foreground">{policy.expected_audience}</p>}
-                      </td>
-                      <td>
-                        <p>{policy.challenge_mode}</p>
-                        <p className="mt-1 text-caption text-muted-foreground">
-                          {t("protocols.mdm.rotationVersion")} {policy.rotation_version}
-                        </p>
-                        {policy.last_rotated_at && <p className="mt-1 text-caption text-muted-foreground">{formatDate(policy.last_rotated_at)}</p>}
-                      </td>
-                      <td>
-                        <ul className="grid gap-1">
-                          {refs.map((field) => (
-                            <li key={field} className="font-mono text-xs">
-                              {field}
-                            </li>
-                          ))}
-                        </ul>
-                      </td>
-                      <td>
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setSCEPEditPolicy(policy)}
-                            aria-label={translateNow("source.edit.scep.policy.value1.883c2507e1", { value1: policy.name })}
-                          >
-                            {t("parity.edit_530164")}
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setSCEPRotatePolicy(policy)}
-                            aria-label={translateNow("source.rotate.challenge.for.value1.c7c084eaeb", { value1: policy.name })}
-                          >
-                            {t("parity.rotateChallenge_99fc02")}
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="destructive-outline"
-                            onClick={() => setSCEPDeletePolicy(policy)}
-                            aria-label={translateNow("source.delete.scep.policy.value1.62934aa247", { value1: policy.name })}
-                          >
-                            {t("parity.delete_f6fdbe")}
-                          </Button>
-                        </div>
-                      </td>
+          {(upstreamAuthorizations?.items ?? []).length > 0 && (
+            <section aria-labelledby="dns-upstream-heading">
+              <h2 id="dns-upstream-heading" className="mb-3 text-title font-semibold">
+                {t("protocols.dns01.upstreamHeading")}
+              </h2>
+              <p className="mb-3 max-w-4xl text-caption text-muted-foreground">{upstreamAuthorizations?.guidance}</p>
+              {(upstreamAuthorizations?.never_validated_count ?? 0) > 0 && (
+                <p className="mb-3 text-sm font-medium text-status-warning">
+                  {t(
+                    upstreamAuthorizations?.never_validated_count === 1
+                      ? "protocols.dns01.upstreamNeverValidatedOne"
+                      : "protocols.dns01.upstreamNeverValidatedMany",
+                    { count: upstreamAuthorizations?.never_validated_count ?? 0 },
+                  )}
+                </p>
+              )}
+              <div className="ui-panel overflow-x-auto">
+                <table className="ui-table min-w-[64rem]">
+                  <caption className="sr-only">{t("protocols.dns01.upstreamCaption")}</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">{t("protocols.dns01.upstreamIdentifier")}</th>
+                      <th scope="col">{t("protocols.dns01.upstreamIssuer")}</th>
+                      <th scope="col">{t("protocols.dns01.upstreamLastValidated")}</th>
+                      <th scope="col">{t("protocols.dns01.upstreamLastReused")}</th>
+                      <th scope="col">{t("protocols.dns01.upstreamExpires")}</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </ScrollableTableRegion>
-          <div className="ui-panel p-3 text-sm">
-            <p className="font-medium">{t("protocols.mdm.telemetry")}</p>
-            <dl className="mt-3 grid grid-cols-2 gap-2 text-caption">
-              <div>
-                <dt className="text-muted-foreground">{t("protocols.mdm.allowed")}</dt>
-                <dd className="font-semibold tabular-nums">{mdmSCEPStatus?.telemetry.allowed ?? 0}</dd>
+                  </thead>
+                  <tbody>
+                    {(upstreamAuthorizations?.items ?? []).map((row) => (
+                      <tr key={`${row.issuer}:${row.identifier}`} className="align-top">
+                        <td className="font-mono text-xs">{row.identifier}</td>
+                        <td>{row.issuer}</td>
+                        <td>
+                          {row.never_validated ? (
+                            <span className="font-medium text-status-warning">{t("protocols.dns01.upstreamNeverValidated")}</span>
+                          ) : (
+                            <span>{formatDate(row.last_validated_at)}</span>
+                          )}
+                        </td>
+                        <td className="text-muted-foreground">{row.last_reused_at ? formatDate(row.last_reused_at) : "-"}</td>
+                        <td>{row.expires_at ? formatDate(row.expires_at) : t("protocols.dns01.upstreamNoStatedExpiry")}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-              <div>
-                <dt className="text-muted-foreground">{t("protocols.mdm.denied")}</dt>
-                <dd className="font-semibold tabular-nums">{mdmSCEPStatus?.telemetry.denied ?? 0}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">{t("protocols.mdm.replay")}</dt>
-                <dd className="font-semibold tabular-nums">{mdmSCEPStatus?.telemetry.replay_rejected ?? 0}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">{t("protocols.mdm.runtime")}</dt>
-                <dd className="font-semibold">{mdmSCEPStatus?.runtime_gate ? t("protocols.mdm.runtimeConfigured") : t("protocols.mdm.runtimeUnknown")}</dd>
-              </div>
-            </dl>
-            {mdmSCEPStatus?.telemetry.last_failure_reason && (
-              <p className="mt-3 text-caption text-muted-foreground">{mdmSCEPStatus.telemetry.last_failure_reason}</p>
-            )}
-            {mdmSCEPStatus?.runtime_note && <p className="mt-3 text-caption text-muted-foreground">{mdmSCEPStatus.runtime_note}</p>}
-          </div>
-        </div>
-        {statusLoading && <LoadingState>{t("protocols.mdm.loading")}</LoadingState>}
-        {!statusLoading && !statusError && (mdmSCEPStatus?.policies ?? []).length === 0 && (
-          <NeutralEmptyState title={t("protocols.mdm.emptyTitle")} body={t("protocols.mdm.empty")} />
-        )}
-      </section>
+            </section>
+          )}
 
-      <section aria-labelledby="client-setup-heading" className="grid min-w-0 gap-4 [&>*]:min-w-0">
-        <h2 id="client-setup-heading" className="text-title font-semibold">
-          {translateNow("source.client.setup.4ba2b51d20")}
-        </h2>
-        {protocolSurfaces.map((protocol) => (
-          <section key={protocol.id} aria-labelledby={`${protocol.id}-heading`} className="min-w-0 border-y border-border py-4">
-            <div className="grid min-w-0 gap-4 lg:grid-cols-[14rem_minmax(0,1fr)] [&>*]:min-w-0">
-              <div>
-                <h3 id={`${protocol.id}-heading`} className="text-base font-semibold">
-                  {protocol.name}
-                </h3>
-                <p className="mt-1 text-sm text-muted-foreground">{protocol.capability}</p>
-              </div>
-              <div className="grid min-w-0 gap-3 [&>*]:min-w-0">
-                {protocol.snippets.map((snippet) => {
-                  const copiedKey = `${protocol.id}:${snippet.label}`;
-                  return (
-                    <div key={snippet.label} className="ui-panel p-3">
-                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-sm font-medium">{snippet.label}</p>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          aria-label={translateNow("source.copy.value1.value2.command.fbc14f63f6", { value1: protocol.name, value2: snippet.label })}
-                          onClick={() => void copySnippet(protocol, snippet)}
-                        >
-                          <Copy className="h-4 w-4" aria-hidden="true" />
-                          {translateNow("source.copy.e21f935f11")}
-                        </Button>
-                      </div>
-                      <ScrollableRegion
-                        className="bg-muted px-3 py-2"
-                        label={translateNow("source.copy.value1.value2.command.fbc14f63f6", { value1: protocol.name, value2: snippet.label })}
-                      >
-                        <code className="block min-w-max text-xs">{snippet.command}</code>
-                      </ScrollableRegion>
-                      {copied === copiedKey && (
-                        <p className="mt-2 text-xs text-muted-foreground">{translateNow("source.copied.command.without.token.material.6c656e4f88")}</p>
-                      )}
-                    </div>
-                  );
-                })}
+          <section aria-labelledby="dns-config-heading">
+            <h2 id="dns-config-heading" className="mb-3 text-title font-semibold">
+              {t("protocols.dns01.configHeading")}
+            </h2>
+            <ScrollableTableRegion className="ui-panel" label={t("protocols.dns01.configCaption")}>
+              <table className="ui-table min-w-[76rem]">
+                <caption className="sr-only">{t("protocols.dns01.configCaption")}</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">{t("protocols.dns01.config")}</th>
+                    <th scope="col">{t("protocols.dns01.provider")}</th>
+                    <th scope="col">{t("protocols.dns01.zone")}</th>
+                    <th scope="col">{t("protocols.dns01.policy")}</th>
+                    <th scope="col">{t("protocols.dns01.secretReferences")}</th>
+                    <th scope="col">{translateNow("source.actions.ff8059dc67")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dnsProviderConfigs.map((config) => {
+                    const refs = credentialReferenceNames(config);
+                    return (
+                      <tr key={config.id} className="align-top">
+                        <td>
+                          <p className="font-medium">{config.name}</p>
+                          <p className="mt-1 font-mono text-xs text-muted-foreground">{config.id}</p>
+                          <p className="mt-2 text-caption text-muted-foreground">{config.secret_handling}</p>
+                        </td>
+                        <td className="font-mono text-xs">{config.provider}</td>
+                        <td>
+                          <p>{config.zone || t("protocols.dns01.zoneUnbound")}</p>
+                          {config.challenge_domain && <p className="mt-1 font-mono text-xs text-muted-foreground">{config.challenge_domain}</p>}
+                          {config.delegation_target && <p className="mt-1 font-mono text-xs text-muted-foreground">{config.delegation_target}</p>}
+                        </td>
+                        <td>
+                          <ul className="grid gap-1">
+                            <li>{(config.allowed_methods ?? []).join(", ") || t("protocols.dns01.noMethodPolicy")}</li>
+                            <li>{config.allow_wildcards ? t("protocols.dns01.wildcardsAllowed") : t("protocols.dns01.wildcardsDenied")}</li>
+                            <li>{config.allow_upstream_dv ? t("protocols.dns01.upstreamDVAllowed") : t("protocols.dns01.upstreamDVDenied")}</li>
+                            {config.caa_issuer_domain && (
+                              <li>
+                                {translateNow("source.caa.084696b5b2")} {config.caa_issuer_domain}
+                              </li>
+                            )}
+                          </ul>
+                        </td>
+                        <td>
+                          <ul className="grid gap-1">
+                            {refs.map((field) => (
+                              <li key={field} className="font-mono text-xs">
+                                {field}
+                              </li>
+                            ))}
+                          </ul>
+                        </td>
+                        <td>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setDNSPreflightConfig(config)}
+                              aria-label={translateNow("source.preflight.check.value1.dd32be6184", { value1: config.name })}
+                            >
+                              {t("parity.preflightCheck_4a464a")}
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setDNSEditConfig(config)}
+                              aria-label={translateNow("source.edit.dns.01.config.value1.58a4415e35", { value1: config.name })}
+                            >
+                              {t("parity.edit_530164")}
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="destructive-outline"
+                              onClick={() => setDNSDeleteConfig(config)}
+                              aria-label={translateNow("source.delete.dns.01.config.value1.c275f568a2", { value1: config.name })}
+                            >
+                              {t("parity.delete_f6fdbe")}
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </ScrollableTableRegion>
+            {statusLoading && <LoadingState>{t("protocols.dns01.configLoading")}</LoadingState>}
+            {!statusLoading && !statusError && dnsProviderConfigs.length === 0 && (
+              <NeutralEmptyState title={t("protocols.dns01.configEmptyTitle")} body={t("protocols.dns01.configEmpty")} />
+            )}
+          </section>
+
+          <section aria-labelledby="mdm-scep-heading">
+            <h2 id="mdm-scep-heading" className="mb-3 text-title font-semibold">
+              {t("protocols.mdm.heading")}
+            </h2>
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_18rem]">
+              <ScrollableTableRegion className="ui-panel" label={t("protocols.mdm.caption")}>
+                <table className="ui-table min-w-[72rem]">
+                  <caption className="sr-only">{t("protocols.mdm.caption")}</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">{t("protocols.mdm.policy")}</th>
+                      <th scope="col">{t("protocols.mdm.provider")}</th>
+                      <th scope="col">{t("protocols.mdm.profile")}</th>
+                      <th scope="col">{t("protocols.mdm.challenge")}</th>
+                      <th scope="col">{t("protocols.mdm.references")}</th>
+                      <th scope="col">{translateNow("source.actions.ff8059dc67")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(mdmSCEPStatus?.policies ?? []).map((policy) => {
+                      const refs = mdmReferenceNames(policy);
+                      return (
+                        <tr key={policy.id} className="align-top">
+                          <td>
+                            <p className="font-medium">{policy.name}</p>
+                            <p className="mt-1 font-mono text-xs text-muted-foreground">{policy.id}</p>
+                            <ProtocolServedBadge served={policy.enabled} servedLabel={t("protocols.mdm.enabled")} offLabel={t("protocols.mdm.disabled")} />
+                          </td>
+                          <td className="font-mono text-xs">{policy.provider}</td>
+                          <td>
+                            <p>{policy.scep_profile}</p>
+                            <p className="mt-1 font-mono text-xs text-muted-foreground">{policy.scep_endpoint}</p>
+                            {policy.expected_audience && <p className="mt-1 font-mono text-xs text-muted-foreground">{policy.expected_audience}</p>}
+                          </td>
+                          <td>
+                            <p>{policy.challenge_mode}</p>
+                            <p className="mt-1 text-caption text-muted-foreground">
+                              {t("protocols.mdm.rotationVersion")} {policy.rotation_version}
+                            </p>
+                            {policy.last_rotated_at && <p className="mt-1 text-caption text-muted-foreground">{formatDate(policy.last_rotated_at)}</p>}
+                          </td>
+                          <td>
+                            <ul className="grid gap-1">
+                              {refs.map((field) => (
+                                <li key={field} className="font-mono text-xs">
+                                  {field}
+                                </li>
+                              ))}
+                            </ul>
+                          </td>
+                          <td>
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setSCEPEditPolicy(policy)}
+                                aria-label={translateNow("source.edit.scep.policy.value1.883c2507e1", { value1: policy.name })}
+                              >
+                                {t("parity.edit_530164")}
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setSCEPRotatePolicy(policy)}
+                                aria-label={translateNow("source.rotate.challenge.for.value1.c7c084eaeb", { value1: policy.name })}
+                              >
+                                {t("parity.rotateChallenge_99fc02")}
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="destructive-outline"
+                                onClick={() => setSCEPDeletePolicy(policy)}
+                                aria-label={translateNow("source.delete.scep.policy.value1.62934aa247", { value1: policy.name })}
+                              >
+                                {t("parity.delete_f6fdbe")}
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </ScrollableTableRegion>
+              <div className="ui-panel p-3 text-sm">
+                <p className="font-medium">{t("protocols.mdm.telemetry")}</p>
+                <dl className="mt-3 grid grid-cols-2 gap-2 text-caption">
+                  <div>
+                    <dt className="text-muted-foreground">{t("protocols.mdm.allowed")}</dt>
+                    <dd className="font-semibold tabular-nums">{mdmSCEPStatus?.telemetry.allowed ?? 0}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">{t("protocols.mdm.denied")}</dt>
+                    <dd className="font-semibold tabular-nums">{mdmSCEPStatus?.telemetry.denied ?? 0}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">{t("protocols.mdm.replay")}</dt>
+                    <dd className="font-semibold tabular-nums">{mdmSCEPStatus?.telemetry.replay_rejected ?? 0}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">{t("protocols.mdm.runtime")}</dt>
+                    <dd className="font-semibold">{mdmSCEPStatus?.runtime_gate ? t("protocols.mdm.runtimeConfigured") : t("protocols.mdm.runtimeUnknown")}</dd>
+                  </div>
+                </dl>
+                {mdmSCEPStatus?.telemetry.last_failure_reason && (
+                  <p className="mt-3 text-caption text-muted-foreground">{mdmSCEPStatus.telemetry.last_failure_reason}</p>
+                )}
+                {mdmSCEPStatus?.runtime_note && <p className="mt-3 text-caption text-muted-foreground">{mdmSCEPStatus.runtime_note}</p>}
               </div>
             </div>
+            {statusLoading && <LoadingState>{t("protocols.mdm.loading")}</LoadingState>}
+            {!statusLoading && !statusError && (mdmSCEPStatus?.policies ?? []).length === 0 && (
+              <NeutralEmptyState title={t("protocols.mdm.emptyTitle")} body={t("protocols.mdm.empty")} />
+            )}
           </section>
-        ))}
-      </section>
+
+          <section aria-labelledby="client-setup-heading" className="grid min-w-0 gap-4 [&>*]:min-w-0">
+            <h2 id="client-setup-heading" className="text-title font-semibold">
+              {translateNow("source.client.setup.4ba2b51d20")}
+            </h2>
+            {protocolSurfaces.map((protocol) => (
+              <section key={protocol.id} aria-labelledby={`${protocol.id}-heading`} className="min-w-0 border-y border-border py-4">
+                <div className="grid min-w-0 gap-4 lg:grid-cols-[14rem_minmax(0,1fr)] [&>*]:min-w-0">
+                  <div>
+                    <h3 id={`${protocol.id}-heading`} className="text-base font-semibold">
+                      {protocol.name}
+                    </h3>
+                    <p className="mt-1 text-sm text-muted-foreground">{protocol.capability}</p>
+                  </div>
+                  <div className="grid min-w-0 gap-3 [&>*]:min-w-0">
+                    {protocol.snippets.map((snippet) => {
+                      const copiedKey = `${protocol.id}:${snippet.label}`;
+                      return (
+                        <div key={snippet.label} className="ui-panel p-3">
+                          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-sm font-medium">{snippet.label}</p>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              aria-label={translateNow("source.copy.value1.value2.command.fbc14f63f6", { value1: protocol.name, value2: snippet.label })}
+                              onClick={() => void copySnippet(protocol, snippet)}
+                            >
+                              <Copy className="h-4 w-4" aria-hidden="true" />
+                              {translateNow("source.copy.e21f935f11")}
+                            </Button>
+                          </div>
+                          <ScrollableRegion
+                            className="bg-muted px-3 py-2"
+                            label={translateNow("source.copy.value1.value2.command.fbc14f63f6", { value1: protocol.name, value2: snippet.label })}
+                          >
+                            <code className="block min-w-max text-xs">{snippet.command}</code>
+                          </ScrollableRegion>
+                          {copied === copiedKey && (
+                            <p className="mt-2 text-xs text-muted-foreground">{translateNow("source.copied.command.without.token.material.6c656e4f88")}</p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </section>
+            ))}
+          </section>
+        </div>
+      </details>
 
       {scepEditPolicy && <MDMSCEPPolicyEditDialog policy={scepEditPolicy} onClose={() => setSCEPEditPolicy(null)} onSaved={handleSCEPPolicySaved} />}
       {scepRotatePolicy && (

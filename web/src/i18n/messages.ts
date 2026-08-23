@@ -858,6 +858,14 @@ export const messages = {
     defaultMessage: "Review top issue",
     description: "Primary dashboard action when at least one urgent credential needs attention.",
   },
+  "dashboard.attention.itemReason": {
+    defaultMessage: "{kind} · {reason}",
+    description: "Plain-language object type and leading reason shown for a dashboard attention item.",
+  },
+  "dashboard.attention.reviewReason": {
+    defaultMessage: "Review why this credential needs attention.",
+    description: "Plain fallback when the detailed contextual-risk explanation is unavailable.",
+  },
   "dashboard.moreActions": {
     defaultMessage: "More actions",
     description: "Dashboard disclosure containing secondary discovery and rotation actions.",
@@ -889,10 +897,6 @@ export const messages = {
   "dashboard.urgentRisk.unavailable": {
     defaultMessage: "summary unavailable",
     description: "Dashboard KPI state when the canonical risk summary could not be loaded.",
-  },
-  "dashboard.rotateFirst.contextualRisk": {
-    defaultMessage: "contextual risk {score}",
-    description: "Dashboard rotate-first row detail sourced from the contextual risk projection.",
   },
   "dashboard.readiness.viewAll": {
     defaultMessage: "View in Certificates →",
@@ -3592,7 +3596,7 @@ export const messages = {
     description: "Certificate-expiry worklist navigation label.",
   },
   "nav.task.expiringSoon.description": {
-    defaultMessage: "30-day certificate worklist",
+    defaultMessage: "Certificates expiring within 30 days",
     description: "Certificate-expiry worklist navigation description.",
   },
   "nav.task.pendingApprovals.label": {
@@ -3600,7 +3604,7 @@ export const messages = {
     description: "Approval inbox worklist navigation label.",
   },
   "nav.task.pendingApprovals.description": {
-    defaultMessage: "dual-control issue, rotate, and revoke inbox",
+    defaultMessage: "Changes waiting for a second person",
     description: "Approval inbox worklist navigation description.",
   },
   "nav.task.highestRisk.label": {
@@ -3608,7 +3612,7 @@ export const messages = {
     description: "Risk worklist navigation label.",
   },
   "nav.task.highestRisk.description": {
-    defaultMessage: "risk-prioritized rotation list",
+    defaultMessage: "Credentials most likely to cause harm",
     description: "Risk worklist navigation description.",
   },
   "certificates.health.heading": {
@@ -4812,9 +4816,13 @@ export const messages = {
     defaultMessage: "How machines request credentials",
     description: "Primary navigation item.",
   },
-  "protocols.action.setUpNext": {
-    defaultMessage: "Set up next method",
-    description: "Primary action that moves to the machine enrollment method register.",
+  "protocols.action.setUpMethod": {
+    defaultMessage: "Set up {method}",
+    description: "Primary action naming the first machine request method that needs setup or repair.",
+  },
+  "protocols.action.viewMethods": {
+    defaultMessage: "View method details",
+    description: "Primary action that opens exact method details when every method is ready.",
   },
   "protocols.readiness.checking": {
     defaultMessage: "Checking machine request methods…",
@@ -4843,6 +4851,110 @@ export const messages = {
   "protocols.readiness.allReady": {
     defaultMessage: "Every shipped method is enabled, tenant-bound, and answering its public probe.",
     description: "Confirmation shown when all machine certificate request methods are ready.",
+  },
+  "protocols.guide.heading": {
+    defaultMessage: "Choose how each machine asks",
+    description: "Plain-language heading for the protocol method guide.",
+  },
+  "protocols.guide.description": {
+    defaultMessage: "Start with the system that needs a credential. The technical setup and exact responder evidence stay one level deeper.",
+    description: "Outcome-first introduction to the protocol method guide.",
+  },
+  "protocols.guide.listLabel": {
+    defaultMessage: "Credential request methods",
+    description: "Accessible label for the plain-language protocol method list.",
+  },
+  "protocols.guide.action": {
+    defaultMessage: "View setup",
+    description: "Secondary action that reveals one protocol's exact setup and evidence.",
+  },
+  "protocols.guide.status.checking": { defaultMessage: "Checking", description: "Protocol guide state while readiness is loading." },
+  "protocols.guide.status.unavailable": {
+    defaultMessage: "Status unavailable",
+    description: "Protocol guide state when readiness cannot be read.",
+  },
+  "protocols.guide.status.ready": { defaultMessage: "Ready", description: "Protocol guide state when the method is enabled and served." },
+  "protocols.guide.status.needsAttention": {
+    defaultMessage: "Needs attention",
+    description: "Protocol guide state when a method is enabled but its responder is not serving.",
+  },
+  "protocols.guide.status.notSetUp": {
+    defaultMessage: "Not set up",
+    description: "Neutral protocol guide state when a method is not enabled.",
+  },
+  "protocols.guide.acme.name": {
+    defaultMessage: "Automatic certificate renewal",
+    description: "Plain-first ACME method name.",
+  },
+  "protocols.guide.acme.audience": {
+    defaultMessage: "For servers, load balancers, and automation",
+    description: "Plain ACME audience description.",
+  },
+  "protocols.guide.acme.outcome": {
+    defaultMessage: "Machines request and renew certificates without a human step.",
+    description: "Plain ACME outcome description.",
+  },
+  "protocols.guide.est.name": { defaultMessage: "Secure device enrollment", description: "Plain-first EST method name." },
+  "protocols.guide.est.audience": {
+    defaultMessage: "For managed devices and network equipment",
+    description: "Plain EST audience description.",
+  },
+  "protocols.guide.est.outcome": {
+    defaultMessage: "Devices request certificates over an authenticated connection.",
+    description: "Plain EST outcome description.",
+  },
+  "protocols.guide.scep.name": { defaultMessage: "Managed device enrollment", description: "Plain-first SCEP method name." },
+  "protocols.guide.scep.audience": {
+    defaultMessage: "For phones, laptops, routers, and device managers",
+    description: "Plain SCEP audience description.",
+  },
+  "protocols.guide.scep.outcome": {
+    defaultMessage: "Your device manager requests a certificate for enrolled hardware.",
+    description: "Plain SCEP outcome description.",
+  },
+  "protocols.guide.cmp.name": { defaultMessage: "Existing PKI enrollment", description: "Plain-first CMP method name." },
+  "protocols.guide.cmp.audience": {
+    defaultMessage: "For established enterprise PKI systems",
+    description: "Plain CMP audience description.",
+  },
+  "protocols.guide.cmp.outcome": {
+    defaultMessage: "Existing certificate systems can keep their standard request flow.",
+    description: "Plain CMP outcome description.",
+  },
+  "protocols.guide.spiffe.name": { defaultMessage: "Workload identity", description: "Plain-first SPIFFE method name." },
+  "protocols.guide.spiffe.audience": {
+    defaultMessage: "For Kubernetes and service workloads",
+    description: "Plain SPIFFE audience description.",
+  },
+  "protocols.guide.spiffe.outcome": {
+    defaultMessage: "Workloads receive short-lived identities based on where they run.",
+    description: "Plain SPIFFE outcome description.",
+  },
+  "protocols.guide.ssh.name": { defaultMessage: "SSH certificates", description: "Plain-first SSH CA method name." },
+  "protocols.guide.ssh.audience": {
+    defaultMessage: "For people and machines using SSH",
+    description: "Plain SSH certificate audience description.",
+  },
+  "protocols.guide.ssh.outcome": {
+    defaultMessage: "Replace copied long-lived SSH keys with short-lived signed access.",
+    description: "Plain SSH certificate outcome description.",
+  },
+  "protocols.guide.tsa.name": { defaultMessage: "Trusted timestamps", description: "Plain-first TSA method name." },
+  "protocols.guide.tsa.audience": {
+    defaultMessage: "For signed software and long-lived evidence",
+    description: "Plain TSA audience description.",
+  },
+  "protocols.guide.tsa.outcome": {
+    defaultMessage: "Prove when an artifact was signed without exposing the signing key.",
+    description: "Plain TSA outcome description.",
+  },
+  "protocols.operations.summary": {
+    defaultMessage: "Set up and operate methods",
+    description: "Disclosure summary for protocol configuration and exact technical evidence.",
+  },
+  "protocols.operations.description": {
+    defaultMessage: "Responder status, DNS, device policies, commands, and exact evidence",
+    description: "Short description beside the protocol operations disclosure.",
   },
   "protocols.networkEvidence.summary": {
     defaultMessage: "Network-segment evidence",

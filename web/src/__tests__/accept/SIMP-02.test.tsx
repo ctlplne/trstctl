@@ -22,7 +22,7 @@ vi.mock("@/lib/api", async (orig) => {
 });
 
 function renderProtocols() {
-  return render(
+  const result = render(
     <MemoryRouter>
       <AppQueryProvider>
         <ToastProvider>
@@ -31,6 +31,8 @@ function renderProtocols() {
       </AppQueryProvider>
     </MemoryRouter>,
   );
+  fireEvent.click(screen.getByText("Set up and operate methods"));
+  return result;
 }
 
 function installClipboardSpy() {

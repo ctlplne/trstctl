@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Activity, AlertTriangle, Boxes, KeyRound, Rocket, ScrollText, ShieldCheck, ShieldAlert, Siren } from "lucide-react";
-import { api, type AuditEvent, type Certificate, type NHIInventory as NHIInventoryResponse, type RotationRun } from "@/lib/api";
+import { api, type AuditEvent, type Certificate, type ContextualRiskPriority, type NHIInventory as NHIInventoryResponse, type RotationRun } from "@/lib/api";
 import { useAuth } from "@/auth/AuthProvider";
 import { useApiQuery } from "@/lib/query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -47,6 +47,49 @@ function inventoryCount(inventory: NHIInventoryResponse | null | undefined, kind
  * numbers (preview mode is a separate, intentional showcase). */
 function readOnboardingDone(): boolean {
   return isOnboardingComplete();
+}
+
+function dashboardRiskKind(kind?: string | null): string {
+  switch (kind?.toLowerCase()) {
+    case "certificate":
+    case "x509":
+      return translateNow("risk.kind.certificate");
+    case "ssh":
+    case "ssh_certificate":
+      return translateNow("risk.kind.sshKey");
+    case "api_key":
+      return translateNow("risk.kind.apiKey");
+    case "token":
+      return translateNow("risk.kind.token");
+    case "secret":
+      return translateNow("risk.kind.secret");
+    case "spiffe":
+    case "workload_identity":
+      return translateNow("risk.kind.workloadIdentity");
+    default:
+      return translateNow("risk.kind.credential");
+  }
+}
+
+function dashboardRiskReason(priority: ContextualRiskPriority): string {
+  switch (priority.priority_reasons?.[0]) {
+    case "high_blast_radius":
+    case "resource_blast_radius":
+      return translateNow("risk.reason.wideImpact");
+    case "weak_crypto_context":
+      return translateNow("risk.reason.weakCrypto");
+    case "orphaned_owner":
+      return translateNow("risk.reason.noOwner");
+    case "near_expiry":
+      return translateNow("risk.reason.nearExpiry");
+    case "stale_rotation":
+      return translateNow("risk.reason.overdueRotation");
+    case "privileged_credential":
+    case "high_privilege":
+      return translateNow("risk.reason.highPrivilege");
+    default:
+      return translateNow("risk.reason.other");
+  }
 }
 
 /* S-N0 (DA-01/DA-12): real mode renders served data only. The readers below
@@ -204,12 +247,12 @@ export function Dashboard() {
     .slice(0, 5)
     .map((row) => ({
       subject: row.subject,
-      detail: t("dashboard.rotateFirst.contextualRisk", { score: Math.round(row.contextual_score) }),
+      detail: t("dashboard.attention.itemReason", { kind: dashboardRiskKind(row.kind), reason: dashboardRiskReason(row) }),
       score: Math.round(row.contextual_score),
     }));
   const rotateFirst = contextualRotateFirst.length
     ? contextualRotateFirst
-    : topRisk.map((r) => ({ subject: r.subject, detail: `risk score ${Math.round(r.score)}`, score: Math.round(r.score) }));
+    : topRisk.map((r) => ({ subject: r.subject, detail: t("dashboard.attention.reviewReason"), score: Math.round(r.score) }));
   const contextualPriorities = urgentRisk.data?.priorities ?? [];
   const criticalAttention = contextualPriorities.filter((row) => row.severity === "critical").length;
   const highAttention = contextualPriorities.filter((row) => row.severity === "high").length;

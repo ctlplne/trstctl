@@ -682,12 +682,15 @@ describe("app shell accessibility and theme", () => {
     const taskList = within(nav).getByRole("list", { name: "Needs action worklists" });
 
     expect(within(nav).getByText("Needs action")).toBeInTheDocument();
-    expect(within(taskList).getByRole("link", { name: /Expiring soon.*30-day certificate worklist/i })).toHaveAttribute("href", "/certificates?expiry=30d");
-    expect(within(taskList).getByRole("link", { name: /Pending approvals.*dual-control issue, rotate, and revoke inbox/i })).toHaveAttribute(
+    expect(within(taskList).getByRole("link", { name: /Expiring soon.*certificates expiring within 30 days/i })).toHaveAttribute(
+      "href",
+      "/certificates?expiry=30d",
+    );
+    expect(within(taskList).getByRole("link", { name: /Pending approvals.*changes waiting for a second person/i })).toHaveAttribute(
       "href",
       "/approvals?status=pending",
     );
-    expect(within(taskList).getByRole("link", { name: /Highest risk.*risk-prioritized rotation list/i })).toHaveAttribute("href", "/risk?sort=score");
+    expect(within(taskList).getByRole("link", { name: /Highest risk.*credentials most likely to cause harm/i })).toHaveAttribute("href", "/risk?sort=score");
 
     expect(within(nav).queryByText("Operate")).not.toBeInTheDocument();
     expect(within(nav).queryByText("Observe")).not.toBeInTheDocument();

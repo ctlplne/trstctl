@@ -988,8 +988,13 @@ describe("i18n boundary", () => {
       // are named by one quiet More disclosure, and the first-use journey says
       // plainly that integrations and an agent can be deferred. Machine-
       // authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "5c9b6c03f9718751c7da848789801dd8f5f44f9b85a53cfa2a153559cd1f3b2d",
-      "de-DE": "3b871fe5194e17f11f2b8fd5e365eb4aadcbd2dbd78a49dc79d9a085f81e2af6",
+      // Quiet-confidence protocol re-pin: the default protocol journey now
+      // explains which method fits each machine, while responder paths and
+      // exact setup evidence stay available in the operations disclosure.
+      // Dashboard risk reasons and task-list descriptions use plain language.
+      // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
+      "es-ES": "e493a1a4e90bb026aec59a741980afff76a4599ca77e2eaf418c41a2d8a030d2",
+      "de-DE": "610cc082828756ba13f392bfaae337640769436e6d15107728f3d98df603bd41",
     });
   });
 

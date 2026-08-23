@@ -170,7 +170,7 @@ const certificateDesignTargets = [
     to: "/protocols",
     answer: /safe doorway.*request and renew.*ACME.*EST.*SCEP.*CMP/i,
     proof: /public endpoints.*responder health.*tenant.*profile binding.*diagnostics/i,
-    primary: "Set up next method",
+    primary: "Set up ACME",
   },
   {
     to: "/codesign",
@@ -226,7 +226,7 @@ describe("naming parity (S-A2)", () => {
         const proof = await screen.findByTestId("page-depth-prove");
         expect(answer).toHaveTextContent(target.answer);
         expect(proof).toHaveTextContent(target.proof);
-        expect(await screen.findByRole(target.to === "/protocols" ? "link" : "button", { name: target.primary })).toBeInTheDocument();
+        expect(await screen.findByRole("button", { name: target.primary })).toBeInTheDocument();
       } finally {
         view.unmount();
       }

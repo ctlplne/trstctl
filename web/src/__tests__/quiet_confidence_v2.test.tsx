@@ -12,6 +12,8 @@ const shellSource = readFileSync(path.join(webRoot, "src/components/AppShell.tsx
 const kpiSource = readFileSync(path.join(webRoot, "src/components/ModuleKpiStrip.tsx"), "utf8");
 const adminHeaderSource = readFileSync(path.join(webRoot, "src/components/AdminHeaderActions.tsx"), "utf8");
 const certificateSource = readFileSync(path.join(webRoot, "src/pages/Certificates.tsx"), "utf8");
+const dashboardSource = readFileSync(path.join(webRoot, "src/pages/Dashboard.tsx"), "utf8");
+const protocolSource = readFileSync(path.join(webRoot, "src/pages/Protocols.tsx"), "utf8");
 const buttonSource = readFileSync(path.join(webRoot, "src/components/ui/button.tsx"), "utf8");
 const buttonStorySource = readFileSync(path.join(webRoot, "src/components/ui/button.stories.tsx"), "utf8");
 
@@ -109,5 +111,20 @@ describe("quiet confidence v2", () => {
     expect(header).not.toContain("<button");
     expect(buttonSource.toLowerCase()).not.toContain("gold remains the single action");
     expect(buttonStorySource.toLowerCase()).not.toContain("gold means act");
+  });
+
+  it("keeps numeric risk scores out of the default Home answer", () => {
+    expect(dashboardSource).toContain('t("dashboard.attention.itemReason"');
+    expect(dashboardSource).not.toContain('t("dashboard.rotateFirst.contextualRisk"');
+    expect(dashboardSource).not.toContain("`risk score ${Math.round(r.score)}`");
+  });
+
+  it("teaches protocol choices before revealing responder machinery", () => {
+    const guide = protocolSource.indexOf('id="protocol-guide-heading"');
+    const operations = protocolSource.indexOf('data-testid="protocol-operational-details"');
+    expect(guide).toBeGreaterThan(0);
+    expect(operations).toBeGreaterThan(guide);
+    expect(protocolSource).toContain("open={operationsOpen}");
+    expect(protocolSource).toContain('nameKey: "protocols.guide.acme.name"');
   });
 });

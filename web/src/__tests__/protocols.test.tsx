@@ -34,8 +34,8 @@ vi.mock("@/lib/api", async (orig) => {
   return { ...actual, api: { ...actual.api, ...apiMock } };
 });
 
-function mountProtocols(permissions: readonly string[] | null = null) {
-  return render(
+function mountProtocols(permissions: readonly string[] | null = null, openOperations = true) {
+  const result = render(
     <AppQueryProvider>
       <RbacProvider permissions={permissions}>
         <MemoryRouter>
@@ -46,6 +46,8 @@ function mountProtocols(permissions: readonly string[] | null = null) {
       </RbacProvider>
     </AppQueryProvider>,
   );
+  if (openOperations) fireEvent.click(screen.getByText("Set up and operate methods"));
+  return result;
 }
 
 async function renderProtocols() {
@@ -351,6 +353,18 @@ describe("protocol surface", () => {
       updated_at: "2026-06-26T14:04:00Z",
     }));
     apiMock.deleteACMEDNS01ProviderConfig.mockResolvedValue(undefined);
+  });
+
+  it("starts with a plain method guide and keeps exact protocol machinery one level deeper", async () => {
+    mountProtocols(null, false);
+
+    expect(await screen.findByRole("heading", { name: "Choose how each machine asks" })).toBeInTheDocument();
+    expect(screen.getByText("Automatic certificate renewal")).toBeInTheDocument();
+    expect(screen.getByText("Machines request and renew certificates without a human step.")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "View setup" })).toHaveLength(7);
+    const operations = screen.getByTestId("protocol-operational-details");
+    expect(operations).not.toHaveAttribute("open");
+    expect(within(operations).getByRole("heading", { name: "Protocol responder status" })).toBeInTheDocument();
   });
 
   it("keeps wide protocol tables inside the page at narrow viewports (AUD-125)", async () => {

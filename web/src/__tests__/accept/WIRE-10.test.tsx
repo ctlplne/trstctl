@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { ToastProvider } from "@/components/ToastProvider";
 import { AppQueryProvider } from "@/lib/query";
@@ -22,7 +22,7 @@ vi.mock("@/lib/api", async (orig) => {
 });
 
 function renderProtocols() {
-  return render(
+  const result = render(
     <MemoryRouter>
       <AppQueryProvider>
         <ToastProvider>
@@ -31,6 +31,8 @@ function renderProtocols() {
       </AppQueryProvider>
     </MemoryRouter>,
   );
+  fireEvent.click(screen.getByText("Set up and operate methods"));
+  return result;
 }
 
 describe("WIRE-10 protocol responder status wiring", () => {
