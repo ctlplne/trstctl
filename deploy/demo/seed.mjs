@@ -11,7 +11,7 @@ if (!["https:", "http:"].includes(serverURL.protocol) || serverURL.username || s
   throw new Error("TRSTCTL_SERVER must be an absolute HTTP(S) origin without credentials, path, query, or fragment");
 }
 const server = serverURL.origin;
-const demoURL = process.env.TRSTCTL_DEMO_URL || "https://localhost:9443";
+const demoURL = process.env.TRSTCTL_DEMO_URL || "https://127.0.0.1:9443";
 const bootstrapTokenFile = process.env.TRSTCTL_DEMO_BOOTSTRAP_TOKEN_FILE || "/seed-state/bootstrap.token";
 const seedVersion = "demo-seed-v1";
 const seedCheckpointSubject = "trstctl-demo-seed-checkpoint";

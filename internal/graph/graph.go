@@ -260,6 +260,12 @@ func (g *Graph) BlastRadius(id string) Impact {
 		imp.Node = n
 	}
 	imp.Affected = g.Reachable(id)
+	// A leaf has a real, successful answer: zero known affected nodes. Encode
+	// that as [] instead of JSON null so every API client can iterate the result
+	// without turning an ordinary zero-edge credential into a page crash.
+	if imp.Affected == nil {
+		imp.Affected = []Node{}
+	}
 	for _, n := range imp.Affected {
 		imp.ByKind[n.Kind] = append(imp.ByKind[n.Kind], n)
 	}

@@ -33,7 +33,7 @@ function waitLabel(seconds: number | undefined): string {
   return `${Math.floor(seconds / 3600)}h`;
 }
 
-export function AgentJobLedgerPanel({ posture: providedPosture }: { posture?: AgentJobPosture | null }) {
+export function AgentJobLedgerPanel({ posture: providedPosture, unavailable = false }: { posture?: AgentJobPosture | null; unavailable?: boolean }) {
   const { t } = useTranslation();
   const canRead = useCan("access:read");
   const [read, setRead] = useState<LedgerRead | null>(null);
@@ -72,7 +72,7 @@ export function AgentJobLedgerPanel({ posture: providedPosture }: { posture?: Ag
         <p className="mt-1 text-sm text-muted-foreground">{t("operations.jobs.description")}</p>
       </div>
 
-      {(readsOwnPosture && read?.kind === "unavailable") || (posture && !posture.served) ? (
+      {unavailable || (readsOwnPosture && read?.kind === "unavailable") || (posture && !posture.served) ? (
         <p className="text-sm text-muted-foreground">{t("operations.jobs.notServed")}</p>
       ) : posture && kinds.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t("operations.jobs.noneEnabled")}</p>

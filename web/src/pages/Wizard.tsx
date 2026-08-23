@@ -10,6 +10,16 @@ import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 
 type WizardStepID = "issuer" | "protocols" | "certificate" | "integrations" | "agent" | "complete";
 
+function optionalCatalogIsUnavailable(reason: unknown): boolean {
+  return reason instanceof ApiError && [404, 501, 503].includes(reason.status);
+}
+
+function optionalCatalog<T>(result: PromiseSettledResult<T>): T | undefined {
+  if (result.status === "fulfilled") return result.value;
+  if (optionalCatalogIsUnavailable(result.reason)) return undefined;
+  throw result.reason;
+}
+
 function onboardingSteps(t: ReturnType<typeof useTranslation>["t"]): CarouselStep[] {
   return [
     {
@@ -258,10 +268,13 @@ function ProtocolProfileStep({ onReady }: { onReady: (summary: string) => void }
         <div className="grid gap-3">
           <p className="text-sm text-muted-foreground">{t("wizard.protocols.responders", { protocols: status.protocols.join(", ") })}</p>
           {status.active ? (
-            <p className="flex items-center gap-2 text-sm font-medium text-status-success">
-              <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-              {t("wizard.protocols.active")}
-            </p>
+            <div className="grid gap-1">
+              <p className="flex items-center gap-2 text-sm font-medium text-status-success">
+                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                {t("wizard.protocols.active")}
+              </p>
+              <p className="text-xs text-muted-foreground">{t("wizard.protocols.readinessNote")}</p>
+            </div>
           ) : (
             <Button type="button" className="justify-self-start" onClick={() => void activate()} disabled={activating}>
               {activating && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
@@ -354,6 +367,7 @@ function IssuerStep({
 }
 
 function CertificateStep({ certificate, onIssued }: { certificate: Identity | null; onIssued: (identity: Identity) => void }) {
+  const { t } = useTranslation();
   const [name, setName] = useState("");
   const [wildcardAck, setWildcardAck] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -421,10 +435,15 @@ function CertificateStep({ certificate, onIssued }: { certificate: Identity | nu
         </label>
       )}
       {certificate ? (
-        <p className="flex items-center gap-2 text-sm font-medium text-status-success">
-          <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-          {certificate.name} {translateNow("source.was.issued.fe1574675b")}
-        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="flex items-center gap-2 text-sm font-medium text-status-success">
+            <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+            {certificate.name} {translateNow("source.was.issued.fe1574675b")}
+          </p>
+          <Link to="/certificates" className="text-sm font-medium text-brand-accent underline underline-offset-2 hover:text-foreground">
+            {t("wizard.certificate.openInventory")}
+          </Link>
+        </div>
       ) : (
         <Button type="submit" className="justify-self-start" disabled={busy || (isWildcard && !wildcardAck)}>
           {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
@@ -456,26 +475,37 @@ function IntegrationProofStep({ identity, onReady }: { identity: Identity; onRea
   const [externalCAStatus, setExternalCAStatus] = useState<string | null>(null);
   const [leaseStatus, setLeaseStatus] = useState<string | null>(null);
   const [loadingCatalogs, setLoadingCatalogs] = useState(true);
+  const [catalogFailed, setCatalogFailed] = useState(false);
+  const [catalogAttempt, setCatalogAttempt] = useState(0);
   const [busy, setBusy] = useState<"connector" | "external-ca" | "lease" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
-    void Promise.all([api.connectorCatalog(), api.externalCAs()])
-      .then(([catalog, cas]) => {
+    setLoadingCatalogs(true);
+    setCatalogFailed(false);
+    setConnectorKinds([]);
+    setExternalCAs([]);
+    void Promise.allSettled([api.connectorCatalog(), api.externalCAs()])
+      .then(([catalogResult, caResult]) => {
         if (!active) return;
-        const kinds = catalog.items.map(({ kind, name }) => ({ kind, name }));
-        setConnectorKinds(kinds);
-        if (kinds.length > 0 && !kinds.some((item) => item.kind === connectorKind)) {
-          setConnectorKind(kinds[0].kind);
-          setTargetName(`first-${kinds[0].kind}`);
+        try {
+          const kinds = (optionalCatalog(catalogResult)?.items ?? []).map(({ kind, name }) => ({ kind, name }));
+          const availableCAs = (optionalCatalog(caResult) ?? []).map(({ id, name }) => ({ id, name }));
+          setConnectorKinds(kinds);
+          if (kinds.length > 0) {
+            setConnectorKind((current) => {
+              const next = kinds.some((item) => item.kind === current) ? current : kinds[0].kind;
+              setTargetName(`first-${next}`);
+              return next;
+            });
+          }
+          setExternalCAs(availableCAs);
+          setExternalCAID(availableCAs[0]?.id ?? "");
+        } catch {
+          setExternalCAID("");
+          setCatalogFailed(true);
         }
-        const availableCAs = cas.map(({ id, name }) => ({ id, name }));
-        setExternalCAs(availableCAs);
-        setExternalCAID(availableCAs[0]?.id ?? "");
-      })
-      .catch((err) => {
-        if (active) setError(`Could not load integration catalogs: ${String(err instanceof Error ? err.message : err)}`);
       })
       .finally(() => {
         if (active) setLoadingCatalogs(false);
@@ -484,8 +514,7 @@ function IntegrationProofStep({ identity, onReady }: { identity: Identity; onRea
       active = false;
     };
     // Catalog discovery is one served read when this optional carousel step mounts.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [catalogAttempt]);
 
   useEffect(() => {
     if (connectorStatus && externalCAStatus && leaseStatus) {
@@ -547,6 +576,8 @@ function IntegrationProofStep({ identity, onReady }: { identity: Identity; onRea
     }
   }
 
+  const noConfiguredCatalogs = !loadingCatalogs && !catalogFailed && connectorKinds.length === 0 && externalCAs.length === 0;
+
   return (
     <section aria-labelledby="step-integrations-heading" className="grid gap-5">
       <div className="flex items-start gap-3">
@@ -565,148 +596,170 @@ function IntegrationProofStep({ identity, onReady }: { identity: Identity; onRea
         </p>
       )}
 
-      <form onSubmit={deployConnector} className="grid gap-3 rounded-control border border-border p-4" aria-labelledby="connector-proof-heading">
-        <h4 id="connector-proof-heading" className="font-semibold">
-          {t("wizard.integrations.connector.heading")}
-        </h4>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label htmlFor="wizard-connector-kind" className="grid gap-1 text-sm font-medium">
-            {translateNow("source.connector.8f0d706fff")}
+      {noConfiguredCatalogs ? (
+        <div role="status" className="rounded-control border border-border bg-muted/30 p-4 text-sm">
+          <p>{t("wizard.integrations.noneConfigured")}</p>
+        </div>
+      ) : null}
+
+      {catalogFailed ? (
+        <div role="alert" className="rounded-control border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <p className="font-medium">{t("wizard.integrations.catalogError")}</p>
+          <Button type="button" variant="outline" className="mt-3" onClick={() => setCatalogAttempt((current) => current + 1)}>
+            {t("admin.system.tryAgain")}
+          </Button>
+        </div>
+      ) : null}
+
+      {connectorKinds.length > 0 ? (
+        <form onSubmit={deployConnector} className="grid gap-3 rounded-control border border-border p-4" aria-labelledby="connector-proof-heading">
+          <h4 id="connector-proof-heading" className="font-semibold">
+            {t("wizard.integrations.connector.heading")}
+          </h4>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label htmlFor="wizard-connector-kind" className="grid gap-1 text-sm font-medium">
+              {translateNow("source.connector.8f0d706fff")}
+              <select
+                id="wizard-connector-kind"
+                value={connectorKind}
+                onChange={(event) => {
+                  setConnectorKind(event.target.value);
+                  setTargetName(`first-${event.target.value}`);
+                }}
+                className="rounded-control border border-border bg-background px-3 py-2"
+              >
+                {connectorKinds.length === 0 && <option value={connectorKind}>{connectorKind}</option>}
+                {connectorKinds.map((item) => (
+                  <option key={item.kind} value={item.kind}>
+                    {item.name} ({item.kind})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label htmlFor="wizard-connector-target" className="grid gap-1 text-sm font-medium">
+              {t("wizard.integrations.connector.targetName")}
+              <input
+                id="wizard-connector-target"
+                value={targetName}
+                onChange={(event) => setTargetName(event.target.value)}
+                className="rounded-control border border-border bg-background px-3 py-2"
+              />
+            </label>
+          </div>
+          <label htmlFor="wizard-connector-config" className="grid gap-1 text-sm font-medium">
+            {t("wizard.integrations.connector.config")}
+            <textarea
+              id="wizard-connector-config"
+              value={targetConfig}
+              onChange={(event) => setTargetConfig(event.target.value)}
+              rows={3}
+              spellCheck={false}
+              className="rounded-control border border-border bg-background px-3 py-2 font-mono text-caption"
+            />
+          </label>
+          {connectorStatus ? (
+            <ProofStatus text={connectorStatus} />
+          ) : (
+            <Button type="submit" className="justify-self-start" disabled={busy !== null || !targetName.trim()}>
+              {busy === "connector" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}{" "}
+              {translateNow("source.deploy.through.connector.47966b95ca")}
+            </Button>
+          )}
+        </form>
+      ) : null}
+
+      {externalCAs.length > 0 ? (
+        <form onSubmit={issueExternalCA} className="grid gap-3 rounded-control border border-border p-4" aria-labelledby="external-ca-proof-heading">
+          <h4 id="external-ca-proof-heading" className="font-semibold">
+            {t("wizard.integrations.externalCA.heading")}
+          </h4>
+          <label htmlFor="wizard-external-ca" className="grid gap-1 text-sm font-medium">
+            {t("wizard.integrations.externalCA.label")}
             <select
-              id="wizard-connector-kind"
-              value={connectorKind}
-              onChange={(event) => {
-                setConnectorKind(event.target.value);
-                setTargetName(`first-${event.target.value}`);
-              }}
+              id="wizard-external-ca"
+              value={externalCAID}
+              onChange={(event) => setExternalCAID(event.target.value)}
               className="rounded-control border border-border bg-background px-3 py-2"
             >
-              {connectorKinds.length === 0 && <option value={connectorKind}>{connectorKind}</option>}
-              {connectorKinds.map((item) => (
-                <option key={item.kind} value={item.kind}>
-                  {item.name} ({item.kind})
+              {externalCAs.length === 0 && <option value="">{t("wizard.integrations.externalCA.none")}</option>}
+              {externalCAs.map((ca) => (
+                <option key={ca.id} value={ca.id}>
+                  {ca.name}
                 </option>
               ))}
             </select>
           </label>
-          <label htmlFor="wizard-connector-target" className="grid gap-1 text-sm font-medium">
-            {t("wizard.integrations.connector.targetName")}
+          <label htmlFor="wizard-external-ca-csr" className="grid gap-1 text-sm font-medium">
+            {t("wizard.integrations.externalCA.csr")}
+            <textarea
+              id="wizard-external-ca-csr"
+              value={csrPEM}
+              onChange={(event) => setCSRPEM(event.target.value)}
+              rows={4}
+              spellCheck={false}
+              placeholder={translateNow("source.begin.certificate.request.929bb0afef")}
+              className="rounded-control border border-border bg-background px-3 py-2 font-mono text-caption"
+            />
+          </label>
+          <label htmlFor="wizard-external-ca-dns" className="grid gap-1 text-sm font-medium">
+            {t("wizard.integrations.externalCA.dns")}
             <input
-              id="wizard-connector-target"
-              value={targetName}
-              onChange={(event) => setTargetName(event.target.value)}
+              id="wizard-external-ca-dns"
+              value={dnsNames}
+              onChange={(event) => setDNSNames(event.target.value)}
+              placeholder={t("wizard.integrations.externalCA.dnsPlaceholder")}
               className="rounded-control border border-border bg-background px-3 py-2"
             />
           </label>
-        </div>
-        <label htmlFor="wizard-connector-config" className="grid gap-1 text-sm font-medium">
-          {t("wizard.integrations.connector.config")}
-          <textarea
-            id="wizard-connector-config"
-            value={targetConfig}
-            onChange={(event) => setTargetConfig(event.target.value)}
-            rows={3}
-            spellCheck={false}
-            className="rounded-control border border-border bg-background px-3 py-2 font-mono text-caption"
-          />
-        </label>
-        {connectorStatus ? (
-          <ProofStatus text={connectorStatus} />
-        ) : (
-          <Button type="submit" className="justify-self-start" disabled={busy !== null || !targetName.trim()}>
-            {busy === "connector" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}{" "}
-            {translateNow("source.deploy.through.connector.47966b95ca")}
-          </Button>
-        )}
-      </form>
+          {externalCAStatus ? (
+            <ProofStatus text={externalCAStatus} />
+          ) : (
+            <Button type="submit" className="justify-self-start" disabled={busy !== null || !externalCAID || !csrPEM.trim()}>
+              {busy === "external-ca" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}{" "}
+              {translateNow("source.issue.through.external.ca.671d1a629f")}
+            </Button>
+          )}
+        </form>
+      ) : null}
 
-      <form onSubmit={issueExternalCA} className="grid gap-3 rounded-control border border-border p-4" aria-labelledby="external-ca-proof-heading">
-        <h4 id="external-ca-proof-heading" className="font-semibold">
-          {t("wizard.integrations.externalCA.heading")}
-        </h4>
-        <label htmlFor="wizard-external-ca" className="grid gap-1 text-sm font-medium">
-          {t("wizard.integrations.externalCA.label")}
-          <select
-            id="wizard-external-ca"
-            value={externalCAID}
-            onChange={(event) => setExternalCAID(event.target.value)}
-            className="rounded-control border border-border bg-background px-3 py-2"
-          >
-            {externalCAs.length === 0 && <option value="">{t("wizard.integrations.externalCA.none")}</option>}
-            {externalCAs.map((ca) => (
-              <option key={ca.id} value={ca.id}>
-                {ca.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label htmlFor="wizard-external-ca-csr" className="grid gap-1 text-sm font-medium">
-          {t("wizard.integrations.externalCA.csr")}
-          <textarea
-            id="wizard-external-ca-csr"
-            value={csrPEM}
-            onChange={(event) => setCSRPEM(event.target.value)}
-            rows={4}
-            spellCheck={false}
-            placeholder={translateNow("source.begin.certificate.request.929bb0afef")}
-            className="rounded-control border border-border bg-background px-3 py-2 font-mono text-caption"
-          />
-        </label>
-        <label htmlFor="wizard-external-ca-dns" className="grid gap-1 text-sm font-medium">
-          {t("wizard.integrations.externalCA.dns")}
-          <input
-            id="wizard-external-ca-dns"
-            value={dnsNames}
-            onChange={(event) => setDNSNames(event.target.value)}
-            placeholder={t("wizard.integrations.externalCA.dnsPlaceholder")}
-            className="rounded-control border border-border bg-background px-3 py-2"
-          />
-        </label>
-        {externalCAStatus ? (
-          <ProofStatus text={externalCAStatus} />
-        ) : (
-          <Button type="submit" className="justify-self-start" disabled={busy !== null || !externalCAID || !csrPEM.trim()}>
-            {busy === "external-ca" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}{" "}
-            {translateNow("source.issue.through.external.ca.671d1a629f")}
-          </Button>
-        )}
-      </form>
-
-      <form onSubmit={issueLease} className="grid gap-3 rounded-control border border-border p-4" aria-labelledby="lease-proof-heading">
-        <div className="flex items-start gap-2">
-          <KeyRound className="mt-0.5 h-4 w-4 text-brand-accent" aria-hidden="true" />
-          <h4 id="lease-proof-heading" className="font-semibold">
-            {t("wizard.integrations.lease.heading")}
-          </h4>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label htmlFor="wizard-lease-provider" className="grid gap-1 text-sm font-medium">
-            {t("wizard.integrations.lease.provider")}
-            <input
-              id="wizard-lease-provider"
-              value={leaseProvider}
-              onChange={(event) => setLeaseProvider(event.target.value)}
-              className="rounded-control border border-border bg-background px-3 py-2"
-            />
-          </label>
-          <label htmlFor="wizard-lease-role" className="grid gap-1 text-sm font-medium">
-            {t("wizard.integrations.lease.role")}
-            <input
-              id="wizard-lease-role"
-              value={leaseRole}
-              onChange={(event) => setLeaseRole(event.target.value)}
-              className="rounded-control border border-border bg-background px-3 py-2"
-            />
-          </label>
-        </div>
-        {leaseStatus ? (
-          <ProofStatus text={leaseStatus} />
-        ) : (
-          <Button type="submit" className="justify-self-start" disabled={busy !== null || !leaseProvider.trim() || !leaseRole.trim()}>
-            {busy === "lease" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />} {translateNow("source.issue.dynamic.lease.7f0d0fe084")}
-          </Button>
-        )}
-      </form>
+      <details className="rounded-control border border-border bg-card">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-medium">{t("wizard.integrations.leaseDisclosure")}</summary>
+        <form onSubmit={issueLease} className="grid gap-3 border-t border-border p-4" aria-labelledby="lease-proof-heading">
+          <div className="flex items-start gap-2">
+            <KeyRound className="mt-0.5 h-4 w-4 text-brand-accent" aria-hidden="true" />
+            <h4 id="lease-proof-heading" className="font-semibold">
+              {t("wizard.integrations.lease.heading")}
+            </h4>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label htmlFor="wizard-lease-provider" className="grid gap-1 text-sm font-medium">
+              {t("wizard.integrations.lease.provider")}
+              <input
+                id="wizard-lease-provider"
+                value={leaseProvider}
+                onChange={(event) => setLeaseProvider(event.target.value)}
+                className="rounded-control border border-border bg-background px-3 py-2"
+              />
+            </label>
+            <label htmlFor="wizard-lease-role" className="grid gap-1 text-sm font-medium">
+              {t("wizard.integrations.lease.role")}
+              <input
+                id="wizard-lease-role"
+                value={leaseRole}
+                onChange={(event) => setLeaseRole(event.target.value)}
+                className="rounded-control border border-border bg-background px-3 py-2"
+              />
+            </label>
+          </div>
+          {leaseStatus ? (
+            <ProofStatus text={leaseStatus} />
+          ) : (
+            <Button type="submit" className="justify-self-start" disabled={busy !== null || !leaseProvider.trim() || !leaseRole.trim()}>
+              {busy === "lease" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />} {translateNow("source.issue.dynamic.lease.7f0d0fe084")}
+            </Button>
+          )}
+        </form>
+      </details>
 
       {error && (
         <p role="alert" className="text-sm text-destructive">

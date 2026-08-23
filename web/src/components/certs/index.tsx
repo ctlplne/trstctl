@@ -151,10 +151,10 @@ export function ReadinessPanel({
         ]}
       />
       <div className="mt-2 flex justify-between text-caption text-muted-foreground">
-        <span>{translateNow("source.398d.today.066f1024a9")}</span>
-        <span>{translateNow("source.200d.2026.a78e5092ff")}</span>
-        <span>{translateNow("source.100d.2027.a5960d51fb")}</span>
-        <span>{translateNow("source.47d.2029.2add4e085d")}</span>
+        <span>{translateNow("certificates.readiness.current")}</span>
+        <span>{translateNow("certificates.readiness.200DayModel")}</span>
+        <span>{translateNow("certificates.readiness.100DayModel")}</span>
+        <span>{translateNow("certificates.readiness.47DayTarget")}</span>
       </div>
     </SectionCard>
   );

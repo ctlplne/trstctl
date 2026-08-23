@@ -10,6 +10,16 @@ export type Locale = (typeof supportedLocales)[number];
 export type MessageValues = Record<string, number | string>;
 
 export const messages = {
+  "app.error.heading": {
+    defaultMessage: "This page stopped unexpectedly",
+    description: "Heading shown when an unhandled UI render error reaches the application boundary.",
+  },
+  "app.error.description": {
+    defaultMessage:
+      "The screen failed, but this did not delete certificates, events, or server data. Reload once. If it happens again, note this page address and the time, then create a redacted support bundle.",
+    description: "Plain data-safety statement and recovery guidance that omits exception text and customer identifiers.",
+  },
+  "app.error.reload": { defaultMessage: "Reload page", description: "Primary application crash recovery action." },
   "auth.browserLoginDisabled.body": {
     defaultMessage: "This control plane is running, but browser SSO is off. Configure browser SSO and reload, or use a scoped API token with trstctl-cli.",
     description: "Login guidance when no browser OIDC route is mounted.",
@@ -2331,6 +2341,11 @@ export const messages = {
     defaultMessage: "Eval protocol profile is active for this tenant.",
     description: "Confirmation after the eval profile activation event is recorded.",
   },
+  "wizard.protocols.readinessNote": {
+    defaultMessage:
+      "Enabled means the tenant may use these responders. The Protocols page checks each responder's remaining prerequisites, including the SPIFFE socket.",
+    description: "Distinguishes durable protocol activation from each responder's runtime readiness.",
+  },
   "wizard.protocols.activate": {
     defaultMessage: "Activate eval protocol profile",
     description: "Button that durably activates the eval enrollment profile.",
@@ -2357,8 +2372,12 @@ export const messages = {
     description: "Diagnostic when an activation response does not report active state.",
   },
   "wizard.protocols.summaryActive": {
-    defaultMessage: "Eval profile active",
+    defaultMessage: "Eval profile enabled; readiness checked per protocol",
     description: "Protocol-profile value in the first-run completion summary.",
+  },
+  "wizard.certificate.openInventory": {
+    defaultMessage: "Open certificate inventory",
+    description: "Link shown immediately after the first-run wizard issues a certificate.",
   },
   "wizard.protocols.summaryOperator": {
     defaultMessage: "Operator-configured profile",
@@ -2442,6 +2461,18 @@ export const messages = {
   "wizard.integrations.loading": {
     defaultMessage: "Loading integration catalogs...",
     description: "Status while the wizard reads connector and upstream-CA catalogs.",
+  },
+  "wizard.integrations.noneConfigured": {
+    defaultMessage: "No optional integrations are configured. Your certificate works; skip this step and connect one later.",
+    description: "Neutral empty state for optional integration catalogs.",
+  },
+  "wizard.integrations.catalogError": {
+    defaultMessage: "trstctl could not verify the optional integration catalogs",
+    description: "Error heading for an unexpected integration-catalog read failure.",
+  },
+  "wizard.integrations.leaseDisclosure": {
+    defaultMessage: "Test a dynamic secret provider (advanced, optional)",
+    description: "Collapsed disclosure for the dynamic-secret proof so an unconfigured form is not shown by default.",
   },
   "wizard.integrations.connector.heading": {
     defaultMessage: "Deploy the issued identity through a connector",
@@ -2805,6 +2836,10 @@ export const messages = {
   "operations.attention.agentUnavailable": {
     defaultMessage: "Agent queue status is unavailable; recent control-plane jobs are still shown.",
     description: "Partial-evidence warning when agent queue health cannot be read.",
+  },
+  "operations.attention.historyUnavailable": {
+    defaultMessage: "Recent job history is unavailable, so trstctl cannot confirm that nothing failed.",
+    description: "Fail-closed attention summary when a core operations history read cannot be loaded.",
   },
   "operations.disclosure.pools": {
     defaultMessage: "Worker pools and queue limits",
@@ -7741,7 +7776,7 @@ export const messages = {
     description: "Opening Ownership status for multiple known attribution gaps.",
   },
   "owners.design.statusBody": {
-    defaultMessage: "{assigned} of {known} known identities and credentials have an owner record. Current owner records: {current} of {owners}.",
+    defaultMessage: "{assigned} of {known} known identities and credentials are assigned. {current} of {owners} owner records have current review evidence.",
     description: "Truthful attribution and attestation counts below the opening Ownership status.",
   },
   "owners.design.disclosure.directory": {
@@ -8950,19 +8985,24 @@ export const messages = {
     description: "Remaining signed non-production slots in the license bundle.",
   },
   "platform.scale.heading": {
-    defaultMessage: "Scale orchestration",
+    defaultMessage: "Capacity planning reference",
     description: "Heading for the high-volume orchestration posture panel.",
   },
   "platform.scale.served": {
-    defaultMessage: "CAP-SCALE-01 active",
+    defaultMessage: "Reference model available",
     description: "Badge showing that the scale orchestration capability is active.",
+  },
+  "platform.scale.description": {
+    defaultMessage:
+      "Planning model, not this install's current usage or bill. Use it to compare tested deployment ceilings before measuring your own workload.",
+    description: "Clarifies that the high-volume capacity model is a planning reference rather than observed usage.",
   },
   "platform.scale.unavailable": {
     defaultMessage: "scale unavailable",
     description: "Badge shown when scale orchestration posture is unavailable.",
   },
   "platform.scale.selectedTier": {
-    defaultMessage: "Selected tier",
+    defaultMessage: "Reference ceiling",
     description: "Metric label for the selected capacity tier.",
   },
   "platform.scale.credentialsCount": {
@@ -13577,14 +13617,6 @@ export const messages = {
     defaultMessage: "Zone (optional)",
     description: "CLI-parity console flow copy.",
   },
-  "source.100d.2027.a5960d51fb": {
-    defaultMessage: "100d · 2027",
-    description: "DA-14 sweep: migrated hardcoded copy from src/components/certs/index.tsx.",
-  },
-  "source.200d.2026.a78e5092ff": {
-    defaultMessage: "200d · 2026",
-    description: "DA-14 sweep: migrated hardcoded copy from src/components/certs/index.tsx.",
-  },
   "source.2026.01.01t00.00.00z.06fea089d5": {
     defaultMessage: "2026-01-01T00:00:00Z",
     description: "DA-14 sweep: migrated hardcoded copy from src/components/secrets/index.tsx.",
@@ -13597,20 +13629,12 @@ export const messages = {
     defaultMessage: "31-90d",
     description: "DA-14 sweep: migrated hardcoded copy from src/components/certs/index.tsx.",
   },
-  "source.398d.today.066f1024a9": {
-    defaultMessage: "398d today",
-    description: "DA-14 sweep: migrated hardcoded copy from src/components/certs/index.tsx.",
-  },
   "source.47.day.readiness.simulator.6c79ae6d09": {
     defaultMessage: "47-day readiness simulator",
     description: "DA-14 sweep: migrated hardcoded copy from src/components/certs/index.tsx.",
   },
   "source.47.day.renewal.readiness.971543ca36": {
     defaultMessage: "47-day renewal readiness",
-    description: "DA-14 sweep: migrated hardcoded copy from src/components/certs/index.tsx.",
-  },
-  "source.47d.2029.2add4e085d": {
-    defaultMessage: "47d · 2029",
     description: "DA-14 sweep: migrated hardcoded copy from src/components/certs/index.tsx.",
   },
   "source.7.30d.watch.7ecf4fbde2": {
@@ -19200,10 +19224,26 @@ export const messages = {
     defaultMessage: "This submits one bulk revocation request for all",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Certificates.tsx.",
   },
-  "source.this.tenant.has.no.credentials.yet.the.fou.7b31a81e81": {
+  "dashboard.empty.description": {
     defaultMessage:
-      "This tenant has no credentials yet. The four-step setup connects an issuer, issues your first certificate, and enrolls an agent — about five minutes. Prefer to look around first? Explore the console.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Dashboard.tsx.",
+      "This tenant has no credentials yet. The six-screen guide checks signing, enables the evaluation protocols, issues your first certificate, and offers optional integration and agent steps — about ten minutes. Prefer to look around first? Explore the console.",
+    description: "Honest first-run duration and scope shown on an empty tenant dashboard.",
+  },
+  "certificates.readiness.current": {
+    defaultMessage: "Current state",
+    description: "Left endpoint of the certificate lifetime-readiness planning scale.",
+  },
+  "certificates.readiness.200DayModel": {
+    defaultMessage: "200-day model",
+    description: "First modeled certificate lifetime milestone without a fabricated calendar year.",
+  },
+  "certificates.readiness.100DayModel": {
+    defaultMessage: "100-day model",
+    description: "Second modeled certificate lifetime milestone without a fabricated calendar year.",
+  },
+  "certificates.readiness.47DayTarget": {
+    defaultMessage: "47-day target",
+    description: "Target endpoint of the certificate lifetime-readiness planning scale.",
   },
   "source.this.value.is.the.exact.once.redeem.result.ed19b63953": {
     defaultMessage: "This value is the exact-once redeem result. A second redeem should fail.",

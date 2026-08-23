@@ -8,6 +8,10 @@ import type { MessageKey } from "@/i18n/messages";
  * error, so every new message key still ships with its translation in the
  * same commit. */
 const esESCatalog = {
+  "app.error.heading": "Esta página se detuvo de forma inesperada",
+  "app.error.description":
+    "La pantalla falló, pero esto no eliminó certificados, eventos ni datos del servidor. Recargue una vez. Si vuelve a ocurrir, anote la dirección de esta página y la hora, y cree un paquete de soporte redactado.",
+  "app.error.reload": "Recargar página",
   "auth.browserLoginDisabled.body":
     "Este plano de control está en ejecución, pero el SSO del navegador está desactivado. Configure el SSO del navegador y vuelva a cargar, o use un token de API con ámbito con trstctl-cli.",
   "auth.browserLoginDisabled.title": "El inicio de sesión en el navegador no está configurado",
@@ -725,6 +729,8 @@ const esESCatalog = {
   "wizard.protocols.loading": "Leyendo el estado de los protocolos...",
   "wizard.protocols.responders": "Respondedores publicados: {protocols}.",
   "wizard.protocols.active": "El perfil de protocolos de evaluación está activo para este inquilino.",
+  "wizard.protocols.readinessNote":
+    "Habilitado significa que el inquilino puede usar estos respondedores. La página Protocolos comprueba los requisitos restantes de cada respondedor, incluido el socket SPIFFE.",
   "wizard.protocols.activate": "Activar el perfil de protocolos de evaluación",
   "wizard.protocols.unavailable":
     "Este despliegue no seleccionó el perfil de evaluación. La exposición de protocolos sigue bajo la configuración explícita del operador, así que la preparación puede continuar sin cambiarla.",
@@ -732,7 +738,8 @@ const esESCatalog = {
   "wizard.protocols.statusError": "No se pudo leer el estado de preparación de protocolos: {error}",
   "wizard.protocols.activationError": "No se pudo activar el perfil de protocolos de evaluación: {error}",
   "wizard.protocols.inactiveError": "el servidor devolvió un perfil inactivo",
-  "wizard.protocols.summaryActive": "Perfil de evaluación activo",
+  "wizard.protocols.summaryActive": "Perfil de evaluación habilitado; preparación comprobada por protocolo",
+  "wizard.certificate.openInventory": "Abrir el inventario de certificados",
   "wizard.protocols.summaryOperator": "Perfil configurado por el operador",
   "wizard.protocols.next": "Siguiente: habilitar protocolos",
   "wizard.issuer.stepLabel": "Comprobar la firma",
@@ -757,6 +764,9 @@ const esESCatalog = {
   "wizard.integrations.description":
     "Estas comprobaciones usan las mismas rutas del producto que la automatización diaria. Requieren sistemas configurados por un operador; puede omitir esta prueba opcional en una instalación solo con el núcleo.",
   "wizard.integrations.loading": "Cargando catálogos de integraciones...",
+  "wizard.integrations.noneConfigured": "No hay integraciones opcionales configuradas. Su certificado funciona; omita este paso y conecte una después.",
+  "wizard.integrations.catalogError": "trstctl no pudo verificar los catálogos de integraciones opcionales",
+  "wizard.integrations.leaseDisclosure": "Probar un proveedor de secretos dinámicos (avanzado, opcional)",
   "wizard.integrations.connector.heading": "Desplegar la identidad emitida mediante un conector",
   "wizard.integrations.connector.targetName": "Nombre del destino",
   "wizard.integrations.connector.config": "Configuración del destino del conector",
@@ -2059,7 +2069,7 @@ const esESCatalog = {
   "owners.design.statusNeedsOne": "1 identidad o credencial conocida necesita responsable",
   "owners.design.statusNeedsMany": "{count} identidades o credenciales conocidas necesitan responsable",
   "owners.design.statusBody":
-    "{assigned} de {known} identidades y credenciales conocidas tienen un registro responsable. Registros responsables vigentes: {current} de {owners}.",
+    "{assigned} de {known} identidades y credenciales conocidas están asignadas. {current} de {owners} registros responsables tienen evidencia de revisión vigente.",
   "owners.design.disclosure.directory": "Registros responsables, herencia y certificaciones",
   "owners.design.disclosure.gaps": "Brechas de cobertura y excepciones temporales",
   "owners.design.disclosure.evidence": "Fuentes, desacuerdos e historial de revisión",
@@ -2522,10 +2532,12 @@ const esESCatalog = {
   "platform.editions.nonProduction": "No producción",
   "platform.editions.productionUnits": "{count} unidades de producción",
   "platform.editions.nonProductionSlots": "Quedan {remaining} de {total} ranuras de no producción",
-  "platform.scale.heading": "Orquestación de escala",
-  "platform.scale.served": "CAP-SCALE-01 activo",
+  "platform.scale.heading": "Referencia para planificar capacidad",
+  "platform.scale.served": "Modelo de referencia disponible",
+  "platform.scale.description":
+    "Es un modelo de planificación, no el uso ni la factura actual de esta instalación. Úselo para comparar límites de despliegue probados antes de medir su propia carga.",
   "platform.scale.unavailable": "escala no disponible",
-  "platform.scale.selectedTier": "Tier seleccionado",
+  "platform.scale.selectedTier": "Límite de referencia",
   "platform.scale.credentialsCount": "{count} credenciales",
   "platform.scale.eventsPerDay": "Eventos/día",
   "platform.scale.monthlyCost": "Modelo de costo mensual",
@@ -3661,15 +3673,11 @@ const esESCatalog = {
   "parity.yesDeletePolicy_30ce34": "Sí, eliminar política",
   "parity.yesDeleteTarget_729269": "Sí, eliminar destino",
   "parity.zoneOptional_0f915d": "Zona (opcional)",
-  "source.100d.2027.a5960d51fb": "100 d · 2027",
-  "source.200d.2026.a78e5092ff": "200 d · 2026",
   "source.2026.01.01t00.00.00z.06fea089d5": "2026-01-01T00:00:00Z",
   "source.30.90d.planned.be92bb89d8": "30-90 d planificado",
   "source.31.90d.149111f115": "31-90 d",
-  "source.398d.today.066f1024a9": "398 d hoy",
   "source.47.day.readiness.simulator.6c79ae6d09": "Simulador de preparación de 47 días",
   "source.47.day.renewal.readiness.971543ca36": "Preparación de renovación de 47 días",
-  "source.47d.2029.2add4e085d": "47 d · 2029",
   "source.7.30d.watch.7ecf4fbde2": "7-30 d en observación",
   "source.7d.critical.b43c284b63": "<7 d crítico",
   "source.8.30d.3a1c0beb22": "8-30 d",
@@ -5061,8 +5069,12 @@ const esESCatalog = {
     "Este texto sin cifrar se decodificó localmente a partir de la respuesta de Transit. Al cerrarlo, se elimina de la página.",
   "source.this.submits.a.single.bulk.revocation.requ.ab3df219e2": "Esto envía una única solicitud de revocación masiva para los",
   "source.this.submits.one.bulk.revocation.request.f.f1809ceaf2": "Esto envía una solicitud de revocación masiva para todos los",
-  "source.this.tenant.has.no.credentials.yet.the.fou.7b31a81e81":
-    "Este inquilino todavía no tiene credenciales. La configuración en cuatro pasos conecta un emisor, emite el primer certificado e inscribe un agente: tarda unos cinco minutos. ¿Prefiere explorar primero? Recorra la consola.",
+  "dashboard.empty.description":
+    "Este inquilino aún no tiene credenciales. La guía de seis pantallas comprueba la firma, habilita los protocolos de evaluación, emite el primer certificado y ofrece pasos opcionales de integración y agente: unos diez minutos. ¿Prefiere explorar primero? Recorra la consola.",
+  "certificates.readiness.current": "Estado actual",
+  "certificates.readiness.200DayModel": "Modelo de 200 días",
+  "certificates.readiness.100DayModel": "Modelo de 100 días",
+  "certificates.readiness.47DayTarget": "Objetivo de 47 días",
   "source.this.value.is.the.exact.once.redeem.result.ed19b63953":
     "Este valor es el resultado de un canje permitido exactamente una vez. Un segundo canje debe fallar.",
   "source.this.view.shows.issuer.name.kind.public.ke.5166a2828e":
@@ -5852,6 +5864,8 @@ const esESCatalog = {
   "operations.attention.waitingOne": "Hay 1 trabajo en espera; el más antiguo lleva {age}.",
   "operations.attention.waitingMany": "Hay {count} trabajos en espera; el más antiguo lleva {age}.",
   "operations.attention.agentUnavailable": "El estado de la cola de agentes no está disponible; aún se muestran los trabajos recientes del plano de control.",
+  "operations.attention.historyUnavailable":
+    "El historial reciente de trabajos no está disponible, por lo que trstctl no puede confirmar que nada haya fallado.",
   "operations.disclosure.pools": "Grupos de trabajadores y límites de cola",
   "operations.disclosure.all": "Todos los trabajos y filtros",
   "operations.disclosure.rotations": "Registros de ejecuciones de rotación",

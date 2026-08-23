@@ -120,6 +120,34 @@ func TestContextualPriorityRaisesBlastRadiusWeakCryptoAndOwnershipReasons(t *tes
 	}
 }
 
+func TestFreshCertificateIsNotImmediatelyRotationOverdue(t *testing.T) {
+	now := time.Date(2026, 8, 23, 12, 0, 0, 0, time.UTC)
+	notBefore := now.Add(-2 * time.Minute)
+	notAfter := now.Add(30 * 24 * time.Hour)
+	g := graph.New()
+	g.AddNode(graph.Node{ID: "cert:fresh-1", Kind: graph.KindCredential, Name: "fresh-1"})
+
+	base := scoreCertificate(g, store.Certificate{
+		ID: "fresh-1", Subject: "fresh.example.test", NotBefore: &notBefore, NotAfter: &notAfter, CreatedAt: notBefore,
+		Source: "issued",
+	}, now)
+	if base.Components.Rotation >= 0.75 {
+		t.Fatalf("fresh certificate rotation component = %.3f, want below overdue threshold", base.Components.Rotation)
+	}
+	priority := contextualPriority(base, g.BlastRadius("cert:fresh-1"), now)
+	if slices.Contains(priority.PriorityReasons, "stale_rotation") {
+		t.Fatalf("fresh certificate reasons = %#v, must not include stale_rotation", priority.PriorityReasons)
+	}
+
+	imported := scoreCertificate(g, store.Certificate{
+		ID: "fresh-import", Subject: "import.example.test", NotBefore: &notBefore, NotAfter: &notAfter, CreatedAt: notBefore,
+		Source: "import",
+	}, now)
+	if imported.Components.Rotation != 1 {
+		t.Fatalf("import without renewal evidence rotation component = %.3f, want unknown-risk maximum", imported.Components.Rotation)
+	}
+}
+
 func TestContextualScorersNormalizeNHIKindsAndMetadata(t *testing.T) {
 	now := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
 	g := graph.New()

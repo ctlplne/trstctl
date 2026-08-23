@@ -376,6 +376,8 @@ describe("auth + dashboards", () => {
     // gate settles — awaiting the CTA is the settle point.
     expect(await within(dash).findByText(/Welcome to trstctl/)).toBeInTheDocument();
     expect(within(dash).getByRole("link", { name: /Set up trstctl/ })).toBeInTheDocument();
+    expect(within(dash).getByText(/six-screen guide/i)).toHaveTextContent(/about ten minutes/i);
+    expect(within(dash).getByText(/six-screen guide/i)).toHaveTextContent(/optional integration and agent steps/i);
     // No demo numbers for a real, empty tenant.
     expect(within(dash).queryByText(/Issuance trend/)).not.toBeInTheDocument();
   });
@@ -629,6 +631,9 @@ describe("auth + dashboards", () => {
     expect(await within(dash).findByText("47-day renewal readiness")).toBeInTheDocument();
     await waitFor(() => expect(within(dash).getByText("33%")).toBeInTheDocument());
     expect(within(dash).getByText(/1 manual certs expiring within 47 days/)).toBeInTheDocument();
+    for (const label of ["Current state", "200-day model", "100-day model", "47-day target"]) {
+      expect(within(dash).getByText(label)).toBeInTheDocument();
+    }
     // The panel links into the certificates readiness tab (numbers are doors).
     const link = within(dash).getByRole("link", { name: /View in Certificates/ });
     expect(link).toHaveAttribute("href", "/certificates?tab=renewal");

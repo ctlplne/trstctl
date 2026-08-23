@@ -17,16 +17,20 @@ its public half. Copy it out and verify the API before opening the browser:
 ```bash
 docker compose -f deploy/demo/docker-compose.yml cp \
   trstctl:/public-trust/control-plane.crt ./trstctl-demo-control-plane.crt
-curl --cacert ./trstctl-demo-control-plane.crt https://localhost:9443/healthz
+curl --cacert ./trstctl-demo-control-plane.crt https://127.0.0.1:9443/healthz
 ```
 
 Import `trstctl-demo-control-plane.crt` into the trust store used by your local
-evaluation browser, then open <https://localhost:9443> and click **Sign in with
+evaluation browser, then open <https://127.0.0.1:9443> and click **Sign in with
 SSO**. Do not bypass a certificate warning: if the browser still warns, it is not
 using the copied trust file. The demo IdP signs you in as
 `demo-admin@trstctl.local` for tenant
 `11111111-1111-4111-8111-111111111111`. Remove the local trust entry when the
 evaluation ends.
+
+Use that exact `127.0.0.1` browser URL. The blank stack uses `localhost`, and
+the distinct loopback hostnames keep both host-scoped SSO cookies valid in one
+browser profile even though the ports already differ.
 
 The seed job creates a 180-day realistic history: owners, members, profiles, an
 internal CA catalog row, real signer-issued X.509 inventory, imported and

@@ -2725,15 +2725,40 @@ func TestRenderedDocsDoNotLoadThirdPartyFonts(t *testing.T) {
 	}
 }
 
+func TestDocsUseTheQuietConfidenceProductLanguage(t *testing.T) {
+	config := read(t, "../mkdocs.yml")
+	for _, marker := range []string{
+		"logo: assets/trstctl-mark.svg",
+		"favicon: assets/trstctl-mark.svg",
+		"stylesheets/quiet-confidence.css",
+	} {
+		if !strings.Contains(config, marker) {
+			t.Errorf("mkdocs.yml is missing quiet-confidence marker %q", marker)
+		}
+	}
+	css := read(t, "stylesheets/quiet-confidence.css")
+	for _, marker := range []string{"#174f45", "#fbfaf6", "box-shadow: none", "system-ui"} {
+		if !strings.Contains(css, marker) {
+			t.Errorf("docs stylesheet is missing quiet-confidence token %q", marker)
+		}
+	}
+	for _, asset := range []string{"assets/trstctl-mark.svg", "../web/public/favicon.svg"} {
+		mark := read(t, asset)
+		if !strings.Contains(mark, `<circle cx="16" cy="16" r="15" fill="#174f45"`) {
+			t.Errorf("%s does not use the shared circular forest mark", asset)
+		}
+	}
+}
+
 // TestDemoClickThroughUsesShippedTLSAddress keeps the design-partner guide on
 // the same TLS origin the shipped demo actually publishes and makes the guide
 // discoverable from both navigation and first-use documentation.
 func TestDemoClickThroughUsesShippedTLSAddress(t *testing.T) {
 	walkthrough := read(t, "demo-click-through.html")
-	if !strings.Contains(walkthrough, "https://localhost:9443/") {
+	if !strings.Contains(walkthrough, "https://127.0.0.1:9443/") {
 		t.Error("demo click-through must link to the shipped HTTPS demo origin")
 	}
-	for _, stale := range []string{"http://127.0.0.1:18081", "not HTTPS, not port 9443"} {
+	for _, stale := range []string{"http://127.0.0.1:18081", "https://localhost:9443", "not HTTPS, not port 9443"} {
 		if strings.Contains(walkthrough, stale) {
 			t.Errorf("demo click-through still contains stale plaintext demo guidance %q", stale)
 		}

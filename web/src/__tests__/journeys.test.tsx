@@ -131,9 +131,10 @@ describe("journeys hub", () => {
     expect(proof).toHaveTextContent("Verified path · shipped wiring 81/81");
     expect(screen.getByRole("button", { name: /First certificate/ }).querySelector("[data-journey-census]")).not.toBeInTheDocument();
 
-    // Detector-backed progress: the issuer exists, so first-certificate shows 1 of 4.
+    // An issuer row alone is not proof that the wizard issued anything. The
+    // first-use path stays open until a real certificate appears.
     const firstCert = screen.getByRole("button", { name: /First certificate/ });
-    expect(await within(firstCert).findByText("1 of 4 steps done")).toBeInTheDocument();
+    expect(await within(firstCert).findByText("0 of 4 steps done")).toBeInTheDocument();
     expect(screen.getByText("Start here")).toBeInTheDocument();
     const morePaths = screen.getByText(`More guided paths (${journeys.length - 3})`).closest("details");
     expect(morePaths).not.toHaveAttribute("open");
@@ -173,5 +174,16 @@ describe("journeys hub", () => {
     expect(docLink).toHaveAttribute("target", "_blank");
 
     expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it("counts the built-in setup issuer journey complete after the wizard creates its identity and certificate", async () => {
+    apiMock.issuers.mockResolvedValue([]);
+    apiMock.identities.mockResolvedValue([{ id: "identity-1", name: "first-service" }]);
+    apiMock.certificatePage.mockResolvedValue({ items: [{ id: "certificate-1", subject: "first-service" }] });
+
+    renderJourneys();
+
+    const firstCert = screen.getByRole("button", { name: /First certificate/ });
+    expect(await within(firstCert).findByText("4 of 4 steps done")).toBeInTheDocument();
   });
 });

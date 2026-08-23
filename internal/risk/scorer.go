@@ -69,13 +69,24 @@ func scoreCertificate(g *graph.Graph, c store.Certificate, now time.Time) Creden
 	sens := inferSensitivity(c)
 	ownerActive := c.OwnerID != nil && *c.OwnerID != ""
 
+	lastRotated := deref(c.RenewedAt)
+	if lastRotated.IsZero() && managedIssuanceSource(c.Source) {
+		// First issuance is the start of the current credential generation. A
+		// certificate trstctl just issued is not infinitely stale. Imported and
+		// discovered certificates remain unknown until renewal evidence exists.
+		lastRotated = deref(c.NotBefore)
+		if lastRotated.IsZero() {
+			lastRotated = c.CreatedAt
+		}
+	}
+
 	sc := Compute(Signals{
 		Now:         now,
 		NotBefore:   deref(c.NotBefore),
 		NotAfter:    deref(c.NotAfter),
 		Exposure:    exposure,
 		Privilege:   priv,
-		LastRotated: deref(c.RenewedAt),
+		LastRotated: lastRotated,
 		OwnerActive: ownerActive,
 		Sensitivity: sens,
 	})
@@ -86,6 +97,10 @@ func scoreCertificate(g *graph.Graph, c store.Certificate, now time.Time) Creden
 		Score: sc.Total, Components: sc.Components,
 		GraphNodeID: "cert:" + c.ID, EvidenceRefs: []string{"credential:" + c.ID},
 	}
+}
+
+func managedIssuanceSource(source string) bool {
+	return source == "issued" || source == "lifecycle" || strings.HasPrefix(source, "protocol:") || strings.HasPrefix(source, "broker:") || strings.HasPrefix(source, "attested:")
 }
 
 // credentialExposure counts the resources reachable from a credential node in

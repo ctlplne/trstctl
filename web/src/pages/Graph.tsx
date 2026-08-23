@@ -136,7 +136,7 @@ export function Graph() {
     setImpact(null);
     setReachable(null);
     const [impactResult, reachableResult] = await Promise.allSettled([api.graphBlastRadius(selected), api.graphReachable(selected)]);
-    if (impactResult.status === "fulfilled") setImpact(impactResult.value);
+    if (impactResult.status === "fulfilled") setImpact(normalizeGraphImpact(impactResult.value));
     else setBlastError(apiProblemMessage(impactResult.reason, "Could not compute blast radius"));
     if (reachableResult.status === "fulfilled") setReachable(reachableResult.value);
     else setReachableError(apiProblemMessage(reachableResult.reason, "Could not compute reachability"));
@@ -369,6 +369,14 @@ function ImpactAnswer({ impact }: { impact: GraphImpact }) {
       )}
     </>
   );
+}
+
+function normalizeGraphImpact(impact: GraphImpact): GraphImpact {
+  return {
+    ...impact,
+    affected: Array.isArray(impact.affected) ? impact.affected : [],
+    by_kind: impact.by_kind && typeof impact.by_kind === "object" ? impact.by_kind : {},
+  };
 }
 
 function mergeCanonical(canonical: string[], served: string[]): string[] {

@@ -3,6 +3,7 @@ import { lazy, type ComponentType, type ReactElement } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider, useAuth } from "@/auth/AuthProvider";
 import { AppShell } from "@/components/AppShell";
+import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { RbacProvider } from "@/components/rbac";
 import { ToastProvider } from "@/components/ToastProvider";
 import { IntlProvider, useTranslation } from "@/i18n/I18nProvider";
@@ -59,7 +60,10 @@ const Approvals = lazyPage(() => import("@/pages/Approvals"), "Approvals");
 const Operations = lazyPage(() => import("@/pages/Operations"), "Operations");
 const Notifications = lazyPage(() => import("@/pages/Notifications"), "Notifications");
 const RequestCredential = lazyPage(() => import("@/pages/RequestCredential"), "RequestCredential");
-const Styleguide = lazyPage(() => import("@/pages/Styleguide"), "Styleguide");
+// The living component catalog is a development instrument, not a customer
+// surface. Keeping it out of production removes the full demo-only page from
+// every signed image while Vitest and the Vite dev server still exercise it.
+const Styleguide = import.meta.env.DEV ? lazyPage(() => import("@/pages/Styleguide"), "Styleguide") : null;
 const Journeys = lazyPage(() => import("@/pages/Journeys"), "Journeys");
 
 /** RequireAuth gates the app behind a resolved session, redirecting to login
@@ -139,7 +143,7 @@ export function AppRoutes() {
             {/* C-A1: bare /platform is an API-free readiness doorway; its
               historical ?tab= deep links redirect to split /admin/* routes. */}
             <Route path="platform" element={<PlatformRedirect />} />
-            <Route path="styleguide" element={<Styleguide />} />
+            {Styleguide ? <Route path="styleguide" element={<Styleguide />} /> : null}
             <Route path="journeys" element={<Journeys />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -164,9 +168,11 @@ export function App() {
     <ThemeProvider>
       <AuthProvider>
         <SessionI18nProvider>
-          <BrowserRouter>
-            <AppRoutes />
-          </BrowserRouter>
+          <AppErrorBoundary>
+            <BrowserRouter>
+              <AppRoutes />
+            </BrowserRouter>
+          </AppErrorBoundary>
         </SessionI18nProvider>
       </AuthProvider>
     </ThemeProvider>

@@ -27,6 +27,9 @@ export function formatDateTime(
   if (value == null || value === "") return "-";
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
+  // Go's zero time is serialized as year 0001. It means "not recorded", not a
+  // real operator date, so never render it as the confidence-breaking Jan 1, 1.
+  if (date.getUTCFullYear() <= 1) return "-";
   return new Intl.DateTimeFormat(policy.locale, {
     dateStyle: "medium",
     timeStyle: "short",
@@ -51,6 +54,7 @@ export function formatShortDate(
   if (value == null || value === "") return "-";
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
+  if (date.getUTCFullYear() <= 1) return "-";
   return new Intl.DateTimeFormat(policy.locale, {
     month: "short",
     day: "numeric",

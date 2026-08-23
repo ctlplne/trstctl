@@ -393,8 +393,8 @@ describe("WIRE-12 Platform served admin surface", () => {
     expect(screen.getByText("managed_provider")).toBeInTheDocument();
     expect(screen.getByText("provider plane enabled")).toBeInTheDocument();
     expect(screen.getAllByText("managed_customer_band").length).toBeGreaterThan(0);
-    expect(screen.getByRole("heading", { name: "Scale orchestration" })).toBeInTheDocument();
-    expect(screen.getByText("CAP-SCALE-01 active")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Capacity planning reference" })).toBeInTheDocument();
+    expect(screen.getByText("Reference model available")).toBeInTheDocument();
     expect(screen.getByText("perf-live")).toBeInTheDocument();
     systemPage.unmount();
 

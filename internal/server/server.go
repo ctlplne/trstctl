@@ -130,9 +130,14 @@ type Deps struct {
 	RestoreDrillRTO      time.Duration
 	Store                *store.Store
 	Log                  *events.Log
-	Signer               SignerProvider            // may be nil → issuance is unavailable (fail closed)
-	SignAuthorizer       *crypto.SignAuthorizer    // test/eval token provider; production should use SignTokenProvider
-	SignTokenProvider    signing.SignTokenProvider // independent approval-token source for dual-control signer handles
+	Signer               SignerProvider // may be nil → issuance is unavailable (fail closed)
+	// SignerMode is the topology the production composition actually opened:
+	// "child" when this process supervises the isolated process, or "external"
+	// when it connected to a separately deployed signer. Empty preserves the
+	// child default for direct/test Build callers that supply a signer.
+	SignerMode        string
+	SignAuthorizer    *crypto.SignAuthorizer    // test/eval token provider; production should use SignTokenProvider
+	SignTokenProvider signing.SignTokenProvider // independent approval-token source for dual-control signer handles
 	// SignerKeyStoreDir is the local signer provisioning/keystore directory when
 	// the deployment has one. Licensed APIs may use it through generic, file-based
 	// provisioning seams; external signer deployments can leave it empty or point it
@@ -614,13 +619,17 @@ type Server struct {
 	cloudTokenMinter *cloudauth.Minter
 	tenantCrypto     tenantseal.Access
 
-	signer      SignerProvider
-	caSigner    crypto.DigestSigner // a *signing.RemoteSigner — the CA key lives in the signer
-	caCertDER   []byte
-	caHierarchy *caHierarchyService
-	ocspSigner  crypto.DigestSigner
-	signAuthz   signing.SignTokenProvider
-	signTO      time.Duration
+	signer SignerProvider
+	// signerTopology is explicit because both child and external runtimes expose
+	// the same SignerProvider client. Inferring topology from that interface made
+	// an external Compose signer appear as an in-process child in System health.
+	signerTopology string
+	caSigner       crypto.DigestSigner // a *signing.RemoteSigner — the CA key lives in the signer
+	caCertDER      []byte
+	caHierarchy    *caHierarchyService
+	ocspSigner     crypto.DigestSigner
+	signAuthz      signing.SignTokenProvider
+	signTO         time.Duration
 
 	// Served agent steady-state channel (WIRE-004 / OPS-005): the agent CA key lives
 	// in the signer (agentCASigner, AN-4) and is STABLE across restarts (a fixed
@@ -908,6 +917,7 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 		log:                       d.Log,
 		outboxWake:                make(chan struct{}, 1),
 		signer:                    d.Signer,
+		signerTopology:            d.SignerMode,
 		signAuthz:                 signProvider,
 		signTO:                    d.SignTimeout,
 		obHandler:                 d.OutboxHandler,

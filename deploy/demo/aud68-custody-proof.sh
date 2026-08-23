@@ -9,7 +9,7 @@ umask 077
 readonly tenant_id="11111111-1111-4111-8111-111111111111"
 readonly tenant_name="Acme Robotics Demo"
 readonly read_scopes="certs:read,audit:read,access:read,graph:read"
-readonly api_url="https://localhost:9443/api/v1/certificates?limit=1"
+readonly api_url="https://127.0.0.1:9443/api/v1/certificates?limit=1"
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 repo_root="$(cd -- "${script_dir}/../.." && pwd -P)"

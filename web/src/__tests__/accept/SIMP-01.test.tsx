@@ -356,9 +356,10 @@ describe("SIMP-01 Platform served-data reduction", () => {
     expect(await screen.findByRole("heading", { name: "Tenant boundary" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Transport" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Auth session" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Scale orchestration" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Capacity planning reference" })).toBeInTheDocument();
     expect(screen.getAllByText("7").length).toBeGreaterThan(0);
-    expect(await screen.findByText("CAP-SCALE-01 active")).toBeInTheDocument();
+    expect(await screen.findByText("Reference model available")).toBeInTheDocument();
+    expect(screen.getByText(/not this install's current usage or bill/i)).toBeInTheDocument();
     expect(screen.getByText("SCALE-1M")).toBeInTheDocument();
     await user.click(screen.getByText("Exceptions", { exact: true }));
     expect(await screen.findByRole("heading", { name: "Managed offering" })).toBeInTheDocument();

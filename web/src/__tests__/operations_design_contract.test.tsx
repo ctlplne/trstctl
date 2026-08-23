@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AppRoutes } from "@/App";
+import { ApiError } from "@/lib/api";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -253,6 +254,28 @@ describe("Jobs and queues design contract", () => {
 
     expect(await screen.findByText("Agent queue status is unavailable; recent control-plane jobs are still shown.")).toBeInTheDocument();
     expect(screen.queryByText("No failed or waiting jobs.")).not.toBeInTheDocument();
+  });
+
+  it("does not claim there are no failures when job history returns 404", async () => {
+    apiMock.rotationRuns.mockRejectedValue(new ApiError(404, "rotation history is not served"));
+    apiMock.connectorDeliveries.mockResolvedValue({ items: [] });
+    apiMock.approvalRequests.mockResolvedValue([]);
+    apiMock.agentJobPosture.mockResolvedValue({
+      served: true,
+      generated_at: "2026-08-20T23:15:00Z",
+      claimable_kinds: [],
+      queues: [],
+      redemptions: { live: 0, total: 0 },
+      receipts: { verified: 0, rejected: 0 },
+    });
+
+    renderOperations();
+
+    expect(
+      await screen.findByText("Recent job history is unavailable, so trstctl cannot confirm that nothing failed.", {}, { timeout: 3000 }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("No failed or waiting jobs.")).not.toBeInTheDocument();
+    expect(screen.getByText("Operations unavailable")).toBeInTheDocument();
   });
 
   it("treats verification, rollback, and dry-run failures as failed jobs", async () => {

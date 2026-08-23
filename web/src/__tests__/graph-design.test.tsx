@@ -120,4 +120,24 @@ describe("route 027 impact-first graph design", () => {
     await user.click(screen.getByRole("button", { name: "Select payments-db" }));
     expect(credentialSelector).toHaveValue("cert:payments");
   });
+
+  it("renders a truthful zero-impact answer when an older server sends null arrays", async () => {
+    apiMock.graph.mockResolvedValue({
+      nodes: [{ id: "cert:leaf", kind: "credential", name: "new-leaf", attrs: {} }],
+      edges: [],
+    });
+    apiMock.graphBlastRadius.mockResolvedValue({
+      node: { id: "cert:leaf", kind: "credential", name: "new-leaf" },
+      affected: null,
+      by_kind: null,
+    });
+    apiMock.graphReachable.mockResolvedValue({ from: "cert:leaf", nodes: [] });
+    const user = userEvent.setup();
+
+    renderGraph();
+    await user.click(await screen.findByRole("button", { name: "Explore impact" }));
+
+    expect(await screen.findByRole("heading", { name: "0 known systems could be affected" })).toBeInTheDocument();
+    expect(screen.getByText(/Only relationships currently known to trstctl are counted/)).toBeInTheDocument();
+  });
 });

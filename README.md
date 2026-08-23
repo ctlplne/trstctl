@@ -246,9 +246,12 @@ flowchart TB
   class signer signer
 ```
 
-Five binaries make this real: `trstctl` (the control plane, which supervises the
-signer as a child process), `trstctl-signer` (the isolated key-holder),
-`trstctl-agent` (the in-network worker), `trstctl-operator`, and `trstctl-cli`.
+Eight shipped commands make this real: `trstctl` (the control plane),
+`trstctl-signer` (the isolated key-holder), `trstctl-agent` (the in-network
+worker), `trstctl-operator`, `trstctl-cli`, `terraform-provider-trstctl`,
+`trstctl-license`, and `trstctl-spire-upstream-authority`. In single-node mode
+the control plane supervises the signer as a child; production-style Compose
+connects to the signer in its separate container.
 Under the hood: ~2394 Go files across the internal subsystem packages, with
 property, differential, fuzz, and real-PostgreSQL/NATS integration tests, plus
 the architecture linter in CI.
@@ -271,7 +274,7 @@ make lint-partial # explicit local subset when optional lint tools are absent
 Two Compose stacks, side-by-side safe:
 
 ```bash
-# Pre-populated click-through demo: local SSO, seeded data, UI at https://localhost:9443
+# Pre-populated click-through demo: local SSO, seeded data, UI at https://127.0.0.1:9443
 # (sign in with SSO as demo-admin@trstctl.local).
 docker compose -f deploy/demo/docker-compose.yml up --build
 
@@ -279,6 +282,10 @@ docker compose -f deploy/demo/docker-compose.yml up --build
 # the recommended path; same external-datastore wiring as production.
 docker compose -f deploy/docker/docker-compose.yml up --build
 ```
+
+The two browser URLs intentionally use different loopback hostnames. Cookies
+belong to a hostname, not a port, so this keeps both local SSO sessions signed in
+at the same time; both hostnames remain on this workstation only.
 
 The demo stack includes a LocalStack KMS configuration for exploring the
 managed-key surface. That convenience stack is not LocalStack conformance
@@ -322,8 +329,8 @@ trstctl is honest about its edges by design:
 ## Repository layout
 
 ```
-cmd/        # binaries: trstctl (control plane), trstctl-signer (isolated key-holder),
-            #           trstctl-agent (in-network worker), trstctl-operator, trstctl-cli
+cmd/        # eight shipped commands: control plane, isolated signer, agent, operator,
+            # CLI, Terraform provider, license helper, and SPIRE upstream authority
 internal/   # subsystem packages: crypto (the one crypto boundary), signing, events,
             #   projections, store, orchestrator, api, ca, protocols/*, secrets..., graph, query, ...
 plugins/    # WASM plugin category roots — ca/ and connectors/

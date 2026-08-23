@@ -33,7 +33,7 @@ openssl x509 -in ./trstctl-demo-control-plane.crt \
   -noout -subject -issuer -dates -fingerprint -sha256
 
 curl --cacert ./trstctl-demo-control-plane.crt \
-  https://localhost:9443/healthz
+  https://127.0.0.1:9443/healthz
 ```
 
 Expected: `curl` prints `{"status":"ok"}`. Stop if it does not. Never use `curl -k`
@@ -94,7 +94,11 @@ identifying websites.
 ## 3. Open the UI
 
 - Blank evaluation: <https://localhost:8443>
-- Populated demo: <https://localhost:9443>
+- Populated demo: <https://127.0.0.1:9443>
+
+The demo uses `127.0.0.1` while the blank stack uses `localhost` so their
+host-scoped browser session cookies do not replace each other. Both names are
+present in the generated certificate and both stay on the local workstation.
 
 The page should open without a certificate warning. If a warning remains, stop
 and confirm that the hostname, port, imported file, and SHA-256 fingerprint are

@@ -51,7 +51,10 @@ export const journeys: Journey[] = [
     descriptionKey: "journeys.fc.description",
     doc: "docs/journeys/first-certificate.md",
     steps: [
-      { id: "wizard", titleKey: "journeys.fc.wizard.title", bodyKey: "journeys.fc.wizard.body", to: "/wizard", detect: "issuers" },
+      // The wizard's proof is a real certificate, not merely an issuer catalog
+      // row. Fresh eval installs use the built-in signer-backed setup issuer,
+      // so checking the catalog left a completed wizard stuck at 3/4.
+      { id: "wizard", titleKey: "journeys.fc.wizard.title", bodyKey: "journeys.fc.wizard.body", to: "/wizard", detect: "certificates" },
       { id: "request", titleKey: "journeys.fc.request.title", bodyKey: "journeys.fc.request.body", to: "/request", detect: "requests" },
       { id: "approve", titleKey: "journeys.fc.approve.title", bodyKey: "journeys.fc.approve.body", to: "/approvals?status=pending", detect: "certificates" },
       { id: "inventory", titleKey: "journeys.fc.inventory.title", bodyKey: "journeys.fc.inventory.body", to: "/certificates", detect: "certificates" },

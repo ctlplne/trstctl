@@ -12,12 +12,15 @@ the optional agent-install step.
 If you want a pre-populated sales/demo environment instead of a blank
 first-run, use the demo stack: `docker compose -f deploy/demo/docker-compose.yml up --build`
 serves a seeded UI (owners, certificates, secrets, transit keys, managed keys)
-with local SSO at <https://localhost:9443>. Everything below uses the blank
+with local SSO at <https://127.0.0.1:9443>. Everything below uses the blank
 stack at <https://localhost:8443>; the two can run side by side. The demo seed
 stores a terminal version checkpoint and reads lifecycle state before acting,
 so repeating `up --build` with the same volumes preserves the exact seeded
 inventory. `scripts/ci/demo-seed-convergence.sh` waits for the first seed and
 proves a second pass changes neither logical inventory nor event/outbox counts.
+The different loopback hostnames are deliberate: browser cookies ignore port
+numbers, so `localhost` for blank and `127.0.0.1` for demo keep both sessions
+alive in one normal browser profile.
 For a read-only, click-by-click product tour, open the
 **[beginner demo walkthrough](demo-click-through.html)** beside the seeded UI.
 
@@ -63,8 +66,8 @@ curl -fsS --cacert ./trstctl-eval-control-plane.crt \
 
 The web UI is served by the same binary at <https://localhost:8443>. The
 blank stack also enables the agent mTLS gRPC channel for the wizard at
-`localhost:19443` (container `:9443`; the demo stack's UI keeps
-`localhost:9443`, so both projects coexist).
+`localhost:19443` (container `:9443`; the demo stack's UI uses
+`127.0.0.1:9443`, so both browser sessions and projects coexist).
 
 !!! tip "Transport encryption"
     Default is `server.tls.mode=internal` (self-signed). For production, set
@@ -229,8 +232,9 @@ getting the `trstctl-agent` binary on Linux, macOS, and Windows.
 
 Review the proved signer/issuer state, protocol profile, issued certificate,
 integration-proof status, and either the enrolled agent or the explicit
-optional-step deferral. The wizard latches closed in this browser and sends you
-to the certificate operations view.
+optional-step deferral. **Complete setup** latches the wizard closed in this
+browser and leaves a clear **Track and renew certificates** link. It does not
+redirect without warning; use that link to open certificate operations.
 
 ## Get your first API token
 

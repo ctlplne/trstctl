@@ -41,6 +41,9 @@ describe("central locale/timezone/plural policy (PRODUCT-004)", () => {
     expect(formatDate(undefined)).toBe("-");
     expect(formatDate("")).toBe("-");
     expect(formatDate("not-a-date")).toBe("not-a-date");
+    expect(formatDate("0001-01-01T00:00:00Z")).toBe("-");
+    expect(formatDateTime("0001-01-01T00:00:00Z")).toBe("-");
+    expect(formatShortDate("0001-01-01T00:00:00Z")).toBe("-");
   });
 
   it("formats numbers and plurals through Intl with locale", () => {

@@ -10,7 +10,7 @@ Need a populated live-demo environment instead? Use
 docker compose -f deploy/demo/docker-compose.yml up --build
 ```
 
-The demo stack runs on <https://localhost:9443> with local SSO and seeded owners,
+The demo stack runs on <https://127.0.0.1:9443> with local SSO and seeded owners,
 certificates, secrets, transit keys, and managed keys. This directory's compose
 file stays blank by design so operators can evaluate the real external
 PostgreSQL/NATS wiring without demo fixtures.
@@ -44,7 +44,7 @@ agent-channel off; this eval stack enables it explicitly so the documented
 first-agent path reaches a real listener. The agent pins a combined public CA
 bundle: capture the eval HTTPS certificate from `localhost:8443` and copy the
 agent CA from `/data/ca/agent-ca.crt` in the `trstctl` service, as shown in
-[Getting started](../../docs/getting-started.md#install-an-agent). The inspected
+[Getting started](../../docs/getting-started.md#connect-an-agent-optional). The inspected
 HTTPS pin survives control-container replacement because the private internal-TLS
 identity is mode `0600` under the persistent `/data` volume. The image also
 prepares `/run/trstctl-spiffe` for uid `65532` before Docker initializes the

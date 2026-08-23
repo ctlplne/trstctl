@@ -1,0 +1,87 @@
+/* The docs are part of the product. This maps MkDocs Material onto the same
+   warm-paper, forest, low-elevation language as the control plane without
+   loading a remote font or hiding Material's accessible behavior. */
+:root {
+  --md-primary-fg-color: #174f45;
+  --md-primary-fg-color--light: #2c6f62;
+  --md-primary-fg-color--dark: #103b34;
+  --md-accent-fg-color: #174f45;
+  --md-default-bg-color: #fbfaf6;
+  --md-default-fg-color: #1d2926;
+  --md-default-fg-color--light: #58645f;
+  --md-typeset-a-color: #245f54;
+  --md-code-bg-color: #f0eee7;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #a0cdbf;
+  --md-primary-fg-color--light: #c4e3d9;
+  --md-primary-fg-color--dark: #74ad9d;
+  --md-accent-fg-color: #a0cdbf;
+  --md-default-bg-color: #101a18;
+  --md-default-fg-color: #eef2ec;
+  --md-default-fg-color--light: #b0bbb6;
+  --md-typeset-a-color: #a0cdbf;
+  --md-code-bg-color: #182421;
+}
+
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.md-header {
+  color: var(--md-default-fg-color);
+  background: color-mix(in srgb, var(--md-default-bg-color) 94%, var(--md-primary-fg-color) 6%);
+  border-bottom: 1px solid color-mix(in srgb, var(--md-default-fg-color) 16%, transparent);
+  box-shadow: none;
+}
+
+.md-header__button.md-logo img,
+.md-header__button.md-logo svg {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.md-search__form,
+.md-search__output,
+.md-typeset .admonition,
+.md-typeset details {
+  border-radius: .45rem;
+  box-shadow: none;
+}
+
+.md-search__form {
+  background: color-mix(in srgb, var(--md-default-bg-color) 88%, var(--md-default-fg-color) 12%);
+}
+
+.md-typeset h1 {
+  color: var(--md-default-fg-color);
+  font-weight: 650;
+  letter-spacing: -.025em;
+}
+
+.md-typeset h2,
+.md-typeset h3 {
+  letter-spacing: -.012em;
+}
+
+.md-typeset table:not([class]) {
+  border: 1px solid color-mix(in srgb, var(--md-default-fg-color) 16%, transparent);
+  border-radius: .45rem;
+  box-shadow: none;
+}
+
+.md-typeset .admonition,
+.md-typeset details {
+  border-color: color-mix(in srgb, var(--md-default-fg-color) 18%, transparent);
+}
+
+.md-nav__link--active,
+.md-nav__link:focus,
+.md-nav__link:hover {
+  color: var(--md-primary-fg-color);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--md-primary-fg-color) 28%, transparent);
+}

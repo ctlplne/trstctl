@@ -27,7 +27,12 @@ export function BlastRadiusExplorer({ nodes, selectedId, onAnalyze }: { nodes: G
       return;
     }
     try {
-      setImpact(await api.graphBlastRadius(id));
+      const result = await api.graphBlastRadius(id);
+      setImpact({
+        ...result,
+        affected: Array.isArray(result.affected) ? result.affected : [],
+        by_kind: result.by_kind && typeof result.by_kind === "object" ? result.by_kind : {},
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }

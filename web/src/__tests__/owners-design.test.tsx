@@ -94,7 +94,7 @@ describe("route 029 decision-first ownership design", () => {
     expect(screen.getByText("Which team is accountable for every identity and credential.", { exact: true })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { level: 2, name: "1 known identity or credential needs an owner" })).toBeInTheDocument();
     expect(
-      screen.getByText("1 of 2 known identities and credentials have an owner record. Current owner records: 1 of 1.", { exact: true }),
+      screen.getByText("1 of 2 known identities and credentials are assigned. 1 of 1 owner records have current review evidence.", { exact: true }),
     ).toBeInTheDocument();
 
     const actions = screen.getByTestId("page-depth-operate");

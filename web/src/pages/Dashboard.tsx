@@ -273,7 +273,7 @@ export function Dashboard() {
           primaryAction={{ label: translateNow("source.set.up.trstctl.b56c208e41"), to: "/wizard", icon: <Rocket className="h-4 w-4" aria-hidden="true" /> }}
           secondaryAction={{ label: translateNow("source.explore.the.console.1f6607ee75"), onClick: () => setDismissed(true) }}
         >
-          {translateNow("source.this.tenant.has.no.credentials.yet.the.fou.7b31a81e81")}
+          {t("dashboard.empty.description")}
         </EmptyState>
       </section>
     );

@@ -281,6 +281,7 @@ func loadRunSecrets(cfg *config.Config) (runSecrets, error) {
 type runSigner struct {
 	signer        SignerProvider
 	tokenProvider signing.SignTokenProvider
+	topology      string
 	close         func()
 }
 
@@ -298,8 +299,10 @@ func openRunSigner(ctx context.Context, cfg *config.Config) (runSigner, error) {
 	var signerErr error
 	switch cfg.Signer.Mode {
 	case config.SignerExternal:
+		out.topology = "external"
 		out.signer, out.close, signerErr = connectExternalSigner(ctx, cfg.Signer)
 	default:
+		out.topology = "child"
 		out.signer, out.close, signerErr = startChildSigner(ctx, cfg)
 	}
 	if signerErr != nil {
@@ -616,7 +619,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		RestoreDrillInterval: drillInterval,
 		RestoreDrillRPO:      drillRPO,
 		RestoreDrillRTO:      drillRTO,
-		Store:                st, Log: log, Signer: signer.signer, SignTokenProvider: signer.tokenProvider,
+		Store:                st, Log: log, Signer: signer.signer, SignerMode: signer.topology, SignTokenProvider: signer.tokenProvider,
 		SignerKeyStoreDir:  cfg.Signer.KeyStoreDir,
 		EgressGuard:        egressGuard,
 		ServiceNowBindings: serviceNowBindingsFromConfig(cfg.ITSM.ServiceNow),

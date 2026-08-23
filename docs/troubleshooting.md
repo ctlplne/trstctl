@@ -122,6 +122,21 @@ trstctl -check-config | grep telemetry
 
 See [Telemetry](telemetry.md) for what is collected when it is enabled.
 
+## The web console goes blank or a page stops rendering
+
+First copy the page URL and note the approximate time. Then use the browser's
+normal reload. Reloading the UI does not delete certificates, events, or server
+state; those live in PostgreSQL and JetStream, not in the page. Do not clear the
+deployment volumes as a browser-recovery step.
+
+If the same page fails again, capture the browser console error and build a
+redacted support bundle with the command below. Report ordinary product defects
+through [GitHub Issues](https://github.com/ctlplne/trstctl/issues). Report a
+possible security vulnerability privately through the repository's **Security →
+Report a vulnerability** flow or the address in the
+[security policy](https://github.com/ctlplne/trstctl/blob/main/SECURITY.md); do not
+put sensitive evidence in a public issue.
+
 ## Still stuck?
 
 Create one bounded artifact:

@@ -80,7 +80,7 @@ func TestDemoComposeIsSeparatePrepopulatedStack(t *testing.T) {
 		"TRSTCTL_CA_CERT_FILE":                             "/data/ca/issuing-ca.crt",
 		"TRSTCTL_CA_PUBLIC_CERT_FILE":                      "/public-trust/issuing-ca.crt",
 		"TRSTCTL_AUTH_OIDC_ENABLED":                        "true",
-		"TRSTCTL_AUTH_OIDC_REDIRECT_URI":                   "https://localhost:9443/auth/callback",
+		"TRSTCTL_AUTH_OIDC_REDIRECT_URI":                   "https://127.0.0.1:9443/auth/callback",
 		"TRSTCTL_AUTH_OIDC_AUTH_ENDPOINT":                  "http://127.0.0.1:19081/authorize",
 		"TRSTCTL_AUTH_OIDC_TOKEN_ENDPOINT":                 "http://127.0.0.1:19081/token",
 		"TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS":             "env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID,env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY,env:TRSTCTL_DISCOVERY_GCP_TOKEN,env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID,env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY,env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN",
@@ -113,7 +113,7 @@ func TestDemoComposeIsSeparatePrepopulatedStack(t *testing.T) {
 	if !contains(idp.Ports, "127.0.0.1:19081:19081") {
 		t.Fatalf("demo OIDC IdP ports = %v, want loopback-only browser SSO port 127.0.0.1:19081:19081", idp.Ports)
 	}
-	if got := stringValue(idp.Environment["OIDC_REDIRECT_URI"]); got != "https://localhost:9443/auth/callback" {
+	if got := stringValue(idp.Environment["OIDC_REDIRECT_URI"]); got != "https://127.0.0.1:9443/auth/callback" {
 		t.Fatalf("demo OIDC redirect allowlist = %q, want exact demo callback", got)
 	}
 	if got := cf.Services["oidc-loopback"].NetworkMode; got != "service:trstctl" {
@@ -586,7 +586,7 @@ func TestDemoDocsKeepCommandsDistinct(t *testing.T) {
 		"docker compose -f deploy/demo/docker-compose.yml up --build",
 		"node deploy/demo/seed.mjs --check",
 		"180-day",
-		"https://localhost:9443",
+		"https://127.0.0.1:9443",
 		"docker compose -f deploy/docker/docker-compose.yml up --build",
 		"down --volumes",
 		"bash deploy/demo/aud68-custody-proof.sh",

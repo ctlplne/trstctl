@@ -548,7 +548,7 @@ export function AdminSystem() {
             <section className="ui-panel p-comfortable" aria-labelledby="scale-orchestration-heading">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <Gauge className="h-4 w-4 text-status-success" aria-hidden="true" />
+                  <Gauge className="h-4 w-4 text-brand-accent" aria-hidden="true" />
                   <h2 id="scale-orchestration-heading" className="text-title font-semibold">
                     {t("platform.scale.heading")}
                   </h2>
@@ -557,6 +557,7 @@ export function AdminSystem() {
                   {scaleOrchestration?.served ? t("platform.scale.served") : t("platform.scale.unavailable")}
                 </span>
               </div>
+              <p className="mt-2 max-w-3xl text-sm text-muted-foreground">{t("platform.scale.description")}</p>
               <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(18rem,0.5fr)_minmax(0,1fr)]">
                 <dl className="grid content-start gap-2 text-sm">
                   <div>

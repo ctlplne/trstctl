@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Wizard } from "@/pages/Wizard";
+import { ApiError } from "@/lib/api";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -47,6 +48,19 @@ function renderWizard() {
       <Wizard pollMs={10} />
     </MemoryRouter>,
   );
+}
+
+async function openIntegrationStep() {
+  const user = userEvent.setup();
+  renderWizard();
+  await user.click(screen.getByRole("button", { name: "Check signing health" }));
+  await user.click(await screen.findByRole("button", { name: "Next: enable protocols" }));
+  await user.click(await screen.findByRole("button", { name: "Activate eval protocol profile" }));
+  await user.click(await screen.findByRole("button", { name: "Next: issue certificate" }));
+  await user.type(await screen.findByLabelText("Service name"), "catalog-proof");
+  await user.click(screen.getByRole("button", { name: "Issue certificate" }));
+  await user.click(await screen.findByRole("button", { name: "Next: prove integrations" }));
+  return user;
 }
 
 describe("C10-7 carousel onboarding wizard", () => {
@@ -124,5 +138,30 @@ describe("C10-7 carousel onboarding wizard", () => {
     renderWizard();
 
     expect(screen.getByTestId("onboarding-slide")).toHaveAttribute("data-motion", "reduced");
+  });
+
+  it("treats intentionally unavailable optional catalogs as a calm core-only state", async () => {
+    apiMock.connectorCatalog.mockRejectedValue(new ApiError(503, "connector subsystem is not enabled"));
+    apiMock.externalCAs.mockRejectedValue(new ApiError(404, "external CA catalog is not mounted"));
+
+    await openIntegrationStep();
+
+    expect(await screen.findByText(/No optional integrations are configured.*Your certificate works/)).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Deploy the issued identity through a connector" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Issue with a configured upstream CA" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Skip integration proof for now" })).toBeEnabled();
+  });
+
+  it("keeps an unexpected catalog failure visible and retryable", async () => {
+    apiMock.connectorCatalog.mockRejectedValue(new ApiError(500, "catalog database failed"));
+    apiMock.externalCAs.mockResolvedValue([]);
+    const user = await openIntegrationStep();
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("trstctl could not verify the optional integration catalogs");
+    expect(alert).not.toHaveTextContent("catalog database failed");
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(apiMock.connectorCatalog).toHaveBeenCalledTimes(2));
   });
 });

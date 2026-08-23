@@ -16,7 +16,7 @@ import {
 test("demo completion summary never renders one-time credential material", () => {
   const sentinel = "trst_should-never-reach-logs";
   const lines = seedCompletionSummary({
-    url: "https://localhost:9443",
+    url: "https://127.0.0.1:9443",
     tenant: "tenant-a",
     plannedEvents: 70,
     owners: 8,

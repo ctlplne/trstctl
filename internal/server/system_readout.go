@@ -72,11 +72,18 @@ func (s *Server) systemReadout(ctx context.Context) api.SystemReadout {
 // "child" when this process supervises the signer, "external" when it dials a
 // separately deployed one, and "none" when no signer is attached.
 func (s *Server) signerMode() string {
-	if s.signer != nil {
-		return "child"
+	if s.signer == nil {
+		return "none"
 	}
-	if s.caSigner != nil {
+	switch s.signerTopology {
+	case "external":
 		return "external"
+	case "child", "":
+		// Empty is the compatibility default for tests and direct Build callers.
+		// Production always supplies the topology opened by openRunSigner.
+		return "child"
+	default:
+		// Unknown topology is not promoted to an operator claim.
+		return "none"
 	}
-	return "none"
 }

@@ -1005,8 +1005,13 @@ describe("i18n boundary", () => {
       // exact setup evidence stay available in the operations disclosure.
       // Dashboard risk reasons and task-list descriptions use plain language.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "76c133db41d218e7e7aa30dabeaf726bbe9e9c2cfb5d24f5514f2ab12745b6b2",
-      "de-DE": "dcf8499ef613995aa4a73d6faeea6fd57a020efcc94625cedaecbb31bc44ca7f",
+      // Quiet-confidence cold-evaluator re-pin: page recovery, optional
+      // integration availability, protocol readiness, capacity references,
+      // ownership evidence, and renewal models now say exactly what the
+      // system knows without implying success. Machine-authored es/de
+      // translations — FLAG FOR HUMAN REVIEW.
+      "es-ES": "7fb6549aae606f9d43d539a2444eb023d6aebd31593224af064c25ba35e1e067",
+      "de-DE": "68f675b1d27925e43831175fda1555de8344923bbd7580a5302c32269ae75262",
     });
   });
 

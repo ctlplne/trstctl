@@ -100,6 +100,7 @@ export function Operations() {
   );
   const loading = rotations.loading || deliveries.loading || approvals.loading;
   const loadError = rotations.error ?? deliveries.error ?? approvals.error;
+  const operationsUnavailable = loadError !== null;
   const failedRows = useMemo(() => rows.filter((row) => isFailureStatus(row.statusKey)), [rows]);
   const attentionRows = useMemo(
     () => rows.filter((row) => isFailureStatus(row.statusKey) || isActiveStatus(row.statusKey) || row.statusKey === "awaiting_approval"),
@@ -192,7 +193,7 @@ export function Operations() {
         <div className="flex items-start gap-3">
           {checkingAttention ? (
             <RefreshCw className="mt-0.5 h-5 w-5 shrink-0 animate-spin text-muted-foreground" aria-hidden="true" />
-          ) : failedRows.length > 0 || waitingJobs > 0 || agentQueueUnavailable ? (
+          ) : failedRows.length > 0 || waitingJobs > 0 || agentQueueUnavailable || operationsUnavailable ? (
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-status-warning" aria-hidden="true" />
           ) : (
             <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-status-success" aria-hidden="true" />
@@ -203,7 +204,7 @@ export function Operations() {
             </h2>
             {checkingAttention ? (
               <p className="mt-1 text-sm text-muted-foreground">{t("operations.attention.checking")}</p>
-            ) : failedRows.length === 0 && waitingJobs === 0 && !agentQueueUnavailable ? (
+            ) : failedRows.length === 0 && waitingJobs === 0 && !agentQueueUnavailable && !operationsUnavailable ? (
               <>
                 <p className="mt-1 font-medium">{t("operations.attention.empty")}</p>
                 <p className="mt-1 text-sm text-muted-foreground">{t("operations.attention.emptyDetail")}</p>
@@ -223,6 +224,7 @@ export function Operations() {
                   </p>
                 ) : null}
                 {agentQueueUnavailable ? <p className="text-muted-foreground">{t("operations.attention.agentUnavailable")}</p> : null}
+                {operationsUnavailable ? <p className="font-medium">{t("operations.attention.historyUnavailable")}</p> : null}
               </div>
             )}
           </div>
@@ -245,7 +247,7 @@ export function Operations() {
 
       <TechnicalDisclosure title={t("operations.disclosure.pools")}>
         <BulkheadEvidence stats={bulkheads.data} loading={bulkheads.loading} error={bulkheads.error} />
-        <AgentJobLedgerPanel posture={jobPosture.data ?? null} />
+        <AgentJobLedgerPanel posture={jobPosture.data ?? null} unavailable={jobPosture.error !== null} />
       </TechnicalDisclosure>
 
       <TechnicalDisclosure title={t("operations.disclosure.all")}>

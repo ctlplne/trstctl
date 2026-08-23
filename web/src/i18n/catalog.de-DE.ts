@@ -12,6 +12,10 @@ import type { MessageKey } from "@/i18n/messages";
  * clause turns a missing key into a type error, so every new message key
  * ships with an es-ES AND a de-DE entry from the same commit. */
 const deDECatalog = {
+  "app.error.heading": "Diese Seite wurde unerwartet beendet",
+  "app.error.description":
+    "Die Anzeige ist fehlgeschlagen, aber dadurch wurden keine Zertifikate, Ereignisse oder Serverdaten gelöscht. Laden Sie die Seite einmal neu. Falls es erneut passiert, notieren Sie Seitenadresse und Uhrzeit und erstellen Sie ein redigiertes Support-Bundle.",
+  "app.error.reload": "Seite neu laden",
   "auth.browserLoginDisabled.body":
     "Diese Steuerungsebene läuft, aber Browser-SSO ist deaktiviert. Konfigurieren Sie Browser-SSO und laden Sie die Seite neu, oder verwenden Sie ein bereichsbeschränktes API-Token mit trstctl-cli.",
   "auth.browserLoginDisabled.title": "Browser-Anmeldung ist nicht konfiguriert",
@@ -739,6 +743,8 @@ const deDECatalog = {
   "wizard.protocols.loading": "Protokollstatus wird gelesen...",
   "wizard.protocols.responders": "Ausgelieferte Responder: {protocols}.",
   "wizard.protocols.active": "Das Eval-Protokollprofil ist für diesen Tenant aktiv.",
+  "wizard.protocols.readinessNote":
+    "Aktiviert bedeutet, dass der Tenant diese Responder verwenden darf. Die Protokollseite prüft die verbleibenden Voraussetzungen jedes Responders, einschließlich des SPIFFE-Sockets.",
   "wizard.protocols.activate": "Eval-Protokollprofil aktivieren",
   "wizard.protocols.unavailable":
     "Diese Bereitstellung hat das Eval-Profil nicht ausgewählt. Die Protokollfreigabe bleibt unter der expliziten Produktionskonfiguration des Betreibers; das Setup kann ohne Änderung fortfahren.",
@@ -746,7 +752,8 @@ const deDECatalog = {
   "wizard.protocols.statusError": "Protokoll-Setup-Status konnte nicht gelesen werden: {error}",
   "wizard.protocols.activationError": "Das Eval-Protokollprofil konnte nicht aktiviert werden: {error}",
   "wizard.protocols.inactiveError": "Server meldete ein inaktives Profil",
-  "wizard.protocols.summaryActive": "Eval-Profil aktiv",
+  "wizard.protocols.summaryActive": "Eval-Profil aktiviert; Bereitschaft wird je Protokoll geprüft",
+  "wizard.certificate.openInventory": "Zertifikatinventar öffnen",
   "wizard.protocols.summaryOperator": "Betreiberkonfiguriertes Profil",
   "wizard.protocols.next": "Weiter: Protokolle aktivieren",
   "wizard.issuer.stepLabel": "Signierung prüfen",
@@ -771,6 +778,10 @@ const deDECatalog = {
   "wizard.integrations.description":
     "Diese Prüfungen nutzen dieselben Produktrouten wie die Day-2-Automatisierung. Sie erfordern vom Betreiber konfigurierte Systeme; auf einer Core-Installation können Sie diesen optionalen Nachweis überspringen.",
   "wizard.integrations.loading": "Integrationskataloge werden geladen...",
+  "wizard.integrations.noneConfigured":
+    "Keine optionalen Integrationen sind konfiguriert. Ihr Zertifikat funktioniert; überspringen Sie diesen Schritt und verbinden Sie später eine.",
+  "wizard.integrations.catalogError": "trstctl konnte die optionalen Integrationskataloge nicht prüfen",
+  "wizard.integrations.leaseDisclosure": "Dynamischen Secret-Anbieter testen (erweitert, optional)",
   "wizard.integrations.connector.heading": "Ausgestellte Identität über einen Connector ausrollen",
   "wizard.integrations.connector.targetName": "Zielname",
   "wizard.integrations.connector.config": "Connector-Zielkonfiguration",
@@ -2072,7 +2083,7 @@ const deDECatalog = {
   "owners.design.statusNeedsOne": "1 bekannte Identität oder 1 bekanntes Credential braucht eine verantwortliche Stelle",
   "owners.design.statusNeedsMany": "{count} bekannte Identitäten oder Credentials brauchen eine verantwortliche Stelle",
   "owners.design.statusBody":
-    "{assigned} von {known} bekannten Identitäten und Credentials haben einen Verantwortungsdatensatz. Aktuelle Verantwortungsdatensätze: {current} von {owners}.",
+    "{assigned} von {known} bekannten Identitäten und Credentials sind zugewiesen. {current} von {owners} Verantwortungsdatensätzen haben aktuelle Prüfnachweise.",
   "owners.design.disclosure.directory": "Verantwortungsdatensätze, Vererbung und Bestätigungen",
   "owners.design.disclosure.gaps": "Abdeckungslücken und befristete Ausnahmen",
   "owners.design.disclosure.evidence": "Quellen, Widersprüche und Prüfverlauf",
@@ -2539,10 +2550,12 @@ const deDECatalog = {
   "platform.editions.nonProduction": "Nicht-Produktion",
   "platform.editions.productionUnits": "{count} Produktionseinheiten",
   "platform.editions.nonProductionSlots": "{remaining} von {total} Nicht-Produktionsplätzen verbleiben",
-  "platform.scale.heading": "Skalierungsorchestrierung",
-  "platform.scale.served": "CAP-SCALE-01 aktiv",
+  "platform.scale.heading": "Referenz für die Kapazitätsplanung",
+  "platform.scale.served": "Referenzmodell verfügbar",
+  "platform.scale.description":
+    "Dies ist ein Planungsmodell, nicht die aktuelle Nutzung oder Rechnung dieser Installation. Vergleichen Sie damit getestete Bereitstellungsgrenzen, bevor Sie Ihre eigene Last messen.",
   "platform.scale.unavailable": "Skalierung nicht verfügbar",
-  "platform.scale.selectedTier": "Gewählte Stufe",
+  "platform.scale.selectedTier": "Referenzobergrenze",
   "platform.scale.credentialsCount": "{count} Credentials",
   "platform.scale.eventsPerDay": "Ereignisse/Tag",
   "platform.scale.monthlyCost": "Monatliches Kostenmodell",
@@ -3675,15 +3688,11 @@ const deDECatalog = {
   "parity.yesDeleteTarget_729269": "Ja, Ziel löschen",
   "parity.zoneOptional_0f915d": "Zone (optional)",
   "locale.deDE": "Deutsch (Deutschland)",
-  "source.100d.2027.a5960d51fb": "100 T · 2027",
-  "source.200d.2026.a78e5092ff": "200 T · 2026",
   "source.2026.01.01t00.00.00z.06fea089d5": "2026-01-01T00:00:00Z",
   "source.30.90d.planned.be92bb89d8": "30-90 T geplant",
   "source.31.90d.149111f115": "31-90 T",
-  "source.398d.today.066f1024a9": "398 T heute",
   "source.47.day.readiness.simulator.6c79ae6d09": "47-Tage-Bereitschaftssimulator",
   "source.47.day.renewal.readiness.971543ca36": "47-Tage-Erneuerungsbereitschaft",
-  "source.47d.2029.2add4e085d": "47 T · 2029",
   "source.7.30d.watch.7ecf4fbde2": "7-30 T beobachten",
   "source.7d.critical.b43c284b63": "<7 T kritisch",
   "source.8.30d.3a1c0beb22": "8-30 T",
@@ -5085,8 +5094,12 @@ const deDECatalog = {
     "Dieser Klartext wurde lokal aus der Transit-Antwort decodiert. Durch Schließen wird er von der Seite entfernt.",
   "source.this.submits.a.single.bulk.revocation.requ.ab3df219e2": "Dies sendet eine einzige Sammelwiderrufsanfrage für die",
   "source.this.submits.one.bulk.revocation.request.f.f1809ceaf2": "Dies sendet eine Sammelwiderrufsanfrage für alle",
-  "source.this.tenant.has.no.credentials.yet.the.fou.7b31a81e81":
-    "Dieser Tenant hat noch keine Zugangsdaten. Die Einrichtung in vier Schritten verbindet einen Aussteller, stellt das erste Zertifikat aus und registriert einen Agenten — in etwa fünf Minuten. Möchten Sie sich zuerst umsehen? Erkunden Sie die Konsole.",
+  "dashboard.empty.description":
+    "Dieser Tenant hat noch keine Credentials. Der Leitfaden mit sechs Bildschirmen prüft die Signierung, aktiviert die Evaluierungsprotokolle, stellt das erste Zertifikat aus und bietet optionale Integrations- und Agentenschritte — etwa zehn Minuten. Möchten Sie sich zuerst umsehen? Erkunden Sie die Konsole.",
+  "certificates.readiness.current": "Aktueller Stand",
+  "certificates.readiness.200DayModel": "200-Tage-Modell",
+  "certificates.readiness.100DayModel": "100-Tage-Modell",
+  "certificates.readiness.47DayTarget": "47-Tage-Ziel",
   "source.this.value.is.the.exact.once.redeem.result.ed19b63953":
     "Dieser Wert ist das Ergebnis der genau einmal erlaubten Einlösung. Eine zweite Einlösung muss fehlschlagen.",
   "source.this.view.shows.issuer.name.kind.public.ke.5166a2828e":
@@ -5883,6 +5896,8 @@ const deDECatalog = {
   "operations.attention.waitingOne": "1 Auftrag wartet; der älteste wartet seit {age}.",
   "operations.attention.waitingMany": "{count} Aufträge warten; der älteste wartet seit {age}.",
   "operations.attention.agentUnavailable": "Der Status der Agent-Warteschlange ist nicht verfügbar; letzte Control-Plane-Aufträge werden weiterhin gezeigt.",
+  "operations.attention.historyUnavailable":
+    "Der letzte Auftragsverlauf ist nicht verfügbar. trstctl kann daher nicht bestätigen, dass nichts fehlgeschlagen ist.",
   "operations.disclosure.pools": "Worker-Pools und Warteschlangengrenzen",
   "operations.disclosure.all": "Alle Aufträge und Filter",
   "operations.disclosure.rotations": "Datensätze der Rotationsläufe",

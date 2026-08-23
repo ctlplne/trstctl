@@ -3,6 +3,8 @@
 package graph_test
 
 import (
+	"bytes"
+	"encoding/json"
 	"reflect"
 	"sort"
 	"testing"
@@ -138,5 +140,20 @@ func TestBlastRadius(t *testing.T) {
 	sort.Strings(got2)
 	if want := []string{"cred:cert-payments", "res:payments-db"}; !reflect.DeepEqual(got2, want) {
 		t.Errorf("BlastRadius(payments-svc).Affected = %v, want %v", got2, want)
+	}
+}
+
+func TestBlastRadiusLeafEncodesAnEmptyAffectedList(t *testing.T) {
+	g := fixture()
+	impact := g.BlastRadius("res:payments-db")
+	if impact.Affected == nil || len(impact.Affected) != 0 {
+		t.Fatalf("leaf affected = %#v, want a present empty list", impact.Affected)
+	}
+	body, err := json.Marshal(impact)
+	if err != nil {
+		t.Fatalf("marshal leaf impact: %v", err)
+	}
+	if len(body) == 0 || !bytes.Contains(body, []byte(`"affected":[]`)) {
+		t.Fatalf("leaf impact JSON = %s, want affected:[]", body)
 	}
 }

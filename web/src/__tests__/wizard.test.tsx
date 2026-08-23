@@ -80,6 +80,7 @@ describe("first-run wizard", () => {
     await user.click(screen.getByRole("button", { name: /activate eval protocol profile/i }));
     await waitFor(() => expect(apiMock.activateProtocolProfile).toHaveBeenCalledTimes(1));
     expect(await screen.findByText(/eval protocol profile is active/i)).toBeInTheDocument();
+    expect(screen.getByText(/enabled means the tenant may use these responders/i)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /next: issue certificate/i }));
 
     // Step 3 — issue the first certificate.
@@ -87,6 +88,7 @@ describe("first-run wizard", () => {
     await user.type(screen.getByLabelText(/service name/i), "payments");
     await user.click(screen.getByRole("button", { name: /issue certificate/i }));
     await waitFor(() => expect(apiMock.issueCertificate).toHaveBeenCalledWith({ name: "payments" }));
+    expect(screen.getByRole("link", { name: /open certificate inventory/i })).toHaveAttribute("href", "/certificates");
     await user.click(screen.getByRole("button", { name: /next: prove integrations/i }));
 
     // Step 4 — configured integration proof is optional on a core-only install.
