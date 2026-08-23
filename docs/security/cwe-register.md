@@ -41,7 +41,7 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1325 annotated sites across 26 rules. Each row is
+1319 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -666,7 +666,7 @@ not this file.
 | `ee/whitelabel/email.go:99` | scheme and host validated above; https only (CWE-79) |
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 
-### G204 — CWE-78 OS command injection (159 sites)
+### G204 — CWE-78 OS command injection (152 sites)
 
 | Location | Reason |
 |---|---|
@@ -731,10 +731,8 @@ not this file.
 | `internal/cli/cli_test.go:1748` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/connector/localops.go:260` | operator-configured local-ops action command; running it is the feature (CWE-78) |
 | `internal/crypto/kmswrap/external_kms.go:122` | operator-configured external KMS helper command (CWE-78) |
-| `internal/kms/pkcs11/softhsm_container_test.go:26` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/kms/pkcs11/softhsm_container_test.go:63` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/kms/tpm/swtpm_container_test.go:25` | fixed local fixture image (CWE-78) |
-| `internal/kms/tpm/swtpm_container_test.go:51` | fixed local fixture image and script (CWE-78) |
+| `internal/kms/pkcs11/softhsm_container_test.go:116` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
+| `internal/kms/tpm/swtpm_container_test.go:94` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
 | `internal/perf/live.go:735` | perf harness building/running the repo's own signer with the go toolchain (CWE-78) |
 | `internal/perf/live.go:899` | perf harness building/running the repo's own signer with the go toolchain (CWE-78) |
 | `internal/projections/server_assembly_test.go:44` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -772,15 +770,10 @@ not this file.
 | `internal/server/java_sdk_served_test.go:55` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/java_sdk_served_test.go:59` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/java_sdk_served_test.go:90` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/pam_served_test.go:303` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/pam_served_test.go:306` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/pam_served_test.go:308` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/pam_served_test.go:311` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/pam_served_test.go:315` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/pam_served_test.go:325` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/pam_served_test.go:347` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/pam_served_test.go:378` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/pam_served_test.go:381` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pam_served_test.go:340` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
+| `internal/server/pam_served_test.go:350` | fixed best-effort test cleanup bounded by a context deadline (CWE-78) |
+| `internal/server/pam_served_test.go:364` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pam_served_test.go:395` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:286` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:345` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:373` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -915,7 +908,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (358 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (359 sites)
 
 | Location | Reason |
 |---|---|
@@ -978,6 +971,7 @@ not this file.
 | `docs/aud58_test.go:15` | name comes from the fixed documentation manifest in this test (CWE-22). |
 | `docs/aud65_test.go:18` | name comes from the fixed documentation manifest in this test (CWE-22). |
 | `docs/deferred_wipe_guard_test.go:45` | walking the repo's own tree (CWE-22) |
+| `docs/docker_acceptance_deadline_test.go:22` | test reads a fixed repository path (CWE-22) |
 | `docs/doctor_doc_test.go:32` | fixed literal list of the repo's own committed doctor sources; no external input reaches this path (CWE-22) |
 | `docs/embedded_postgres_teardown_test.go:43` | walks this repository's own test sources (CWE-22) |
 | `docs/est_differential_test.go:190` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
@@ -1149,7 +1143,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:249` | test-owned fixture path (CWE-22) |
 | `internal/server/migration_run_served_test.go:258` | test-owned fixture path (CWE-22) |
 | `internal/server/migration_run_served_test.go:289` | test-owned fixture path (CWE-22) |
-| `internal/server/pam_served_test.go:350` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/server/pam_served_test.go:367` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/plugins.go:199` | operator-configured plugin dir; WASM and signature are verified after the read (CWE-22) |
 | `internal/server/plugins.go:203` | operator-configured plugin dir; WASM and signature are verified after the read (CWE-22) |
 | `internal/server/protect_correct102_guard_test.go:100` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |

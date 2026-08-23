@@ -3,11 +3,19 @@
 package tpm_test
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+)
+
+const (
+	swtpmDockerProbeTimeout = 15 * time.Second
+	swtpmDockerBuildTimeout = 5 * time.Minute
+	swtpmDockerRunTimeout   = 5 * time.Minute
 )
 
 func TestSwtpmContainerEdgeCAHandle(t *testing.T) {
@@ -21,9 +29,8 @@ func TestSwtpmContainerEdgeCAHandle(t *testing.T) {
 	}
 	goModCache := hostTPMGoModCache(t)
 	image := "trstctl-swtpm-go:aud-26-edge-custody"
-	if out, err := exec.Command("docker", "image", "inspect", image).CombinedOutput(); err != nil {
-		build := exec.Command("docker", "build", "-t", image, filepath.Join("testdata", "swtpm")) // #nosec G204 -- fixed local fixture image (CWE-78)
-		if buildOut, buildErr := build.CombinedOutput(); buildErr != nil {
+	if out, err := swtpmDockerOutput(t, swtpmDockerProbeTimeout, "image", "inspect", image); err != nil {
+		if buildOut, buildErr := swtpmDockerOutput(t, swtpmDockerBuildTimeout, "build", "-t", image, filepath.Join("testdata", "swtpm")); buildErr != nil {
 			t.Fatalf("build swtpm image after inspect failed (%v, %s): %v\n%s", err, out, buildErr, buildOut)
 		}
 	}
@@ -48,7 +55,7 @@ func TestSwtpmContainerEdgeCAHandle(t *testing.T) {
 		"-v", repoRoot + ":/work:ro", "-v", goModCache + ":/gomodcache:ro",
 		"-w", "/work", image, "bash", "-lc", script,
 	}
-	out, err := exec.Command("docker", args...).CombinedOutput() // #nosec G204 -- fixed local fixture image and script (CWE-78)
+	out, err := swtpmDockerOutput(t, swtpmDockerRunTimeout, args...)
 	if err != nil {
 		t.Fatalf("swtpm edge CA integration failed: %v\n%s", err, out)
 	}
@@ -75,7 +82,18 @@ func requireDockerForSwtpm(t *testing.T) {
 	if _, err := exec.LookPath("docker"); err != nil {
 		t.Skipf("docker is required: %v", err)
 	}
-	if out, err := exec.Command("docker", "version", "--format", "{{.Server.Version}}").CombinedOutput(); err != nil {
+	if out, err := swtpmDockerOutput(t, swtpmDockerProbeTimeout, "version", "--format", "{{.Server.Version}}"); err != nil {
 		t.Skipf("docker daemon is required: %v\n%s", err, out)
 	}
+}
+
+func swtpmDockerOutput(t *testing.T, timeout time.Duration, args ...string) ([]byte, error) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "docker", args...).CombinedOutput() // #nosec G204 -- fixed Docker test-harness operations bounded by a context deadline (CWE-78)
+	if ctx.Err() == context.DeadlineExceeded {
+		t.Fatalf("docker %s exceeded %s; the daemon may be unresponsive", strings.Join(args, " "), timeout)
+	}
+	return out, err
 }

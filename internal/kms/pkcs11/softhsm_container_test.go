@@ -3,11 +3,19 @@
 package pkcs11_test
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+)
+
+const (
+	softHSMDockerProbeTimeout = 15 * time.Second
+	softHSMDockerBuildTimeout = 5 * time.Minute
+	softHSMDockerRunTimeout   = 5 * time.Minute
 )
 
 func TestPKCS11SoftHSMContainerGenerateSign(t *testing.T) {
@@ -22,9 +30,8 @@ func TestPKCS11SoftHSMContainerGenerateSign(t *testing.T) {
 	}
 	goModCache := hostGoModCache(t)
 	image := "trstctl-softhsm-go:aud-26-edge-custody"
-	if out, err := exec.Command("docker", "image", "inspect", image).CombinedOutput(); err != nil {
-		build := exec.Command("docker", "build", "-t", image, filepath.Join("testdata", "softhsm")) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
-		if buildOut, buildErr := build.CombinedOutput(); buildErr != nil {
+	if out, err := softHSMDockerOutput(t, softHSMDockerProbeTimeout, "image", "inspect", image); err != nil {
+		if buildOut, buildErr := softHSMDockerOutput(t, softHSMDockerBuildTimeout, "build", "-t", image, filepath.Join("testdata", "softhsm")); buildErr != nil {
 			t.Fatalf("build SoftHSM test image after inspect failed (%v, %s): %v\n%s", err, out, buildErr, buildOut)
 		}
 	}
@@ -60,7 +67,7 @@ func TestPKCS11SoftHSMContainerGenerateSign(t *testing.T) {
 		image,
 		"bash", "-lc", script,
 	}
-	out, err := exec.Command("docker", args...).CombinedOutput() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
+	out, err := softHSMDockerOutput(t, softHSMDockerRunTimeout, args...)
 	if err != nil {
 		t.Fatalf("SoftHSM integration failed: %v\n%s", err, out)
 	}
@@ -97,8 +104,18 @@ func requireDockerForSoftHSM(t *testing.T) {
 	if _, err := exec.LookPath("docker"); err != nil {
 		t.Skipf("docker is required for the SoftHSM acceptance test: %v", err)
 	}
-	cmd := exec.Command("docker", "version", "--format", "{{.Server.Version}}")
-	if out, err := cmd.CombinedOutput(); err != nil {
+	if out, err := softHSMDockerOutput(t, softHSMDockerProbeTimeout, "version", "--format", "{{.Server.Version}}"); err != nil {
 		t.Skipf("docker daemon is required for the SoftHSM acceptance test: %v\n%s", err, out)
 	}
+}
+
+func softHSMDockerOutput(t *testing.T, timeout time.Duration, args ...string) ([]byte, error) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "docker", args...).CombinedOutput() // #nosec G204 -- fixed Docker test-harness operations bounded by a context deadline (CWE-78)
+	if ctx.Err() == context.DeadlineExceeded {
+		t.Fatalf("docker %s exceeded %s; the daemon may be unresponsive", strings.Join(args, " "), timeout)
+	}
+	return out, err
 }

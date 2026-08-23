@@ -280,7 +280,7 @@ func startPAMSSHD(t *testing.T, caPub []byte) pamSSHD {
 	if _, err := exec.LookPath("docker"); err != nil {
 		t.Skipf("docker is required for the sshd acceptance backend: %v", err)
 	}
-	if out, err := exec.Command("docker", "version", "--format", "{{.Server.Version}}").CombinedOutput(); err != nil {
+	if out, err := pamDockerOutput(t, 15*time.Second, "version", "--format", "{{.Server.Version}}"); err != nil {
 		t.Skipf("docker daemon is required for the sshd acceptance backend: %v\n%s", err, out)
 	}
 	dir := t.TempDir()
@@ -300,19 +300,19 @@ CMD ["/usr/sbin/sshd","-D","-e","-f","/etc/ssh/sshd_config"]
 		t.Fatalf("write sshd Dockerfile: %v", err)
 	}
 	image := "trstctl-pam-sshd:" + strconv.FormatInt(time.Now().UnixNano(), 36)
-	if out, err := exec.Command("docker", "build", "-t", image, dir).CombinedOutput(); err != nil { // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
+	if out, err := pamDockerOutput(t, 3*time.Minute, "build", "-t", image, dir); err != nil {
 		t.Skipf("build sshd container image: %v\n%s", err, out)
 	}
-	t.Cleanup(func() { _ = exec.Command("docker", "image", "rm", "-f", image).Run() }) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
+	t.Cleanup(func() { pamDockerCleanup("image", "rm", "-f", image) })
 	name := "trstctl-pam-sshd-" + strconv.FormatInt(time.Now().UnixNano(), 36)
-	if out, err := exec.Command("docker", "run", "-d", "--name", name, "-p", "127.0.0.1::22", image).CombinedOutput(); err != nil { // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
+	if out, err := pamDockerOutput(t, 30*time.Second, "run", "-d", "--name", name, "-p", "127.0.0.1::22", image); err != nil {
 		t.Fatalf("run sshd container: %v\n%s", err, out)
 	}
-	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", name).Run() }) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
+	t.Cleanup(func() { pamDockerCleanup("rm", "-f", name) })
 	var addr string
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		out, err := exec.Command("docker", "port", name, "22/tcp").CombinedOutput() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
+		out, err := pamDockerOutput(t, 5*time.Second, "port", name, "22/tcp")
 		if err == nil {
 			addr = strings.TrimSpace(string(out))
 			if addr != "" {
@@ -322,7 +322,7 @@ CMD ["/usr/sbin/sshd","-D","-e","-f","/etc/ssh/sshd_config"]
 		time.Sleep(100 * time.Millisecond)
 	}
 	if addr == "" {
-		logs, _ := exec.Command("docker", "logs", name).CombinedOutput() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
+		logs, _ := pamDockerOutput(t, 15*time.Second, "logs", name)
 		t.Fatalf("sshd container did not expose a port; logs:\n%s", logs)
 	}
 	parts := strings.Split(addr, ":")
@@ -331,6 +331,23 @@ CMD ["/usr/sbin/sshd","-D","-e","-f","/etc/ssh/sshd_config"]
 		t.Fatalf("parse sshd port from %q: %v", addr, err)
 	}
 	return pamSSHD{Name: name, Port: port}
+}
+
+func pamDockerOutput(t *testing.T, timeout time.Duration, args ...string) ([]byte, error) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "docker", args...).CombinedOutput() // #nosec G204 -- fixed Docker test-harness operations bounded by a context deadline (CWE-78)
+	if ctx.Err() == context.DeadlineExceeded {
+		t.Fatalf("docker %s exceeded %s; the daemon may be unresponsive", strings.Join(args, " "), timeout)
+	}
+	return out, err
+}
+
+func pamDockerCleanup(args ...string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	_ = exec.CommandContext(ctx, "docker", args...).Run() // #nosec G204 -- fixed best-effort test cleanup bounded by a context deadline (CWE-78)
 }
 
 type pamSSHD struct {
@@ -378,7 +395,7 @@ func assertPAMSSHAccess(t *testing.T, sshd pamSSHD, keyPath, cert string, wantOK
 	cmd := exec.Command("ssh", args...) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	out, err := cmd.CombinedOutput()
 	if wantOK && err != nil {
-		logs, _ := exec.Command("docker", "logs", sshd.Name).CombinedOutput() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
+		logs, _ := pamDockerOutput(t, 15*time.Second, "logs", sshd.Name)
 		t.Fatalf("ssh with PAM certificate failed: %v\n%s\nsshd logs:\n%s", err, out, logs)
 	}
 	if !wantOK && err == nil {
