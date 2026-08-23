@@ -33,7 +33,20 @@
                         Start="auto"
                         ErrorControl="normal"
                         Account="LocalSystem"
-                        Arguments="--service=run --enroll-url [ENROLLURL] --bootstrap-token-file [BOOTSTRAPTOKENFILE] --ca-bundle [CABUNDLE] --server [SERVER] --server-name [SERVERNAME] --name [ComputerName] --key [CommonAppDataFolder]trstctl\agent.key --cert [CommonAppDataFolder]trstctl\agent.crt" />
+                        Arguments="--service=run --enroll-url [ENROLLURL] --bootstrap-token-file [BOOTSTRAPTOKENFILE] --ca-bundle [CABUNDLE] --server [SERVER] --server-name [SERVERNAME] --name [ComputerName] --key [CommonAppDataFolder]trstctl\agent.key --cert [CommonAppDataFolder]trstctl\agent.crt">
+          <ServiceConfig Id="AgentFailureClassification"
+                         FailureActionsWhen="failedToStopOrReturnedError"
+                         OnInstall="yes"
+                         OnReinstall="yes" />
+          <ServiceConfigFailureActions Id="AgentRecoveryActions"
+                                       ResetPeriod="86400"
+                                       OnInstall="yes"
+                                       OnReinstall="yes">
+            <Failure Action="restartService" Delay="30000" />
+            <Failure Action="restartService" Delay="60000" />
+            <Failure Action="restartService" Delay="300000" />
+          </ServiceConfigFailureActions>
+        </ServiceInstall>
         <ServiceControl Id="AgentServiceControl"
                         Name="trstctl-agent"
                         Start="install"

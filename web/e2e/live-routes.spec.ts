@@ -19,6 +19,9 @@ type RouteReceipt = {
   }>;
   alerts: string[];
   capabilityDisclosures: string[];
+  exposedFrameworkLabels: string[];
+  forcedUppercaseTableHeaders: string[];
+  mutatingRequests: Array<{ method: string; path: string }>;
   httpFailures: Array<{
     method: string;
     path: string;
@@ -72,6 +75,7 @@ function expectedPath(route: string): RegExp {
 
 async function auditRoute(page: Page, route: string): Promise<RouteReceipt> {
   const httpFailures: RouteReceipt["httpFailures"] = [];
+  const mutatingRequests: RouteReceipt["mutatingRequests"] = [];
   const pendingResponseReceipts: Array<Promise<void>> = [];
   const onResponse = (response: Response) => {
     if (response.status() >= 400) {
@@ -82,7 +86,14 @@ async function auditRoute(page: Page, route: string): Promise<RouteReceipt> {
       );
     }
   };
+  const onRequest = (request: import("@playwright/test").Request) => {
+    const method = request.method();
+    if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
+      mutatingRequests.push({ method, path: new URL(request.url()).pathname });
+    }
+  };
   page.on("response", onResponse);
+  page.on("request", onRequest);
 
   try {
     await page.goto(route, { waitUntil: "domcontentloaded" });
@@ -140,6 +151,13 @@ async function auditRoute(page: Page, route: string): Promise<RouteReceipt> {
         documentWidth: { client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth },
         mainWidth: { client: mainElement?.clientWidth ?? 0, scroll: mainElement?.scrollWidth ?? 0 },
         overflowSources,
+        exposedFrameworkLabels: Array.from(mainElement?.querySelectorAll("span") ?? [])
+          .filter((element) => ["Answer", "Operate"].includes((element.textContent ?? "").trim()))
+          .filter((element) => !element.classList.contains("sr-only"))
+          .map((element) => (element.textContent ?? "").trim()),
+        forcedUppercaseTableHeaders: Array.from(mainElement?.querySelectorAll("table.ui-table thead th") ?? [])
+          .filter((element) => getComputedStyle(element).textTransform === "uppercase")
+          .map((element) => (element.textContent ?? "").replace(/\s+/g, " ").trim()),
       };
     });
 
@@ -154,10 +172,12 @@ async function auditRoute(page: Page, route: string): Promise<RouteReceipt> {
       ...widths,
       alerts,
       capabilityDisclosures,
+      mutatingRequests,
       httpFailures,
     };
   } finally {
     page.off("response", onResponse);
+    page.off("request", onRequest);
   }
 }
 
@@ -203,6 +223,9 @@ for (const viewport of viewports) {
 
       expect(browserErrors, "live route must not emit browser console errors or uncaught exceptions").toEqual([]);
       expect(serverErrors, "live route must not receive unexplained backend 5xx responses").toEqual([]);
+      expect(receipt.mutatingRequests, "opening a route must not cause an accidental mutation").toEqual([]);
+      expect(receipt.exposedFrameworkLabels, "Answer / Operate are an internal hierarchy, not visible product chrome").toEqual([]);
+      expect(receipt.forcedUppercaseTableHeaders, "table headers use calm sentence case, not forced uppercase").toEqual([]);
       expect(
         documentOverflow,
         `live route must not overflow the supported viewport; widest DOM sources: ${JSON.stringify(receipt.overflowSources)}`,

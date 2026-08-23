@@ -26,6 +26,11 @@ func TestAgentBootstrapMSIRequiresConfiguredFirstBootProperties(t *testing.T) {
 		`--bootstrap-token-file [BOOTSTRAPTOKENFILE]`,
 		`--server [SERVER]`,
 		`--server-name [SERVERNAME]`,
+		`FailureActionsWhen="failedToStopOrReturnedError"`,
+		`<ServiceConfigFailureActions`,
+		`<Failure Action="restartService" Delay="30000"`,
+		`<Failure Action="restartService" Delay="60000"`,
+		`<Failure Action="restartService" Delay="300000"`,
 	} {
 		if !strings.Contains(wxs, want) {
 			t.Errorf("trstctl-agent.wxs missing %q", want)

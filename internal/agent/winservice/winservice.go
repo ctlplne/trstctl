@@ -133,7 +133,20 @@ var wixTemplate = template.Must(template.New("wxs").Funcs(template.FuncMap{
                         Start="{{.Start}}"
                         ErrorControl="normal"
                         Account="LocalSystem"
-                        Arguments="{{attr .Arguments}}" />
+                        Arguments="{{attr .Arguments}}">
+          <ServiceConfig Id="AgentFailureClassification"
+                         FailureActionsWhen="failedToStopOrReturnedError"
+                         OnInstall="yes"
+                         OnReinstall="yes" />
+          <ServiceConfigFailureActions Id="AgentRecoveryActions"
+                                       ResetPeriod="86400"
+                                       OnInstall="yes"
+                                       OnReinstall="yes">
+            <Failure Action="restartService" Delay="30000" />
+            <Failure Action="restartService" Delay="60000" />
+            <Failure Action="restartService" Delay="300000" />
+          </ServiceConfigFailureActions>
+        </ServiceInstall>
         <ServiceControl Id="AgentServiceControl"
                         Name="{{attr .Name}}"
                         Start="install"

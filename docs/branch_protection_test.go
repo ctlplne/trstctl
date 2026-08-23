@@ -62,8 +62,7 @@ var branchProtectionExemptCIJobs = map[string]string{
 	"captured soak / leak gate":                "scheduled/manual-only endurance verifier; it publishes captured soak trend evidence outside the PR path and cannot be required on pull_request",
 	"spine burst / replay-outbox gate":         "scheduled/manual-only event-spine capacity verifier; it boots embedded datastores, publishes replay/outbox trend evidence, and cannot be required on pull_request",
 	"perf live / served hot-path load gate":    "scheduled/manual-only served-load verifier; too load-sensitive for shared per-PR runners. Promoted to required by the per-PR 'scheduled gates / nightly freshness' check",
-	"web storybook (workbench build)":          "advisory component-workbench build (S-C8): it verifies the stories compile against real tokens, and stays non-blocking while story coverage matures so a workbench regression cannot hold product merges",
-	"web e2e (Playwright shell smoke, manual)": "workflow_dispatch-only browser smoke against the seeded demo stack; it needs Docker + browser installs and cannot be required on pull_request",
+	"web storybook (workbench build)": "advisory component-workbench build (S-C8): it verifies the stories compile against real tokens, and stays non-blocking while story coverage matures so a workbench regression cannot hold product merges",
 }
 
 // TestBranchProtectionMatchesCIJobs is the TEST-006 reality-test for the codified
@@ -193,6 +192,7 @@ func TestBranchProtectionMatchesCIJobs(t *testing.T) {
 		"chaos (fault injection)":             "make chaos must block merge (RESIL-003)",
 		"fuzz (smoke per-PR, deeper nightly)": "fuzz smoke/nightly parser safety net must block merge (FUZZ-003)",
 		"fips-capable build (GOFIPS140)":      "FIPS-capable build must block merge (PKIGOV-007)",
+		"web e2e (three-browser live routes)": "the supported-browser route matrix must block merge (S-C4)",
 	}
 	for gate, why := range requiredGates {
 		if !seenRequired[gate] {

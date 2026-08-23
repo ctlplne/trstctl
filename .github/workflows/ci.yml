@@ -1507,19 +1507,37 @@ jobs:
       - name: Test (Windows agent surface, incl. real certificate store)
         run: go test ./internal/agent/... ./internal/dist/... ./internal/crypto/...
 
-      - name: Build MSI (WiX v3)
+      - name: Build current and prior-fixture MSIs (WiX v3)
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path dist | Out-Null
-          go build -o dist\trstctl-agent.exe .\cmd\trstctl-agent
+          New-Item -ItemType Directory -Force -Path dist, dist\prior | Out-Null
+          go build -ldflags "-X trstctl.com/trstctl/internal/buildinfo.version=0.1.0" -o dist\trstctl-agent.exe .\cmd\trstctl-agent
+          go build -ldflags "-X trstctl.com/trstctl/internal/buildinfo.version=0.0.9" -o dist\prior\trstctl-agent.exe .\cmd\trstctl-agent
           choco install wixtoolset --no-progress -y
           $wixDir = Get-ChildItem 'C:\Program Files (x86)' -Directory -Filter 'WiX Toolset *' |
             Sort-Object Name -Descending | Select-Object -First 1
           $bin = Join-Path $wixDir.FullName 'bin'
           Copy-Item deploy\windows\trstctl-agent.wxs dist\trstctl-agent.wxs
+          (Get-Content deploy\windows\trstctl-agent.wxs -Raw).Replace('Version="0.1.0"', 'Version="0.0.9"') |
+            Set-Content dist\prior\trstctl-agent.wxs
           & "$bin\candle.exe" -arch x64 -out dist\ dist\trstctl-agent.wxs
           & "$bin\light.exe" -b dist -out dist\trstctl-agent.msi dist\trstctl-agent.wixobj
+          & "$bin\candle.exe" -arch x64 -out dist\prior\ dist\prior\trstctl-agent.wxs
+          & "$bin\light.exe" -b dist\prior -out dist\prior\trstctl-agent-prior.msi dist\prior\trstctl-agent.wixobj
           Get-ChildItem dist
+
+      # This is a real Windows Installer + Service Control Manager lifecycle,
+      # not an XML assertion: install N-1, start, stop/start, repair, major
+      # upgrade, reject downgrade, simulate resume, and uninstall. A local TCP
+      # sink keeps first-boot enrollment pending without external credentials.
+      - name: Exercise MSI and Windows service lifecycle
+        shell: pwsh
+        run: |
+          .\scripts\ci\windows-msi-lifecycle.ps1 `
+            -PriorMsi (Resolve-Path dist\prior\trstctl-agent-prior.msi) `
+            -CurrentMsi (Resolve-Path dist\trstctl-agent.msi) `
+            -CurrentExe (Resolve-Path dist\trstctl-agent.exe) `
+            -EvidenceDirectory (Join-Path $env:RUNNER_TEMP 'windows-msi-lifecycle')
 
       # CI builds the Windows package but does not Authenticode-sign it. Release
       # signing happens only in the protected `agent-windows` release job through
@@ -1545,6 +1563,14 @@ jobs:
             dist/trstctl-agent.exe
             dist/trstctl-agent.msi
             dist/SHA256SUMS
+
+      - name: Upload Windows lifecycle evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-msi-lifecycle
+          path: ${{ runner.temp }}/windows-msi-lifecycle
+          if-no-files-found: warn
 
   kubernetes:
     name: kubernetes / kind e2e
@@ -1713,17 +1739,15 @@ jobs:
       - name: Build the static workbench
         run: npm run storybook:build
 
-  # S-C4: browser e2e against the seeded demo stack. Manual-only
-  # (workflow_dispatch) because it needs Docker plus a browser install, which is
-  # too heavy for the per-PR path. Scope is the shell smoke spec: visual
-  # regression (e2e/visual.spec.ts) is local-only by design, because this runner
-  # is ubuntu-latest and could only ever record or compare -linux baselines. See
-  # web/DESIGN.md and docs/visual_baselines_test.go (CODE-109).
+  # S-C4: required browser e2e against the seeded demo stack. This runs the
+  # shell journeys and every tenant route at desktop and mobile sizes in all
+  # three supported engines. Pixel baselines stay local-only because rasterized
+  # text is platform-specific; semantic layout, network, console, and route
+  # receipts block every pull request here.
   web-e2e:
-    name: web e2e (Playwright shell smoke, manual)
-    if: github.event_name == 'workflow_dispatch'
+    name: web e2e (three-browser live routes)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: web
@@ -1741,8 +1765,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+      - name: Install supported Playwright browsers
+        run: npx playwright install --with-deps chromium firefox webkit
 
       - name: Start the seeded demo stack
         working-directory: .
@@ -1763,8 +1787,8 @@ jobs:
         working-directory: .
         run: scripts/ci/demo-seed-convergence.sh
 
-      - name: Shell smoke
-        run: npm run e2e -- e2e/shell.spec.ts
+      - name: Shell and full live-route matrix
+        run: npm run e2e -- e2e/shell.spec.ts e2e/live-routes.spec.ts --workers=6
 
       - name: Upload report on failure
         if: failure()

@@ -60,6 +60,7 @@ exemption, and this page must document every required context.
 | `fuzz (smoke per-PR, deeper nightly)` | `ci.yml` | Independent semantic-property and fuzz-target census guards run before PR fuzz smoke; deeper scheduled fuzzing keeps generated invariants, fuzz targets, and seed corpora wired into the merge gate |
 | `ClusterFuzzLite / OSS-Fuzz (address)` | `ci.yml` | Hosted ClusterFuzzLite / OSS-Fuzz-family build and fuzz run, SHA-pinned upstream actions, uploaded build/SARIF, archived run artifacts |
 | `web ui (typecheck / test / build)` | `ci.yml` | Web console typecheck, Vitest + axe, Vite build, npm SCA |
+| `web e2e (three-browser live routes)` | `ci.yml` | Required Chromium, Firefox, and WebKit shell journeys plus every tenant route at desktop and mobile sizes against the real seeded demo stack; rejects browser errors, unexplained 5xx responses, and viewport overflow |
 | `docs site (mkdocs build --strict)` | `ci.yml` | Docs build with no broken nav/links |
 | `actionlint (workflow lint)` | `ci.yml` | Workflow + shell lint of the pipelines themselves |
 | `govulncheck` | `ci.yml` | Reachability-aware vulnerability scan |

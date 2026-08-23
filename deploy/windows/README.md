@@ -38,7 +38,11 @@ CI exercises this on two jobs: `windows cross-build` (Linux,
 `make windows-build`: `GOOS=windows go build ./... && go vet ./...`) for a fast
 guard, and `windows / test + MSI` (a real `windows-latest` runner) which runs
 the Windows agent tests — including a round-trip against the live per-user
-certificate store — and builds the MSI with the WiX Toolset. The `agent-windows`
+certificate store — then installs an N-1 fixture MSI, validates automatic SCM
+registration and restart recovery, performs stop/start, repair, major upgrade,
+downgrade refusal, a resume simulation, and uninstall with the WiX Toolset. The
+literal machine-reboot case remains a self-hosted release qualification because
+GitHub-hosted jobs cannot reboot and resume the same ephemeral runner. The `agent-windows`
 release job (`release.yml`) is the protected gate that signs and verifies the
 Windows artifacts before publication.
 
@@ -76,6 +80,9 @@ trstctl-agent.exe --service=uninstall
 `--service=install` registers an auto-start `LocalSystem` service whose command
 line reproduces the supplied flags with `--service=run`; the SCM then starts the
 agent, which enrolls, maintains mutual TLS, and installs and rotates credentials.
+If the agent exits with an error, SCM classifies that as a failed service and
+restarts it after 30 seconds, then 60 seconds, then 5 minutes. A deliberate
+operator stop remains a clean exit and does not trigger recovery.
 The token file is single-use. After enrollment succeeds and the service persists
 its certificate, rotate or delete the token file.
 

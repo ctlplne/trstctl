@@ -91,9 +91,16 @@ func (h *handler) Execute(_ []string, r <-chan svc.ChangeRequest, status chan<- 
 				return false, 0
 			default:
 			}
-		case <-done:
-			// The loop exited on its own; report stopped.
+		case err := <-done:
+			// A clean return is a normal stop. A non-nil error is a service
+			// failure, so return a non-zero Win32 exit code. That distinction is
+			// what lets the SCM recovery policy restart the agent after a
+			// transient first-boot or control-plane failure instead of silently
+			// leaving an automatic service stopped.
 			status <- svc.Status{State: svc.StopPending}
+			if err != nil {
+				return false, 1
+			}
 			return false, 0
 		}
 	}
