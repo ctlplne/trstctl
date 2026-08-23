@@ -44,7 +44,7 @@ awk -v module="$MODULE" '
 	}
 	function is_orphan_fragment(s,    fragment) {
 		fragment = trim(s)
-		return fragment == "" || index(module, fragment) == 1 || index(fragment, module) == 1 || fragment ~ /^[0-9]+$/
+		return fragment == "" || index(module, fragment) == 1 || index(fragment, module) == 1 || fragment ~ /^[0-9]+([[:space:]]+[0-9]+)?$/
 	}
 	function add_row(row, line_no,    fields, block, stmts, count) {
 		split(row, fields, " ")

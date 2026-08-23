@@ -494,9 +494,9 @@ not this file.
 | `internal/store/audit_feed.go:414` | positive PostgreSQL bigint by schema (CWE-190) |
 | `internal/store/ca.go:457` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/ca.go:527` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/connector_lifecycle.go:418` | JetStream sequence fits PostgreSQL bigint by construction (CWE-190) |
-| `internal/store/connector_lifecycle.go:472` | constrained positive PostgreSQL bigint (CWE-190) |
-| `internal/store/connector_lifecycle.go:475` | constrained positive PostgreSQL bigint (CWE-190) |
+| `internal/store/connector_lifecycle.go:443` | JetStream sequence fits PostgreSQL bigint by construction (CWE-190) |
+| `internal/store/connector_lifecycle.go:497` | constrained positive PostgreSQL bigint (CWE-190) |
+| `internal/store/connector_lifecycle.go:500` | constrained positive PostgreSQL bigint (CWE-190) |
 | `internal/store/cryptoasset_migration_test.go:38` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/store/discovery_coverage.go:37` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/discovery_coverage.go:57` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
@@ -657,7 +657,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:2763` | closed test table list above |
+| `internal/store/migration_content_test.go:2822` | closed test table list above |
 
 ### G203 — CWE-? (unmapped rule) (2 sites)
 

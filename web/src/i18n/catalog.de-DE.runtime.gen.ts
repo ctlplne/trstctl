@@ -60,6 +60,7 @@ const translatedValues = [
   "Was geschieht, was betroffen ist und wie es eingedämmt wird.",
   "Exakte Reaktionsdetails umfassen Ereignisverlauf, Auswirkungsnachweise, Freigabeprotokolle, Ersatz- und Wiederherstellungsstatus, Rollback-Referenzen, Connector-Belege, Idempotenzdatensätze und manipulationssichere Audit-Pakete.",
   "Reaktion fortsetzen",
+  "Reaktion starten",
   "Aktuelle Lage",
   "Eine einfache Zusammenfassung der Vorfallnachweise in trstctl. Unbekanntes bleibt unbekannt, bis Nachweise eintreffen.",
   "Was geschieht",

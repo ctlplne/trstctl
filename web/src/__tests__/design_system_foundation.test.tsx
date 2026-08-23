@@ -168,6 +168,18 @@ describe("Clarity/Console design-system foundation", () => {
     expect(themeProviderSource).toContain('stored ?? "light"');
   });
 
+  it("keeps shared dialog motion from replacing each panel's positioning transform", () => {
+    const panelStart = tailwind.indexOf('"panel-in": {');
+    const drawerStart = tailwind.indexOf('"drawer-in": {', panelStart);
+    expect(panelStart).toBeGreaterThanOrEqual(0);
+    expect(drawerStart).toBeGreaterThan(panelStart);
+
+    // A transform inside the keyframe wins over Tailwind's centering
+    // transform after animation-fill-mode: both. The result looks centered
+    // during unit tests but sits half a panel off-screen in a real browser.
+    expect(tailwind.slice(panelStart, drawerStart)).not.toContain("transform:");
+  });
+
   it("defines every ui-* component class that source references (R-01 guard)", () => {
     // .ui-input was referenced by ~145 call sites for months while defined
     // nowhere — every form control rendered as raw native chrome, and no test

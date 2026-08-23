@@ -968,8 +968,12 @@ describe("i18n boundary", () => {
       // verbs, and the certificate inventory gives a one-sentence weekly
       // answer before progressive table controls. Machine-authored es/de —
       // FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "f8c1c5b6ede33b5cf1a0069a7858abfa6fc4d4d6c67a99cfed9a407f965508dc",
-      "de-DE": "72ee8bd0b2b4f9a0ca144f8be82bd42acde5f7ba7fc708aabac4aa770a2abd8d",
+      // Quiet-confidence live-interaction re-pin: an empty incident history
+      // now says Start response; a recorded history still says Continue
+      // response. Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION
+      // REVIEW before release.
+      "es-ES": "c66421146866a3ccb63b910d2ef9c92717ff9c61370568a5a219eebedb0593c2",
+      "de-DE": "f2ce1191579357a47a763790b9ba5f3f036fbcfc2e73317b67729e10f63d861b",
     });
   });
 

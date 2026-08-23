@@ -60,6 +60,7 @@ const translatedValues = [
   "Qué está pasando, qué está afectado y cómo contenerlo.",
   "El detalle exacto de la respuesta incluye la cronología de eventos, la evidencia del radio de impacto, los registros de aprobación, el estado de reemplazo y recuperación, las referencias de reversión, los recibos de conectores, los registros de idempotencia y los paquetes de auditoría a prueba de manipulaciones.",
   "Continuar respuesta",
+  "Iniciar respuesta",
   "Situación actual",
   "Un resumen sencillo de la evidencia de incidentes en trstctl. Lo desconocido sigue siendo desconocido hasta que llegue evidencia.",
   "Qué está pasando",

@@ -110,6 +110,7 @@ const deDECatalog = {
   "incidents.page.details":
     "Exakte Reaktionsdetails umfassen Ereignisverlauf, Auswirkungsnachweise, Freigabeprotokolle, Ersatz- und Wiederherstellungsstatus, Rollback-Referenzen, Connector-Belege, Idempotenzdatensätze und manipulationssichere Audit-Pakete.",
   "incidents.action.continue": "Reaktion fortsetzen",
+  "incidents.action.start": "Reaktion starten",
   "incidents.situation.title": "Aktuelle Lage",
   "incidents.situation.description": "Eine einfache Zusammenfassung der Vorfallnachweise in trstctl. Unbekanntes bleibt unbekannt, bis Nachweise eintreffen.",
   "incidents.situation.happening": "Was geschieht",

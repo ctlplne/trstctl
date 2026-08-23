@@ -130,6 +130,9 @@ describe("journeys hub", () => {
     // Detector-backed progress: the issuer exists, so first-certificate shows 1 of 4.
     const firstCert = screen.getByRole("button", { name: /First certificate/ });
     expect(await within(firstCert).findByText("1 of 4 steps done")).toBeInTheDocument();
+    expect(firstCert.querySelector(".line-clamp-2")).not.toBeInTheDocument();
+    expect(screen.getByTestId("compact-step-progress").querySelector(".truncate")).not.toBeInTheDocument();
+    expect(screen.getByTestId("full-step-progress").querySelector(".truncate")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Continue journey" }));
     expect(document.activeElement).toHaveAttribute("id", "journey-workspace");
 

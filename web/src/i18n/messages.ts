@@ -227,6 +227,10 @@ export const messages = {
     defaultMessage: "Continue response",
     description: "Primary incident action that opens and focuses the response intake.",
   },
+  "incidents.action.start": {
+    defaultMessage: "Start response",
+    description: "Primary incident action when there is no recorded response to continue.",
+  },
   "incidents.situation.title": {
     defaultMessage: "Situation now",
     description: "Heading for the decision-first incident situation summary.",

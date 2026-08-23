@@ -29,6 +29,7 @@ import (
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	194: true,
 	184: true,
 	181: true,
 	179: true,

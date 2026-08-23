@@ -87,7 +87,7 @@ export function StepShell({
                 <span className="w-5 shrink-0 text-center text-caption tabular-nums" aria-hidden="true">
                   {state === "done" ? "✓" : index + 1}
                 </span>
-                <span className="min-w-0 flex-1 truncate">{step.label}</span>
+                <span className="min-w-0 flex-1 break-words leading-snug">{step.label}</span>
               </li>
             );
           })}
@@ -106,7 +106,7 @@ export function StepShell({
                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-current">
                       {state === "done" ? <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> : index + 1}
                     </span>
-                    <span className="truncate">{step.label}</span>
+                    <span className="min-w-0 break-words leading-snug">{step.label}</span>
                   </div>
                 </li>
               );

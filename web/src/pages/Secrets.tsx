@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Eyebrow } from "@/components/typography";
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Copy, Eye, KeyRound, Loader2, LogIn, RefreshCw, RotateCw, Share2, Trash2 } from "lucide-react";
@@ -173,9 +173,15 @@ export function Secrets() {
   const [createName, setCreateName] = useState("");
   const [createValue, setCreateValue] = useState("");
   const [createOwnerID, setCreateOwnerID] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
+  const createNameRef = useRef<HTMLInputElement>(null);
   const [owners, setOwners] = useState<Owner[]>([]);
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (createOpen) createNameRef.current?.focus();
+  }, [createOpen]);
 
   const [revealed, setRevealed] = useState<SecretValue | null>(null);
   const [revealBusy, setRevealBusy] = useState<string | null>(null);
@@ -637,12 +643,24 @@ export function Secrets() {
       setCreateName("");
       setCreateValue("");
       setCreateOwnerID("");
+      setCreateOpen(false);
       setNotice(`Secret ${meta.name} stored as version ${meta.version}. The value was sealed and is not shown after submit.`);
     } catch (err) {
       setCreateError(apiProblemMessage(err, "Could not create secret"));
     } finally {
       setCreateBusy(false);
     }
+  }
+
+  function closeCreateForm() {
+    // A cancelled secret value should leave React state immediately, just as a
+    // submitted value does. Names and ownership are cleared too so reopening
+    // cannot look like a half-finished mutation.
+    setCreateName("");
+    setCreateValue("");
+    setCreateOwnerID("");
+    setCreateError(null);
+    setCreateOpen(false);
   }
 
   async function revealSecret(name: string) {
@@ -1337,7 +1355,13 @@ export function Secrets() {
           <>
             <Button
               type="button"
+              disabled={tab === "store" && Boolean(loadError)}
               onClick={() => {
+                if (tab === "store") {
+                  if (createOpen) createNameRef.current?.focus();
+                  else setCreateOpen(true);
+                  return;
+                }
                 if ("destination" in routeUX) {
                   navigate(routeUX.destination);
                   return;
@@ -1403,65 +1427,73 @@ export function Secrets() {
               </div>
             </div>
 
-            <form
-              aria-label={translateNow("source.create.secret.b72a982613")}
-              onSubmit={(event) => void submitCreate(event)}
-              className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"
-            >
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium">{translateNow("source.secret.name.5cdf573b89")}</span>
-                <input
-                  id="secret-create-name"
-                  className="rounded-md border border-border bg-background px-3 py-2"
-                  value={createName}
-                  onChange={(event) => setCreateName(event.target.value)}
-                  placeholder={translateNow("source.app.db.password.917cb98f9d")}
-                  required
-                />
-              </label>
-              <div className="grid gap-1 text-sm">
-                <label className="font-medium" htmlFor="secret-create-owner">
-                  {translateNow("source.owner.4b1b8aa360")}
+            {createOpen && (
+              <form
+                aria-label={translateNow("source.create.secret.b72a982613")}
+                onSubmit={(event) => void submitCreate(event)}
+                className="grid gap-3 rounded-panel border border-border bg-card p-comfortable md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"
+              >
+                <label className="grid gap-1 text-sm">
+                  <span className="font-medium">{translateNow("source.secret.name.5cdf573b89")}</span>
+                  <input
+                    ref={createNameRef}
+                    id="secret-create-name"
+                    className="rounded-md border border-border bg-background px-3 py-2"
+                    value={createName}
+                    onChange={(event) => setCreateName(event.target.value)}
+                    placeholder={translateNow("source.app.db.password.917cb98f9d")}
+                    required
+                  />
                 </label>
-                <Select
-                  id="secret-create-owner"
-                  aria-describedby="secret-create-owner-help"
-                  value={createOwnerID}
-                  onChange={(event) => setCreateOwnerID(event.target.value)}
-                  required={owners.length > 0}
-                >
-                  <option value="">{owners.length > 0 ? t("secrets.store.chooseOwner") : t("secrets.store.unassignedOwner")}</option>
-                  {owners.map((owner) => (
-                    <option key={owner.id} value={owner.id}>
-                      {owner.environment ? t("secrets.store.ownerOption", { name: owner.name, environment: owner.environment }) : owner.name}
-                    </option>
-                  ))}
-                </Select>
-                <span id="secret-create-owner-help" className="text-xs text-muted-foreground">
-                  {owners.length > 0 ? t("secrets.store.ownerHelp") : t("secrets.store.noOwnersHelp")}
-                </span>
-              </div>
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium">{translateNow("source.secret.value.6ef47d9880")}</span>
-                <input
-                  id="secret-create-value"
-                  aria-label={translateNow("source.secret.value.6ef47d9880")}
-                  aria-describedby="secret-create-value-help"
-                  className="rounded-md border border-border bg-background px-3 py-2"
-                  type="password"
-                  value={createValue}
-                  onChange={(event) => setCreateValue(event.target.value)}
-                  required
-                />
-                <span id="secret-create-value-help" className="text-xs text-muted-foreground">
-                  {t("secrets.store.valueHelp")}
-                </span>
-              </label>
-              <Button type="submit" className="self-end" disabled={createBusy || Boolean(loadError) || (owners.length > 0 && !createOwnerID)}>
-                {createBusy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-                {translateNow("source.create.secret.b72a982613")}
-              </Button>
-            </form>
+                <div className="grid gap-1 text-sm">
+                  <label className="font-medium" htmlFor="secret-create-owner">
+                    {translateNow("source.owner.4b1b8aa360")}
+                  </label>
+                  <Select
+                    id="secret-create-owner"
+                    aria-describedby="secret-create-owner-help"
+                    value={createOwnerID}
+                    onChange={(event) => setCreateOwnerID(event.target.value)}
+                    required={owners.length > 0}
+                  >
+                    <option value="">{owners.length > 0 ? t("secrets.store.chooseOwner") : t("secrets.store.unassignedOwner")}</option>
+                    {owners.map((owner) => (
+                      <option key={owner.id} value={owner.id}>
+                        {owner.environment ? t("secrets.store.ownerOption", { name: owner.name, environment: owner.environment }) : owner.name}
+                      </option>
+                    ))}
+                  </Select>
+                  <span id="secret-create-owner-help" className="text-xs text-muted-foreground">
+                    {owners.length > 0 ? t("secrets.store.ownerHelp") : t("secrets.store.noOwnersHelp")}
+                  </span>
+                </div>
+                <label className="grid gap-1 text-sm">
+                  <span className="font-medium">{translateNow("source.secret.value.6ef47d9880")}</span>
+                  <input
+                    id="secret-create-value"
+                    aria-label={translateNow("source.secret.value.6ef47d9880")}
+                    aria-describedby="secret-create-value-help"
+                    className="rounded-md border border-border bg-background px-3 py-2"
+                    type="password"
+                    value={createValue}
+                    onChange={(event) => setCreateValue(event.target.value)}
+                    required
+                  />
+                  <span id="secret-create-value-help" className="text-xs text-muted-foreground">
+                    {t("secrets.store.valueHelp")}
+                  </span>
+                </label>
+                <div className="flex flex-wrap items-center gap-2 self-end">
+                  <Button type="button" variant="ghost" onClick={closeCreateForm} disabled={createBusy}>
+                    {translateNow("source.cancel.19766ed6cc")}
+                  </Button>
+                  <Button type="submit" disabled={createBusy || Boolean(loadError) || (owners.length > 0 && !createOwnerID)}>
+                    {createBusy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                    {translateNow("source.create.secret.b72a982613")}
+                  </Button>
+                </div>
+              </form>
+            )}
             {createError && <ErrorState title={translateNow("source.secret.create.failed.885c3ecf7c")}>{createError}</ErrorState>}
 
             {!loadError && (

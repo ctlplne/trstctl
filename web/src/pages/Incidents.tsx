@@ -613,7 +613,7 @@ export function Incidents() {
         technicalDetails={t("incidents.page.details")}
         actions={
           <Button type="button" onClick={continueResponse}>
-            {t("incidents.action.continue")}
+            {t(loading || executions.length > 0 || fleetRuns.length > 0 ? "incidents.action.continue" : "incidents.action.start")}
           </Button>
         }
       />

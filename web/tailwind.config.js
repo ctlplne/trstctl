@@ -76,8 +76,11 @@ export default {
       keyframes: {
         "overlay-in": { from: { opacity: "0" }, to: { opacity: "1" } },
         "panel-in": {
-          from: { opacity: "0", transform: "translateY(8px) scale(0.98)" },
-          to: { opacity: "1", transform: "translateY(0) scale(1)" },
+          // Keep panel motion on opacity. A transform here replaces utility
+          // transforms such as -translate-x-1/2 after animation fill, which
+          // moves centered dialogs halfway off-screen in a real browser.
+          from: { opacity: "0" },
+          to: { opacity: "1" },
         },
         "drawer-in": {
           from: { opacity: "0", transform: "translateX(24px)" },

@@ -835,7 +835,10 @@ describe("secrets surface", () => {
     expect(within(drawer).queryByText("SUPER-SECRET")).not.toBeInTheDocument();
     await user.click(within(drawer).getByRole("button", { name: /close/i }));
 
+    expect(screen.queryByRole("form", { name: "Create secret" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Add secret" }));
     const createForm = within(screen.getByRole("form", { name: "Create secret" }));
+    expect(createForm.getByLabelText("Secret name")).toHaveFocus();
     await user.type(createForm.getByLabelText("Secret name"), "app/cache/token");
     await user.type(createForm.getByLabelText("Secret value"), "new-secret-value");
     await user.selectOptions(createForm.getByLabelText("Owner"), "11111111-1111-4111-8111-111111111111");
@@ -1414,7 +1417,8 @@ describe("secrets surface", () => {
 
     expect(await screen.findByText("Secrets API unavailable or disabled")).toBeInTheDocument();
     expect(screen.getByText(/secrets.enable_api disabled or KEK missing/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /create secret/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /add secret/i })).toBeDisabled();
+    expect(screen.queryByRole("form", { name: /create secret/i })).not.toBeInTheDocument();
   });
 
   it("renders the shared grid empty state for an enabled store with no metadata", async () => {

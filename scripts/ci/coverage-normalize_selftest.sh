@@ -97,14 +97,14 @@ fi
 cat >"$numeric_orphan_profile" <<EOF
 mode: atomic
 ${covered_block} 2 3
- 0
+2 0
 EOF
 
 "$normalizer" "$numeric_orphan_profile" "$numeric_orphan_out"
 if go tool cover -func="$numeric_orphan_out" >/dev/null; then
-	echo "PASS: ignores a standalone numeric coverage fragment"
+	echo "PASS: ignores a standalone statement-count and execution-count fragment"
 else
-	echo "FAIL: numeric orphan fragment repair is not accepted by go tool cover"
+	echo "FAIL: numeric count-fragment repair is not accepted by go tool cover"
 	fails=1
 fi
 

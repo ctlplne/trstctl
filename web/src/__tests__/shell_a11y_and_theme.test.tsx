@@ -530,6 +530,8 @@ describe("app shell accessibility and theme", () => {
     let palette = await screen.findByRole("dialog", { name: "What do you need?" });
     let search = within(palette).getByRole("searchbox", { name: "Search or start a task" });
     expect(search).toHaveFocus();
+    expect(within(palette).getByRole("region", { name: "Actions" })).toBeInTheDocument();
+    expect(within(palette).queryByRole("region", { name: "Home" })).not.toBeInTheDocument();
     await user.type(search, "payments");
 
     await waitFor(() => expect(apiMock.certificatePage).toHaveBeenCalled());

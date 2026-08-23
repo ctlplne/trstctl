@@ -232,4 +232,24 @@ for (const viewport of viewports) {
       ).toBeNull();
     });
   }
+
+  test(`task search stays inside ${viewport.name} and starts with tasks`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await signIn(page);
+    await page.goto("/certificates", { waitUntil: "domcontentloaded" });
+
+    await page.getByRole("button", { name: "Open task search" }).click();
+    const dialog = page.getByRole("dialog", { name: "What do you need?" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("region", { name: "Actions" })).toBeVisible();
+    await expect(dialog.getByRole("region", { name: "Home" })).toHaveCount(0);
+
+    const bounds = await dialog.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(bounds?.x ?? -1).toBeGreaterThanOrEqual(0);
+    expect((bounds?.x ?? viewport.width) + (bounds?.width ?? 1)).toBeLessThanOrEqual(viewport.width);
+
+    await dialog.getByRole("searchbox", { name: "Search or start a task" }).fill("license");
+    await expect(dialog.getByRole("button", { name: /Plan and license/ })).toBeVisible();
+  });
 }

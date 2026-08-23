@@ -249,6 +249,11 @@ export function CommandPalette({ open, onClose, returnFocusRef, user }: CommandP
     () => actions.filter((command) => hasAnyPermission(user, command.permissionAny) && matchesAction(command, query)),
     [actions, query, user],
   );
+  // The empty state is a short task launcher. Pages appear after the operator
+  // types, or immediately for a read-only user who has no permitted actions.
+  // This keeps 42 destinations searchable without making the first view feel
+  // like a sitemap.
+  const showRoutes = query.trim().length > 0 || filteredActions.length === 0;
   const choices: Array<ActionCommand | RouteCommand | GlobalSearchResult> = [...filteredActions, ...filteredRoutes, ...search.results];
   const titleId = "command-palette-title";
   const descriptionId = "command-palette-description";
@@ -296,9 +301,8 @@ export function CommandPalette({ open, onClose, returnFocusRef, user }: CommandP
             {t("command.description")}
           </p>
         </div>
-        <Button type="button" size="sm" variant="ghost" onClick={onClose}>
+        <Button type="button" size="icon" variant="ghost" aria-label={t("command.close")} onClick={onClose}>
           <X className="h-4 w-4" aria-hidden="true" />
-          <span>{t("command.close")}</span>
         </Button>
       </div>
       <div className="border-b border-border p-comfortable">
@@ -326,13 +330,14 @@ export function CommandPalette({ open, onClose, returnFocusRef, user }: CommandP
             ))}
           </PaletteSection>
         )}
-        {routeSections.map((section) => (
-          <PaletteSection key={section.label} title={section.label}>
-            {section.routes.map((command) => (
-              <PaletteButton key={command.id} label={command.label} description={command.description} onClick={() => activate(command)} />
-            ))}
-          </PaletteSection>
-        ))}
+        {showRoutes &&
+          routeSections.map((section) => (
+            <PaletteSection key={section.label} title={section.label}>
+              {section.routes.map((command) => (
+                <PaletteButton key={command.id} label={command.label} description={command.description} onClick={() => activate(command)} />
+              ))}
+            </PaletteSection>
+          ))}
         {search.results.length > 0 && (
           <PaletteSection title={t("command.inventory")}>
             {search.results.map((result) => (

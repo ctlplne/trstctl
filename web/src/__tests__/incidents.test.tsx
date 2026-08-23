@@ -429,6 +429,15 @@ describe("incident response served execution surface", () => {
     expect(screen.getByLabelText("Affected identity")).toHaveFocus();
   });
 
+  it("starts a response when there is no response to continue", async () => {
+    apiMock.incidentExecutions.mockResolvedValueOnce({ items: [] });
+    apiMock.fleetReissuanceRuns.mockResolvedValueOnce({ items: [] });
+    renderIncidents();
+
+    expect(await screen.findByRole("button", { name: "Start response" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Continue response" })).not.toBeInTheDocument();
+  });
+
   it("opens on execution evidence and gives every response workflow a stable tab", async () => {
     const user = userEvent.setup();
     renderIncidents();

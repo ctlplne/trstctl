@@ -128,7 +128,7 @@ export function Journeys() {
                   )}
                 >
                   <span className="text-body font-semibold">{t(journey.titleKey)}</span>
-                  <span className="line-clamp-2 text-caption text-muted-foreground">{t(journey.descriptionKey)}</span>
+                  <span className="text-caption leading-snug text-muted-foreground">{t(journey.descriptionKey)}</span>
                   <span className="text-caption font-medium tabular-nums text-brand-accent">
                     {formatMessage("journeys.progress", { done: progress.done, total: progress.total })}
                   </span>
