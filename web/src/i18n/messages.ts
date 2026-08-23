@@ -3345,6 +3345,10 @@ export const messages = {
     defaultMessage: "Retire or revoke identities in response to HR departures, vendor terminations, or inactivity windows.",
     description: "Description under the decommission-by-signal heading.",
   },
+  "identities.decommission.open": {
+    defaultMessage: "Open decommission controls",
+    description: "Progressive-disclosure control that reveals the destructive identity decommission form.",
+  },
   "state.permissionDenied": {
     defaultMessage: "Permission denied",
     description: "Shared alert title for authenticated users who cannot read a resource.",
@@ -16093,10 +16097,6 @@ export const messages = {
     defaultMessage: "Lifecycle identity",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
   },
-  "source.lifecycle.state.machine.4fd45925e4": {
-    defaultMessage: "Lifecycle state machine",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Identities.tsx.",
-  },
   "source.limit.674b0ed54b": {
     defaultMessage: "Limit",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Assistant.tsx.",
@@ -20015,6 +20015,18 @@ export const messages = {
     defaultMessage:
       "Exact lifecycle states, owner IDs, credential types, connector receipts, fingerprints, rotation runs, graph impact, and raw attributes remain available in the table and detail drawer.",
     description: "Progressive expert detail for the identity inventory route.",
+  },
+  "identities.lifecycle.nextHeading": {
+    defaultMessage: "Next valid actions",
+    description: "Plain heading for lifecycle actions allowed from an identity's current state.",
+  },
+  "identities.lifecycle.nextDescription": {
+    defaultMessage: "These are the only actions this identity's current state allows.",
+    description: "Plain explanation above an identity's valid lifecycle actions.",
+  },
+  "identities.lifecycle.rulesSummary": {
+    defaultMessage: "Show all lifecycle rules",
+    description: "Progressive disclosure for every valid and invalid identity state transition.",
   },
   "identities.find.action": { defaultMessage: "Find identities", description: "Primary action that jumps to identity search." },
   "identities.search.label": { defaultMessage: "Find identities", description: "Identity inventory search label." },

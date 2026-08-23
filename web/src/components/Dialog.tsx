@@ -83,6 +83,8 @@ export function Dialog({
   useEffect(() => {
     if (!open) return;
     function onKeyDown(event: KeyboardEvent) {
+      const openModals = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"]'));
+      if (openModals.at(-1) !== panelRef.current) return;
       if (event.key === "Escape") {
         event.preventDefault();
         onClose();

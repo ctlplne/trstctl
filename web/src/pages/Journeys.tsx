@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { ArrowUpRight, Check, Copy, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
 import { api } from "@/lib/api";
 import { hasJourneyMark, readJourneyMarks, toggleJourneyMark } from "@/lib/journeyProgress";
@@ -182,10 +182,7 @@ export function Journeys() {
                 <div className="flex flex-wrap items-center gap-3">
                   {current.to && (
                     <>
-                      <Link
-                        to={current.to}
-                        className="inline-flex min-h-9 items-center justify-center gap-2 rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground shadow-elevation1 transition-[filter,transform] duration-fast hover:brightness-105 motion-safe:hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                      >
+                      <Link to={current.to} className={buttonVariants()}>
                         {t("journeys.open")}
                         <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
                       </Link>

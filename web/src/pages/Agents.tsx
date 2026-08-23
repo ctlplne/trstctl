@@ -54,14 +54,7 @@ function AgentRoleBadges({ agent }: { agent: Agent }) {
   return (
     <span className="flex flex-wrap gap-1">
       {roles.map((role) => (
-        <span
-          key={role}
-          className={
-            role === "network"
-              ? "rounded-full border border-status-warning px-2 py-0.5 text-xs text-status-warning"
-              : "rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground"
-          }
-        >
+        <span key={role} className={role === "network" ? "text-xs font-medium text-status-warning" : "text-xs font-medium text-muted-foreground"}>
           {role === "network" ? translateNow("source.agent.role.network.a2r0le0005") : translateNow("source.agent.role.host.a2r0le0003")}
         </span>
       ))}

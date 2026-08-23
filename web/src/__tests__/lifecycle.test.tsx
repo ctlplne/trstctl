@@ -37,6 +37,12 @@ function renderIdentities() {
   );
 }
 
+async function openIdentityDetails(user: ReturnType<typeof userEvent.setup>, name: string) {
+  const row = (await screen.findByText(name)).closest("tr")!;
+  await user.click(within(row).getByRole("button", { name: /view details/i }));
+  return screen.findByRole("dialog", { name: "Identity detail" });
+}
+
 describe("lifecycle actions from the UI", () => {
   beforeEach(() => {
     apiMock.issuers.mockReset().mockResolvedValue([{ id: "iss-1", kind: "x509_ca", name: "LE" }]);
@@ -75,6 +81,25 @@ describe("lifecycle actions from the UI", () => {
     apiMock.identities.mockReset();
   });
 
+  it("keeps each identity row to one review action and moves lifecycle choices into detail", async () => {
+    const identity = { id: "dep-quiet", name: "quiet-row", kind: "x509_certificate", owner_id: "own-1", status: "deployed" };
+    apiMock.identities.mockResolvedValue([identity]);
+    apiMock.getIdentity.mockResolvedValue(identity);
+    const user = userEvent.setup();
+    renderIdentities();
+
+    const row = (await screen.findByText("quiet-row")).closest("tr")!;
+    expect(within(row).getAllByRole("button")).toHaveLength(1);
+    expect(within(row).getByRole("button", { name: "View details" })).toBeInTheDocument();
+    expect(within(row).queryByRole("button", { name: "Renew" })).not.toBeInTheDocument();
+    expect(within(row).queryByRole("button", { name: "Revoke" })).not.toBeInTheDocument();
+
+    await user.click(within(row).getByRole("button", { name: "View details" }));
+    const dialog = await screen.findByRole("dialog", { name: "Identity detail" });
+    expect(within(dialog).getByRole("button", { name: "Renew" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Revoke" })).toBeInTheDocument();
+  });
+
   it("maps served identity data to graph node IDs conservatively", () => {
     expect(
       graphNodeIdForIdentity({
@@ -107,27 +132,31 @@ describe("lifecycle actions from the UI", () => {
   });
 
   it("offers the state-appropriate action and calls the transition endpoint", async () => {
-    apiMock.identities.mockResolvedValue([
+    const identities = [
       { id: "req-1", name: "requested-svc", status: "requested" },
       { id: "iss-1", name: "issued-svc", status: "issued" },
       { id: "dep-1", name: "deployed-svc", status: "deployed" },
-    ]);
+    ];
+    apiMock.identities.mockResolvedValue(identities);
+    apiMock.getIdentity.mockImplementation(async (id: string) => identities.find((identity) => identity.id === id)!);
     const user = userEvent.setup();
     renderIdentities();
 
     // A requested identity can be issued.
-    const reqRow = (await screen.findByText("requested-svc")).closest("tr")!;
-    await user.click(within(reqRow).getByRole("button", { name: /^issue$/i }));
+    let dialog = await openIdentityDetails(user, "requested-svc");
+    await user.click(within(dialog).getByRole("button", { name: /^issue$/i }));
     await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("req-1", "issued", expect.anything()));
+    await user.click(within(dialog).getByRole("button", { name: "Close" }));
 
     // An issued identity can be deployed or revoked.
-    const issRow = screen.getByText("issued-svc").closest("tr")!;
-    await user.click(within(issRow).getByRole("button", { name: /deploy/i }));
+    dialog = await openIdentityDetails(user, "issued-svc");
+    await user.click(within(dialog).getByRole("button", { name: /^deploy$/i }));
     await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("iss-1", "deployed", expect.anything()));
+    await user.click(within(dialog).getByRole("button", { name: "Close" }));
 
     // A deployed identity can be renewed.
-    const depRow = screen.getByText("deployed-svc").closest("tr")!;
-    await user.click(within(depRow).getByRole("button", { name: /renew/i }));
+    dialog = await openIdentityDetails(user, "deployed-svc");
+    await user.click(within(dialog).getByRole("button", { name: /^renew$/i }));
     await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("dep-1", "renewing", expect.anything()));
   });
 
@@ -315,7 +344,7 @@ describe("lifecycle actions from the UI", () => {
 
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog", { name: "Identity detail" })).not.toBeInTheDocument();
-    expect(opener).toHaveFocus();
+    await waitFor(() => expect(opener).toHaveFocus());
   });
 
   it("renders the per-credential activity timeline disclosure in the identity drawer (FE-022)", async () => {
@@ -356,7 +385,8 @@ describe("lifecycle actions from the UI", () => {
     const row = (await screen.findByText("request-state-machine")).closest("tr")!;
     await user.click(within(row).getByRole("button", { name: /view details/i }));
 
-    expect(await screen.findByText("Lifecycle state machine")).toBeInTheDocument();
+    expect(await screen.findByText("Next valid actions")).toBeInTheDocument();
+    await user.click(screen.getByText("Show all lifecycle rules"));
     expect(screen.getByRole("button", { name: "Move to issued" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Move to deployed" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Move to retired" })).toBeDisabled();
@@ -378,6 +408,7 @@ describe("lifecycle actions from the UI", () => {
     const revokedRow = (await screen.findByText("revoked-svc")).closest("tr")!;
     await user.click(within(revokedRow).getByRole("button", { name: /view details/i }));
     expect(await screen.findByText(/Terminal trust state/i)).toBeInTheDocument();
+    await user.click(screen.getByText("Show all lifecycle rules"));
     expect(screen.getByRole("button", { name: "Move to issued" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Move to retired" })).toBeEnabled();
     await user.click(within(screen.getByRole("dialog", { name: "Identity detail" })).getByRole("button", { name: "Close" }));
@@ -385,20 +416,23 @@ describe("lifecycle actions from the UI", () => {
     const retiredRow = screen.getByText("retired-svc").closest("tr")!;
     await user.click(within(retiredRow).getByRole("button", { name: /view details/i }));
     expect(await screen.findByText(/Terminal state: retired identities/i)).toBeInTheDocument();
+    await user.click(screen.getByText("Show all lifecycle rules"));
     for (const target of ["issued", "deployed", "renewing", "revoked", "retired"]) {
       expect(screen.getByRole("button", { name: `Move to ${target}` })).toBeDisabled();
     }
   });
 
   it("revokes an identity only after the user confirms (SURFACE-007)", async () => {
-    apiMock.identities.mockResolvedValue([{ id: "dep-9", name: "to-revoke", status: "deployed" }]);
+    const identity = { id: "dep-9", name: "to-revoke", status: "deployed" };
+    apiMock.identities.mockResolvedValue([identity]);
+    apiMock.getIdentity.mockResolvedValue(identity);
     const user = userEvent.setup();
     renderIdentities();
 
-    const row = (await screen.findByText("to-revoke")).closest("tr")!;
+    const detail = await openIdentityDetails(user, "to-revoke");
     // Clicking Revoke must NOT immediately call the destructive transition — it opens
     // a confirmation dialog that names the credential.
-    await user.click(within(row).getByRole("button", { name: /^revoke$/i }));
+    await user.click(within(detail).getByRole("button", { name: /^revoke$/i }));
     expect(apiMock.transitionIdentity).not.toHaveBeenCalled();
     const dialog = await screen.findByRole("alertdialog");
     // The dialog names the credential (it appears in both the heading and the body).
@@ -423,7 +457,9 @@ describe("lifecycle actions from the UI", () => {
   });
 
   it("shows served blast-radius impact before destructive confirmation (FE-083)", async () => {
-    apiMock.identities.mockResolvedValue([{ id: "dep-9", name: "to-revoke", kind: "x509_certificate", owner_id: "owner-1", status: "deployed" }]);
+    const identity = { id: "dep-9", name: "to-revoke", kind: "x509_certificate", owner_id: "owner-1", status: "deployed" };
+    apiMock.identities.mockResolvedValue([identity]);
+    apiMock.getIdentity.mockResolvedValue(identity);
     apiMock.graphBlastRadius.mockResolvedValue({
       node: { id: "cert:dep-9", kind: "credential", name: "to-revoke certificate" },
       affected: [
@@ -436,8 +472,8 @@ describe("lifecycle actions from the UI", () => {
     const user = userEvent.setup();
     renderIdentities();
 
-    const row = (await screen.findByText("to-revoke")).closest("tr")!;
-    await user.click(within(row).getByRole("button", { name: /^revoke$/i }));
+    const detail = await openIdentityDetails(user, "to-revoke");
+    await user.click(within(detail).getByRole("button", { name: /^revoke$/i }));
 
     await waitFor(() => expect(apiMock.graphBlastRadius).toHaveBeenCalledWith("cert:dep-9"));
     const dialog = await screen.findByRole("alertdialog");
@@ -451,12 +487,14 @@ describe("lifecycle actions from the UI", () => {
   });
 
   it("does not invent blast-radius impact when no graph node mapping exists (FE-083)", async () => {
-    apiMock.identities.mockResolvedValue([{ id: "api-9", name: "api-key", kind: "api_key", owner_id: "owner-1", status: "deployed" }]);
+    const identity = { id: "api-9", name: "api-key", kind: "api_key", owner_id: "owner-1", status: "deployed" };
+    apiMock.identities.mockResolvedValue([identity]);
+    apiMock.getIdentity.mockResolvedValue(identity);
     const user = userEvent.setup();
     renderIdentities();
 
-    const row = (await screen.findByText("api-key")).closest("tr")!;
-    await user.click(within(row).getByRole("button", { name: /^revoke$/i }));
+    const detail = await openIdentityDetails(user, "api-key");
+    await user.click(within(detail).getByRole("button", { name: /^revoke$/i }));
 
     expect(apiMock.graphBlastRadius).not.toHaveBeenCalled();
     const dialog = await screen.findByRole("alertdialog");
@@ -464,13 +502,15 @@ describe("lifecycle actions from the UI", () => {
   });
 
   it("degrades blast-radius impact when the graph request fails (FE-083)", async () => {
-    apiMock.identities.mockResolvedValue([{ id: "dep-404", name: "missing-graph-node", kind: "x509_certificate", owner_id: "owner-1", status: "deployed" }]);
+    const identity = { id: "dep-404", name: "missing-graph-node", kind: "x509_certificate", owner_id: "owner-1", status: "deployed" };
+    apiMock.identities.mockResolvedValue([identity]);
+    apiMock.getIdentity.mockResolvedValue(identity);
     apiMock.graphBlastRadius.mockRejectedValue(new ApiError(404, JSON.stringify({ detail: "graph node not found" })));
     const user = userEvent.setup();
     renderIdentities();
 
-    const row = (await screen.findByText("missing-graph-node")).closest("tr")!;
-    await user.click(within(row).getByRole("button", { name: /^revoke$/i }));
+    const detail = await openIdentityDetails(user, "missing-graph-node");
+    await user.click(within(detail).getByRole("button", { name: /^revoke$/i }));
 
     await waitFor(() => expect(apiMock.graphBlastRadius).toHaveBeenCalledWith("cert:dep-404"));
     const dialog = await screen.findByRole("alertdialog");
@@ -478,19 +518,21 @@ describe("lifecycle actions from the UI", () => {
   });
 
   it("cancelling the confirmation does not revoke (SURFACE-007)", async () => {
-    apiMock.identities.mockResolvedValue([{ id: "dep-9", name: "keep-me", status: "deployed" }]);
+    const identity = { id: "dep-9", name: "keep-me", status: "deployed" };
+    apiMock.identities.mockResolvedValue([identity]);
+    apiMock.getIdentity.mockResolvedValue(identity);
     const user = userEvent.setup();
     renderIdentities();
 
-    const row = (await screen.findByText("keep-me")).closest("tr")!;
-    const opener = within(row).getByRole("button", { name: /^revoke$/i });
+    const detail = await openIdentityDetails(user, "keep-me");
+    const opener = within(detail).getByRole("button", { name: /^revoke$/i });
     await user.click(opener);
     const dialog = await screen.findByRole("alertdialog");
     expect(within(dialog).getByLabelText(/type credential name/i)).toHaveFocus();
     await user.keyboard("{Escape}");
     expect(apiMock.transitionIdentity).not.toHaveBeenCalled();
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
-    expect(opener).toHaveFocus();
+    await waitFor(() => expect(opener).toHaveFocus());
   });
 
   it("bulk revokes selected identities with one transactional request and a server-reported summary", async () => {
@@ -559,6 +601,7 @@ describe("lifecycle actions from the UI", () => {
     renderIdentities();
 
     expect(await screen.findByText("payments-api")).toBeInTheDocument();
+    await user.click(screen.getByText("Open decommission controls"));
     const form = screen.getByRole("form", { name: "NHI decommission" });
     await user.selectOptions(within(form).getByLabelText("Signal"), "vendor_term");
     await user.type(within(form).getByLabelText("Vendor"), "Acme SaaS");
@@ -587,21 +630,25 @@ describe("lifecycle actions from the UI", () => {
   });
 
   it("surfaces a 429 rate-limit with a Retry-After hint (SURFACE-007)", async () => {
-    apiMock.identities.mockResolvedValue([{ id: "req-1", name: "svc", status: "requested" }]);
+    const identity = { id: "req-1", name: "svc", status: "requested" };
+    apiMock.identities.mockResolvedValue([identity]);
+    apiMock.getIdentity.mockResolvedValue(identity);
     apiMock.transitionIdentity.mockReset().mockRejectedValue(new ApiError(429, "rate limited", 12));
     const user = userEvent.setup();
     renderIdentities();
 
-    const row = (await screen.findByText("svc")).closest("tr")!;
     // Issue is non-destructive, so it runs without confirmation and hits the 429.
-    await user.click(within(row).getByRole("button", { name: /^issue$/i }));
+    const detail = await openIdentityDetails(user, "svc");
+    await user.click(within(detail).getByRole("button", { name: /^issue$/i }));
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent(/rate limited/i);
     expect(alert).toHaveTextContent(/12s/);
   });
 
   it("shows served problem details for denied issue", async () => {
-    apiMock.identities.mockResolvedValue([{ id: "req-1", name: "request-only-svc", kind: "x509_certificate", status: "requested" }]);
+    const identity = { id: "req-1", name: "request-only-svc", kind: "x509_certificate", status: "requested" };
+    apiMock.identities.mockResolvedValue([identity]);
+    apiMock.getIdentity.mockResolvedValue(identity);
     apiMock.transitionIdentity.mockReset().mockRejectedValue(
       new ApiError(
         403,
@@ -613,15 +660,15 @@ describe("lifecycle actions from the UI", () => {
     const user = userEvent.setup();
     renderIdentities();
 
-    const row = (await screen.findByText("request-only-svc")).closest("tr")!;
-    const issue = within(row).getByRole("button", { name: /^issue$/i });
+    const detail = await openIdentityDetails(user, "request-only-svc");
+    const issue = within(detail).getByRole("button", { name: /^issue$/i });
     await user.click(issue);
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent(/certs:request principals cannot self-issue/i);
     expect(alert).toHaveTextContent(/distinct approver/i);
     expect(issue).toBeDisabled();
-    expect(row).toHaveTextContent(/certs:request principals cannot self-issue/i);
+    expect(detail).toHaveTextContent(/certs:request principals cannot self-issue/i);
   });
 
   it("moves dual-control approval decisions out of identity rows", async () => {
@@ -730,12 +777,14 @@ describe("lifecycle actions from the UI", () => {
   });
 
   it("reports idempotency protection after a successful lifecycle transition", async () => {
-    apiMock.identities.mockResolvedValue([{ id: "req-1", name: "idempotent-svc", kind: "x509_certificate", status: "requested" }]);
+    const identity = { id: "req-1", name: "idempotent-svc", kind: "x509_certificate", status: "requested" };
+    apiMock.identities.mockResolvedValue([identity]);
+    apiMock.getIdentity.mockResolvedValue(identity);
     const user = userEvent.setup();
     renderIdentities();
 
-    const row = (await screen.findByText("idempotent-svc")).closest("tr")!;
-    await user.click(within(row).getByRole("button", { name: /^issue$/i }));
+    const detail = await openIdentityDetails(user, "idempotent-svc");
+    await user.click(within(detail).getByRole("button", { name: /^issue$/i }));
 
     await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("req-1", "issued", expect.anything()));
     expect(await screen.findByRole("status")).toHaveTextContent(/Idempotency-Key protects/i);

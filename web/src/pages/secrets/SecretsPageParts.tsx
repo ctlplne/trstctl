@@ -598,7 +598,7 @@ export function SecretApprovalQueue({
           <h3 className="text-title font-semibold">{t("secrets.approvals.heading")}</h3>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("secrets.approvals.description")}</p>
         </div>
-        <span className="rounded-control border border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground">{t("secrets.approvals.badge")}</span>
+        <span className="text-xs font-medium text-muted-foreground">{t("secrets.approvals.badge")}</span>
       </div>
       {items.length === 0 ? (
         <p className="rounded-control border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">{t("secrets.approvals.empty")}</p>

@@ -1014,6 +1014,7 @@ const deDECatalog = {
   "request.wizard.noOwnersHelp": "Bitten Sie einen Operator, vor der Anforderung eines Berechtigungsnachweises einen verantwortlichen Eigentümer anzulegen.",
   "identities.decommission.description":
     "Identitäten als Reaktion auf HR-Abgänge, Vertragsenden von Anbietern oder Inaktivitätsfenster stilllegen oder widerrufen.",
+  "identities.decommission.open": "Stilllegungssteuerung öffnen",
   "state.permissionDenied": "Zugriff verweigert",
   "grid.state.loading": "Zeilen werden geladen...",
   "grid.state.error": "Zeilen konnten nicht geladen werden",
@@ -4367,7 +4368,6 @@ const deDECatalog = {
   "source.license.feature.de93785a58": "Lizenzfunktion",
   "source.license.tier.0c9a751553": "Lizenzstufe",
   "source.lifecycle.identity.b788cc9a64": "Lebenszyklus-Identität",
-  "source.lifecycle.state.machine.4fd45925e4": "Lebenszyklus-Zustandsmaschine",
   "source.limit.674b0ed54b": "Limit",
   "source.line.d7852cd0d2": "Line",
   "source.load.next.metadata.page.8cd7685eed": "Nächste Metadaten-Seite laden",
@@ -5740,6 +5740,9 @@ const deDECatalog = {
   "identities.page.answer": "Welche Maschinen und Dienste Identitäten besitzen und ob sie gesund sind.",
   "identities.page.details":
     "Exakte Lebenszykluszustände, Verantwortlichen-IDs, Credential-Typen, Connector-Belege, Fingerabdrücke, Rotationsläufe, Graphauswirkungen und Rohattribute bleiben in Tabelle und Detailansicht verfügbar.",
+  "identities.lifecycle.nextHeading": "Nächste gültige Aktionen",
+  "identities.lifecycle.nextDescription": "Dies sind die einzigen Aktionen, die der aktuelle Zustand dieser Identität erlaubt.",
+  "identities.lifecycle.rulesSummary": "Alle Lebenszyklusregeln anzeigen",
   "identities.find.action": "Identitäten suchen",
   "identities.search.label": "Identitäten suchen",
   "identities.search.placeholder": "Name, verantwortliche Stelle oder Typ",

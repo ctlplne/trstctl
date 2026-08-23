@@ -108,9 +108,13 @@ describe("WIRE-02 Workloads broker and attestation wiring", () => {
     const brokerRow = await screen.findByRole("row", { name: /agent-build-1 spiffe:\/\/tenant\/ai\/build-agent/i });
     expect(within(brokerRow).getByText("mcp:read-only, secrets:read:ci")).toBeInTheDocument();
 
-    await user.type(screen.getByLabelText("Attestation proof payload (base64)"), "c3ZpZC1wcm9vZg==");
-    await user.type(screen.getByLabelText("Workload public key"), "-----BEGIN PUBLIC KEY-----\nSVID\n-----END PUBLIC KEY-----");
     await user.click(screen.getByRole("button", { name: "Issue attested SVID" }));
+    const attestationPayload = screen.getByLabelText("Attestation proof payload (base64)");
+    const attestedIssueForm = attestationPayload.closest("form");
+    expect(attestedIssueForm).toBeTruthy();
+    await user.type(attestationPayload, "c3ZpZC1wcm9vZg==");
+    await user.type(screen.getByLabelText("Workload public key"), "-----BEGIN PUBLIC KEY-----\nSVID\n-----END PUBLIC KEY-----");
+    await user.click(within(attestedIssueForm as HTMLFormElement).getByRole("button", { name: "Issue attested SVID" }));
 
     expect(apiMock.issueAttestedSVID).toHaveBeenCalledWith({
       method: "k8s_sat",

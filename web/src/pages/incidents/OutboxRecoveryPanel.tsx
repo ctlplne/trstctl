@@ -1,6 +1,7 @@
 import type { OutboxReconciliationConflictList } from "@/lib/api";
 import { formatDateTime } from "@/i18n/format";
 import { translateNow } from "@/i18n/I18nProvider";
+import { StatusBadge } from "@/components/StatusBadge";
 
 export function OutboxRecoveryPanel({ conflicts }: { conflicts: OutboxReconciliationConflictList }) {
   if (!Array.isArray(conflicts.items) || conflicts.items.length === 0) {
@@ -28,9 +29,7 @@ export function OutboxRecoveryPanel({ conflicts }: { conflicts: OutboxReconcilia
                   {translateNow("source.sequence.0740f4bade")} {conflict.source_event_sequence} · {formatDateTime(conflict.detected_at)}
                 </p>
               </div>
-              <span className="rounded-full border border-warning/50 bg-warning/10 px-2 py-1 text-xs font-medium text-warning-foreground">
-                {conflict.status}
-              </span>
+              <StatusBadge vocabulary="delivery" value={conflict.status} tone="warning" />
             </div>
             <dl className="grid gap-3 text-sm lg:grid-cols-2">
               <div>

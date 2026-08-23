@@ -1246,7 +1246,7 @@ function RiskScoreMeter({ risk }: { risk: CredentialRisk }) {
   );
 }
 
-// The chips answer "why is this row here": the ranked factors with a
+// The compact summary answers "why is this row here": the ranked factors with a
 // meaningful contribution, biggest first, capped at two so the column stays
 // scannable.
 export function rankedRiskFactors(risk: CredentialRisk, limit = 2): Array<{ factor: RiskFactor; percent: number }> {
@@ -1261,15 +1261,18 @@ function RiskFactorChips({ risk }: { risk: CredentialRisk }) {
   const ranked = rankedRiskFactors(risk);
   if (ranked.length === 0) return <span className="text-caption text-muted-foreground">{translateNow("risk.factorChips.none")}</span>;
   return (
-    <div className="flex flex-wrap gap-1">
-      {ranked.map(({ factor, percent }) => (
-        <span
-          key={factor}
-          className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-2xs"
-          data-testid={`risk-factor-chip-${factor}`}
-        >
-          <span className="text-muted-foreground">{factorLabels[factor]}</span>
-          <Num>{String(percent)}</Num>
+    <div className="flex flex-wrap items-center gap-1.5 text-2xs">
+      {ranked.map(({ factor, percent }, index) => (
+        <span key={factor} className="contents">
+          <span className="inline-flex items-center gap-1" data-testid={`risk-factor-chip-${factor}`}>
+            <span className="text-muted-foreground">{factorLabels[factor]}</span>
+            <Num>{String(percent)}</Num>
+          </span>
+          {index < ranked.length - 1 ? (
+            <span aria-hidden="true" className="text-muted-foreground">
+              ·
+            </span>
+          ) : null}
         </span>
       ))}
     </div>

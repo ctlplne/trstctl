@@ -1,7 +1,7 @@
 import { translateNow } from "@/i18n/I18nProvider";
 export type StatusTone = "operate" | "observe" | "disclose" | "success" | "warning" | "critical" | "high" | "medium" | "low" | "neutral" | "info";
 
-export type StatusVocabulary = "agent" | "certificate" | "delivery" | "expiry" | "honesty" | "lifecycle" | "risk";
+export type StatusVocabulary = "agent" | "certificate" | "delivery" | "discovery" | "expiry" | "honesty" | "lifecycle" | "risk";
 
 export type StatusDescriptor = {
   label: string;
@@ -245,6 +245,37 @@ export const agentStatus: Record<string, StatusDescriptor> = {
   },
 };
 
+export const discoveryStatus: Record<string, StatusDescriptor> = {
+  unmanaged: {
+    get label() {
+      return translateNow("discovery.findings.statusUnmanaged");
+    },
+    tone: "critical",
+    order: 1,
+  },
+  investigating: {
+    get label() {
+      return translateNow("discovery.findings.statusInvestigating");
+    },
+    tone: "warning",
+    order: 2,
+  },
+  managed: {
+    get label() {
+      return translateNow("discovery.findings.statusManaged");
+    },
+    tone: "success",
+    order: 3,
+  },
+  dismissed: {
+    get label() {
+      return translateNow("discovery.findings.statusDismissed");
+    },
+    tone: "neutral",
+    order: 4,
+  },
+};
+
 export const deliveryStatus: Record<string, StatusDescriptor> = {
   pending: {
     get label() {
@@ -361,6 +392,7 @@ export const statusVocabulary: Record<StatusVocabulary, Record<string, StatusDes
   agent: agentStatus,
   certificate: certificateStatus,
   delivery: deliveryStatus,
+  discovery: discoveryStatus,
   expiry: expiryBands,
   honesty: honestyModes,
   lifecycle: lifecycleStatus,

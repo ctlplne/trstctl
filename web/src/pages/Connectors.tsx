@@ -28,22 +28,12 @@ import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 // yet audited for agent execution).
 function VantageBadge({ vantage }: { vantage: string }) {
   if (vantage === "host_agent") {
-    return (
-      <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">{translateNow("source.vantage.host.a3vant0002")}</span>
-    );
+    return <span className="text-xs font-medium text-muted-foreground">{translateNow("source.vantage.host.a3vant0002")}</span>;
   }
   if (vantage === "network_relay") {
-    return (
-      <span className="rounded-full border border-status-warning px-2 py-0.5 text-xs text-status-warning">
-        {translateNow("source.vantage.relay.a3vant0003")}
-      </span>
-    );
+    return <span className="text-xs font-medium text-status-warning">{translateNow("source.vantage.relay.a3vant0003")}</span>;
   }
-  return (
-    <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
-      {translateNow("source.vantage.control.plane.a3vant0004")}
-    </span>
-  );
+  return <span className="text-xs font-medium text-muted-foreground">{translateNow("source.vantage.control.plane.a3vant0004")}</span>;
 }
 
 export function Connectors() {

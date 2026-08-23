@@ -76,4 +76,13 @@ describe("quiet confidence v2", () => {
 
     expect(offenders).toEqual([]);
   });
+
+  it("keeps text-bearing pill shapes out of product pages", () => {
+    const offenders = [path.join(webRoot, "src/components"), path.join(webRoot, "src/pages")]
+      .flatMap(productTsxFiles)
+      .filter((file) => /className\s*=\s*["'][^"']*\brounded-full\b[^"']*\bpx-/.test(readFileSync(file, "utf8")))
+      .map((file) => path.relative(webRoot, file));
+
+    expect(offenders).toEqual([]);
+  });
 });

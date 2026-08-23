@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Workloads } from "@/pages/Workloads";
 
@@ -37,7 +38,7 @@ describe("workload identity disclosure surface", () => {
     expect(screen.getByRole("heading", { name: "Workloads" })).toBeInTheDocument();
     expect(screen.getByText(/where an app runs.*short-lived identity instead of a standing secret/i)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Workload identity needs a trust source" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Set up workload identity" })).toHaveAttribute("href", "#attestation-heading");
+    expect(screen.getByRole("button", { name: "Set up workload identity" })).toHaveAttribute("aria-expanded", "false");
     expect(await screen.findByText("CAP-K8S-04")).toBeInTheDocument();
     expect(await screen.findByText("CAP-K8S-07")).toBeInTheDocument();
     expect(screen.getByText("trustbundles/status: update, patch")).toBeInTheDocument();
@@ -63,11 +64,23 @@ describe("workload identity disclosure surface", () => {
     expect(screen.queryByRole("button", { name: /revoke now|renew now/i })).not.toBeInTheDocument();
   });
 
-  it("renders attested SVID controls without token leakage or fixture rows", async () => {
+  it("reveals trust setup on request and keeps unusable proof and rotation forms out of the opening view", async () => {
+    const user = userEvent.setup();
     renderWorkloads();
 
     expect(await screen.findByText("CAP-K8S-04")).toBeInTheDocument();
     expect(screen.getByText("Workload attestation chain")).toBeInTheDocument();
+    const setup = screen.getByRole("button", { name: "Set up workload identity" });
+    expect(setup).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByLabelText("Trust source name")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Rotation JWKS JSON")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Attestation proof payload (base64)")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Issue attested SVID" })).not.toBeInTheDocument();
+
+    await user.click(setup);
+
+    expect(setup).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByLabelText("Trust source name")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Create trust source" })).toBeInTheDocument();
     expect(screen.getByText("No attester trust source has been configured.")).toBeInTheDocument();
     const trustSources = screen.getByRole("group", { name: "Attester trust sources" });
@@ -76,14 +89,7 @@ describe("workload identity disclosure surface", () => {
     expect(within(trustSourceTable).getAllByRole("columnheader")).toHaveLength(5);
     expect(within(trustSourceTable).queryByRole("columnheader", { name: "Version" })).not.toBeInTheDocument();
     expect(within(trustSourceTable).queryByRole("columnheader", { name: "Last rotated" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Issue attested SVID" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Issue attested SVID" })).toBeDisabled();
     expect(screen.getByText("Add a trusted attester before issuing a workload identity.")).toBeInTheDocument();
-    expect(screen.getByLabelText("Attestation method")).toHaveValue("k8s_sat");
-    expect(screen.getByLabelText("Attestation proof payload (base64)")).toBeInTheDocument();
-    expect(screen.getByLabelText("Workload public key")).toBeInTheDocument();
-    expect(screen.getByText("No attested SVID has been issued in this browser session.")).toBeInTheDocument();
-    expect(screen.getByRole("group", { name: "Attested SVID outcomes" })).toHaveAttribute("tabindex", "0");
     expect(screen.getByText("Raw attestation evidence stays out of the browser")).toBeInTheDocument();
     expect(screen.getByText(/Returned certificate PEM and claim maps are discarded/i)).toBeInTheDocument();
     expect(screen.queryByText("Workload attestation fixtures")).not.toBeInTheDocument();

@@ -1457,7 +1457,7 @@ function ShadowPosturePanel({ posture }: { posture: NHIShadowPosture | null }) {
             {t("discovery.shadow.heading")}
           </h2>
         </div>
-        <span className="rounded-full border border-border px-2 py-1 font-mono text-xs text-muted-foreground">{posture.capability}</span>
+        <code className="text-xs text-muted-foreground">{posture.capability}</code>
       </div>
       <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
         <ShadowMetric label={t("discovery.shadow.metricFindings")} value={posture.summary.findings} />
@@ -1498,9 +1498,7 @@ function ShadowPosturePanel({ posture }: { posture: NHIShadowPosture | null }) {
                     <td>{finding.kind}</td>
                     <td>{finding.surface || "-"}</td>
                     <td>
-                      <span className={`inline-flex rounded-full border px-2 py-1 text-xs font-medium ${severityTone(finding.severity)}`}>
-                        {finding.severity}
-                      </span>
+                      <StatusBadge vocabulary="risk" value={finding.severity} />
                     </td>
                     <td className="max-w-[26rem] text-sm">{finding.recommendation}</td>
                   </tr>
@@ -1550,19 +1548,6 @@ function topRecordEntries(value: unknown, limit: number): { key: string; value: 
     .filter((entry) => entry.key && Number.isFinite(entry.value) && entry.value > 0)
     .sort((a, b) => b.value - a.value || a.key.localeCompare(b.key))
     .slice(0, limit);
-}
-
-function severityTone(severity: string): string {
-  switch (severity) {
-    case "critical":
-      return "border-destructive/60 bg-destructive/15 text-destructive";
-    case "high":
-      return "border-status-warning/60 bg-status-warning/15 text-status-warning";
-    case "medium":
-      return "border-accent/40 bg-accent/10 text-accent-foreground";
-    default:
-      return "border-muted-foreground/30 bg-muted text-muted-foreground";
-  }
 }
 
 function MonitoringPanel({ monitoring, onCreateSource }: { monitoring: DiscoveryMonitoring | null; onCreateSource: () => void }) {
@@ -2317,28 +2302,20 @@ function FindingDetail({ label, value }: { label: string; value: string }) {
 }
 
 function TriagePill({ status }: { status: FindingTriageStatus }) {
-  const { t } = useTranslation();
-  const tone =
-    status === "managed"
-      ? "border-status-success/40 bg-status-success/10 text-status-success"
-      : status === "dismissed"
-        ? "border-muted-foreground/30 bg-muted text-muted-foreground"
-        : status === "investigating"
-          ? "border-status-warning/40 bg-status-warning/10 text-status-warning"
-          : "border-destructive/40 bg-destructive/10 text-destructive";
-  return <span className={`inline-flex rounded-full border px-2 py-1 text-xs font-medium ${tone}`}>{triageStatusLabel(t, status)}</span>;
+  return <StatusBadge vocabulary="discovery" value={status} />;
 }
 
 function TagList({ tags }: { tags: string[] }) {
   if (tags.length === 0) return <span className="text-muted-foreground">-</span>;
   return (
-    <div className="flex flex-wrap gap-1">
-      {tags.map((tag) => (
-        <span key={tag} className="rounded-full border border-border px-2 py-1 text-xs">
+    <span className="text-xs">
+      {tags.map((tag, index) => (
+        <span key={tag}>
+          {index > 0 && <span aria-hidden="true"> · </span>}
           {tag}
         </span>
       ))}
-    </div>
+    </span>
   );
 }
 

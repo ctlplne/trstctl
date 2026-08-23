@@ -999,6 +999,7 @@ const esESCatalog = {
   "request.wizard.noOwnersHelp": "Pide a un operador que cree un propietario responsable antes de solicitar una credencial.",
   "identities.decommission.description":
     "Retire o revoque identidades en respuesta a bajas de RR. HH., terminaciones de proveedores o ventanas de inactividad.",
+  "identities.decommission.open": "Abrir controles de retirada",
   "state.permissionDenied": "Permiso denegado",
   "grid.state.loading": "Cargando filas...",
   "grid.state.error": "No se pudieron cargar las filas",
@@ -4345,7 +4346,6 @@ const esESCatalog = {
   "source.license.feature.de93785a58": "Característica de licencia",
   "source.license.tier.0c9a751553": "Nivel de licencia",
   "source.lifecycle.identity.b788cc9a64": "Identidad del ciclo de vida",
-  "source.lifecycle.state.machine.4fd45925e4": "Máquina de estados del ciclo de vida",
   "source.limit.674b0ed54b": "Limit",
   "source.line.d7852cd0d2": "Line",
   "source.load.next.metadata.page.8cd7685eed": "Cargar siguiente página de metadatos",
@@ -5709,6 +5709,9 @@ const esESCatalog = {
   "identities.page.answer": "Qué máquinas y servicios tienen identidades y si están en buen estado.",
   "identities.page.details":
     "Los estados exactos del ciclo de vida, los ID de responsables, los tipos de credenciales, los recibos de conectores, las huellas, las rotaciones, el impacto en el grafo y los atributos sin procesar siguen disponibles en la tabla y el panel de detalles.",
+  "identities.lifecycle.nextHeading": "Siguientes acciones válidas",
+  "identities.lifecycle.nextDescription": "Estas son las únicas acciones que permite el estado actual de esta identidad.",
+  "identities.lifecycle.rulesSummary": "Mostrar todas las reglas del ciclo de vida",
   "identities.find.action": "Buscar identidades",
   "identities.search.label": "Buscar identidades",
   "identities.search.placeholder": "Nombre, responsable o tipo",

@@ -979,8 +979,13 @@ describe("i18n boundary", () => {
       // Quiet-confidence v4 re-pin: advanced secret administration closes by
       // default while remaining one click away. Machine-authored es/de —
       // FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "2b09022c31baecd5a73e5e9077839cb94671d9e575abdc9f70e08cef11be3f20",
-      "de-DE": "2a7dec5d7d6c955b2ad26984f0b9c7a5ca99ad5422fd0e05034fe9209f4882e6",
+      // Quiet-confidence v5 re-pin: identity lifecycle and fleet-wide
+      // decommission controls now disclose progressively, while the one-click
+      // valid next actions stay translated. The retired internal "state
+      // machine" heading is removed. Machine-authored es/de — FLAGGED FOR
+      // HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "e7aefbd1f82c7123a9986b18850f099671603c6b83d49c002502f68c90b9a2ee",
+      "de-DE": "f6bf7df97376eedf9e19f844264035f7b7a7b9ee2efd4f382364392a00e75059",
     });
   });
 

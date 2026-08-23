@@ -1602,7 +1602,7 @@ function LabeledSelect({
 
 function SummaryPill({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-control border border-border px-3 py-2">
+    <div className="border-s border-border ps-3">
       <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd className="text-base font-semibold">{value}</dd>
     </div>

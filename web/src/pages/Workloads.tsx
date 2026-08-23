@@ -4,7 +4,7 @@ import { ErrorState, UnavailableState } from "@/components/StatePrimitives";
 import { PageHeader } from "@/components/PageHeader";
 import { ScrollableTableRegion } from "@/components/ScrollableTableRegion";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Num } from "@/components/typography";
 import {
   api,
@@ -87,6 +87,9 @@ export function Workloads() {
   const [trustSourceMethod, setTrustSourceMethod] = useState<TrustSourceMethod>("k8s_sat");
   const [issueAttestationMethod, setIssueAttestationMethod] = useState<TrustSourceMethod>("k8s_sat");
   const [rotateTrustSourceID, setRotateTrustSourceID] = useState("");
+  const [showTrustSourceSetup, setShowTrustSourceSetup] = useState(false);
+  const [showTrustSourceRotation, setShowTrustSourceRotation] = useState(false);
+  const [showAttestedIssue, setShowAttestedIssue] = useState(false);
   const [csrSupport, setCSRSupport] = useState<KubernetesCSRSupport | null>(null);
   const [trustBundleSupport, setTrustBundleSupport] = useState<KubernetesTrustBundleDistribution | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -300,6 +303,7 @@ export function Workloads() {
       upsertTrustSource(source);
       form.reset();
       setTrustSourceMethod("k8s_sat");
+      setShowTrustSourceSetup(false);
     } catch (err) {
       setTrustSourceError(apiProblemMessage(err, t("workloads.attestation.createErrorFallback")));
     } finally {
@@ -366,9 +370,14 @@ export function Workloads() {
         description={t(hasEnabledTrustSource ? "workloads.page.answerReady" : "workloads.page.answerNeedsTrust")}
         technicalDetails={t("workloads.page.details")}
         actions={
-          <a className={buttonVariants()} href="#attestation-heading">
+          <Button
+            type="button"
+            aria-expanded={showTrustSourceSetup}
+            aria-controls="attester-trust-source-form"
+            onClick={() => setShowTrustSourceSetup((visible) => !visible)}
+          >
             {t("workloads.page.setupAction")}
-          </a>
+          </Button>
         }
       />
 
@@ -729,8 +738,38 @@ export function Workloads() {
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("workloads.attestation.description")}</p>
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-          <form aria-labelledby="attester-trust-source-heading" className="ui-panel grid gap-3 p-comfortable" onSubmit={createAttesterTrustSource}>
+        <div className="flex flex-wrap gap-2">
+          {attesterTrustSources.length > 0 ? (
+            <Button
+              type="button"
+              variant="outline"
+              aria-expanded={showTrustSourceRotation}
+              aria-controls="attester-trust-rotate-form"
+              onClick={() => setShowTrustSourceRotation((visible) => !visible)}
+            >
+              {t("workloads.attestation.rotateTrustSource")}
+            </Button>
+          ) : null}
+          {hasEnabledTrustSource ? (
+            <Button
+              type="button"
+              variant="outline"
+              aria-expanded={showAttestedIssue}
+              aria-controls="attested-svid-issue-form"
+              onClick={() => setShowAttestedIssue((visible) => !visible)}
+            >
+              {t("workloads.attestation.issueButton")}
+            </Button>
+          ) : null}
+        </div>
+
+        {showTrustSourceSetup ? (
+          <form
+            id="attester-trust-source-form"
+            aria-labelledby="attester-trust-source-heading"
+            className="ui-panel grid max-w-3xl gap-3 p-comfortable"
+            onSubmit={createAttesterTrustSource}
+          >
             <div>
               <h3 id="attester-trust-source-heading" className="text-title font-semibold">
                 {t("workloads.attestation.trustSourceHeading")}
@@ -792,8 +831,15 @@ export function Workloads() {
               {t("workloads.attestation.createTrustSource")}
             </Button>
           </form>
+        ) : null}
 
-          <form aria-labelledby="attester-trust-rotate-heading" className="ui-panel grid gap-3 p-comfortable" onSubmit={rotateAttesterTrustSource}>
+        {showTrustSourceRotation ? (
+          <form
+            id="attester-trust-rotate-form"
+            aria-labelledby="attester-trust-rotate-heading"
+            className="ui-panel grid max-w-3xl gap-3 p-comfortable"
+            onSubmit={rotateAttesterTrustSource}
+          >
             <div>
               <h3 id="attester-trust-rotate-heading" className="text-title font-semibold">
                 {t("workloads.attestation.rotateHeading")}
@@ -848,7 +894,7 @@ export function Workloads() {
               {t("workloads.attestation.rotateTrustSource")}
             </Button>
           </form>
-        </div>
+        ) : null}
 
         {trustSourceError && <ErrorState title={t("workloads.attestation.errorTitle")}>{trustSourceError}</ErrorState>}
         <ScrollableTableRegion className="ui-panel" label={t("workloads.attestation.caption")}>
@@ -925,85 +971,95 @@ export function Workloads() {
           </table>
         </ScrollableTableRegion>
 
-        <form aria-labelledby="attested-issue-heading" className="ui-panel grid gap-3 p-comfortable" onSubmit={issueAttestedSVID}>
-          <div>
-            <h3 id="attested-issue-heading" className="text-title font-semibold">
-              {t("workloads.attestation.issueHeading")}
-            </h3>
-            <p className="mt-1 text-sm text-muted-foreground">{t("workloads.attestation.issueDescription")}</p>
-          </div>
-          <div className="grid gap-3 md:grid-cols-[12rem_1fr_1fr_10rem_auto]">
-            <label className="grid gap-1 text-sm font-medium">
-              {t("workloads.attestation.method")}
-              <select
-                className="ui-input"
-                name="method"
-                value={issueAttestationMethod}
-                onChange={(event) => setIssueAttestationMethod(event.target.value as TrustSourceMethod)}
-              >
-                {attesterMethods.map((method) => (
-                  <option key={method.value} value={method.value}>
-                    {t(method.labelKey)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-1 text-sm font-medium">
-              {t("workloads.attestation.proofPayload")}
-              <textarea className="ui-input min-h-20 font-mono text-xs" name="payload_base64" required />
-            </label>
-            <label className="grid gap-1 text-sm font-medium">
-              {t("workloads.attestation.publicKey")}
-              <textarea className="ui-input min-h-20 font-mono text-xs" name="public_key_pem" required />
-            </label>
-            <label className="grid gap-1 text-sm font-medium">
-              {t("workloads.attestation.svidTTL")}
-              <input className="ui-input" type="number" min={60} max={86400} name="ttl_seconds" defaultValue={600} />
-            </label>
-            <Button type="submit" className="self-end" disabled={busy === "attested-svid" || !canIssueSelectedMethod}>
-              {busy === "attested-svid" ? <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
-              {t("workloads.attestation.issueButton")}
-            </Button>
-          </div>
-          {!canIssueSelectedMethod ? <p className="text-sm text-muted-foreground">{t("workloads.attestation.addTrustBeforeIssue")}</p> : null}
-        </form>
+        {!hasEnabledTrustSource ? <p className="text-sm text-muted-foreground">{t("workloads.attestation.addTrustBeforeIssue")}</p> : null}
+
+        {showAttestedIssue && hasEnabledTrustSource ? (
+          <form
+            id="attested-svid-issue-form"
+            aria-labelledby="attested-issue-heading"
+            className="ui-panel grid gap-3 p-comfortable"
+            onSubmit={issueAttestedSVID}
+          >
+            <div>
+              <h3 id="attested-issue-heading" className="text-title font-semibold">
+                {t("workloads.attestation.issueHeading")}
+              </h3>
+              <p className="mt-1 text-sm text-muted-foreground">{t("workloads.attestation.issueDescription")}</p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-[12rem_1fr_1fr_10rem_auto]">
+              <label className="grid gap-1 text-sm font-medium">
+                {t("workloads.attestation.method")}
+                <select
+                  className="ui-input"
+                  name="method"
+                  value={issueAttestationMethod}
+                  onChange={(event) => setIssueAttestationMethod(event.target.value as TrustSourceMethod)}
+                >
+                  {attesterMethods.map((method) => (
+                    <option key={method.value} value={method.value}>
+                      {t(method.labelKey)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-1 text-sm font-medium">
+                {t("workloads.attestation.proofPayload")}
+                <textarea className="ui-input min-h-20 font-mono text-xs" name="payload_base64" required />
+              </label>
+              <label className="grid gap-1 text-sm font-medium">
+                {t("workloads.attestation.publicKey")}
+                <textarea className="ui-input min-h-20 font-mono text-xs" name="public_key_pem" required />
+              </label>
+              <label className="grid gap-1 text-sm font-medium">
+                {t("workloads.attestation.svidTTL")}
+                <input className="ui-input" type="number" min={60} max={86400} name="ttl_seconds" defaultValue={600} />
+              </label>
+              <Button type="submit" className="self-end" disabled={busy === "attested-svid" || !canIssueSelectedMethod}>
+                {busy === "attested-svid" ? <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
+                {t("workloads.attestation.issueButton")}
+              </Button>
+            </div>
+          </form>
+        ) : null}
         {attestationError && <ErrorState title={t("workloads.attestation.issueErrorTitle")}>{attestationError}</ErrorState>}
-        <AttesterBreakdown rows={attestedSVIDs} failures={attestationFailures} />
-        <ScrollableTableRegion className="ui-panel" label={t("workloads.attestation.outcomesCaption")}>
-          <table className="ui-table min-w-[58rem]">
-            <caption className="sr-only">{t("workloads.attestation.outcomesCaption")}</caption>
-            <thead>
-              <tr>
-                <th scope="col">{translateNow("source.credential.b1c42b3ce1")}</th>
-                <th scope="col">{translateNow("source.subject.6897128384")}</th>
-                <th scope="col">{translateNow("source.method.52a0f9b65b")}</th>
-                <th scope="col">{translateNow("source.selectors.d27e6f722c")}</th>
-                <th scope="col">{translateNow("source.verified.4f7838402f")}</th>
-                <th scope="col">{translateNow("source.expires.f6725f3af0")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {attestedSVIDs.length === 0 ? (
+        {attestedSVIDs.length > 0 || attestationFailures.length > 0 ? <AttesterBreakdown rows={attestedSVIDs} failures={attestationFailures} /> : null}
+        {attestedSVIDs.length > 0 ? (
+          <ScrollableTableRegion className="ui-panel" label={t("workloads.attestation.outcomesCaption")}>
+            <table className="ui-table min-w-[58rem]">
+              <caption className="sr-only">{t("workloads.attestation.outcomesCaption")}</caption>
+              <thead>
                 <tr>
-                  <td colSpan={6} className="text-muted-foreground">
-                    {translateNow("source.no.attested.svid.has.been.issued.in.this.b.8fee10fc2a")}
-                  </td>
+                  <th scope="col">{translateNow("source.credential.b1c42b3ce1")}</th>
+                  <th scope="col">{translateNow("source.subject.6897128384")}</th>
+                  <th scope="col">{translateNow("source.method.52a0f9b65b")}</th>
+                  <th scope="col">{translateNow("source.selectors.d27e6f722c")}</th>
+                  <th scope="col">{translateNow("source.verified.4f7838402f")}</th>
+                  <th scope="col">{translateNow("source.expires.f6725f3af0")}</th>
                 </tr>
-              ) : (
-                attestedSVIDs.map((row) => (
-                  <tr key={row.credential_id} className="align-top">
-                    <td className="font-mono text-xs">{row.credential_id}</td>
-                    <td>{row.subject}</td>
-                    <td>{row.attestation.method}</td>
-                    <td>{row.attestation.selectors.join(", ") || "-"}</td>
-                    <td>{formatDate(row.attestation.verified_at)}</td>
-                    <td>{formatDate(row.not_after)}</td>
+              </thead>
+              <tbody>
+                {attestedSVIDs.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="text-muted-foreground">
+                      {translateNow("source.no.attested.svid.has.been.issued.in.this.b.8fee10fc2a")}
+                    </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </ScrollableTableRegion>
+                ) : (
+                  attestedSVIDs.map((row) => (
+                    <tr key={row.credential_id} className="align-top">
+                      <td className="font-mono text-xs">{row.credential_id}</td>
+                      <td>{row.subject}</td>
+                      <td>{row.attestation.method}</td>
+                      <td>{row.attestation.selectors.join(", ") || "-"}</td>
+                      <td>{formatDate(row.attestation.verified_at)}</td>
+                      <td>{formatDate(row.not_after)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </ScrollableTableRegion>
+        ) : null}
         <UnavailableState title={translateNow("source.raw.attestation.evidence.stays.out.of.the.6ffaf184fc")}>
           {translateNow("source.submitted.proof.fields.are.cleared.after.i.b9215d2471")}
         </UnavailableState>

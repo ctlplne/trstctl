@@ -343,6 +343,7 @@ export function Identities() {
   const [decommissionResult, setDecommissionResult] = useState<NHIDecommissionResponse | null>(null);
   const [pendingImpact, setPendingImpact] = useState<BlastRadiusState>(emptyBlastRadiusState);
   const pendingConfirmRef = useRef<HTMLInputElement>(null);
+  const pendingReturnFocusRef = useRef<HTMLButtonElement | null>(null);
   const bulkConfirmRef = useRef<HTMLButtonElement>(null);
   const impactRequestRef = useRef(0);
   const ownerByID = useMemo(() => new Map((owners ?? []).map((owner) => [owner.id, owner])), [owners]);
@@ -443,10 +444,16 @@ export function Identities() {
    * which is first parked in `pending` so the user must confirm it in a dialog that
    * names the credential (SURFACE-007). */
   function clearPending() {
+    const returnTarget = pendingReturnFocusRef.current;
     impactRequestRef.current += 1;
     setPending(null);
     setPendingConfirmName("");
     setPendingImpact(emptyBlastRadiusState);
+    if (returnTarget) {
+      requestAnimationFrame(() => {
+        if (document.contains(returnTarget)) returnTarget.focus();
+      });
+    }
   }
 
   const loadBlastRadius = useCallback((identity: Identity) => {
@@ -595,39 +602,14 @@ export function Identities() {
       {
         id: "actions",
         header: "Actions",
-        cell: (identity) => {
-          const state = identityState(identity);
-          const actions = actionsFor(state);
-          return (
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" size="sm" variant="outline" onClick={() => openDetail(identity)}>
-                {translateNow("source.view.details.d1bf045bb5")}
-              </Button>
-              {actions.map((a) => (
-                <div key={a.to} className="space-y-1">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={isDestructive(a.to) ? "outline" : "default"}
-                    disabled={busyId === identity.id || Boolean(deniedTransitions[deniedKey(identity.id, a.to)])}
-                    aria-describedby={deniedTransitions[deniedKey(identity.id, a.to)] ? `denied-${identity.id}-${a.to}` : undefined}
-                    onClick={() => request(identity, a.to, a.label)}
-                  >
-                    {a.label}
-                  </Button>
-                  {deniedTransitions[deniedKey(identity.id, a.to)] && (
-                    <p id={`denied-${identity.id}-${a.to}`} className="max-w-xs text-xs text-status-warning">
-                      {deniedTransitions[deniedKey(identity.id, a.to)]}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
-          );
-        },
+        cell: (identity) => (
+          <Button type="button" size="sm" variant="outline" onClick={() => openDetail(identity)}>
+            {translateNow("source.view.details.d1bf045bb5")}
+          </Button>
+        ),
       },
     ],
-    [busyId, deniedTransitions, latestDelivery, latestRotation, openDetail, ownerByID, request],
+    [latestDelivery, latestRotation, openDetail, ownerByID],
   );
 
   return (
@@ -664,75 +646,6 @@ export function Identities() {
         <p role="status" className="mb-3 text-sm text-status-success">
           {notice}
         </p>
-      )}
-
-      {pending && (
-        <Dialog
-          open
-          role="alertdialog"
-          onClose={clearPending}
-          titleId="confirm-title"
-          descriptionId="confirm-desc"
-          initialFocusRef={pendingConfirmRef}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          overlayClassName="absolute inset-0 bg-black/55"
-          panelClassName="relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-panel border border-destructive/40 bg-card p-4 shadow-elevation2"
-        >
-          <h2 id="confirm-title" className="text-title font-semibold text-destructive">
-            {pending.label} “{pending.name}”?
-          </h2>
-          <p id="confirm-desc" className="mt-1 text-sm text-destructive">
-            {pending.to === "revoked"
-              ? `Revoking “${pending.name}” permanently invalidates the credential; relying parties will stop trusting it. This cannot be undone.`
-              : translateNow("source.retiring.value1.discards.the.credential.re.7f368527a3", { value1: pending.name })}
-          </p>
-          <BlastRadiusImpactPanel state={pendingImpact} />
-          <div className="mt-3 grid gap-3">
-            <label className="block text-sm font-medium text-destructive" htmlFor="destructive-confirm-name">
-              {translateNow("source.type.credential.name.to.confirm.cc8d26a179")}
-            </label>
-            <input
-              ref={pendingConfirmRef}
-              id="destructive-confirm-name"
-              value={pendingConfirmName}
-              onChange={(e) => setPendingConfirmName(e.target.value)}
-              className="rounded-control border border-destructive/40 bg-background px-3 py-2 text-sm text-foreground"
-              placeholder={pending.name}
-            />
-            <label className="block text-sm font-medium text-destructive" htmlFor="destructive-reason">
-              {pending.to === "revoked" ? translateNow("source.revocation.reason.b11670420f") : translateNow("source.transition.reason.2b9e603491")}
-            </label>
-            <textarea
-              id="destructive-reason"
-              value={pendingReason}
-              onChange={(e) => setPendingReason(e.target.value)}
-              className="min-h-20 rounded-control border border-destructive/40 bg-background px-3 py-2 text-sm text-foreground"
-              placeholder={
-                pending.to === "revoked"
-                  ? translateNow("source.e.g.key.compromise.cab.1234.ff97b4f9ff")
-                  : translateNow("source.e.g.record.cleanup.approved.in.cab.1234.8cc38f337d")
-              }
-            />
-          </div>
-          <div className="mt-3 flex gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="destructive"
-              disabled={busyId === pending.id || pendingConfirmName.trim() !== pending.name}
-              onClick={() => {
-                const p = pending;
-                clearPending();
-                void act(p.id, p.to, pendingReason);
-              }}
-            >
-              {translateNow("source.yes.value1.0cb667502c", { value1: pending.label.toLowerCase() })}
-            </Button>
-            <Button type="button" size="sm" variant="ghost" onClick={clearPending}>
-              {translateNow("source.cancel.19766ed6cc")}
-            </Button>
-          </div>
-        </Dialog>
       )}
 
       {selectedRows.length > 0 && (
@@ -893,85 +806,96 @@ export function Identities() {
         <DeliveryEvidencePanel deliveries={deliveryReceipts} rotations={rotationRuns} error={evidenceError} />
       </details>
 
-      <section aria-labelledby="decommission-heading" className="mb-3 grid gap-3 rounded-md border border-border p-3">
+      <section aria-labelledby="decommission-heading" className="mb-3 border-y border-border py-4">
         <div>
           <h2 id="decommission-heading" className="text-title font-semibold">
             {t("identities.decommission.heading")}
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("identities.decommission.description")}</p>
         </div>
-        <form
-          aria-label={t("identities.decommission.ariaLabel")}
-          className="grid gap-3 md:grid-cols-[minmax(10rem,12rem)_1fr_1fr_auto]"
-          onSubmit={(event) => void runDecommission(event)}
-        >
-          <label className="grid gap-1 text-sm font-medium" htmlFor="nhi-decommission-type">
-            {t("identities.decommission.signal")}
-            <select
-              id="nhi-decommission-type"
-              className="ui-input"
-              value={decommissionType}
-              onChange={(event) => {
-                setDecommissionType(event.target.value as DecommissionSignalType);
-                setDecommissionTarget("");
-                setDecommissionResult(null);
-              }}
-            >
-              <option value="departure">{t("identities.decommission.departure")}</option>
-              <option value="vendor_term">{t("identities.decommission.vendorTerm")}</option>
-              <option value="inactivity">{t("identities.decommission.inactivity")}</option>
-            </select>
-          </label>
-          <label className="grid gap-1 text-sm font-medium" htmlFor="nhi-decommission-target">
-            {t(decommissionInputLabelKey(decommissionType))}
-            <input
-              id="nhi-decommission-target"
-              className="ui-input"
-              type={decommissionType === "inactivity" ? "datetime-local" : "text"}
-              value={decommissionTarget}
-              onChange={(event) => setDecommissionTarget(event.target.value)}
-              placeholder={
-                decommissionType === "vendor_term"
-                  ? translateNow("source.acme.saas.5d97e28912")
-                  : decommissionType === "departure"
-                    ? translateNow("source.alice.example.com.ff8d9819fc")
-                    : undefined
-              }
-              required
-            />
-          </label>
-          <label className="grid gap-1 text-sm font-medium" htmlFor="nhi-decommission-reason">
-            {translateNow("source.reason.f81ab834de")}
-            <input
-              id="nhi-decommission-reason"
-              className="ui-input"
-              value={decommissionReason}
-              onChange={(event) => setDecommissionReason(event.target.value)}
-              placeholder={t("identities.decommission.reasonPlaceholder")}
-            />
-          </label>
-          <div className="flex items-end">
-            <Button type="submit" variant="destructive" className="w-full" loading={decommissionBusy}>
-              {t("identities.decommission.submit")}
-            </Button>
-          </div>
-        </form>
+        <details className="group mt-3">
+          <summary className="cursor-pointer list-none font-medium text-brand-accent marker:hidden">
+            {t("identities.decommission.open")}
+            <span aria-hidden="true" className="ms-2 text-muted-foreground group-open:hidden">
+              +
+            </span>
+            <span aria-hidden="true" className="ms-2 hidden text-muted-foreground group-open:inline">
+              −
+            </span>
+          </summary>
+          <form
+            aria-label={t("identities.decommission.ariaLabel")}
+            className="mt-3 grid gap-3 md:grid-cols-[minmax(10rem,12rem)_1fr_1fr_auto]"
+            onSubmit={(event) => void runDecommission(event)}
+          >
+            <label className="grid gap-1 text-sm font-medium" htmlFor="nhi-decommission-type">
+              {t("identities.decommission.signal")}
+              <select
+                id="nhi-decommission-type"
+                className="ui-input"
+                value={decommissionType}
+                onChange={(event) => {
+                  setDecommissionType(event.target.value as DecommissionSignalType);
+                  setDecommissionTarget("");
+                  setDecommissionResult(null);
+                }}
+              >
+                <option value="departure">{t("identities.decommission.departure")}</option>
+                <option value="vendor_term">{t("identities.decommission.vendorTerm")}</option>
+                <option value="inactivity">{t("identities.decommission.inactivity")}</option>
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm font-medium" htmlFor="nhi-decommission-target">
+              {t(decommissionInputLabelKey(decommissionType))}
+              <input
+                id="nhi-decommission-target"
+                className="ui-input"
+                type={decommissionType === "inactivity" ? "datetime-local" : "text"}
+                value={decommissionTarget}
+                onChange={(event) => setDecommissionTarget(event.target.value)}
+                placeholder={
+                  decommissionType === "vendor_term"
+                    ? translateNow("source.acme.saas.5d97e28912")
+                    : decommissionType === "departure"
+                      ? translateNow("source.alice.example.com.ff8d9819fc")
+                      : undefined
+                }
+                required
+              />
+            </label>
+            <label className="grid gap-1 text-sm font-medium" htmlFor="nhi-decommission-reason">
+              {translateNow("source.reason.f81ab834de")}
+              <input
+                id="nhi-decommission-reason"
+                className="ui-input"
+                value={decommissionReason}
+                onChange={(event) => setDecommissionReason(event.target.value)}
+                placeholder={t("identities.decommission.reasonPlaceholder")}
+              />
+            </label>
+            <div className="flex items-end">
+              <Button type="submit" variant="destructive" className="w-full" loading={decommissionBusy}>
+                {t("identities.decommission.submit")}
+              </Button>
+            </div>
+          </form>
 
-        {decommissionResult && (
-          <div role="status" className="rounded-md border border-border p-3 text-sm">
-            <p className="font-medium">
-              {translateNow("source.cap.gov.04.matched.d376577cb5")} {decommissionResult.summary.total_matched}; revoked {decommissionResult.summary.revoked};
-              retired {decommissionResult.summary.retired}; failed {decommissionResult.summary.failed}
-            </p>
-            <ul className="mt-2 space-y-1">
-              {decommissionResult.items.slice(0, 5).map((item) => (
-                <li key={item.identity_id}>
-                  {item.name} {item.action} {translateNow("source.via.4d327af41f")} {item.signal_type}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+          {decommissionResult && (
+            <div role="status" className="mt-3 border-s-2 border-status-success ps-3 text-sm">
+              <p className="font-medium">
+                {translateNow("source.cap.gov.04.matched.d376577cb5")} {decommissionResult.summary.total_matched}; revoked {decommissionResult.summary.revoked};
+                retired {decommissionResult.summary.retired}; failed {decommissionResult.summary.failed}
+              </p>
+              <ul className="mt-2 space-y-1">
+                {decommissionResult.items.slice(0, 5).map((item) => (
+                  <li key={item.identity_id}>
+                    {item.name} {item.action} {translateNow("source.via.4d327af41f")} {item.signal_type}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </details>
       </section>
 
       <DetailDrawer
@@ -994,11 +918,81 @@ export function Identities() {
             if (!selectedId) return;
             setTransitionReasons((current) => ({ ...current, [selectedId]: value }));
           }}
-          onTransition={(to, label) => {
+          onTransition={(to, label, returnFocus) => {
             if (!detail) return;
+            if (isDestructive(to)) pendingReturnFocusRef.current = returnFocus ?? null;
             request(detail, to, label, transitionReasons[detail.id]);
           }}
         />
+        {pending && (
+          <Dialog
+            open
+            role="alertdialog"
+            onClose={clearPending}
+            titleId="confirm-title"
+            descriptionId="confirm-desc"
+            initialFocusRef={pendingConfirmRef}
+            returnFocusRef={pendingReturnFocusRef}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            overlayClassName="absolute inset-0 bg-black/55"
+            panelClassName="relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-panel border border-destructive/40 bg-card p-4 shadow-elevation2"
+          >
+            <h2 id="confirm-title" className="text-title font-semibold text-destructive">
+              {pending.label} “{pending.name}”?
+            </h2>
+            <p id="confirm-desc" className="mt-1 text-sm text-destructive">
+              {pending.to === "revoked"
+                ? `Revoking “${pending.name}” permanently invalidates the credential; relying parties will stop trusting it. This cannot be undone.`
+                : translateNow("source.retiring.value1.discards.the.credential.re.7f368527a3", { value1: pending.name })}
+            </p>
+            <BlastRadiusImpactPanel state={pendingImpact} />
+            <div className="mt-3 grid gap-3">
+              <label className="block text-sm font-medium text-destructive" htmlFor="destructive-confirm-name">
+                {translateNow("source.type.credential.name.to.confirm.cc8d26a179")}
+              </label>
+              <input
+                ref={pendingConfirmRef}
+                id="destructive-confirm-name"
+                value={pendingConfirmName}
+                onChange={(event) => setPendingConfirmName(event.target.value)}
+                className="rounded-control border border-destructive/40 bg-background px-3 py-2 text-sm text-foreground"
+                placeholder={pending.name}
+              />
+              <label className="block text-sm font-medium text-destructive" htmlFor="destructive-reason">
+                {pending.to === "revoked" ? translateNow("source.revocation.reason.b11670420f") : translateNow("source.transition.reason.2b9e603491")}
+              </label>
+              <textarea
+                id="destructive-reason"
+                value={pendingReason}
+                onChange={(event) => setPendingReason(event.target.value)}
+                className="min-h-20 rounded-control border border-destructive/40 bg-background px-3 py-2 text-sm text-foreground"
+                placeholder={
+                  pending.to === "revoked"
+                    ? translateNow("source.e.g.key.compromise.cab.1234.ff97b4f9ff")
+                    : translateNow("source.e.g.record.cleanup.approved.in.cab.1234.8cc38f337d")
+                }
+              />
+            </div>
+            <div className="mt-3 flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                disabled={busyId === pending.id || pendingConfirmName.trim() !== pending.name}
+                onClick={() => {
+                  const transition = pending;
+                  clearPending();
+                  void act(transition.id, transition.to, pendingReason);
+                }}
+              >
+                {translateNow("source.yes.value1.0cb667502c", { value1: pending.label.toLowerCase() })}
+              </Button>
+              <Button type="button" size="sm" variant="ghost" onClick={clearPending}>
+                {translateNow("source.cancel.19766ed6cc")}
+              </Button>
+            </div>
+          </Dialog>
+        )}
       </DetailDrawer>
     </section>
   );
@@ -1181,12 +1175,13 @@ function IdentityDetailPanel({
   rotationRun?: RotationRun;
   reason: string;
   onReasonChange: (value: string) => void;
-  onTransition: (to: TransitionTo, label: string) => void;
+  onTransition: (to: TransitionTo, label: string, returnFocus?: HTMLButtonElement) => void;
 }) {
   const state = identity ? identityState(identity) : "";
   const kind = identity?.kind ? kindCopy[identity.kind] : null;
   const terminal = terminalMessage(state);
   const rows = identity ? attributeRows(identity) : [];
+  const availableActions = actionsFor(state);
 
   return (
     <section aria-labelledby="identity-detail-content-heading" className="text-sm">
@@ -1296,9 +1291,9 @@ function IdentityDetailPanel({
 
           <section aria-labelledby="identity-lifecycle-heading" className="mt-5 border-t border-border pt-4">
             <h3 id="identity-lifecycle-heading" className="font-semibold">
-              {translateNow("source.lifecycle.state.machine.4fd45925e4")}
+              {translateNow("identities.lifecycle.nextHeading")}
             </h3>
-            <p className="mt-1 text-muted-foreground">{translateNow("source.only.valid.next.states.are.enabled.disable.643c38f3f4")}</p>
+            <p className="mt-1 text-muted-foreground">{translateNow("identities.lifecycle.nextDescription")}</p>
             <label htmlFor="transition-reason" className="mt-3 block text-sm font-medium">
               {translateNow("source.transition.reason.2b9e603491")}
             </label>
@@ -1309,36 +1304,69 @@ function IdentityDetailPanel({
               className="mt-1 min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
               placeholder={translateNow("source.e.g.change.approved.in.cab.1234.6a0cc1f9e3")}
             />
-            <div className="mt-3 flex flex-wrap gap-2">
-              {lifecycleTargets.map((target) => {
-                const action = actionForTarget(state, target);
-                const denied = deniedTransitions[deniedKey(identity.id, target)];
-                const disabled = busy || !action || Boolean(denied);
-                const reasonId = `state-machine-${identity.id}-${target}-reason`;
-                return (
-                  <div key={target} className="max-w-xs space-y-1">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={isDestructive(target) ? "outline" : "default"}
-                      disabled={disabled}
-                      aria-describedby={reasonId}
-                      onClick={() => action && onTransition(target, action.label)}
-                    >
-                      {translateNow("source.move.to.beb8194bc4")} {target}
-                    </Button>
-                    <p id={reasonId} className="text-xs text-muted-foreground">
-                      {denied ||
-                        (action
-                          ? translateNow("source.valid.from.value1.ae82fe20dd", { value1: state })
-                          : target === state
-                            ? translateNow("source.already.in.this.state.f32a2089a5")
-                            : translateNow("source.invalid.from.value1.26f942026d", { value1: state || "unknown" }))}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
+            {availableActions.length > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {availableActions.map((action) => {
+                  const denied = deniedTransitions[deniedKey(identity.id, action.to)];
+                  return (
+                    <div key={action.to} className="max-w-xs space-y-1">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={isDestructive(action.to) ? "outline" : "default"}
+                        disabled={busy || Boolean(denied)}
+                        aria-describedby={denied ? `next-${identity.id}-${action.to}-reason` : undefined}
+                        onClick={(event) => onTransition(action.to, action.label, event.currentTarget)}
+                      >
+                        {action.label}
+                      </Button>
+                      {denied ? (
+                        <p id={`next-${identity.id}-${action.to}-reason`} className="text-xs text-status-warning">
+                          {denied}
+                        </p>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            <details className="group mt-4 border-t border-border pt-3">
+              <summary className="cursor-pointer text-sm font-medium text-muted-foreground marker:text-muted-foreground">
+                {translateNow("identities.lifecycle.rulesSummary")}
+              </summary>
+              <p className="mt-2 text-xs text-muted-foreground">{translateNow("source.only.valid.next.states.are.enabled.disable.643c38f3f4")}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {lifecycleTargets.map((target) => {
+                  const action = actionForTarget(state, target);
+                  const denied = deniedTransitions[deniedKey(identity.id, target)];
+                  const disabled = busy || !action || Boolean(denied);
+                  const reasonId = `state-machine-${identity.id}-${target}-reason`;
+                  return (
+                    <div key={target} className="max-w-xs space-y-1">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={isDestructive(target) ? "outline" : "default"}
+                        disabled={disabled}
+                        aria-describedby={reasonId}
+                        onClick={(event) => action && onTransition(target, action.label, event.currentTarget)}
+                      >
+                        {translateNow("source.move.to.beb8194bc4")} {target}
+                      </Button>
+                      <p id={reasonId} className="text-xs text-muted-foreground">
+                        {denied ||
+                          (action
+                            ? translateNow("source.valid.from.value1.ae82fe20dd", { value1: state })
+                            : target === state
+                              ? translateNow("source.already.in.this.state.f32a2089a5")
+                              : translateNow("source.invalid.from.value1.26f942026d", { value1: state || "unknown" }))}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </details>
           </section>
         </>
       )}

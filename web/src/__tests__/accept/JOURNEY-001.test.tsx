@@ -55,6 +55,8 @@ describe("JOURNEY-001 workload owner attested onboarding", () => {
 
     expect(await screen.findByText("No attester trust source has been configured.")).toBeInTheDocument();
 
+    await user.click(screen.getByRole("button", { name: "Set up workload identity" }));
+
     await user.type(screen.getByLabelText("Trust source name"), "prod-k8s");
     await user.type(screen.getByLabelText("Issuer"), "https://kubernetes.default.svc");
     await user.type(screen.getByLabelText("Audience"), "trstctl");
@@ -74,9 +76,11 @@ describe("JOURNEY-001 workload owner attested onboarding", () => {
     expect(within(trustSourceRow!).getByText("trust-source-1")).toBeInTheDocument();
     expect(within(trustSourceRow!).getByText("k8s_sat")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Attestation proof payload (base64)"), { target: { value: "c2F0LWpvdXJuZXktMQ==" } });
-    await user.type(screen.getByLabelText("Workload public key"), "-----BEGIN PUBLIC KEY-----\nSVID\n-----END PUBLIC KEY-----");
     await user.click(screen.getByRole("button", { name: "Issue attested SVID" }));
+    const issueForm = screen.getByRole("form", { name: "Issue attested SVID" });
+    fireEvent.change(within(issueForm).getByLabelText("Attestation proof payload (base64)"), { target: { value: "c2F0LWpvdXJuZXktMQ==" } });
+    await user.type(within(issueForm).getByLabelText("Workload public key"), "-----BEGIN PUBLIC KEY-----\nSVID\n-----END PUBLIC KEY-----");
+    await user.click(within(issueForm).getByRole("button", { name: "Issue attested SVID" }));
 
     expect(apiMock.issueAttestedSVID).toHaveBeenCalledWith({
       method: "k8s_sat",
@@ -86,9 +90,11 @@ describe("JOURNEY-001 workload owner attested onboarding", () => {
     });
     expect(await screen.findByRole("row", { name: /cred-svid-1.*spiffe:\/\/tenant\/ns\/default\/sa\/api/i })).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Rotation JWKS JSON"), { target: { value: '{"keys":[{"kid":"journey-k2"}]}' } });
-    await user.type(screen.getByLabelText("Rotation reason"), "jwks rollover");
     await user.click(screen.getByRole("button", { name: "Rotate trust source" }));
+    const rotateForm = screen.getByRole("form", { name: "Rotate trust material" });
+    fireEvent.change(within(rotateForm).getByLabelText("Rotation JWKS JSON"), { target: { value: '{"keys":[{"kid":"journey-k2"}]}' } });
+    await user.type(within(rotateForm).getByLabelText("Rotation reason"), "jwks rollover");
+    await user.click(within(rotateForm).getByRole("button", { name: "Rotate trust source" }));
 
     expect(apiMock.rotateWorkloadAttesterTrustSource).toHaveBeenCalledWith("trust-source-1", {
       jwks: { keys: [{ kid: "journey-k2" }] },
@@ -96,9 +102,11 @@ describe("JOURNEY-001 workload owner attested onboarding", () => {
     });
     await waitFor(() => expect(trustSourceRow).toHaveTextContent(/Version 2 · Last rotated/));
 
-    fireEvent.change(screen.getByLabelText("Attestation proof payload (base64)"), { target: { value: "c2F0LWpvdXJuZXktMg==" } });
-    fireEvent.change(screen.getByLabelText("Workload public key"), { target: { value: "-----BEGIN PUBLIC KEY-----\nSVID-ROTATED\n-----END PUBLIC KEY-----" } });
-    await user.click(screen.getByRole("button", { name: "Issue attested SVID" }));
+    fireEvent.change(within(issueForm).getByLabelText("Attestation proof payload (base64)"), { target: { value: "c2F0LWpvdXJuZXktMg==" } });
+    fireEvent.change(within(issueForm).getByLabelText("Workload public key"), {
+      target: { value: "-----BEGIN PUBLIC KEY-----\nSVID-ROTATED\n-----END PUBLIC KEY-----" },
+    });
+    await user.click(within(issueForm).getByRole("button", { name: "Issue attested SVID" }));
 
     expect(apiMock.issueAttestedSVID).toHaveBeenLastCalledWith({
       method: "k8s_sat",
