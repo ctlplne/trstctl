@@ -19990,77 +19990,29 @@ export function interpolateMessage(message: string, values: MessageValues = {}):
   });
 }
 
+const pseudoTargetAlphabet = "ÅƁÇÐÉƑĜĦĪĴĶĻṀÑØƤǪŘŞŦŮṼŴẊÝŽåƀçďéƒĝħīĵķļṁñøƥǫřşŧůṽŵẋýž";
+
 export function pseudoLocalize(message: string): string {
-  const map: Record<string, string> = {
-    A: "Å",
-    B: "Ɓ",
-    C: "Ç",
-    D: "Ð",
-    E: "É",
-    F: "Ƒ",
-    G: "Ĝ",
-    H: "Ħ",
-    I: "Ī",
-    J: "Ĵ",
-    K: "Ķ",
-    L: "Ļ",
-    M: "Ṁ",
-    N: "Ñ",
-    O: "Ø",
-    P: "Ƥ",
-    Q: "Ǫ",
-    R: "Ř",
-    S: "Ş",
-    T: "Ŧ",
-    U: "Ů",
-    V: "Ṽ",
-    W: "Ŵ",
-    X: "Ẋ",
-    Y: "Ý",
-    Z: "Ž",
-    a: "å",
-    b: "ƀ",
-    c: "ç",
-    d: "ď",
-    e: "é",
-    f: "ƒ",
-    g: "ĝ",
-    h: "ħ",
-    i: "ī",
-    j: "ĵ",
-    k: "ķ",
-    l: "ļ",
-    m: "ṁ",
-    n: "ñ",
-    o: "ø",
-    p: "ƥ",
-    q: "ǫ",
-    r: "ř",
-    s: "ş",
-    t: "ŧ",
-    u: "ů",
-    v: "ṽ",
-    w: "ŵ",
-    x: "ẋ",
-    y: "ý",
-    z: "ž",
-  };
-  return `[${message.replace(/[A-Za-z]/g, (char) => map[char] ?? char)}]`;
+  return `[${message.replace(/[A-Za-z]/g, (char) => {
+    const code = char.charCodeAt(0);
+    return pseudoTargetAlphabet[code < 91 ? code - 65 : code - 71];
+  })}]`;
 }
 
 function buildCatalog(localize: (message: string) => string): Record<MessageKey, string> {
   return Object.fromEntries(orderedMessageKeys.map((key, index) => [key, localize(defaultMessageValues[index])])) as Record<MessageKey, string>;
 }
 
-/** Rebuild a lazy production catalog whose generated chunk carries values
- * only. Message IDs already exist in the eager English catalog, so sending
- * those same IDs again for every locale is duplicate wire data. The exact
- * length check makes stale generated output fail closed before any lookup. */
-export function buildTranslatedCatalog(values: readonly string[]): Record<MessageKey, string> {
+/** Rebuild a lazy production catalog whose generated chunk carries changed
+ * values only. Message IDs and unchanged values already exist in the eager
+ * English catalog, so sending them again for every locale is duplicate wire
+ * data. The exact length check makes stale output fail closed; null is the
+ * generator's explicit marker for an unchanged canonical English value. */
+export function buildTranslatedCatalog(values: readonly (string | null)[]): Record<MessageKey, string> {
   if (values.length !== orderedMessageKeys.length) {
     throw new Error(`translated catalog has ${values.length} values for ${orderedMessageKeys.length} message keys`);
   }
-  return Object.fromEntries(orderedMessageKeys.map((key, index) => [key, values[index]])) as Record<MessageKey, string>;
+  return Object.fromEntries(orderedMessageKeys.map((key, index) => [key, values[index] ?? defaultMessageValues[index]])) as Record<MessageKey, string>;
 }
 
 /* S-C10: the production translation catalogs moved to per-locale modules
@@ -20070,10 +20022,12 @@ export function buildTranslatedCatalog(values: readonly string[]): Record<Messag
  * English — never to raw keys. */
 export type LazyLocale = "es-ES" | "de-DE";
 
+const pseudoCatalog = buildCatalog(pseudoLocalize);
+
 export const eagerCatalogs: Record<Exclude<Locale, LazyLocale>, Record<MessageKey, string>> = {
   "en-US": buildCatalog((message) => message),
-  "en-XA": buildCatalog(pseudoLocalize),
-  "ar-XB": buildCatalog(pseudoLocalize),
+  "en-XA": pseudoCatalog,
+  "ar-XB": pseudoCatalog,
 };
 
 export function isLazyLocale(locale: Locale): locale is LazyLocale {

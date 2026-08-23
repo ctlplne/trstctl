@@ -210,6 +210,14 @@ describe("naming parity (S-A2)", () => {
     });
   }
 
+  it('names the dev-only /styleguide route "Design system" in its H1 and document title', async () => {
+    const view = renderAt("/styleguide");
+    const heading = await screen.findByRole("heading", { level: 1, name: "Design system" });
+    expect(heading).toBeInTheDocument();
+    await waitFor(() => expect(document.title).toBe("Design system · trstctl"));
+    view.unmount();
+  });
+
   for (const target of certificateDesignTargets) {
     it(`opens ${target.to} with a plain answer, exact proof, and one obvious next action`, async () => {
       const view = renderAt(target.to);

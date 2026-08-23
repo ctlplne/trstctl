@@ -12,6 +12,7 @@ describe("served styleguide", () => {
     render(<Styleguide />);
 
     expect(screen.getByRole("heading", { name: "Design system" })).toBeInTheDocument();
+    expect(screen.getByRole("tablist", { name: "Design system sections" })).toBeInTheDocument();
     expect(screen.getByText("Internal component, state, content, and accessibility contract.")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Color tokens" })).toBeInTheDocument();
 

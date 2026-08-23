@@ -93,7 +93,7 @@ export function Styleguide() {
 
       <PageTabs
         idPrefix="styleguide"
-        ariaLabel="Styleguide sections"
+        ariaLabel="Design system sections"
         active={tab}
         onChange={setTab}
         tabs={[
