@@ -12,7 +12,7 @@ algorithms without rewriting the system) and PQC migration (moving your estate t
 The mental model: lifecycle is the superintendent who cuts a new key before the old one
 wears out; crypto-agility is a master key-cutting machine that can switch blank types
 instantly; PQC migration is the project to re-cut every key in the building to a new,
-tamper-proof blank.
+quantum-resistant blank.
 
 ## Why it exists
 

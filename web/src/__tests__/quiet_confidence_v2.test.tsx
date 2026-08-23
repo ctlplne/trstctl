@@ -10,6 +10,10 @@ const webRoot = process.cwd();
 const css = readFileSync(path.join(webRoot, "src/index.css"), "utf8");
 const shellSource = readFileSync(path.join(webRoot, "src/components/AppShell.tsx"), "utf8");
 const kpiSource = readFileSync(path.join(webRoot, "src/components/ModuleKpiStrip.tsx"), "utf8");
+const adminHeaderSource = readFileSync(path.join(webRoot, "src/components/AdminHeaderActions.tsx"), "utf8");
+const certificateSource = readFileSync(path.join(webRoot, "src/pages/Certificates.tsx"), "utf8");
+const buttonSource = readFileSync(path.join(webRoot, "src/components/ui/button.tsx"), "utf8");
+const buttonStorySource = readFileSync(path.join(webRoot, "src/components/ui/button.stories.tsx"), "utf8");
 
 function productTsxFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -89,5 +93,21 @@ describe("quiet confidence v2", () => {
       .map((file) => path.relative(webRoot, file));
 
     expect(offenders).toEqual([]);
+  });
+
+  it("folds redundant administration links into one quiet secondary disclosure", () => {
+    expect(adminHeaderSource).toContain('<details className="group relative">');
+    expect(adminHeaderSource).toContain('t("dashboard.moreActions")');
+    expect(adminHeaderSource.match(/<Link\b/g)).toHaveLength(2);
+  });
+
+  it("uses the shared forest action primitive on the certificate first impression", () => {
+    const headerStart = certificateSource.indexOf("<PageHeader");
+    const headerEnd = certificateSource.indexOf("/>", headerStart);
+    const header = certificateSource.slice(headerStart, headerEnd);
+    expect(header).toContain("<Button");
+    expect(header).not.toContain("<button");
+    expect(buttonSource.toLowerCase()).not.toContain("gold remains the single action");
+    expect(buttonStorySource.toLowerCase()).not.toContain("gold means act");
   });
 });

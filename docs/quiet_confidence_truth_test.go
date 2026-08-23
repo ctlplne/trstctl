@@ -39,14 +39,29 @@ func TestInstallGuideDoesNotInventAProductionContainerOrSignerHelper(t *testing.
 
 func TestQuietConfidenceSecurityClaimsStayBounded(t *testing.T) {
 	readme := read(t, "../README.md")
+	lifecycle := read(t, "features/lifecycle-and-pqc.md")
 	for _, overclaim := range []string{"tamper-proof", "hard-isolated"} {
-		if strings.Contains(strings.ToLower(readme), overclaim) {
-			t.Errorf("README still uses unbounded security claim %q", overclaim)
+		if strings.Contains(strings.ToLower(readme+"\n"+lifecycle), overclaim) {
+			t.Errorf("customer-facing docs still use unbounded security claim %q", overclaim)
 		}
 	}
 	for _, want := range []string{"tamper-evident", "row-level security", "downloads the pinned PostgreSQL runtime"} {
 		if !strings.Contains(readme, want) {
 			t.Errorf("README is missing bounded customer-facing truth %q", want)
+		}
+	}
+}
+
+func TestBrowserSessionPrivacyBoundaryIsCataloged(t *testing.T) {
+	catalog := read(t, "privacy-data-catalog.md")
+	normalized := strings.Join(strings.Fields(catalog), " ")
+	for _, want := range []string{
+		"browser_sessions.pseudonymous-authority",
+		"Raw session IDs, subject names, email addresses, and roles never enter this table",
+		"next session creation for the same tenant deletes expired rows",
+	} {
+		if !strings.Contains(normalized, want) {
+			t.Errorf("privacy catalog is missing browser-session boundary %q", want)
 		}
 	}
 }

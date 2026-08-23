@@ -687,10 +687,7 @@ export function AppShell() {
           panelClassName="h-full w-[min(20rem,calc(100vw-2rem))] overflow-y-auto border-e border-sidebar-active/40 bg-sidebar text-sidebar-foreground shadow-xl"
           panelAnimation="drawer"
         >
-          <div
-            id={mobileNavId}
-            className="min-h-full"
-          >
+          <div id={mobileNavId} className="min-h-full">
             <div className="flex h-14 items-center justify-between border-b border-border px-4">
               <h2 id="mobile-primary-navigation-title" className="text-sm font-semibold">
                 {t("shell.primaryNavigationDialog")}

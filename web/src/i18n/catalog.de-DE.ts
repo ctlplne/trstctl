@@ -788,8 +788,7 @@ const deDECatalog = {
   "wizard.agent.heading": "Agent verbinden (optional)",
   "wizard.agent.description":
     "Ein Agent lässt trstctl Anmeldedaten in einem Netzwerk erkennen und ausliefern. Zertifikatsvorgänge funktionieren ohne Agenten, daher können Sie das Setup jetzt abschließen und später einen Agenten verbinden. Sein einmaliges Enrollment-Token kann nur diesen Agenten registrieren; es kann keine Zertifikate ausstellen.",
-  "wizard.agent.commandIntro":
-    "Linux-Beispiel für den leeren Compose-Stack. Speichern Sie zuerst das Einmal-Token und das CA-Bundle neben diesem Befehl.",
+  "wizard.agent.commandIntro": "Linux-Beispiel für den leeren Compose-Stack. Speichern Sie zuerst das Einmal-Token und das CA-Bundle neben diesem Befehl.",
   "wizard.agent.commandLabel": "Ausführbarer Linux-Agentenbefehl",
   "wizard.agent.skip": "Agent vorerst überspringen",
   "wizard.agent.skipped":
@@ -885,8 +884,8 @@ const deDECatalog = {
   "journeys.status.pending": "Ausstehend",
   "journeys.fc.title": "Erstes Zertifikat",
   "journeys.fc.description": "Von einer leeren Control Plane zu einem ausgestellten, inventarisierten Zertifikat.",
-  "journeys.fc.wizard.title": "Aussteller verbinden und Agent registrieren",
-  "journeys.fc.wizard.body": "Der Einrichtungsassistent stellt die signer-gestützte interne CA bereit und bringt Ihren ersten Agenten online.",
+  "journeys.fc.wizard.title": "Ersteinsatz-Anleitung abschließen",
+  "journeys.fc.wizard.body": "Signer prüfen und ein Testzertifikat ausstellen. Integrationen oder einen Agenten erst bei Bedarf hinzufügen.",
   "journeys.fc.request.title": "Credential anfordern",
   "journeys.fc.request.body": "Profil wählen und die Credential benennen — die Freigabe bleibt ein separater Schritt, niemand stellt sich selbst aus.",
   "journeys.fc.approve.title": "Freigeben",

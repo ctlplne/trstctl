@@ -41,10 +41,9 @@ function onboardingSteps(t: ReturnType<typeof useTranslation>["t"]): CarouselSte
   ];
 }
 
-/** Wizard is the first-run flow (F12): a fresh install confirms an issuer,
+/** Wizard is the first-run flow (F12): a fresh install proves signer health,
  * activates the explicit eval enrollment profile when configured, issues its
- * first certificate, proves configured integrations through their served routes,
- * enrolls an agent, then latches a browser-local completion
+ * first certificate, optionally proves integrations or enrolls an agent, then latches a browser-local completion
  * flag (see lib/onboardingState) so the dashboard stops prompting setup on later
  * visits. "Reopen setup guide" clears the flag. */
 export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
@@ -893,9 +892,7 @@ function shellArg(value: string): string {
 function agentConnection(origin: string): { server: string; serverName: string } {
   const url = new URL(origin);
   const loopback = url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]";
-  return loopback
-    ? { server: "localhost:19443", serverName: "localhost" }
-    : { server: `${url.hostname}:9443`, serverName: url.hostname };
+  return loopback ? { server: "localhost:19443", serverName: "localhost" } : { server: `${url.hostname}:9443`, serverName: url.hostname };
 }
 
 function CompleteStep({

@@ -2433,8 +2433,7 @@ export const messages = {
     description: "Button that explicitly defers optional agent enrollment.",
   },
   "wizard.agent.skipped": {
-    defaultMessage:
-      "No agent was enrolled. Certificate operations are ready; connect an agent later when you want discovery or deployment.",
+    defaultMessage: "No agent was enrolled. Certificate operations are ready; connect an agent later when you want discovery or deployment.",
     description: "Neutral confirmation after optional agent enrollment is deferred.",
   },
   "wizard.agent.resume": {
@@ -2995,11 +2994,11 @@ export const messages = {
     description: "Journey description: first certificate.",
   },
   "journeys.fc.wizard.title": {
-    defaultMessage: "Connect an issuer and enroll an agent",
+    defaultMessage: "Complete the first-use guide",
     description: "First-certificate journey step 1 title.",
   },
   "journeys.fc.wizard.body": {
-    defaultMessage: "The setup wizard provisions the signer-backed internal CA and brings your first agent online.",
+    defaultMessage: "Check the signer and issue a test certificate. Add integrations or an agent only when needed.",
     description: "First-certificate journey step 1 body.",
   },
   "journeys.fc.request.title": {

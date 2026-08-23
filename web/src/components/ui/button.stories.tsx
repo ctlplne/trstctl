@@ -26,7 +26,7 @@ export const WithIcon: Story = {
 export const Variants: Story = {
   render: () => (
     <div className="flex flex-wrap items-center gap-3">
-      <Button>Primary — gold means act</Button>
+      <Button>Primary — forest means act</Button>
       <Button variant="outline">Outline</Button>
       <Button variant="ghost">Ghost</Button>
       <Button variant="destructive">Revoke</Button>

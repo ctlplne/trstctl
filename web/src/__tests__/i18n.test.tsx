@@ -984,8 +984,12 @@ describe("i18n boundary", () => {
       // valid next actions stay translated. The retired internal "state
       // machine" heading is removed. Machine-authored es/de — FLAGGED FOR
       // HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "e7aefbd1f82c7123a9986b18850f099671603c6b83d49c002502f68c90b9a2ee",
-      "de-DE": "f6bf7df97376eedf9e19f844264035f7b7a7b9ee2efd4f382364392a00e75059",
+      // Quiet-confidence v6 re-pin: the two secondary administration links
+      // are named by one quiet More disclosure, and the first-use journey says
+      // plainly that integrations and an agent can be deferred. Machine-
+      // authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "5c9b6c03f9718751c7da848789801dd8f5f44f9b85a53cfa2a153559cd1f3b2d",
+      "de-DE": "3b871fe5194e17f11f2b8fd5e365eb4aadcbd2dbd78a49dc79d9a085f81e2af6",
     });
   });
 

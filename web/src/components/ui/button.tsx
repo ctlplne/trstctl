@@ -2,8 +2,8 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { forwardRef, type ButtonHTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
-/* Product controls use the shared 6px radius. Gold remains the single action
- * channel, but marketing-style pills and hover lifts stay out of dense
+/* Product controls use the shared 6px radius. Forest is the single action
+ * channel, while marketing-style pills and hover lifts stay out of dense
  * operator workflows. */
 export const buttonVariants = cva(
   "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-control text-sm font-medium transition-[color,background-color,border-color,box-shadow,filter] duration-fast disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background",

@@ -118,6 +118,10 @@ describe("journeys hub", () => {
     const { container } = renderJourneys();
 
     expect(await screen.findByRole("heading", { name: "Guided setup" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Previous" }));
+    expect(screen.getByRole("heading", { name: "Complete the first-use guide" })).toBeInTheDocument();
+    expect(screen.getAllByText(/an agent only when needed/i).length).toBeGreaterThan(0);
+    await user.click(screen.getByRole("button", { name: "Next" }));
 
     // Engineering proof stays reachable once, without repeating a bright
     // shipped-wiring badge on all twelve outcome choices.

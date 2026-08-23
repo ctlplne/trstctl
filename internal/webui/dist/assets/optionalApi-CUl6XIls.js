@@ -1,0 +1,1 @@
+import{H as e}from"./index-Vrussu3u.js";function t(t,n,...r){let i=e[t];return typeof i==`function`?i(...r):Promise.resolve(n)}export{t};

@@ -1027,13 +1027,9 @@ export function Certificates() {
         description="See which certificates are healthy, which expire soon, and what needs action."
         technicalDetails="Exact evidence includes the subject and SANs, serial number, issuer chain, validity window, source, owner, deployment receipt, renewal job, revocation state, CRL and CT state, and immutable events. Private keys are never displayed."
         actions={
-          <button
-            type="button"
-            onClick={() => setShowIngest((v) => !v)}
-            className="inline-flex h-9 items-center justify-center rounded-control bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-elevation1 hover:brightness-105"
-          >
+          <Button type="button" onClick={() => setShowIngest((v) => !v)}>
             {showIngest ? translateNow("source.close.ingest.9381182077") : translateNow("source.add.certificate.6fa2cfd67c")}
-          </button>
+          </Button>
         }
       />
 

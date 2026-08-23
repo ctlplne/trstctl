@@ -39,6 +39,7 @@ export (below) returns every matching row for that location.
 | `remediation_playbook_runs.operator-evidence` | `remediation_playbook_runs.created_by/reason/evidence_refs/rollback_refs` | Erasure pseudonymizes matching remediation operators and clears free-form evidence, keeping non-PII run state. Retention covers stale remediation evidence. |
 | `compliance_report_schedules.recipient` | `compliance_report_schedules.recipient_ref` | Erasure pseudonymizes matching compliance-report recipient references. Retention covers stale recipient references once schedule evidence ages out. |
 | `incident_fleet_reissuance_runs.operator-evidence` | `incident_fleet_reissuance_runs.created_by/reason/evidence_bundle/failed_targets/rollback_refs` | Erasure pseudonymizes matching fleet-reissuance operators and clears free-form incident evidence, keeping non-PII run state. Retention covers stale fleet-reissuance evidence. |
+| `browser_sessions.pseudonymous-authority` | `browser_sessions.session_hash/subject_hash/created_at/last_seen_at/expires_at/revoked_at` | Stores only tenant-bound SHA-256 digests needed for shared revocation and idle-time checks. Raw session IDs, subject names, email addresses, and roles never enter this table. Logout or subject offboarding revokes matching rows; tenant offboarding deletes them. Expired rows are removed when that tenant next creates a browser session. |
 | `oidc_prelogin.client-metadata` | `oidcPreLoginEntry.ClientIP/UserAgent` | Deletes the in-memory pre-login entry on consume or TTL expiry. No durable read model or event stores the client IP/user-agent metadata. |
 
 Default non-audit retention runs every `24h`, using these class windows:
@@ -48,7 +49,9 @@ subjects/PAM subjects `2160h`. Governance, discovery, notification,
 remediation, compliance-schedule, ownership-exception, and incident free-form evidence follows
 the 397-day operational evidence window unless an operator configures a
 shorter policy. OIDC pre-login metadata is ephemeral and expires after
-`10m`. Operators can override these classes via the
+`10m`. Browser-session rows expire at the configured browser-session TTL; an
+expired cookie cannot authorize a request, and the next session creation for the
+same tenant deletes expired rows. Operators can override the other classes via the
 `TRSTCTL_PRIVACY_RETENTION_*` settings (`docs/configuration.md`).
 
 ## Read-model snapshot cache
