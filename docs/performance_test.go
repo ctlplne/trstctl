@@ -458,6 +458,18 @@ func TestSoakEnduranceGateIsExecutableEvidence(t *testing.T) {
 	if !strings.Contains(mk, "soak:") {
 		t.Error("Makefile no longer defines the `soak` target; the TRACE-009 endurance evidence is gone — revisit this reality test")
 	}
+	soakTargetStart := strings.Index(mk, "soak: ##")
+	if soakTargetStart < 0 {
+		t.Fatal("cannot isolate the Makefile soak target")
+	}
+	soakTargetEnd := strings.Index(mk[soakTargetStart:], "\n.PHONY: soak-capture")
+	if soakTargetEnd < 0 {
+		t.Fatal("cannot isolate the Makefile soak target")
+	}
+	soakTarget := mk[soakTargetStart : soakTargetStart+soakTargetEnd]
+	if !strings.Contains(soakTarget, "set -e;") {
+		t.Error("Makefile soak target must fail closed when the healthy analyzer cannot run; a trailing success message must not mask its exit status")
+	}
 	if !strings.Contains(mk, "soak-capture:") || !strings.Contains(mk, "scripts/perf/soak.sh --in") {
 		t.Error("Makefile no longer defines the captured `soak-capture` target that feeds scripts/perf/soak.sh --in — PERF-003")
 	}

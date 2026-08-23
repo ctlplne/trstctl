@@ -337,7 +337,7 @@ usability-release-check: ## Fail release notes that claim NPS/operator satisfact
 
 .PHONY: soak
 soak: ## Run the endurance/soak gate self-test: fail on an induced leak, pass on a healthy series (PERF-004)
-	@out="$${SOAK_OUT:-$${TMPDIR:-/tmp}/trstctl-soak.json}"; \
+	@set -e; out="$${SOAK_OUT:-$${TMPDIR:-/tmp}/trstctl-soak.json}"; \
 	echo ">> soak: self-test (induced leak must fail, healthy series must pass) -> $$out"; \
 	if scripts/perf/soak.sh --selftest-fail --out "$$out.fail" >/dev/null 2>&1; then \
 		echo "FAIL: soak gate passed an induced leak series" >&2; exit 1; \
