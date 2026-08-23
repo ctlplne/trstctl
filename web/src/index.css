@@ -267,7 +267,7 @@
     border: 1px solid hsl(var(--border));
     border-radius: var(--radius-panel);
     background: hsl(var(--card));
-    box-shadow: var(--elevation-1);
+    box-shadow: none;
   }
 
   /* The form-control family (design review R-01). Every input, select, and

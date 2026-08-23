@@ -71,6 +71,7 @@ export type ModuleId = SpaceId;
 export interface NavSpace {
   id: SpaceId;
   labelKey: MessageKey;
+  questionKey: MessageKey;
   icon: NavIcon;
   /** The space's scoped sidebar — grouped exactly like the old rail bands. */
   groups: NavGroup[];
@@ -109,6 +110,7 @@ export const navSpaces: NavSpace[] = [
   {
     id: "certificates",
     labelKey: "nav.module.certificates",
+    questionKey: "nav.spaceQuestion.certificates",
     icon: "certificate",
     groups: [
       {
@@ -136,6 +138,7 @@ export const navSpaces: NavSpace[] = [
   {
     id: "secrets",
     labelKey: "nav.module.secrets",
+    questionKey: "nav.spaceQuestion.secrets",
     icon: "vault",
     /* S-C2: the Secrets workspaces are sidebar rows, not in-page tabs — the
      * store keeps /secrets, and each other workspace owns a sub-route. */
@@ -166,6 +169,7 @@ export const navSpaces: NavSpace[] = [
   {
     id: "workload",
     labelKey: "nav.space.workload",
+    questionKey: "nav.spaceQuestion.workload",
     icon: "spiffe",
     groups: [
       {
@@ -184,6 +188,7 @@ export const navSpaces: NavSpace[] = [
   {
     id: "posture",
     labelKey: "nav.space.posture",
+    questionKey: "nav.spaceQuestion.posture",
     icon: "posture",
     groups: [
       {
@@ -203,6 +208,7 @@ export const navSpaces: NavSpace[] = [
   {
     id: "platform",
     labelKey: "nav.space.platform",
+    questionKey: "nav.spaceQuestion.platform",
     icon: "platform",
     groups: [
       {

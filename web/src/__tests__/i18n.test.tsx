@@ -144,6 +144,7 @@ describe("i18n boundary", () => {
     const nav = await screen.findByRole("navigation", { name: "Principal" });
     expect(await screen.findByText("Acción requerida")).toBeInTheDocument();
     expect(within(nav).getByText("Inicio")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cuenta y preferencias" }));
     const selector = screen.getByRole("combobox", { name: "Idioma" });
     expect(selector).toHaveValue("es-ES");
 
@@ -167,6 +168,7 @@ describe("i18n boundary", () => {
     );
 
     expect(await screen.findByText("Needs action")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Account and preferences" }));
     fireEvent.change(screen.getByRole("combobox", { name: "Language" }), { target: { value: "de-DE" } });
     // English serves until the de catalog module resolves; then the tree
     // re-renders translated.
@@ -957,8 +959,13 @@ describe("i18n boundary", () => {
       // the rail, H1, and browser title. Every safety qualifier remains intact.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
       // release.
-      "es-ES": "848586b1df223b052726b9cf1a7f023faba5ba0ca54196876fc3598602937c67",
-      "de-DE": "8e0739157fd3e1ed08e7d8396370cbfd6e720c8a919b707b0f37373b6a5fb623",
+      // Quiet-confidence shell re-pin: each product space now asks its plain-
+      // language operator question, and wizard progress offers the nearby
+      // steps first while preserving the complete sequence on request.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
+      // release.
+      "es-ES": "8806f41226d61ba8a6688c4c436a99d65133e923ae4716a8a0a8d60d4a5681c6",
+      "de-DE": "2e4a22e494a36541bae53fbf5cf2cc46494f25b8344a65e61b4a02a656a04089",
     });
   });
 

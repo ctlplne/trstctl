@@ -1064,6 +1064,7 @@ describe("operational console surface", () => {
     await user.click(screen.getByRole("button", { name: /expires/i }));
     await waitFor(() => expect(apiMock.risk).toHaveBeenLastCalledWith({ sort: "expiry" }));
 
+    await user.click(screen.getByRole("button", { name: "Filters" }));
     await user.clear(screen.getByLabelText("Minimum score"));
     await user.type(screen.getByLabelText("Minimum score"), "80");
     await user.selectOptions(screen.getByLabelText("Privilege"), "3");

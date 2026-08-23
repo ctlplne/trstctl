@@ -23,7 +23,6 @@ import {
   ShieldAlert,
   ShieldCheck,
   KeyRound,
-  Languages,
   LockKeyhole,
   LogOut,
   Rocket,
@@ -319,7 +318,10 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
         {activeSpace && (
           <li>
             {/* S-C1: the sidebar names the active space; the rail switches it. */}
-            <p className="px-3 pb-1 pt-0.5 text-sm font-bold text-sidebar-foreground">{t(activeSpace.labelKey)}</p>
+            <div className="border-b border-sidebar-active/55 px-3 pb-3 pt-0.5">
+              <p className="text-sm font-bold text-sidebar-foreground">{t(activeSpace.labelKey)}</p>
+              <p className="mt-1 text-caption leading-relaxed text-sidebar-foreground/75">{t(activeSpace.questionKey)}</p>
+            </div>
           </li>
         )}
         {visibleGroups.map((group) => {
@@ -459,7 +461,7 @@ export function AppShell() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  const [mobileAccountOpen, setMobileAccountOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const [logoutPending, setLogoutPending] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const mobileNavId = "mobile-primary-nav";
@@ -564,31 +566,6 @@ export function AppShell() {
             <span className="min-w-0 flex-1 truncate text-start">{t("shell.searchOrJump")}</span>
             <kbd className="rounded border border-border px-1.5 py-0.5 font-mono text-2xs">{translateNow("source.cmd.k.abdd8e293f")}</kbd>
           </Button>
-          {user && (
-            <div
-              aria-label={t("shell.tenantContext")}
-              className="hidden min-w-0 items-center gap-2 rounded-control border border-border px-2 py-1 text-xs lg:flex"
-            >
-              <span className="text-muted-foreground">{t("shell.tenant")}</span>
-              <strong className="max-w-32 truncate font-semibold">{user.tenant_id}</strong>
-            </div>
-          )}
-          <label className="relative hidden h-9 items-center sm:flex">
-            <span className="sr-only">{t("shell.locale")}</span>
-            <Languages aria-hidden="true" className="pointer-events-none absolute start-2 h-4 w-4 text-muted-foreground" />
-            <select
-              aria-label={t("shell.locale")}
-              className="h-9 rounded-control border border-border bg-background ps-8 pe-7 text-xs text-foreground hover:bg-muted"
-              value={locale}
-              onChange={(event) => setLocale(event.target.value as Locale)}
-            >
-              {localeChoices.map((candidate) => (
-                <option key={candidate} value={candidate}>
-                  {t(localeLabelKeys[candidate])}
-                </option>
-              ))}
-            </select>
-          </label>
           {user && hasAnyPermission(user, permissionAnyForPath("/notifications")) && (
             <Link
               to="/notifications"
@@ -599,29 +576,38 @@ export function AppShell() {
               <Bell className="h-4 w-4" aria-hidden="true" />
             </Link>
           )}
-          {user && !isDesktop && (
+          {user && (
             <div className="relative">
               <Button
                 type="button"
-                size="icon"
+                size={isDesktop ? "sm" : "icon"}
                 variant="ghost"
-                aria-controls="mobile-account-menu"
-                aria-expanded={mobileAccountOpen}
+                aria-controls="account-menu"
+                aria-expanded={accountOpen}
                 aria-label={t("shell.accountMenu")}
-                onClick={() => setMobileAccountOpen((open) => !open)}
+                onClick={() => setAccountOpen((open) => !open)}
+                className="max-w-52 gap-2"
               >
                 <UserRound className="h-4 w-4" aria-hidden="true" />
+                {isDesktop ? (
+                  <span className="min-w-0 truncate text-sm font-medium" data-testid="current-user">
+                    {user.email || user.subject}
+                  </span>
+                ) : null}
               </Button>
-              {mobileAccountOpen && (
+              {accountOpen && (
                 <div
-                  id="mobile-account-menu"
+                  id="account-menu"
                   role="dialog"
                   aria-label={t("shell.accountMenu")}
                   className="absolute end-0 top-11 z-50 grid w-[min(19rem,calc(100vw-1rem))] gap-3 rounded-panel border border-border bg-card p-3 text-card-foreground shadow-elevation3"
                 >
                   <div className="min-w-0 border-b border-border pb-3 text-sm">
                     <strong className="block truncate">{user.email || user.subject}</strong>
-                    <span className="block truncate text-caption text-muted-foreground">{user.tenant_id}</span>
+                    <span aria-label={t("shell.tenantContext")} className="block truncate text-caption text-muted-foreground">
+                      <span className="sr-only">{t("shell.tenant")}: </span>
+                      {user.tenant_id}
+                    </span>
                   </div>
                   <label className="grid gap-1 text-caption font-medium text-muted-foreground">
                     {t("shell.locale")}
@@ -647,7 +633,7 @@ export function AppShell() {
                       variant="ghost"
                       aria-label={t("shell.openKeyboardShortcuts")}
                       onClick={() => {
-                        setMobileAccountOpen(false);
+                        setAccountOpen(false);
                         setShortcutsOpen(true);
                       }}
                     >
@@ -669,43 +655,10 @@ export function AppShell() {
               )}
             </div>
           )}
-          <Button
-            ref={shortcutsButtonRef}
-            type="button"
-            size="icon"
-            variant="ghost"
-            aria-label={t("shell.openKeyboardShortcuts")}
-            onClick={() => setShortcutsOpen(true)}
-            className="hidden md:inline-flex"
-          >
-            <CircleHelp className="h-4 w-4" aria-hidden="true" />
-          </Button>
-          <span className="hidden md:block">
-            <ThemeToggle />
-          </span>
-          {user && (
-            <span className="hidden max-w-44 truncate text-sm text-muted-foreground sm:inline" data-testid="current-user">
-              {user.email || user.subject}
-            </span>
-          )}
           {logoutError && (
             <span className="max-w-40 truncate text-xs text-destructive" role="alert">
               {logoutError}
             </span>
-          )}
-          {user && (
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              aria-label={t("shell.signOut")}
-              title={t("shell.signOut")}
-              onClick={handleLogout}
-              disabled={logoutPending}
-              className="hidden md:inline-flex"
-            >
-              <LogOut className="h-4 w-4" aria-hidden="true" />
-            </Button>
           )}
         </div>
       </header>

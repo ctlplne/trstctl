@@ -60,9 +60,9 @@ export function PageHeader({
       </div>
       <details className="group mt-4 min-w-0" data-testid="page-depth-prove">
         <summary className="inline-flex cursor-pointer list-none items-center text-caption text-muted-foreground marker:hidden hover:text-foreground">
-          <span className="font-medium">{t("pageHeader.prove")}</span>
-          <span className="ms-2 group-open:hidden">{t("pageHeader.openDetails")}</span>
-          <span className="ms-2 hidden group-open:inline">{t("pageHeader.closeDetails")}</span>
+          <span className="sr-only">{t("pageHeader.prove")}: </span>
+          <span className="font-medium group-open:hidden">{t("pageHeader.openDetails")}</span>
+          <span className="hidden font-medium group-open:inline">{t("pageHeader.closeDetails")}</span>
         </summary>
         <div className="mt-2 max-w-3xl border-s-2 border-border ps-3 text-caption leading-relaxed text-muted-foreground">
           {technicalDetails ?? t("pageHeader.proveFallback")}

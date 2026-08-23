@@ -3770,9 +3770,17 @@ export const messages = {
     defaultMessage: "Certificates & PKI",
     description: "Module switcher label: certificate lifecycle, CA hierarchy, profiles, and enrollment protocols (S-B1/S-B2).",
   },
+  "nav.spaceQuestion.certificates": {
+    defaultMessage: "How are certificates issued, renewed, and trusted?",
+    description: "Plain-language orientation question shown inside the Certificates and PKI space.",
+  },
   "nav.module.secrets": {
     defaultMessage: "Secrets",
     description: "Module switcher label: the secrets management product.",
+  },
+  "nav.spaceQuestion.secrets": {
+    defaultMessage: "How do machines receive and rotate secrets safely?",
+    description: "Plain-language orientation question shown inside the Secrets space.",
   },
   "nav.module.ssh": {
     defaultMessage: "SSH",
@@ -3790,13 +3798,25 @@ export const messages = {
     defaultMessage: "Workload & SSH",
     description: "Space switcher label: SPIFFE workload identity, the identity registry, and SSH trust (S-C1).",
   },
+  "nav.spaceQuestion.workload": {
+    defaultMessage: "Who is this machine, and what can it access?",
+    description: "Plain-language orientation question shown inside the Workload and SSH space.",
+  },
   "nav.space.posture": {
     defaultMessage: "Posture & response",
     description: "Space switcher label: discovery, risk, the credential graph, incidents, and operations (S-C1).",
   },
+  "nav.spaceQuestion.posture": {
+    defaultMessage: "What is wrong, and what could be affected?",
+    description: "Plain-language orientation question shown inside the Posture and response space.",
+  },
   "nav.space.platform": {
     defaultMessage: "Platform",
     description: "Space switcher label: governance, infrastructure, integrations, and administration (S-C1).",
+  },
+  "nav.spaceQuestion.platform": {
+    defaultMessage: "How is the control plane protected and operated?",
+    description: "Plain-language orientation question shown inside the Platform space.",
   },
   "nav.space.home": {
     defaultMessage: "Home",
@@ -13672,6 +13692,14 @@ export const messages = {
   "source.onboarding.progress.ad8a0dac00": {
     defaultMessage: "Onboarding progress",
     description: "DA-14 sweep: migrated hardcoded copy from src/components/wizard/StepShell.tsx.",
+  },
+  "wizard.progress.nearby": {
+    defaultMessage: "Previous, current, and next setup steps",
+    description: "Accessible label for the quiet three-step onboarding orientation.",
+  },
+  "wizard.progress.viewAll": {
+    defaultMessage: "View all setup steps",
+    description: "Disclosure that reveals the complete onboarding step list.",
   },
   "source.online.f6fc84c9f2": {
     defaultMessage: "online",

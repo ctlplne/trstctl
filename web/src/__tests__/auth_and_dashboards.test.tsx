@@ -239,6 +239,7 @@ describe("auth + dashboards", () => {
     expect(localStorage.getItem("token")).toBeNull();
     expect(sessionStorage.length).toBe(0);
 
+    await user.click(screen.getByRole("button", { name: "Account and preferences" }));
     await user.click(screen.getByRole("button", { name: "Sign out" }));
     expect(await screen.findByRole("button", { name: /Sign in with SSO/i })).toBeInTheDocument();
     expect(apiMock.logout).not.toHaveBeenCalled();
@@ -339,6 +340,7 @@ describe("auth + dashboards", () => {
 
     expect(await screen.findByTestId("current-user")).toHaveTextContent("u@example.test");
 
+    await user.click(screen.getByRole("button", { name: "Account and preferences" }));
     await user.click(screen.getByRole("button", { name: "Sign out" }));
 
     await waitFor(() => expect(apiMock.logout).toHaveBeenCalledTimes(1));
@@ -353,6 +355,7 @@ describe("auth + dashboards", () => {
 
     renderAt("/");
 
+    await user.click(await screen.findByRole("button", { name: "Account and preferences" }));
     await user.click(await screen.findByRole("button", { name: "Sign out" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Sign-out failed");

@@ -429,7 +429,7 @@ describe("app shell accessibility and theme", () => {
     renderShell();
     await screen.findByText("u@example.test");
     await user.tab(); // skip link
-    await user.tab(); // theme toggle
+    await user.tab(); // shell controls
     const dashboardLink = screen.getByRole("link", { name: /^Home$/i });
     dashboardLink.focus();
     expect(dashboardLink).toHaveFocus();
@@ -439,7 +439,7 @@ describe("app shell accessibility and theme", () => {
     const user = userEvent.setup();
     resizeViewport(380);
     const { container } = renderShell();
-    await screen.findByText("u@example.test");
+    await screen.findByRole("button", { name: "Account and preferences" });
 
     expect(screen.queryByRole("navigation", { name: /Primary/i })).not.toBeInTheDocument();
     expect(screen.getByRole("main")).toHaveClass("min-w-0");
@@ -476,7 +476,7 @@ describe("app shell accessibility and theme", () => {
     const user = userEvent.setup();
     resizeViewport(380);
     renderShell();
-    await screen.findByText("u@example.test");
+    await screen.findByRole("button", { name: "Account and preferences" });
 
     const opener = screen.getByRole("button", { name: "Account and preferences" });
     expect(opener).toHaveAttribute("aria-expanded", "false");
@@ -492,10 +492,12 @@ describe("app shell accessibility and theme", () => {
     expect(within(menu).getByRole("button", { name: "Sign out" })).toBeVisible();
   });
 
-  it("shows tenant context without a fake tenant switch", async () => {
+  it("keeps tenant context in the quiet account menu without a fake switch", async () => {
+    const user = userEvent.setup();
     renderShell();
     await screen.findByText("u@example.test");
 
+    await user.click(screen.getByRole("button", { name: "Account and preferences" }));
     const tenant = screen.getByLabelText("Tenant context");
     expect(tenant).toHaveTextContent("t1");
     expect(tenant).not.toHaveTextContent(/Tenant switching isn't available yet|Switch unavailable/i);
@@ -508,13 +510,14 @@ describe("app shell accessibility and theme", () => {
     renderShell();
     await screen.findByText("u@example.test");
 
+    await user.click(screen.getByRole("button", { name: "Account and preferences" }));
     const signOut = screen.getByRole("button", { name: "Sign out" });
     await user.click(signOut);
 
     expect(apiMock.logout).toHaveBeenCalledTimes(1);
     expect(await screen.findByRole("alert")).toHaveTextContent("Sign-out failed");
     expect(screen.getByRole("button", { name: "Sign out" })).toBeEnabled();
-    expect(screen.getByText("u@example.test")).toBeInTheDocument();
+    expect(screen.getByTestId("current-user")).toHaveTextContent("u@example.test");
   });
 
   it("opens the command palette from Cmd-K, searches inventory, and navigates on Enter", async () => {
@@ -581,6 +584,7 @@ describe("app shell accessibility and theme", () => {
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog", { name: "Keyboard shortcuts" })).not.toBeInTheDocument();
 
+    await user.click(screen.getByRole("button", { name: "Account and preferences" }));
     await user.click(screen.getByRole("button", { name: "Open keyboard shortcuts" }));
     overlay = screen.getByRole("dialog", { name: "Keyboard shortcuts" });
     expect(within(overlay).getByText("Close open overlay")).toBeInTheDocument();
@@ -610,6 +614,7 @@ describe("app shell accessibility and theme", () => {
     for (const link of ["Request a certificate", "How machines request credentials", "Certificate authorities", "Certificate rules", "Software signing"]) {
       expect(within(nav).getByRole("link", { name: new RegExp(link) })).toBeInTheDocument();
     }
+    expect(within(nav).getByText("How are certificates issued, renewed, and trusted?")).toBeInTheDocument();
 
     // Other spaces' routes stay out of the sidebar until their space is active.
     expect(within(nav).queryByRole("link", { name: /unmanaged credentials/i })).not.toBeInTheDocument();
@@ -798,6 +803,7 @@ describe("app shell accessibility and theme", () => {
     await screen.findByText("u@example.test");
     // First load uses the quiet light work surface — not the OS appearance.
     expect(document.documentElement.classList.contains("dark")).toBe(false);
+    await user.click(screen.getByRole("button", { name: "Account and preferences" }));
     const toggle = screen.getByRole("button", { name: /Theme:/i });
     await user.click(toggle); // light -> dark
     expect(document.documentElement.classList.contains("dark")).toBe(true);

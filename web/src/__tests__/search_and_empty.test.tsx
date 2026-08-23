@@ -363,6 +363,7 @@ describe("certificate inventory gap closure", () => {
     expect(await screen.findByText("CN=page-two")).toBeInTheDocument();
     expect(screen.getByText(/no more certificate pages/i)).toBeInTheDocument();
 
+    await user.click(screen.getByRole("button", { name: "Filters" }));
     await user.click(screen.getByRole("button", { name: "<7d" }));
     await waitFor(() =>
       expect(apiMock.certificatePage).toHaveBeenLastCalledWith({

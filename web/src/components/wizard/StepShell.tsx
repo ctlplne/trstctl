@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowLeft, ArrowRight, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { translateNow } from "@/i18n/I18nProvider";
@@ -62,26 +62,17 @@ export function StepShell({
           </div>
           <p className="font-mono text-caption text-muted-foreground">{progress}%</p>
         </div>
-        <ol
-          className="mt-5 hidden gap-2 sm:grid sm:grid-cols-4"
+        <div
+          className="mt-4 h-1 overflow-hidden rounded-full bg-muted"
+          role="progressbar"
           aria-label={translateNow("source.onboarding.progress.ad8a0dac00")}
-          data-testid="full-step-progress"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={progress}
         >
-          {steps.map((step, index) => {
-            const state = index < currentIndex ? "done" : index === currentIndex ? "current" : "upcoming";
-            return (
-              <li key={step.id} aria-current={state === "current" ? "step" : undefined} className="min-w-0">
-                <div className={cn("flex items-center gap-2 rounded-control border px-2 py-2 text-sm", stepStateClass(state))}>
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-current">
-                    {state === "done" ? <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> : index + 1}
-                  </span>
-                  <span className="truncate">{step.label}</span>
-                </div>
-              </li>
-            );
-          })}
-        </ol>
-        <ol className="mt-4 grid gap-1 sm:hidden" aria-label={translateNow("source.onboarding.progress.ad8a0dac00")} data-testid="compact-step-progress">
+          <div className="h-full rounded-full bg-primary transition-[width] duration-300" style={{ width: `${progress}%` }} />
+        </div>
+        <ol className="mt-3 grid gap-1 sm:grid-cols-3" aria-label={translateNow("wizard.progress.nearby")} data-testid="compact-step-progress">
           {compactSteps.map(({ step, index }) => {
             const state = index < currentIndex ? "done" : index === currentIndex ? "current" : "upcoming";
             return (
@@ -101,6 +92,27 @@ export function StepShell({
             );
           })}
         </ol>
+        <details className="group mt-3" data-testid="full-step-progress">
+          <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-caption font-medium text-muted-foreground hover:text-foreground">
+            {translateNow("wizard.progress.viewAll")}
+            <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" aria-hidden="true" />
+          </summary>
+          <ol className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3" aria-label={translateNow("source.onboarding.progress.ad8a0dac00")}>
+            {steps.map((step, index) => {
+              const state = index < currentIndex ? "done" : index === currentIndex ? "current" : "upcoming";
+              return (
+                <li key={step.id} aria-current={state === "current" ? "step" : undefined} className="min-w-0">
+                  <div className={cn("flex items-center gap-2 rounded-control border px-2 py-2 text-sm", stepStateClass(state))}>
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-current">
+                      {state === "done" ? <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> : index + 1}
+                    </span>
+                    <span className="truncate">{step.label}</span>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </details>
       </div>
 
       <div

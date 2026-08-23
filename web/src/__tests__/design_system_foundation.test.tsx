@@ -449,9 +449,15 @@ describe("shared DataGrid", () => {
     );
 
     expect(screen.getByRole("searchbox", { name: "Search credential rows" })).toBeInTheDocument();
-    expect(screen.getByText("Owner filter")).toBeInTheDocument();
+    const filters = screen.getByRole("button", { name: "Filters" });
+    expect(filters).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByText("Owner filter")).not.toBeVisible();
     expect(screen.getByRole("button", { name: /bulk rotate/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /columns/i })).toBeInTheDocument();
+
+    await user.click(filters);
+    expect(filters).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Owner filter")).toBeVisible();
 
     await user.type(screen.getByRole("searchbox", { name: "Search credential rows" }), "worker");
     expect(screen.getByText("worker")).toBeInTheDocument();
@@ -486,6 +492,7 @@ describe("shared DataGrid", () => {
     );
 
     expect(screen.queryByRole("columnheader", { name: /status/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Filters" }));
     await user.selectOptions(screen.getByLabelText("Owner view filter"), "platform");
     await user.click(screen.getByRole("button", { name: /name/i }));
     await user.type(screen.getByLabelText("Saved view name"), "Platform focus");

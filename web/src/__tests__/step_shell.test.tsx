@@ -1,4 +1,5 @@
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { StepShell } from "@/components/wizard/StepShell";
 
@@ -9,7 +10,8 @@ const steps = Array.from({ length: 6 }, (_, index) => ({
 }));
 
 describe("StepShell quiet mobile progress", () => {
-  it("shows only the previous, current, and next decision in the compact progress view", () => {
+  it("shows only the nearby decision path until the user asks for every step", async () => {
+    const user = userEvent.setup();
     render(
       <StepShell steps={steps} currentIndex={3} onNext={() => undefined} onPrevious={() => undefined}>
         <p>Current task</p>
@@ -26,8 +28,12 @@ describe("StepShell quiet mobile progress", () => {
     const current = within(compact).getByText("Decision 4").closest("li");
     expect(current).toHaveAttribute("aria-current", "step");
     expect(current).toHaveClass("text-foreground");
+    expect(screen.getByRole("progressbar", { name: "Onboarding progress" })).toHaveAttribute("aria-valuenow", "67");
 
     const full = screen.getByTestId("full-step-progress");
+    expect(full).not.toHaveAttribute("open");
+    await user.click(within(full).getByText("View all setup steps"));
+    expect(full).toHaveAttribute("open");
     const fullCurrent = within(full).getByText("Decision 4").closest("li");
     expect(fullCurrent?.firstElementChild).toHaveClass("text-foreground");
     expect(fullCurrent?.firstElementChild).not.toHaveClass("text-brand-accent");

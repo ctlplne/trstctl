@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/auth/AuthProvider";
@@ -52,6 +52,7 @@ describe("UX-02 shell metadata declutter", () => {
     const hiddenNumericBadges = Array.from(nav.querySelectorAll("[aria-hidden='true']")).filter((element) => /^\d+$/.test(element.textContent?.trim() ?? ""));
     expect(hiddenNumericBadges).toEqual([]);
 
+    fireEvent.click(screen.getByRole("button", { name: "Account and preferences" }));
     expect(screen.getByLabelText("Tenant context")).toHaveTextContent("t1");
     expect(screen.queryByRole("button", { name: /tenant switching|switch unavailable/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/Switch unavailable|Tenant switching isn't available yet/i)).not.toBeInTheDocument();

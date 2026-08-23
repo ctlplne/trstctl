@@ -39,16 +39,10 @@ export function EmptyState({
   return (
     <div
       data-state-primitive="empty"
-      className={cn(
-        "rounded-panel border border-dashed border-border bg-card/70 p-10 text-center shadow-elevation1",
-        "flex flex-col items-center justify-center",
-        className,
-      )}
+      className={cn("border-y border-dashed border-border bg-card/35 px-5 py-8 text-center sm:px-8", "flex flex-col items-center justify-center", className)}
     >
-      {icon ? (
-        <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-control border border-border bg-muted/60 text-brand-accent">{icon}</div>
-      ) : null}
-      <Heading className="mb-1 text-lg font-semibold">{title}</Heading>
+      {icon ? <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-primary/[0.08] text-brand-accent">{icon}</div> : null}
+      <Heading className="mb-1 text-title font-semibold">{title}</Heading>
       {children && <p className="mx-auto mb-5 max-w-md text-sm text-muted-foreground">{children}</p>}
       {(primary || secondaryAction) && (
         <div className="flex flex-wrap items-center justify-center gap-2">
