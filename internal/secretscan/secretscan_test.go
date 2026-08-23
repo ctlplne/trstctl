@@ -100,6 +100,7 @@ func TestRepositoryGitleaksHistoryExceptionsPinProvenNonSecrets(t *testing.T) {
 		"5492dd461025416c8519ec266324de743d8d1207:tools/" + labName + "/main.go:private-key:858",
 		"97c94bab72b2d632ae803ddf984a4b0b39acd2ea:internal/webui/dist/assets/Journeys-CgL9FFZL.js:generic-api-key:8",
 		"97c94bab72b2d632ae803ddf984a4b0b39acd2ea:internal/webui/dist/assets/Journeys-CgL9FFZL.js:generic-api-key:13",
+		"89b00febd786690475ccd4b2beede7ad1a444505:web/src/i18n/catalog.en-US.runtime.gen.ts:generic-api-key:3056",
 	} {
 		if got := strings.Count(ignore, fingerprint); got != 1 {
 			t.Errorf("history exception %q occurs %d times, want exactly once", fingerprint, got)

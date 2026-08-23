@@ -148,3 +148,10 @@ c5a260d61b49b2d9f70e3c406ee6bf463c86f60e:internal/store/migration_content_test.g
 942bcd9b46480ffa3c63075d020225731b588009:internal/server/private_key_scanner_test.go:private-key:40
 942bcd9b46480ffa3c63075d020225731b588009:internal/server/private_key_scanner_test.go:private-key:188
 2fff14152b570652d345dd414000bdb4cf26ffbb:internal/server/agent_job_credentials_served_test.go:private-key:36
+
+# QA design closeout (2026-08-23): this exact historical match is two adjacent
+# generated localization identifiers, not credential material. Gitleaks treats
+# `remoteKeyOptional` as an assignment keyword and the following deterministic
+# `req7c2f9a_03dd4e` message identifier as its value. The immutable fingerprint
+# suppresses only this commit/path/rule/line; any new match still fails.
+89b00febd786690475ccd4b2beede7ad1a444505:web/src/i18n/catalog.en-US.runtime.gen.ts:generic-api-key:3056
