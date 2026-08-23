@@ -71,8 +71,8 @@ func TestDemoComposeIsSeparatePrepopulatedStack(t *testing.T) {
 	if got := stringValue(cp.Build["target"]); got != "demo" {
 		t.Fatalf("demo trstctl build target = %q, want demo", got)
 	}
-	if !contains(cp.Ports, "9443:8443") || contains(cp.Ports, "19081:19081") {
-		t.Fatalf("demo trstctl ports = %v, want only the browser/API port 9443:8443", cp.Ports)
+	if !contains(cp.Ports, "127.0.0.1:9443:8443") || contains(cp.Ports, "127.0.0.1:19081:19081") {
+		t.Fatalf("demo trstctl ports = %v, want only the loopback browser/API port 127.0.0.1:9443:8443", cp.Ports)
 	}
 	for k, want := range map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE":               "/data/ca/agent-ca.crt",
@@ -109,8 +109,11 @@ func TestDemoComposeIsSeparatePrepopulatedStack(t *testing.T) {
 	if got := idp.NetworkMode; got != "" {
 		t.Fatalf("demo OIDC IdP network_mode = %q, want default project network so host port publishing works", got)
 	}
-	if !contains(idp.Ports, "19081:19081") {
-		t.Fatalf("demo OIDC IdP ports = %v, want browser SSO port 19081:19081", idp.Ports)
+	if !contains(idp.Ports, "127.0.0.1:19081:19081") {
+		t.Fatalf("demo OIDC IdP ports = %v, want loopback-only browser SSO port 127.0.0.1:19081:19081", idp.Ports)
+	}
+	if got := stringValue(idp.Environment["OIDC_REDIRECT_URI"]); got != "https://localhost:9443/auth/callback" {
+		t.Fatalf("demo OIDC redirect allowlist = %q, want exact demo callback", got)
 	}
 	if got := cf.Services["oidc-loopback"].NetworkMode; got != "service:trstctl" {
 		t.Fatalf("demo OIDC loopback proxy network_mode = %q, want service:trstctl for the validated loopback token endpoint", got)

@@ -11,6 +11,11 @@ const esESCatalog = {
   "auth.browserLoginDisabled.body":
     "Este plano de control está en ejecución, pero el SSO del navegador está desactivado. Configure el SSO del navegador y vuelva a cargar, o use un token de API con ámbito con trstctl-cli.",
   "auth.browserLoginDisabled.title": "El inicio de sesión en el navegador no está configurado",
+  "auth.login.eyebrow": "Credenciales para máquinas y aplicaciones",
+  "auth.login.title": "Inicia sesión en trstctl",
+  "auth.login.body":
+    "Continúa con el proveedor de inicio de sesión configurado. Gestionarás identidades de máquina y las credenciales que utilizan.",
+  "auth.login.action": "Continuar con SSO",
   "admin.access.pamUnavailableTitle": "Las sesiones de acceso privilegiado no están disponibles",
   "admin.access.pamUnavailableBody":
     "Este despliegue no tiene habilitado un intermediario de acceso privilegiado. Las personas, los roles y los metadatos de las claves de acceso siguen funcionando.",
@@ -3902,7 +3907,6 @@ const esESCatalog = {
   "source.audit.trail.c1ada08ce1": "Pista de auditoría",
   "source.auth.and.profile.gate.220561196c": "Control de autenticación y perfil",
   "source.auth.session.0e46f553a4": "Sesión de autenticación",
-  "source.authenticate.with.your.organization.s.iden.c19821f6a0": "Autenticarse con el proveedor de identidad de su organización para gestionar credenciales.",
   "source.authority.key.60329d7d7b": "Clave de autoridad",
   "source.authority.key.cfdd3eeb4b": "clave de autoridad",
   "source.available.ca.integrations.and.local.signin.a7967de86e": "Integraciones de CA disponibles y plantillas de autoridad de firma local.",
@@ -4365,7 +4369,6 @@ const esESCatalog = {
   "source.loading.tools.efc190cd4c": "Cargando herramientas...",
   "source.local.plaintext.to.encrypt.a67b9e7b54": "texto sin cifrar local para cifrar",
   "source.local.preview.http.957e66ac19": "Vista previa HTTP local",
-  "source.machine.credential.access.bb586fcf38": "Acceso a credenciales de máquina",
   "source.machine.login.e25f8c4843": "Inicio de sesión de máquina",
   "source.machine.login.failed.01826fdfc8": "Inicio de sesión de máquina fallido",
   "source.machine.login.test.7f62ed2b92": "Prueba de inicio de sesión de máquina",
@@ -4846,8 +4849,6 @@ const esESCatalog = {
   "source.showing.d604310a78": "Showing",
   "source.shown.once.22548d041f": "Se muestra una vez",
   "source.sign.an.artifact.fb729a3d5b": "Firmar un artefacto",
-  "source.sign.in.bfd402b2f6": "Iniciar sesión",
-  "source.sign.in.with.sso.73e984e9b4": "Iniciar sesión con SSO",
   "source.sign.intermediate.csr.with.64b849b64d": "Firmar la CSR intermedia con",
   "source.sign.message.516e35c2fc": "Firmar mensaje",
   "source.signature.f1a73e2204": "Signature",

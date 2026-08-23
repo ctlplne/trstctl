@@ -5,6 +5,7 @@ package docker
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -267,6 +268,7 @@ type composeFile struct {
 		Environment map[string]any `yaml:"environment"`
 		Volumes     []string       `yaml:"volumes"`
 		Ports       []any          `yaml:"ports"`
+		NetworkMode string         `yaml:"network_mode"`
 		DependsOn   map[string]struct {
 			Condition string `yaml:"condition"`
 		} `yaml:"depends_on"`
@@ -275,6 +277,84 @@ type composeFile struct {
 		} `yaml:"healthcheck"`
 	} `yaml:"services"`
 	Volumes map[string]any `yaml:"volumes"`
+}
+
+// TestComposeBlankEvaluationHasASafeFirstOperatorLogin closes the cold-install
+// failure where the stack was healthy but every browser identity provider was
+// disabled. The evaluation-only IdP is deliberately loopback-bound, produces an
+// opaque single-use OIDC code through the shared local-IdP implementation, and
+// gives the control plane only public JWKS/trust material. Production keeps its
+// normal fail-closed authentication defaults because this wiring exists only in
+// the explicitly non-production Compose file.
+func TestComposeBlankEvaluationHasASafeFirstOperatorLogin(t *testing.T) {
+	raw := readArtifact(t, "docker-compose.yml")
+	var cf composeFile
+	if err := yaml.Unmarshal([]byte(raw), &cf); err != nil {
+		t.Fatalf("docker-compose.yml is not valid YAML: %v", err)
+	}
+
+	for _, want := range []string{"oidc-keys", "eval-oidc", "oidc-loopback"} {
+		if _, ok := cf.Services[want]; !ok {
+			t.Errorf("blank evaluation compose has no %q service", want)
+		}
+	}
+
+	cp := cf.Services["trstctl"]
+	for key, want := range map[string]string{ // #nosec G101 -- names are non-secret evaluation OIDC configuration keys (CWE-798)
+		"TRSTCTL_SERVER_TLS_INTERNAL_TRUST_FILE": "/public-trust/control-plane.crt",
+		"TRSTCTL_AUTH_OIDC_ENABLED":              "true",
+		"TRSTCTL_AUTH_OIDC_ISSUER":               "http://127.0.0.1:18081",
+		"TRSTCTL_AUTH_OIDC_AUTH_ENDPOINT":        "http://127.0.0.1:18081/authorize",
+		"TRSTCTL_AUTH_OIDC_TOKEN_ENDPOINT":       "http://127.0.0.1:18081/token",
+		"TRSTCTL_AUTH_OIDC_REDIRECT_URI":         "https://localhost:8443/auth/callback",
+		"TRSTCTL_AUTH_OIDC_JWKS_FILE":            "/local-oidc-public/jwks.json",
+	} {
+		if got := asEnvString(cp.Environment[key]); got != want {
+			t.Errorf("blank evaluation %s = %q, want %q", key, got, want)
+		}
+	}
+	if dep := cp.DependsOn["oidc-keys"].Condition; dep != "service_completed_successfully" {
+		t.Errorf("trstctl oidc-keys dependency = %q, want service_completed_successfully", dep)
+	}
+	if !hasComposeVolumeMount(cp.Volumes, "evaloidcpublic", "/local-oidc-public") {
+		t.Errorf("trstctl volumes %v do not mount public local-IdP JWKS", cp.Volumes)
+	}
+	if hasComposeVolume(cp.Volumes, "evaloidcprivate") {
+		t.Errorf("trstctl volumes %v expose the local IdP private-key volume to the control plane", cp.Volumes)
+	}
+	if !hasComposeVolumeMount(cp.Volumes, "publictrust", "/public-trust") {
+		t.Errorf("trstctl volumes %v do not publish the certificate-only browser trust file", cp.Volumes)
+	}
+
+	idp := cf.Services["eval-oidc"]
+	if idp.NetworkMode != "" {
+		t.Errorf("eval OIDC network_mode = %q, want the project network so its host loopback port is publishable", idp.NetworkMode)
+	}
+	if ports := composePortStrings(idp.Ports); !containsStr(ports, "127.0.0.1:18081:18081") {
+		t.Errorf("eval OIDC ports = %v, want an explicit loopback-only host binding", ports)
+	}
+	if got := asEnvString(idp.Environment["OIDC_REDIRECT_URI"]); got != "https://localhost:8443/auth/callback" {
+		t.Errorf("eval OIDC redirect allowlist = %q, want the exact blank callback", got)
+	}
+	if got := cf.Services["oidc-loopback"].NetworkMode; got != "service:trstctl" {
+		t.Errorf("eval OIDC loopback proxy network_mode = %q, want service:trstctl", got)
+	}
+	for _, volume := range []string{"evaloidcprivate", "evaloidcpublic", "publictrust"} {
+		if _, ok := cf.Volumes[volume]; !ok {
+			t.Errorf("blank evaluation compose does not declare %s", volume)
+		}
+	}
+
+	mustContainAll(t, "blank evaluation shared local IdP", raw,
+		"../local-oidc/oidc-keygen.mjs",
+		"../local-oidc/oidc-server.mjs")
+	idpSource := readArtifact(t, filepath.Join("..", "local-oidc", "oidc-server.mjs"))
+	mustContainAll(t, "shared local IdP security contract", idpSource,
+		"timingSafeEqual",
+		"code_challenge",
+		"code_verifier",
+		"authorizationCodes.delete",
+		"redirectURI !== configuredRedirectURI")
 }
 
 // TestComposeBringsUpEvaluableStack encodes the Compose half of the acceptance:
@@ -455,6 +535,14 @@ func nodeToStrings(n yaml.Node) []string {
 		return out
 	}
 	return nil
+}
+
+func composePortStrings(ports []any) []string {
+	out := make([]string, 0, len(ports))
+	for _, port := range ports {
+		out = append(out, fmt.Sprint(port))
+	}
+	return out
 }
 
 func hasComposeVolumeMount(volumes []string, volume, mountPath string) bool {

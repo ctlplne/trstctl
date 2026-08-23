@@ -41,11 +41,11 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1319 annotated sites across 26 rules. Each row is
+1323 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (283 sites)
+### G101 — CWE-798 Use of hardcoded credentials (284 sites)
 
 | Location | Reason |
 |---|---|
@@ -55,6 +55,7 @@ not this file.
 | `deploy/deploycheck_test.go:1444` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/deploycheck_test.go:1446` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/deploycheck_test.go:1466` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/docker/dist_test.go:303` | names are non-secret evaluation OIDC configuration keys (CWE-798) |
 | `deploy/helm/helm_test.go:164` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/helm/helm_test.go:600` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/helm/helm_test.go:802` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -590,7 +591,7 @@ not this file.
 | `deploy/helm/airgap_bundle_test.go:163` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/ai_surface_placement_test.go:27` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/deferred_wipe_guard_test.go:45` | walking the repo's own tree (CWE-22) |
-| `docs/docs_test.go:2540` | test walks the repo's own checkout; no hostile symlink exposure (CWE-367) |
+| `docs/docs_test.go:2541` | test walks the repo's own checkout; no hostile symlink exposure (CWE-367) |
 | `docs/embedded_postgres_teardown_test.go:43` | walks this repository's own test sources (CWE-22) |
 | `docs/est_differential_test.go:190` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_completeness_test.go:260` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
@@ -666,7 +667,7 @@ not this file.
 | `ee/whitelabel/email.go:99` | scheme and host validated above; https only (CWE-79) |
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 
-### G204 — CWE-78 OS command injection (152 sites)
+### G204 — CWE-78 OS command injection (154 sites)
 
 | Location | Reason |
 |---|---|
@@ -685,10 +686,10 @@ not this file.
 | `deploy/deploycheck_test.go:119` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/deploycheck_test.go:442` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/deploycheck_test.go:452` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `deploy/docker/dist_test.go:518` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `deploy/docker/dist_test.go:621` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `deploy/docker/dist_test.go:917` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `deploy/docker/dist_test.go:982` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `deploy/docker/dist_test.go:606` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `deploy/docker/dist_test.go:709` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `deploy/docker/dist_test.go:1005` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `deploy/docker/dist_test.go:1070` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/docker/reproducible_test.go:64` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/helm/airgap_bundle_test.go:34` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/helm/airgap_bundle_test.go:49` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -698,6 +699,8 @@ not this file.
 | `deploy/helm/helm_test.go:1115` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/kubernetes/manifests_test.go:416` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/kubernetes/manifests_test.go:434` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `deploy/local-oidc/oidc_test.go:79` | node path comes from LookPath and the script is a checked-in test target (CWE-78) |
+| `deploy/local-oidc/oidc_test.go:155` | arguments are fixed checked-in scripts (CWE-78) |
 | `docs/claim_applications_test.go:67` | test runs the repository's own committed generator against tempdir fixtures it just wrote itself (CWE-78) |
 | `docs/cwe_register_test.go:18` | test runs the repo's own committed generator (CWE-78) |
 | `docs/cwe_register_test.go:40` | test runs the repo's own committed generator against a tempdir fixture (CWE-78) |
@@ -830,7 +833,7 @@ not this file.
 | `clients/embedded/est_client_test.go:73` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `clients/embedded/est_client_test.go:138` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `clients/embedded/est_client_test.go:199` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `deploy/docker/dist_test.go:861` | npm fixture tree in t.TempDir; mirrors a real package layout, nothing secret (CWE-276) |
+| `deploy/docker/dist_test.go:949` | npm fixture tree in t.TempDir; mirrors a real package layout, nothing secret (CWE-276) |
 | `internal/agent/destination/fs_unix_test.go:79` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/discovery/discovery_test.go:270` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/discovery/privatekey_test.go:27` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -908,7 +911,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (359 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (360 sites)
 
 | Location | Reason |
 |---|---|
@@ -952,8 +955,8 @@ not this file.
 | `deploy/deploycheck_test.go:1103` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/deploycheck_test.go:1286` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/deploycheck_test.go:1530` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/docker/dist_test.go:24` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/docker/dist_test.go:933` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/docker/dist_test.go:25` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/docker/dist_test.go:1021` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/docker/reproducible_test.go:35` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/helm/airgap_bundle_test.go:62` | bundle is created inside this test's TempDir (CWE-22). |
 | `deploy/helm/airgap_bundle_test.go:69` | bundle is created inside this test's TempDir (CWE-22). |
@@ -966,6 +969,7 @@ not this file.
 | `deploy/iac/iac_test.go:279` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/kubernetes/manifests_test.go:477` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/kubernetes/manifests_test.go:494` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/local-oidc/oidc_test.go:164` | paths are exact children of t.TempDir (CWE-22) |
 | `docs/ai_surface_placement_test.go:27` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/aud56_test.go:52` | name comes from the fixed documentation manifest in this test (CWE-22). |
 | `docs/aud58_test.go:15` | name comes from the fixed documentation manifest in this test (CWE-22). |
@@ -1285,9 +1289,9 @@ not this file.
 | `cmd/trstctl-license/main.go:67` | writes the license PUBLIC key/inspection output; public material (CWE-276) |
 | `cmd/trstctl-license/main.go:148` | writes the license PUBLIC key/inspection output; public material (CWE-22, CWE-276) |
 | `cmd/trstctl/backup_cmd_test.go:31` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `deploy/docker/dist_test.go:864` | non-secret npm fixture manifest in t.TempDir (CWE-276) |
-| `deploy/docker/dist_test.go:867` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `deploy/docker/dist_test.go:873` | fake npm shim in a test tempdir must be executable (CWE-276) |
+| `deploy/docker/dist_test.go:952` | non-secret npm fixture manifest in t.TempDir (CWE-276) |
+| `deploy/docker/dist_test.go:955` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `deploy/docker/dist_test.go:961` | fake npm shim in a test tempdir must be executable (CWE-276) |
 | `docs/lint_gate_test.go:88` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/destination/fs_unix_test.go:57` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/discovery/discovery_test.go:273` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |

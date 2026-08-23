@@ -21,6 +21,7 @@ import (
 var requiredPages = []string{
 	"index.md",
 	"getting-started.md",
+	"local-evaluation-tls.md",
 	"install.md",
 	"airgap.md",
 	"uninstall.md",
@@ -2745,14 +2746,12 @@ func TestDemoClickThroughUsesShippedTLSAddress(t *testing.T) {
 	}
 }
 
-// TestDocsNeverTeachCurlToSkipTLS prevents an emergency or secret-handling
-// example from turning certificate validation off. The one exception is the
-// first unauthenticated localhost liveness probe before an evaluator has had a
-// chance to capture and inspect the self-signed public certificate.
+// TestDocsNeverTeachCurlToSkipTLS prevents any customer example from turning
+// certificate validation off. The evaluation stacks publish a certificate-only
+// trust file before first use, so even the initial localhost health probe can and
+// must verify the server.
 func TestDocsNeverTeachCurlToSkipTLS(t *testing.T) {
 	insecureFlag := regexp.MustCompile(`(?:^|\s)(?:-[A-Za-z]*k[A-Za-z]*|--insecure)(?:\s|$)`)
-	allowed := "curl -fksS https://localhost:8443/healthz"
-	allowedCount := 0
 	err := filepath.WalkDir(".", func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -2764,19 +2763,12 @@ func TestDocsNeverTeachCurlToSkipTLS(t *testing.T) {
 			if !strings.Contains(line, "curl") || !insecureFlag.MatchString(line) {
 				continue
 			}
-			if path == "getting-started.md" && strings.Contains(line, allowed) {
-				allowedCount++
-				continue
-			}
 			t.Errorf("%s:%d teaches curl to disable TLS verification: %s", path, lineNumber+1, strings.TrimSpace(line))
 		}
 		return nil
 	})
 	if err != nil {
 		t.Fatal(err)
-	}
-	if allowedCount != 1 {
-		t.Errorf("initial unauthenticated localhost liveness exception count = %d, want 1", allowedCount)
 	}
 }
 

@@ -192,7 +192,7 @@ describe("auth + dashboards", () => {
 
     renderAt("/");
 
-    await waitFor(() => expect(screen.getByRole("button", { name: /Sign in with SSO/i })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("button", { name: /Continue with SSO/i })).toBeInTheDocument());
   });
 
   it("does not offer a broken SSO link when browser authentication is disabled", async () => {
@@ -203,7 +203,7 @@ describe("auth + dashboards", () => {
     renderAt("/");
 
     expect(await screen.findByRole("heading", { name: "Browser sign-in is not configured" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Sign in with SSO/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Continue with SSO/i })).not.toBeInTheDocument();
     expect(screen.getByText(/control plane is running.*browser SSO is off/i)).toBeInTheDocument();
     expect(screen.getByText(/scoped API token.*trstctl-cli/i)).toBeInTheDocument();
   });
@@ -241,7 +241,7 @@ describe("auth + dashboards", () => {
 
     await user.click(screen.getByRole("button", { name: "Account and preferences" }));
     await user.click(screen.getByRole("button", { name: "Sign out" }));
-    expect(await screen.findByRole("button", { name: /Sign in with SSO/i })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /Continue with SSO/i })).toBeInTheDocument();
     expect(apiMock.logout).not.toHaveBeenCalled();
   });
 
@@ -344,7 +344,7 @@ describe("auth + dashboards", () => {
     await user.click(screen.getByRole("button", { name: "Sign out" }));
 
     await waitFor(() => expect(apiMock.logout).toHaveBeenCalledTimes(1));
-    expect(await screen.findByRole("button", { name: /Sign in with SSO/i })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /Continue with SSO/i })).toBeInTheDocument();
     expect(screen.queryByTestId("current-user")).not.toBeInTheDocument();
   });
 

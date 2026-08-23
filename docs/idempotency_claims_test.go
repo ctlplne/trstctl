@@ -40,21 +40,25 @@ func TestIdempotencyClaimsTrackComposeE2EReceipt(t *testing.T) {
 		{"docs/features/issuance-and-cas.md", read(t, "features/issuance-and-cas.md")},
 	} {
 		low := strings.ToLower(doc.body)
+		if strings.Contains(low, "known an-5 blocker") {
+			t.Errorf("%s still publishes the closed identity-transition receipt as a known AN-5 blocker", doc.name)
+		}
 		for _, stale := range []string{
 			"a retried request can't accidentally mint two certificates",
 			"returns the *same* certificate instead of minting a second one",
 		} {
 			if strings.Contains(low, stale) {
-				t.Errorf("%s still overclaims idempotent issuance while the compose E2E receipt owns that proof (%q)", doc.name, stale)
+				t.Errorf("%s makes an unbounded issuance claim instead of naming the Compose E2E proof (%q)", doc.name, stale)
 			}
 		}
 		for _, want := range []string{
 			"identity-transition issuance retry",
 			"compose e2e",
-			"known an-5 blocker",
+			"same key",
+			"one",
 		} {
 			if !strings.Contains(low, want) {
-				t.Errorf("%s must disclose the current identity-transition issuance retry blocker with the compose E2E receipt (missing %q)", doc.name, want)
+				t.Errorf("%s must state the bounded identity-transition Compose E2E proof (missing %q)", doc.name, want)
 			}
 		}
 	}

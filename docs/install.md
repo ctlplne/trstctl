@@ -213,10 +213,16 @@ Install from a release binary or build from source.
 ```bash
 git clone https://github.com/ctlplne/trstctl
 cd trstctl
-make build           # builds ./bin/trstctl, trstctl-signer, and trstctl-agent
+make build           # builds all eight repository commands into ./bin
 sudo install -m 0755 bin/trstctl /usr/local/bin/trstctl
 sudo install -m 0755 bin/trstctl-agent /usr/local/bin/trstctl-agent
 ```
+
+`make build` produces all eight repository commands in `./bin`: `trstctl`,
+`trstctl-signer`, `trstctl-agent`, `trstctl-cli`, `trstctl-operator`,
+`trstctl-license`, `terraform-provider-trstctl`, and
+`trstctl-spire-upstream-authority`. Install only the roles this host needs; do
+not place the vendor-side license signer on a control-plane host.
 
 Run the agent under systemd so it restarts on failure and on boot. A minimal
 unit:

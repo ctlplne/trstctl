@@ -9,7 +9,9 @@ HTTPS APIs.
 docker compose -f deploy/demo/docker-compose.yml up --build
 ```
 
-The stack creates one stable self-signed browser certificate and publishes only
+The UI and automatic demo IdP bind to host loopback, so the disposable demo
+administrator is not exposed to the LAN. The IdP uses an exact callback allowlist,
+PKCE, and short-lived single-use authorization codes. The stack creates one stable self-signed browser certificate and publishes only
 its public half. Copy it out and verify the API before opening the browser:
 
 ```bash

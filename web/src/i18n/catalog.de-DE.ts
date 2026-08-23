@@ -15,6 +15,11 @@ const deDECatalog = {
   "auth.browserLoginDisabled.body":
     "Diese Steuerungsebene läuft, aber Browser-SSO ist deaktiviert. Konfigurieren Sie Browser-SSO und laden Sie die Seite neu, oder verwenden Sie ein bereichsbeschränktes API-Token mit trstctl-cli.",
   "auth.browserLoginDisabled.title": "Browser-Anmeldung ist nicht konfiguriert",
+  "auth.login.eyebrow": "Zugangsdaten für Maschinen und Anwendungen",
+  "auth.login.title": "Bei trstctl anmelden",
+  "auth.login.body":
+    "Fahren Sie mit dem konfigurierten Anmeldeanbieter fort. Danach verwalten Sie Maschinenidentitäten und deren Zugangsdaten.",
+  "auth.login.action": "Sicher mit SSO fortfahren",
   "admin.access.pamUnavailableTitle": "Sitzungen mit privilegiertem Zugriff sind nicht verfügbar",
   "admin.access.pamUnavailableBody":
     "In dieser Bereitstellung ist kein Broker für privilegierten Zugriff aktiviert. Personen, Rollen und Zugriffsschlüssel-Metadaten funktionieren weiterhin.",
@@ -3917,8 +3922,6 @@ const deDECatalog = {
   "source.audit.trail.c1ada08ce1": "Audit-Trail",
   "source.auth.and.profile.gate.220561196c": "Auth- und Profilkontrolle",
   "source.auth.session.0e46f553a4": "Auth-Sitzung",
-  "source.authenticate.with.your.organization.s.iden.c19821f6a0":
-    "Authentifizieren Sie sich mit dem Identitätsanbieter Ihrer Organisation, um Zugangsdaten zu verwalten.",
   "source.authority.key.60329d7d7b": "Autoritätsschlüssel",
   "source.authority.key.cfdd3eeb4b": "Autoritätsschlüssel",
   "source.available.ca.integrations.and.local.signin.a7967de86e": "Verfügbare CA-Integrationen und lokale Vorlagen für Signierbehörden.",
@@ -4388,7 +4391,6 @@ const deDECatalog = {
   "source.loading.tools.efc190cd4c": "Tools werden geladen...",
   "source.local.plaintext.to.encrypt.a67b9e7b54": "lokaler Klartext zum Verschlüsseln",
   "source.local.preview.http.957e66ac19": "Lokale HTTP-Vorschau",
-  "source.machine.credential.access.bb586fcf38": "Zugriff mit Maschinenzugangsdaten",
   "source.machine.login.e25f8c4843": "Maschinen-Login",
   "source.machine.login.failed.01826fdfc8": "Maschinenanmeldung fehlgeschlagen",
   "source.machine.login.test.7f62ed2b92": "Maschinenanmeldetest",
@@ -4872,8 +4874,6 @@ const deDECatalog = {
   "source.showing.d604310a78": "Showing",
   "source.shown.once.22548d041f": "Einmal angezeigt",
   "source.sign.an.artifact.fb729a3d5b": "Ein Artefakt signieren",
-  "source.sign.in.bfd402b2f6": "Anmelden",
-  "source.sign.in.with.sso.73e984e9b4": "Mit SSO anmelden",
   "source.sign.intermediate.csr.with.64b849b64d": "Zwischen-CSR signieren mit",
   "source.sign.message.516e35c2fc": "Nachricht signieren",
   "source.signature.f1a73e2204": "Signature",

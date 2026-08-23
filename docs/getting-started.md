@@ -1,11 +1,13 @@
 # Getting started
 
-This walkthrough takes a fresh machine to its first issued certificate. The
-control plane is serving about two minutes after `compose up`; issuance itself
-is sub-second (measured figure under [Issue your first cert](#issue-your-first-cert)).
-Most of the wall-clock is the single agent-install step. You bring up a blank
-control plane with one command, then the in-product wizard connects a CA,
-issues a certificate, and enrolls an agent.
+This walkthrough takes a fresh machine to its first issued certificate. One
+Compose command builds and starts the blank evaluation services. You then trust
+one certificate-only file, sign in through the loopback-only local identity
+provider, and follow the in-product wizard. The control plane is usually ready
+about two minutes after a cached build; a first image download/build takes
+longer. Issuance itself is sub-second (measured under
+[Issue your first cert](#issue-your-first-cert)). Most of the remaining time is
+the optional agent-install step.
 
 If you want a pre-populated sales/demo environment instead of a blank
 first-run, use the demo stack: `docker compose -f deploy/demo/docker-compose.yml up --build`
@@ -21,25 +23,42 @@ For a read-only, click-by-click product tour, open the
 
 ## Prerequisites
 
-- Docker with the Compose plugin (`docker compose version` works), or a Go
-  1.26.6+ toolchain to run from source.
-- About 1 GB of free disk for the PostgreSQL and NATS volumes.
+- Docker with the Compose plugin (`docker compose version` works). Use a current
+  release that supports `--wait` and health-gated `depends_on` conditions.
+- `curl` and `openssl` for certificate inspection and verified health checks.
+  The command-line appendix also uses `jq` and standard `awk`.
+- At least **8 GB** of free disk for a first source-image build and the named
+  PostgreSQL, NATS, signer, and identity-provider volumes; 12 GB leaves safer
+  build-cache headroom.
+- `trstctl-agent` before the optional agent-enrollment step. Install it from a
+  release or build it with the other binaries as described in [Install](install.md).
+- `trstctl-cli` only if you choose the command-line appendix. `make build` puts
+  it at `./bin/trstctl-cli`; it is not installed on the host by Compose.
+- A patched Go
+  1.26.6+ toolchain only when building host binaries from source.
 
 ## 1. Bring up the control plane (about 2 minutes)
 
 ```bash
-docker compose -f deploy/docker/docker-compose.yml up --build
+docker compose -f deploy/docker/docker-compose.yml up --build --detach --wait --wait-timeout 180
 ```
 
-Compose starts PostgreSQL and NATS JetStream, waits for both to report
-healthy, then starts the control plane wired to them through its external
-datastore configuration. The process brings up the event log, projections,
-orchestrator, and API in order, and supervises the signing service as a child
-process — it answers real API requests end to end. TLS is on by default with
-a self-signed internal certificate, so health-check with `-k`:
+Compose starts PostgreSQL and NATS JetStream, generates a stable local OIDC
+keypair, starts the signing service in its own container, and then starts the
+control plane through the external-datastore path. A loopback-only local identity provider (IdP)
+gives this disposable blank evaluation one first operator. The signer remains a
+separate process and service; the control plane reaches it only over the shared
+Unix-domain socket.
+
+Copy the certificate-only trust file and verify the health endpoint with it:
 
 ```bash
-curl -fksS https://localhost:8443/healthz   # {"status":"ok"}
+docker compose -f deploy/docker/docker-compose.yml cp \
+  trstctl:/public-trust/control-plane.crt ./trstctl-eval-control-plane.crt
+openssl x509 -in ./trstctl-eval-control-plane.crt \
+  -noout -subject -issuer -dates -fingerprint -sha256
+curl -fsS --cacert ./trstctl-eval-control-plane.crt \
+  https://localhost:8443/healthz   # {"status":"ok"}
 ```
 
 The web UI is served by the same binary at <https://localhost:8443>. The
@@ -76,10 +95,17 @@ blank stack also enables the agent mTLS gRPC channel for the wizard at
     See [Configuration](configuration.md#datastores) and
     [Supply chain](supply-chain.md).
 
-## 2. Open the UI and sign in
+## 2. Trust the certificate, then sign in
 
-Visit <https://localhost:8443> (accept the self-signed evaluation
-certificate) and sign in. A fresh install lands on a **Get started** prompt
+Import `trstctl-eval-control-plane.crt` into the trust store used by your
+evaluation browser. Follow [Trust the local evaluation certificate](local-evaluation-tls.md)
+for macOS, Windows, Linux, and cleanup instructions. Do not bypass the browser
+warning.
+
+Visit <https://localhost:8443>, choose **Continue with SSO**, and the local IdP
+signs in `eval-admin@trstctl.local` for the evaluation tenant. Both the UI/API
+and the automatic IdP bind to host loopback; another machine cannot use this
+evaluation administrator. A fresh install lands on a **Get started** prompt
 that launches the setup wizard. The wizard has six screens: use the internal
 CA, activate the evaluation enrollment profile, issue the first certificate,
 prove configured integrations, enroll an agent, and complete setup.
@@ -151,8 +177,7 @@ printf '\n'
 printf '%s' "$BOOTSTRAP_TOKEN" > ./trstctl-bootstrap-token
 unset BOOTSTRAP_TOKEN
 
-openssl s_client -connect localhost:8443 -servername localhost -showcerts </dev/null 2>/dev/null \
-  | awk '/BEGIN CERTIFICATE/,/END CERTIFICATE/' > ./trstctl-https-ca.pem
+docker compose -f deploy/docker/docker-compose.yml cp trstctl:/public-trust/control-plane.crt ./trstctl-https-ca.pem
 docker compose -f deploy/docker/docker-compose.yml cp trstctl:/data/ca/agent-ca.crt ./trstctl-agent-ca.pem
 cat ./trstctl-https-ca.pem ./trstctl-agent-ca.pem > ./trstctl-ca.pem
 
@@ -190,13 +215,16 @@ this browser and sends you to the certificate operations view.
 
 ## Get your first API token
 
-A freshly booted control plane fails closed: every API route returns `401`
-until you present a credential. OIDC, SAML, and LDAP / Active Directory login
-are served once their `auth.*.enabled` blocks are configured, and SCIM 2.0
-can provision users after you configure a tenant-bound SCIM token — but the
-zero-dependency first credential is the host-local bootstrap verb. It talks
-straight to the datastore (no existing token required) and prints a
-tenant-scoped token once:
+The product default fails closed: protected API routes return `401` until you
+present a credential. The blank **evaluation Compose profile** is the explicit
+local-only exception described above; it wires one loopback OIDC operator so the
+browser journey is executable. Production and custom deployments serve OIDC,
+SAML, or LDAP / Active Directory only after their `auth.*.enabled` blocks are
+configured. SCIM 2.0 can then provision users with a tenant-bound SCIM token.
+
+For automation or recovery, the network-independent first credential is the
+host-local bootstrap verb. It talks straight to the deployment datastore (no
+existing HTTP token required) and prints a tenant-scoped token once:
 
 ```bash
 # Pick any UUID as your tenant id (a single-tenant deployment uses one well-known id).
@@ -225,7 +253,8 @@ the platform but cannot self-issue a certificate. Use it as
 ## Prefer the command line?
 
 Everything the wizard does is scriptable with `trstctl-cli` (see the
-[CLI reference](cli.md)). The bootstrap token creates the owner and identity;
+[CLI reference](cli.md)). Install a release binary or run `make build` and use
+`./bin/trstctl-cli`; Compose does not install it on the host. The bootstrap token creates the owner and identity;
 the served issue transition requires a distinct issuer/approver credential
 with `certs:issue` — not the bootstrap token. This registration-authority
 split is described in [Policy & governance](features/policy-and-governance.md).
@@ -234,12 +263,11 @@ split is described in [Policy & governance](features/policy-and-governance.md).
 export TRSTCTL_SERVER=https://localhost:8443
 export TRSTCTL_TOKEN="$TRSTCTL_BOOTSTRAP_TOKEN"
 
-# The evaluation certificate is self-signed. Capture its public certificate,
-# compare this fingerprint with the one your browser accepted, then let the CLI
-# trust only that certificate. The pin survives a normal restart with the same
-# trstctldata volume; inspect a new pin after replacing the volume or rotating TLS.
-openssl s_client -connect localhost:8443 -servername localhost </dev/null 2>/dev/null \
-  | openssl x509 -out trstctl-eval-ca.pem
+# Copy the same certificate-only file you deliberately trusted for the browser.
+# The pin survives a normal restart with the same trstctldata volume; inspect a
+# new pin after replacing the volume or intentionally rotating TLS.
+docker compose -f deploy/docker/docker-compose.yml cp \
+  trstctl:/public-trust/control-plane.crt ./trstctl-eval-ca.pem
 openssl x509 -in trstctl-eval-ca.pem -noout -fingerprint -sha256
 export TRSTCTL_CA_FILE="$PWD/trstctl-eval-ca.pem"
 

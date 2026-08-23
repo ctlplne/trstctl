@@ -21,14 +21,23 @@ PostgreSQL/NATS wiring without demo fixtures.
 docker compose -f deploy/docker/docker-compose.yml up --build
 ```
 
-This brings up three services:
+This assembles seven Compose services (one exits after key generation):
 
 - **postgres** — PostgreSQL 16 (the read store; AN-1), health-gated.
 - **nats** — NATS 2.10 with JetStream enabled (the event spine; AN-2).
+- one-shot **oidc-keys** service — creates the stable evaluation IdP keypair.
+- separate **signer** service — owns private-key operations and exposes no TCP
+  port; the control plane reaches it only through the shared UDS (AN-4).
 - **trstctl** — the control plane, built from `deploy/docker/Dockerfile`,
   starting only once Postgres and NATS report healthy.
+- loopback-only **eval-oidc** service — automatically authenticates one disposable
+  local evaluation operator with PKCE-bound, single-use authorization codes.
+- **oidc-loopback** — a project-internal TCP bridge that lets the control plane
+  reach the SSRF-allowlisted literal loopback token endpoint.
 
-The control plane publishes the UI/API on <https://localhost:8443> and, for the
+Every published evaluation port binds to host `127.0.0.1`; the automatic local
+administrator is never exposed to the LAN. The control plane publishes the UI/API
+on <https://localhost:8443> and, for the
 blank first-run wizard, opts into the served agent mTLS gRPC channel on
 `localhost:19443` (container `:9443`). The core product default remains
 agent-channel off; this eval stack enables it explicitly so the documented
@@ -41,6 +50,11 @@ identity is mode `0600` under the persistent `/data` volume. The image also
 prepares `/run/trstctl-spiffe` for uid `65532` before Docker initializes the
 `spiffesock` volume, so the nonroot control plane can bind the advertised SPIFFE
 Workload API socket without a root init container.
+
+Before opening the browser, copy `/public-trust/control-plane.crt`, inspect it,
+and import that certificate-only file using
+[the local TLS trust guide](../../docs/local-evaluation-tls.md). Never copy the
+private `/data/tls/internal-server.pem` identity or bypass the warning.
 
 The control plane is wired to Postgres and NATS through the external datastore
 configuration (`TRSTCTL_POSTGRES_MODE=external`, `TRSTCTL_NATS_MODE=external`),

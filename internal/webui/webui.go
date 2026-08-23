@@ -21,6 +21,10 @@ import (
 func Handler(assets fs.FS) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		clean := path.Clean(r.URL.Path)
+		if clean == "/openapi.json" {
+			http.Redirect(w, r, "/api/v1/openapi.json", http.StatusPermanentRedirect)
+			return
+		}
 		if clean == "/api" || strings.HasPrefix(clean, "/api/") {
 			http.NotFound(w, r) // belongs to the API handler
 			return
@@ -33,8 +37,21 @@ func Handler(assets fs.FS) http.Handler {
 		if serveFile(w, r, assets, name) {
 			return
 		}
+		if looksLikeAssetRequest(name) {
+			http.NotFound(w, r)
+			return
+		}
 		serveFile(w, r, assets, "index.html") // SPA fallback
 	})
+}
+
+func looksLikeAssetRequest(name string) bool {
+	switch strings.ToLower(path.Ext(name)) {
+	case ".css", ".gif", ".ico", ".jpeg", ".jpg", ".js", ".json", ".map", ".mjs", ".png", ".svg", ".txt", ".webmanifest", ".woff", ".woff2", ".xml", ".yaml", ".yml":
+		return true
+	default:
+		return false
+	}
 }
 
 // serveFile serves a named asset and reports whether it existed. A missing

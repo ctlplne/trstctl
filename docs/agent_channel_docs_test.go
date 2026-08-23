@@ -15,7 +15,7 @@ func TestGettingStartedAgentChannelMatchesBlankCompose(t *testing.T) {
 	install := read(t, "install.md")
 	rollout := read(t, "runbooks/fleet-rollout.md")
 
-	if !containsAll(compose, []string{`TRSTCTL_SERVER_ADDR: ":8443"`, `"8443:8443"`}) {
+	if !containsAll(compose, []string{`TRSTCTL_SERVER_ADDR: ":8443"`, `"127.0.0.1:8443:8443"`}) {
 		t.Fatal("blank Compose must keep serving the documented control-plane endpoint at https://localhost:8443")
 	}
 
@@ -23,7 +23,7 @@ func TestGettingStartedAgentChannelMatchesBlankCompose(t *testing.T) {
 		`TRSTCTL_AGENT_CHANNEL_ENABLED: "true"`,
 		`TRSTCTL_AGENT_CHANNEL_ADDR: ":9443"`,
 		`TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE: /data/ca/agent-ca.crt`,
-		`"19443:9443"`,
+		`"127.0.0.1:19443:9443"`,
 	})
 	gettingStartedUsesLocalAgentChannel := strings.Contains(gettingStarted, "--server localhost:19443")
 	if strings.Contains(gettingStarted, "--server localhost:9443") {
@@ -39,14 +39,17 @@ func TestGettingStartedAgentChannelMatchesBlankCompose(t *testing.T) {
 	if gettingStartedUsesLocalAgentChannel {
 		for _, want := range []string{
 			"--server-name localhost",
+			"docker compose -f deploy/docker/docker-compose.yml cp trstctl:/public-trust/control-plane.crt ./trstctl-https-ca.pem",
 			"docker compose -f deploy/docker/docker-compose.yml cp trstctl:/data/ca/agent-ca.crt ./trstctl-agent-ca.pem",
-			"openssl s_client -connect localhost:8443 -servername localhost -showcerts",
 			"cat ./trstctl-https-ca.pem ./trstctl-agent-ca.pem > ./trstctl-ca.pem",
 			"--ca-bundle ./trstctl-ca.pem",
 		} {
 			if !strings.Contains(gettingStarted, want) {
 				t.Errorf("getting-started.md local agent command is missing CA/server-name guidance %q", want)
 			}
+		}
+		if strings.Contains(gettingStarted, "openssl s_client -connect localhost:8443") {
+			t.Fatal("getting-started.md must copy the certificate-only published trust file rather than scraping an untrusted live connection")
 		}
 	}
 

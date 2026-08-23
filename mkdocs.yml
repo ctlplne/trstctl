@@ -37,6 +37,7 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Getting started: getting-started.md
+  - Trust local evaluation TLS: local-evaluation-tls.md
   - Demo browser walkthrough: demo-click-through.html
   - Journeys:
       - Automate TLS across your fleet: journeys/automate-fleet-tls.md

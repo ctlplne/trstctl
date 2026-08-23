@@ -68,6 +68,25 @@ func TestSPAFallback(t *testing.T) {
 	}
 }
 
+func TestConventionalOpenAPIPathRedirectsToCanonicalContract(t *testing.T) {
+	res, _ := get(t, webui.Handler(fixtureFS()), "/openapi.json")
+	if res.StatusCode != http.StatusPermanentRedirect {
+		t.Fatalf("GET /openapi.json = %d, want 308", res.StatusCode)
+	}
+	if got := res.Header.Get("Location"); got != "/api/v1/openapi.json" {
+		t.Fatalf("GET /openapi.json Location = %q, want canonical served contract", got)
+	}
+}
+
+func TestMissingAssetLikePathDoesNotMasqueradeAsHTML(t *testing.T) {
+	for _, p := range []string{"/missing.json", "/assets/missing.js", "/favicon.ico"} {
+		res, body := get(t, webui.Handler(fixtureFS()), p)
+		if res.StatusCode != http.StatusNotFound || strings.Contains(body, "id=root") {
+			t.Errorf("missing asset-like path %s = %d body=%q, want honest 404", p, res.StatusCode, body)
+		}
+	}
+}
+
 // The UI handler must never serve index.html for API paths — those belong to the
 // API handler when composed.
 func TestDoesNotShadowAPI(t *testing.T) {

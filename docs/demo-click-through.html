@@ -187,7 +187,7 @@
     .mental-model h2 { margin-top: 0; }
     .flow {
       display: grid;
-      grid-template-columns: repeat(5, minmax(110px, 1fr));
+      grid-template-columns: repeat(6, minmax(110px, 1fr));
       gap: .6rem;
       align-items: stretch;
       margin-top: 1rem;
@@ -211,6 +211,31 @@
       color: var(--teal);
       font-weight: 900;
       transform: translateY(-50%);
+    }
+    .entity-chain {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: .6rem;
+      margin-top: 1rem;
+    }
+    .entity-chain > div {
+      position: relative;
+      padding: .75rem;
+      border: 1px solid #c8d9dd;
+      border-radius: .55rem;
+      background: white;
+      font-size: .83rem;
+    }
+    .entity-chain strong { display: block; color: var(--navy); }
+    .entity-chain > div:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      top: 50%;
+      right: -.62rem;
+      z-index: 2;
+      transform: translateY(-50%);
+      color: var(--blue);
+      font-weight: 900;
     }
 
     .section-title { margin: 2.5rem 0 1rem; scroll-margin-top: 1rem; }
@@ -318,6 +343,8 @@
       .intro-grid { grid-template-columns: 1fr; }
       .flow { grid-template-columns: 1fr; }
       .flow > div:not(:last-child)::after { content: "↓"; top: auto; right: 50%; bottom: -.8rem; transform: translateX(50%); }
+      .entity-chain { grid-template-columns: 1fr; }
+      .entity-chain > div:not(:last-child)::after { content: "↓"; top: auto; right: 50%; bottom: -.8rem; transform: translateX(50%); }
     }
     @media (max-width: 620px) {
       .tour-header { grid-template-columns: auto 1fr; }
@@ -344,10 +371,11 @@
     <div class="hero-inner">
       <p class="eyebrow">Local Provider demo · beginner guide</p>
       <h1>Learn trstctl by clicking through the real control plane</h1>
-      <p class="lede">No PKI background required. This guide explains what to click, what you should see, and why each screen matters. The main tour is read-only and safe.</p>
+      <p class="lede">No PKI background required. Start with the 10-minute proof loop, then continue into the full read-only tour when you want the detail.</p>
       <div class="hero-actions">
         <a class="button primary" href="https://localhost:9443/" target="_blank" rel="noopener">Open the trstctl demo</a>
-        <a class="button secondary" href="#before-you-start">Start the walkthrough</a>
+        <a class="button secondary" href="#quick-tour">Take the 10-minute tour</a>
+        <a class="button secondary" href="#before-you-start">See the full walkthrough</a>
         <a class="button secondary" href="getting-started/">Back to the documentation</a>
         <button class="secondary" type="button" onclick="window.print()">Print or save as PDF</button>
       </div>
@@ -362,6 +390,7 @@
       <nav aria-label="Walkthrough contents">
         <ol class="toc">
           <li><a href="#before-you-start">Before you start</a></li>
+          <li><a href="#quick-tour">10-minute proof loop</a></li>
           <li><a href="#stop-1">1. Sign in</a></li>
           <li><a href="#stop-2">2. Dashboard</a></li>
           <li><a href="#stop-3">3. Journeys</a></li>
@@ -388,7 +417,7 @@
     <main id="main">
       <section id="before-you-start" class="section-title">
         <h2>Before you start</h2>
-        <p>Keep this guide in one tab and the demo in another. Plan on 35–50 minutes.</p>
+        <p>Keep this guide in one tab and the demo in another. Plan on 10 minutes for the first proof loop or 35–50 minutes for the complete tour.</p>
       </section>
 
       <div class="intro-grid">
@@ -414,13 +443,33 @@
       <section class="mental-model" aria-labelledby="mental-model-title">
         <h2 id="mental-model-title">The whole product in one picture</h2>
         <p><strong>trstctl manages credentials used by machines, not people.</strong> A machine might be a web service, build bot, Kubernetes workload, router, database, or AI agent. trstctl finds its credentials, applies policy, records every state change, and delivers replacements.</p>
+        <div class="entity-chain" aria-label="The four things connected by trstctl">
+          <div><strong>Owner</strong>The person or team accountable for the machine.</div>
+          <div><strong>Machine identity</strong>The service, workload, device, bot, or agent.</div>
+          <div><strong>Credential</strong>The certificate, key, secret, or token that proves identity.</div>
+          <div><strong>Deployment target</strong>The system where that credential must work.</div>
+        </div>
         <div class="flow" aria-label="trstctl capability flow">
           <div><strong>Discover</strong>Find certificates, secrets, tokens, SSH keys, and workloads.</div>
           <div><strong>Decide</strong>Apply tenant policy, ownership, risk, and approval rules.</div>
           <div><strong>Issue</strong>Ask an isolated signer or external CA for a credential.</div>
           <div><strong>Deliver</strong>Use a connector to place it where the machine needs it.</div>
           <div><strong>Prove</strong>Keep immutable events, receipts, audit exports, and evidence packs.</div>
+          <div><strong>Rotate or revoke</strong>Replace healthy credentials on schedule and remove unsafe ones quickly.</div>
         </div>
+      </section>
+
+      <section id="quick-tour" class="callout tip" aria-labelledby="quick-tour-title">
+        <h3 id="quick-tour-title">The 10-minute proof loop</h3>
+        <p>Use this short, read-only path to answer the first customer question: “Can I see one machine credential move from discovery to action and evidence?”</p>
+        <ol>
+          <li><a href="#stop-1">Sign in</a> and confirm that your tenant and role are visible.</li>
+          <li><a href="#stop-2">Open the dashboard</a> and identify what needs attention first.</li>
+          <li><a href="#stop-4">Inspect discovery</a> to see where a credential came from.</li>
+          <li><a href="#stop-5">Open a certificate</a> to connect owner, machine identity, credential, and deployment target.</li>
+          <li><a href="#stop-13">Open an incident</a> to see the safe remediation plan and evidence.</li>
+        </ol>
+        <p>If you can explain those five screens in plain language, stop there. Continue with the full walkthrough only when you want protocol, governance, graph, connector, and administration detail.</p>
       </section>
 
       <div class="callout warning">
@@ -443,7 +492,7 @@
           <h4>Click</h4>
           <ol>
             <li><a class="button small primary" href="https://localhost:9443/" target="_blank" rel="noopener">Open demo home</a></li>
-            <li>If you see the sign-in page, click <strong>Sign in with SSO</strong>. The local identity provider signs you in automatically.</li>
+            <li>If you see the sign-in page, click <strong>Continue with SSO</strong>. The local identity provider signs you in automatically.</li>
             <li>Look at the top-right corner for <code>demo-admin@trstctl.local</code>.</li>
             <li>Look at the top bar for <strong>Tenant</strong> and the UUID beginning <code>11111111</code>.</li>
           </ol>
@@ -817,11 +866,11 @@
       </section>
       <details open>
         <summary>The page says “token exchange failed”</summary>
-        <div><p>Close the error tab, reopen <a href="https://localhost:9443/" target="_blank" rel="noopener">the demo root</a>, and click <strong>Sign in with SSO</strong> again. If it repeats, the local OIDC sidecar needs to be reattached; ask the demo operator to restart it.</p></div>
+        <div><p>Close the error tab, reopen <a href="https://localhost:9443/" target="_blank" rel="noopener">the demo root</a>, and click <strong>Continue with SSO</strong> again. If it repeats, the local OIDC sidecar needs to be reattached; ask the demo operator to restart it.</p></div>
       </details>
       <details>
         <summary>The browser cannot connect</summary>
-        <div><p>Confirm the address is exactly <code>https://localhost:9443</code>. The local certificate is self-signed, so inspect and accept it for this evaluation only. Do not replace HTTPS with a plaintext proxy. The demo stack must remain running on this machine.</p></div>
+        <div><p>Confirm the address is exactly <code>https://localhost:9443</code>. Copy <code>/public-trust/control-plane.crt</code> from the <code>trstctl</code> service, inspect its SHA-256 fingerprint, and import that certificate-only file into the browser trust store. Do not bypass the warning or replace HTTPS with a plaintext proxy. See <a href="local-evaluation-tls/">Trust local evaluation TLS</a>. The demo stack must remain running on this machine.</p></div>
       </details>
       <details>
         <summary>A screen has no rows</summary>

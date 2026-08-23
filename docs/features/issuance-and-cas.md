@@ -61,9 +61,11 @@ resent — it stays explicitly indeterminate rather than guessing the CA did not
 After a definite result the worker emits `certificate.recorded`, rebuilds the
 certificate inventory, and records the separate `ca.issue` evidence row. The
 identity-transition issuance retry path (`POST /api/v1/identities/{id}/transitions` to
-`issued`) is a known AN-5 blocker until CORRECT closes the served-stack Compose E2E
-receipt, so this page does not claim that retrying that transition with the same key
-is proven to return the original certificate yet. The request's
+`issued`) is exercised by the shipped-stack Compose E2E gate: the gate repeats the
+same request with the same key, waits through the real PostgreSQL/JetStream/outbox/
+isolated-signer path, and asserts certificate inventory remains exactly one before
+revoking that certificate and verifying OCSP and CRL state. This bounded proof does
+not turn tokenless or unreconciled upstream adapters into exactly-once receivers. The request's
 [CSR](../glossary.md) is inspected through the single isolated cryptography path, and
 the active [profile](#profiles-and-the-registration-authority-split-f53) is enforced
 *before* signing, with an `issuance.profile_evaluated` event recorded either way.

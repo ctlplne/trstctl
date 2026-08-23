@@ -21,22 +21,22 @@ export function Login() {
         <div className="flex flex-col items-center gap-3 text-center">
           <BrandMark size="md" />
           <div>
-            <Eyebrow as="p">{translateNow("source.machine.credential.access.bb586fcf38")}</Eyebrow>
+            <Eyebrow as="p">{translateNow("auth.login.eyebrow")}</Eyebrow>
             <h1 className="text-heading font-semibold tracking-tight">{translateNow("source.trstctl.74de2c6ee4")}</h1>
           </div>
         </div>
 
         <Card className="border-border/90 shadow-elevation1">
           <CardHeader>
-            <CardTitle>{translateNow(oidcAvailable ? "source.sign.in.bfd402b2f6" : "auth.browserLoginDisabled.title")}</CardTitle>
+            <CardTitle>{translateNow(oidcAvailable ? "auth.login.title" : "auth.browserLoginDisabled.title")}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="mb-4 text-body text-muted-foreground">
-              {translateNow(oidcAvailable ? "source.authenticate.with.your.organization.s.iden.c19821f6a0" : "auth.browserLoginDisabled.body")}
+              {translateNow(oidcAvailable ? "auth.login.body" : "auth.browserLoginDisabled.body")}
             </p>
             {oidcAvailable && (
-              <Button className="w-full" onClick={beginLogin}>
-                {translateNow("source.sign.in.with.sso.73e984e9b4")}
+              <Button className="min-h-11 w-full" onClick={beginLogin}>
+                {translateNow("auth.login.action")}
               </Button>
             )}
             {previewAvailable && (

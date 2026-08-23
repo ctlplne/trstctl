@@ -60,6 +60,21 @@ services:
       timeout: 3s
       retries: 20
 
+  # EVALUATION ONLY — generate one stable local IdP signing keypair. The private
+  # half is mounted only into eval-oidc; trstctl receives the public JWKS. Keeping
+  # the pair in a named volume preserves browser-login continuity across restart.
+  oidc-keys:
+    image: node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
+    environment:
+      OIDC_PRIVATE_KEY_DIR: /local-oidc-private
+      OIDC_JWKS_DIR: /local-oidc-public
+      OIDC_KEY_ID: trstctl-eval-idp
+    command: ["node", "/local/oidc-keygen.mjs"]
+    volumes:
+      - evaloidcprivate:/local-oidc-private
+      - evaloidcpublic:/local-oidc-public
+      - ../local-oidc/oidc-keygen.mjs:/local/oidc-keygen.mjs:ro
+
   # The signing service runs as its OWN service (AN-4 / R3.2): process isolation is
   # also deployment isolation. Its CA key is sealed at rest in a persistent volume,
   # so a restart preserves the issuing CA instead of silently rotating it.
@@ -106,6 +121,8 @@ services:
         condition: service_healthy
       signer:
         condition: service_started
+      oidc-keys:
+        condition: service_completed_successfully
     environment:
       TRSTCTL_SERVER_ADDR: ":8443"
       # External-datastore configuration (the tested external path).
@@ -171,17 +188,39 @@ services:
       TRSTCTL_PROTOCOLS_SPIFFE_SOCKET_PATH: /run/trstctl-spiffe/workload.sock
       # TLS is on by default (server.tls.mode=internal): the control plane serves
       # HTTPS with a self-signed certificate, so reach it at https://localhost:8443
-      # and verify with the certificate-only /data/tls/internal-server.crt file.
+      # and verify with the certificate-only public trust file below.
       # For production set TRSTCTL_SERVER_TLS_MODE=file with your certificate.
+      TRSTCTL_SERVER_TLS_INTERNAL_TRUST_FILE: /public-trust/control-plane.crt
+      # EVALUATION ONLY — a loopback-only local IdP gives the first operator a
+      # real browser session instead of leaving a healthy blank stack behind an
+      # unconfigured-login wall. The product default remains authentication-off
+      # and fail-closed; production must configure its own OIDC, SAML, or LDAP.
+      TRSTCTL_AUTH_OIDC_ENABLED: "true"
+      TRSTCTL_AUTH_OIDC_ISSUER: "http://127.0.0.1:18081"
+      TRSTCTL_AUTH_OIDC_CLIENT_ID: trstctl-eval-ui
+      TRSTCTL_AUTH_OIDC_AUTH_ENDPOINT: "http://127.0.0.1:18081/authorize"
+      TRSTCTL_AUTH_OIDC_TOKEN_ENDPOINT: "http://127.0.0.1:18081/token"
+      TRSTCTL_AUTH_OIDC_REDIRECT_URI: "https://localhost:8443/auth/callback"
+      TRSTCTL_AUTH_OIDC_JWKS_FILE: /local-oidc-public/jwks.json
+      TRSTCTL_AUTH_OIDC_SESSION_SECRET_FILE: /data/secrets/oidc-session.secret
+      TRSTCTL_AUTH_OIDC_SESSION_TTL: 8h
+      TRSTCTL_AUTH_OIDC_LOGIN_REDIRECT: /
+      TRSTCTL_AUTH_OIDC_TENANT_CLAIM: tenant
+      TRSTCTL_AUTH_OIDC_CLAIM_IS_TENANT: "true"
+      TRSTCTL_AUTH_OIDC_DEFAULT_ROLES: admin
     volumes:
       - signersock:/run/trstctl   # reach the signer over the shared UDS
       - spiffesock:/run/trstctl-spiffe # mount this volume into a workload container to use the SPIFFE Workload API
       - secrets:/data/secrets     # the same deployment KEK as the signer
       - trstctldata:/data         # CA cert + audit key persistence
+      - publictrust:/public-trust # certificate-only trust publication; no private TLS state
+      - evaloidcpublic:/local-oidc-public:ro # public JWKS only; the IdP private volume is not mounted here
     ports:
-      - "8443:8443"
-      - "19443:9443"
-      - "19444:9444"
+      # The automatic eval administrator is safe only on the same workstation.
+      # Bind every published blank-eval listener to host loopback by default.
+      - "127.0.0.1:8443:8443"
+      - "127.0.0.1:19443:9443"
+      - "127.0.0.1:19444:9444"
     healthcheck:
       # Distroless has no shell; the binary probes its own /healthz over the same
       # transport the server uses (HTTPS by default).
@@ -191,6 +230,66 @@ services:
       retries: 5
       start_period: 25s
 
+  # EVALUATION ONLY — a one-user OIDC provider for the blank first-run journey.
+  # Its host listener is loopback-only. The shared implementation issues opaque,
+  # short-lived, single-use authorization codes bound to PKCE and this one exact
+  # callback; it is not a production identity provider.
+  eval-oidc:
+    image: node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
+    restart: on-failure
+    depends_on:
+      trstctl:
+        condition: service_started
+      oidc-keys:
+        condition: service_completed_successfully
+    environment:
+      OIDC_HOST: "0.0.0.0"
+      OIDC_PORT: "18081"
+      OIDC_ISSUER: "http://127.0.0.1:18081"
+      OIDC_CLIENT_ID: trstctl-eval-ui
+      OIDC_REDIRECT_URI: "https://localhost:8443/auth/callback"
+      OIDC_TENANT: "${COMPOSE_E2E_TENANT:-11111111-1111-4111-8111-111111111111}"
+      OIDC_SUBJECT: eval-admin
+      OIDC_EMAIL: eval-admin@trstctl.local
+      OIDC_NAME: Evaluation Admin
+      OIDC_KEY_ID: trstctl-eval-idp
+      OIDC_PRIVATE_KEY: /local-oidc-private/idp-private.pem
+      OIDC_JWKS: /local-oidc-public/jwks.json
+    command: ["node", "/local/oidc-server.mjs"]
+    volumes:
+      - evaloidcprivate:/local-oidc-private:ro
+      - evaloidcpublic:/local-oidc-public:ro
+      - ../local-oidc/oidc-server.mjs:/local/oidc-server.mjs:ro
+    ports:
+      - "127.0.0.1:18081:18081"
+
+  # trstctl's SSRF guard correctly permits HTTP only to literal loopback. This
+  # tiny TCP bridge shares trstctl's network namespace and forwards that exact
+  # loopback address to the project-local IdP service.
+  oidc-loopback:
+    image: node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
+    network_mode: "service:trstctl"
+    restart: on-failure
+    depends_on:
+      trstctl:
+        condition: service_started
+      eval-oidc:
+        condition: service_started
+    command:
+      - "node"
+      - "-e"
+      - |
+        const net = require("node:net");
+        net.createServer((client) => {
+          const upstream = net.connect(18081, "eval-oidc");
+          client.pipe(upstream);
+          upstream.pipe(client);
+          upstream.on("error", () => client.destroy());
+          client.on("error", () => upstream.destroy());
+        }).listen(18081, "127.0.0.1", () => {
+          console.log("evaluation OIDC loopback proxy listening on 127.0.0.1:18081");
+        });
+
 volumes:
   pgdata:
   natsdata:
@@ -199,3 +298,6 @@ volumes:
   signerkeys:
   secrets:
   trstctldata:
+  publictrust:
+  evaloidcprivate:
+  evaloidcpublic:

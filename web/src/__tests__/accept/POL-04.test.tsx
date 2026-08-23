@@ -61,10 +61,10 @@ describe("POL-04 login and assistant polish", () => {
     apiMock.me.mockRejectedValue(new UnauthorizedError());
     renderAt("/");
 
-    expect(await screen.findByRole("button", { name: /Sign in with SSO/i })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /Continue with SSO/i })).toBeInTheDocument();
     expect(screen.queryByText(/Control plane/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/in-memory tenant/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/Machine credential access/i)).toBeInTheDocument();
+    expect(screen.getByText(/Credentials for machines and apps/i)).toBeInTheDocument();
     expect(screen.getByText(/sample data in this browser/i)).toBeInTheDocument();
   });
 

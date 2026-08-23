@@ -18,6 +18,22 @@ export const messages = {
     defaultMessage: "Browser sign-in is not configured",
     description: "Login heading when no browser OIDC route is mounted.",
   },
+  "auth.login.eyebrow": {
+    defaultMessage: "Credentials for machines and apps",
+    description: "Plain-language product category above the login heading.",
+  },
+  "auth.login.title": {
+    defaultMessage: "Sign in to trstctl",
+    description: "Login card heading when browser SSO is available.",
+  },
+  "auth.login.body": {
+    defaultMessage: "Continue with your configured sign-in provider. You will manage machine identities and the credentials they use.",
+    description: "Plain-language explanation of what follows browser sign-in.",
+  },
+  "auth.login.action": {
+    defaultMessage: "Continue with SSO",
+    description: "Primary action that begins the configured OIDC sign-in flow.",
+  },
   "app.loading": {
     defaultMessage: "Loading...",
     description: "Status text shown while the authenticated session is loading.",
@@ -14394,10 +14410,6 @@ export const messages = {
     defaultMessage: "Auth session",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
   },
-  "source.authenticate.with.your.organization.s.iden.c19821f6a0": {
-    defaultMessage: "Authenticate with your organization's identity provider to manage credentials.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Login.tsx.",
-  },
   "source.authority.key.60329d7d7b": {
     defaultMessage: "Authority key",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/SSHTrust.tsx.",
@@ -16172,10 +16184,6 @@ export const messages = {
   "source.local.preview.http.957e66ac19": {
     defaultMessage: "Local preview HTTP",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
-  },
-  "source.machine.credential.access.bb586fcf38": {
-    defaultMessage: "Machine credential access",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Login.tsx.",
   },
   "source.machine.login.e25f8c4843": {
     defaultMessage: "Machine login",
@@ -18236,14 +18244,6 @@ export const messages = {
   "source.sign.an.artifact.fb729a3d5b": {
     defaultMessage: "Sign an artifact",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/CodeSigning.tsx.",
-  },
-  "source.sign.in.bfd402b2f6": {
-    defaultMessage: "Sign in",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Login.tsx.",
-  },
-  "source.sign.in.with.sso.73e984e9b4": {
-    defaultMessage: "Sign in with SSO",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Login.tsx.",
   },
   "source.sign.intermediate.csr.with.64b849b64d": {
     defaultMessage: "Sign intermediate CSR with",
