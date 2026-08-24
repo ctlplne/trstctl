@@ -78,10 +78,12 @@ owned by the API handler. No separate static server is required. **Served.** The
 `index.html` references the real Vite bundle, and tests fail if a clean build regresses to
 the placeholder.
 
-The console is organized as a **space rail over scoped sidebars** — the
-*Certificates & PKI*, *Secrets*, *Workload & SSH*, *Posture & response*, and
-*Platform* spaces each own their product surfaces, with Home carrying the
-cross-space dashboard, journeys, and worklists — and every served capability
+The console is organized as a **space rail over scoped sidebars** —
+_Certificate Lifecycle_, _Machine & Workload Trust_, _Secrets & Access_,
+_Software Trust_, and _Trust Operations_ each own one operator mental model, with
+Home carrying the cross-space dashboard, journeys, and worklists. These are views
+over one API, tenant boundary, event stream, owner directory, alert service, policy
+system, and audit chain; they are not separate backends. Every served capability
 across these feature pages has a screen behind it: the certificate command center, the
 secrets workspace, non-human-identity governance, discovery, the PQC posture gauge, the
 compliance and audit surfaces, the **privacy** (`/privacy`) governance console, and the
@@ -94,7 +96,7 @@ The full route-to-screen map is **[The web console](../web-console.md)**. **Serv
 
 People log in through **OIDC** (OpenID Connect), **SAML 2.0**, or **LDAP / Active
 Directory** against a standards-compliant provider. OIDC uses the authorization-code flow with random `state`
-(CSRF protection) and a mandatory `nonce` (replay protection); the returned id_token is
+(CSRF protection) and a mandatory `nonce` (replay protection); the returned id*token is
 verified — signature (via JWKS through the single isolated cryptography path), issuer,
 audience, expiry, nonce — before session issue. SAML serves a Service Provider at
 `/auth/saml/metadata`, starts SP-initiated login at `/auth/saml/login`, and accepts
@@ -104,8 +106,8 @@ Directory mounts `POST /auth/ldap/login`, binds the user to the directory, searc
 directory groups, and maps those groups to tenant roles. All three paths mint the same
 short-lived, HMAC-signed, `HttpOnly`+`Secure` session cookie and resolve the verified
 subject, tenant claim, or groups through the same per-user tenant-mapping table. CI/CD
-instead uses API tokens (`trst_`-prefixed, only the SHA-256 hash stored). **Served when
-`auth.oidc.enabled`, `auth.saml.enabled`, or `auth.ldap.enabled` is configured.** API
+instead uses API tokens (`trst*`-prefixed, only the SHA-256 hash stored). **Served when
+`auth.oidc.enabled`, `auth.saml.enabled`, or `auth.ldap.enabled` is configured.\*\* API
 tokens remain the zero-dependency auth path when SSO is disabled; an
 enabled-but-incomplete OIDC, SAML, or LDAP block fails closed at startup.
 
@@ -143,7 +145,7 @@ today), and startup fails closed if
 the archive is unsupported, unpinned, or hash-mismatched. Even bundled, Postgres runs
 under the non-superuser `trstctl_app` role so row-level security still applies — per-tenant
 isolation is enforced at the database layer even for eval, not relaxed. The
-[signing service](../design/signing-service.md) is *always* a separate supervised child
+[signing service](../design/signing-service.md) is _always_ a separate supervised child
 process, never in-process — private-key operations stay in their own isolated service. For
 production, flip Postgres/NATS to external. **Served (binary).**
 
@@ -193,7 +195,7 @@ one tenant can never read another's data, and that guarantee lives at the databa
 Every table carries a `tenant_id` and has [row-level security](../glossary.md) that denies
 all rows when the tenant context is unset (fail-closed). `WithTenant` drops to the
 non-superuser role and sets the tenant for the transaction, so every query is confined
-automatically — and a custom build check *fails the build* if any repository query omits
+automatically — and a custom build check _fails the build_ if any repository query omits
 the tenant filter. A single-company deployment simply runs one tenant.
 
 ### Managed offering / SaaS provider plane (CAP-MODEL-02)
@@ -257,7 +259,7 @@ credentials. `GET /api/v1/scale/orchestration` and
 - execution lanes for issuance, inventory, graph/risk, revocation, signer, and
   projection replay;
 - the bounded queues, bulkhead environment knobs, backpressure signals, replay source,
-  and AN-* architecture invariant for each lane;
+  and AN-\* architecture invariant for each lane;
 - the shard plan for inventory pages, CRL shards, and projection batches;
 - explicit residuals for customer infrastructure pricing, external relying-party CRL
   adoption, and remote CI behavior.
@@ -399,7 +401,7 @@ configured. See
 - **Auth:** `/auth/login`, `/auth/callback`, `/auth/me`, `/auth/logout` (OIDC when
   `auth.oidc.enabled` is on); `/auth/saml/login`, `/auth/saml/acs`, and
   `/auth/saml/metadata` (SAML when `auth.saml.enabled` is on); `POST
-  /auth/ldap/login` (LDAP / Active Directory when `auth.ldap.enabled` is on); API
+/auth/ldap/login` (LDAP / Active Directory when `auth.ldap.enabled` is on); API
   tokens prefixed `trst_`. Config:
   `TRSTCTL_AUTH_OIDC_ISSUER`, `TRSTCTL_AUTH_OIDC_CLIENT_ID`,
   `TRSTCTL_AUTH_OIDC_REDIRECT_URI`,

@@ -475,7 +475,7 @@ describe("app shell accessibility and theme", () => {
     const results = await axe(container);
     expect(results).toHaveNoViolations();
 
-    await user.click(within(drawer).getByRole("button", { name: "Certificates & PKI" }));
+    await user.click(within(drawer).getByRole("button", { name: "Certificate Lifecycle" }));
     expect(screen.queryByRole("dialog", { name: "Primary navigation" })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Open primary navigation" }));
@@ -622,15 +622,16 @@ describe("app shell accessibility and theme", () => {
     await screen.findByText("u@example.test");
     const nav = screen.getByRole("navigation", { name: /Primary/i });
 
-    // S-C1: inside the Certificates & PKI space its groups render — including
+    // S-C1: inside the Certificate Lifecycle space its groups render — including
     // the formerly module-banded CA hierarchy and Certificate profiles.
     for (const group of ["Inventory", "Issue & automate"]) {
       expect(within(nav).getAllByText(group).length).toBeGreaterThan(0);
     }
-    for (const link of ["Request a certificate", "How machines request credentials", "Certificate authorities", "Certificate rules", "Software signing"]) {
+    for (const link of ["Request a certificate", "How machines request credentials", "Certificate authorities", "Certificate rules"]) {
       expect(within(nav).getByRole("link", { name: new RegExp(link) })).toBeInTheDocument();
     }
-    expect(within(nav).getByText("How are certificates issued, renewed, and trusted?")).toBeInTheDocument();
+    expect(within(nav).getByText("Which certificates need attention, and is renewal safe?")).toBeInTheDocument();
+    expect(within(nav).queryByRole("link", { name: /Software signing/i })).not.toBeInTheDocument();
 
     // Other spaces' routes stay out of the sidebar until their space is active.
     expect(within(nav).queryByRole("link", { name: /unmanaged credentials/i })).not.toBeInTheDocument();
@@ -640,10 +641,10 @@ describe("app shell accessibility and theme", () => {
     // The space rail lists Home plus every permitted space, and marks the
     // active one from the URL.
     const rail = screen.getByRole("navigation", { name: /Spaces/i });
-    for (const space of ["Home", "Certificates & PKI", "Secrets", "Workload & SSH", "Posture & response", "Platform"]) {
+    for (const space of ["Home", "Certificate Lifecycle", "Secrets & Access", "Machine & Workload Trust", "Software Trust", "Trust Operations"]) {
       expect(within(rail).getByRole("button", { name: space })).toBeInTheDocument();
     }
-    expect(within(rail).getByRole("button", { name: "Certificates & PKI" })).toHaveAttribute("aria-current", "true");
+    expect(within(rail).getByRole("button", { name: "Certificate Lifecycle" })).toHaveAttribute("aria-current", "true");
   });
 
   it("persists manual nav-group collapse and restore choices", async () => {

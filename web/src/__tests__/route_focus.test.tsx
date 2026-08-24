@@ -57,7 +57,7 @@ describe("SPA route focus management (PRODUCT-006)", () => {
     expect(document.activeElement).not.toBe(screen.getByRole("heading", { name: "Overview" }));
 
     // S-C1: /certificates is reached from Home via the space rail.
-    await user.click(screen.getByRole("button", { name: "Certificates & PKI" }));
+    await user.click(screen.getByRole("button", { name: "Certificate Lifecycle" }));
 
     const heading = await screen.findByRole("heading", { name: "Certificates" });
     const main = screen.getByRole("main");
@@ -72,7 +72,7 @@ describe("SPA route focus management (PRODUCT-006)", () => {
     await screen.findByText("u@example.test");
 
     // S-C1: /certificates is reached from Home via the space rail.
-    await user.click(screen.getByRole("button", { name: "Certificates & PKI" }));
+    await user.click(screen.getByRole("button", { name: "Certificate Lifecycle" }));
     await screen.findByRole("heading", { name: "Certificates" });
 
     await waitFor(() => expect(document.title).toMatch(/Certificates/));
@@ -105,7 +105,7 @@ describe("SPA route focus management (PRODUCT-006)", () => {
     );
     await screen.findByText("u@example.test");
 
-    await user.click(screen.getByRole("button", { name: "Workload & SSH" }));
+    await user.click(screen.getByRole("button", { name: "Machine & Workload Trust" }));
     await screen.findByText("no heading here");
 
     const main = screen.getByRole("main");

@@ -58,12 +58,13 @@ export interface ContextualRouteItem {
   featureIds: string[];
 }
 
-/* S-C1 (spaces): the unified-shell space registry. The S-B1/S-B2 module era
- * scoped a thin band of issuance routes and left ~20 rows always visible; the
- * approved 2026-07 redesign inverts that — five focused spaces own every
- * product surface, and only Home (Dashboard + Journeys + worklists) is global.
- * A space is a NavModule that additionally carries its own grouped sidebar.
- * Space ids are stable identifiers, not URLs; route URLs are unchanged. */
+/* S-C1 (spaces): the unified-shell space registry. Five operator mental models
+ * own every product surface, and only Home (Dashboard + Journeys + worklists)
+ * is global. The ids deliberately retain their original internal values so
+ * stored preferences and audit deep links survive the 2026-08 product carve:
+ * `posture` now presents Software Trust, and `platform` presents Trust
+ * Operations. Customer labels and canonical route ownership—not an internal
+ * persistence key—define the product. Route URLs remain stable. */
 export type SpaceId = "certificates" | "secrets" | "workload" | "posture" | "platform";
 /** Back-compat alias: audit deep links and preferences persist these ids. */
 export type ModuleId = SpaceId;
@@ -87,10 +88,9 @@ export interface NavModule {
 }
 
 /** navSpaces: the five spaces of the unified shell. Every customer route lives
- * in exactly one space group (the module_map partition guard); labels reuse the
- * established vocabulary — "Certificates & PKI", "Detect & respond", and
- * "Govern & administer" survive from the S-A1/S-B1 era on purpose (docs and
- * operator muscle memory reference them).
+ * in exactly one space group (the module_map partition guard). The visible
+ * vocabulary is task-first: Certificate Lifecycle; Machine & Workload Trust;
+ * Secrets & Access; Software Trust; and Trust Operations.
  *
  * S-C7 — the workspaces-vs-lenses rule for in-page tabs. A tab becomes a
  * sidebar ROUTE only when it is a distinct served workspace: its own feature
@@ -130,7 +130,6 @@ export const navSpaces: NavSpace[] = [
             mode: "real",
             featureIds: ["F5", "F46", "F69", "F70", "F71", "F72", "F73", "F74"],
           },
-          { to: "/codesign", labelKey: "nav.item.codeSigning", icon: "signature", mode: "real", featureIds: ["F50"] },
         ],
       },
     ],
@@ -183,6 +182,10 @@ export const navSpaces: NavSpace[] = [
         labelKey: "nav.group.sshTrust",
         items: [{ to: "/ssh", labelKey: "nav.item.sshTrust", icon: "ssh", mode: "real", featureIds: ["F44", "F45"] }],
       },
+      {
+        labelKey: "nav.group.infrastructure",
+        items: [{ to: "/agents", labelKey: "nav.item.agents", icon: "agent", mode: "real", featureIds: ["F3", "F54"] }],
+      },
     ],
   },
   {
@@ -192,16 +195,8 @@ export const navSpaces: NavSpace[] = [
     icon: "posture",
     groups: [
       {
-        labelKey: "nav.group.detectRespond",
-        items: [
-          { to: "/discovery", labelKey: "nav.item.discovery", icon: "activity", mode: "real", featureIds: ["F2", "F17", "F35", "F36", "F42", "F49"] },
-          { to: "/posture", labelKey: "nav.item.posture", icon: "posture", mode: "real", featureIds: ["F16", "F17", "F18", "F52", "F57"] },
-          { to: "/risk", labelKey: "nav.item.risk", icon: "risk", mode: "real", featureIds: ["F19"] },
-          { to: "/graph", labelKey: "nav.item.graph", icon: "graph", mode: "real", featureIds: ["F21"] },
-          { to: "/migration", labelKey: "source.migration.h2mig00001", icon: "graph", mode: "real", featureIds: ["F48"] },
-          { to: "/incidents", labelKey: "nav.item.incidents", icon: "incident", mode: "real", featureIds: ["F31", "F32", "F34"] },
-          { to: "/operations", labelKey: "nav.item.operations", icon: "activity", mode: "real", featureIds: ["F7"] },
-        ],
+        labelKey: "nav.group.overview",
+        items: [{ to: "/codesign", labelKey: "nav.item.codeSigning", icon: "signature", mode: "real", featureIds: ["F50"] }],
       },
     ],
   },
@@ -212,22 +207,35 @@ export const navSpaces: NavSpace[] = [
     icon: "platform",
     groups: [
       {
+        labelKey: "nav.group.overview",
+        items: [{ to: "/trust-operations", labelKey: "nav.item.trustOperations", icon: "platform", mode: "real", featureIds: ["F7", "F19", "F31", "F59"] }],
+      },
+      {
+        labelKey: "nav.group.detectRespond",
+        items: [
+          { to: "/discovery", labelKey: "nav.item.discovery", icon: "activity", mode: "real", featureIds: ["F2", "F17", "F35", "F36", "F42", "F49"] },
+          { to: "/risk", labelKey: "nav.item.risk", icon: "risk", mode: "real", featureIds: ["F19"] },
+          { to: "/graph", labelKey: "nav.item.graph", icon: "graph", mode: "real", featureIds: ["F21"] },
+          { to: "/posture", labelKey: "nav.item.posture", icon: "posture", mode: "real", featureIds: ["F16", "F17", "F18", "F52", "F57"] },
+          { to: "/migration", labelKey: "source.migration.h2mig00001", icon: "graph", mode: "real", featureIds: ["F48"] },
+          { to: "/incidents", labelKey: "nav.item.incidents", icon: "incident", mode: "real", featureIds: ["F31", "F32", "F34"] },
+          { to: "/operations", labelKey: "nav.item.operations", icon: "activity", mode: "real", featureIds: ["F7"] },
+        ],
+      },
+      {
         labelKey: "nav.group.governAdminister",
         items: [
           { to: "/policy", labelKey: "nav.item.policy", icon: "policy", mode: "real", featureIds: ["F28", "F29", "F62"] },
           { to: "/approvals", labelKey: "nav.item.approvals", icon: "approval", mode: "real", featureIds: ["F33"] },
           { to: "/audit", labelKey: "nav.item.audit", icon: "audit", mode: "real", featureIds: ["F9"] },
           { to: "/owners", labelKey: "nav.item.ownership", icon: "owner", mode: "real", featureIds: ["F59"] },
+          { to: "/notifications", labelKey: "nav.item.notifications", icon: "notification", mode: "real", featureIds: ["F7"] },
           { to: "/privacy", labelKey: "nav.item.privacy", icon: "policy", mode: "real", featureIds: ["F79"] },
         ],
       },
       {
         labelKey: "nav.group.infrastructure",
-        items: [
-          { to: "/agents", labelKey: "nav.item.agents", icon: "agent", mode: "real", featureIds: ["F3", "F54"] },
-          { to: "/connectors", labelKey: "nav.item.connectors", icon: "connector", mode: "real", featureIds: ["F7", "F27", "F20"] },
-          { to: "/notifications", labelKey: "nav.item.notifications", icon: "notification", mode: "real", featureIds: ["F7"] },
-        ],
+        items: [{ to: "/connectors", labelKey: "nav.item.connectors", icon: "connector", mode: "real", featureIds: ["F7", "F27", "F20"] }],
       },
       {
         labelKey: "nav.group.integrations",
@@ -298,8 +306,8 @@ const moduleScopeTerms: Record<ModuleId, string> = {
   certificates: "cert",
   secrets: "secret",
   workload: "ssh",
-  posture: "incident",
-  platform: "agent",
+  posture: "sign",
+  platform: "incident",
 };
 
 export function moduleScopeTerm(moduleId: string): string | undefined {
@@ -334,6 +342,7 @@ export function lockedModuleIds(licensedFeatures: ReadonlySet<string>): ModuleId
 export const appRoutePaths = [
   "/login",
   "/",
+  "/trust-operations",
   "/certificates",
   "/identities",
   "/owners",
@@ -380,6 +389,7 @@ export const appRoutePaths = [
 
 const routePermissionAny: Record<string, string[]> = {
   "/": ["certs:read", "identities:read", "risk:read"],
+  "/trust-operations": ["risk:read", "incidents:read", "owners:read", "notifications:read", "audit:read", "access:read"],
   "/agents": ["agents:read"],
   "/approvals": ["certs:issue"],
   "/assistant": ["graph:read"],

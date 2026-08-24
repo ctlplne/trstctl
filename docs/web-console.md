@@ -13,23 +13,29 @@ related capability is API-only today.
 ## Navigation
 
 The console is a unified shell: an icon rail of five spaces at the far edge, and a
-sidebar scoped to the active space. _Home_ is the cross-space plane — Dashboard and
+sidebar scoped to the active space. _Home_ is the cross-space cockpit — Dashboard and
 Journeys sit above a few quick tasks (for example _Expiring ≤30 days_) that
 deep-link into a pre-filtered worklist. Each space owns every surface of one
-concern: _Certificates & PKI_ (certificates, request, profiles, CA hierarchy,
-protocols, code signing), _Secrets_ (the secrets workspace), _Workload & SSH_
-(workloads, identities, SSH trust), _Posture & response_ (find unmanaged
-credentials, algorithms and future readiness, risk, what could be affected, incidents,
-operations — the Detect & respond
-group), and _Platform_ (policy, approvals, audit, owners, privacy under Govern &
-administer; agents, connectors, notifications under Infrastructure; integrations
-and the API playground; access, system posture, editions, and the assistant under
-Administration).
+operator question:
+
+- _Certificate Lifecycle_ — which certificates need attention, and is renewal safe?
+  It owns inventory, request, profiles, CA hierarchy, and enrollment protocols.
+- _Machine & Workload Trust_ — which machines can prove who they are, and what
+  needs repair? It owns workloads, machine identities, SSH trust, and agents.
+- _Secrets & Access_ — which secrets need rotation, repair, or access review? It
+  owns the store, dynamic engines, access, sharing, synchronization, and scanning.
+- _Software Trust_ — can we prove what was signed, by whom, and with a healthy key?
+  It owns software signing and timestamp-verification work.
+- _Trust Operations_ — what cross-product risk, ownership, alerting, or system work
+  needs attention? Its served overview at `/trust-operations` composes the existing
+  risk, incident, ownership, alert-delivery, routing, and worker-health read models.
+  Discovery, posture, graph, incidents, jobs, policy, approvals, audit, people,
+  alerts, privacy, integrations, and administration remain reachable here.
 
 The mechanism: the URL decides the active space — deep-linking any route lights up
 its owning space, and choosing a space in the rail lands on the first route your
 session may read. trstctl's cross-domain moat still meets in one place (one
-identity graph, one blast-radius view, one signed audit stream): every non-Platform
+identity graph, one blast-radius view, one signed audit stream): every non-Trust-Operations
 space keeps a Change history (this space) row, a scoped lens over the single stream, and
 the command palette jumps across spaces from anywhere. A space with no readable
 routes disappears from the rail entirely, and route URLs are unchanged from the
@@ -390,7 +396,13 @@ load on demand. See [Privacy data catalog](privacy-data-catalog.md). Backed by
 `/api/v1/privacy/archive-erasure-attestations`,
 `/api/v1/privacy/retention-runs`, and `/api/v1/privacy/catalog`.
 
-### Operations & trust (`/incidents`, `/codesign`, `/ca-hierarchy`)
+### Trust Operations and Software Trust (`/trust-operations`, `/incidents`, `/codesign`)
+
+- **Trust Operations overview** — the cross-domain queue names the affected product
+  area, deadline, accountability state, and safest next action. Separate health
+  links show open incidents, ownership gaps, failed alert deliveries, and worker
+  bulkheads. Its route-safety statement is derived from the served channel and
+  routing-policy APIs; it never claims that a human received an alert.
 
 - **Incidents** — the response console: compromise → blast radius →
   replacement-before-revoke → automated revoke/rotate/right-size playbooks →
@@ -653,6 +665,7 @@ remain fail-closed when the surface is disabled. The route is backed by
 | Route               | Screen                          |
 | ------------------- | ------------------------------- |
 | `/`                 | Dashboard                       |
+| `/trust-operations` | Trust Operations overview       |
 | `/journeys`         | Journeys                        |
 | `/identities`       | Identities & NHI                |
 | `/owners`           | Ownership                       |

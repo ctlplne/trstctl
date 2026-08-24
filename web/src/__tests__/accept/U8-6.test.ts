@@ -7,8 +7,10 @@ describe("U8-6 navigation & IA refresh", () => {
   it("renders task-based groups where every command resolves to one registered route and is RBAC-gated", () => {
     // S-C1: space-scoped groups across the five spaces (the S-A1 four-band
     // era ended when the unified shell landed); S-C2 added the two Secrets
-    // workspace groups.
-    expect(navGroups.length).toBe(12);
+    // workspace groups. The certctl-informed carve adds a Machine
+    // infrastructure group plus one overview each for Software Trust and Trust
+    // Operations; route ownership remains unique.
+    expect(navGroups.length).toBe(15);
 
     const registered = new Set<string>(appRoutePaths);
     const sidebarItems = navGroups.flatMap((group) => group.items);
@@ -33,8 +35,9 @@ describe("U8-6 navigation & IA refresh", () => {
     // rows (Access / System / Editions), consciously spending two more rows
     // of rail budget to kill the DA-13 grab-bag. New ceiling: 34.
     // S-C2 spent five rows to give each Secrets workspace a route. Ceiling: 38.
-    // H2 spent one row for the served migration workspace. Ceiling: 39.
-    expect(sidebarRoutes.length + taskNavItems.length).toBeLessThanOrEqual(39);
+    // H2 spent one row for the migration workspace. The product carve adds the
+    // real Trust Operations overview and no duplicate destination. Ceiling: 40.
+    expect(sidebarRoutes.length + taskNavItems.length).toBeLessThanOrEqual(40);
 
     // S-A1 promoted the formerly-hidden surfaces into the rail; they are no
     // longer contextual-only.

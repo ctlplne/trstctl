@@ -4088,20 +4088,20 @@ export const messages = {
     description: "Primary navigation item.",
   },
   "nav.module.certificates": {
-    defaultMessage: "Certificates & PKI",
-    description: "Module switcher label: certificate lifecycle, CA hierarchy, profiles, and enrollment protocols (S-B1/S-B2).",
+    defaultMessage: "Certificate Lifecycle",
+    description: "Space switcher label: discover, issue, deploy, renew, revoke, and monitor certificates.",
   },
   "nav.spaceQuestion.certificates": {
-    defaultMessage: "How are certificates issued, renewed, and trusted?",
-    description: "Plain-language orientation question shown inside the Certificates and PKI space.",
+    defaultMessage: "Which certificates need attention, and is renewal safe?",
+    description: "Plain-language orientation question shown inside Certificate Lifecycle.",
   },
   "nav.module.secrets": {
-    defaultMessage: "Secrets",
-    description: "Module switcher label: the secrets management product.",
+    defaultMessage: "Secrets & Access",
+    description: "Space switcher label: secret storage, access, rotation, synchronization, and scanning.",
   },
   "nav.spaceQuestion.secrets": {
-    defaultMessage: "How do machines receive and rotate secrets safely?",
-    description: "Plain-language orientation question shown inside the Secrets space.",
+    defaultMessage: "Which secrets need rotation, repair, or access review?",
+    description: "Plain-language orientation question shown inside Secrets and Access.",
   },
   "nav.module.ssh": {
     defaultMessage: "SSH",
@@ -4116,32 +4116,178 @@ export const messages = {
     description: "Module switcher label: agents, devices, and workload identity.",
   },
   "nav.space.workload": {
-    defaultMessage: "Workload & SSH",
-    description: "Space switcher label: SPIFFE workload identity, the identity registry, and SSH trust (S-C1).",
+    defaultMessage: "Machine & Workload Trust",
+    description: "Space switcher label: agents, SPIFFE workload identity, machine credentials, and SSH trust.",
   },
   "nav.spaceQuestion.workload": {
-    defaultMessage: "Who is this machine, and what can it access?",
-    description: "Plain-language orientation question shown inside the Workload and SSH space.",
+    defaultMessage: "Which machines can prove who they are, and what needs repair?",
+    description: "Plain-language orientation question shown inside Machine and Workload Trust.",
   },
   "nav.space.posture": {
-    defaultMessage: "Posture & response",
-    description: "Space switcher label: discovery, risk, the credential graph, incidents, and operations (S-C1).",
+    defaultMessage: "Software Trust",
+    description: "Space switcher label: software signing, timestamping, approvals, key health, and verification.",
   },
   "nav.spaceQuestion.posture": {
-    defaultMessage: "What is wrong, and what could be affected?",
-    description: "Plain-language orientation question shown inside the Posture and response space.",
+    defaultMessage: "Can we prove what was signed, by whom, and with a healthy key?",
+    description: "Plain-language orientation question shown inside Software Trust.",
   },
   "nav.space.platform": {
-    defaultMessage: "Platform",
-    description: "Space switcher label: governance, infrastructure, integrations, and administration (S-C1).",
+    defaultMessage: "Trust Operations",
+    description: "Space switcher label: cross-domain risk, incidents, ownership, alerts, evidence, integrations, and system health.",
   },
   "nav.spaceQuestion.platform": {
-    defaultMessage: "How is the control plane protected and operated?",
-    description: "Plain-language orientation question shown inside the Platform space.",
+    defaultMessage: "What risk, ownership, alerting, or system work needs attention?",
+    description: "Plain-language orientation question shown inside Trust Operations.",
   },
   "nav.space.home": {
     defaultMessage: "Home",
     description: "Space switcher label: the cross-space Home plane (Dashboard, Journeys, and the needs-action worklists).",
+  },
+  "trustOperations.title": {
+    defaultMessage: "Trust Operations",
+    description: "Cross-domain operations overview title.",
+  },
+  "trustOperations.answer": {
+    defaultMessage: "What needs attention across every trust domain.",
+    description: "Answer-first description for Trust Operations.",
+  },
+  "trustOperations.technical": {
+    defaultMessage:
+      "Risk projections, incidents, effective ownership, alert delivery, worker bulkheads, and exact audit evidence remain one tenant-scoped control plane.",
+    description: "Technical disclosure for Trust Operations.",
+  },
+  "trustOperations.review": {
+    defaultMessage: "Review the top issue",
+    description: "Primary Trust Operations action.",
+  },
+  "trustOperations.loading": {
+    defaultMessage: "Checking risk, ownership, alert delivery, incidents, and worker health…",
+    description: "Trust Operations loading state.",
+  },
+  "trustOperations.attentionTitle": {
+    defaultMessage: "{count} urgent conditions need attention",
+    description: "Trust Operations attention heading.",
+  },
+  "trustOperations.attentionHealthy": {
+    defaultMessage: "No urgent conditions are projected",
+    description: "Trust Operations healthy attention heading.",
+  },
+  "trustOperations.attentionHelp": {
+    defaultMessage: "The queue combines consequence, deadline, automation evidence, and accountability. Exact scoring stays on the risk page.",
+    description: "Trust Operations attention explanation.",
+  },
+  "trustOperations.attentionHealthyHelp": {
+    defaultMessage:
+      "No critical or high condition is projected from the data currently available. This is not a claim about assets trstctl has not discovered.",
+    description: "Truthful Trust Operations healthy explanation.",
+  },
+  "trustOperations.attentionLabel": {
+    defaultMessage: "Cross-product attention queue",
+    description: "Accessible Trust Operations queue label.",
+  },
+  "trustOperations.deadlineLabel": {
+    defaultMessage: "Deadline",
+    description: "Accessible deadline label.",
+  },
+  "trustOperations.ownerLabel": {
+    defaultMessage: "Accountability",
+    description: "Accessible owner label.",
+  },
+  "trustOperations.nextActionLabel": {
+    defaultMessage: "Safest next action",
+    description: "Accessible next-action label.",
+  },
+  "trustOperations.deadline.unknown": {
+    defaultMessage: "Deadline not reported",
+    description: "Unknown risk deadline.",
+  },
+  "trustOperations.deadline.expired": {
+    defaultMessage: "Already expired",
+    description: "Expired risk deadline.",
+  },
+  "trustOperations.deadline.today": {
+    defaultMessage: "Expires today",
+    description: "Risk deadline today.",
+  },
+  "trustOperations.deadline.one": {
+    defaultMessage: "Expires in 1 day",
+    description: "Risk deadline one day away.",
+  },
+  "trustOperations.deadline.many": {
+    defaultMessage: "Expires in {count} days",
+    description: "Risk deadline several days away.",
+  },
+  "trustOperations.owner.present": {
+    defaultMessage: "Accountable owner recorded",
+    description: "Trust Operations owner-present state.",
+  },
+  "trustOperations.owner.missing": {
+    defaultMessage: "No accountable owner",
+    description: "Trust Operations missing-owner state.",
+  },
+  "trustOperations.remediate": {
+    defaultMessage: "Review and remediate",
+    description: "Trust Operations queue action.",
+  },
+  "trustOperations.healthTitle": {
+    defaultMessage: "Operational safety",
+    description: "Trust Operations health heading.",
+  },
+  "trustOperations.healthHelp": {
+    defaultMessage: "These are unresolved conditions, not unread-message counts.",
+    description: "Trust Operations health explanation.",
+  },
+  "trustOperations.healthLabel": {
+    defaultMessage: "Trust Operations health",
+    description: "Accessible Trust Operations health-list label.",
+  },
+  "trustOperations.incidents.one": {
+    defaultMessage: "1 open incident",
+    description: "One open incident.",
+  },
+  "trustOperations.incidents.many": {
+    defaultMessage: "{count} open incidents",
+    description: "Open incident count.",
+  },
+  "trustOperations.ownership.one": {
+    defaultMessage: "1 ownership gap",
+    description: "One ownership gap.",
+  },
+  "trustOperations.ownership.many": {
+    defaultMessage: "{count} ownership gaps",
+    description: "Ownership-gap count.",
+  },
+  "trustOperations.alerts.one": {
+    defaultMessage: "1 failed alert delivery",
+    description: "One failed alert delivery.",
+  },
+  "trustOperations.alerts.many": {
+    defaultMessage: "{count} failed alert deliveries",
+    description: "Failed alert delivery count.",
+  },
+  "trustOperations.workers.healthy": {
+    defaultMessage: "Background workers healthy",
+    description: "Healthy worker-pool state.",
+  },
+  "trustOperations.workers.review": {
+    defaultMessage: "Background workers need review",
+    description: "Unhealthy or unavailable worker-pool state.",
+  },
+  "trustOperations.routingTitle": {
+    defaultMessage: "Alert route safety",
+    description: "Trust Operations alert-safety heading.",
+  },
+  "trustOperations.routingReady": {
+    defaultMessage: "{channels} ready channels are connected to {policies} routing policies. Review the Alert Center before relying on a human response.",
+    description: "Trust Operations alert route ready state.",
+  },
+  "trustOperations.routingUnsafe": {
+    defaultMessage: "Alert delivery is not fully routable: the APIs report {channels} ready channels and {policies} routing policies.",
+    description: "Trust Operations alert route unsafe state.",
+  },
+  "trustOperations.routingReview": {
+    defaultMessage: "Review routes and delivery evidence",
+    description: "Trust Operations alert route action.",
   },
   "shell.spaces": {
     defaultMessage: "Spaces",
@@ -6879,6 +7025,10 @@ export const messages = {
   "nav.item.operations": {
     defaultMessage: "Jobs and queues",
     description: "Primary navigation item.",
+  },
+  "nav.item.trustOperations": {
+    defaultMessage: "Trust Operations",
+    description: "Trust Operations overview navigation item.",
   },
   "nav.item.notifications": {
     defaultMessage: "Alerts and delivery",

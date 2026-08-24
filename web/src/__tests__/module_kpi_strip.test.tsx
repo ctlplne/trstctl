@@ -82,7 +82,7 @@ describe("module KPI strip (S-B3)", () => {
 
     renderAt("/certificates");
 
-    const strip = await screen.findByRole("region", { name: /Certificates & PKI module metrics/i });
+    const strip = await screen.findByRole("region", { name: /Certificate Lifecycle module metrics/i });
     // Served numbers, not fabricated.
     const expiring30 = within(strip).getByRole("link", { name: /Expiring ≤30d/ });
     expect(within(expiring30).getByText("5")).toBeInTheDocument();
@@ -109,7 +109,7 @@ describe("module KPI strip (S-B3)", () => {
     await screen.findByRole("heading", { level: 1, name: "Certificates" });
     await waitFor(() => expect(screen.getByText("CN=svc.example.test")).toBeInTheDocument());
     // Inventory renders, but with no served health the KPI strip stays absent.
-    expect(screen.queryByRole("region", { name: /Certificates & PKI module metrics/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: /Certificate Lifecycle module metrics/i })).not.toBeInTheDocument();
   });
 
   it("renders the reusable strip: every number links, and no demo data leaks", async () => {

@@ -2,7 +2,7 @@
 
 ## What it is
 
-Before you can manage credentials, you have to *know they exist*. Discovery is how
+Before you can manage credentials, you have to _know they exist_. Discovery is how
 trstctl finds the credentials already scattered across your infrastructure —
 [certificates](../glossary.md), SSH keys, and [secrets](../glossary.md) — and the
 **inventory** is the single, tenant-scoped list it keeps them in.
@@ -11,7 +11,7 @@ Think of it like a building's master key register: someone has to walk every flo
 write down every lock and every key, and keep that register current as locks change.
 trstctl is that walker and that register, for machines.
 
-In the console, open **Posture & response → Find unmanaged credentials**. The page
+In the console, open **Trust Operations → Find unmanaged credentials**. The page
 starts with the credentials that need a decision. Choose **Run scan** to use an
 existing discovery source or add your first one.
 
@@ -44,7 +44,7 @@ deployed, and lifecycle status. It never stores a private key.
 Nothing writes to that table directly — a core trstctl design rule
 ([event sourcing](../glossary.md)). When a certificate is discovered or issued, the
 orchestrator appends a `certificate.recorded` event to the append-only, tamper-evident
-log, and a *projector* reads that event and builds the table row. The table is a
+log, and a _projector_ reads that event and builds the table row. The table is a
 **projection** — a derived view you could delete and rebuild from the log — which is
 why trstctl can survive a database loss: the truth is the event log, and the inventory
 is just a fast index into it.
@@ -96,7 +96,7 @@ schedule, run, and repository-path proof when they need to verify or troubleshoo
 
 ### Agent-based discovery (F3) — what each host can see from the inside
 
-A network scan only sees what a host *presents on a port*. Plenty of credentials never
+A network scan only sees what a host _presents on a port_. Plenty of credentials never
 appear on the wire: a certificate sitting in a file, in a PKCS#11 token, in the Windows
 certificate store, or in a Kubernetes Secret. The trstctl **agent** runs on the host and
 enumerates those local sources, then reconciles what it finds into the inventory over
@@ -198,7 +198,7 @@ trstctl-agent ... \
 The agent reports the result over its existing mTLS inventory RPC. The control plane
 derives the tenant from the verified agent certificate, appends discovery events, and
 projects the metadata into `GET /api/v1/ssh/fleet`. Operators can read the same view
-with `trstctl ssh fleet` or in **Workload & SSH → SSH trust**.
+with `trstctl ssh fleet` or in **Machine & Workload Trust → SSH trust**.
 
 Two flags make the result actionable. **StandingAccess** marks an entry that grants
 persistent login (an `authorized_keys` line). **Orphaned** marks a standing-access grant
@@ -219,15 +219,15 @@ Eight more source kinds follow an identical pattern: create a source with a `kin
 a `config`, queue a run, read back metadata-only findings. Rather than walk through
 that shape eight times, here is what each one actually finds:
 
-| Source kind | What it finds | Config essentials |
-|---|---|---|
-| `cloud_certificate` (F49) | Certificates the cloud provider already knows about: AWS ACM, Azure Key Vault, GCP Certificate Manager | `providers[]` (region/vault/project plus `access_key_id_ref`, `secret_access_key_ref`, or `token_ref`); inline credentials are rejected before storage |
-| `nhi_cross_surface` | Non-certificate machine identities across six surfaces: IdP, cloud, SaaS, on-prem, code, and CI | `observations[]`: `surface`, `system`, `external_id`, `principal`, `owner`, `credential_kind`, `scopes`; needs at least one observation per surface |
-| `service_account` (CAP-NHI-03) | AD/on-prem and cloud service accounts | `accounts[]`: `surface` (`active_directory` or `cloud`), `provider`, `account_id`, `principal`, `credential_refs`; needs at least one of each surface |
-| `oauth_grant` | Third-party OAuth apps, grants, and scopes; a second pass flags abused or malicious grants | `grants[]`: `provider`, `app_id`, `principal`, `resource`, `scopes`, `consent_type`, `third_party`, `owner`; no client-secret or token field exists |
-| `nhi_behavior` | Behavior anomalies (unfamiliar IP, geo, or user-agent; usage spikes; off-hours activity) against a learned per-principal baseline | `events[]`: `principal`, `occurred_at`, `ip`, `geo`, `user_agent`, `action`, `usage_count`, `baseline`; optional `business_hours` window |
-| `credential_compromise` (CAP-ITDR-02) | Leaked, replayed, or honeytoken-flagged credentials (OWASP NHI2 signals) | `signals[]`: `principal`, `credential_ref`, `credential_kind`, `provider`, `detector`, `observed_at`, `reason`, `confidence`, `evidence_refs` |
-| `k8s_ingress_gateway` (CAP-K8S-03) | Kubernetes `Ingress`/`Gateway` API TLS needs; mints signer-backed public certificates through the same issuance path as lifecycle | `resources[]`: `kind` (`Ingress` or `Gateway`), `namespace`, `name`, `tls_secret_name`, `hosts`, `auto_issue` |
+| Source kind                           | What it finds                                                                                                                                                                                                                                                                                 | Config essentials                                                                                                                                                                         |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cloud_certificate` (F49)             | Certificates the cloud provider already knows about: AWS ACM, Azure Key Vault, GCP Certificate Manager                                                                                                                                                                                        | `providers[]` (region/vault/project plus `access_key_id_ref`, `secret_access_key_ref`, or `token_ref`); inline credentials are rejected before storage                                    |
+| `nhi_cross_surface`                   | Non-certificate machine identities across six surfaces: IdP, cloud, SaaS, on-prem, code, and CI                                                                                                                                                                                               | `observations[]`: `surface`, `system`, `external_id`, `principal`, `owner`, `credential_kind`, `scopes`; needs at least one observation per surface                                       |
+| `service_account` (CAP-NHI-03)        | AD/on-prem and cloud service accounts                                                                                                                                                                                                                                                         | `accounts[]`: `surface` (`active_directory` or `cloud`), `provider`, `account_id`, `principal`, `credential_refs`; needs at least one of each surface                                     |
+| `oauth_grant`                         | Third-party OAuth apps, grants, and scopes; a second pass flags abused or malicious grants                                                                                                                                                                                                    | `grants[]`: `provider`, `app_id`, `principal`, `resource`, `scopes`, `consent_type`, `third_party`, `owner`; no client-secret or token field exists                                       |
+| `nhi_behavior`                        | Behavior anomalies (unfamiliar IP, geo, or user-agent; usage spikes; off-hours activity) against a learned per-principal baseline                                                                                                                                                             | `events[]`: `principal`, `occurred_at`, `ip`, `geo`, `user_agent`, `action`, `usage_count`, `baseline`; optional `business_hours` window                                                  |
+| `credential_compromise` (CAP-ITDR-02) | Leaked, replayed, or honeytoken-flagged credentials (OWASP NHI2 signals)                                                                                                                                                                                                                      | `signals[]`: `principal`, `credential_ref`, `credential_kind`, `provider`, `detector`, `observed_at`, `reason`, `confidence`, `evidence_refs`                                             |
+| `k8s_ingress_gateway` (CAP-K8S-03)    | Kubernetes `Ingress`/`Gateway` API TLS needs; mints signer-backed public certificates through the same issuance path as lifecycle                                                                                                                                                             | `resources[]`: `kind` (`Ingress` or `Gateway`), `namespace`, `name`, `tls_secret_name`, `hosts`, `auto_issue`                                                                             |
 | `secret_store` / `api_key` (F35, F36) | Secrets, API keys, tokens, and PATs by reference only — path, name, or ARN plus a masked fingerprint, never a value; also covers cloud secret-manager import from AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV for certificate material stored as secrets | path/name/ARN, `masked_fingerprint`, scope, expiry, `rotation_age_days`; secret-shaped fields (`token_value`, `secret`, `password`, `private_key`) are rejected before a source is stored |
 
 All eight run through the discovery outbox worker, normalize their input into
@@ -433,22 +433,22 @@ Be precise about what runs in the server today versus what ships as tested libra
 code awaiting control-plane wiring (this matters for an honest evaluation — see also
 [Current limitations](../limitations.md)):
 
-| Capability | Status today |
-|---|---|
-| Certificate inventory (F1) | **Served** — REST + CLI, event-sourced, with the `/api/v1/certificates/health` expiry/source dashboard |
-| Network discovery (F2) | **Served** — source/schedule/run/finding APIs + CLI/UI; TLS scan executes through the outbox with reserved-IP SSRF filtering |
-| Agent-based discovery (F3) | **Served** — enrollment (`/enroll/bootstrap`, `/api/v1/agents`) and the mTLS `ReportInventory` path record source/run/finding rows and graph nodes |
-| SSH discovery (F42) | **Served** — source/schedule/run/finding APIs + CLI/UI; host-key scans execute through the outbox, and on-host SSH/private-key inventory reports through the agent mTLS path |
-| Agentless cloud discovery (F49) | **Served** — AWS ACM, Azure Key Vault, and GCP Certificate Manager provider execution runs from the outbox with credential references |
-| Secret-store & API-key discovery (F35, F36) | **Served for cloud secret managers** — AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV imports; metadata-only references and fingerprints, never values |
-| Cross-surface NHI discovery | **Served** — six-surface (IdP/cloud/SaaS/on-prem/code/CI) metadata-only findings |
-| Unified NHI inventory | **Served** — `/api/v1/nhi/inventory` normalizes identities, certificates, tokens, agents, and findings across eleven kinds |
-| Service-account discovery (CAP-NHI-03) | **Served** — AD/on-prem and cloud service-account findings |
-| OAuth grant discovery + abuse detection (CAP-ITDR-03) | **Served** — consent metadata findings, plus `oauth_grant_abuse` detections |
-| NHI behavior analytics | **Served** — baseline and anomaly findings for IP, geo, user-agent, usage-spike, and off-hours signals |
-| Compromised-credential detection (CAP-ITDR-02) | **Served** — honeytoken/leak/replay signals normalized to findings tagged to OWASP NHI2 |
-| Shadow/unmanaged NHI posture | **Served** — `/api/v1/nhi/posture/shadow`, `trstctl-cli nhi posture shadow`, and the Discovery console |
-| Kubernetes Ingress/Gateway TLS auto-issuance (CAP-K8S-03) | **Served** — `k8s_ingress_gateway` findings mint signer-backed public certificates for `Ingress`/`Gateway` resources |
+| Capability                                                | Status today                                                                                                                                                                             |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Certificate inventory (F1)                                | **Served** — REST + CLI, event-sourced, with the `/api/v1/certificates/health` expiry/source dashboard                                                                                   |
+| Network discovery (F2)                                    | **Served** — source/schedule/run/finding APIs + CLI/UI; TLS scan executes through the outbox with reserved-IP SSRF filtering                                                             |
+| Agent-based discovery (F3)                                | **Served** — enrollment (`/enroll/bootstrap`, `/api/v1/agents`) and the mTLS `ReportInventory` path record source/run/finding rows and graph nodes                                       |
+| SSH discovery (F42)                                       | **Served** — source/schedule/run/finding APIs + CLI/UI; host-key scans execute through the outbox, and on-host SSH/private-key inventory reports through the agent mTLS path             |
+| Agentless cloud discovery (F49)                           | **Served** — AWS ACM, Azure Key Vault, and GCP Certificate Manager provider execution runs from the outbox with credential references                                                    |
+| Secret-store & API-key discovery (F35, F36)               | **Served for cloud secret managers** — AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV imports; metadata-only references and fingerprints, never values |
+| Cross-surface NHI discovery                               | **Served** — six-surface (IdP/cloud/SaaS/on-prem/code/CI) metadata-only findings                                                                                                         |
+| Unified NHI inventory                                     | **Served** — `/api/v1/nhi/inventory` normalizes identities, certificates, tokens, agents, and findings across eleven kinds                                                               |
+| Service-account discovery (CAP-NHI-03)                    | **Served** — AD/on-prem and cloud service-account findings                                                                                                                               |
+| OAuth grant discovery + abuse detection (CAP-ITDR-03)     | **Served** — consent metadata findings, plus `oauth_grant_abuse` detections                                                                                                              |
+| NHI behavior analytics                                    | **Served** — baseline and anomaly findings for IP, geo, user-agent, usage-spike, and off-hours signals                                                                                   |
+| Compromised-credential detection (CAP-ITDR-02)            | **Served** — honeytoken/leak/replay signals normalized to findings tagged to OWASP NHI2                                                                                                  |
+| Shadow/unmanaged NHI posture                              | **Served** — `/api/v1/nhi/posture/shadow`, `trstctl-cli nhi posture shadow`, and the Discovery console                                                                                   |
+| Kubernetes Ingress/Gateway TLS auto-issuance (CAP-K8S-03) | **Served** — `k8s_ingress_gateway` findings mint signer-backed public certificates for `Ingress`/`Gateway` resources                                                                     |
 
 NHI policy compliance lives in [Policy & governance](policy-and-governance.md); CT-log
 monitoring and drift detection live in [Observability & risk](observability-and-risk.md)
@@ -457,7 +457,7 @@ monitoring and drift detection live in [Observability & risk](observability-and-
 Other gotchas: a network scan only sees what a host presents on a port at scan time —
 pair it with agent-based discovery for the full picture. Cloud discovery needs
 read-only credentials with list/get permission on the relevant service. Secret-store
-discovery records *references*, so a finding tells you a secret exists and where, not
+discovery records _references_, so a finding tells you a secret exists and where, not
 what it is.
 
 ## Reference

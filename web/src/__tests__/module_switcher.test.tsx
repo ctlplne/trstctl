@@ -86,13 +86,13 @@ describe("space switcher (S-C1)", () => {
     const rail = screen.getByRole("navigation", { name: /Spaces/i });
 
     // The rail exposes Home plus the five spaces.
-    for (const space of ["Home", "Certificates & PKI", "Secrets", "Workload & SSH", "Posture & response", "Platform"]) {
+    for (const space of ["Home", "Certificate Lifecycle", "Secrets & Access", "Machine & Workload Trust", "Software Trust", "Trust Operations"]) {
       expect(within(rail).getByRole("button", { name: space })).toBeInTheDocument();
     }
 
     // On a certificates route, the Certificates & PKI space is active and its
     // sidebar shows the certificate authority and rule workspaces.
-    expect(within(rail).getByRole("button", { name: "Certificates & PKI" })).toHaveAttribute("aria-current", "true");
+    expect(within(rail).getByRole("button", { name: "Certificate Lifecycle" })).toHaveAttribute("aria-current", "true");
     expect(within(nav).getByRole("link", { name: /Certificate authorities/i })).toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: /Certificate rules/i })).toBeInTheDocument();
 
@@ -107,7 +107,7 @@ describe("space switcher (S-C1)", () => {
     await screen.findByRole("navigation", { name: /Primary/i });
     const rail = screen.getByRole("navigation", { name: /Spaces/i });
 
-    await user.click(within(rail).getByRole("button", { name: "Workload & SSH" }));
+    await user.click(within(rail).getByRole("button", { name: "Machine & Workload Trust" }));
 
     // The URL is the source of truth: switching lands on the space's first
     // permitted route and the sidebar re-scopes.
@@ -115,14 +115,14 @@ describe("space switcher (S-C1)", () => {
     const nav = screen.getByRole("navigation", { name: /Primary/i });
     await waitFor(() => expect(within(nav).getByRole("link", { name: /SSH access/i })).toBeInTheDocument());
     expect(within(nav).queryByRole("link", { name: /Certificate authorities/i })).not.toBeInTheDocument();
-    expect(within(rail).getByRole("button", { name: "Workload & SSH" })).toHaveAttribute("aria-current", "true");
+    expect(within(rail).getByRole("button", { name: "Machine & Workload Trust" })).toHaveAttribute("aria-current", "true");
   });
 
   it("marks the owning space active when deep-linking a space route", async () => {
     renderAt("/ssh");
     await screen.findByRole("navigation", { name: /Primary/i });
     const rail = screen.getByRole("navigation", { name: /Spaces/i });
-    await waitFor(() => expect(within(rail).getByRole("button", { name: "Workload & SSH" })).toHaveAttribute("aria-current", "true"));
+    await waitFor(() => expect(within(rail).getByRole("button", { name: "Machine & Workload Trust" })).toHaveAttribute("aria-current", "true"));
   });
 
   it("shows Home (primary items + worklists) outside any space", async () => {
@@ -144,11 +144,11 @@ describe("space switcher (S-C1)", () => {
     await screen.findByRole("navigation", { name: /Primary/i });
     const rail = screen.getByRole("navigation", { name: /Spaces/i });
 
-    expect(within(rail).getByRole("button", { name: "Secrets" })).toBeInTheDocument();
-    expect(within(rail).getByRole("button", { name: "Posture & response" })).toBeInTheDocument();
+    expect(within(rail).getByRole("button", { name: "Secrets & Access" })).toBeInTheDocument();
+    expect(within(rail).getByRole("button", { name: "Trust Operations" })).toBeInTheDocument();
     // No certificate-issuance space for a session lacking certs:*/issuers:*.
-    expect(within(rail).queryByRole("button", { name: "Certificates & PKI" })).not.toBeInTheDocument();
+    expect(within(rail).queryByRole("button", { name: "Certificate Lifecycle" })).not.toBeInTheDocument();
     // Workload & SSH needs certs/identities scopes this session lacks.
-    expect(within(rail).queryByRole("button", { name: "Workload & SSH" })).not.toBeInTheDocument();
+    expect(within(rail).queryByRole("button", { name: "Machine & Workload Trust" })).not.toBeInTheDocument();
   });
 });

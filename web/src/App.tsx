@@ -23,6 +23,7 @@ function lazyPage<M extends Record<K, ComponentType>, K extends string>(loader: 
 }
 
 const Dashboard = lazyPage(() => import("@/pages/Dashboard"), "Dashboard");
+const TrustOperations = lazyPage(() => import("@/pages/TrustOperations"), "TrustOperations");
 const Certificates = lazyPage(() => import("@/pages/Certificates"), "Certificates");
 const Identities = lazyPage(() => import("@/pages/Identities"), "Identities");
 const Owners = lazyPage(() => import("@/pages/Owners"), "Owners");
@@ -100,6 +101,7 @@ export function AppRoutes() {
             }
           >
             <Route index element={<Dashboard />} />
+            <Route path="trust-operations" element={<TrustOperations />} />
             <Route path="certificates" element={<Certificates />} />
             <Route path="identities" element={<Identities />} />
             <Route path="owners" element={<Owners />} />

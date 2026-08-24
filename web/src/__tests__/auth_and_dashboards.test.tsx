@@ -411,7 +411,7 @@ describe("auth + dashboards", () => {
     // S-C1: Discovery lives in the Posture & response space — for a viewer the
     // rail advertises that space, while privileged rows stay hidden.
     const rail = screen.getByRole("navigation", { name: /Spaces/i });
-    expect(within(rail).getByRole("button", { name: "Posture & response" })).toBeInTheDocument();
+    expect(within(rail).getByRole("button", { name: "Trust Operations" })).toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: /Request a certificate/i })).not.toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: /Approvals/i })).not.toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: /^Change history$/i })).not.toBeInTheDocument();

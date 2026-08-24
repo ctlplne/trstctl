@@ -58,8 +58,8 @@ describe("audit module scope (S-B4)", () => {
     expect(moduleScopeTerm("secrets")).toBe("secret");
     expect(moduleScopeTerm("certificates")).toBe("cert");
     expect(moduleScopeTerm("workload")).toBe("ssh");
-    expect(moduleScopeTerm("posture")).toBe("incident");
-    expect(moduleScopeTerm("platform")).toBe("agent");
+    expect(moduleScopeTerm("posture")).toBe("sign");
+    expect(moduleScopeTerm("platform")).toBe("incident");
     expect(moduleScopeTerm("nope")).toBeUndefined();
   });
 

@@ -4,7 +4,7 @@
 
 **Code signing** is putting a verifiable signature on a software artifact — a binary, a
 container image, an SBOM — so anyone can confirm it came from you and wasn't tampered
-with. **Timestamping** is getting a trusted third party to attest *when* something was
+with. **Timestamping** is getting a trusted third party to attest _when_ something was
 signed, so the signature stays verifiable even after the signing certificate expires.
 trstctl provides both: a governed code-signing service and an RFC 3161 timestamping
 authority (TSA).
@@ -24,7 +24,7 @@ that give signatures long-term validity.
 
 ### The code-signing service (F50)
 
-The service signs the *digest* (hash) of an artifact, never the artifact itself, so it
+The service signs the _digest_ (hash) of an artifact, never the artifact itself, so it
 works for anything from a 4 KB manifest to a 4 GB image. Two modes:
 
 - **Key-based signing.** The API seals the complete command with tenant- and
@@ -76,7 +76,8 @@ verifiable.
 
 ### In the console
 
-The `/codesign` screen offers key-backed and keyless (Fulcio) signing: it submits only
+Open **Software Trust → Software signing**. The `/codesign` screen offers key-backed
+and keyless (Fulcio) signing: it submits only
 the artifact digest and renders the returned signature receipt, so private keys and
 artifact bytes never enter the browser. See [The web console](../web-console.md).
 

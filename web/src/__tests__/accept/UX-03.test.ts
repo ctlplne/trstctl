@@ -20,8 +20,9 @@ describe("UX-03 task-based navigation", () => {
     // S-C2 split the Secrets mega-page's six workspaces into six sidebar
     // routes — consciously spending five rows of budget to kill the last
     // in-page tab strip (each row is one served workspace). New ceiling: 38.
-    // H2 added one served migration workspace row. New ceiling: 39.
-    expect(allSidebarItems.length).toBeLessThanOrEqual(39);
+    // H2 added one migration workspace row. The product carve adds one real
+    // Trust Operations overview; moving existing routes adds no rows. Ceiling: 40.
+    expect(allSidebarItems.length).toBeLessThanOrEqual(40);
     expect(navGroups.map((group) => messages[group.labelKey].defaultMessage)).toEqual([
       "Inventory",
       "Issue & automate",
@@ -30,6 +31,9 @@ describe("UX-03 task-based navigation", () => {
       "Delivery & scanning",
       "Workload identity",
       "SSH trust",
+      "Infrastructure",
+      "Overview",
+      "Overview",
       "Detect & respond",
       "Govern & administer",
       "Infrastructure",

@@ -1010,8 +1010,12 @@ describe("i18n boundary", () => {
       // ownership evidence, and renewal models now say exactly what the
       // system knows without implying success. Machine-authored es/de
       // translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "7fb6549aae606f9d43d539a2444eb023d6aebd31593224af064c25ba35e1e067",
-      "de-DE": "68f675b1d27925e43831175fda1555de8344923bbd7580a5302c32269ae75262",
+      // Certctl-informed product carve: reviewed space labels and the new
+      // Trust Operations cockpit keep urgency, ownership, alert delivery, and
+      // unknown-state language explicit. Machine-authored es/de — FLAGGED FOR
+      // HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "c5ae85692cab328cdc1cb109f2c31deea58629035bc85852de5b14adade17284",
+      "de-DE": "11fe748e8889ac55d66befd2b6e053a8ad95690955e7d42c2234ad94efb8d8cd",
     });
   });
 

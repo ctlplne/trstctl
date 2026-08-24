@@ -5,6 +5,7 @@ import {
   moduleForRoute,
   moduleLabelKey,
   navModules,
+  navSpaces,
   permissionAnyForPath,
   realGuiSurfaces,
   spaceForRoute,
@@ -85,10 +86,43 @@ describe("module map (S-B1)", () => {
   });
 
   it("keeps the curated space set small (Infisical lesson: shrink, do not sprawl)", () => {
-    // S-C1: SSH/Signing folded into their parent spaces; Fleet split between
-    // Workload & SSH and Platform. Still five, still shrinking-not-sprawling.
+    // The persistent ids remain stable for stored preferences and audit links,
+    // while the visible product language follows the five operator mental
+    // models. Home is a global cockpit, not a sixth product space.
     expect(navModules.length).toBeLessThanOrEqual(5);
     expect(navModules.map((m) => m.id)).toEqual(["certificates", "secrets", "workload", "posture", "platform"]);
+    expect(navSpaces.map((space) => space.labelKey)).toEqual([
+      "nav.module.certificates",
+      "nav.module.secrets",
+      "nav.space.workload",
+      "nav.space.posture",
+      "nav.space.platform",
+    ]);
+  });
+
+  it("maps the old surfaces into the five certctl-informed operator domains without changing URLs", () => {
+    expect(moduleForRoute("/certificates")).toBe("certificates");
+    expect(moduleForRoute("/workloads")).toBe("workload");
+    expect(moduleForRoute("/agents")).toBe("workload");
+    expect(moduleForRoute("/secrets")).toBe("secrets");
+    expect(moduleForRoute("/codesign")).toBe("posture");
+
+    // Cross-domain risk, discovery, people, alerts, evidence, and system
+    // readiness have one canonical home in Trust Operations.
+    for (const route of [
+      "/trust-operations",
+      "/discovery",
+      "/risk",
+      "/posture",
+      "/incidents",
+      "/operations",
+      "/owners",
+      "/notifications",
+      "/audit",
+      "/admin/system",
+    ]) {
+      expect(moduleForRoute(route), route).toBe("platform");
+    }
   });
 
   it("normalizes query links and fails closed for exempt or unknown routes", () => {

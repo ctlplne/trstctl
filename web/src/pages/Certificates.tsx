@@ -1232,7 +1232,7 @@ export function Certificates() {
                     </p>
                   </section>
                   <ModuleKpiStrip
-                    ariaLabel="Certificates & PKI module metrics"
+                    ariaLabel="Certificate Lifecycle module metrics"
                     kpis={[
                       {
                         id: "expiring-30d",
