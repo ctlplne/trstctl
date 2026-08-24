@@ -163,3 +163,10 @@ c5a260d61b49b2d9f70e3c406ee6bf463c86f60e:internal/store/migration_content_test.g
 3b59fa92057ce64aab8e982c74f31efe5eb8ad05:internal/cli/cli_test.go:generic-api-key:599
 3b59fa92057ce64aab8e982c74f31efe5eb8ad05:internal/server/ownership_assignment_served_test.go:generic-api-key:49
 3b59fa92057ce64aab8e982c74f31efe5eb8ad05:internal/server/ownership_assignment_served_test.go:generic-api-key:68
+
+# QA final product closeout (2026-08-24): these exact historical matches are
+# generated `journeys.k8s.*.body` localization lookup identifiers in a minified
+# UI bundle, not credentials. Each immutable fingerprint covers only the
+# introducing commit, generated path, rule, and line; any new match still fails.
+32d187e6621cc5c324dcd0741116d14fee098ce3:internal/webui/dist/assets/Journeys-TMIUjhAI.js:generic-api-key:8
+32d187e6621cc5c324dcd0741116d14fee098ce3:internal/webui/dist/assets/Journeys-TMIUjhAI.js:generic-api-key:13
