@@ -47,9 +47,12 @@ fi
 BIN="$BIN_DIR/trstctl"
 
 command -v docker >/dev/null 2>&1 || fail "Docker is required for fresh external PostgreSQL/NATS datastores"
-POSTGRES_IMAGE="postgres:16.15-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685"
+POSTGRES_IMAGE="trstctl-postgres-hardened:local"
 NATS_IMAGE="nats:2.10-alpine@sha256:b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927"
 POSTGRES_PASSWORD="trstctl-dr-rehearsal-password"
+
+say "building digest-pinned hardened PostgreSQL runtime"
+docker build -f "$REPO_ROOT/deploy/docker/Dockerfile.postgres" -t "$POSTGRES_IMAGE" "$REPO_ROOT"
 
 wait_postgres() { # $1 = container id
 	local id="$1"
@@ -81,6 +84,7 @@ PY
 start_infra() { # $1 = PostgreSQL loopback port, $2 = NATS loopback port
 	local pgport="$1" natsport="$2" pgid natsid
 	pgid="$(docker run -d --rm \
+		--user postgres \
 		-e "POSTGRES_PASSWORD=$POSTGRES_PASSWORD" \
 		-p "127.0.0.1:$pgport:5432" "$POSTGRES_IMAGE")" \
 		|| fail "start external PostgreSQL container"

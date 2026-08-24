@@ -1,0 +1,15 @@
+# syntax=docker/dockerfile:1.7
+
+# PostgreSQL for the local evaluation, demo, and restore-rehearsal stacks.
+#
+# The exact upstream 16.15 Bookworm filesystem is digest-pinned. Its Debian
+# packages scan clean, but the upstream convenience helper `/usr/local/bin/gosu`
+# was built with a vulnerable Go toolchain. trstctl does not need that helper:
+# Compose and the rehearsal start this image directly as the image's existing
+# `postgres` account. Removing the unused helper gives us fewer executable bytes
+# and avoids claiming a clean image while carrying a known-vulnerable binary.
+FROM postgres:16.15-bookworm@sha256:60f4761b9035e0b8d5218f701a8c3382f641bf12b1604822574cf5be3baeb537
+
+USER root
+RUN rm -f /usr/local/bin/gosu && test ! -e /usr/local/bin/gosu
+USER postgres

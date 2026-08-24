@@ -18,7 +18,11 @@ name: trstctl-demo
 
 services:
   postgres:
-    image: postgres:16.15-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.postgres
+    image: trstctl-postgres-hardened:local
+    user: "postgres"
     environment:
       POSTGRES_DB: trstctl
       POSTGRES_USER: trstctl

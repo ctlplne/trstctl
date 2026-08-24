@@ -181,6 +181,47 @@ func TestDockerfileStagesLocalModuleReplacementsBeforeDownload(t *testing.T) {
 	}
 }
 
+// TestPostgresRuntimeImageIsHardenedAndNonRoot keeps the evaluation, demo, and
+// restore-rehearsal database on the same reviewable construction. ELI5: the
+// upstream image includes gosu even though trstctl never needs it. A published
+// vulnerability in that unused helper must not remain inside bytes we ship or
+// execute, and PostgreSQL must not begin life as root merely to change users.
+func TestPostgresRuntimeImageIsHardenedAndNonRoot(t *testing.T) {
+	const (
+		base       = "postgres:16.15-bookworm@sha256:60f4761b9035e0b8d5218f701a8c3382f641bf12b1604822574cf5be3baeb537"
+		localImage = "trstctl-postgres-hardened:local"
+	)
+
+	df := readArtifact(t, "Dockerfile.postgres")
+	mustContainAll(t, "hardened PostgreSQL Dockerfile", df,
+		"FROM "+base,
+		"RUN rm -f /usr/local/bin/gosu",
+		"test ! -e /usr/local/bin/gosu",
+		"USER postgres",
+	)
+	for _, forbidden := range []string{"apt-get", "apk add", "curl ", "wget "} {
+		if strings.Contains(df, forbidden) {
+			t.Errorf("hardened PostgreSQL Dockerfile downloads or installs mutable runtime content via %q", forbidden)
+		}
+	}
+
+	for _, path := range []string{"docker-compose.yml", "../demo/docker-compose.yml"} {
+		compose := readArtifact(t, path)
+		mustContainAll(t, path+" hardened PostgreSQL wiring", compose,
+			"dockerfile: deploy/docker/Dockerfile.postgres",
+			"image: "+localImage,
+			`user: "postgres"`,
+		)
+	}
+
+	rehearsal := repoFile(t, "scripts", "ci", "restore-rehearsal.sh")
+	mustContainAll(t, "restore rehearsal hardened PostgreSQL wiring", rehearsal,
+		`POSTGRES_IMAGE="`+localImage+`"`,
+		`docker build -f "$REPO_ROOT/deploy/docker/Dockerfile.postgres" -t "$POSTGRES_IMAGE" "$REPO_ROOT"`,
+		`--user postgres`,
+	)
+}
+
 // TestDockerfileBuildsForBuildKitTargetPlatform prevents a multi-architecture
 // image from carrying a binary for a different CPU. BuildKit supplies TARGETOS
 // and TARGETARCH for each requested platform. Redeclaring either argument with
