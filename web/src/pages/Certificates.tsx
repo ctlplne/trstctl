@@ -13,12 +13,14 @@ import {
   type RevocationHealth,
   type CTSubmission,
   type Identity,
+  type Notification,
+  type NotificationChannel,
+  type NotificationRoutingPolicy,
   type Owner,
   type RogueCertificatePosture,
   type RotationRun,
 } from "@/lib/api";
 import { CredentialChip } from "@/components/CredentialChip";
-import { ModuleKpiStrip } from "@/components/ModuleKpiStrip";
 import { PageTabs, tabPanelProps } from "@/components/PageTabs";
 import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
@@ -37,8 +39,8 @@ import { expiryBandForDate } from "@/lib/statusVocab";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { formatDate as formatDatePolicy, formatNumber as formatNumberPolicy } from "@/i18n/format";
 import type { MessageKey } from "@/i18n/messages";
-import { CertificatesDashboard, ReadinessPanel, ReadinessSimulator, DeploymentReceipts, RenewalHistory, autoRenewingCount } from "@/components/certs";
-import type { RiskItem } from "@/components/risk";
+import { ReadinessPanel, ReadinessSimulator, DeploymentReceipts, RenewalHistory, autoRenewingCount } from "@/components/certs";
+import { LifecycleCockpit } from "@/components/certs/LifecycleCockpit";
 import type { GridViewPrimitive } from "@/lib/gridViews";
 
 type ExpiryFilter = "all" | "7d" | "30d" | "90d";
@@ -637,11 +639,17 @@ export function Certificates() {
   const [ingestLoading, setIngestLoading] = useState(false);
   const [ingestError, setIngestError] = useState<Notice | null>(null);
   const [ingestSuccess, setIngestSuccess] = useState<string | null>(null);
-  const [risks, setRisks] = useState<RiskItem[]>([]);
   const [rotationRuns, setRotationRuns] = useState<RotationRun[]>([]);
   const [deliveries, setDeliveries] = useState<ConnectorDelivery[]>([]);
+  const [rotationRunsObserved, setRotationRunsObserved] = useState(false);
+  const [deliveriesObserved, setDeliveriesObserved] = useState(false);
   const [owners, setOwners] = useState<Owner[]>([]);
   const [identities, setIdentities] = useState<Identity[]>([]);
+  const [ownersObserved, setOwnersObserved] = useState(false);
+  const [identitiesObserved, setIdentitiesObserved] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[] | null>(null);
+  const [notificationChannels, setNotificationChannels] = useState<NotificationChannel[] | null>(null);
+  const [notificationRoutingPolicies, setNotificationRoutingPolicies] = useState<NotificationRoutingPolicy[] | null>(null);
   const [renewingIds, setRenewingIds] = useState<Set<string>>(() => new Set());
   const [health, setHealth] = useState<CertificateHealthDashboard | null>(null);
   const [crlDistributions, setCRLDistributions] = useState<CRLDistribution[]>([]);
@@ -671,23 +679,53 @@ export function Certificates() {
       settleOptional(() => api.crlDistributions()),
       settleOptional(() => api.revocationHealth()),
       settleOptional(() => api.rogueCertificates()),
-      settleOptional(() => api.risk({ sort: "score" })),
       settleOptional(() => api.rotationRuns({ limit: 100 })),
       settleOptional(() => api.connectorDeliveries({ limit: 50 })),
       settleOptional(() => api.owners()),
       settleOptional(() => api.identities()),
-    ]).then(([healthResult, crlResult, revocationResult, rogueResult, riskResult, rotationResult, deliveryResult, ownerResult, identityResult]) => {
-      if (cancelled) return;
-      if (healthResult) setHealth(healthResult);
-      if (crlResult) setCRLDistributions(crlResult.items ?? []);
-      if (revocationResult) setRevocationHealth(revocationResult);
-      if (rogueResult) setRoguePosture(rogueResult);
-      if (riskResult) setRisks(riskResult);
-      if (rotationResult) setRotationRuns(rotationResult.items ?? []);
-      if (deliveryResult) setDeliveries(deliveryResult.items ?? []);
-      if (ownerResult) setOwners(ownerResult);
-      if (identityResult) setIdentities(identityResult);
-    });
+      settleOptional(() => api.notifications({ limit: 100 })),
+      settleOptional(() => api.notificationChannels()),
+      settleOptional(() => api.notificationRoutingPolicies()),
+    ]).then(
+      ([
+        healthResult,
+        crlResult,
+        revocationResult,
+        rogueResult,
+        rotationResult,
+        deliveryResult,
+        ownerResult,
+        identityResult,
+        notificationResult,
+        channelResult,
+        policyResult,
+      ]) => {
+        if (cancelled) return;
+        if (healthResult) setHealth(healthResult);
+        if (crlResult) setCRLDistributions(crlResult.items ?? []);
+        if (revocationResult) setRevocationHealth(revocationResult);
+        if (rogueResult) setRoguePosture(rogueResult);
+        if (rotationResult) {
+          setRotationRuns(rotationResult.items ?? []);
+          setRotationRunsObserved(true);
+        }
+        if (deliveryResult) {
+          setDeliveries(deliveryResult.items ?? []);
+          setDeliveriesObserved(true);
+        }
+        if (ownerResult) {
+          setOwners(ownerResult);
+          setOwnersObserved(true);
+        }
+        if (identityResult) {
+          setIdentities(identityResult);
+          setIdentitiesObserved(true);
+        }
+        if (notificationResult) setNotifications(notificationResult.items ?? []);
+        if (channelResult) setNotificationChannels(channelResult.items ?? []);
+        if (policyResult) setNotificationRoutingPolicies(policyResult.items ?? []);
+      },
+    );
     return () => {
       cancelled = true;
     };
@@ -1175,7 +1213,6 @@ export function Certificates() {
             <div {...tabPanelProps("certs", "health")} className="grid gap-4">
               {health && <CertificateHealthPanel health={health} />}
               {roguePosture && <RogueCertificatePanel posture={roguePosture} />}
-              <CertificatesDashboard certificates={certificates} risks={risks} />
             </div>
           )}
           {tab === "crlct" && (
@@ -1218,42 +1255,17 @@ export function Certificates() {
           {tab === "inventory" && (
             <div {...tabPanelProps("certs", "inventory")} className="grid gap-4">
               {health && (
-                <>
-                  <section aria-labelledby="certificate-inventory-answer" className="border-s-2 border-border ps-3">
-                    <h2 id="certificate-inventory-answer" className="text-body font-semibold text-foreground">
-                      {health.summary.expiring_7d === 0
-                        ? t("certificates.inventoryAnswer.noneTitle")
-                        : health.summary.expiring_7d === 1
-                          ? t("certificates.inventoryAnswer.oneTitle")
-                          : t("certificates.inventoryAnswer.manyTitle", { count: formatCount(health.summary.expiring_7d) })}
-                    </h2>
-                    <p className="mt-1 text-caption text-muted-foreground">
-                      {health.summary.expiring_7d === 0 ? t("certificates.inventoryAnswer.noneBody") : t("certificates.inventoryAnswer.attentionBody")}
-                    </p>
-                  </section>
-                  <ModuleKpiStrip
-                    ariaLabel="Certificate Lifecycle module metrics"
-                    kpis={[
-                      {
-                        id: "expiring-30d",
-                        label: t("moduleKpi.certificates.expiring30d"),
-                        value: health.summary.expiring_30d,
-                        to: "/certificates?expiry=30d",
-                        tone: health.summary.expiring_30d > 0 ? "warn" : "ok",
-                        sub: health.summary.expiring_30d > 0 ? t("moduleKpi.certificates.renewSoon") : undefined,
-                      },
-                      {
-                        id: "expiring-7d",
-                        label: t("moduleKpi.certificates.expiring7d"),
-                        value: health.summary.expiring_7d,
-                        to: "/certificates?expiry=7d",
-                        tone: health.summary.expiring_7d > 0 ? "crit" : "ok",
-                      },
-                      { id: "active", label: t("moduleKpi.certificates.active"), value: health.summary.active, to: "/certificates" },
-                      { id: "ca-hierarchy", label: t("moduleKpi.certificates.authorities"), value: t("moduleKpi.view"), to: "/ca-hierarchy" },
-                    ]}
-                  />
-                </>
+                <LifecycleCockpit
+                  certificates={certificates}
+                  health={health}
+                  owners={ownersObserved ? owners : null}
+                  identities={identitiesObserved ? identities : null}
+                  rotationRuns={rotationRunsObserved ? rotationRuns : null}
+                  deliveries={deliveriesObserved ? deliveries : null}
+                  notifications={notifications}
+                  channels={notificationChannels}
+                  routingPolicies={notificationRoutingPolicies}
+                />
               )}
               <BulkActionBar count={selectedIds.size} onClear={() => setSelectedIds(new Set())} className="sticky top-0 z-10 mb-3 shadow-elevation1">
                 <Button
@@ -1604,15 +1616,27 @@ export function Certificates() {
                 <dd>{detail.deployment_location || "-"}</dd>
               </div>
               <div>
-                <dt className="font-medium text-muted-foreground">{translateNow("source.owner.4b1b8aa360")}</dt>
+                <dt className="font-medium text-muted-foreground">{t("certificateCockpit.detail.effectiveOwnership")}</dt>
                 <dd>
-                  {detail.owner_id ? (
-                    <a className="text-primary underline" href={`/owners?owner=${encodeURIComponent(detail.owner_id)}`}>
-                      {detail.owner_id}
-                    </a>
-                  ) : (
-                    "-"
-                  )}
+                  {(() => {
+                    if (!detail.owner_id) return t("certificateCockpit.owner.missing");
+                    const owner = ownerByID.get(detail.owner_id);
+                    return (
+                      <span className="grid gap-0.5">
+                        <Link className="text-primary underline" to={`/owners?owner=${encodeURIComponent(detail.owner_id)}`}>
+                          {owner?.name || detail.owner_id}
+                        </Link>
+                        {owner ? (
+                          <span className="text-xs text-muted-foreground">
+                            {effectiveOwnershipLabel(owner)} ·{" "}
+                            {ownerIsReachable(owner) ? t("certificateCockpit.detail.reachable") : t("certificateCockpit.detail.noAlertContact")}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">{t("certificateCockpit.owner.unresolved")}</span>
+                        )}
+                      </span>
+                    );
+                  })()}
                 </dd>
               </div>
               <div className="md:col-span-2">
@@ -1652,7 +1676,10 @@ export function Certificates() {
                 </dd>
               </div>
               <div className="md:col-span-2">
-                <CredentialActivityTimeline credentialLabel={detail.subject} />
+                <dt className="sr-only">{t("certificateCockpit.detail.activity")}</dt>
+                <dd>
+                  <CredentialActivityTimeline credentialLabel={detail.subject} />
+                </dd>
               </div>
             </dl>
           </>
@@ -1764,7 +1791,17 @@ function certificateColumns(ownerByID: Map<string, Owner>, lifecycle?: DataGridC
       id: "team",
       header: "Team",
       className: "min-w-36 align-middle",
-      cell: (c) => certificateTeamLabel(c, ownerByID) || <span className="text-muted-foreground">-</span>,
+      cell: (c) => {
+        const owner = c.owner_id ? ownerByID.get(c.owner_id) : undefined;
+        const label = certificateTeamLabel(c, ownerByID) || owner?.name || c.owner_id;
+        if (!label) return <span className="text-muted-foreground">{translateNow("certificateCockpit.owner.missing")}</span>;
+        return (
+          <span className="grid gap-0.5">
+            <span>{label}</span>
+            {owner ? <span className="text-xs text-muted-foreground">{effectiveOwnershipLabel(owner)}</span> : null}
+          </span>
+        );
+      },
     },
     {
       id: "algorithm",
@@ -1877,6 +1914,17 @@ function certificateTeamLabel(c: Certificate, ownerByID: Map<string, Owner>): st
   const teamID = certificateTeamID(c, ownerByID);
   if (!teamID) return "";
   return ownerByID.get(teamID)?.name || teamID;
+}
+
+function ownerIsReachable(owner: Owner): boolean {
+  return Boolean(owner.email?.trim() || owner.escalation_chain.some((entry) => entry.trim()));
+}
+
+function effectiveOwnershipLabel(owner: Owner): string {
+  if (!owner.ownership_complete) return translateNow("certificateCockpit.detail.incomplete");
+  if (!owner.ownership_current) return translateNow("certificateCockpit.detail.notCurrent");
+  if (!owner.ownership_attested) return translateNow("certificateCockpit.detail.notAttested");
+  return translateNow("certificateCockpit.detail.current");
 }
 
 function teamFacetOptions(

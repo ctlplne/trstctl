@@ -10,7 +10,19 @@ import { IntlProvider, directionForLocale, formatMessage, negotiateLocale, useTr
 import { formatDate, formatNumber, formatPlural } from "@/i18n/format";
 import extractedDebtBudget from "@/i18n/extractedMessages.budget.json";
 import { extractedMessages } from "@/i18n/extractedMessages.gen";
-import { defaultLocale, defaultTimeZone, eagerCatalogs, messages, productionLocales, pseudoLocalize, type MessageKey } from "@/i18n/messages";
+import {
+  buildTranslatedCatalog,
+  defaultLocale,
+  defaultTimeZone,
+  eagerCatalogs,
+  lazyCatalogLoaders,
+  messages,
+  productionLocales,
+  pseudoLocalize,
+  type MessageKey,
+} from "@/i18n/messages";
+import esESRuntimeValues from "@/i18n/catalog.es-ES.runtime.gen.json";
+import deDERuntimeValues from "@/i18n/catalog.de-DE.runtime.gen.json";
 
 // S-C10: es/de are lazy per-locale modules now. The guards below still audit
 // the FULL catalogs (parity, placeholders, digests), so load them explicitly —
@@ -21,8 +33,8 @@ const catalogs = {
   "de-DE": (await import("@/i18n/catalog.de-DE")).default,
 } as const;
 const runtimeCatalogs = {
-  "es-ES": (await import("@/i18n/catalog.es-ES.runtime.gen")).default,
-  "de-DE": (await import("@/i18n/catalog.de-DE.runtime.gen")).default,
+  "es-ES": buildTranslatedCatalog(esESRuntimeValues),
+  "de-DE": buildTranslatedCatalog(deDERuntimeValues),
 } as const;
 import { contextualRouteItems, navGroups, taskNavItems } from "@/lib/navigation";
 
@@ -81,10 +93,38 @@ function LocaleProbe() {
   );
 }
 
+function stubRuntimeCatalogFetch(): () => void {
+  const originalFetch = globalThis.fetch;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const values = String(input).includes("de-DE") ? deDERuntimeValues : esESRuntimeValues;
+      return new Response(JSON.stringify(values), { status: 200, headers: { "content-type": "application/json" } });
+    }),
+  );
+  return () => vi.stubGlobal("fetch", originalFetch);
+}
+
 describe("i18n boundary", () => {
   it("generates byte-identical compact runtime catalogs from the reviewed keyed sources", () => {
     expect(runtimeCatalogs["es-ES"]).toEqual(catalogs["es-ES"]);
     expect(runtimeCatalogs["de-DE"]).toEqual(catalogs["de-DE"]);
+  });
+
+  it("fails closed when a runtime catalog is unavailable or structurally stale", async () => {
+    const originalFetch = globalThis.fetch;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("unavailable", { status: 503 })),
+    );
+    await expect(lazyCatalogLoaders["es-ES"]()).rejects.toThrow("HTTP 503");
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify([null]), { status: 200, headers: { "content-type": "application/json" } })),
+    );
+    await expect(lazyCatalogLoaders["de-DE"]()).rejects.toThrow("translated catalog has 1 values");
+    vi.stubGlobal("fetch", originalFetch);
   });
 
   function setViewportWidth(width: number) {
@@ -125,6 +165,7 @@ describe("i18n boundary", () => {
   });
 
   it("renders real Spanish page chrome and lets the operator switch locale in memory", async () => {
+    const restoreFetch = stubRuntimeCatalogFetch();
     render(
       <IntlProvider initialLocale="es-ES" initialTimeZone="UTC">
         <ThemeProvider>
@@ -147,12 +188,14 @@ describe("i18n boundary", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cuenta y preferencias" }));
     const selector = screen.getByRole("combobox", { name: "Idioma" });
     expect(selector).toHaveValue("es-ES");
+    restoreFetch();
 
     fireEvent.change(selector, { target: { value: "en-US" } });
     expect(screen.getByText("Needs action")).toBeInTheDocument();
   });
 
   it("swaps English fallback for the lazy catalog after an in-session locale switch (S-C10)", async () => {
+    const restoreFetch = stubRuntimeCatalogFetch();
     render(
       <IntlProvider initialLocale="en-US" initialTimeZone="UTC">
         <ThemeProvider>
@@ -174,6 +217,7 @@ describe("i18n boundary", () => {
     // re-renders translated.
     expect(await screen.findByText("Aktion erforderlich")).toBeInTheDocument();
     expect(screen.queryByText("Needs action")).not.toBeInTheDocument();
+    restoreFetch();
   });
 
   it("closes the localized mobile navigation after route selection", () => {
@@ -1014,8 +1058,21 @@ describe("i18n boundary", () => {
       // Trust Operations cockpit keep urgency, ownership, alert delivery, and
       // unknown-state language explicit. Machine-authored es/de — FLAGGED FOR
       // HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "c5ae85692cab328cdc1cb109f2c31deea58629035bc85852de5b14adade17284",
-      "de-DE": "11fe748e8889ac55d66befd2b6e053a8ad95690955e7d42c2234ad94efb8d8cd",
+      // Certificate Lifecycle cockpit re-pin: expiry, renewal, deployment,
+      // ownership, alert-route, action-queue, and chart-table copy is present
+      // in all production catalogs. Negations around unavailable evidence and
+      // human receipt remain explicit. Machine-authored es/de — FLAGGED FOR
+      // HUMAN TRANSLATION REVIEW before release.
+      // Runtime-asset re-pin: reviewed es/de values now load as same-origin
+      // JSON only when selected, so translated copy no longer consumes the
+      // JavaScript parse/compile budget. Six superseded certificate-strip keys
+      // and duplicate cockpit labels were retired after source search and the
+      // catalog parity oracle proved them unreachable.
+      // Work-arrival range re-pin: the inclusive day-window label is now
+      // explicit production copy rather than an ad-hoc English abbreviation.
+      // Placeholders and meaning were reviewed in all three catalogs.
+      "es-ES": "b05c7f43db8464924247c7e0334a5abbbd0a320e1f087171c9aaf20b54151516",
+      "de-DE": "89968a11a30a8fe2235ec96535670643b5562f502c5176a31b268ad63a913af8",
     });
   });
 

@@ -1,4 +1,6 @@
 import { defaultMessageValues, orderedMessageKeys } from "@/i18n/catalog.en-US.runtime.gen";
+import esESRuntimeCatalogURL from "@/i18n/catalog.es-ES.runtime.gen.json?url";
+import deDERuntimeCatalogURL from "@/i18n/catalog.de-DE.runtime.gen.json?url";
 
 export const defaultLocale = "en-US";
 export const defaultTimeZone = "UTC";
@@ -486,26 +488,6 @@ export const messages = {
     defaultMessage: "Inventory",
     description: "Certificates page tab: the primary certificate table.",
   },
-  "certificates.inventoryAnswer.noneTitle": {
-    defaultMessage: "No certificates expire this week.",
-    description: "Calm certificate inventory answer when no certificate expires within seven days.",
-  },
-  "certificates.inventoryAnswer.oneTitle": {
-    defaultMessage: "1 certificate needs attention this week.",
-    description: "Certificate inventory answer when exactly one certificate expires within seven days.",
-  },
-  "certificates.inventoryAnswer.manyTitle": {
-    defaultMessage: "{count} certificates need attention this week.",
-    description: "Certificate inventory answer when multiple certificates expire within seven days.",
-  },
-  "certificates.inventoryAnswer.noneBody": {
-    defaultMessage: "The inventory is ready to review by owner, date, or status.",
-    description: "Next-step guidance when no certificate expires within seven days.",
-  },
-  "certificates.inventoryAnswer.attentionBody": {
-    defaultMessage: "Review the earliest expiry first. Exact fields and renewal controls remain available in the table and certificate details.",
-    description: "Next-step guidance when certificates expire within seven days.",
-  },
   "certificates.inventory.loadedOne": {
     defaultMessage: "1 certificate loaded",
     description: "Certificate inventory result count when one row is loaded.",
@@ -798,10 +780,6 @@ export const messages = {
   "audit.export.offlineMissing": {
     defaultMessage: "No external-time proof is available; the signed hash chain can still be checked",
     description: "Audit evidence guidance for an unanchored but signed download.",
-  },
-  "moduleKpi.certificates.renewSoon": {
-    defaultMessage: "renew soon",
-    description: "Module KPI sub-label under the certificates expiring-30d metric.",
   },
   "moduleKpi.certificates.expiring30d": {
     defaultMessage: "Expiring ≤30d",
@@ -4289,6 +4267,151 @@ export const messages = {
     defaultMessage: "Review routes and delivery evidence",
     description: "Trust Operations alert route action.",
   },
+  "certificateCockpit.title": { defaultMessage: "Certificate Lifecycle cockpit", description: "Certificate Lifecycle first-view cockpit title." },
+  "certificateCockpit.answer.attention": {
+    defaultMessage: "{count} certificates need action. Start with the first row; the evidence below explains why.",
+    description: "Answer-first certificate attention summary.",
+  },
+  "certificateCockpit.answer.clear": {
+    defaultMessage: "No loaded certificate needs action from the evidence currently available.",
+    description: "Truthful empty certificate attention summary.",
+  },
+  "certificateCockpit.metric.ownerGaps": { defaultMessage: "Owner gaps (loaded)", description: "Loaded certificate owner gap metric." },
+  "certificateCockpit.metrics.label": { defaultMessage: "Certificate Lifecycle module metrics", description: "Accessible certificate cockpit metric label." },
+  "certificateCockpit.renewalFailure.one": { defaultMessage: "1 renewal failed", description: "One failed renewal job." },
+  "certificateCockpit.renewalFailure.many": { defaultMessage: "{count} renewals failed", description: "Failed renewal job count." },
+  "certificateCockpit.deploymentFailure.one": {
+    defaultMessage: "1 deployment failed verification",
+    description: "One failed or unverified certificate deployment.",
+  },
+  "certificateCockpit.deploymentFailure.many": {
+    defaultMessage: "{count} deployments failed verification",
+    description: "Failed or unverified certificate deployment count.",
+  },
+  "certificateCockpit.deploymentAttention.one": {
+    defaultMessage: "1 deployment is failed, delayed, or unverified",
+    description: "One certificate deployment needing attention.",
+  },
+  "certificateCockpit.deploymentAttention.many": {
+    defaultMessage: "{count} deployments are failed, delayed, or unverified",
+    description: "Certificate deployments needing attention.",
+  },
+  "certificateCockpit.arrival.title": { defaultMessage: "Work arriving in 90 days", description: "Certificate expiry work chart title." },
+  "certificateCockpit.arrival.help": {
+    defaultMessage: "Each bar is a 15-day renewal window. Expired work stays in the action queue instead of hiding in this future view.",
+    description: "Certificate expiry work chart explanation.",
+  },
+  "certificateCockpit.arrival.aria": {
+    defaultMessage: "Certificate work arriving over the next 90 days",
+    description: "Accessible certificate work chart label.",
+  },
+  "certificateCockpit.arrival.tableAria": { defaultMessage: "Certificate work arrival data", description: "Accessible certificate work table label." },
+  "certificateCockpit.arrival.range": {
+    defaultMessage: "{start}–{end} days",
+    description: "Localized inclusive day range in the certificate work-arrival chart.",
+  },
+  "certificateCockpit.outcomes.title": { defaultMessage: "Renewal and deployment outcomes", description: "Certificate outcome chart title." },
+  "certificateCockpit.outcomes.help": {
+    defaultMessage: "Completed jobs and deployment checks by week. Running and queued work is not counted as success.",
+    description: "Certificate outcome chart explanation.",
+  },
+  "certificateCockpit.outcomes.aria": { defaultMessage: "Renewal and deployment outcomes by week", description: "Accessible certificate outcome chart label." },
+  "certificateCockpit.outcomes.tableAria": {
+    defaultMessage: "Renewal and deployment outcome data",
+    description: "Accessible certificate outcome table label.",
+  },
+  "certificateCockpit.table.window": { defaultMessage: "Window", description: "Certificate chart window column." },
+  "certificateCockpit.table.week": { defaultMessage: "Week", description: "Certificate outcome week column." },
+  "certificateCockpit.queue.title": { defaultMessage: "Certificate action queue", description: "Certificate action queue title." },
+  "certificateCockpit.queue.help": {
+    defaultMessage: "Deadline, automation proof, accountability, reason, and the safest next action are visible together.",
+    description: "Certificate action queue explanation.",
+  },
+  "certificateCockpit.queue.automation": { defaultMessage: "Automation", description: "Certificate queue automation column." },
+  "certificateCockpit.queue.owner": { defaultMessage: "Owner or team", description: "Certificate queue owner column." },
+  "certificateCockpit.queue.reason": { defaultMessage: "Why it is here", description: "Certificate queue reason column." },
+  "certificateCockpit.queue.empty": {
+    defaultMessage: "No action is projected from the loaded evidence. This does not cover certificates trstctl has not discovered.",
+    description: "Truthful empty certificate action queue.",
+  },
+  "certificateCockpit.deadline.unknown": { defaultMessage: "Expiry not recorded", description: "Unknown certificate deadline." },
+  "certificateCockpit.deadline.expiredOne": { defaultMessage: "Expired 1 day ago", description: "Certificate expired one day ago." },
+  "certificateCockpit.deadline.expiredMany": { defaultMessage: "Expired {count} days ago", description: "Certificate expired several days ago." },
+  "certificateCockpit.deadline.today": { defaultMessage: "Expires today", description: "Certificate expires today." },
+  "certificateCockpit.deadline.one": { defaultMessage: "Expires in 1 day", description: "Certificate expires in one day." },
+  "certificateCockpit.deadline.many": { defaultMessage: "Expires in {count} days", description: "Certificate expires in several days." },
+  "certificateCockpit.automation.failed": { defaultMessage: "Renewal failed", description: "Verified failed certificate automation state." },
+  "certificateCockpit.automation.delayed": { defaultMessage: "Renewal delayed", description: "Long-running certificate automation state." },
+  "certificateCockpit.automation.running": { defaultMessage: "Renewal in progress", description: "Running certificate automation state." },
+  "certificateCockpit.automation.verified": { defaultMessage: "Automation verified", description: "Successful certificate automation state." },
+  "certificateCockpit.automation.managed-unverified": {
+    defaultMessage: "Managed; not yet verified",
+    description: "Managed certificate without successful automation evidence.",
+  },
+  "certificateCockpit.automation.manual": { defaultMessage: "Manual renewal", description: "Certificate without managed identity automation." },
+  "certificateCockpit.automation.unknown": { defaultMessage: "Automation not checked", description: "Unavailable certificate automation evidence." },
+  "certificateCockpit.owner.missing": { defaultMessage: "No accountable owner", description: "Certificate has no owner reference." },
+  "certificateCockpit.owner.unreachable": { defaultMessage: "{name}; no alert contact", description: "Certificate owner has no reachable contact." },
+  "certificateCockpit.owner.unresolved": { defaultMessage: "Owner reference is unresolved", description: "Certificate owner reference is not in the roster." },
+  "certificateCockpit.owner.unchecked": { defaultMessage: "Owner contact not checked", description: "Certificate owner roster was unavailable." },
+  "certificateCockpit.detail.effectiveOwnership": { defaultMessage: "Effective ownership", description: "Certificate detail effective ownership label." },
+  "certificateCockpit.detail.current": { defaultMessage: "Current ownership", description: "Current and attested certificate ownership state." },
+  "certificateCockpit.detail.incomplete": { defaultMessage: "Ownership is incomplete", description: "Incomplete certificate ownership state." },
+  "certificateCockpit.detail.notCurrent": { defaultMessage: "Ownership needs review", description: "Stale certificate ownership state." },
+  "certificateCockpit.detail.notAttested": { defaultMessage: "Ownership not attested", description: "Unattested certificate ownership state." },
+  "certificateCockpit.detail.reachable": { defaultMessage: "Alert contact reachable", description: "Certificate owner has an alert contact." },
+  "certificateCockpit.detail.noAlertContact": { defaultMessage: "No alert contact", description: "Certificate owner has no alert contact." },
+  "certificateCockpit.detail.activity": { defaultMessage: "Credential activity", description: "Accessible certificate activity definition label." },
+  "certificateCockpit.reason.expired": { defaultMessage: "Certificate is expired", description: "Expired certificate queue reason." },
+  "certificateCockpit.reason.sevenDays": { defaultMessage: "Expires within 7 days", description: "Seven-day certificate queue reason." },
+  "certificateCockpit.reason.thirtyDays": { defaultMessage: "Expires within 30 days", description: "Thirty-day certificate queue reason." },
+  "certificateCockpit.reason.renewalFailed": { defaultMessage: "Renewal job failed", description: "Failed renewal queue reason." },
+  "certificateCockpit.reason.renewalDelayed": { defaultMessage: "Renewal job is delayed", description: "Delayed renewal queue reason." },
+  "certificateCockpit.reason.renewalUnverified": {
+    defaultMessage: "Renewal automation has no successful run",
+    description: "Unverified renewal automation queue reason.",
+  },
+  "certificateCockpit.reason.verificationFailed": {
+    defaultMessage: "Deployment verification failed",
+    description: "Failed deployment verification queue reason.",
+  },
+  "certificateCockpit.reason.deploymentFailed": { defaultMessage: "Deployment failed", description: "Failed deployment queue reason." },
+  "certificateCockpit.reason.deploymentUnverified": { defaultMessage: "Deployment has not been verified", description: "Unverified deployment queue reason." },
+  "certificateCockpit.reason.deploymentDelayed": { defaultMessage: "Deployment is delayed", description: "Delayed deployment queue reason." },
+  "certificateCockpit.reason.ownerMissing": { defaultMessage: "Owner is missing", description: "Missing owner queue reason." },
+  "certificateCockpit.reason.ownerUnreachable": { defaultMessage: "Owner has no alert contact", description: "Unreachable owner queue reason." },
+  "certificateCockpit.reason.review": { defaultMessage: "Evidence needs review", description: "Fallback certificate queue reason." },
+  "certificateCockpit.action.retryRenewal": { defaultMessage: "Retry renewal", description: "Retry failed certificate renewal action." },
+  "certificateCockpit.action.reviewRenewal": { defaultMessage: "Review delayed renewal", description: "Review delayed certificate renewal action." },
+  "certificateCockpit.action.repairDeployment": { defaultMessage: "Repair deployment", description: "Repair failed certificate deployment action." },
+  "certificateCockpit.action.renew": { defaultMessage: "Start renewal", description: "Start managed certificate renewal action." },
+  "certificateCockpit.action.replace": { defaultMessage: "Replace certificate", description: "Replace manual certificate action." },
+  "certificateCockpit.action.review": { defaultMessage: "Review certificate", description: "Fallback certificate action." },
+  "certificateCockpit.action.reviewInventory": { defaultMessage: "Review inventory", description: "Review certificate inventory action." },
+  "certificateCockpit.alert.title": { defaultMessage: "Urgent alert delivery safety", description: "Certificate alert safety heading." },
+  "certificateCockpit.alert.unchecked": {
+    defaultMessage: "Alert routes were not checked because notification evidence is unavailable.",
+    description: "Unavailable certificate alert evidence state.",
+  },
+  "certificateCockpit.alert.ready": {
+    defaultMessage: "The urgent route is configured: {channels} ready channels are connected to {policies} routing policies.",
+    description: "Configured certificate alert route state.",
+  },
+  "certificateCockpit.alert.unsafe": {
+    defaultMessage: "The urgent route is incomplete: {channels} ready channels and {policies} routing policies were reported.",
+    description: "Incomplete certificate alert route state.",
+  },
+  "certificateCockpit.alert.deadOne": { defaultMessage: "1 urgent alert is dead and needs repair.", description: "One dead urgent certificate alert." },
+  "certificateCockpit.alert.deadMany": {
+    defaultMessage: "{count} urgent alerts are dead and need repair.",
+    description: "Dead urgent certificate alert count.",
+  },
+  "certificateCockpit.alert.humanProof": {
+    defaultMessage: "Sent means a provider accepted the alert; it does not prove a human received it.",
+    description: "Honest certificate alert delivery semantics.",
+  },
+  "certificateCockpit.alert.repair": { defaultMessage: "Repair alert delivery", description: "Repair dead certificate alert action." },
+  "certificateCockpit.alert.review": { defaultMessage: "Review alert evidence", description: "Review certificate alert action." },
   "shell.spaces": {
     defaultMessage: "Spaces",
     description: "Accessible label for the space-switcher rail in the shell (S-C1).",
@@ -20610,11 +20733,11 @@ function buildCatalog(localize: (message: string) => string): Record<MessageKey,
   return Object.fromEntries(orderedMessageKeys.map((key, index) => [key, localize(defaultMessageValues[index])])) as Record<MessageKey, string>;
 }
 
-/** Rebuild a lazy production catalog whose generated chunk carries changed
- * values only. Message IDs and unchanged values already exist in the eager
- * English catalog, so sending them again for every locale is duplicate wire
- * data. The exact length check makes stale output fail closed; null is the
- * generator's explicit marker for an unchanged canonical English value. */
+/** Rebuild a lazy production catalog whose generated JSON asset carries
+ * changed values only. Message IDs and unchanged values already exist in the
+ * eager English catalog, so sending them again for every locale is duplicate
+ * wire data. The exact length check makes stale output fail closed; null is
+ * the generator's explicit marker for an unchanged canonical English value. */
 export function buildTranslatedCatalog(values: readonly (string | null)[]): Record<MessageKey, string> {
   if (values.length !== orderedMessageKeys.length) {
     throw new Error(`translated catalog has ${values.length} values for ${orderedMessageKeys.length} message keys`);
@@ -20622,11 +20745,10 @@ export function buildTranslatedCatalog(values: readonly (string | null)[]): Reco
   return Object.fromEntries(orderedMessageKeys.map((key, index) => [key, values[index] ?? defaultMessageValues[index]])) as Record<MessageKey, string>;
 }
 
-/* S-C10: the production translation catalogs moved to per-locale modules
- * (catalog.es-ES.ts / catalog.de-DE.ts) loaded on demand by the I18nProvider,
- * so the entry chunk ships only the English source catalog and the cheap
- * pseudo transforms. Until a lazy catalog resolves, lookups fall back to
- * English — never to raw keys. */
+/* S-C10: generated per-locale JSON assets load on demand through the
+ * I18nProvider, so the JavaScript bundle ships only the English source catalog
+ * and the cheap pseudo transforms. Until a lazy catalog resolves, lookups fall
+ * back to English — never to raw keys. */
 export type LazyLocale = "es-ES" | "de-DE";
 
 const pseudoCatalog = buildCatalog(pseudoLocalize);
@@ -20641,7 +20763,17 @@ export function isLazyLocale(locale: Locale): locale is LazyLocale {
   return locale === "es-ES" || locale === "de-DE";
 }
 
+async function fetchTranslatedCatalog(url: string): Promise<{ default: Record<MessageKey, string> }> {
+  const response = await fetch(url, { cache: "force-cache", credentials: "same-origin" });
+  if (!response.ok) throw new Error(`translation catalog request failed with HTTP ${response.status}`);
+  const value: unknown = await response.json();
+  if (!Array.isArray(value) || value.some((entry) => entry !== null && typeof entry !== "string")) {
+    throw new Error("translation catalog is not an ordered string/null array");
+  }
+  return { default: buildTranslatedCatalog(value) };
+}
+
 export const lazyCatalogLoaders: Record<LazyLocale, () => Promise<{ default: Record<MessageKey, string> }>> = {
-  "es-ES": () => import("@/i18n/catalog.es-ES.runtime.gen"),
-  "de-DE": () => import("@/i18n/catalog.de-DE.runtime.gen"),
+  "es-ES": () => fetchTranslatedCatalog(esESRuntimeCatalogURL),
+  "de-DE": () => fetchTranslatedCatalog(deDERuntimeCatalogURL),
 };

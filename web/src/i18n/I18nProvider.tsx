@@ -63,8 +63,8 @@ function initialTimeZonePreference(initialTimeZone?: string): string {
   return normalizeTimeZone(browserTimeZone());
 }
 
-/* S-C10: es/de catalogs are lazy modules. The cache below is module-scope so
- * a catalog loads once per session; until it resolves, lookups fall back to
+/* S-C10: es/de catalogs are lazy same-origin JSON assets. The cache below is
+ * module-scope so a catalog loads once per session; until it resolves, lookups fall back to
  * English — never to raw keys. loadLocaleCatalog de-duplicates in-flight
  * loads and reports whether anything new arrived (the provider bumps a
  * version to re-render translated copy on arrival). */
@@ -82,7 +82,7 @@ export function loadLocaleCatalog(locale: Locale): Promise<boolean> {
       return true;
     })
     .catch(() => {
-      // Fail open to English; a retry happens on the next locale switch.
+      // Preserve readable English; a retry happens on the next locale switch.
       delete catalogLoads[locale];
       return false;
     });
@@ -135,9 +135,9 @@ export function IntlProvider({ children, initialLocale, initialTimeZone, serverL
   const [timeZone, updateTimeZone] = useState(() => initialTimeZonePreference(initialTimeZone));
   const dir = directionForLocale(locale);
 
-  // S-C10: lazy locales resolve their catalog on demand; the version bump
+  // S-C10: lazy locales resolve their JSON catalog on demand; the version bump
   // re-renders the tree so English fallback copy swaps to the translation the
-  // moment the module arrives. Loading is idempotent and cached module-wide.
+  // moment the asset arrives. Loading is idempotent and cached module-wide.
   const [catalogVersion, setCatalogVersion] = useState(0);
   useEffect(() => {
     let cancelled = false;

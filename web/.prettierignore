@@ -2,7 +2,9 @@ coverage/
 dist/
 node_modules/
 .vite/
+.storybook-static/
 src/i18n/extractedMessages.gen.ts
+src/i18n/catalog.*.runtime.gen.json
 src/lib/api-types.gen.ts
 test-results/
 playwright-report/

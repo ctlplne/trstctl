@@ -1,0 +1,376 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import { axe } from "vitest-axe";
+import { ToastProvider } from "@/components/ToastProvider";
+import { Certificates } from "@/pages/Certificates";
+
+const { apiMock } = vi.hoisted(() => ({
+  apiMock: {
+    certificatePage: vi.fn(),
+    getCertificate: vi.fn(),
+    certificateHealth: vi.fn(),
+    crlDistributions: vi.fn(),
+    revocationHealth: vi.fn(),
+    rogueCertificates: vi.fn(),
+    risk: vi.fn(),
+    rotationRuns: vi.fn(),
+    connectorDeliveries: vi.fn(),
+    owners: vi.fn(),
+    identities: vi.fn(),
+    notifications: vi.fn(),
+    notificationChannels: vi.fn(),
+    notificationRoutingPolicies: vi.fn(),
+  },
+}));
+
+vi.mock("@/lib/api", async (orig) => {
+  const actual = await orig<typeof import("@/lib/api")>();
+  return { ...actual, api: apiMock };
+});
+
+function renderPage() {
+  return render(
+    <MemoryRouter>
+      <ToastProvider>
+        <Certificates />
+      </ToastProvider>
+    </MemoryRouter>,
+  );
+}
+
+describe("Certificate Lifecycle cockpit", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-08-24T12:00:00Z"));
+    localStorage.clear();
+
+    apiMock.certificatePage.mockResolvedValue({
+      items: [
+        {
+          id: "cert-expired",
+          tenant_id: "tenant-1",
+          subject: "CN=checkout.prod.example",
+          issuer: "CN=Production CA",
+          status: "active",
+          fingerprint: "fp-expired",
+          not_after: "2026-08-23T12:00:00Z",
+          deployment_location: "production / ingress / checkout",
+          attributes: { environment: "production", team_name: "Payments" },
+        },
+        {
+          id: "cert-renewal-failed",
+          tenant_id: "tenant-1",
+          subject: "CN=api.prod.example",
+          issuer: "CN=Production CA",
+          status: "active",
+          fingerprint: "fp-api",
+          not_after: "2026-08-27T12:00:00Z",
+          owner_id: "team-platform",
+          deployment_location: "production / load balancer / api",
+          attributes: { environment: "production", team_id: "team-platform" },
+        },
+        {
+          id: "cert-planned",
+          tenant_id: "tenant-1",
+          subject: "CN=jobs.stage.example",
+          issuer: "CN=Issuing CA",
+          status: "active",
+          fingerprint: "fp-jobs",
+          not_after: "2026-09-13T12:00:00Z",
+          owner_id: "team-platform",
+          deployment_location: "staging / worker / jobs",
+          attributes: { environment: "staging", team_id: "team-platform" },
+        },
+      ],
+    });
+    apiMock.certificateHealth.mockResolvedValue({
+      generated_at: "2026-08-24T12:00:00Z",
+      inventory_path: "/api/v1/certificates",
+      expiring_path: "/api/v1/certificates?expiring_before=2026-09-23T12:00:00Z",
+      expiry_buckets: [],
+      source_breakdown: [],
+      expiring: [],
+      summary: {
+        total: 3,
+        active: 3,
+        expired: 1,
+        expiring_7d: 2,
+        expiring_30d: 3,
+        expiring_90d: 3,
+        revoked: 0,
+        superseded: 0,
+        external_source_count: 0,
+        imported_count: 0,
+        discovered_count: 0,
+        unknown_expiry_count: 0,
+        health: "critical",
+      },
+    });
+    apiMock.getCertificate.mockResolvedValue({
+      id: "cert-renewal-failed",
+      tenant_id: "tenant-1",
+      subject: "CN=api.prod.example",
+      issuer: "CN=Production CA",
+      status: "active",
+      fingerprint: "fp-api",
+      not_after: "2026-08-27T12:00:00Z",
+      owner_id: "team-platform",
+      deployment_location: "production / load balancer / api",
+    });
+    apiMock.crlDistributions.mockResolvedValue({ items: [] });
+    apiMock.revocationHealth.mockResolvedValue(undefined);
+    apiMock.rogueCertificates.mockResolvedValue(undefined);
+    apiMock.risk.mockResolvedValue([]);
+    apiMock.rotationRuns.mockResolvedValue({
+      items: [
+        {
+          id: "rotation-failed",
+          tenant_id: "tenant-1",
+          identity_id: "identity-api",
+          predecessor_fingerprint: "fp-api",
+          status: "failed",
+          trigger: "scheduled",
+          error: "upstream CA timed out",
+          created_at: "2026-08-24T10:00:00Z",
+          updated_at: "2026-08-24T10:05:00Z",
+        },
+        {
+          id: "rotation-ok",
+          tenant_id: "tenant-1",
+          identity_id: "identity-jobs",
+          predecessor_fingerprint: "fp-old-jobs",
+          successor_fingerprint: "fp-jobs",
+          status: "succeeded",
+          trigger: "scheduled",
+          created_at: "2026-08-20T10:00:00Z",
+          updated_at: "2026-08-20T10:05:00Z",
+          completed_at: "2026-08-20T10:05:00Z",
+        },
+        {
+          id: "unrelated-secret-rotation",
+          tenant_id: "tenant-1",
+          identity_id: "identity-secret",
+          predecessor_fingerprint: "secret-version-1",
+          status: "failed",
+          trigger: "scheduled",
+          created_at: "2026-08-24T10:00:00Z",
+          updated_at: "2026-08-24T10:05:00Z",
+        },
+      ],
+    });
+    apiMock.connectorDeliveries.mockResolvedValue({
+      items: [
+        {
+          id: "delivery-failed",
+          tenant_id: "tenant-1",
+          identity_id: "identity-api",
+          fingerprint: "fp-api",
+          connector: "f5",
+          target: "api-load-balancer",
+          destination: "production / load balancer / api",
+          status: "verify_failed",
+          attempts: 3,
+          detail: "new certificate was not observed",
+          rollback: "available",
+          created_at: "2026-08-24T10:06:00Z",
+          updated_at: "2026-08-24T10:12:00Z",
+        },
+        {
+          id: "delivery-ok",
+          tenant_id: "tenant-1",
+          identity_id: "identity-jobs",
+          fingerprint: "fp-jobs",
+          connector: "kubernetes",
+          target: "jobs-worker",
+          destination: "staging / worker / jobs",
+          status: "verified",
+          attempts: 1,
+          rollback: "available",
+          created_at: "2026-08-20T10:06:00Z",
+          updated_at: "2026-08-20T10:08:00Z",
+        },
+        {
+          id: "unrelated-secret-delivery",
+          tenant_id: "tenant-1",
+          identity_id: "identity-secret",
+          fingerprint: "secret-version-2",
+          connector: "vault",
+          target: "payment-secret",
+          destination: "secret/production/payment",
+          status: "failed",
+          attempts: 2,
+          detail: "secret target rejected the update",
+          rollback: "available",
+          created_at: "2026-08-24T10:06:00Z",
+          updated_at: "2026-08-24T10:08:00Z",
+        },
+      ],
+    });
+    apiMock.owners.mockResolvedValue([
+      {
+        id: "team-platform",
+        tenant_id: "tenant-1",
+        kind: "team",
+        name: "Platform Trust",
+        email: "platform@example.test",
+        escalation_chain: ["oncall@example.test"],
+        ownership_attested: true,
+        ownership_complete: true,
+        ownership_current: true,
+      },
+    ]);
+    apiMock.identities.mockResolvedValue([
+      { id: "identity-api", kind: "x509_certificate", name: "api.prod.example", owner_id: "team-platform", status: "active" },
+      { id: "identity-jobs", kind: "x509_certificate", name: "jobs.stage.example", owner_id: "team-platform", status: "active" },
+    ]);
+    apiMock.notifications.mockResolvedValue({
+      items: [
+        {
+          id: "notification-dead",
+          tenant_id: "tenant-1",
+          certificate_id: "cert-expired",
+          destination: "payments-oncall@example.test",
+          status: "dead",
+          attempts: 4,
+          severity: "critical",
+          subject: "CN=checkout.prod.example",
+          last_error: "mailbox rejected the message",
+          created_at: "2026-08-24T09:00:00Z",
+        },
+      ],
+    });
+    apiMock.notificationChannels.mockResolvedValue({
+      items: [{ id: "email", label: "Email", category: "email", delivery: "outbox", configured: true, enabled: true }],
+    });
+    apiMock.notificationRoutingPolicies.mockResolvedValue({
+      items: [
+        {
+          id: "urgent-certificates",
+          tenant_id: "tenant-1",
+          name: "Urgent certificates",
+          default_channels: ["email"],
+          channels_by_severity: { critical: ["email"] },
+          digest_interval_seconds: 0,
+          digest_timezone: "UTC",
+          digest_preview: { interval_seconds: 0, next_run_at: "2026-08-24T12:00:00Z", timezone: "UTC" },
+          created_at: "2026-08-01T00:00:00Z",
+          updated_at: "2026-08-01T00:00:00Z",
+        },
+      ],
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("puts the whole urgent answer, evidence, and next actions in the default first view", async () => {
+    const view = renderPage();
+
+    const cockpit = await screen.findByRole("region", { name: "Certificate Lifecycle cockpit" });
+    expect(within(cockpit).getByText("1", { selector: "[data-metric='expired']" })).toBeInTheDocument();
+    expect(within(cockpit).getByText("2", { selector: "[data-metric='expiring-7d']" })).toBeInTheDocument();
+    expect(within(cockpit).getByText("3", { selector: "[data-metric='expiring-30d']" })).toBeInTheDocument();
+    expect(within(cockpit).getByText("1", { selector: "[data-metric='owner-gaps']" })).toBeInTheDocument();
+    expect(within(cockpit).getByText(/1 renewal failed/i)).toBeInTheDocument();
+    expect(within(cockpit).getByText(/1 deployment failed verification/i)).toBeInTheDocument();
+
+    expect(within(cockpit).getByRole("img", { name: "Certificate work arriving over the next 90 days" })).toBeInTheDocument();
+    expect(within(cockpit).getByRole("table", { name: "Certificate work arrival data" })).toBeInTheDocument();
+    expect(within(cockpit).getByRole("img", { name: "Renewal and deployment outcomes by week" })).toBeInTheDocument();
+    const outcomeTable = within(cockpit).getByRole("table", { name: "Renewal and deployment outcome data" });
+    expect(outcomeTable).toBeInTheDocument();
+    const outcomeTotals = within(outcomeTable)
+      .getAllByRole("row")
+      .slice(1)
+      .reduce(
+        (totals, row) => {
+          const cells = within(row).getAllByRole("cell");
+          return { succeeded: totals.succeeded + Number(cells[0]?.textContent ?? 0), failed: totals.failed + Number(cells[1]?.textContent ?? 0) };
+        },
+        { succeeded: 0, failed: 0 },
+      );
+    expect(outcomeTotals).toEqual({ succeeded: 2, failed: 2 });
+
+    const queue = within(cockpit).getByRole("table", { name: "Certificate action queue" });
+    const expiredRow = within(queue).getByRole("row", { name: /checkout\.prod\.example/i });
+    expect(within(expiredRow).getByText("production")).toBeInTheDocument();
+    expect(within(expiredRow).getByText("Expired 1 day ago")).toBeInTheDocument();
+    expect(within(expiredRow).getByText("Manual renewal")).toBeInTheDocument();
+    expect(within(expiredRow).getByText("No accountable owner")).toBeInTheDocument();
+    expect(within(expiredRow).getByRole("link", { name: "Assign owner" })).toHaveAttribute("href", "/owners?status=orphaned");
+
+    const failedRow = within(queue).getByRole("row", { name: /api\.prod\.example/i });
+    expect(within(failedRow).getByText("Renewal failed")).toBeInTheDocument();
+    expect(within(failedRow).getByText("Platform Trust")).toBeInTheDocument();
+    expect(within(failedRow).getByText(/deployment verification failed/i)).toBeInTheDocument();
+    expect(within(failedRow).getByRole("link", { name: "Retry renewal" })).toHaveAttribute("href", "/identities?identity=identity-api");
+
+    const alertSafety = within(cockpit).getByRole("region", { name: "Urgent alert delivery safety" });
+    expect(within(alertSafety).getByText(/route is configured/i)).toBeInTheDocument();
+    expect(within(alertSafety).getByText(/1 urgent alert is dead/i)).toBeInTheDocument();
+    expect(within(alertSafety).getByText(/does not prove a human received it/i)).toBeInTheDocument();
+    expect(within(alertSafety).getByRole("link", { name: "Repair alert delivery" })).toHaveAttribute("href", "/notifications?status=dead");
+
+    const inventory = screen.getByRole("table", { name: "Inventoried certificates" });
+    const inventoryRow = within(inventory).getByRole("row", { name: /api\.prod\.example/i });
+    fireEvent.click(within(inventoryRow).getByRole("button", { name: /review/i }));
+    const detail = await screen.findByRole("dialog", { name: /certificate details/i });
+    expect(within(detail).getByText("Effective ownership")).toBeInTheDocument();
+    expect(within(detail).getByRole("link", { name: "Platform Trust" })).toHaveAttribute("href", "/owners?owner=team-platform");
+    expect(within(detail).getByText(/Current ownership · Alert contact reachable/)).toBeInTheDocument();
+
+    expect(await axe(view.container)).toHaveNoViolations();
+  });
+
+  it("counts the complete owner-gap population while keeping the visible work queue bounded", async () => {
+    const certificates = Array.from({ length: 12 }, (_, index) => ({
+      id: `cert-unowned-${index}`,
+      tenant_id: "tenant-1",
+      subject: `CN=service-${index}.prod.example`,
+      issuer: "CN=Production CA",
+      status: "active",
+      fingerprint: `fp-unowned-${index}`,
+      not_after: "2026-08-30T12:00:00Z",
+      deployment_location: "production",
+    }));
+    apiMock.certificatePage.mockResolvedValue({ items: certificates });
+    apiMock.certificateHealth.mockResolvedValue({
+      generated_at: "2026-08-24T12:00:00Z",
+      inventory_path: "/api/v1/certificates",
+      expiring_path: "/api/v1/certificates?expiring_before=2026-09-23T12:00:00Z",
+      expiry_buckets: [],
+      source_breakdown: [],
+      expiring: [],
+      summary: {
+        total: 12,
+        active: 12,
+        expired: 0,
+        expiring_7d: 12,
+        expiring_30d: 12,
+        expiring_90d: 12,
+        revoked: 0,
+        superseded: 0,
+        external_source_count: 0,
+        imported_count: 0,
+        discovered_count: 0,
+        unknown_expiry_count: 0,
+        health: "critical",
+      },
+    });
+
+    renderPage();
+    const cockpit = await screen.findByRole("region", { name: "Certificate Lifecycle cockpit" });
+    expect(within(cockpit).getByText(/12 certificates need action/i)).toBeInTheDocument();
+    expect(within(cockpit).getByText("12", { selector: "[data-metric='owner-gaps']" })).toBeInTheDocument();
+    expect(within(within(cockpit).getByRole("table", { name: "Certificate action queue" })).getAllByRole("row")).toHaveLength(11);
+  });
+
+  it("labels owner coverage as not checked when its tenant evidence API is unavailable", async () => {
+    apiMock.owners.mockRejectedValue(new Error("owner projection unavailable"));
+    renderPage();
+    const cockpit = await screen.findByRole("region", { name: "Certificate Lifecycle cockpit" });
+    expect(within(cockpit).getByText("Not checked", { selector: "[data-metric='owner-gaps']" })).toBeInTheDocument();
+  });
+});

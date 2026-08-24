@@ -11,6 +11,7 @@ export default tseslint.config(
     ignores: [
       "coverage/**",
       "dist/**",
+      ".storybook-static/**",
       "node_modules/**",
       ".vite/**",
       "vite.config.ts.timestamp-*.mjs",
