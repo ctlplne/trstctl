@@ -702,7 +702,12 @@ describe("secrets surface", () => {
 
   it("gives every secrets workspace one plain-language answer and one honest next action", async () => {
     const routes = [
-      ["/secrets", "Secret store", "Which secrets exist, who owns them, and which need rotation.", "Add secret"],
+      [
+        "/secrets",
+        "Secrets & Access",
+        "See leaks, overdue rotation, failed delivery, ownership, and machine access before opening a secret value.",
+        "Add secret",
+      ],
       ["/secrets/access", "Machine access", "Which machine can use which secret, and why.", "Grant access"],
       ["/secrets/sharing", "One-time secret links", "What can be viewed once, by whom, and until when.", "Create one-time link"],
       ["/secrets/engines", "Automatic secret sources", "Which systems can create short-lived credentials on demand.", "Add source"],
@@ -717,6 +722,41 @@ describe("secrets surface", () => {
       expect(within(screen.getByRole("group", { name: "Do next" })).getByRole("button", { name: action })).toBeInTheDocument();
       cleanup();
     }
+  });
+
+  it("opens with a served secrets risk cockpit instead of navigation-only KPI links", async () => {
+    apiMock.secretRotationSchedules.mockResolvedValueOnce({
+      items: [
+        {
+          id: "schedule-1",
+          tenant_id: "t1",
+          name: "payments-db",
+          provider: "postgresql",
+          key: "app/db/password",
+          old_ref: "version:3",
+          interval_seconds: 86400,
+          enabled: true,
+          next_run_at: new Date(Date.now() - 3_600_000).toISOString(),
+          last_run_status: "delivery_failed",
+          last_error: "destination did not confirm the new version",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      ],
+    });
+    renderSecrets();
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Secrets & Access" })).toBeInTheDocument();
+    const health = await screen.findByRole("list", { name: "Secrets and access health" });
+    expect(within(health).getByRole("link", { name: /1 leaked-secret finding/i })).toHaveAttribute("href", "/secrets/scanning");
+    expect(within(health).getByRole("link", { name: /1 overdue rotation/i })).toHaveAttribute("href", "/secrets?focus=rotation");
+    expect(within(health).getByRole("link", { name: /1 failed delivery/i })).toHaveAttribute("href", "/secrets/sync");
+    expect(within(health).getByRole("link", { name: /0 secrets without an owner/i })).toHaveAttribute("href", "/secrets?owner=missing");
+
+    const attention = screen.getByRole("list", { name: "Secrets and access attention" });
+    expect(within(attention).getByText("payments-db")).toBeInTheDocument();
+    expect(within(attention).getByText(/destination did not confirm/i)).toBeInTheDocument();
+    expect(within(attention).getByRole("link", { name: "Repair delivery" })).toHaveAttribute("href", "/secrets/sync");
   });
 
   it("moves the three direct secrets jobs to their first safe field", async () => {
@@ -779,7 +819,7 @@ describe("secrets surface", () => {
     const user = userEvent.setup();
     renderSecrets();
 
-    expect(await screen.findByRole("heading", { name: "Secret store" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Secrets & Access" })).toBeInTheDocument();
     expect(await screen.findByRole("table", { name: "Native secret metadata" })).toBeInTheDocument();
     expect(screen.getByRole("searchbox", { name: "Search native secret metadata" })).toBeInTheDocument();
     expect(screen.getByText("app/db/password")).toBeInTheDocument();

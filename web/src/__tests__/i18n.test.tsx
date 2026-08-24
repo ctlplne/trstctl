@@ -1079,8 +1079,13 @@ describe("i18n boundary", () => {
       // semantics, routing inheritance/preview, global urgency indicator, and
       // no-deadline state are translated in both production catalogs. Machine-
       // authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "7a6294fe399defc1f8020bd9548261131108a15a89374d7c179c978c49a59be1",
-      "de-DE": "d2e6c7fb94a1fd975140c032e2211775d144432eaec9d77e6d99cb4cae8e4d7b",
+      // Workload and Secrets G6 re-pin: the two workspace roots now explain
+      // tenant-served urgency, ownership, expiry, delivery, and access risk in
+      // plain language. The workspace names also match their rail labels and
+      // document titles. Machine-authored es/de — FLAGGED FOR HUMAN
+      // TRANSLATION REVIEW before release.
+      "es-ES": "ebf225e03d3118f313f422723f6692812386b66f777e35338419c9492014187c",
+      "de-DE": "e3739f3dd50fd3d878ae5761201e5a31521f01beb80ac0044747c082a1ebe592",
     });
   });
 

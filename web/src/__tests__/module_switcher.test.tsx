@@ -111,7 +111,7 @@ describe("space switcher (S-C1)", () => {
 
     // The URL is the source of truth: switching lands on the space's first
     // permitted route and the sidebar re-scopes.
-    await screen.findByRole("heading", { level: 1, name: "Workloads" });
+    await screen.findByRole("heading", { level: 1, name: "Machine & Workload Trust" });
     const nav = screen.getByRole("navigation", { name: /Primary/i });
     await waitFor(() => expect(within(nav).getByRole("link", { name: /SSH access/i })).toBeInTheDocument());
     expect(within(nav).queryByRole("link", { name: /Certificate authorities/i })).not.toBeInTheDocument();

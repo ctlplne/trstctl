@@ -1249,8 +1249,8 @@ export const messages = {
     description: "Secrets route: systems that issue short-lived credentials on demand. Nav label, H1, and title.",
   },
   "secrets.route.store": {
-    defaultMessage: "Secret store",
-    description: "Secrets route: native secret inventory and lifecycle. Nav label, H1, and title.",
+    defaultMessage: "Secrets & Access",
+    description: "Secrets workspace overview: risk, native inventory, rotation, delivery, scanning, and access. H1 and title.",
   },
   "secrets.route.access": {
     defaultMessage: "Machine access",
@@ -1265,14 +1265,76 @@ export const messages = {
     description: "Secrets route: outbound destinations and their current delivery state. Nav label, H1, and title.",
   },
   "secrets.route.storeAnswer": {
-    defaultMessage: "Which secrets exist, who owns them, and which need rotation.",
-    description: "Secret store opening answer.",
+    defaultMessage: "See leaks, overdue rotation, failed delivery, ownership, and machine access before opening a secret value.",
+    description: "Secrets and Access workspace opening answer.",
   },
   "secrets.route.storeDetails": {
     defaultMessage: "Versions, explicit value reveals, references, metadata, rotation receipts, and the immutable event trail remain available below.",
     description: "Secret store technical-details summary.",
   },
   "secrets.route.storeAction": { defaultMessage: "Add secret", description: "Secret store primary action." },
+  "secrets.overview.attentionTitle": {
+    defaultMessage: "{count} secrets and access issues need attention",
+    description: "Heading above the served Secrets and Access action queue.",
+  },
+  "secrets.overview.attentionHealthy": { defaultMessage: "No urgent secrets work", description: "Healthy Secrets and Access action heading." },
+  "secrets.overview.attentionHelp": {
+    defaultMessage: "Start with leaked values and failed rotation delivery. Each row explains the consequence and opens the safest repair surface.",
+    description: "Help above the Secrets and Access action queue.",
+  },
+  "secrets.overview.attentionHealthyHelp": {
+    defaultMessage: "No stored secret needs urgent action for a detected leak, late rotation, failed delivery, or missing owner.",
+    description: "Honest healthy-state explanation for the Secrets and Access queue.",
+  },
+  "secrets.overview.attentionLabel": {
+    defaultMessage: "Secrets and access attention",
+    description: "Accessible label for the Secrets and Access action queue.",
+  },
+  "secrets.overview.healthTitle": { defaultMessage: "Workspace health", description: "Secrets and Access health-summary heading." },
+  "secrets.overview.healthHelp": {
+    defaultMessage: "This workspace tracks {count} stored secrets alongside leak, rotation, delivery, and ownership results.",
+    description: "Explains the source of Secrets and Access health counts.",
+  },
+  "secrets.overview.healthLabel": { defaultMessage: "Secrets and access health", description: "Accessible label for Secrets and Access health links." },
+  "secrets.overview.leaksOne": { defaultMessage: "1 leaked-secret finding", description: "Single leaked-secret health count." },
+  "secrets.overview.leaksMany": { defaultMessage: "{count} leaked-secret findings", description: "Leaked-secret health count." },
+  "secrets.overview.overdueOne": { defaultMessage: "1 overdue rotation", description: "Single overdue secret rotation count." },
+  "secrets.overview.overdueMany": { defaultMessage: "{count} overdue rotations", description: "Overdue secret rotation count." },
+  "secrets.overview.failuresOne": { defaultMessage: "1 failed delivery", description: "Single secret rotation or sync delivery failure count." },
+  "secrets.overview.failuresMany": { defaultMessage: "{count} failed deliveries", description: "Secret rotation or sync delivery failure count." },
+  "secrets.overview.unownedOne": { defaultMessage: "1 secret without an owner", description: "Single unowned secret count." },
+  "secrets.overview.unownedMany": { defaultMessage: "{count} secrets without an owner", description: "Unowned secret count." },
+  "secrets.overview.deliveryFailureFallback": {
+    defaultMessage: "The last rotation or delivery did not complete.",
+    description: "Fallback detail for a failed secret schedule.",
+  },
+  "secrets.overview.deliveryFailureConsequence": {
+    defaultMessage: "The source and destination may now hold different versions.",
+    description: "Plain consequence of failed secret delivery.",
+  },
+  "secrets.overview.repairDelivery": { defaultMessage: "Repair delivery", description: "Action opening failed secret delivery repair." },
+  "secrets.overview.rotationOverdue": { defaultMessage: "The scheduled rotation deadline has passed.", description: "Overdue secret rotation detail." },
+  "secrets.overview.rotationConsequence": {
+    defaultMessage: "The old credential remains usable longer than the reviewed interval.",
+    description: "Plain consequence of overdue secret rotation.",
+  },
+  "secrets.overview.reviewRotation": { defaultMessage: "Review rotation", description: "Action opening secret rotation work." },
+  "secrets.overview.leakName": { defaultMessage: "Leaked-secret findings", description: "Action-row name for served leaked-secret findings." },
+  "secrets.overview.leakDetail": {
+    defaultMessage: "{count} findings need triage and revocation proof.",
+    description: "Action-row detail for leaked-secret findings.",
+  },
+  "secrets.overview.leakConsequence": {
+    defaultMessage: "A copied credential may still work until it is rotated or revoked.",
+    description: "Plain consequence of a leaked credential.",
+  },
+  "secrets.overview.reviewLeaks": { defaultMessage: "Review findings", description: "Action opening leaked-secret findings." },
+  "secrets.overview.ownerMissing": { defaultMessage: "No accountable owner is recorded.", description: "Unowned secret action detail." },
+  "secrets.overview.ownerConsequence": {
+    defaultMessage: "Nobody is clearly responsible for rotation or incident response.",
+    description: "Plain consequence of an unowned secret.",
+  },
+  "secrets.overview.assignOwner": { defaultMessage: "Assign owner", description: "Action opening unowned secret work." },
   "secrets.store.exploreTools": {
     defaultMessage: "Browse folders and references",
     description: "Collapsed secret-store tools summary.",
@@ -4457,7 +4519,7 @@ export const messages = {
     description: "Primary navigation item.",
   },
   "nav.item.workloads": {
-    defaultMessage: "Workloads",
+    defaultMessage: "Machine & Workload Trust",
     description: "Primary navigation item.",
   },
   "nav.item.profiles": {
@@ -5567,7 +5629,7 @@ export const messages = {
     description: "Primary navigation item.",
   },
   "nav.item.secrets": {
-    defaultMessage: "Secret store",
+    defaultMessage: "Secrets & Access",
     description: "Primary navigation item for native secret inventory and lifecycle.",
   },
   "nav.item.nativeSecrets": {
@@ -11941,6 +12003,83 @@ export const messages = {
     defaultMessage: "See where each app runs, how that location is proved, and which short-lived identity the app receives from an enabled trust source.",
     description: "Plain-language workload identity answer when an attester is enabled.",
   },
+  "workloads.overview.answer": {
+    defaultMessage: "See which machine identities may stop working, which agents are stale, what sits outside SSH trust, and where delivery failed.",
+    description: "Machine and Workload Trust workspace opening answer.",
+  },
+  "workloads.overview.details": {
+    defaultMessage:
+      "Counts come from tenant-scoped identities, contextual risk, agent heartbeats, SSH fleet posture, lifecycle runs, and connector delivery receipts. Attestation payloads and private keys never enter this overview.",
+    description: "Technical evidence summary for the Machine and Workload Trust overview.",
+  },
+  "workloads.overview.loading": {
+    defaultMessage: "Loading machine and workload health…",
+    description: "Loading state for the Machine and Workload Trust overview.",
+  },
+  "workloads.overview.attentionTitle": {
+    defaultMessage: "{count} machine and workload issues need attention",
+    description: "Heading above the Machine and Workload Trust action queue.",
+  },
+  "workloads.overview.attentionHealthy": { defaultMessage: "No urgent machine or workload work", description: "Healthy machine and workload action heading." },
+  "workloads.overview.attentionHelp": {
+    defaultMessage: "Start with the first deadline or failed delivery. Each row opens the existing authority that owns the repair.",
+    description: "Help above the Machine and Workload Trust action queue.",
+  },
+  "workloads.overview.attentionHealthyHelp": {
+    defaultMessage: "No machine identity, agent, SSH host, rotation, or delivery currently needs urgent action in the available results.",
+    description: "Honest healthy-state explanation for Machine and Workload Trust.",
+  },
+  "workloads.overview.attentionLabel": {
+    defaultMessage: "Machine and workload attention",
+    description: "Accessible label for the Machine and Workload Trust action queue.",
+  },
+  "workloads.overview.healthTitle": { defaultMessage: "Workspace health", description: "Machine and Workload Trust health heading." },
+  "workloads.overview.healthHelp": {
+    defaultMessage: "Current counts come from identities, agents, SSH hosts, rotations, and deliveries. Open one to inspect the matching items.",
+    description: "Explanation of Machine and Workload Trust health counts.",
+  },
+  "workloads.overview.healthLabel": {
+    defaultMessage: "Machine and workload health",
+    description: "Accessible label for Machine and Workload Trust health links.",
+  },
+  "workloads.overview.identitiesOne": { defaultMessage: "1 short-lived identity", description: "Single machine/workload identity count." },
+  "workloads.overview.identitiesMany": { defaultMessage: "{count} short-lived identities", description: "Machine/workload identity count." },
+  "workloads.overview.agentsOne": { defaultMessage: "1 agent needs attention", description: "Single unhealthy or stale agent count." },
+  "workloads.overview.agentsMany": { defaultMessage: "{count} agents need attention", description: "Unhealthy or stale agent count." },
+  "workloads.overview.sshOne": { defaultMessage: "1 host outside the SSH CA", description: "Single host outside SSH certificate trust." },
+  "workloads.overview.sshMany": { defaultMessage: "{count} hosts outside the SSH CA", description: "Hosts outside SSH certificate trust." },
+  "workloads.overview.deliveriesOne": { defaultMessage: "1 failed workload delivery", description: "Single workload lifecycle or delivery failure." },
+  "workloads.overview.deliveriesMany": { defaultMessage: "{count} failed workload deliveries", description: "Workload lifecycle or delivery failures." },
+  "workloads.overview.deadlineUnknown": { defaultMessage: "Expiry is not recorded", description: "Workload identity missing-expiry state." },
+  "workloads.overview.expired": { defaultMessage: "Already expired", description: "Expired workload identity deadline." },
+  "workloads.overview.expiresToday": { defaultMessage: "Expires today", description: "Workload identity expires today." },
+  "workloads.overview.expiresOne": { defaultMessage: "Expires in 1 day", description: "Workload identity one-day deadline." },
+  "workloads.overview.expiresMany": { defaultMessage: "Expires in {count} days", description: "Workload identity deadline in days." },
+  "workloads.overview.ownerPresent": { defaultMessage: "Accountable owner recorded", description: "Workload identity has an accountable owner." },
+  "workloads.overview.ownerMissing": { defaultMessage: "No accountable owner", description: "Workload identity lacks an accountable owner." },
+  "workloads.overview.reviewIdentity": { defaultMessage: "Review workload identity", description: "Action opening workload identity inventory." },
+  "workloads.overview.agentDetail": { defaultMessage: "Agent state: {status}", description: "Machine agent state in the action queue." },
+  "workloads.overview.socketOff": {
+    defaultMessage: "The host is not serving its local Workload API socket.",
+    description: "Agent local Workload API unavailable detail.",
+  },
+  "workloads.overview.reviewAgent": { defaultMessage: "Review agent", description: "Action opening agent health." },
+  "workloads.overview.deliveryFailed": { defaultMessage: "The last workload delivery failed.", description: "Fallback failed workload delivery detail." },
+  "workloads.overview.deliveryConsequence": {
+    defaultMessage: "The target may still be using the previous identity.",
+    description: "Plain consequence of a workload delivery failure.",
+  },
+  "workloads.overview.reviewDelivery": { defaultMessage: "Review delivery", description: "Action opening workload delivery receipts." },
+  "workloads.overview.sshOutsideName": {
+    defaultMessage: "SSH hosts outside certificate trust",
+    description: "Action-row name for SSH hosts outside the tenant CA.",
+  },
+  "workloads.overview.sshOutsideDetail": { defaultMessage: "{count} hosts still rely on standing keys.", description: "SSH host coverage gap detail." },
+  "workloads.overview.sshOutsideConsequence": {
+    defaultMessage: "A copied or orphaned key may remain valid until each host is changed.",
+    description: "Plain consequence of hosts outside SSH certificate trust.",
+  },
+  "workloads.overview.reviewSSH": { defaultMessage: "Review SSH trust", description: "Action opening SSH trust coverage." },
   "workloads.page.answerNeedsTrust": {
     defaultMessage: "Choose what may prove where an app runs. After that, the app can receive a short-lived identity instead of a standing secret.",
     description: "Plain-language workload identity answer when no attester is enabled.",

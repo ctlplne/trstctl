@@ -1,6 +1,7 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { Ban, Plus, RefreshCw, RotateCw, Trash2 } from "lucide-react";
-import { ErrorState, UnavailableState } from "@/components/StatePrimitives";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { Link } from "react-router-dom";
+import { Ban, Network, Plus, RefreshCw, RotateCw, ServerOff, ShieldAlert, Trash2, Waypoints } from "lucide-react";
+import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
 import { PageHeader } from "@/components/PageHeader";
 import { ScrollableTableRegion } from "@/components/ScrollableTableRegion";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -12,9 +13,15 @@ import {
   type Attestation,
   type AttestedSVID,
   type BrokerAgentIdentity,
+  type ConnectorDelivery,
+  type ContextualRiskPriority,
   type DynamicLease,
+  type Identity,
   type KubernetesCSRSupport,
   type KubernetesTrustBundleDistribution,
+  type RotationRun,
+  type SSHFleetInventory,
+  type SSHStatus,
   type WorkloadAttesterTrustSource,
   type WorkloadAttesterTrustSourceRequest,
   type WorkloadAttesterTrustSourceRotateRequest,
@@ -31,6 +38,44 @@ type BrokerIdentityRow = Pick<BrokerAgentIdentity, "agent_id" | "certificate_id"
 type AttestedSVIDRow = Pick<AttestedSVID, "credential_id" | "not_after" | "subject"> & { attestation: SafeAttestation };
 type TrustSourceMethod = WorkloadAttesterTrustSourceRequest["method"];
 type TrustSourceStatusLabels = { revoked: string; disabled: string; enabled: string };
+
+type WorkloadOverviewState = {
+  identities: Identity[] | null;
+  risks: ContextualRiskPriority[] | null;
+  ssh: SSHStatus | null;
+  sshFleet: SSHFleetInventory | null;
+  deliveries: ConnectorDelivery[] | null;
+  rotations: RotationRun[] | null;
+};
+
+async function readOverview<T>(reader: () => Promise<T>): Promise<T | null> {
+  try {
+    return await reader();
+  } catch {
+    return null;
+  }
+}
+
+function workloadDeadline(expiresAt: string | undefined, now: number, t: ReturnType<typeof useTranslation>["t"]): string {
+  if (!expiresAt) return t("workloads.overview.deadlineUnknown");
+  const expires = new Date(expiresAt).getTime();
+  if (!Number.isFinite(expires)) return t("workloads.overview.deadlineUnknown");
+  const days = Math.ceil((expires - now) / 86_400_000);
+  if (days < 0) return t("workloads.overview.expired");
+  if (days === 0) return t("workloads.overview.expiresToday");
+  return t(days === 1 ? "workloads.overview.expiresOne" : "workloads.overview.expiresMany", { count: String(days) });
+}
+
+function WorkloadHealthLink({ to, icon, label, urgent }: { to: string; icon: ReactNode; label: string; urgent: boolean }) {
+  return (
+    <li>
+      <Link to={to} className="ui-panel flex min-h-20 items-center gap-3 p-4 hover:border-brand-accent/50">
+        <span className={urgent ? "text-risk-critical" : "text-brand-accent"}>{icon}</span>
+        <span className="text-sm font-semibold">{label}</span>
+      </Link>
+    </li>
+  );
+}
 
 /** S-C20: an attestation refusal observed in this browser session. The served
  * API answers per request, so this is client-observed history, labelled as
@@ -77,6 +122,7 @@ const attesterMethods: Array<{ value: TrustSourceMethod; labelKey: MessageKey }>
 
 export function Workloads() {
   const { t } = useTranslation();
+  const [overviewNow] = useState(() => Date.now());
   const [provider, setProvider] = useState("postgresql");
   const [role, setRole] = useState("readonly-reporting");
   const [ttlSeconds, setTtlSeconds] = useState(1200);
@@ -92,10 +138,21 @@ export function Workloads() {
   const [showAttestedIssue, setShowAttestedIssue] = useState(false);
   const [csrSupport, setCSRSupport] = useState<KubernetesCSRSupport | null>(null);
   const [trustBundleSupport, setTrustBundleSupport] = useState<KubernetesTrustBundleDistribution | null>(null);
+  const [kubernetesOpened, setKubernetesOpened] = useState(false);
+  const [kubernetesLoaded, setKubernetesLoaded] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   // B3: per-host SPIFFE Workload API status, read from agent heartbeats. Loaded
   // separately so a deployment without the agent fleet still renders the rest.
   const [workloadAPIHosts, setWorkloadAPIHosts] = useState<Agent[]>([]);
+  const [overview, setOverview] = useState<WorkloadOverviewState>({
+    identities: null,
+    risks: null,
+    ssh: null,
+    sshFleet: null,
+    deliveries: null,
+    rotations: null,
+  });
+  const [overviewLoading, setOverviewLoading] = useState(true);
   const [leaseError, setLeaseError] = useState<string | null>(null);
   const [brokerError, setBrokerError] = useState<string | null>(null);
   const [attestationError, setAttestationError] = useState<string | null>(null);
@@ -111,48 +168,55 @@ export function Workloads() {
 
   useEffect(() => {
     let active = true;
-    if (typeof api.agents !== "function") return;
-    api
-      .agents()
-      .then((rows) => {
-        if (active) setWorkloadAPIHosts(rows ?? []);
-      })
-      .catch(() => {
-        if (active) setWorkloadAPIHosts([]);
+    void Promise.all([
+      readOverview(() => api.agents()),
+      readOverview(() => api.identities()),
+      readOverview(() => api.contextualRiskPriorities()),
+      readOverview(() => api.sshStatus()),
+      readOverview(() => api.sshFleet()),
+      readOverview(() => api.connectorDeliveries({ limit: 100 })),
+      readOverview(() => api.rotationRuns({ limit: 100 })),
+    ]).then(([agents, identities, risks, ssh, sshFleet, deliveries, rotations]) => {
+      if (!active) return;
+      setWorkloadAPIHosts(agents ?? []);
+      setOverview({
+        identities,
+        risks: risks?.priorities ?? null,
+        ssh,
+        sshFleet,
+        deliveries: deliveries?.items ?? null,
+        rotations: rotations?.items ?? null,
       });
+      setOverviewLoading(false);
+    });
     return () => {
       active = false;
     };
   }, []);
 
   useEffect(() => {
+    if (!kubernetesOpened || kubernetesLoaded) return;
     let cancelled = false;
-    api
-      .kubernetesCSRSupport()
-      .then((support) => {
-        if (cancelled) return;
-        setCSRSupport(support);
+    void Promise.allSettled([api.kubernetesCSRSupport(), api.kubernetesTrustBundles()]).then(([csr, bundles]) => {
+      if (cancelled) return;
+      if (csr.status === "fulfilled") {
+        setCSRSupport(csr.value);
         setCSRSupportError(null);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setCSRSupportError(apiProblemMessage(err, t("workloads.kubernetesCSR.errorFallback")));
-      });
-    api
-      .kubernetesTrustBundles()
-      .then((support) => {
-        if (cancelled) return;
-        setTrustBundleSupport(support);
+      } else {
+        setCSRSupportError(apiProblemMessage(csr.reason, t("workloads.kubernetesCSR.errorFallback")));
+      }
+      if (bundles.status === "fulfilled") {
+        setTrustBundleSupport(bundles.value);
         setTrustBundleError(null);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setTrustBundleError(apiProblemMessage(err, t("workloads.trustBundles.errorFallback")));
-      });
+      } else {
+        setTrustBundleError(apiProblemMessage(bundles.reason, t("workloads.trustBundles.errorFallback")));
+      }
+      setKubernetesLoaded(true);
+    });
     return () => {
       cancelled = true;
     };
-  }, [t]);
+  }, [kubernetesLoaded, kubernetesOpened, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -362,13 +426,95 @@ export function Workloads() {
     }
   }
 
+  const machineKinds = new Set(["workload_identity", "spiffe", "ssh", "ssh_certificate", "ssh_key"]);
+  const identities = (overview.identities ?? []).filter((identity) => machineKinds.has(identity.kind));
+  const identityIDs = new Set(identities.map((identity) => identity.id));
+  const urgentRisks = (overview.risks ?? []).filter(
+    (risk) => machineKinds.has(risk.kind.toLowerCase()) && (risk.severity === "critical" || risk.severity === "high"),
+  );
+  const expiringIdentities = identities.filter((identity) => {
+    const expires = new Date(identity.not_after ?? "").getTime();
+    return Number.isFinite(expires) && expires <= overviewNow + 30 * 86_400_000;
+  });
+  const agentsNeedingAttention = workloadAPIHosts.filter((agent) => {
+    const lastSeen = new Date(agent.last_seen_at ?? "").getTime();
+    const stale = Number.isFinite(lastSeen) && lastSeen < overviewNow - 15 * 60_000;
+    return agent.status !== "active" || stale || agent.workload_api.state === "not_serving";
+  });
+  const failedDeliveries = (overview.deliveries ?? []).filter(
+    (delivery) =>
+      Boolean(delivery.identity_id && identityIDs.has(delivery.identity_id)) && ["failed", "verify_failed", "rollback_failed"].includes(delivery.status),
+  );
+  const failedRotations = (overview.rotations ?? []).filter((rotation) => identityIDs.has(rotation.identity_id) && rotation.status === "failed");
+  const attentionRows: Array<{
+    id: string;
+    name: string;
+    detail: string;
+    owner: string;
+    to: string;
+    action: string;
+  }> = [];
+  const seenAttention = new Set<string>();
+  for (const risk of urgentRisks) {
+    attentionRows.push({
+      id: `risk:${risk.credential_id}`,
+      name: risk.subject,
+      detail: workloadDeadline(risk.expires_at, overviewNow, t),
+      owner: risk.owner_active ? t("workloads.overview.ownerPresent") : t("workloads.overview.ownerMissing"),
+      to: "/identities",
+      action: t("workloads.overview.reviewIdentity"),
+    });
+    seenAttention.add(risk.credential_id);
+  }
+  for (const identity of expiringIdentities) {
+    if (seenAttention.has(identity.id)) continue;
+    attentionRows.push({
+      id: `identity:${identity.id}`,
+      name: identity.name,
+      detail: workloadDeadline(identity.not_after, overviewNow, t),
+      owner: identity.owner_id ? t("workloads.overview.ownerPresent") : t("workloads.overview.ownerMissing"),
+      to: "/identities",
+      action: t("workloads.overview.reviewIdentity"),
+    });
+  }
+  for (const agent of agentsNeedingAttention) {
+    attentionRows.push({
+      id: `agent:${agent.id}`,
+      name: agent.name,
+      detail: t("workloads.overview.agentDetail", { status: agent.status }),
+      owner: agent.workload_api.state === "not_serving" ? t("workloads.overview.socketOff") : agent.workload_api.detail,
+      to: "/agents",
+      action: t("workloads.overview.reviewAgent"),
+    });
+  }
+  for (const delivery of failedDeliveries) {
+    attentionRows.push({
+      id: `delivery:${delivery.id}`,
+      name: delivery.destination,
+      detail: delivery.detail || delivery.reason || t("workloads.overview.deliveryFailed"),
+      owner: t("workloads.overview.deliveryConsequence"),
+      to: "/connectors",
+      action: t("workloads.overview.reviewDelivery"),
+    });
+  }
+  if ((overview.sshFleet?.hosts_not_under_ca ?? 0) > 0) {
+    attentionRows.push({
+      id: "ssh:outside-ca",
+      name: t("workloads.overview.sshOutsideName"),
+      detail: t("workloads.overview.sshOutsideDetail", { count: String(overview.sshFleet?.hosts_not_under_ca ?? 0) }),
+      owner: t("workloads.overview.sshOutsideConsequence"),
+      to: "/ssh",
+      action: t("workloads.overview.reviewSSH"),
+    });
+  }
+
   return (
     <section aria-labelledby="workload-heading" className="grid gap-6">
       <PageHeader
         titleId="workload-heading"
-        title={t("nav.item.workloads")}
-        description={t(hasEnabledTrustSource ? "workloads.page.answerReady" : "workloads.page.answerNeedsTrust")}
-        technicalDetails={t("workloads.page.details")}
+        title={t("nav.space.workload")}
+        description={t("workloads.overview.answer")}
+        technicalDetails={t("workloads.overview.details")}
         actions={
           <Button
             type="button"
@@ -380,6 +526,84 @@ export function Workloads() {
           </Button>
         }
       />
+
+      {overviewLoading ? (
+        <LoadingState>{t("workloads.overview.loading")}</LoadingState>
+      ) : (
+        <>
+          <section aria-labelledby="workload-attention-heading" className="ui-panel space-y-4 p-comfortable">
+            <div>
+              <h2 id="workload-attention-heading" className="text-title font-semibold">
+                {attentionRows.length > 0
+                  ? t("workloads.overview.attentionTitle", { count: String(attentionRows.length) })
+                  : t("workloads.overview.attentionHealthy")}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {attentionRows.length > 0 ? t("workloads.overview.attentionHelp") : t("workloads.overview.attentionHealthyHelp")}
+              </p>
+            </div>
+            {attentionRows.length > 0 ? (
+              <ul aria-label={t("workloads.overview.attentionLabel")} className="divide-y divide-border">
+                {attentionRows.slice(0, 8).map((row) => (
+                  <li key={row.id} className="grid gap-3 py-4 first:pt-0 last:pb-0 lg:grid-cols-[minmax(14rem,1fr)_minmax(14rem,1fr)_auto] lg:items-center">
+                    <strong className="min-w-0 break-all text-body">{row.name}</strong>
+                    <div className="text-sm">
+                      <p>{row.detail}</p>
+                      <p className="mt-1 text-muted-foreground">{row.owner}</p>
+                    </div>
+                    <Link to={row.to} className="text-sm font-semibold text-brand-accent hover:underline">
+                      {row.action}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </section>
+
+          <section aria-labelledby="workload-health-heading" className="space-y-3">
+            <div>
+              <h2 id="workload-health-heading" className="text-title font-semibold">
+                {t("workloads.overview.healthTitle")}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">{t("workloads.overview.healthHelp")}</p>
+            </div>
+            <ul aria-label={t("workloads.overview.healthLabel")} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <WorkloadHealthLink
+                to="/identities"
+                icon={<Waypoints className="h-4 w-4" aria-hidden="true" />}
+                label={t(identities.length === 1 ? "workloads.overview.identitiesOne" : "workloads.overview.identitiesMany", {
+                  count: String(identities.length),
+                })}
+                urgent={expiringIdentities.length > 0 || urgentRisks.length > 0}
+              />
+              <WorkloadHealthLink
+                to="/agents"
+                icon={<ServerOff className="h-4 w-4" aria-hidden="true" />}
+                label={t(agentsNeedingAttention.length === 1 ? "workloads.overview.agentsOne" : "workloads.overview.agentsMany", {
+                  count: String(agentsNeedingAttention.length),
+                })}
+                urgent={agentsNeedingAttention.length > 0}
+              />
+              <WorkloadHealthLink
+                to="/ssh"
+                icon={<Network className="h-4 w-4" aria-hidden="true" />}
+                label={t((overview.sshFleet?.hosts_not_under_ca ?? 0) === 1 ? "workloads.overview.sshOne" : "workloads.overview.sshMany", {
+                  count: String(overview.sshFleet?.hosts_not_under_ca ?? 0),
+                })}
+                urgent={(overview.sshFleet?.hosts_not_under_ca ?? 0) > 0 || overview.ssh?.served === false}
+              />
+              <WorkloadHealthLink
+                to="/connectors"
+                icon={<ShieldAlert className="h-4 w-4" aria-hidden="true" />}
+                label={t(failedDeliveries.length + failedRotations.length === 1 ? "workloads.overview.deliveriesOne" : "workloads.overview.deliveriesMany", {
+                  count: String(failedDeliveries.length + failedRotations.length),
+                })}
+                urgent={failedDeliveries.length + failedRotations.length > 0}
+              />
+            </ul>
+          </section>
+        </>
+      )}
 
       <section aria-labelledby="workload-readiness-heading" className="ui-panel grid gap-2 p-comfortable">
         <h2 id="workload-readiness-heading" className="text-title font-semibold">
@@ -448,7 +672,7 @@ export function Workloads() {
         </section>
       ) : null}
 
-      <details className="group border-y border-border py-3">
+      <details className="group border-y border-border py-3" onToggle={(event) => setKubernetesOpened(event.currentTarget.open)}>
         <summary className="cursor-pointer font-semibold text-foreground marker:text-muted-foreground">{t("workloads.advanced.kubernetesSummary")}</summary>
         <div className="mt-3 grid gap-4">
           <section aria-labelledby="kubernetes-csr-heading" className="grid gap-3 border-y border-border py-4">

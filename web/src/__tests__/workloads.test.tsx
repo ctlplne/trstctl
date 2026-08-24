@@ -6,8 +6,15 @@ import { Workloads } from "@/pages/Workloads";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
+    agents: vi.fn(),
+    connectorDeliveries: vi.fn(),
+    contextualRiskPriorities: vi.fn(),
+    identities: vi.fn(),
     kubernetesCSRSupport: vi.fn(),
     kubernetesTrustBundles: vi.fn(),
+    rotationRuns: vi.fn(),
+    sshFleet: vi.fn(),
+    sshStatus: vi.fn(),
     workloadAttesterTrustSources: vi.fn(),
   },
 }));
@@ -30,15 +37,107 @@ describe("workload identity disclosure surface", () => {
     apiMock.kubernetesCSRSupport.mockReset().mockResolvedValue(kubernetesCSRSupportFixture());
     apiMock.kubernetesTrustBundles.mockReset().mockResolvedValue(kubernetesTrustBundleFixture());
     apiMock.workloadAttesterTrustSources.mockReset().mockResolvedValue({ items: [] });
+    apiMock.agents.mockReset().mockResolvedValue([
+      {
+        id: "agent-1",
+        name: "build-host-7",
+        status: "offline",
+        last_seen_at: new Date(Date.now() - 3_600_000).toISOString(),
+        workload_api: { state: "not_serving", svids_issued: 0, detail: "The host socket is off." },
+      },
+    ]);
+    apiMock.identities.mockReset().mockResolvedValue([
+      {
+        id: "workload-1",
+        kind: "workload_identity",
+        name: "spiffe://prod/payments-api",
+        status: "issued",
+        owner_id: "",
+        not_after: new Date(Date.now() + 5 * 86_400_000).toISOString(),
+      },
+      { id: "ssh-1", kind: "ssh_key", name: "legacy-build-key", status: "active", owner_id: "team-1" },
+    ]);
+    apiMock.contextualRiskPriorities.mockReset().mockResolvedValue({
+      generated_at: new Date().toISOString(),
+      capability: "contextual-risk",
+      coverage: ["workload_identity", "ssh_key"],
+      summary: {},
+      urgent_summary: { status: "complete", urgent: 1 },
+      priorities: [
+        {
+          credential_id: "workload-1",
+          subject: "spiffe://prod/payments-api",
+          kind: "workload_identity",
+          severity: "critical",
+          contextual_score: 96,
+          expires_at: new Date(Date.now() + 5 * 86_400_000).toISOString(),
+          owner_active: false,
+          priority_reasons: ["near_expiry", "orphaned_owner"],
+          recommended_action: "Assign the Payments team, then renew the SVID.",
+        },
+      ],
+    });
+    apiMock.sshStatus.mockReset().mockResolvedValue({ tenant_id: "tenant-1", served: true, krl_version: 3, revoked_count: 1, attestors: [] });
+    apiMock.sshFleet.mockReset().mockResolvedValue({
+      host_count: 8,
+      hosts: [],
+      hosts_not_under_ca: 3,
+      key_count: 12,
+      orphaned_key_count: 2,
+      standing_key_count: 4,
+    });
+    apiMock.connectorDeliveries.mockReset().mockResolvedValue({
+      items: [
+        {
+          id: "delivery-1",
+          tenant_id: "tenant-1",
+          identity_id: "workload-1",
+          connector: "kubernetes",
+          target: "prod-cluster",
+          destination: "Deployment/payments-api",
+          status: "failed",
+          attempts: 3,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      ],
+    });
+    apiMock.rotationRuns.mockReset().mockResolvedValue({ items: [] });
+  });
+
+  it("opens as a served Machine and Workload cockpit and keeps unopened Kubernetes diagnostics quiet", async () => {
+    const user = userEvent.setup();
+    renderWorkloads();
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Machine & Workload Trust" })).toBeInTheDocument();
+    const attention = await screen.findByRole("list", { name: "Machine and workload attention" });
+    expect(within(attention).getByText("spiffe://prod/payments-api")).toBeInTheDocument();
+    expect(within(attention).getByText(/expires in 5 days/i)).toBeInTheDocument();
+    expect(within(attention).getByText(/no accountable owner/i)).toBeInTheDocument();
+    expect(within(attention).getByRole("link", { name: "Review workload identity" })).toHaveAttribute("href", "/identities");
+
+    const health = screen.getByRole("list", { name: "Machine and workload health" });
+    expect(within(health).getByRole("link", { name: /1 agent needs attention/i })).toHaveAttribute("href", "/agents");
+    expect(within(health).getByRole("link", { name: /3 hosts outside the ssh ca/i })).toHaveAttribute("href", "/ssh");
+    expect(within(health).getByRole("link", { name: /1 failed workload delivery/i })).toHaveAttribute("href", "/connectors");
+
+    expect(apiMock.kubernetesCSRSupport).not.toHaveBeenCalled();
+    expect(apiMock.kubernetesTrustBundles).not.toHaveBeenCalled();
+    await user.click(screen.getByText("Kubernetes controller evidence"));
+    expect(await screen.findByText("CAP-K8S-04")).toBeInTheDocument();
+    expect(apiMock.kubernetesCSRSupport).toHaveBeenCalledTimes(1);
+    expect(apiMock.kubernetesTrustBundles).toHaveBeenCalledTimes(1);
   });
 
   it("renders dynamic lease controls with expiry visualization and no fixture lease rows", async () => {
+    const user = userEvent.setup();
     renderWorkloads();
 
-    expect(screen.getByRole("heading", { name: "Workloads" })).toBeInTheDocument();
-    expect(screen.getByText(/where an app runs.*short-lived identity instead of a standing secret/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Machine & Workload Trust" })).toBeInTheDocument();
+    expect(screen.getByText(/which machine identities may stop working.*agents are stale/i)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Workload identity needs a trust source" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Set up workload identity" })).toHaveAttribute("aria-expanded", "false");
+    await user.click(screen.getByText("Kubernetes controller evidence"));
     expect(await screen.findByText("CAP-K8S-04")).toBeInTheDocument();
     expect(await screen.findByText("CAP-K8S-07")).toBeInTheDocument();
     expect(screen.getByText("trustbundles/status: update, patch")).toBeInTheDocument();
@@ -68,7 +167,7 @@ describe("workload identity disclosure surface", () => {
     const user = userEvent.setup();
     renderWorkloads();
 
-    expect(await screen.findByText("CAP-K8S-04")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Machine & Workload Trust" })).toBeInTheDocument();
     expect(screen.getByText("Workload attestation chain")).toBeInTheDocument();
     const setup = screen.getByRole("button", { name: "Set up workload identity" });
     expect(setup).toHaveAttribute("aria-expanded", "false");
@@ -102,7 +201,7 @@ describe("workload identity disclosure surface", () => {
   it("renders scoped AI-agent broker controls as metadata-only", async () => {
     renderWorkloads();
 
-    expect(await screen.findByText("CAP-K8S-04")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Machine & Workload Trust" })).toBeInTheDocument();
     expect(screen.getByText("AI-agent / NHI broker")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Issue broker identity" })).toBeInTheDocument();
     expect(screen.getByLabelText("Agent ID")).toHaveValue("agent-build-1");

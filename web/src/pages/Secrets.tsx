@@ -1,7 +1,22 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Eyebrow } from "@/components/typography";
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { Copy, Eye, KeyRound, Loader2, LogIn, MoreHorizontal, RefreshCw, RotateCw, Share2, Trash2 } from "lucide-react";
+import {
+  AlertTriangle,
+  Clock3,
+  Copy,
+  Eye,
+  KeyRound,
+  Loader2,
+  LogIn,
+  MoreHorizontal,
+  RefreshCw,
+  RotateCw,
+  Send,
+  Share2,
+  Trash2,
+  UserRoundX,
+} from "lucide-react";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DataGridToolbar } from "@/components/DataGridToolbar";
 import { DetailDrawer } from "@/components/DetailDrawer";
@@ -10,7 +25,6 @@ import { PageHeader } from "@/components/PageHeader";
 import { ProgressiveTaskList } from "@/components/ProgressiveTaskList";
 import { ScrollableTableRegion } from "@/components/ScrollableTableRegion";
 import { IdentityPicker } from "@/components/IdentityPicker";
-import { ModuleKpiStrip } from "@/components/ModuleKpiStrip";
 import { useCan } from "@/components/rbac";
 import { ErrorState, UnavailableState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -154,8 +168,20 @@ function secretRotationQueued(rotation: SecretRotation): boolean {
   return "queued" in rotation && rotation.queued === true;
 }
 
+function SecretsHealthLink({ to, label, urgent, icon }: { to: string; label: string; urgent: boolean; icon: ReactNode }) {
+  return (
+    <li>
+      <Link to={to} className="ui-panel flex min-h-20 items-center gap-3 p-4 hover:border-brand-accent/50">
+        <span className={urgent ? "text-risk-critical" : "text-brand-accent"}>{icon}</span>
+        <span className="text-sm font-semibold">{label}</span>
+      </Link>
+    </li>
+  );
+}
+
 export function Secrets() {
   const { t } = useTranslation();
+  const [overviewNow] = useState(() => Date.now());
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -458,6 +484,67 @@ export function Secrets() {
   }, [items, ownerByID, secretSearch]);
   const detailSecret = useMemo(() => items.find((item) => item.name === detailSecretName) ?? null, [detailSecretName, items]);
   const configuredSyncTargets = useMemo(() => syncCatalog?.targets.filter((target) => target.configured) ?? [], [syncCatalog]);
+  const unownedSecrets = useMemo(() => items.filter((item) => !item.owner_id || !ownerByID.has(item.owner_id)), [items, ownerByID]);
+  const overdueSchedules = useMemo(
+    () =>
+      (rotationSchedules ?? []).filter((schedule) => {
+        const nextRun = new Date(schedule.next_run_at).getTime();
+        return schedule.enabled && Number.isFinite(nextRun) && nextRun <= overviewNow;
+      }),
+    [overviewNow, rotationSchedules],
+  );
+  const failedSchedules = useMemo(
+    () => (rotationSchedules ?? []).filter((schedule) => ["failed", "delivery_failed", "rollback_failed", "unsupported"].includes(schedule.last_run_status)),
+    [rotationSchedules],
+  );
+  const leakedFindings = unvaultedPosture?.summary.leaked_secret_findings ?? 0;
+  const secretAttention = useMemo(() => {
+    const rows: Array<{ id: string; name: string; detail: string; consequence: string; to: string; action: string }> = [];
+    const failed = new Set<string>();
+    for (const schedule of failedSchedules) {
+      failed.add(schedule.id);
+      rows.push({
+        id: `failed:${schedule.id}`,
+        name: schedule.name,
+        detail: schedule.last_error || t("secrets.overview.deliveryFailureFallback"),
+        consequence: t("secrets.overview.deliveryFailureConsequence"),
+        to: "/secrets/sync",
+        action: t("secrets.overview.repairDelivery"),
+      });
+    }
+    for (const schedule of overdueSchedules) {
+      if (failed.has(schedule.id)) continue;
+      rows.push({
+        id: `overdue:${schedule.id}`,
+        name: schedule.name,
+        detail: t("secrets.overview.rotationOverdue"),
+        consequence: t("secrets.overview.rotationConsequence"),
+        to: "/secrets?focus=rotation",
+        action: t("secrets.overview.reviewRotation"),
+      });
+    }
+    if (leakedFindings > 0) {
+      rows.push({
+        id: "leaks",
+        name: t("secrets.overview.leakName"),
+        detail: t("secrets.overview.leakDetail", { count: String(leakedFindings) }),
+        consequence: t("secrets.overview.leakConsequence"),
+        to: "/secrets/scanning",
+        action: t("secrets.overview.reviewLeaks"),
+      });
+    }
+    for (const secret of unownedSecrets.slice(0, 3)) {
+      rows.push({
+        id: `owner:${secret.name}`,
+        name: secret.name,
+        detail: t("secrets.overview.ownerMissing"),
+        consequence: t("secrets.overview.ownerConsequence"),
+        to: "/secrets?owner=missing",
+        action: t("secrets.overview.assignOwner"),
+      });
+    }
+    return rows;
+  }, [failedSchedules, leakedFindings, overdueSchedules, t, unownedSecrets]);
 
   const secretColumns = useMemo<Array<DataGridColumn<SecretMeta>>>(
     () => [
@@ -1456,14 +1543,75 @@ export function Secrets() {
 
       {tab === "store" && (
         <div className="grid gap-6">
-          <ModuleKpiStrip
-            ariaLabel="Secrets module metrics"
-            kpis={[
-              { id: "stored", label: t("moduleKpi.secrets.stored"), value: items.length, to: "/secrets" },
-              { id: "engines", label: t("moduleKpi.secrets.engines"), value: t("moduleKpi.view"), to: "/secrets/engines" },
-              { id: "sync", label: t("moduleKpi.secrets.sync"), value: t("moduleKpi.view"), to: "/secrets/sync" },
-            ]}
-          />
+          <section aria-labelledby="secrets-attention-heading" className="ui-panel space-y-4 p-comfortable">
+            <div>
+              <h2 id="secrets-attention-heading" className="text-title font-semibold">
+                {secretAttention.length > 0
+                  ? t("secrets.overview.attentionTitle", { count: String(secretAttention.length) })
+                  : t("secrets.overview.attentionHealthy")}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {secretAttention.length > 0 ? t("secrets.overview.attentionHelp") : t("secrets.overview.attentionHealthyHelp")}
+              </p>
+            </div>
+            {secretAttention.length > 0 ? (
+              <ul aria-label={t("secrets.overview.attentionLabel")} className="divide-y divide-border">
+                {secretAttention.slice(0, 8).map((row) => (
+                  <li key={row.id} className="grid gap-3 py-4 first:pt-0 last:pb-0 lg:grid-cols-[minmax(14rem,1fr)_minmax(14rem,1fr)_auto] lg:items-center">
+                    <strong className="min-w-0 break-all text-body">{row.name}</strong>
+                    <div className="text-sm">
+                      <p>{row.detail}</p>
+                      <p className="mt-1 text-muted-foreground">{row.consequence}</p>
+                    </div>
+                    <Link to={row.to} className="text-sm font-semibold text-brand-accent hover:underline">
+                      {row.action}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </section>
+
+          <section aria-labelledby="secrets-health-heading" className="space-y-3">
+            <div>
+              <h2 id="secrets-health-heading" className="text-title font-semibold">
+                {t("secrets.overview.healthTitle")}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">{t("secrets.overview.healthHelp", { count: String(items.length) })}</p>
+            </div>
+            <ul aria-label={t("secrets.overview.healthLabel")} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <SecretsHealthLink
+                to="/secrets/scanning"
+                icon={<AlertTriangle className="h-4 w-4" aria-hidden="true" />}
+                label={t(leakedFindings === 1 ? "secrets.overview.leaksOne" : "secrets.overview.leaksMany", { count: String(leakedFindings) })}
+                urgent={leakedFindings > 0}
+              />
+              <SecretsHealthLink
+                to="/secrets?focus=rotation"
+                icon={<Clock3 className="h-4 w-4" aria-hidden="true" />}
+                label={t(overdueSchedules.length === 1 ? "secrets.overview.overdueOne" : "secrets.overview.overdueMany", {
+                  count: String(overdueSchedules.length),
+                })}
+                urgent={overdueSchedules.length > 0}
+              />
+              <SecretsHealthLink
+                to="/secrets/sync"
+                icon={<Send className="h-4 w-4" aria-hidden="true" />}
+                label={t(failedSchedules.length === 1 ? "secrets.overview.failuresOne" : "secrets.overview.failuresMany", {
+                  count: String(failedSchedules.length),
+                })}
+                urgent={failedSchedules.length > 0}
+              />
+              <SecretsHealthLink
+                to="/secrets?owner=missing"
+                icon={<UserRoundX className="h-4 w-4" aria-hidden="true" />}
+                label={t(unownedSecrets.length === 1 ? "secrets.overview.unownedOne" : "secrets.overview.unownedMany", {
+                  count: String(unownedSecrets.length),
+                })}
+                urgent={unownedSecrets.length > 0}
+              />
+            </ul>
+          </section>
           <details className="ui-panel group p-comfortable">
             <summary className="cursor-pointer font-medium text-foreground">
               {t("secrets.store.exploreTools")}

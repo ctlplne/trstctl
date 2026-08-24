@@ -51,7 +51,7 @@ const routeCatalog = {
   profiles: { path: "/profiles", heading: "Certificate rules" },
   request: { path: "/request", heading: "Request a certificate" },
   risk: { path: "/risk", heading: "What to fix first" },
-  workloads: { path: "/workloads", heading: "Workloads" },
+  workloads: { path: "/workloads", heading: "Machine & Workload Trust" },
   wizard: { path: "/wizard", heading: "Set up trstctl" },
 } as const satisfies Record<string, JourneySmokeRoute>;
 
