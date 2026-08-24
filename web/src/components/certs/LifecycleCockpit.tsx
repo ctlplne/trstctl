@@ -75,13 +75,14 @@ function commonName(subject: string): string {
   return (match?.[1] ?? subject).trim();
 }
 
-function environmentFor(certificate: Certificate): string {
+function environmentFor(certificate: Certificate, owner: Owner | undefined): string {
   const explicit = firstText(certificate, ["environment", "env"]);
   if (explicit) return explicit;
   const location = certificate.deployment_location?.toLowerCase() ?? "";
   for (const candidate of ["production", "prod", "staging", "stage", "development", "dev"]) {
     if (new RegExp(`(^|[^a-z])${candidate}([^a-z]|$)`).test(location)) return candidate;
   }
+  if (owner?.environment?.trim()) return owner.environment.trim();
   return "Not recorded";
 }
 
@@ -306,7 +307,7 @@ export function LifecycleCockpit(props: LifecycleCockpitProps) {
       return {
         certificate,
         commonName: commonName(certificate.subject),
-        environment: environmentFor(certificate),
+        environment: environmentFor(certificate, owner),
         deadline,
         automation,
         automationLabel: t(`certificateCockpit.automation.${automation}` as MessageKey),

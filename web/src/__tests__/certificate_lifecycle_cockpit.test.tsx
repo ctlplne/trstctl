@@ -67,8 +67,8 @@ describe("Certificate Lifecycle cockpit", () => {
           fingerprint: "fp-api",
           not_after: "2026-08-27T12:00:00Z",
           owner_id: "team-platform",
-          deployment_location: "production / load balancer / api",
-          attributes: { environment: "production", team_id: "team-platform" },
+          deployment_location: "connector.deploy",
+          attributes: { team_id: "team-platform" },
         },
         {
           id: "cert-planned",
@@ -214,6 +214,7 @@ describe("Certificate Lifecycle cockpit", () => {
         kind: "team",
         name: "Platform Trust",
         email: "platform@example.test",
+        environment: "production",
         escalation_chain: ["oncall@example.test"],
         ownership_attested: true,
         ownership_complete: true,
@@ -302,6 +303,7 @@ describe("Certificate Lifecycle cockpit", () => {
     expect(within(expiredRow).getByRole("link", { name: "Assign owner" })).toHaveAttribute("href", "/owners?status=orphaned");
 
     const failedRow = within(queue).getByRole("row", { name: /api\.prod\.example/i });
+    expect(within(failedRow).getByText("production")).toBeInTheDocument();
     expect(within(failedRow).getByText("Renewal failed")).toBeInTheDocument();
     expect(within(failedRow).getByText("Platform Trust")).toBeInTheDocument();
     expect(within(failedRow).getByText(/deployment verification failed/i)).toBeInTheDocument();
