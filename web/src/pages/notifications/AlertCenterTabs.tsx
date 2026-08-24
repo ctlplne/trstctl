@@ -77,32 +77,36 @@ export function NeedsAttention({
     return <EmptyState title={t("notifications.center.clearTitle")}>{t("notifications.center.clearBody")}</EmptyState>;
   }
   return (
-    <section aria-labelledby="attention-chain-heading" className="grid gap-3">
+    <section aria-labelledby="attention-chain-heading" className="grid min-w-0 max-w-full gap-3">
       <div className="grid gap-1">
         <h2 id="attention-chain-heading" className="text-title font-semibold">
           {t("notifications.center.attentionCount", { count: urgent.length })}
         </h2>
         <p className="max-w-3xl text-sm text-muted-foreground">{t("notifications.center.attentionHelp")}</p>
       </div>
-      <div className="grid gap-3">
+      <div className="grid min-w-0 max-w-full gap-3">
         {urgent.map((notification) => (
-          <article key={notification.id} className="rounded-panel border border-border bg-card p-comfortable shadow-none">
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(9rem,0.7fr))_auto] xl:items-center">
-              <div className="grid gap-2">
-                <div className="flex flex-wrap items-center gap-2">
+          <article key={notification.id} className="min-w-0 max-w-full rounded-panel border border-border bg-card p-comfortable shadow-none">
+            <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(9rem,0.7fr))_auto] xl:items-center">
+              <div className="grid min-w-0 gap-2">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
                   {notification.status === "dead" ? (
                     <TriangleAlert className="h-4 w-4 text-status-critical" aria-hidden="true" />
                   ) : (
                     <BellRing className="h-4 w-4 text-status-warning" aria-hidden="true" />
                   )}
-                  <h3 className="font-semibold">{notification.subject || notification.certificate_id || notification.destination}</h3>
+                  <h3 className="min-w-0 [overflow-wrap:anywhere] font-semibold">
+                    {notification.subject || notification.certificate_id || notification.destination}
+                  </h3>
                   <StatusBadge
                     value={notification.severity || notification.status}
                     label={notification.severity || notification.status}
                     tone={notification.status === "dead" || notification.severity === "critical" ? "critical" : "warning"}
                   />
                 </div>
-                <p className="text-sm text-muted-foreground">{notification.detail || t("notifications.center.defaultImpact")}</p>
+                <p className="min-w-0 [overflow-wrap:anywhere] text-sm text-muted-foreground">
+                  {notification.detail || t("notifications.center.defaultImpact")}
+                </p>
               </div>
               <Fact label={t("notifications.center.deadline")} value={deadlineLabel(notification, t)} />
               <Fact
@@ -195,9 +199,9 @@ function automationLabel(
 
 function Fact({ label, value }: { label: string; value: string }) {
   return (
-    <dl className="grid gap-1 text-sm">
+    <dl className="grid min-w-0 gap-1 text-sm">
       <Eyebrow as="dt">{label}</Eyebrow>
-      <dd className="break-words font-medium">{value}</dd>
+      <dd className="min-w-0 [overflow-wrap:anywhere] font-medium">{value}</dd>
     </dl>
   );
 }
