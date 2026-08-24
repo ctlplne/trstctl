@@ -45,9 +45,20 @@ func TestServedLifecycleSchedulerDispatchesExpiryWebhookNotification(t *testing.
 		"owners:read", "owners:write",
 		"identities:read", "identities:write",
 		"certs:read", "certs:issue",
+		"notifications:read", "notifications:write",
 	)
 
-	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/owners", tok, map[string]any{
+	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/notification-routing-policies", tok, "notif-01-workspace-route", map[string]any{
+		"name":             "Certificate lifecycle route",
+		"scope_kind":       "workspace",
+		"scope_ref":        "certificate-lifecycle",
+		"default_channels": []string{"webhook"},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create automatic lifecycle route: status %d body %s", status, body)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/owners", tok, map[string]any{
 		"kind": "workload",
 		"name": "notif-01-owner",
 	})
@@ -313,7 +324,9 @@ func TestServedNotificationRoutingPolicyAuthoringAndChannelTestDESIGN003(t *test
 	tok := seedScopedToken(t, h.store, h.tenant, "notifications:read", "notifications:write")
 
 	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/notification-routing-policies", tok, "design-003-policy-create", map[string]any{
-		"name": "Expiry escalation",
+		"name":       "Expiry escalation",
+		"scope_kind": "workspace",
+		"scope_ref":  "certificate-lifecycle",
 		"channels_by_severity": map[string][]string{
 			"critical": {"slack", "webhook"},
 			"warning":  {"slack"},
@@ -330,6 +343,8 @@ func TestServedNotificationRoutingPolicyAuthoringAndChannelTestDESIGN003(t *test
 	var created struct {
 		ID                 string              `json:"id"`
 		Name               string              `json:"name"`
+		ScopeKind          string              `json:"scope_kind"`
+		ScopeRef           string              `json:"scope_ref"`
 		ChannelsBySeverity map[string][]string `json:"channels_by_severity"`
 		DefaultChannels    []string            `json:"default_channels"`
 		OwnerEmail         string              `json:"owner_email"`
@@ -342,7 +357,7 @@ func TestServedNotificationRoutingPolicyAuthoringAndChannelTestDESIGN003(t *test
 	if err := json.Unmarshal(body, &created); err != nil {
 		t.Fatalf("decode created policy: %v (%s)", err, body)
 	}
-	if created.ID == "" || created.Name != "Expiry escalation" || created.OwnerEmail != "platform-security@example.test" {
+	if created.ID == "" || created.Name != "Expiry escalation" || created.ScopeKind != "workspace" || created.ScopeRef != "certificate-lifecycle" || created.OwnerEmail != "platform-security@example.test" {
 		t.Fatalf("bad created policy: %+v", created)
 	}
 	if got := created.ChannelsBySeverity["critical"]; len(got) != 2 || got[0] != "slack" || got[1] != "webhook" {
@@ -361,6 +376,11 @@ func TestServedNotificationRoutingPolicyAuthoringAndChannelTestDESIGN003(t *test
 	}
 	if !strings.Contains(string(body), "Expiry escalation") || !strings.Contains(string(body), "platform-security@example.test") {
 		t.Fatalf("policy list did not show authored policy: %s", body)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/notification-routing-preview?workspace=certificate-lifecycle&severity=critical", tok, nil)
+	if status != http.StatusOK || !strings.Contains(string(body), `"scope_kind":"workspace"`) || !strings.Contains(string(body), `"delivery_ready":true`) {
+		t.Fatalf("preview effective lifecycle route: status %d body %s", status, body)
 	}
 
 	const rawSlackSecretRef = "secret://notifications/slack/raw-webhook-url"

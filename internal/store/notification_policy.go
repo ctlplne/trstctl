@@ -17,6 +17,8 @@ type NotificationRoutingPolicy struct {
 	ID                 string
 	TenantID           string
 	Name               string
+	ScopeKind          string
+	ScopeRef           string
 	ChannelsBySeverity map[string][]string
 	DefaultChannels    []string
 	OwnerRef           string
@@ -27,13 +29,21 @@ type NotificationRoutingPolicy struct {
 	UpdatedAt          time.Time
 }
 
+// NotificationRoutingSelector describes one alert's position in the routing
+// hierarchy. Empty values mean that level is not known for this alert.
+type NotificationRoutingSelector struct {
+	Workspace string
+	OwnerRef  string
+	AssetRef  string
+}
+
 // ListNotificationRoutingPolicies returns one tenant's routing policies ordered
 // by operator-facing name. The tenant predicate is in SQL and RLS enforces it.
 func (s *Store) ListNotificationRoutingPolicies(ctx context.Context, tenantID string) ([]NotificationRoutingPolicy, error) {
 	var out []NotificationRoutingPolicy
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
-			`SELECT id::text, tenant_id::text, name, channels_by_severity, default_channels,
+			`SELECT id::text, tenant_id::text, name, scope_kind, scope_ref, channels_by_severity, default_channels,
 			        owner_ref, owner_email, digest_interval_seconds, digest_timezone, created_at, updated_at
 			   FROM notification_routing_policies
 			  WHERE tenant_id = $1
@@ -61,13 +71,46 @@ func (s *Store) GetNotificationRoutingPolicy(ctx context.Context, tenantID, id s
 	var out NotificationRoutingPolicy
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return scanNotificationRoutingPolicy(tx.QueryRow(ctx,
-			`SELECT id::text, tenant_id::text, name, channels_by_severity, default_channels,
+			`SELECT id::text, tenant_id::text, name, scope_kind, scope_ref, channels_by_severity, default_channels,
 			        owner_ref, owner_email, digest_interval_seconds, digest_timezone, created_at, updated_at
 			   FROM notification_routing_policies
 			  WHERE tenant_id = $1 AND id = $2`,
 			tenantID, id), &out)
 	})
 	return out, err
+}
+
+// ResolveEffectiveNotificationRoutingPolicy resolves one tenant's most-specific
+// applicable rule: asset, then owner, then workspace, then global. Manual rules
+// are never selected implicitly.
+func (s *Store) ResolveEffectiveNotificationRoutingPolicy(ctx context.Context, tenantID string, selector NotificationRoutingSelector) (NotificationRoutingPolicy, bool, error) {
+	var out NotificationRoutingPolicy
+	found := false
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		row := tx.QueryRow(ctx,
+			`SELECT id::text, tenant_id::text, name, scope_kind, scope_ref, channels_by_severity, default_channels,
+			        owner_ref, owner_email, digest_interval_seconds, digest_timezone, created_at, updated_at
+			   FROM notification_routing_policies
+			  WHERE tenant_id = $1
+			    AND ((scope_kind = 'asset' AND scope_ref = $2)
+			      OR (scope_kind = 'owner' AND scope_ref = $3)
+			      OR (scope_kind = 'workspace' AND scope_ref = $4)
+			      OR (scope_kind = 'global' AND scope_ref = ''))
+			  ORDER BY CASE scope_kind
+			             WHEN 'asset' THEN 1 WHEN 'owner' THEN 2
+			             WHEN 'workspace' THEN 3 ELSE 4 END
+			  LIMIT 1`,
+			tenantID, selector.AssetRef, selector.OwnerRef, selector.Workspace)
+		if err := scanNotificationRoutingPolicy(row, &out); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil
+			}
+			return err
+		}
+		found = true
+		return nil
+	})
+	return out, found, err
 }
 
 // ApplyNotificationRoutingPolicyUpsertedTx projects a
@@ -96,14 +139,19 @@ func (s *Store) ApplyNotificationRoutingPolicyUpsertedTx(ctx context.Context, tx
 	if p.DigestTimezone == "" {
 		p.DigestTimezone = "UTC"
 	}
+	if p.ScopeKind == "" {
+		p.ScopeKind = "manual"
+	}
 	_, err = tx.Exec(ctx,
 		`INSERT INTO notification_routing_policies (
-		     id, tenant_id, name, channels_by_severity, default_channels,
+		     id, tenant_id, name, scope_kind, scope_ref, channels_by_severity, default_channels,
 		     owner_ref, owner_email, digest_interval_seconds, digest_timezone, created_at, updated_at
 		 )
-		 VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8, $9, $10, $11)
+		 VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9, $10, $11, $12, $13)
 		 ON CONFLICT (tenant_id, id) DO UPDATE
 		      SET name = EXCLUDED.name,
+		          scope_kind = EXCLUDED.scope_kind,
+		          scope_ref = EXCLUDED.scope_ref,
 		          channels_by_severity = EXCLUDED.channels_by_severity,
 		          default_channels = EXCLUDED.default_channels,
 		          owner_ref = EXCLUDED.owner_ref,
@@ -111,7 +159,7 @@ func (s *Store) ApplyNotificationRoutingPolicyUpsertedTx(ctx context.Context, tx
 		          digest_interval_seconds = EXCLUDED.digest_interval_seconds,
 		          digest_timezone = EXCLUDED.digest_timezone,
 		          updated_at = EXCLUDED.updated_at`,
-		p.ID, p.TenantID, p.Name, matrix, defaults,
+		p.ID, p.TenantID, p.Name, p.ScopeKind, p.ScopeRef, matrix, defaults,
 		p.OwnerRef, p.OwnerEmail, p.DigestInterval, p.DigestTimezone, p.CreatedAt.UTC(), p.UpdatedAt.UTC())
 	return err
 }
@@ -133,7 +181,7 @@ func scanNotificationRoutingPolicy(row rowScanner, p *NotificationRoutingPolicy)
 	var matrix []byte
 	var defaults []byte
 	if err := row.Scan(
-		&p.ID, &p.TenantID, &p.Name, &matrix, &defaults,
+		&p.ID, &p.TenantID, &p.Name, &p.ScopeKind, &p.ScopeRef, &matrix, &defaults,
 		&p.OwnerRef, &p.OwnerEmail, &p.DigestInterval, &p.DigestTimezone,
 		&p.CreatedAt, &p.UpdatedAt,
 	); err != nil {

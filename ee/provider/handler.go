@@ -522,7 +522,7 @@ func (h *handler) logout(w http.ResponseWriter, r *http.Request) {
 			writeProviderError(w, errors.New("provider: session authenticator is not configured"))
 			return
 		}
-		if err := h.saml.RevokeSession(w, op.Session); err != nil {
+		if err := h.saml.RevokeSession(r.Context(), w, op.Session); err != nil {
 			writeProviderError(w, err)
 			return
 		}

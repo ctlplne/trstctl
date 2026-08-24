@@ -12,6 +12,7 @@ const { apiMock } = vi.hoisted(() => ({
     authMethods: vi.fn().mockResolvedValue({ oidc: true, saml: false, ldap: false }),
     createAPIToken: vi.fn(),
     revokeAPIToken: vi.fn(),
+    notifications: vi.fn(),
   },
 }));
 
@@ -142,6 +143,7 @@ describe("DESIGN-002 answer-first API playground", () => {
       token: "trst_test_docs_token",
     }));
     apiMock.revokeAPIToken.mockResolvedValue(undefined);
+    apiMock.notifications.mockResolvedValue({ items: [] });
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url === "/api/v1/openapi.json") {

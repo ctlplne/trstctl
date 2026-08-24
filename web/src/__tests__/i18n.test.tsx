@@ -1075,8 +1075,12 @@ describe("i18n boundary", () => {
       // asset/owner filters, assignment, reassignment, and success copy are
       // present with placeholder parity in both production catalogs. Machine-
       // authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "442f8d1acfa70fa36bd2a37154dc76d3ad3797469f4860d07e43f0c3039fafd5",
-      "de-DE": "3d721c72c6207b8291d09ed598c77c5f2090033c1446d4b12c9d6959990f46de",
+      // Alert Center G5 re-pin: the five operator views, truthful delivery
+      // semantics, routing inheritance/preview, global urgency indicator, and
+      // no-deadline state are translated in both production catalogs. Machine-
+      // authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "7a6294fe399defc1f8020bd9548261131108a15a89374d7c179c978c49a59be1",
+      "de-DE": "d2e6c7fb94a1fd975140c032e2211775d144432eaec9d77e6d99cb4cae8e4d7b",
     });
   });
 

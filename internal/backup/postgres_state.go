@@ -1158,7 +1158,6 @@ func postgresStateRestoreOrder() ([]string, error) {
 		"idempotency_keys",
 		"issuance_approval_requests",
 		"issuance_approvals",
-		"notification_routing_policies",
 		"outbox",
 		"policy_bindings",
 		// The non-PII preparation is the durable cross-store crash bridge. It is

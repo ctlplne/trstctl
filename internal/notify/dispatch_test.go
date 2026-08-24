@@ -46,6 +46,21 @@ type routingResolver struct {
 	resolveCount int
 }
 
+type effectiveRoutingResolver struct {
+	routingResolver
+	policy      notify.RoutingPolicy
+	gotSelector notify.RoutingSelector
+}
+
+func (r *effectiveRoutingResolver) ResolveEffectiveNotificationPolicy(_ context.Context, tenantID string, selector notify.RoutingSelector) (notify.RoutingPolicy, bool, error) {
+	r.gotTenantID = tenantID
+	r.gotSelector = selector
+	if tenantID != r.policy.TenantID {
+		return notify.RoutingPolicy{}, false, nil
+	}
+	return r.policy, true, nil
+}
+
 func (r *routingResolver) ResolveNotificationPolicy(_ context.Context, tenantID, policyID string) (notify.RoutingPolicy, bool, error) {
 	r.gotTenantID = tenantID
 	r.gotPolicyID = policyID
@@ -273,6 +288,32 @@ func TestDispatchRoutesBySeverityPolicy(t *testing.T) {
 	}
 	if len(email.got) != 2 || len(slack.got) != 1 || len(teams.got) != 1 || len(pager.got) != 1 {
 		t.Fatalf("unknown severity route: email=%d slack=%d teams=%d pager=%d, want safe low-tier fallback", len(email.got), len(slack.got), len(teams.got), len(pager.got))
+	}
+}
+
+func TestDispatchResolvesEffectivePolicyWhenAlertDoesNotNameOne(t *testing.T) {
+	email := &capturingNotifier{name: "email"}
+	pager := &capturingNotifier{name: "pagerduty"}
+	d := notify.NewDispatcher(email, pager)
+	resolver := &effectiveRoutingResolver{policy: notify.RoutingPolicy{
+		TenantID: "t1", ID: "asset-route", ScopeKind: "asset", ScopeRef: "certificate/cert-payments",
+		ChannelsBySeverity: map[string][]string{notify.AlertSeverityCritical: {"pagerduty"}},
+	}}
+	d.SetPolicyResolver(resolver)
+	payload, _ := json.Marshal(notify.Alert{
+		Kind: notify.KindCertificateExpiry, TenantID: "t1", CertificateID: "cert-payments",
+		OwnerID: "platform", Severity: notify.AlertSeverityCritical,
+	})
+	if err := d.Dispatch(context.Background(), payload); err != nil {
+		t.Fatalf("Dispatch effective route: %v", err)
+	}
+	if resolver.gotSelector.Workspace != "certificate-lifecycle" ||
+		resolver.gotSelector.OwnerRef != "owner/platform" ||
+		resolver.gotSelector.AssetRef != "certificate/cert-payments" {
+		t.Fatalf("effective selector = %+v", resolver.gotSelector)
+	}
+	if len(pager.got) != 1 || len(email.got) != 0 {
+		t.Fatalf("effective route: email=%d pagerduty=%d, want only pagerduty", len(email.got), len(pager.got))
 	}
 }
 

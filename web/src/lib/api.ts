@@ -267,6 +267,7 @@ import type {
   NotificationRoutingPolicy,
   NotificationRoutingPolicyList,
   NotificationRoutingPolicyRequest,
+  NotificationRoutingPreview,
   OffboardMemberRequest,
   OffboardMemberResponse,
   OIDCMappingStatus,
@@ -836,6 +837,7 @@ export type {
   NotificationRoutingPolicy,
   NotificationRoutingPolicyList,
   NotificationRoutingPolicyRequest,
+  NotificationRoutingPreview,
   OffboardMemberRequest,
   OffboardMemberResponse,
   OIDCMappingStatus,
@@ -1864,6 +1866,12 @@ export interface Api {
   updateNotificationChannel(id: string, input: NotificationChannelRequest): Promise<NotificationChannel>;
   deleteNotificationChannel(id: string): Promise<void>;
   notificationRoutingPolicies(): Promise<NotificationRoutingPolicyList>;
+  notificationRoutingPreview(options: {
+    workspace?: string;
+    owner_ref?: string;
+    asset_ref?: string;
+    severity?: "low" | "informational" | "warning" | "critical";
+  }): Promise<NotificationRoutingPreview>;
   createNotificationRoutingPolicy(input: NotificationRoutingPolicyRequest): Promise<NotificationRoutingPolicy>;
   updateNotificationRoutingPolicy(id: string, input: NotificationRoutingPolicyRequest): Promise<NotificationRoutingPolicy>;
   deleteNotificationRoutingPolicy(id: string): Promise<void>;
@@ -2362,6 +2370,11 @@ const liveApi: Api = {
   updateNotificationChannel: (id, input) => mutate<NotificationChannel>("PUT", `/api/v1/notification-channels/${encodeURIComponent(id)}`, input),
   deleteNotificationChannel: (id) => mutate<void>("DELETE", `/api/v1/notification-channels/${encodeURIComponent(id)}`),
   notificationRoutingPolicies: () => req<NotificationRoutingPolicyList>("/api/v1/notification-routing-policies"),
+  notificationRoutingPreview: (options) => {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(options)) if (value) query.set(key, value);
+    return req<NotificationRoutingPreview>(`/api/v1/notification-routing-preview?${query.toString()}`);
+  },
   createNotificationRoutingPolicy: (input) => mutate<NotificationRoutingPolicy>("POST", "/api/v1/notification-routing-policies", input),
   updateNotificationRoutingPolicy: (id, input) =>
     mutate<NotificationRoutingPolicy>("PUT", `/api/v1/notification-routing-policies/${encodeURIComponent(id)}`, input),

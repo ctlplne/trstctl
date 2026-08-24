@@ -3491,6 +3491,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/notification-routing-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Preview the effective notification route without sending */
+        get: operations["previewNotificationRouting"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/notifications": {
         parameters: {
             query?: never;
@@ -9893,6 +9910,9 @@ export interface components {
             name: string;
             owner_email?: string;
             owner_ref?: string;
+            /** @enum {string} */
+            scope_kind: "manual" | "global" | "workspace" | "owner" | "asset";
+            scope_ref?: string;
             /** Format: uuid */
             tenant_id: string;
             /** Format: date-time */
@@ -9912,6 +9932,17 @@ export interface components {
             name: string;
             owner_email?: string;
             owner_ref?: string;
+            /** @enum {string} */
+            scope_kind?: "manual" | "global" | "workspace" | "owner" | "asset";
+            scope_ref?: string;
+        };
+        NotificationRoutingPreview: {
+            delivery_ready: boolean;
+            effective_channels: string[];
+            explanation: string;
+            matched_policy?: components["schemas"]["NotificationRoutingPolicy"];
+            missing_channels: string[];
+            resolution_order: string[];
         };
         OIDCMappingStatus: {
             allow_default_tenant: boolean;
@@ -22367,6 +22398,53 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewNotificationRouting: {
+        parameters: {
+            query?: {
+                /** @description served workspace id */
+                workspace?: string;
+                /** @description owner/<id> hierarchy reference */
+                owner_ref?: string;
+                /** @description kind/<id> asset reference */
+                asset_ref?: string;
+                /** @description alert severity */
+                severity?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationRoutingPreview"];
+                };
             };
             /** @description client error */
             "4XX": {

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { RefreshCw, Save, Send } from "lucide-react";
+import type { QueryClient } from "@tanstack/react-query";
 import { Dialog } from "@/components/Dialog";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
@@ -8,19 +9,39 @@ import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useToast } from "@/components/ToastProvider";
 import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { formatDateTime } from "@/i18n/format";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
-import { api, ApiError, type Notification, type NotificationChannel, type NotificationChannelTest, type NotificationRoutingPolicy } from "@/lib/api";
+import {
+  api,
+  ApiError,
+  type Notification,
+  type NotificationChannel,
+  type NotificationChannelTest,
+  type NotificationRoutingPolicy,
+  type NotificationRoutingPreview,
+} from "@/lib/api";
+import { useApiQuery, useQueryClient } from "@/lib/query";
 import type { StatusTone } from "@/lib/statusVocab";
+import {
+  AlertCenterPanel,
+  AlertCenterTabs,
+  meaningfulAttention,
+  NeedsAttention,
+  ViewIntroduction,
+  type AlertCenterView,
+} from "@/pages/notifications/AlertCenterTabs";
 
-type ActiveTab = "all" | "dead";
 type NotificationStatus = Notification["status"];
 type TestSeverity = "low" | "informational" | "warning" | "critical";
 type Notice = { title: string; detail?: string };
-type OpenSections = { channels: boolean; routing: boolean; delivery: boolean };
 type PolicyFormState = {
   name: string;
+  scopeKind: "manual" | "global" | "workspace" | "owner" | "asset";
+  scopeRef: string;
   ownerRef: string;
   ownerEmail: string;
   digestInterval: string;
@@ -53,6 +74,8 @@ const initialChannelForm: ChannelFormState = {
 };
 const initialPolicyForm: PolicyFormState = {
   name: "",
+  scopeKind: "workspace",
+  scopeRef: "certificate-lifecycle",
   ownerRef: "",
   ownerEmail: "",
   digestInterval: "86400",
@@ -83,10 +106,14 @@ const digestOptions = [
 ] as const;
 const testSeverityOptions: TestSeverity[] = ["critical", "warning", "informational", "low"];
 const channelTypeOptions = ["email", "slack", "msteams", "sms", "siem", "pagerduty", "opsgenie", "webhook"] as const;
+const notificationQueryKey = ["alert-center", "notifications"] as const;
+const channelQueryKey = ["alert-center", "channels"] as const;
+const policyQueryKey = ["alert-center", "routing-policies"] as const;
 
 export function Notifications() {
   const { toast } = useToast();
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const channelLoadError = t("notifications.channels.loadError");
   const notificationUnavailable = t("notifications.error.unavailable");
   const notificationLoadError = t("notifications.error.loadFailed");
@@ -94,16 +121,11 @@ export function Notifications() {
   const markReadLoadFailed = t("notifications.action.markReadLoadFailed");
   const requeueFailed = t("notifications.action.requeueFailed");
   const requeueLoadFailed = t("notifications.action.requeueLoadFailed");
-  const [activeTab, setActiveTab] = useState<ActiveTab>("all");
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [activeView, setActiveView] = useState<AlertCenterView>("attention");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<Notice | null>(null);
-  const [channelError, setChannelError] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<"" | NotificationStatus>("");
-  const [channels, setChannels] = useState<NotificationChannel[]>([]);
-  const [policies, setPolicies] = useState<NotificationRoutingPolicy[]>([]);
   const [channelForm, setChannelForm] = useState<ChannelFormState>(initialChannelForm);
   const [policyForm, setPolicyForm] = useState<PolicyFormState>(initialPolicyForm);
   const [testForm, setTestForm] = useState<TestFormState>(initialTestForm);
@@ -111,72 +133,63 @@ export function Notifications() {
   const [policyBusy, setPolicyBusy] = useState(false);
   const [testBusy, setTestBusy] = useState(false);
   const [testResult, setTestResult] = useState<NotificationChannelTest | null>(null);
+  const [routePreview, setRoutePreview] = useState<NotificationRoutingPreview | null>(null);
+  const [previewBusy, setPreviewBusy] = useState(false);
   const [detail, setDetail] = useState<Notification | null>(null);
-  const [loadFailed, setLoadFailed] = useState(false);
   const [channelDialogOpen, setChannelDialogOpen] = useState(false);
-  const [open, setOpen] = useState<OpenSections>({ channels: false, routing: false, delivery: false });
   const channelDialogHeadingRef = useRef<HTMLHeadingElement>(null);
 
-  const load = useCallback(async () => {
+  const notificationQuery = useApiQuery(notificationQueryKey, () => api.notifications({ limit: 100 }), { live: { intervalMs: 30_000 } });
+  const channelQuery = useApiQuery(channelQueryKey, () => api.notificationChannels(), { live: { intervalMs: 60_000 } });
+  const policyQuery = useApiQuery(policyQueryKey, () => api.notificationRoutingPolicies(), { live: { intervalMs: 60_000 } });
+  const notifications = useMemo(() => notificationQuery.data?.items ?? [], [notificationQuery.data]);
+  const channels = channelQuery.data?.items ?? [];
+  const policies = policyQuery.data?.items ?? [];
+  const loading = notificationQuery.loading || channelQuery.loading || policyQuery.loading;
+  const loadFailed = Boolean(notificationQuery.error || channelQuery.error || policyQuery.error);
+  const loadError: Notice | null = loadFailed
+    ? {
+        title: notificationUnavailable,
+        detail: errorText(notificationQuery.errorValue || channelQuery.errorValue || policyQuery.errorValue, notificationLoadError),
+      }
+    : null;
+  const channelError = channelQuery.error ? errorText(channelQuery.errorValue, channelLoadError) : null;
+
+  function refreshAlertCenter() {
     setError(null);
-    setChannelError(null);
-    setLoadFailed(false);
-    try {
-      const [result, channelResult, policyResult] = await Promise.all([
-        api.notifications(activeTab === "dead" ? { limit: 100, status: "dead" } : { limit: 100 }),
-        api.notificationChannels(),
-        api.notificationRoutingPolicies(),
-      ]);
-      setNotifications(result.items ?? []);
-      setChannels(channelResult.items ?? []);
-      setPolicies(policyResult.items ?? []);
-    } catch (err) {
-      setNotifications([]);
-      setChannels([]);
-      setPolicies([]);
-      setLoadFailed(true);
-      setError({ title: notificationUnavailable, detail: errorText(err, notificationLoadError) });
-      setChannelError(errorText(err, channelLoadError));
-    } finally {
-      setLoading(false);
-    }
-  }, [activeTab, channelLoadError, notificationLoadError, notificationUnavailable]);
-
-  useEffect(() => {
-    setLoading(true);
-    void load();
-  }, [load]);
-
-  useEffect(() => {
-    const id = window.setInterval(() => void load(), 30_000);
-    return () => window.clearInterval(id);
-  }, [load]);
+    notificationQuery.refetch();
+    channelQuery.refetch();
+    policyQuery.refetch();
+  }
 
   const typeOptions = useMemo(() => Array.from(new Set(notifications.map(notificationType))).sort(), [notifications]);
   const filteredNotifications = useMemo(
     () =>
       notifications.filter((notification) => {
+        if (activeView === "failures" && notification.status !== "dead") return false;
         if (typeFilter && notificationType(notification) !== typeFilter) return false;
         if (statusFilter && notification.status !== statusFilter) return false;
         return true;
       }),
-    [notifications, statusFilter, typeFilter],
+    [activeView, notifications, statusFilter, typeFilter],
   );
   const unreadCount = filteredNotifications.filter(isUnread).length;
 
   async function markRead(notification: Notification) {
-    const snapshot = notifications;
+    const snapshot = notificationQuery.data;
     setBusyId(notification.id);
     setError(null);
-    setNotifications((current) =>
-      current.map((candidate) => (candidate.id === notification.id ? { ...candidate, status: "read", read_at: new Date().toISOString() } : candidate)),
+    updateNotificationCache(queryClient, (candidate) =>
+      candidate.id === notification.id ? { ...candidate, status: "read", read_at: new Date().toISOString() } : candidate,
     );
     try {
       const updated = await api.markNotificationRead(notification.id);
-      setNotifications((current) => current.map((candidate) => (candidate.id === notification.id ? updated : candidate)));
+      updateNotificationCache(queryClient, (candidate) => (candidate.id === notification.id ? updated : candidate));
+      void queryClient.invalidateQueries({ queryKey: notificationQueryKey, refetchType: "none" });
+      void queryClient.invalidateQueries({ queryKey: ["header-alerts"], refetchType: "none" });
       toast({ kind: "success", title: t("notifications.action.markedRead"), description: notificationSubject(notification) });
     } catch (err) {
-      setNotifications(snapshot);
+      queryClient.setQueryData(notificationQueryKey, snapshot);
       setError({ title: markReadFailed, detail: errorText(err, markReadLoadFailed) });
       toast({ kind: "error", title: markReadFailed, description: errorText(err, markReadLoadFailed) });
     } finally {
@@ -199,7 +212,9 @@ export function Notifications() {
     setError(null);
     try {
       const updated = await api.requeueNotification(notification.id);
-      setNotifications((current) => current.map((candidate) => (candidate.id === notification.id ? updated : candidate)));
+      updateNotificationCache(queryClient, (candidate) => (candidate.id === notification.id ? updated : candidate));
+      void queryClient.invalidateQueries({ queryKey: notificationQueryKey, refetchType: "none" });
+      void queryClient.invalidateQueries({ queryKey: ["header-alerts"], refetchType: "none" });
       toast({ kind: "success", title: t("notifications.action.requeued"), description: notificationSubject(notification) });
     } catch (err) {
       setError({ title: requeueFailed, detail: errorText(err, requeueLoadFailed) });
@@ -216,6 +231,8 @@ export function Notifications() {
     try {
       const created = await api.createNotificationRoutingPolicy({
         name: policyForm.name.trim(),
+        scope_kind: policyForm.scopeKind,
+        scope_ref: policyForm.scopeKind === "manual" || policyForm.scopeKind === "global" ? undefined : policyForm.scopeRef.trim(),
         owner_ref: policyForm.ownerRef.trim() || undefined,
         owner_email: policyForm.ownerEmail.trim() || undefined,
         digest_interval_seconds: Number(policyForm.digestInterval),
@@ -227,7 +244,8 @@ export function Notifications() {
           low: splitChannels(policyForm.lowChannels),
         },
       });
-      setPolicies((current) => upsertPolicy(current, created));
+      queryClient.setQueryData(policyQueryKey, { items: upsertPolicy(policies, created) });
+      void queryClient.invalidateQueries({ queryKey: policyQueryKey, refetchType: "none" });
       toast({ kind: "success", title: t("notifications.routing.policyCreated"), description: created.name });
     } catch (err) {
       const detail = errorText(err, t("notifications.routing.createError"));
@@ -252,7 +270,8 @@ export function Notifications() {
         credential_ref: channelForm.credentialRef.trim() || undefined,
         enabled: channelForm.enabled,
       });
-      setChannels((current) => upsertChannel(current, saved));
+      queryClient.setQueryData(channelQueryKey, { items: upsertChannel(channels, saved) });
+      void queryClient.invalidateQueries({ queryKey: channelQueryKey, refetchType: "none" });
       setChannelForm((current) => ({ ...current, credentialRef: "" }));
       setChannelDialogOpen(false);
       toast({ kind: "success", title: t("notifications.channels.saved"), description: saved.label });
@@ -325,6 +344,24 @@ export function Notifications() {
     }
   }
 
+  async function previewRoute() {
+    setPreviewBusy(true);
+    setError(null);
+    try {
+      const preview = await api.notificationRoutingPreview({
+        workspace: policyForm.scopeKind === "workspace" ? policyForm.scopeRef : undefined,
+        owner_ref: policyForm.scopeKind === "owner" ? policyForm.scopeRef : undefined,
+        asset_ref: policyForm.scopeKind === "asset" ? policyForm.scopeRef : undefined,
+        severity: "critical",
+      });
+      setRoutePreview(preview);
+    } catch (err) {
+      setError({ title: t("notifications.routing.previewFailed"), detail: errorText(err, t("notifications.routing.previewFailedDetail")) });
+    } finally {
+      setPreviewBusy(false);
+    }
+  }
+
   return (
     <section aria-labelledby="notifications-heading" className="space-y-4">
       <PageHeader
@@ -361,133 +398,128 @@ export function Notifications() {
         {!loading && !loadFailed && policies.length > 0 ? <RoutingPreview policies={policies} channels={channels} /> : null}
       </section>
 
-      {error && <ErrorState title={error.title}>{error.detail}</ErrorState>}
+      {(error || loadError) && <ErrorState title={(error || loadError)!.title}>{(error || loadError)!.detail}</ErrorState>}
 
-      <NotificationDetails
-        title={t("notifications.design.disclosure.channels")}
-        open={open.channels}
-        onToggle={(value) => setOpen((current) => ({ ...current, channels: value }))}
-      >
-        <div className="grid gap-4">
-          <p className="max-w-3xl text-sm text-muted-foreground">{t("notifications.design.channelsHelp")}</p>
-          <ChannelCatalog channels={channels} error={channelError} />
-        </div>
-      </NotificationDetails>
+      <section aria-label={t("notifications.center.views")} className="ui-panel p-comfortable">
+        <AlertCenterTabs
+          active={activeView}
+          onChange={setActiveView}
+          failureCount={deadDeliveries.length}
+          attentionCount={meaningfulAttention(notifications).length}
+        />
 
-      <NotificationDetails
-        title={t("notifications.design.disclosure.routing")}
-        open={open.routing}
-        onToggle={(value) => setOpen((current) => ({ ...current, routing: value }))}
-      >
-        <div className="grid gap-4">
-          <p className="max-w-3xl text-sm text-muted-foreground">{t("notifications.design.routingHelp")}</p>
-          <RoutingPolicyAuthoring
-            channels={channels}
-            policies={policies}
-            policyForm={policyForm}
-            testForm={testForm}
-            policyBusy={policyBusy}
-            testBusy={testBusy}
-            testResult={testResult}
-            onPolicyFormChange={setPolicyForm}
-            onTestFormChange={setTestForm}
-            onSavePolicy={(event) => void savePolicy(event)}
-            onTestChannel={(event) => void testChannel(event)}
-          />
-        </div>
-      </NotificationDetails>
+        {activeView === "attention" ? (
+          <AlertCenterPanel view="attention">
+            {loading ? (
+              <LoadingState>{t("notifications.loading")}</LoadingState>
+            ) : (
+              <NeedsAttention
+                notifications={notifications}
+                busyId={busyId}
+                onDetails={(notification) => void openDetails(notification)}
+                onRequeue={(notification) => void requeue(notification)}
+              />
+            )}
+          </AlertCenterPanel>
+        ) : null}
 
-      <NotificationDetails
-        title={t("notifications.design.disclosure.delivery")}
-        open={open.delivery}
-        onToggle={(value) => setOpen((current) => ({ ...current, delivery: value }))}
-      >
-        <div className="grid gap-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <p className="max-w-3xl text-sm text-muted-foreground">{t("notifications.design.deliveryHelp")}</p>
-            <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
-              <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
-              {translateNow("source.refresh.0e91610117")}
-            </Button>
-          </div>
-
-          <div className="grid gap-3 rounded-control border border-border bg-muted/20 p-3 lg:grid-cols-[auto_minmax(12rem,16rem)_minmax(12rem,16rem)_1fr]">
-            <div
-              role="tablist"
-              aria-label={t("notifications.queue.tablist")}
-              className="inline-flex h-10 w-fit overflow-hidden rounded-control border border-border"
-            >
-              <button
-                type="button"
-                role="tab"
-                aria-selected={activeTab === "all"}
-                className={tabClass(activeTab === "all")}
-                onClick={() => setActiveTab("all")}
-              >
-                {t("notifications.queue.all")}
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={activeTab === "dead"}
-                className={tabClass(activeTab === "dead")}
-                onClick={() => setActiveTab("dead")}
-              >
-                {t("notifications.queue.deadLetter")}
-              </button>
+        {activeView === "routing" ? (
+          <AlertCenterPanel view="routing">
+            <div className="grid gap-4">
+              <ViewIntroduction view="routing" />
+              <RoutingPolicyAuthoring
+                channels={channels}
+                policies={policies}
+                policyForm={policyForm}
+                policyBusy={policyBusy}
+                routePreview={routePreview}
+                previewBusy={previewBusy}
+                onPolicyFormChange={setPolicyForm}
+                onSavePolicy={(event) => void savePolicy(event)}
+                onPreviewRoute={() => void previewRoute()}
+              />
             </div>
-            <label className="grid gap-2 text-sm font-medium">
-              {t("notifications.filter.type")}
-              <select
-                aria-label={t("notifications.filter.type")}
-                value={typeFilter}
-                onChange={(event) => setTypeFilter(event.target.value)}
-                className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-focus focus:ring-2 focus:ring-focus/20"
-              >
-                <option value="">{t("notifications.filter.typeAll")}</option>
-                {typeOptions.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-2 text-sm font-medium">
-              {t("notifications.filter.status")}
-              <select
-                aria-label={t("notifications.filter.status")}
-                value={statusFilter}
-                onChange={(event) => setStatusFilter(event.target.value as "" | NotificationStatus)}
-                className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-focus focus:ring-2 focus:ring-focus/20"
-              >
-                {statusOptions.map((option) => (
-                  <option key={option.value || "all"} value={option.value}>
-                    {t(option.labelKey)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="flex items-end justify-between gap-3 text-sm text-muted-foreground">
-              <span>{t("notifications.count.total", { count: filteredNotifications.length })}</span>
-              <span>{t("notifications.count.unread", { count: unreadCount })}</span>
-            </div>
-          </div>
+          </AlertCenterPanel>
+        ) : null}
 
-          {loading ? (
-            <LoadingState>{t("notifications.loading")}</LoadingState>
-          ) : filteredNotifications.length === 0 ? (
-            <EmptyState title={t("notifications.design.emptyDeliveryTitle")}>{t("notifications.design.emptyDeliveryBody")}</EmptyState>
-          ) : (
-            <NotificationsTable
-              notifications={filteredNotifications}
-              busyId={busyId}
-              onMarkRead={(notification) => void markRead(notification)}
-              onRequeue={(notification) => void requeue(notification)}
-              onDetails={(notification) => void openDetails(notification)}
-            />
-          )}
-        </div>
-      </NotificationDetails>
+        {activeView === "channels" ? (
+          <AlertCenterPanel view="channels">
+            <div className="grid gap-4">
+              <ViewIntroduction view="channels" />
+              <ChannelCatalog channels={channels} error={channelError} />
+              <ChannelTestForm
+                channels={channels}
+                form={testForm}
+                busy={testBusy}
+                result={testResult}
+                onFormChange={setTestForm}
+                onSubmit={(event) => void testChannel(event)}
+              />
+            </div>
+          </AlertCenterPanel>
+        ) : null}
+
+        {activeView === "failures" || activeView === "history" ? (
+          <AlertCenterPanel view={activeView}>
+            <div className="grid gap-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <ViewIntroduction view={activeView} />
+                <Button type="button" variant="outline" onClick={refreshAlertCenter} disabled={loading}>
+                  <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
+                  {translateNow("source.refresh.0e91610117")}
+                </Button>
+              </div>
+              <div className="grid gap-3 rounded-control border border-border bg-muted/20 p-3 lg:grid-cols-[minmax(12rem,16rem)_minmax(12rem,16rem)_1fr]">
+                <Field label={t("notifications.filter.type")}>
+                  {(control) => (
+                    <Select {...control} aria-label={t("notifications.filter.type")} value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
+                      <option value="">{t("notifications.filter.typeAll")}</option>
+                      {typeOptions.map((type) => (
+                        <option key={type} value={type}>
+                          {type}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                </Field>
+                <Field label={t("notifications.filter.status")}>
+                  {(control) => (
+                    <Select
+                      {...control}
+                      aria-label={t("notifications.filter.status")}
+                      value={statusFilter}
+                      onChange={(event) => setStatusFilter(event.target.value as "" | NotificationStatus)}
+                    >
+                      {statusOptions.map((option) => (
+                        <option key={option.value || "all"} value={option.value}>
+                          {t(option.labelKey)}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                </Field>
+                <div className="flex items-end justify-between gap-3 text-sm text-muted-foreground">
+                  <span>{t("notifications.count.total", { count: filteredNotifications.length })}</span>
+                  <span>{t("notifications.count.unread", { count: unreadCount })}</span>
+                </div>
+              </div>
+              {loading ? (
+                <LoadingState>{t("notifications.loading")}</LoadingState>
+              ) : filteredNotifications.length === 0 ? (
+                <EmptyState title={t("notifications.design.emptyDeliveryTitle")}>{t("notifications.design.emptyDeliveryBody")}</EmptyState>
+              ) : (
+                <NotificationsTable
+                  notifications={filteredNotifications}
+                  busyId={busyId}
+                  onMarkRead={(notification) => void markRead(notification)}
+                  onRequeue={(notification) => void requeue(notification)}
+                  onDetails={(notification) => void openDetails(notification)}
+                />
+              )}
+            </div>
+          </AlertCenterPanel>
+        ) : null}
+      </section>
 
       <Dialog
         open={channelDialogOpen}
@@ -667,15 +699,6 @@ function ChannelCatalog({ channels, error }: { channels: NotificationChannel[]; 
   );
 }
 
-function NotificationDetails({ title, open, onToggle, children }: { title: string; open: boolean; onToggle: (open: boolean) => void; children: ReactNode }) {
-  return (
-    <details className="rounded-panel border border-border bg-card shadow-elevation1" open={open} onToggle={(event) => onToggle(event.currentTarget.open)}>
-      <summary className="cursor-pointer px-4 py-3 font-semibold text-foreground">{title}</summary>
-      <div className="border-t border-border p-4">{open ? children : null}</div>
-    </details>
-  );
-}
-
 function DeliveryCount({ label, tone = "neutral" }: { label: string; tone?: "neutral" | "critical" }) {
   const { t } = useTranslation();
   return (
@@ -780,20 +803,17 @@ function ChannelAuthoring({
         />
       </div>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <label className="grid gap-2 text-sm font-medium">
-          {t("notifications.channels.type")}
-          <select
-            value={form.channelType}
-            onChange={(event) => onFormChange({ ...form, channelType: event.target.value })}
-            className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-focus focus:ring-2 focus:ring-focus/20"
-          >
-            {channelTypeOptions.map((channelType) => (
-              <option key={channelType} value={channelType}>
-                {channelType}
-              </option>
-            ))}
-          </select>
-        </label>
+        <Field label={t("notifications.channels.type")}>
+          {(control) => (
+            <Select {...control} value={form.channelType} onChange={(event) => onFormChange({ ...form, channelType: event.target.value })}>
+              {channelTypeOptions.map((channelType) => (
+                <option key={channelType} value={channelType}>
+                  {channelType}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
         <TextInput label={t("notifications.channels.label")} value={form.label} onChange={(value) => onFormChange({ ...form, label: value })} />
         <TextInput
           label={t("notifications.channels.endpointUrl")}
@@ -832,34 +852,98 @@ function ChannelAuthoring({
   );
 }
 
+function ChannelTestForm({
+  channels,
+  form,
+  busy,
+  result,
+  onFormChange,
+  onSubmit,
+}: {
+  channels: NotificationChannel[];
+  form: TestFormState;
+  busy: boolean;
+  result: NotificationChannelTest | null;
+  onFormChange: (next: TestFormState) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const { t } = useTranslation();
+  const configured = channels.filter(channelReady);
+  const selected = form.channelId || firstConfiguredChannel(channels)?.id || "";
+  return (
+    <form
+      aria-label={t("notifications.design.testFormLabel")}
+      className="grid max-w-2xl gap-4 rounded-control border border-border bg-background p-4"
+      onSubmit={onSubmit}
+    >
+      <h2 className="text-base font-semibold">{t("notifications.routing.testHeading")}</h2>
+      <div className="grid gap-3 md:grid-cols-2">
+        <Field label={t("notifications.routing.channel")}>
+          {(control) => (
+            <Select {...control} value={selected} onChange={(event) => onFormChange({ ...form, channelId: event.target.value })}>
+              {configured.length === 0 ? <option value="">{t("notifications.routing.noReadyChannels")}</option> : null}
+              {configured.map((channel) => (
+                <option key={channel.id} value={channel.id}>
+                  {channel.label}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        <Field label={t("notifications.routing.severity")}>
+          {(control) => (
+            <Select {...control} value={form.severity} onChange={(event) => onFormChange({ ...form, severity: event.target.value as TestSeverity })}>
+              {testSeverityOptions.map((severity) => (
+                <option key={severity} value={severity}>
+                  {severity}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        <TextInput label={t("notifications.routing.testSubject")} value={form.subject} onChange={(value) => onFormChange({ ...form, subject: value })} />
+        <TextInput
+          label={t("notifications.routing.credentialRef")}
+          value={form.credentialRef}
+          onChange={(value) => onFormChange({ ...form, credentialRef: value })}
+        />
+      </div>
+      <Button type="submit" className="w-fit" disabled={busy || !selected}>
+        <Send className="h-4 w-4" aria-hidden="true" />
+        {busy ? t("notifications.routing.testing") : t("notifications.routing.sendTest")}
+      </Button>
+      {result ? (
+        <p className="text-sm text-muted-foreground">
+          {result.channel_id} #{result.outbox_id} - {result.credential_ref || result.secret_handling}
+        </p>
+      ) : null}
+    </form>
+  );
+}
+
 function RoutingPolicyAuthoring({
   channels,
   policies,
   policyForm,
-  testForm,
   policyBusy,
-  testBusy,
-  testResult,
+  routePreview,
+  previewBusy,
   onPolicyFormChange,
-  onTestFormChange,
   onSavePolicy,
-  onTestChannel,
+  onPreviewRoute,
 }: {
   channels: NotificationChannel[];
   policies: NotificationRoutingPolicy[];
   policyForm: PolicyFormState;
-  testForm: TestFormState;
   policyBusy: boolean;
-  testBusy: boolean;
-  testResult: NotificationChannelTest | null;
+  routePreview: NotificationRoutingPreview | null;
+  previewBusy: boolean;
   onPolicyFormChange: (next: PolicyFormState) => void;
-  onTestFormChange: (next: TestFormState) => void;
   onSavePolicy: (event: FormEvent<HTMLFormElement>) => void;
-  onTestChannel: (event: FormEvent<HTMLFormElement>) => void;
+  onPreviewRoute: () => void;
 }) {
   const { t } = useTranslation();
   const configured = channels.filter(channelReady);
-  const selectedChannel = testForm.channelId || firstConfiguredChannel(channels)?.id || "";
   const readyChannelIDs = new Set(configured.map((channel) => channel.id));
   const requestedChannelIDs = Array.from(
     new Set([
@@ -870,7 +954,8 @@ function RoutingPolicyAuthoring({
     ]),
   );
   const requestedChannelsReady = requestedChannelIDs.length > 0 && requestedChannelIDs.every((channelID) => readyChannelIDs.has(channelID));
-  const policyReady = policyForm.name.trim().length > 0 && requestedChannelsReady;
+  const scopeReady = policyForm.scopeKind === "manual" || policyForm.scopeKind === "global" || policyForm.scopeRef.trim().length > 0;
+  const policyReady = policyForm.name.trim().length > 0 && scopeReady && requestedChannelsReady;
   const routingReadiness =
     configured.length === 0
       ? t("notifications.routing.readinessNoChannels")
@@ -888,7 +973,7 @@ function RoutingPolicyAuthoring({
         </div>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">
+      <div className="grid gap-5">
         <form aria-label={t("notifications.design.routingFormLabel")} className="grid gap-4" onSubmit={onSavePolicy}>
           <div className="grid gap-3 md:grid-cols-2">
             <TextInput
@@ -898,6 +983,44 @@ function RoutingPolicyAuthoring({
               placeholder={t("notifications.routing.namePlaceholder")}
               required
             />
+            <Field label={t("notifications.routing.ruleLevel")}>
+              {(control) => (
+                <Select
+                  {...control}
+                  value={policyForm.scopeKind}
+                  onChange={(event) => {
+                    const scopeKind = event.target.value as PolicyFormState["scopeKind"];
+                    onPolicyFormChange({ ...policyForm, scopeKind, scopeRef: scopeKind === "workspace" ? "certificate-lifecycle" : "" });
+                  }}
+                >
+                  <option value="global">{t("notifications.routing.levelGlobal")}</option>
+                  <option value="workspace">{t("notifications.routing.levelWorkspace")}</option>
+                  <option value="owner">{t("notifications.routing.levelOwner")}</option>
+                  <option value="asset">{t("notifications.routing.levelAsset")}</option>
+                  <option value="manual">{t("notifications.routing.levelManual")}</option>
+                </Select>
+              )}
+            </Field>
+            {policyForm.scopeKind === "workspace" ? (
+              <Field label={t("notifications.routing.workspace")}>
+                {(control) => (
+                  <Select {...control} value={policyForm.scopeRef} onChange={(event) => onPolicyFormChange({ ...policyForm, scopeRef: event.target.value })}>
+                    <option value="certificate-lifecycle">{t("nav.module.certificates")}</option>
+                    <option value="machine-workload-trust">{t("nav.space.workload")}</option>
+                    <option value="secrets-access">{t("nav.module.secrets")}</option>
+                    <option value="software-trust">{t("nav.space.posture")}</option>
+                    <option value="trust-operations">{t("nav.space.platform")}</option>
+                  </Select>
+                )}
+              </Field>
+            ) : policyForm.scopeKind === "owner" || policyForm.scopeKind === "asset" ? (
+              <TextInput
+                label={t(policyForm.scopeKind === "owner" ? "notifications.routing.ownerRoute" : "notifications.routing.assetRoute")}
+                value={policyForm.scopeRef}
+                onChange={(value) => onPolicyFormChange({ ...policyForm, scopeRef: value })}
+                required
+              />
+            ) : null}
             <TextInput
               label={t("notifications.routing.ownerEmail")}
               value={policyForm.ownerEmail}
@@ -910,20 +1033,21 @@ function RoutingPolicyAuthoring({
               onChange={(value) => onPolicyFormChange({ ...policyForm, ownerRef: value })}
               placeholder={t("notifications.routing.ownerRefPlaceholder")}
             />
-            <label className="grid gap-2 text-sm font-medium">
-              {t("notifications.routing.digestInterval")}
-              <select
-                value={policyForm.digestInterval}
-                onChange={(event) => onPolicyFormChange({ ...policyForm, digestInterval: event.target.value })}
-                className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-focus focus:ring-2 focus:ring-focus/20"
-              >
-                {digestOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {t(option.labelKey)}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <Field label={t("notifications.routing.digestInterval")}>
+              {(control) => (
+                <Select
+                  {...control}
+                  value={policyForm.digestInterval}
+                  onChange={(event) => onPolicyFormChange({ ...policyForm, digestInterval: event.target.value })}
+                >
+                  {digestOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {t(option.labelKey)}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
           </div>
           <div className="grid gap-3 md:grid-cols-2">
             <TextInput
@@ -963,66 +1087,27 @@ function RoutingPolicyAuthoring({
           <p id="notification-routing-readiness" className="text-sm text-muted-foreground" role="status">
             {routingReadiness}
           </p>
-          <Button type="submit" className="w-fit" aria-describedby="notification-routing-readiness" disabled={policyBusy || !policyReady}>
-            <Save className="h-4 w-4" aria-hidden="true" />
-            {policyBusy ? t("notifications.routing.saving") : t("notifications.routing.save")}
-          </Button>
-        </form>
-
-        <form
-          aria-label={t("notifications.design.testFormLabel")}
-          className="grid content-start gap-4 rounded-control border border-border bg-background p-4"
-          onSubmit={onTestChannel}
-        >
-          <h3 className="text-sm font-semibold">{t("notifications.routing.testHeading")}</h3>
-          <label className="grid gap-2 text-sm font-medium">
-            {t("notifications.routing.channel")}
-            <select
-              value={selectedChannel}
-              onChange={(event) => onTestFormChange({ ...testForm, channelId: event.target.value })}
-              className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-focus focus:ring-2 focus:ring-focus/20"
-            >
-              {configured.length === 0 ? <option value="">{t("notifications.routing.noReadyChannels")}</option> : null}
-              {configured.map((channel) => (
-                <option key={channel.id} value={channel.id}>
-                  {channel.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-2 text-sm font-medium">
-            {t("notifications.routing.severity")}
-            <select
-              value={testForm.severity}
-              onChange={(event) => onTestFormChange({ ...testForm, severity: event.target.value as TestSeverity })}
-              className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-focus focus:ring-2 focus:ring-focus/20"
-            >
-              {testSeverityOptions.map((severity) => (
-                <option key={severity} value={severity}>
-                  {severity}
-                </option>
-              ))}
-            </select>
-          </label>
-          <TextInput
-            label={t("notifications.routing.testSubject")}
-            value={testForm.subject}
-            onChange={(value) => onTestFormChange({ ...testForm, subject: value })}
-          />
-          <TextInput
-            label={t("notifications.routing.credentialRef")}
-            value={testForm.credentialRef}
-            onChange={(value) => onTestFormChange({ ...testForm, credentialRef: value })}
-          />
-          <Button type="submit" className="w-fit" disabled={testBusy || !selectedChannel}>
-            <Send className="h-4 w-4" aria-hidden="true" />
-            {testBusy ? t("notifications.routing.testing") : t("notifications.routing.sendTest")}
-          </Button>
-          {testResult && (
-            <p className="text-sm text-muted-foreground">
-              {testResult.channel_id} #{testResult.outbox_id} - {testResult.credential_ref || testResult.secret_handling}
-            </p>
-          )}
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" className="w-fit" aria-describedby="notification-routing-readiness" disabled={policyBusy || !policyReady}>
+              <Save className="h-4 w-4" aria-hidden="true" />
+              {policyBusy ? t("notifications.routing.saving") : t("notifications.routing.save")}
+            </Button>
+            <Button type="button" variant="outline" disabled={previewBusy || !scopeReady} onClick={onPreviewRoute}>
+              {previewBusy ? t("notifications.routing.previewing") : t("notifications.routing.preview")}
+            </Button>
+          </div>
+          {routePreview ? (
+            <div className="grid gap-2 rounded-control border border-border bg-muted/20 p-3" role="status">
+              <p className="text-sm font-medium">{routePreview.explanation}</p>
+              <p className="text-sm text-muted-foreground">
+                {t("notifications.routing.resolution")}: {routePreview.resolution_order.join(" → ")}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {t("notifications.routing.channelsLabel")}: {routePreview.effective_channels.join(", ") || t("notifications.routing.none")} ·{" "}
+                {t(routePreview.delivery_ready ? "notifications.routing.previewReady" : "notifications.routing.previewNotReady")}
+              </p>
+            </div>
+          ) : null}
         </form>
       </div>
 
@@ -1035,7 +1120,10 @@ function RoutingPolicyAuthoring({
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{policy.name}</p>
-                  <p className="truncate text-xs text-muted-foreground">{policy.id}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {policy.scope_kind}
+                    {policy.scope_ref ? t("source.value1.550e636eaf", { value1: policy.scope_ref }) : ""} · {policy.id}
+                  </p>
                 </div>
                 <StatusBadge value="configured" label={joinChannels(policy.default_channels)} tone="neutral" />
               </div>
@@ -1076,18 +1164,19 @@ function TextInput({
   describedBy?: string;
 }) {
   return (
-    <label className="grid gap-2 text-sm font-medium">
-      {label}
-      <input
-        type={type}
-        value={value}
-        required={required}
-        placeholder={placeholder}
-        aria-describedby={describedBy}
-        onChange={(event) => onChange(event.target.value)}
-        className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-focus focus:ring-2 focus:ring-focus/20"
-      />
-    </label>
+    <Field label={label} required={required}>
+      {(control) => (
+        <Input
+          {...control}
+          type={type}
+          value={value}
+          required={required}
+          placeholder={placeholder}
+          aria-describedby={[control["aria-describedby"], describedBy].filter(Boolean).join(" ") || undefined}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      )}
+    </Field>
   );
 }
 
@@ -1257,6 +1346,13 @@ function upsertChannel(current: NotificationChannel[], next: NotificationChannel
   return current.map((channel) => (channel.id === next.id ? next : channel)).sort((a, b) => a.label.localeCompare(b.label));
 }
 
+function updateNotificationCache(queryClient: QueryClient, update: (notification: Notification) => Notification) {
+  queryClient.setQueryData<{ items: Notification[] }>(notificationQueryKey, (current) => ({
+    ...current,
+    items: (current?.items ?? []).map(update),
+  }));
+}
+
 function firstConfiguredChannel(channels: NotificationChannel[]): NotificationChannel | undefined {
   return channels.find(channelReady);
 }
@@ -1266,10 +1362,6 @@ function policyChannels(policy: NotificationRoutingPolicy, severity: string): st
   const value = matrix && typeof matrix === "object" ? matrix[severity] : undefined;
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is string => typeof item === "string");
-}
-
-function tabClass(active: boolean): string {
-  return active ? "bg-brand-accent px-4 text-sm font-medium text-white" : "bg-background px-4 text-sm text-muted-foreground hover:bg-muted/60";
 }
 
 function isUnread(notification: Notification): boolean {

@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -82,6 +83,8 @@ type notificationChannelRequest struct {
 type notificationRoutingPolicyRequest struct {
 	ID                 string              `json:"id,omitempty"`
 	Name               string              `json:"name"`
+	ScopeKind          string              `json:"scope_kind,omitempty"`
+	ScopeRef           string              `json:"scope_ref,omitempty"`
 	ChannelsBySeverity map[string][]string `json:"channels_by_severity"`
 	DefaultChannels    []string            `json:"default_channels"`
 	OwnerRef           string              `json:"owner_ref,omitempty"`
@@ -94,6 +97,8 @@ type notificationRoutingPolicyResponse struct {
 	ID                 string                            `json:"id"`
 	TenantID           string                            `json:"tenant_id"`
 	Name               string                            `json:"name"`
+	ScopeKind          string                            `json:"scope_kind"`
+	ScopeRef           string                            `json:"scope_ref,omitempty"`
 	ChannelsBySeverity map[string][]string               `json:"channels_by_severity"`
 	DefaultChannels    []string                          `json:"default_channels"`
 	OwnerRef           string                            `json:"owner_ref,omitempty"`
@@ -103,6 +108,15 @@ type notificationRoutingPolicyResponse struct {
 	DigestPreview      notificationDigestPreviewResponse `json:"digest_preview"`
 	CreatedAt          time.Time                         `json:"created_at"`
 	UpdatedAt          time.Time                         `json:"updated_at"`
+}
+
+type notificationRoutingPreviewResponse struct {
+	ResolutionOrder []string                           `json:"resolution_order"`
+	Matched         *notificationRoutingPolicyResponse `json:"matched_policy,omitempty"`
+	Effective       []string                           `json:"effective_channels"`
+	Missing         []string                           `json:"missing_channels"`
+	DeliveryReady   bool                               `json:"delivery_ready"`
+	Explanation     string                             `json:"explanation"`
 }
 
 type notificationDigestPreviewResponse struct {
@@ -392,6 +406,62 @@ func (a *API) getNotificationRoutingPolicy(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	a.writeJSON(w, http.StatusOK, toNotificationRoutingPolicyResponse(row))
+}
+
+func (a *API) previewNotificationRouting(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	if a.store == nil {
+		a.writeError(w, errStatus(http.StatusServiceUnavailable, "notification routing policy store is not configured"))
+		return
+	}
+	selector := store.NotificationRoutingSelector{
+		Workspace: strings.TrimSpace(r.URL.Query().Get("workspace")),
+		OwnerRef:  strings.TrimSpace(r.URL.Query().Get("owner_ref")),
+		AssetRef:  strings.TrimSpace(r.URL.Query().Get("asset_ref")),
+	}
+	severity, err := normalizeNotificationSeverity(r.URL.Query().Get("severity"))
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	policy, found, err := a.store.ResolveEffectiveNotificationRoutingPolicy(r.Context(), tenantID, selector)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	response := notificationRoutingPreviewResponse{
+		ResolutionOrder: []string{"asset", "owner", "workspace", "global"},
+		DeliveryReady:   false,
+		Explanation:     "No automatic rule matches this asset. The alert will use the server's explicit fallback, if one exists.",
+	}
+	if found {
+		view := toNotificationRoutingPolicyResponse(policy)
+		response.Matched = &view
+		response.Effective = notify.RoutingPolicy{ChannelsBySeverity: policy.ChannelsBySeverity, DefaultChannels: policy.DefaultChannels}.EffectiveAlertChannels(severity)
+		channels, loadErr := a.notificationChannelsForTenant(r.Context(), tenantID)
+		if loadErr != nil {
+			a.writeError(w, loadErr)
+			return
+		}
+		ready := make(map[string]bool, len(channels))
+		for _, channel := range channels {
+			if channel.Configured && channel.Enabled {
+				ready[strings.ToLower(strings.TrimSpace(channel.ID))] = true
+			}
+		}
+		for _, name := range response.Effective {
+			if !ready[strings.ToLower(strings.TrimSpace(name))] {
+				response.Missing = append(response.Missing, name)
+			}
+		}
+		response.DeliveryReady = len(response.Effective) > 0 && len(response.Missing) == 0
+		response.Explanation = fmt.Sprintf("The %s rule %q wins because it is the most specific match. It sends %s alerts to %d channel(s).", policy.ScopeKind, policy.Name, severity, len(response.Effective))
+	}
+	a.writeJSON(w, http.StatusOK, response)
 }
 
 //trstctl:mutation
@@ -832,10 +902,37 @@ func (a *API) decodeNotificationRoutingPolicyRequest(r *http.Request, tenantID, 
 	if _, err := time.LoadLocation(timezone); err != nil {
 		return store.NotificationRoutingPolicy{}, errStatus(http.StatusBadRequest, "digest_timezone must be a valid time zone")
 	}
+	scopeKind := strings.ToLower(strings.TrimSpace(req.ScopeKind))
+	if scopeKind == "" {
+		scopeKind = "manual"
+	}
+	scopeRef := strings.TrimSpace(req.ScopeRef)
+	switch scopeKind {
+	case "manual", "global":
+		if scopeRef != "" {
+			return store.NotificationRoutingPolicy{}, errStatus(http.StatusBadRequest, "manual and global routing policies cannot have scope_ref")
+		}
+	case "workspace":
+		if !supportedNotificationWorkspace(scopeRef) {
+			return store.NotificationRoutingPolicy{}, errStatus(http.StatusBadRequest, "workspace scope_ref must name one served workspace")
+		}
+	case "owner":
+		if !strings.HasPrefix(scopeRef, "owner/") || len(scopeRef) <= len("owner/") {
+			return store.NotificationRoutingPolicy{}, errStatus(http.StatusBadRequest, "owner scope_ref must use owner/<id>")
+		}
+	case "asset":
+		if !strings.Contains(scopeRef, "/") || strings.HasSuffix(scopeRef, "/") {
+			return store.NotificationRoutingPolicy{}, errStatus(http.StatusBadRequest, "asset scope_ref must use kind/<id>")
+		}
+	default:
+		return store.NotificationRoutingPolicy{}, errStatus(http.StatusBadRequest, "scope_kind must be manual, global, workspace, owner, or asset")
+	}
 	return store.NotificationRoutingPolicy{
 		ID:                 id,
 		TenantID:           tenantID,
 		Name:               name,
+		ScopeKind:          scopeKind,
+		ScopeRef:           scopeRef,
 		ChannelsBySeverity: matrix,
 		DefaultChannels:    defaults,
 		OwnerRef:           strings.TrimSpace(req.OwnerRef),
@@ -849,6 +946,8 @@ func (a *API) appendNotificationRoutingPolicyUpsert(ctx context.Context, tenantI
 	payload, err := json.Marshal(projections.NotificationRoutingPolicyUpserted{
 		ID:                 policy.ID,
 		Name:               policy.Name,
+		ScopeKind:          policy.ScopeKind,
+		ScopeRef:           policy.ScopeRef,
 		ChannelsBySeverity: policy.ChannelsBySeverity,
 		DefaultChannels:    policy.DefaultChannels,
 		OwnerRef:           policy.OwnerRef,
@@ -1013,6 +1112,8 @@ func toNotificationRoutingPolicyResponse(p store.NotificationRoutingPolicy) noti
 		ID:                 p.ID,
 		TenantID:           p.TenantID,
 		Name:               p.Name,
+		ScopeKind:          firstNonEmpty(p.ScopeKind, "manual"),
+		ScopeRef:           p.ScopeRef,
 		ChannelsBySeverity: copyChannelMatrix(p.ChannelsBySeverity),
 		DefaultChannels:    append([]string(nil), p.DefaultChannels...),
 		OwnerRef:           p.OwnerRef,
@@ -1026,6 +1127,15 @@ func toNotificationRoutingPolicyResponse(p store.NotificationRoutingPolicy) noti
 		},
 		CreatedAt: p.CreatedAt,
 		UpdatedAt: p.UpdatedAt,
+	}
+}
+
+func supportedNotificationWorkspace(workspace string) bool {
+	switch workspace {
+	case "certificate-lifecycle", "machine-workload-trust", "secrets-access", "software-trust", "trust-operations":
+		return true
+	default:
+		return false
 	}
 }
 

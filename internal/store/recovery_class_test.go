@@ -55,6 +55,19 @@ func TestOwnershipAssignmentsUseEventRecoveryAndSnapshots(t *testing.T) {
 	}
 }
 
+func TestNotificationRoutingPoliciesUseEventRecoveryAndSnapshots(t *testing.T) {
+	const table = "notification_routing_policies"
+	if !containsRecoveryTable(ReadModelTables, table) {
+		t.Errorf("%s is event-derived but missing from ReadModelTables", table)
+	}
+	if !containsRecoveryTable(snapshotTables, table) {
+		t.Errorf("%s is event-derived but missing from snapshotTables", table)
+	}
+	if SnapshotFormatVersion < 34 {
+		t.Errorf("SnapshotFormatVersion = %d; a pre-v34 snapshot cannot restore automatic notification routing authority", SnapshotFormatVersion)
+	}
+}
+
 func TestWorkloadIdentityReadModelsUseEventRecoveryAndSnapshots(t *testing.T) {
 	for _, table := range []string{"workload_attester_trust_sources", "secret_sync_workload_identity_sources"} {
 		if !containsRecoveryTable(ReadModelTables, table) {

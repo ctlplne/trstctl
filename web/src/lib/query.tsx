@@ -1,5 +1,7 @@
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
+
+const AppQueryContext = createContext(false);
 
 /** S-C5: the TanStack Query layer. Adoption policy (see web/DESIGN.md): new
  * surfaces use useApiQuery/useQueryClient directly; existing pages migrate off
@@ -46,7 +48,17 @@ export function AppQueryProvider({ children }: { children: ReactNode }) {
     return () => document.removeEventListener("visibilitychange", onVisibilityChange);
   }, [client]);
 
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  return (
+    <AppQueryContext.Provider value>
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    </AppQueryContext.Provider>
+  );
+}
+
+/** Safe presence probe for shell chrome that can also render in isolated tests
+ * and component workbenches. Data hooks still run only under the real provider. */
+export function useHasAppQueryProvider(): boolean {
+  return useContext(AppQueryContext);
 }
 
 export interface ApiQueryOptions {

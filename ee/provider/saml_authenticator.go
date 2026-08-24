@@ -3,6 +3,7 @@
 package provider
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -149,7 +150,7 @@ func (a *SAMLAuthenticator) AuthenticateLogout(r *http.Request) (Operator, bool)
 	if err != nil || strings.TrimSpace(cookie.Value) == "" {
 		return Operator{}, false
 	}
-	session, err := a.sessions.VerifyForLogout(cookie.Value)
+	session, err := a.sessions.VerifyForLogoutContext(r.Context(), cookie.Value)
 	if err != nil || session.TenantID != providerAuthorityTenant || session.ID == "" || session.Subject == "" {
 		return Operator{}, false
 	}
@@ -233,12 +234,12 @@ func (a *SAMLAuthenticator) ServeACS(w http.ResponseWriter, r *http.Request) {
 // cookies. Clearing React state alone is not logout: the HttpOnly cookie would
 // otherwise authenticate the next request and immediately sign the user back
 // in.
-func (a *SAMLAuthenticator) RevokeSession(w http.ResponseWriter, sessionID string) error {
+func (a *SAMLAuthenticator) RevokeSession(ctx context.Context, w http.ResponseWriter, sessionID string) error {
 	if a == nil || a.sessions == nil {
 		return errors.New("provider: SAML session issuer is not configured")
 	}
 	if strings.TrimSpace(sessionID) != "" {
-		if err := a.sessions.Revoke(sessionID); err != nil && !errors.Is(err, auth.ErrSessionNotFound) {
+		if err := a.sessions.RevokeContext(ctx, providerAuthorityTenant, sessionID); err != nil && !errors.Is(err, auth.ErrSessionNotFound) {
 			return err
 		}
 	}

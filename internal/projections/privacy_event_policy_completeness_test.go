@@ -406,7 +406,7 @@ func TestCatalogedPersonalDataEventPathsRewriteAndStillDecode(t *testing.T) {
 			data:   completePrivacyFixture[NotificationThresholdDelivered](t, `{"subject":"privacy-policy-subject","channel":"privacy-policy-subject"}`),
 			decode: decodePrivacyFixture[NotificationThresholdDelivered], wantPlaceholder: true},
 		{name: "notification routing", eventType: EventNotificationRoutingPolicyUpserted, version: 1,
-			data:   completePrivacyFixture[NotificationRoutingPolicyUpserted](t, `{"owner_ref":"privacy-policy-subject","owner_email":"privacy-policy-subject","channels_by_severity":{"critical":["pager"]}}`),
+			data:   completePrivacyFixture[NotificationRoutingPolicyUpserted](t, `{"scope_ref":"privacy-policy-subject","owner_ref":"privacy-policy-subject","owner_email":"privacy-policy-subject","channels_by_severity":{"critical":["pager"]}}`),
 			decode: decodePrivacyFixture[NotificationRoutingPolicyUpserted], wantPlaceholder: true,
 			want: []string{`"owner_email":""`}},
 		{name: "incident execution", eventType: EventIncidentExecutionRecorded, version: 1,

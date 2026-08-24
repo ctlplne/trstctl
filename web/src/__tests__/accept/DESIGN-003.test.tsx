@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { ToastProvider } from "@/components/ToastProvider";
 import { Notifications } from "@/pages/Notifications";
+import { AppQueryProvider } from "@/lib/query";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -11,6 +12,7 @@ const { apiMock } = vi.hoisted(() => ({
     notificationChannels: vi.fn(),
     createNotificationChannel: vi.fn(),
     notificationRoutingPolicies: vi.fn(),
+    notificationRoutingPreview: vi.fn(),
     createNotificationRoutingPolicy: vi.fn(),
     testNotificationChannel: vi.fn(),
     markNotificationRead: vi.fn(),
@@ -27,6 +29,8 @@ const createdPolicy = {
   id: "11111111-1111-1111-1111-111111111111",
   tenant_id: "t1",
   name: "Expiry escalation",
+  scope_kind: "workspace",
+  scope_ref: "certificate-lifecycle",
   channels_by_severity: { critical: ["slack", "webhook"], warning: ["slack"], low: ["email"] },
   default_channels: ["webhook"],
   owner_ref: "team/platform-security",
@@ -40,11 +44,13 @@ const createdPolicy = {
 
 function renderNotifications() {
   return render(
-    <MemoryRouter>
-      <ToastProvider>
-        <Notifications />
-      </ToastProvider>
-    </MemoryRouter>,
+    <AppQueryProvider>
+      <MemoryRouter>
+        <ToastProvider>
+          <Notifications />
+        </ToastProvider>
+      </MemoryRouter>
+    </AppQueryProvider>,
   );
 }
 
@@ -121,7 +127,7 @@ describe("DESIGN-003 notification routing authoring", () => {
     );
     expect(screen.queryByText("secret://notifications/webhook/hmac-key")).not.toBeInTheDocument();
 
-    await user.click(screen.getByText("Routing rules and templates", { exact: true }));
+    await user.click(screen.getByRole("tab", { name: "Routing policies" }));
     expect(await screen.findByRole("heading", { name: "Routing policies" })).toBeInTheDocument();
     await user.type(screen.getByLabelText("Policy name"), "Expiry escalation");
     await user.type(screen.getByLabelText("Owner reference"), "team/platform-security");
@@ -138,6 +144,8 @@ describe("DESIGN-003 notification routing authoring", () => {
     expect(apiMock.createNotificationRoutingPolicy).toHaveBeenCalledWith(
       expect.objectContaining({
         name: "Expiry escalation",
+        scope_kind: "workspace",
+        scope_ref: "certificate-lifecycle",
         owner_email: "platform-security@example.test",
         digest_interval_seconds: 43200,
         default_channels: ["webhook"],
@@ -147,6 +155,7 @@ describe("DESIGN-003 notification routing authoring", () => {
     expect((await screen.findAllByText(/platform-security@example\.test/)).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/slack, webhook/).length).toBeGreaterThan(0);
 
+    await user.click(screen.getByRole("tab", { name: "Channels & test" }));
     const credential = screen.getByLabelText("Credential reference");
     await user.selectOptions(screen.getByLabelText("Channel"), "slack");
     await user.type(credential, "secret://notifications/slack/raw-webhook-url");

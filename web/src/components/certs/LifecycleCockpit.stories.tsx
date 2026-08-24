@@ -108,6 +108,7 @@ const meta = {
         id: "urgent-certificates",
         tenant_id: "storybook",
         name: "Urgent certificates",
+        scope_kind: "workspace",
         default_channels: ["email"],
         channels_by_severity: { critical: ["email"] },
         digest_interval_seconds: 0,

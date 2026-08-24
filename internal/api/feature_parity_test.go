@@ -165,9 +165,11 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// request prepare and evidence-backed completion operations close I3's
 	// approved-to-issued bridge, raising the ratchet to 374. Asset-specific,
 	// attributed ownership assignment raises it to 375 and maps beside the
-	// existing ownership-attribution and attestation governance surface.
-	if len(out) != 375 {
-		t.Fatalf("OpenAPI operationIds = %d, want 375", len(out))
+	// existing ownership-attribution and attestation governance surface. The
+	// read-only effective notification-route preview raises it to 376 and maps
+	// onto F29 beside the policy hierarchy it resolves without sending.
+	if len(out) != 376 {
+		t.Fatalf("OpenAPI operationIds = %d, want 376", len(out))
 	}
 	return out
 }

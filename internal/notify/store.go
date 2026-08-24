@@ -50,8 +50,30 @@ func (r *StorePolicyResolver) ResolveNotificationPolicy(ctx context.Context, ten
 	return RoutingPolicy{
 		TenantID:           p.TenantID,
 		ID:                 p.ID,
+		ScopeKind:          p.ScopeKind,
+		ScopeRef:           p.ScopeRef,
 		ChannelsBySeverity: p.ChannelsBySeverity,
 		DefaultChannels:    p.DefaultChannels,
+	}, true, nil
+}
+
+// ResolveEffectiveNotificationPolicy chooses the most-specific automatic rule
+// under the alert tenant. A missing rule preserves the existing fallback.
+func (r *StorePolicyResolver) ResolveEffectiveNotificationPolicy(ctx context.Context, tenantID string, selector RoutingSelector) (RoutingPolicy, bool, error) {
+	if r == nil || r.store == nil || strings.TrimSpace(tenantID) == "" {
+		return RoutingPolicy{}, false, nil
+	}
+	p, ok, err := r.store.ResolveEffectiveNotificationRoutingPolicy(ctx, tenantID, store.NotificationRoutingSelector{
+		Workspace: selector.Workspace,
+		OwnerRef:  selector.OwnerRef,
+		AssetRef:  selector.AssetRef,
+	})
+	if err != nil || !ok {
+		return RoutingPolicy{}, ok, err
+	}
+	return RoutingPolicy{
+		TenantID: p.TenantID, ID: p.ID, ScopeKind: p.ScopeKind, ScopeRef: p.ScopeRef,
+		ChannelsBySeverity: p.ChannelsBySeverity, DefaultChannels: p.DefaultChannels,
 	}, true, nil
 }
 

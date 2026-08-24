@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { AppShell } from "@/components/AppShell";
 import { AdminAccess, AdminEditions, AdminSystem, PlatformRedirect } from "@/pages/Platform";
+import { AppQueryProvider } from "@/lib/query";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -36,6 +37,7 @@ const { apiMock } = vi.hoisted(() => ({
     offboardMember: vi.fn(),
     apiTokens: vi.fn(),
     pamSessions: vi.fn(),
+    notifications: vi.fn(),
     createAPIToken: vi.fn(),
     revokeAPIToken: vi.fn(),
     logout: vi.fn(),
@@ -50,34 +52,36 @@ vi.mock("@/lib/api", async (orig) => {
 function renderShell(initialEntries = ["/"]) {
   return render(
     <ThemeProvider>
-      <AuthProvider>
-        <MemoryRouter initialEntries={initialEntries}>
-          <Routes>
-            <Route element={<AppShell />}>
-              <Route index element={<h1>Overview</h1>} />
-              <Route path="certificates" element={<h1>Certificates</h1>} />
-              <Route path="identities" element={<h1>Identities</h1>} />
-              <Route path="admin/access" element={<AdminAccess />} />
-              <Route path="admin/system" element={<AdminSystem />} />
-              <Route path="admin/editions" element={<AdminEditions />} />
-              <Route path="platform" element={<PlatformRedirect />} />
-              <Route path="secrets" element={<h1>Secrets</h1>} />
-              <Route
-                path="custom-tools"
-                element={
-                  <form>
-                    <h1>Custom Tools</h1>
-                    <label>
-                      Route search
-                      <input type="search" />
-                    </label>
-                  </form>
-                }
-              />
-            </Route>
-          </Routes>
-        </MemoryRouter>
-      </AuthProvider>
+      <AppQueryProvider>
+        <AuthProvider>
+          <MemoryRouter initialEntries={initialEntries}>
+            <Routes>
+              <Route element={<AppShell />}>
+                <Route index element={<h1>Overview</h1>} />
+                <Route path="certificates" element={<h1>Certificates</h1>} />
+                <Route path="identities" element={<h1>Identities</h1>} />
+                <Route path="admin/access" element={<AdminAccess />} />
+                <Route path="admin/system" element={<AdminSystem />} />
+                <Route path="admin/editions" element={<AdminEditions />} />
+                <Route path="platform" element={<PlatformRedirect />} />
+                <Route path="secrets" element={<h1>Secrets</h1>} />
+                <Route
+                  path="custom-tools"
+                  element={
+                    <form>
+                      <h1>Custom Tools</h1>
+                      <label>
+                        Route search
+                        <input type="search" />
+                      </label>
+                    </form>
+                  }
+                />
+              </Route>
+            </Routes>
+          </MemoryRouter>
+        </AuthProvider>
+      </AppQueryProvider>
     </ThemeProvider>,
   );
 }
@@ -93,6 +97,7 @@ function resizeViewport(width: number) {
 
 describe("app shell accessibility and theme", () => {
   beforeEach(() => {
+    apiMock.notifications.mockResolvedValue({ items: [] });
     apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "user-1", tenant_id: "t1", email: "u@example.test" });
     apiMock.certificatePage.mockResolvedValue({
       items: [
@@ -846,5 +851,47 @@ describe("app shell accessibility and theme", () => {
     // And restores it.
     await user.click(screen.getByRole("button", { name: /show navigation sidebar/i }));
     expect(document.getElementById("desktop-primary-nav")).not.toBeNull();
+  });
+
+  it("badges only meaningful unresolved alert chains in the global header", async () => {
+    apiMock.notifications.mockResolvedValue({
+      items: [
+        {
+          id: "info",
+          tenant_id: "t1",
+          destination: "notification.audit",
+          subject: "Inventory complete",
+          severity: "informational",
+          status: "pending",
+          attempts: 0,
+          created_at: "2026-08-24T10:00:00Z",
+        },
+        {
+          id: "critical",
+          tenant_id: "t1",
+          destination: "notification.email",
+          certificate_id: "cert-1",
+          subject: "payments-api",
+          severity: "critical",
+          status: "pending",
+          attempts: 0,
+          created_at: "2026-08-24T10:01:00Z",
+        },
+        {
+          id: "duplicate",
+          tenant_id: "t1",
+          destination: "notification.slack",
+          certificate_id: "cert-1",
+          subject: "payments-api",
+          severity: "warning",
+          status: "pending",
+          attempts: 0,
+          created_at: "2026-08-24T10:02:00Z",
+        },
+      ],
+    });
+    renderShell();
+    expect(await screen.findByRole("link", { name: "Alerts and delivery: 1 need attention" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /3 need attention/ })).not.toBeInTheDocument();
   });
 });

@@ -117,8 +117,8 @@ not this file.
 | `internal/api/itsm_test.go:41` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/managedkeys_test.go:181` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/nhi_inventory.go:166` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/notifications.go:619` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/notifications.go:945` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/notifications.go:689` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/notifications.go:1044` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/notifications_helpers_test.go:68` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/openapi.go:170` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_posture.go:780` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -532,8 +532,8 @@ not this file.
 | `internal/store/projection_checkpoint.go:213` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/secret_rotation_schedule.go:289` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:313` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
-| `internal/store/snapshot.go:434` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
-| `internal/store/snapshot.go:449` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/snapshot.go:437` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
+| `internal/store/snapshot.go:452` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/tenant.go:58` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/tenant.go:76` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/tenant_key_domain.go:146` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
@@ -617,12 +617,12 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `ee/provider/saml_authenticator.go:214` | credential cookie is HttpOnly, host-only, strict, and Secure follows the served TLS mode. |
-| `ee/provider/saml_authenticator.go:223` | non-HttpOnly by design for double-submit CSRF; it is not a credential without the HttpOnly session. |
-| `ee/provider/saml_authenticator.go:245` | deletion preserves the HttpOnly, strict, host-only session policy; Secure is false only in explicit loopback development mode (CWE-614). |
-| `ee/provider/saml_authenticator.go:249` | this non-credential double-submit cookie must remain JavaScript-readable; strict and served-mode Secure still apply (CWE-614). |
-| `ee/provider/saml_authenticator.go:345` | short-lived HttpOnly state/request correlation; None is paired with Secure for the required cross-site SAML POST. |
-| `ee/provider/saml_authenticator.go:352` | expiry retains HttpOnly/Lax and uses insecure transport only in explicit loopback development mode (CWE-614). |
+| `ee/provider/saml_authenticator.go:215` | credential cookie is HttpOnly, host-only, strict, and Secure follows the served TLS mode. |
+| `ee/provider/saml_authenticator.go:224` | non-HttpOnly by design for double-submit CSRF; it is not a credential without the HttpOnly session. |
+| `ee/provider/saml_authenticator.go:246` | deletion preserves the HttpOnly, strict, host-only session policy; Secure is false only in explicit loopback development mode (CWE-614). |
+| `ee/provider/saml_authenticator.go:250` | this non-credential double-submit cookie must remain JavaScript-readable; strict and served-mode Secure still apply (CWE-614). |
+| `ee/provider/saml_authenticator.go:346` | short-lived HttpOnly state/request correlation; None is paired with Secure for the required cross-site SAML POST. |
+| `ee/provider/saml_authenticator.go:353` | expiry retains HttpOnly/Lax and uses insecure transport only in explicit loopback development mode (CWE-614). |
 | `internal/api/auth.go:774` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
 | `internal/api/auth.go:785` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
 | `internal/api/auth.go:797` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
@@ -659,7 +659,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:2822` | closed test table list above |
+| `internal/store/migration_content_test.go:2863` | closed test table list above |
 
 ### G203 — CWE-? (unmapped rule) (2 sites)
 
@@ -732,7 +732,7 @@ not this file.
 | `internal/api/headerauth_guard_test.go:34` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/api/headerauth_guard_test.go:39` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/ca/shellca/shellca.go:120` | the shell-CA backend exists to run the operator's configured signing command (CWE-78) |
-| `internal/cli/cli_test.go:1772` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/cli/cli_test.go:1785` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/connector/localops.go:260` | operator-configured local-ops action command; running it is the feature (CWE-78) |
 | `internal/crypto/kmswrap/external_kms.go:122` | operator-configured external KMS helper command (CWE-78) |
 | `internal/kms/pkcs11/softhsm_container_test.go:116` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
@@ -1312,7 +1312,7 @@ not this file.
 | `internal/ca/profilelint/profilelint_test.go:241` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/ca/profilelint/profilelint_test.go:254` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/cbom/hostsource/hostsource_test.go:22` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/cli/cli_test.go:1802` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/cli/cli_test.go:1815` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/cli/secret_scan_local.go:137` | a git hook must be executable; 0755 is the working minimum (CWE-276) |
 | `internal/connector/localops_test.go:87` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/crypto/external_kms_test.go:88` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |

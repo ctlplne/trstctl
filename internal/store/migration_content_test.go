@@ -19,6 +19,46 @@ import (
 	corestore "trstctl.com/trstctl/internal/store"
 )
 
+func TestMigration0197KeepsExistingRoutesManualAndConstrainsAutomaticScopes(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 197)
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect fresh content database: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+	if _, err := pool.Exec(ctx, `INSERT INTO notification_routing_policies
+		(id, tenant_id, name, channels_by_severity, default_channels, created_at, updated_at)
+		VALUES ('10000000-0000-4000-8000-000000000197', $1, 'legacy-manual', '{}'::jsonb, '["email"]'::jsonb, now(), now())`, tenantA); err != nil {
+		t.Fatalf("seed pre-0197 route: %v", err)
+	}
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	var kind, ref string
+	if err := pool.QueryRow(ctx, `SELECT scope_kind, scope_ref FROM notification_routing_policies WHERE tenant_id = $1 AND id = '10000000-0000-4000-8000-000000000197'`, tenantA).Scan(&kind, &ref); err != nil {
+		t.Fatal(err)
+	}
+	if kind != "manual" || ref != "" {
+		t.Fatalf("legacy route scope = %q/%q, want manual with empty ref", kind, ref)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO notification_routing_policies
+		(id, tenant_id, name, scope_kind, scope_ref, channels_by_severity, default_channels, created_at, updated_at)
+		VALUES ('10000000-0000-4000-8000-000000000198', $1, 'workspace-one', 'workspace', 'certificate-lifecycle', '{}'::jsonb, '["email"]'::jsonb, now(), now())`, tenantA); err != nil {
+		t.Fatalf("insert valid workspace route: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO notification_routing_policies
+		(id, tenant_id, name, scope_kind, scope_ref, channels_by_severity, default_channels, created_at, updated_at)
+		VALUES ('10000000-0000-4000-8000-000000000199', $1, 'workspace-duplicate', 'workspace', 'certificate-lifecycle', '{}'::jsonb, '["slack"]'::jsonb, now(), now())`, tenantA); err == nil {
+		t.Fatal("0197 allowed two automatic rules to own the same tenant workspace")
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO notification_routing_policies
+		(id, tenant_id, name, scope_kind, scope_ref, channels_by_severity, default_channels, created_at, updated_at)
+		VALUES ('10000000-0000-4000-8000-000000000200', $1, 'bad-owner', 'owner', 'plain-owner-id', '{}'::jsonb, '["email"]'::jsonb, now(), now())`, tenantB); err == nil {
+		t.Fatal("0197 accepted an owner rule without the owner/<id> namespace")
+	}
+}
+
 // contentPrefixVersion is the historical schema point the SCHEMA-003 content test
 // migrates TO before seeding. Every table the test populates (read-model owners +
 // certificates, independent-state ssh_keys, sealed-blob secret_store + credentials,
@@ -29,6 +69,7 @@ import (
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	197: true,
 	194: true,
 	184: true,
 	181: true,

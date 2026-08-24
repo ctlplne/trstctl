@@ -205,9 +205,11 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// creation plus the signed canonical JSON/CSV/NDJSON export, yielding 384.
 	// The approved-request prepare and evidence-backed complete commands close
 	// I3's missing issuance bridge, yielding 386. The event-backed ownership
-	// assignment command raises it to 387 and keeps browser/headless parity.
-	if len(out) != 387 {
-		t.Fatalf("CLI commands = %d, want 387", len(out))
+	// assignment command raises it to 387 and keeps browser/headless parity. The
+	// notification routing-preview read raises it to 388 and exposes the same
+	// tenant-safe hierarchy answer as the Alert Center without sending.
+	if len(out) != 388 {
+		t.Fatalf("CLI commands = %d, want 388", len(out))
 	}
 	return out
 }

@@ -36,8 +36,17 @@ type Notifier interface {
 type RoutingPolicy struct {
 	TenantID           string
 	ID                 string
+	ScopeKind          string
+	ScopeRef           string
 	ChannelsBySeverity map[string][]string
 	DefaultChannels    []string
+}
+
+// RoutingSelector is the hierarchy location used for automatic routing.
+type RoutingSelector struct {
+	Workspace string
+	OwnerRef  string
+	AssetRef  string
 }
 
 // EffectiveAlertChannels resolves the channel set for severity. Unknown severity
@@ -66,6 +75,13 @@ func (p RoutingPolicy) EffectiveAlertChannels(severity string) []string {
 // backed by PostgreSQL must filter by tenant_id and let RLS enforce isolation.
 type PolicyResolver interface {
 	ResolveNotificationPolicy(ctx context.Context, tenantID, policyID string) (RoutingPolicy, bool, error)
+}
+
+// EffectivePolicyResolver is an optional extension implemented by resolvers
+// that can choose a policy from the global -> workspace -> owner -> asset
+// hierarchy when the producer did not pin a policy UUID.
+type EffectivePolicyResolver interface {
+	ResolveEffectiveNotificationPolicy(context.Context, string, RoutingSelector) (RoutingPolicy, bool, error)
 }
 
 // ChannelResolver loads tenant-authored notification channels at dispatch time.
@@ -427,6 +443,17 @@ func (d *Dispatcher) effectiveChannels(ctx context.Context, alert Alert) ([]Noti
 			names = policy.EffectiveAlertChannels(alert.Severity)
 		}
 	}
+	if len(names) == 0 && strings.TrimSpace(alert.RoutingPolicyID) == "" {
+		if resolver, ok := d.resolver.(EffectivePolicyResolver); ok {
+			policy, found, err := resolver.ResolveEffectiveNotificationPolicy(ctx, alert.TenantID, routingSelectorForAlert(alert))
+			if err != nil {
+				return nil, fmt.Errorf("notify: resolve effective routing policy: %w", err)
+			}
+			if found {
+				names = policy.EffectiveAlertChannels(alert.Severity)
+			}
+		}
+	}
 	if len(names) == 0 && d.defaultPolicy.hasRoutes() {
 		names = d.defaultPolicy.EffectiveAlertChannels(alert.Severity)
 	}
@@ -442,6 +469,23 @@ func (d *Dispatcher) effectiveChannels(ctx context.Context, alert Alert) ([]Noti
 		return nil, fmt.Errorf("notify: requested channel(s) are not configured: %s", strings.Join(missing, ", "))
 	}
 	return channels, nil
+}
+
+func routingSelectorForAlert(alert Alert) RoutingSelector {
+	selector := RoutingSelector{}
+	switch alert.Kind {
+	case KindCertificateExpiry:
+		selector.Workspace = "certificate-lifecycle"
+	default:
+		selector.Workspace = "trust-operations"
+	}
+	if id := strings.TrimSpace(alert.OwnerID); id != "" {
+		selector.OwnerRef = "owner/" + id
+	}
+	if id := strings.TrimSpace(alert.CertificateID); id != "" {
+		selector.AssetRef = "certificate/" + id
+	}
+	return selector
 }
 
 func missingChannelNames(requested []string, channels []Notifier) []string {

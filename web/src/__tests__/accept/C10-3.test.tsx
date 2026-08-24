@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { ToastProvider } from "@/components/ToastProvider";
 import { Notifications } from "@/pages/Notifications";
+import { AppQueryProvider } from "@/lib/query";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -58,11 +59,13 @@ const deadNotification = {
 
 function renderNotifications() {
   return render(
-    <MemoryRouter>
-      <ToastProvider>
-        <Notifications />
-      </ToastProvider>
-    </MemoryRouter>,
+    <AppQueryProvider>
+      <MemoryRouter>
+        <ToastProvider>
+          <Notifications />
+        </ToastProvider>
+      </MemoryRouter>
+    </AppQueryProvider>,
   );
 }
 
@@ -70,11 +73,7 @@ describe("C10-3 notifications inbox", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     for (const mock of Object.values(apiMock)) mock.mockReset();
-    apiMock.notifications.mockImplementation((options?: { status?: string }) =>
-      Promise.resolve({
-        items: options?.status === "dead" ? [deadNotification] : [pendingNotification],
-      }),
-    );
+    apiMock.notifications.mockResolvedValue({ items: [pendingNotification, deadNotification] });
     apiMock.notificationChannels.mockResolvedValue({
       items: [
         { id: "email", label: "Email", category: "smtp", configured: true, delivery: "notification.* outbox fanout" },
@@ -89,6 +88,8 @@ describe("C10-3 notifications inbox", () => {
       id: "policy-1",
       tenant_id: "t1",
       name: "Expiry escalation",
+      scope_kind: "workspace",
+      scope_ref: "certificate-lifecycle",
       channels_by_severity: { critical: ["slack"] },
       default_channels: ["email"],
       digest_interval_seconds: 86400,
@@ -118,14 +119,14 @@ describe("C10-3 notifications inbox", () => {
     expect(await screen.findByRole("heading", { name: "Alerts and delivery" })).toBeInTheDocument();
     await waitFor(() => expect(apiMock.notifications).toHaveBeenCalledWith({ limit: 100 }));
     await waitFor(() => expect(apiMock.notificationChannels).toHaveBeenCalled());
-    await user.click(screen.getByText("Channels and webhooks", { exact: true }));
+    await user.click(screen.getByRole("tab", { name: "Channels & test" }));
     expect(screen.getByText("Channel coverage")).toBeInTheDocument();
     expect(screen.getByText("5 configured")).toBeInTheDocument();
     for (const label of ["Email", "Slack", "Microsoft Teams", "SMS", "SIEM"]) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0);
     }
 
-    await user.click(screen.getByText("Delivery attempts and dead letters", { exact: true }));
+    await user.click(screen.getByRole("tab", { name: "History" }));
     expect(screen.getByText("1 unread")).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Type filter" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Status filter" })).toBeInTheDocument();
@@ -141,8 +142,7 @@ describe("C10-3 notifications inbox", () => {
     expect(await screen.findByRole("status", { name: "Notification marked read" })).toBeInTheDocument();
     expect(within(inboxRow).getByText("read")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: "Dead-letter" }));
-    await waitFor(() => expect(apiMock.notifications).toHaveBeenCalledWith({ limit: 100, status: "dead" }));
+    await user.click(screen.getByRole("tab", { name: "Delivery failures (1)" }));
     const deadRow = await screen.findByText("billing-hook");
     const deadLetterRow = deadRow.closest("tr")!;
     expect(within(deadLetterRow).getByText("dead")).toBeInTheDocument();

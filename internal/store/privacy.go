@@ -1650,14 +1650,18 @@ func (s *Store) ApplyPrivacyRetentionEnforcedTx(ctx context.Context, tx pgx.Tx, 
 	}
 	if _, err := tx.Exec(ctx,
 		`UPDATE notification_routing_policies
-			    SET owner_ref = CASE
+			    SET scope_ref = CASE
+			          WHEN scope_kind <> 'owner' OR scope_ref = '' OR scope_ref LIKE 'owner/retained:%' OR scope_ref LIKE 'owner/erased:%' THEN scope_ref
+			          ELSE 'owner/retained:' || left(md5($1::text || ':' || scope_ref), 12)
+			        END,
+			        owner_ref = CASE
 			          WHEN owner_ref = '' OR owner_ref LIKE 'retained:%' OR owner_ref LIKE 'erased:%' THEN owner_ref
 			          ELSE 'retained:' || left(md5($1::text || ':' || owner_ref), 12)
 			        END,
 			        owner_email = ''
 			  WHERE tenant_id = $1
 			    AND updated_at < $2
-			    AND (owner_ref <> '' OR owner_email <> '')`,
+			    AND (scope_kind = 'owner' OR owner_ref <> '' OR owner_email <> '')`,
 		r.TenantID, r.Cutoffs.AttestationEvidenceBefore); err != nil {
 		return err
 	}
@@ -2142,11 +2146,11 @@ func privacyReadModelExportQueries(tenantID, subject string) []privacyReadModelQ
 		{
 			table: "notification_routing_policies",
 			sql: `SELECT id::text, ''::text,
-			             jsonb_build_object('name', name, 'owner_ref', owner_ref, 'owner_email', owner_email, 'digest_interval_seconds', digest_interval_seconds, 'digest_timezone', digest_timezone)::text,
+			             jsonb_build_object('name', name, 'scope_kind', scope_kind, 'scope_ref', scope_ref, 'owner_ref', owner_ref, 'owner_email', owner_email, 'digest_interval_seconds', digest_interval_seconds, 'digest_timezone', digest_timezone)::text,
 			             created_at
 			        FROM notification_routing_policies
 			       WHERE tenant_id = $1
-			         AND (owner_ref = $2 OR owner_email = $2)
+			         AND (scope_ref = $2 OR scope_ref = 'owner/' || $2 OR owner_ref = $2 OR owner_email = $2)
 			       ORDER BY id`,
 			args: []any{tenantID, subject},
 		},
@@ -2236,7 +2240,7 @@ func privacyReadModelSelectorQueries(tenantID, subject string) []privacyReadMode
 		{table: "access_change_requests", sql: `SELECT id::text, ''::text, 0 FROM access_change_requests WHERE tenant_id = $1 AND (requester_subject = $2 OR position($2 in reason) > 0 OR $2 = ANY(evidence_refs)) ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "access_change_request_decisions", sql: `SELECT request_id::text, ''::text, 0 FROM access_change_request_decisions WHERE tenant_id = $1 AND (approver_subject = $2 OR position($2 in reason) > 0 OR $2 = ANY(decision_evidence_refs)) GROUP BY request_id ORDER BY request_id`, args: []any{tenantID, subject}},
 		{table: "discovery_runs", sql: `SELECT id::text, ''::text, 0 FROM discovery_runs WHERE tenant_id = $1 AND requested_by = $2 ORDER BY id`, args: []any{tenantID, subject}},
-		{table: "notification_routing_policies", sql: `SELECT id::text, ''::text, 0 FROM notification_routing_policies WHERE tenant_id = $1 AND (owner_ref = $2 OR owner_email = $2) ORDER BY id`, args: []any{tenantID, subject}},
+		{table: "notification_routing_policies", sql: `SELECT id::text, ''::text, 0 FROM notification_routing_policies WHERE tenant_id = $1 AND (scope_ref = $2 OR scope_ref = 'owner/' || $2 OR owner_ref = $2 OR owner_email = $2) ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "remediation_playbook_runs", sql: `SELECT id::text, ''::text, 0 FROM remediation_playbook_runs WHERE tenant_id = $1 AND (created_by = $2 OR position($2 in reason) > 0 OR $2 = ANY(evidence_refs) OR $2 = ANY(rollback_refs)) ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "compliance_report_schedules", sql: `SELECT id::text, ''::text, 0 FROM compliance_report_schedules WHERE tenant_id = $1 AND recipient_ref = $2 ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "incident_fleet_reissuance_runs", sql: `SELECT id::text, ''::text, 0 FROM incident_fleet_reissuance_runs WHERE tenant_id = $1 AND (created_by = $2 OR position($2 in reason) > 0 OR position($2 in evidence_bundle) > 0 OR $2 = ANY(failed_targets) OR $2 = ANY(rollback_refs)) ORDER BY id`, args: []any{tenantID, subject}},
@@ -3206,15 +3210,15 @@ func eraseNotificationRoutingPolicyPrivacyRows(ctx context.Context, tx pgx.Tx, t
 	if len(ids) == 0 {
 		return nil
 	}
-	type row struct{ id, ownerRef, ownerEmail string }
+	type row struct{ id, scopeKind, scopeRef, ownerRef, ownerEmail string }
 	var rowsToUpdate []row
-	rows, err := tx.Query(ctx, `SELECT id::text, owner_ref, owner_email FROM notification_routing_policies WHERE tenant_id = $1 AND id::text = ANY($2)`, tenantID, ids)
+	rows, err := tx.Query(ctx, `SELECT id::text, scope_kind, scope_ref, owner_ref, owner_email FROM notification_routing_policies WHERE tenant_id = $1 AND id::text = ANY($2)`, tenantID, ids)
 	if err != nil {
 		return err
 	}
 	for rows.Next() {
 		var r row
-		if err := rows.Scan(&r.id, &r.ownerRef, &r.ownerEmail); err != nil {
+		if err := rows.Scan(&r.id, &r.scopeKind, &r.scopeRef, &r.ownerRef, &r.ownerEmail); err != nil {
 			rows.Close()
 			return err
 		}
@@ -3226,16 +3230,22 @@ func eraseNotificationRoutingPolicyPrivacyRows(ctx context.Context, tx pgx.Tx, t
 	}
 	rows.Close()
 	for _, r := range rowsToUpdate {
+		scopeRef := r.scopeRef
+		if r.scopeKind == "owner" && (subjectValueMatches(tenantID, subjectRef, scopeRef) || subjectValueMatches(tenantID, "owner/"+subjectRef, scopeRef)) {
+			scopeRef = "owner/" + strings.TrimPrefix(placeholder, "owner/")
+		}
 		ownerEmail := r.ownerEmail
 		if subjectValueMatches(tenantID, subjectRef, ownerEmail) {
 			ownerEmail = ""
 		}
 		if _, err := tx.Exec(ctx,
 			`UPDATE notification_routing_policies
-			    SET owner_ref = $3,
-			        owner_email = $4
+			    SET scope_ref = $3,
+			        owner_ref = $4,
+			        owner_email = $5
 			  WHERE tenant_id = $1 AND id::text = $2`,
 			tenantID, r.id,
+			scopeRef,
 			redactSubjectValue(tenantID, subjectRef, placeholder, r.ownerRef),
 			ownerEmail); err != nil {
 			return err
@@ -3710,7 +3720,7 @@ func countPrivacyRetentionRows(ctx context.Context, tx pgx.Tx, tenantID string, 
 			sql: `SELECT count(*) FROM notification_routing_policies
 				       WHERE tenant_id = $1
 				         AND updated_at < $2
-				         AND (owner_ref <> '' OR owner_email <> '')`,
+				         AND (scope_kind = 'owner' OR owner_ref <> '' OR owner_email <> '')`,
 			args: []any{tenantID, c.AttestationEvidenceBefore},
 		},
 		"remediation_playbook_runs": {

@@ -48,6 +48,9 @@ import { persistCollapsedGroups, readCollapsedGroups } from "@/lib/navPreference
 import { Eyebrow } from "@/components/typography";
 import { cn } from "@/lib/utils";
 import type { Me } from "@/lib/api";
+import { api } from "@/lib/api";
+import { useApiQuery, useHasAppQueryProvider } from "@/lib/query";
+import { meaningfulAttention } from "@/pages/notifications/AlertCenterTabs";
 import { useTranslation, type I18nContextValue, translateNow } from "@/i18n/I18nProvider";
 import { localeLabelKeys, productionLocales, supportedLocales, type Locale, type MessageKey } from "@/i18n/messages";
 
@@ -569,16 +572,7 @@ export function AppShell() {
             <span className="min-w-0 flex-1 truncate text-start">{t("shell.searchOrJump")}</span>
             <kbd className="rounded border border-border px-1.5 py-0.5 font-mono text-2xs">{translateNow("source.cmd.k.abdd8e293f")}</kbd>
           </Button>
-          {user && hasAnyPermission(user, permissionAnyForPath("/notifications")) && (
-            <Link
-              to="/notifications"
-              aria-label={t("nav.item.notifications")}
-              title={t("nav.item.notifications")}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-foreground transition-colors duration-fast hover:bg-foreground/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-            >
-              <Bell className="h-4 w-4" aria-hidden="true" />
-            </Link>
-          )}
+          {user && hasAnyPermission(user, permissionAnyForPath("/notifications")) ? <HeaderAlertIndicator /> : null}
           {user && (
             <div className="relative">
               <Button
@@ -735,5 +729,48 @@ export function AppShell() {
       <CommandPalette open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} returnFocusRef={commandButtonRef} user={user} />
       <ShortcutsHelp open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} returnFocusRef={shortcutsButtonRef} />
     </div>
+  );
+}
+
+function HeaderAlertIndicator() {
+  const { t } = useTranslation();
+  const hasQueryProvider = useHasAppQueryProvider();
+  if (!hasQueryProvider || typeof api.notifications !== "function") {
+    return <HeaderAlertLink label={t("nav.item.notifications")} />;
+  }
+  return <LiveHeaderAlertIndicator />;
+}
+
+function LiveHeaderAlertIndicator() {
+  const { t } = useTranslation();
+  const query = useApiQuery(["header-alerts"], () => api.notifications({ limit: 100 }), { live: { intervalMs: 30_000 } });
+  const count = meaningfulAttention(query.data?.items ?? []).length;
+  const label =
+    count > 0
+      ? t("notifications.center.headerCount", { count })
+      : query.error
+        ? t("notifications.center.headerUnavailable")
+        : t("notifications.center.headerClear");
+  return <HeaderAlertLink label={label} count={count} />;
+}
+
+function HeaderAlertLink({ label, count = 0 }: { label: string; count?: number }) {
+  return (
+    <Link
+      to="/notifications"
+      aria-label={label}
+      title={label}
+      className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-foreground transition-colors duration-fast hover:bg-foreground/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+    >
+      <Bell className="h-4 w-4" aria-hidden="true" />
+      {count > 0 ? (
+        <span
+          className="absolute -end-1 -top-1 min-w-4 rounded-control bg-status-critical px-1 text-center text-2xs font-semibold leading-4 text-white"
+          aria-hidden="true"
+        >
+          {count > 99 ? "99+" : count}
+        </span>
+      ) : null}
+    </Link>
   );
 }

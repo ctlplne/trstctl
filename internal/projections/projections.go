@@ -2229,6 +2229,8 @@ type NotificationChannelDeleted struct {
 type NotificationRoutingPolicyUpserted struct {
 	ID                 string              `json:"id"`
 	Name               string              `json:"name"`
+	ScopeKind          string              `json:"scope_kind,omitempty"`
+	ScopeRef           string              `json:"scope_ref,omitempty"`
 	ChannelsBySeverity map[string][]string `json:"channels_by_severity"`
 	DefaultChannels    []string            `json:"default_channels"`
 	OwnerRef           string              `json:"owner_ref,omitempty"`
@@ -5034,6 +5036,8 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			ID:                 pl.ID,
 			TenantID:           e.TenantID,
 			Name:               pl.Name,
+			ScopeKind:          pl.ScopeKind,
+			ScopeRef:           pl.ScopeRef,
 			ChannelsBySeverity: pl.ChannelsBySeverity,
 			DefaultChannels:    pl.DefaultChannels,
 			OwnerRef:           pl.OwnerRef,

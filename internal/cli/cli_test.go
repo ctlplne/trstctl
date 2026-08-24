@@ -1582,6 +1582,19 @@ func TestNotificationCommandsSendPathsQueriesAndIdempotencyKeys(t *testing.T) {
 		t.Errorf("routing policy list request = %s %s", cap.Method, cap.Path)
 	}
 
+	code, _, _ = run(t, []string{"notifications", "routing-preview", "--workspace", "certificate-lifecycle", "--owner_ref", "owner/platform", "--asset_ref", "certificate/payments", "--severity", "critical"}, env, "")
+	if code != 0 {
+		t.Fatalf("routing preview exit = %d", code)
+	}
+	if cap.Method != "GET" || cap.Path != "/api/v1/notification-routing-preview" {
+		t.Errorf("routing preview request = %s %s", cap.Method, cap.Path)
+	}
+	for _, want := range []string{"workspace=certificate-lifecycle", "owner_ref=owner%2Fplatform", "asset_ref=certificate%2Fpayments", "severity=critical"} {
+		if !strings.Contains(cap.Query, want) {
+			t.Errorf("routing preview query = %q, missing %q", cap.Query, want)
+		}
+	}
+
 	const policyID = "11111111-1111-4111-8111-111111111111"
 	code, _, _ = run(t, []string{"notifications", "routing-policies", "get", policyID}, env, "")
 	if code != 0 {

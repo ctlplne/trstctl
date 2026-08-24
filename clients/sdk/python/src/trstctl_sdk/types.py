@@ -5915,6 +5915,8 @@ NotificationRoutingPolicy = TypedDict(
         'name': str,
         'owner_email': str,
         'owner_ref': str,
+        'scope_kind': str,
+        'scope_ref': str,
         'tenant_id': str,
         'updated_at': str,
     },
@@ -5941,6 +5943,21 @@ NotificationRoutingPolicyRequest = TypedDict(
         'name': str,
         'owner_email': str,
         'owner_ref': str,
+        'scope_kind': str,
+        'scope_ref': str,
+    },
+    total=False,
+)
+
+NotificationRoutingPreview = TypedDict(
+    'NotificationRoutingPreview',
+    {
+        'delivery_ready': bool,
+        'effective_channels': list[str],
+        'explanation': str,
+        'matched_policy': dict[str, Any],
+        'missing_channels': list[str],
+        'resolution_order': list[str],
     },
     total=False,
 )

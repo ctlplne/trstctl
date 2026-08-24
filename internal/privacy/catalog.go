@@ -272,7 +272,7 @@ func Catalog() []CatalogEntry {
 		},
 		{
 			ID:             "notification_routing_policies.owner-contact",
-			Location:       "notification_routing_policies.owner_ref/owner_email",
+			Location:       "notification_routing_policies.scope_ref/owner_ref/owner_email",
 			Category:       "notification routing owner reference and contact metadata",
 			Purpose:        "operator ownership, escalation, and digest routing for notification policy configuration",
 			RetentionClass: "operational:notification-routing-after-397d",

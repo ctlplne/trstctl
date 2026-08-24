@@ -475,6 +475,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 	)
 	notificationRouting := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/name", opaque),
+		privacyRule("/scope_kind", opaque), privacyRule("/scope_ref", exact),
 		privacyRule("/channels_by_severity", opaque), privacyRule("/default_channels", opaque),
 		privacyRule("/owner_ref", exact), privacyRule("/owner_email", clear),
 		privacyRule("/digest_interval_seconds", opaque),

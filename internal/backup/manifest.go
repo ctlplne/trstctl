@@ -77,7 +77,6 @@ var RecoveredFromPostgresBackup = []string{
 	"idempotency_keys",
 	"issuance_approval_requests",
 	"issuance_approvals",
-	"notification_routing_policies",
 	"outbox",
 	"policy_bindings",
 	// This event-populated AN-5 receiver deliberately survives read-model rebuild:

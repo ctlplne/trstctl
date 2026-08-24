@@ -11521,8 +11521,8 @@
             "phase": "P2",
             "priority": 80,
             "served_state": "served",
-            "backend_status": "served: production dispatcher assembles email/Slack/Teams/SMS/SIEM/webhook plus native PagerDuty Events v2 and OpsGenie Alert v2 delivery, with tenant channel lifecycle, routing policy, channel tests, inbox/dead-letter handling, and outbox-backed retries",
-            "current_frontend_mapping": "served: Notifications at /notifications lists configured channel families, authors tenant notification channels with endpoint metadata and redacted credential references, authors severity-to-channel routing policies with owner and digest preview metadata, queues redacted channel tests, shows owner/approver escalation, marks read, and requeues dead letters",
+            "backend_status": "served: production dispatcher resolves tenant routing from asset to owner to workspace to global, assembles email/Slack/Teams/SMS/SIEM/webhook plus native PagerDuty Events v2 and OpsGenie Alert v2 delivery, and preserves channel lifecycle, safe tests, inbox/dead-letter handling, and outbox-backed retries",
+            "current_frontend_mapping": "served: the global Alert Center at /notifications separates meaningful attention, delivery failures, history, inherited routing policies, and channels/tests; it previews the server-resolved route, shows precise delivery semantics and owner/escalation evidence, marks read, and requeues dead letters",
             "target_gui_mapping": "Notification channel UI for Slack, Teams, email, SMS, SIEM, PagerDuty, OpsGenie, webhook, test delivery, secret reference, and duplicate-safe delivery.",
             "acceptance_test": "Served lifecycle and channel-test mutations enqueue durable notification work; the DoD runtime proof enters through the authenticated channel-test route assembled by buildRunDeps and requires exact PagerDuty/OpsGenie native requests, vendor acceptance envelopes, external readback, and nonce/PID-bound execution receipts.",
             "source_docs": [
@@ -11559,7 +11559,8 @@
                 "listNotifications",
                 "getNotification",
                 "markNotificationRead",
-                "requeueNotification"
+                "requeueNotification",
+                "previewNotificationRouting"
             ],
             "api_na": "",
             "cli_surface": [
@@ -11577,7 +11578,8 @@
                 "notifications list",
                 "notifications get",
                 "notifications read",
-                "notifications requeue"
+                "notifications requeue",
+                "notifications routing-preview"
             ],
             "cli_na": "",
             "facet_evidence": {

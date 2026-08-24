@@ -2644,6 +2644,8 @@ func componentSchemas() map[string]*Schema {
 	notificationRoutingPolicyReq := object(map[string]*Schema{
 		"id":                      uuid(),
 		"name":                    str(),
+		"scope_kind":              {Type: "string", Enum: []string{"manual", "global", "workspace", "owner", "asset"}},
+		"scope_ref":               str(),
 		"channels_by_severity":    {Type: "object"},
 		"default_channels":        {Type: "array", Items: str()},
 		"owner_ref":               str(),
@@ -2660,6 +2662,8 @@ func componentSchemas() map[string]*Schema {
 		"id":                      uuid(),
 		"tenant_id":               uuid(),
 		"name":                    str(),
+		"scope_kind":              {Type: "string", Enum: []string{"manual", "global", "workspace", "owner", "asset"}},
+		"scope_ref":               str(),
 		"channels_by_severity":    {Type: "object"},
 		"default_channels":        {Type: "array", Items: str()},
 		"owner_ref":               str(),
@@ -2669,7 +2673,15 @@ func componentSchemas() map[string]*Schema {
 		"digest_preview":          ref("NotificationDigestPreview"),
 		"created_at":              timestamp(),
 		"updated_at":              timestamp(),
-	}, "id", "tenant_id", "name", "channels_by_severity", "default_channels", "digest_interval_seconds", "digest_timezone", "digest_preview", "created_at", "updated_at")
+	}, "id", "tenant_id", "name", "scope_kind", "channels_by_severity", "default_channels", "digest_interval_seconds", "digest_timezone", "digest_preview", "created_at", "updated_at")
+	notificationRoutingPreview := object(map[string]*Schema{
+		"resolution_order":   {Type: "array", Items: str()},
+		"matched_policy":     ref("NotificationRoutingPolicy"),
+		"effective_channels": {Type: "array", Items: str()},
+		"missing_channels":   {Type: "array", Items: str()},
+		"delivery_ready":     {Type: "boolean"},
+		"explanation":        str(),
+	}, "resolution_order", "effective_channels", "missing_channels", "delivery_ready", "explanation")
 	notificationChannelTestReq := object(map[string]*Schema{
 		"subject":           str(),
 		"severity":          {Type: "string", Enum: []string{"low", "informational", "warning", "critical"}},
@@ -5161,6 +5173,7 @@ func componentSchemas() map[string]*Schema {
 		"NotificationRoutingPolicyRequest":         notificationRoutingPolicyReq,
 		"NotificationRoutingPolicy":                notificationRoutingPolicy,
 		"NotificationRoutingPolicyList":            list("NotificationRoutingPolicy"),
+		"NotificationRoutingPreview":               notificationRoutingPreview,
 		"Notification":                             notification,
 		"NotificationList":                         list("Notification"),
 		"PolicyDryRunRequest":                      policyDryRunReq,

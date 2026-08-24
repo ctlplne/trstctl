@@ -4223,6 +4223,8 @@ export interface NotificationRoutingPolicy {
   name: string;
   owner_email?: string;
   owner_ref?: string;
+  scope_kind: "manual" | "global" | "workspace" | "owner" | "asset";
+  scope_ref?: string;
   tenant_id: string;
   updated_at: string;
 }
@@ -4241,6 +4243,17 @@ export interface NotificationRoutingPolicyRequest {
   name: string;
   owner_email?: string;
   owner_ref?: string;
+  scope_kind?: "manual" | "global" | "workspace" | "owner" | "asset";
+  scope_ref?: string;
+}
+
+export interface NotificationRoutingPreview {
+  delivery_ready: boolean;
+  effective_channels: string[];
+  explanation: string;
+  matched_policy?: NotificationRoutingPolicy;
+  missing_channels: string[];
+  resolution_order: string[];
 }
 
 export interface OIDCMappingStatus {

@@ -238,6 +238,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"notifications", "channels", "test"}, Method: "POST", Path: "/api/v1/notification-channels/{id}/test", Body: bodyFile, Summary: "Queue a redacted notification channel test through the outbox"},
 	{Name: []string{"notifications", "routing-policies", "create"}, Method: "POST", Path: "/api/v1/notification-routing-policies", Body: bodyFile, Summary: "Create a notification severity-to-channel routing policy"},
 	{Name: []string{"notifications", "routing-policies", "list"}, Method: "GET", Path: "/api/v1/notification-routing-policies", Summary: "List notification routing policies"},
+	{Name: []string{"notifications", "routing-preview"}, Method: "GET", Path: "/api/v1/notification-routing-preview", Query: []string{"workspace", "owner_ref", "asset_ref", "severity"}, Summary: "Preview the effective asset-to-channel route without sending"},
 	{Name: []string{"notifications", "routing-policies", "get"}, Method: "GET", Path: "/api/v1/notification-routing-policies/{id}", Summary: "Get a notification routing policy"},
 	{Name: []string{"notifications", "routing-policies", "update"}, Method: "PUT", Path: "/api/v1/notification-routing-policies/{id}", Body: bodyFile, Summary: "Replace a notification routing policy"},
 	{Name: []string{"notifications", "routing-policies", "delete"}, Method: "DELETE", Path: "/api/v1/notification-routing-policies/{id}", Summary: "Delete a notification routing policy"},
