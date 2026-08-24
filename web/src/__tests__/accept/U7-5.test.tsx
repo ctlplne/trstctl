@@ -3,8 +3,17 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { CodeSigning } from "@/pages/CodeSigning";
+import { AppQueryProvider } from "@/lib/query";
 
-const { apiMock } = vi.hoisted(() => ({ apiMock: { signCode: vi.fn(), signCodeKeyless: vi.fn() } }));
+const { apiMock } = vi.hoisted(() => ({
+  apiMock: {
+    signCode: vi.fn(),
+    signCodeKeyless: vi.fn(),
+    codeSigningIdentities: vi.fn(),
+    approvalRequests: vi.fn(),
+    protocolStatuses: vi.fn(),
+  },
+}));
 
 vi.mock("@/lib/api", async (orig) => {
   const actual = await orig<typeof import("@/lib/api")>();
@@ -22,15 +31,24 @@ beforeEach(() => {
     signature: "KEYLESSBASE64SIG",
     transparency_destination: "transparency.rekor",
   });
+  apiMock.codeSigningIdentities.mockReset().mockResolvedValue({ items: [], total: 0, verified_count: 0, not_published_count: 0 });
+  apiMock.approvalRequests.mockReset().mockResolvedValue([]);
+  apiMock.protocolStatuses.mockReset().mockResolvedValue({
+    source: "public_responder_probe",
+    checked_at: "2026-08-24T12:00:00Z",
+    items: [{ protocol: "tsa", endpoint: "/tsa", enabled: true, served: true, status_code: 200 }],
+  });
 });
 
 describe("U7-5 code-signing console (keyless)", () => {
   it("submits a keyless signing request to the served endpoint and renders the receipt", async () => {
     const user = userEvent.setup();
     render(
-      <MemoryRouter>
-        <CodeSigning />
-      </MemoryRouter>,
+      <AppQueryProvider>
+        <MemoryRouter>
+          <CodeSigning />
+        </MemoryRouter>
+      </AppQueryProvider>,
     );
     await user.click(screen.getByRole("button", { name: "Keyless (Fulcio)" }));
     await user.type(screen.getByLabelText("Artifact digest"), `sha256:${"f".repeat(64)}`);

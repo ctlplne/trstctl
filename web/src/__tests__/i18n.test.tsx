@@ -1089,8 +1089,18 @@ describe("i18n boundary", () => {
       // counts remain visible, but every missing check says unavailable rather
       // than presenting a safe zero. Machine-authored es/de — FLAGGED FOR
       // HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "4cc3c02f906d8c6817dc0a2ec06b556a1f3f8644d641f84dd14e0b480459617e",
-      "de-DE": "99b6ef9b0b3148985bf1efacafeb63d02411d535cde465fa5d9f5ba4f1fab6f9",
+      // Software Trust and Trust Operations G7 re-pin: both roots now expose
+      // served outcomes, approvals, operational infrastructure, and explicit
+      // unknown states. The managed-key read-model gap remains named instead
+      // of becoming a fabricated health claim. Machine-authored es/de —
+      // FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
+      // Home G7 re-pin: each urgent row names the affected workspace,
+      // consequence, deadline, automation uncertainty, owner, and safest next
+      // action. The five-workspace strip labels missing reads unavailable.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
+      // release.
+      "es-ES": "602d5c93589e21270e115c1557641aa32cd5e791c12c6eb19b016c25635209bc",
+      "de-DE": "9fb49ebd4e1c135e062eab1155518a56394c6968eee9f71b4642c39acbcd45cd",
     });
   });
 

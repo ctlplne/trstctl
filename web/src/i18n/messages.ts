@@ -882,6 +882,59 @@ export const messages = {
     defaultMessage: "Review why this credential needs attention.",
     description: "Plain fallback when the detailed contextual-risk explanation is unavailable.",
   },
+  "dashboard.attention.consequence.expiry": {
+    defaultMessage: "Machines may lose trust after this credential expires.",
+    description: "Home consequence for near-expiry work.",
+  },
+  "dashboard.attention.consequence.owner": {
+    defaultMessage: "Nobody is accountable for restoring this credential if it fails.",
+    description: "Home consequence for ownerless work.",
+  },
+  "dashboard.attention.consequence.crypto": {
+    defaultMessage: "A weaker credential may be easier to misuse.",
+    description: "Home consequence for weak cryptography.",
+  },
+  "dashboard.attention.consequence.impact": {
+    defaultMessage: "One credential failure could affect several dependent systems.",
+    description: "Home consequence for wide-impact credentials.",
+  },
+  "dashboard.attention.consequence.rotation": {
+    defaultMessage: "Old credential material remains usable longer than intended.",
+    description: "Home consequence for overdue rotation.",
+  },
+  "dashboard.attention.consequence.review": { defaultMessage: "The exact operational consequence needs review.", description: "Home fallback consequence." },
+  "dashboard.attention.deadlineUnknown": { defaultMessage: "Deadline not reported", description: "Home work-item unknown deadline." },
+  "dashboard.attention.deadlineExpired": { defaultMessage: "Already expired", description: "Home work-item expired deadline." },
+  "dashboard.attention.deadlineToday": { defaultMessage: "Expires today", description: "Home work-item deadline today." },
+  "dashboard.attention.deadlineOne": { defaultMessage: "Expires in 1 day", description: "Home work-item one-day deadline." },
+  "dashboard.attention.deadlineMany": { defaultMessage: "Expires in {count} days", description: "Home work-item multi-day deadline." },
+  "dashboard.attention.automationUnknown": {
+    defaultMessage: "Automation not proven on Home",
+    description: "Home states that automation evidence is not present in the risk summary.",
+  },
+  "dashboard.attention.ownerPresent": { defaultMessage: "Accountable owner recorded", description: "Home work-item owner present." },
+  "dashboard.attention.ownerMissing": { defaultMessage: "No accountable owner", description: "Home work-item owner missing." },
+  "dashboard.attention.nextActionReview": {
+    defaultMessage: "Open the risk evidence before changing the credential.",
+    description: "Home fallback safest next action.",
+  },
+  "dashboard.attention.consequenceLabel": { defaultMessage: "What happens if nobody acts", description: "Accessible Home consequence label." },
+  "dashboard.attention.automationLabel": { defaultMessage: "Automation", description: "Accessible Home automation label." },
+  "dashboard.attention.ownerLabel": { defaultMessage: "Accountability", description: "Accessible Home owner label." },
+  "dashboard.attention.nextActionLabel": { defaultMessage: "Safest next action", description: "Accessible Home next-action label." },
+  "dashboard.workspaceHealth.title": { defaultMessage: "Workspace health", description: "Home cross-workspace health heading." },
+  "dashboard.workspaceHealth.help": {
+    defaultMessage: "A compact door into each trust domain. Missing reads say unavailable instead of showing a safe zero.",
+    description: "Home cross-workspace health explanation.",
+  },
+  "dashboard.workspaceHealth.label": { defaultMessage: "Workspace health", description: "Accessible Home workspace-health list label." },
+  "dashboard.workspaceHealth.loading": { defaultMessage: "Checking current evidence…", description: "Home workspace-health loading state." },
+  "dashboard.workspaceHealth.unavailable": { defaultMessage: "Current evidence unavailable", description: "Home workspace-health unavailable state." },
+  "dashboard.workspaceHealth.certificates": { defaultMessage: "{count} expire within 7 days", description: "Home Certificate Lifecycle health summary." },
+  "dashboard.workspaceHealth.machines": { defaultMessage: "{count} machine identities tracked", description: "Home Machine and Workload Trust summary." },
+  "dashboard.workspaceHealth.secrets": { defaultMessage: "{count} stored secrets tracked", description: "Home Secrets and Access summary." },
+  "dashboard.workspaceHealth.signing": { defaultMessage: "{failures} failures across {total} recent operations", description: "Home Software Trust summary." },
+  "dashboard.workspaceHealth.incidents": { defaultMessage: "{count} open incidents", description: "Home Trust Operations summary." },
   "dashboard.moreActions": {
     defaultMessage: "More actions",
     description: "Dashboard disclosure containing secondary discovery and rotation actions.",
@@ -2651,6 +2704,77 @@ export const messages = {
     defaultMessage: "Download signature",
     description: "Link that downloads the returned artifact signature.",
   },
+  "codesign.answer": {
+    defaultMessage:
+      "See what software-signing work needs attention, what completed, and whether approvals, timestamping, and transparency proof are ready. Artifact bytes and private keys never enter this browser.",
+    description: "Answer-first description for the Software Trust overview.",
+  },
+  "codesign.technical": {
+    defaultMessage:
+      "The overview reads tenant-scoped signing operations, immutable approval intents, and public TSA probes. Managed-key inventory is labeled unavailable because the current API exposes key mutations but no read model.",
+    description: "Exact evidence disclosure for the Software Trust overview.",
+  },
+  "codesign.overview.loading": {
+    defaultMessage: "Checking signing outcomes, approvals, and timestamping…",
+    description: "Software Trust overview loading state.",
+  },
+  "codesign.attention.unknown": { defaultMessage: "Software Trust urgency is not fully known", description: "Software Trust incomplete-evidence heading." },
+  "codesign.attention.unknownHelp": {
+    defaultMessage: "At least one required evidence source could not be read. Available facts remain visible, but missing facts are never converted to zero.",
+    description: "Software Trust incomplete-evidence explanation.",
+  },
+  "codesign.attention.count": { defaultMessage: "{count} Software Trust items need attention", description: "Software Trust attention count." },
+  "codesign.attention.clear": {
+    defaultMessage: "No Software Trust work needs attention",
+    description: "Software Trust clear state when all required evidence loaded.",
+  },
+  "codesign.attention.help": {
+    defaultMessage:
+      "Failures, pending signing approvals, and TSA readiness are counted once from the available evidence. Key inventory remains a named visibility gap.",
+    description: "Software Trust attention explanation.",
+  },
+  "codesign.source.operationsUnavailable": { defaultMessage: "Signing outcomes are unavailable", description: "Unavailable code-signing ledger source." },
+  "codesign.source.approvalsUnavailable": { defaultMessage: "Signing approvals are unavailable", description: "Unavailable signing-approval source." },
+  "codesign.source.tsaUnavailable": { defaultMessage: "Timestamping readiness is unavailable", description: "Unavailable TSA-probe source." },
+  "codesign.health.title": { defaultMessage: "Software-signing health", description: "Software Trust health heading." },
+  "codesign.health.help": {
+    defaultMessage: "These are operational facts from current product reads, plus one explicit key-inventory visibility gap.",
+    description: "Software Trust health explanation.",
+  },
+  "codesign.health.label": { defaultMessage: "Software Trust health", description: "Accessible label for Software Trust health cards." },
+  "codesign.health.operationsUnavailable": { defaultMessage: "Signing outcomes are unavailable", description: "Unavailable operation-health card." },
+  "codesign.health.failures.one": { defaultMessage: "1 signing or transparency failure", description: "One recent signing failure." },
+  "codesign.health.failures.many": { defaultMessage: "{count} signing or transparency failures", description: "Recent signing failure count." },
+  "codesign.health.approvalsUnavailable": { defaultMessage: "Signing approvals are unavailable", description: "Unavailable approval-health card." },
+  "codesign.health.approvals.one": { defaultMessage: "1 signing approval waiting", description: "One signing approval waiting." },
+  "codesign.health.approvals.many": { defaultMessage: "{count} signing approvals waiting", description: "Signing approval count." },
+  "codesign.health.tsaUnavailable": { defaultMessage: "Timestamping readiness is unavailable", description: "Unavailable TSA-health card." },
+  "codesign.health.tsaServing": { defaultMessage: "Timestamping is serving", description: "TSA probe healthy state." },
+  "codesign.health.tsaReview": { defaultMessage: "Timestamping needs review", description: "TSA probe unhealthy or disabled state." },
+  "codesign.health.keysUnavailable": {
+    defaultMessage: "Managed-key inventory is not exposed by this read model",
+    description: "Honest managed-key visibility gap.",
+  },
+  "codesign.health.operations.one": { defaultMessage: "1 recent signing operation", description: "One recent signing operation." },
+  "codesign.health.operations.many": { defaultMessage: "{count} recent signing operations", description: "Recent signing operation count." },
+  "codesign.outcomes.title": { defaultMessage: "Recent signing outcomes", description: "Recent Software Trust outcomes heading." },
+  "codesign.outcomes.help": {
+    defaultMessage: "Each row is one tenant-scoped operation joined to its transparency-log publication state.",
+    description: "Recent Software Trust outcomes explanation.",
+  },
+  "codesign.outcomes.label": { defaultMessage: "Recent software-signing outcomes", description: "Accessible recent signing outcomes table label." },
+  "codesign.outcomes.operation": { defaultMessage: "Operation", description: "Signing outcomes operation column." },
+  "codesign.outcomes.mode": { defaultMessage: "Key custody", description: "Signing outcomes mode column." },
+  "codesign.outcomes.result": { defaultMessage: "Signing result", description: "Signing outcomes result column." },
+  "codesign.outcomes.transparency": { defaultMessage: "Transparency proof", description: "Signing outcomes transparency column." },
+  "codesign.outcomes.evidence": { defaultMessage: "Failure evidence", description: "Signing outcomes evidence column." },
+  "codesign.outcomes.noError": { defaultMessage: "No failure reported", description: "Successful signing outcome evidence text." },
+  "codesign.mode.managed": { defaultMessage: "Managed key", description: "Managed-key signing mode." },
+  "codesign.mode.keyless": { defaultMessage: "Keyless identity", description: "Keyless signing mode." },
+  "codesign.transparency.verified": { defaultMessage: "Transparency verified", description: "Verified transparency state." },
+  "codesign.transparency.pending": { defaultMessage: "Transparency pending", description: "Pending transparency state." },
+  "codesign.transparency.failed": { defaultMessage: "Transparency failed", description: "Failed transparency state." },
+  "codesign.transparency.notPublished": { defaultMessage: "Not published", description: "Not-published transparency state." },
   "operations.jobs.description": {
     defaultMessage:
       "Work that touches your estate is decided here and executed by an agent in your environment. This is what is waiting, what an agent holds right now, and how long the oldest job has waited \u2014 the number that tells a drained queue from a stalled one.",
@@ -4220,6 +4344,15 @@ export const messages = {
     defaultMessage: "{count} urgent conditions need attention",
     description: "Trust Operations attention heading.",
   },
+  "trustOperations.attentionUnknown": {
+    defaultMessage: "Trust Operations urgency is not fully known",
+    description: "Trust Operations incomplete-evidence heading.",
+  },
+  "trustOperations.attentionUnknownHelp": {
+    defaultMessage:
+      "At least one required tenant evidence source could not be read. Available facts remain visible; missing facts are never converted to reassuring zeroes.",
+    description: "Trust Operations incomplete-evidence explanation.",
+  },
   "trustOperations.attentionHealthy": {
     defaultMessage: "No urgent conditions are projected",
     description: "Trust Operations healthy attention heading.",
@@ -4293,6 +4426,16 @@ export const messages = {
     defaultMessage: "Trust Operations health",
     description: "Accessible Trust Operations health-list label.",
   },
+  "trustOperations.source.risk": { defaultMessage: "Risk priorities are unavailable", description: "Unavailable contextual-risk source." },
+  "trustOperations.source.incidents": { defaultMessage: "Incident evidence is unavailable", description: "Unavailable incidents source." },
+  "trustOperations.source.notifications": { defaultMessage: "Alert delivery evidence is unavailable", description: "Unavailable notification source." },
+  "trustOperations.source.ownership": { defaultMessage: "Ownership evidence is unavailable", description: "Unavailable ownership source." },
+  "trustOperations.source.workers": { defaultMessage: "Worker evidence is unavailable", description: "Unavailable bulkhead source." },
+  "trustOperations.source.connectors": { defaultMessage: "Connector delivery evidence is unavailable", description: "Unavailable connector source." },
+  "trustOperations.source.agents": { defaultMessage: "Agent queue evidence is unavailable", description: "Unavailable agent-job source." },
+  "trustOperations.source.audit": { defaultMessage: "Audit evidence is unavailable", description: "Unavailable audit source." },
+  "trustOperations.source.system": { defaultMessage: "System readiness is unavailable", description: "Unavailable system-readout source." },
+  "trustOperations.source.routing": { defaultMessage: "Alert route evidence is unavailable", description: "Unavailable alert routing source." },
   "trustOperations.incidents.one": {
     defaultMessage: "1 open incident",
     description: "One open incident.",
@@ -4301,6 +4444,7 @@ export const messages = {
     defaultMessage: "{count} open incidents",
     description: "Open incident count.",
   },
+  "trustOperations.incidents.unavailable": { defaultMessage: "Incident evidence unavailable", description: "Unavailable incident health card." },
   "trustOperations.ownership.one": {
     defaultMessage: "1 ownership gap",
     description: "One ownership gap.",
@@ -4309,6 +4453,7 @@ export const messages = {
     defaultMessage: "{count} ownership gaps",
     description: "Ownership-gap count.",
   },
+  "trustOperations.ownership.unavailable": { defaultMessage: "Ownership evidence unavailable", description: "Unavailable ownership health card." },
   "trustOperations.alerts.one": {
     defaultMessage: "1 failed alert delivery",
     description: "One failed alert delivery.",
@@ -4317,6 +4462,7 @@ export const messages = {
     defaultMessage: "{count} failed alert deliveries",
     description: "Failed alert delivery count.",
   },
+  "trustOperations.alerts.unavailable": { defaultMessage: "Alert delivery evidence unavailable", description: "Unavailable alert health card." },
   "trustOperations.workers.healthy": {
     defaultMessage: "Background workers healthy",
     description: "Healthy worker-pool state.",
@@ -4325,6 +4471,19 @@ export const messages = {
     defaultMessage: "Background workers need review",
     description: "Unhealthy or unavailable worker-pool state.",
   },
+  "trustOperations.workers.unavailable": { defaultMessage: "Background-worker evidence unavailable", description: "Unavailable worker health card." },
+  "trustOperations.connectors.one": { defaultMessage: "1 connector delivery failed", description: "One failed connector delivery." },
+  "trustOperations.connectors.many": { defaultMessage: "{count} connector deliveries failed", description: "Failed connector delivery count." },
+  "trustOperations.connectors.unavailable": { defaultMessage: "Connector delivery evidence unavailable", description: "Unavailable connector health card." },
+  "trustOperations.agents.one": { defaultMessage: "1 agent job waiting", description: "One waiting agent job." },
+  "trustOperations.agents.many": { defaultMessage: "{count} agent jobs waiting", description: "Waiting agent-job count." },
+  "trustOperations.agents.healthy": { defaultMessage: "Agent queues healthy", description: "Healthy agent-job queues." },
+  "trustOperations.agents.unavailable": { defaultMessage: "Agent queue evidence unavailable", description: "Unavailable agent health card." },
+  "trustOperations.audit.readable": { defaultMessage: "Audit evidence is readable", description: "Successful tenant audit evidence read." },
+  "trustOperations.audit.unavailable": { defaultMessage: "Audit evidence unavailable", description: "Unavailable audit health card." },
+  "trustOperations.system.ready": { defaultMessage: "Core dependencies ready", description: "Ready system dependencies and signer." },
+  "trustOperations.system.review": { defaultMessage: "Core dependencies need review", description: "Unready system dependency or signer." },
+  "trustOperations.system.unavailable": { defaultMessage: "System readiness unavailable", description: "Unavailable system health card." },
   "trustOperations.routingTitle": {
     defaultMessage: "Alert route safety",
     description: "Trust Operations alert-safety heading.",
@@ -4336,6 +4495,10 @@ export const messages = {
   "trustOperations.routingUnsafe": {
     defaultMessage: "Alert delivery is not fully routable: the APIs report {channels} ready channels and {policies} routing policies.",
     description: "Trust Operations alert route unsafe state.",
+  },
+  "trustOperations.routingUnknown": {
+    defaultMessage: "Alert route safety is unknown because channel or routing-policy evidence could not be read.",
+    description: "Unavailable alert route evidence state.",
   },
   "trustOperations.routingReview": {
     defaultMessage: "Review routes and delivery evidence",
@@ -5633,7 +5796,7 @@ export const messages = {
     description: "Standing and orphaned grant counts for one SSH key location.",
   },
   "nav.item.codeSigning": {
-    defaultMessage: "Software signing",
+    defaultMessage: "Software Trust",
     description: "Primary navigation item.",
   },
   "nav.item.tsa": {

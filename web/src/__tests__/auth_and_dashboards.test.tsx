@@ -28,6 +28,7 @@ const { apiMock } = vi.hoisted(() => ({
     incidentExecutions: vi.fn(),
     transitionIdentity: vi.fn(),
     endpointVerifications: vi.fn(),
+    codeSigningIdentities: vi.fn(),
   },
 }));
 
@@ -179,6 +180,8 @@ describe("auth + dashboards", () => {
       summary: { endpoints: 0, verified: 0, diverged: 0, unreachable: 0, verified_percent: 0 },
       guidance: "",
     });
+    apiMock.codeSigningIdentities.mockReset();
+    apiMock.codeSigningIdentities.mockResolvedValue({ items: [], total: 0, verified_count: 0, not_published_count: 0 });
     apiMock.connectorDeliveries.mockResolvedValue({ items: [] });
     apiMock.secretPage.mockResolvedValue({ items: [] });
     apiMock.incidentExecutions.mockResolvedValue({ items: [] });
@@ -536,6 +539,52 @@ describe("auth + dashboards", () => {
     // Secrets KPI comes from the served secret store, not a stub.
     const secrets = kpiTile(dash, /^Secrets$/);
     await waitFor(() => expect(within(secrets).getByText("2")).toBeInTheDocument());
+  });
+
+  it("answers domain, consequence, automation, accountability, and next action in the Home worklist", async () => {
+    seededTenant();
+    apiMock.contextualRiskPriorities.mockResolvedValue({
+      ...contextualRiskFixture(1, 0),
+      priorities: [
+        {
+          credential_id: "cert-payments",
+          subject: "payments.example.test",
+          kind: "certificate",
+          severity: "critical",
+          contextual_score: 96,
+          expires_at: new Date(Date.now() + 86_400_000).toISOString(),
+          owner_active: false,
+          priority_reasons: ["near_expiry", "orphaned_owner"],
+          recommended_action: "Assign the Payments team, verify the alert route, then renew.",
+          base_score: 90,
+          blast_radius: 8,
+          credential_blast_radius: 3,
+          crypto_asset_blast_radius: 0,
+          resource_blast_radius: 5,
+          workload_blast_radius: 0,
+          components: {},
+          evidence_refs: [],
+          privilege: 2,
+          rank: 1,
+          sensitivity: 4,
+          weak_crypto_context: 0,
+        },
+      ],
+    });
+
+    renderAt("/");
+    const dash = await screen.findByRole("region", { name: "Home" });
+    const queue = await within(dash).findByRole("list", { name: "Highest-priority credentials" });
+    expect(within(queue).getByText("Certificate Lifecycle")).toBeInTheDocument();
+    expect(within(queue).getByText("Machines may lose trust after this credential expires.")).toBeInTheDocument();
+    expect(within(queue).getByText("Automation not proven on Home")).toBeInTheDocument();
+    expect(within(queue).getByText("No accountable owner")).toBeInTheDocument();
+    expect(within(queue).getByText("Assign the Payments team, verify the alert route, then renew.")).toBeInTheDocument();
+
+    const health = within(dash).getByRole("list", { name: "Workspace health" });
+    expect(within(health).getByRole("link", { name: /Certificate Lifecycle/ })).toHaveAttribute("href", "/certificates");
+    expect(within(health).getByRole("link", { name: /Software Trust/ })).toHaveAttribute("href", "/codesign");
+    expect(within(health).getByRole("link", { name: /Trust Operations/ })).toHaveAttribute("href", "/trust-operations");
   });
 
   it("AUD-67 reports contextual critical work when certificate risk is empty", async () => {

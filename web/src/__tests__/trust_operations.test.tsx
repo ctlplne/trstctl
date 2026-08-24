@@ -16,6 +16,10 @@ const { apiMock } = vi.hoisted(() => ({
     notificationRoutingPolicies: vi.fn(),
     ownershipAttribution: vi.fn(),
     bulkheadStats: vi.fn(),
+    auditEvents: vi.fn(),
+    connectorDeliveries: vi.fn(),
+    agentJobPosture: vi.fn(),
+    platformSystem: vi.fn(),
   },
 }));
 
@@ -108,6 +112,46 @@ describe("Trust Operations overview", () => {
       served: true,
       pools: [{ name: "notifications", workers: 2, capacity: 10, queued: 0, submitted: 4, completed: 4, rejected: 0, panicked: 0, saturation_percent: 0 }],
     });
+    apiMock.auditEvents.mockResolvedValue([{ sequence: 42, tenant_id: "tenant-1", time: "2026-08-24T11:59:00Z", type: "notification.delivered" }]);
+    apiMock.connectorDeliveries.mockResolvedValue({
+      items: [
+        {
+          id: "connector-1",
+          tenant_id: "tenant-1",
+          connector: "kubernetes",
+          target: "cluster-a",
+          destination: "connector.deploy",
+          status: "verify_failed",
+          attempts: 3,
+          created_at: "2026-08-24T11:00:00Z",
+          updated_at: "2026-08-24T11:03:00Z",
+        },
+      ],
+    });
+    apiMock.agentJobPosture.mockResolvedValue({
+      served: true,
+      generated_at: "2026-08-24T12:00:00Z",
+      claimable_kinds: ["discovery"],
+      queues: [{ kind: "discovery", enabled: true, pending: 2, claimed: 0, oldest_unclaimed_seconds: 120 }],
+      receipts: { rejected: 0, verified: 4 },
+      redemptions: { live: 1, total: 4 },
+    });
+    apiMock.platformSystem.mockResolvedValue({
+      version: "0.1.0",
+      commit: "abc123",
+      build_date: "2026-08-24T10:00:00Z",
+      go_version: "go1.26",
+      started_at: "2026-08-24T10:00:00Z",
+      uptime_seconds: 7200,
+      fips_module_active: false,
+      signer_mode: "child",
+      idempotency_results: { protected: true },
+      dependencies: [
+        { name: "postgres", ready: true },
+        { name: "jetstream", ready: true },
+        { name: "signer", ready: true },
+      ],
+    });
   });
 
   it("answers cross-product urgency before exposing control-plane machinery", async () => {
@@ -128,5 +172,25 @@ describe("Trust Operations overview", () => {
     expect(within(health).getByRole("link", { name: /2 ownership gaps/i })).toHaveAttribute("href", "/owners?status=orphaned");
     expect(within(health).getByRole("link", { name: /1 failed alert delivery/i })).toHaveAttribute("href", "/notifications?status=dead");
     expect(within(health).getByRole("link", { name: /background workers healthy/i })).toHaveAttribute("href", "/operations");
+    expect(within(health).getByRole("link", { name: /1 connector delivery failed/i })).toHaveAttribute("href", "/connectors");
+    expect(within(health).getByRole("link", { name: /2 agent jobs waiting/i })).toHaveAttribute("href", "/agents");
+    expect(within(health).getByRole("link", { name: /audit evidence is readable/i })).toHaveAttribute("href", "/audit");
+    expect(within(health).getByRole("link", { name: /core dependencies ready/i })).toHaveAttribute("href", "/platform");
+  });
+
+  it("labels failed evidence sources as unavailable instead of reporting green zeroes", async () => {
+    apiMock.contextualRiskPriorities.mockRejectedValue(new Error("risk unavailable"));
+    apiMock.incidentExecutions.mockRejectedValue(new Error("incidents unavailable"));
+    apiMock.auditEvents.mockRejectedValue(new Error("audit unavailable"));
+    apiMock.platformSystem.mockRejectedValue(new Error("system unavailable"));
+    renderPage();
+
+    expect(await screen.findByRole("heading", { name: "Trust Operations urgency is not fully known" }, { timeout: 3_000 })).toBeInTheDocument();
+    expect(screen.getByText("Risk priorities are unavailable")).toBeInTheDocument();
+    const health = screen.getByRole("list", { name: "Trust Operations health" });
+    expect(within(health).getByRole("link", { name: "Incident evidence unavailable" })).toBeInTheDocument();
+    expect(within(health).getByRole("link", { name: "Audit evidence unavailable" })).toBeInTheDocument();
+    expect(within(health).getByRole("link", { name: "System readiness unavailable" })).toBeInTheDocument();
+    expect(screen.queryByText("No urgent conditions are projected")).not.toBeInTheDocument();
   });
 });

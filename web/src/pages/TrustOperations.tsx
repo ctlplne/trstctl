@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, BellRing, CircleGauge, ShieldAlert, Users } from "lucide-react";
+import { AlertTriangle, BellRing, Bot, CircleGauge, FileCheck2, PlugZap, ServerCog, ShieldAlert, Users } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingState } from "@/components/StatePrimitives";
 import { api, type ContextualRiskPriority } from "@/lib/api";
@@ -46,8 +46,14 @@ export function TrustOperations() {
   const policies = useApiQuery(["notification-routing-policies"], api.notificationRoutingPolicies, { live: { intervalMs: 60_000 } });
   const ownership = useApiQuery(["ownership-attribution"], api.ownershipAttribution, { live: { intervalMs: 60_000 } });
   const workers = useApiQuery(["operations", "bulkheads"], api.bulkheadStats, { live: { intervalMs: 30_000 } });
+  const audit = useApiQuery(["audit-events", { limit: 1 }], () => api.auditEvents({ limit: 1 }), { live: { intervalMs: 60_000 } });
+  const connectors = useApiQuery(["connector-deliveries", { limit: 100 }], () => api.connectorDeliveries({ limit: 100 }), { live: { intervalMs: 30_000 } });
+  const agentJobs = useApiQuery(["agent-job-posture"], api.agentJobPosture, { live: { intervalMs: 30_000 } });
+  const system = useApiQuery(["platform-system"], api.platformSystem, { live: { intervalMs: 60_000 } });
 
-  const loading = risks.loading || incidents.loading || notifications.loading || channels.loading || policies.loading || ownership.loading || workers.loading;
+  const sources = [risks, incidents, notifications, channels, policies, ownership, workers, audit, connectors, agentJobs, system];
+  const loading = sources.some((source) => source.loading);
+  const sourceUnavailable = sources.some((source) => source.error !== null);
   const urgent = (risks.data?.priorities ?? []).filter((row) => row.severity === "critical" || row.severity === "high").slice(0, 5);
   const openIncidents = (incidents.data?.items ?? []).filter((row) => row.status !== "completed" && row.status !== "rolled_back").length;
   const deadDeliveries = (notifications.data?.items ?? []).filter((row) => row.status === "dead").length;
@@ -55,6 +61,13 @@ export function TrustOperations() {
   const readyChannels = (channels.data?.items ?? []).filter(readyChannel).length;
   const routingReady = readyChannels > 0 && (policies.data?.items ?? []).length > 0;
   const workerHealthy = Boolean(workers.data?.served) && (workers.data?.pools ?? []).every((pool) => pool.rejected === 0 && pool.panicked === 0);
+  const connectorFailureStates = new Set(["failed", "verify_failed", "rollback_refused", "rollback_failed", "dry_run_blocked"]);
+  const connectorFailures = (connectors.data?.items ?? []).filter((delivery) => connectorFailureStates.has(delivery.status)).length;
+  const waitingAgentJobs = (agentJobs.data?.queues ?? []).reduce((sum, queue) => sum + queue.pending, 0);
+  const agentHealthy = Boolean(agentJobs.data?.served) && waitingAgentJobs === 0 && (agentJobs.data?.receipts?.rejected ?? 0) === 0;
+  const systemDependencies = system.data?.dependencies ?? [];
+  const systemReady =
+    system.data !== null && system.data.signer_mode !== "none" && systemDependencies.length > 0 && systemDependencies.every((dependency) => dependency.ready);
   const primaryTo = deadDeliveries > 0 ? "/notifications?status=dead" : urgent.length > 0 ? "/risk?sort=score" : "/operations";
 
   return (
@@ -82,12 +95,34 @@ export function TrustOperations() {
           <section aria-labelledby="trust-operations-attention-heading" className="ui-panel space-y-4 p-comfortable">
             <div>
               <h2 id="trust-operations-attention-heading" className="text-title font-semibold">
-                {urgent.length > 0 ? t("trustOperations.attentionTitle", { count: String(urgent.length) }) : t("trustOperations.attentionHealthy")}
+                {sourceUnavailable
+                  ? t("trustOperations.attentionUnknown")
+                  : urgent.length > 0
+                    ? t("trustOperations.attentionTitle", { count: String(urgent.length) })
+                    : t("trustOperations.attentionHealthy")}
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                {urgent.length > 0 ? t("trustOperations.attentionHelp") : t("trustOperations.attentionHealthyHelp")}
+                {sourceUnavailable
+                  ? t("trustOperations.attentionUnknownHelp")
+                  : urgent.length > 0
+                    ? t("trustOperations.attentionHelp")
+                    : t("trustOperations.attentionHealthyHelp")}
               </p>
             </div>
+            {sourceUnavailable ? (
+              <ul className="grid gap-1 text-sm text-muted-foreground sm:grid-cols-2">
+                {risks.error ? <li>{t("trustOperations.source.risk")}</li> : null}
+                {incidents.error ? <li>{t("trustOperations.source.incidents")}</li> : null}
+                {notifications.error ? <li>{t("trustOperations.source.notifications")}</li> : null}
+                {ownership.error ? <li>{t("trustOperations.source.ownership")}</li> : null}
+                {workers.error ? <li>{t("trustOperations.source.workers")}</li> : null}
+                {connectors.error ? <li>{t("trustOperations.source.connectors")}</li> : null}
+                {agentJobs.error ? <li>{t("trustOperations.source.agents")}</li> : null}
+                {audit.error ? <li>{t("trustOperations.source.audit")}</li> : null}
+                {system.error ? <li>{t("trustOperations.source.system")}</li> : null}
+                {channels.error || policies.error ? <li>{t("trustOperations.source.routing")}</li> : null}
+              </ul>
+            ) : null}
             {urgent.length > 0 ? (
               <ul aria-label={t("trustOperations.attentionLabel")} className="divide-y divide-border">
                 {urgent.map((priority) => (
@@ -133,26 +168,78 @@ export function TrustOperations() {
               <HealthLink
                 to="/incidents"
                 icon={<AlertTriangle className="h-4 w-4" aria-hidden="true" />}
-                label={t(openIncidents === 1 ? "trustOperations.incidents.one" : "trustOperations.incidents.many", { count: String(openIncidents) })}
-                urgent={openIncidents > 0}
+                label={
+                  incidents.error
+                    ? t("trustOperations.incidents.unavailable")
+                    : t(openIncidents === 1 ? "trustOperations.incidents.one" : "trustOperations.incidents.many", { count: String(openIncidents) })
+                }
+                urgent={incidents.error !== null || openIncidents > 0}
               />
               <HealthLink
                 to="/owners?status=orphaned"
                 icon={<Users className="h-4 w-4" aria-hidden="true" />}
-                label={t(ownerGaps === 1 ? "trustOperations.ownership.one" : "trustOperations.ownership.many", { count: String(ownerGaps) })}
-                urgent={ownerGaps > 0}
+                label={
+                  ownership.error
+                    ? t("trustOperations.ownership.unavailable")
+                    : t(ownerGaps === 1 ? "trustOperations.ownership.one" : "trustOperations.ownership.many", { count: String(ownerGaps) })
+                }
+                urgent={ownership.error !== null || ownerGaps > 0}
               />
               <HealthLink
                 to="/notifications?status=dead"
                 icon={<BellRing className="h-4 w-4" aria-hidden="true" />}
-                label={t(deadDeliveries === 1 ? "trustOperations.alerts.one" : "trustOperations.alerts.many", { count: String(deadDeliveries) })}
-                urgent={deadDeliveries > 0}
+                label={
+                  notifications.error
+                    ? t("trustOperations.alerts.unavailable")
+                    : t(deadDeliveries === 1 ? "trustOperations.alerts.one" : "trustOperations.alerts.many", { count: String(deadDeliveries) })
+                }
+                urgent={notifications.error !== null || deadDeliveries > 0}
               />
               <HealthLink
                 to="/operations"
                 icon={<CircleGauge className="h-4 w-4" aria-hidden="true" />}
-                label={t(workerHealthy ? "trustOperations.workers.healthy" : "trustOperations.workers.review")}
-                urgent={!workerHealthy}
+                label={
+                  workers.error
+                    ? t("trustOperations.workers.unavailable")
+                    : t(workerHealthy ? "trustOperations.workers.healthy" : "trustOperations.workers.review")
+                }
+                urgent={workers.error !== null || !workerHealthy}
+              />
+              <HealthLink
+                to="/connectors"
+                icon={<PlugZap className="h-4 w-4" aria-hidden="true" />}
+                label={
+                  connectors.error
+                    ? t("trustOperations.connectors.unavailable")
+                    : t(connectorFailures === 1 ? "trustOperations.connectors.one" : "trustOperations.connectors.many", { count: String(connectorFailures) })
+                }
+                urgent={connectors.error !== null || connectorFailures > 0}
+              />
+              <HealthLink
+                to="/agents"
+                icon={<Bot className="h-4 w-4" aria-hidden="true" />}
+                label={
+                  agentJobs.error
+                    ? t("trustOperations.agents.unavailable")
+                    : agentHealthy
+                      ? t("trustOperations.agents.healthy")
+                      : t(waitingAgentJobs === 1 ? "trustOperations.agents.one" : "trustOperations.agents.many", { count: String(waitingAgentJobs) })
+                }
+                urgent={agentJobs.error !== null || !agentHealthy}
+              />
+              <HealthLink
+                to="/audit"
+                icon={<FileCheck2 className="h-4 w-4" aria-hidden="true" />}
+                label={audit.error ? t("trustOperations.audit.unavailable") : t("trustOperations.audit.readable")}
+                urgent={audit.error !== null}
+              />
+              <HealthLink
+                to="/platform"
+                icon={<ServerCog className="h-4 w-4" aria-hidden="true" />}
+                label={
+                  system.error ? t("trustOperations.system.unavailable") : t(systemReady ? "trustOperations.system.ready" : "trustOperations.system.review")
+                }
+                urgent={system.error !== null || !systemReady}
               />
             </ul>
           </section>
@@ -162,9 +249,11 @@ export function TrustOperations() {
               {t("trustOperations.routingTitle")}
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              {routingReady
-                ? t("trustOperations.routingReady", { channels: String(readyChannels), policies: String(policies.data?.items?.length ?? 0) })
-                : t("trustOperations.routingUnsafe", { channels: String(readyChannels), policies: String(policies.data?.items?.length ?? 0) })}
+              {channels.error || policies.error
+                ? t("trustOperations.routingUnknown")
+                : routingReady
+                  ? t("trustOperations.routingReady", { channels: String(readyChannels), policies: String(policies.data?.items?.length ?? 0) })
+                  : t("trustOperations.routingUnsafe", { channels: String(readyChannels), policies: String(policies.data?.items?.length ?? 0) })}
             </p>
             <Link to="/notifications" className="mt-3 inline-block text-sm font-semibold text-brand-accent hover:underline">
               {t("trustOperations.routingReview")}

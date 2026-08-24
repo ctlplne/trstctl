@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { Activity, AlertTriangle, Boxes, KeyRound, Rocket, ScrollText, ShieldCheck, ShieldAlert, Siren } from "lucide-react";
+import { Activity, AlertTriangle, Boxes, Bot, FileSignature, KeyRound, Rocket, ScrollText, ShieldCheck, ShieldAlert, Siren } from "lucide-react";
 import { api, type AuditEvent, type Certificate, type ContextualRiskPriority, type NHIInventory as NHIInventoryResponse, type RotationRun } from "@/lib/api";
 import { useAuth } from "@/auth/AuthProvider";
 import { useApiQuery } from "@/lib/query";
@@ -123,6 +123,46 @@ function readRecentAudit(): Promise<AuditEvent[]> {
     .catch(() => []);
 }
 
+function readCodeSigningHealth(): Promise<{ total: number; failures: number } | null> {
+  const client = api as typeof api & {
+    codeSigningIdentities?: () => Promise<{ total?: number; items?: Array<{ status?: string; transparency?: string }> }>;
+  };
+  if (!client.codeSigningIdentities) return Promise.resolve(null);
+  return Promise.resolve(client.codeSigningIdentities())
+    .then((result) => ({
+      total: Number.isFinite(result?.total) ? Number(result.total) : (result?.items ?? []).length,
+      failures: (result?.items ?? []).filter((item) => item.status === "failed" || item.transparency === "failed").length,
+    }))
+    .catch(() => null);
+}
+
+function dashboardWorkspace(kind?: string | null): string {
+  const normalized = kind?.toLowerCase() ?? "";
+  if (normalized.includes("cert") || normalized === "x509") return translateNow("nav.module.certificates");
+  if (normalized.includes("secret") || normalized.includes("token") || normalized.includes("api_key")) return translateNow("nav.module.secrets");
+  if (normalized.includes("sign")) return translateNow("nav.space.posture");
+  return translateNow("nav.space.workload");
+}
+
+function dashboardConsequence(priority: Pick<ContextualRiskPriority, "priority_reasons">): string {
+  const reasons = priority.priority_reasons ?? [];
+  if (reasons.includes("near_expiry")) return translateNow("dashboard.attention.consequence.expiry");
+  if (reasons.includes("orphaned_owner")) return translateNow("dashboard.attention.consequence.owner");
+  if (reasons.includes("weak_crypto_context")) return translateNow("dashboard.attention.consequence.crypto");
+  if (reasons.includes("high_blast_radius") || reasons.includes("resource_blast_radius")) return translateNow("dashboard.attention.consequence.impact");
+  if (reasons.includes("stale_rotation")) return translateNow("dashboard.attention.consequence.rotation");
+  return translateNow("dashboard.attention.consequence.review");
+}
+
+function dashboardDeadline(expiresAt?: string): string {
+  const deadline = expiresAt ? new Date(expiresAt).getTime() : Number.NaN;
+  if (!Number.isFinite(deadline)) return translateNow("dashboard.attention.deadlineUnknown");
+  const days = Math.ceil((deadline - Date.now()) / dayMs);
+  if (days < 0) return translateNow("dashboard.attention.deadlineExpired");
+  if (days === 0) return translateNow("dashboard.attention.deadlineToday");
+  return translateNow(days === 1 ? "dashboard.attention.deadlineOne" : "dashboard.attention.deadlineMany", { count: String(days) });
+}
+
 const pqcAlgorithmPattern = /^(ml-kem|ml-dsa|slh-dsa|hybrid)/i;
 
 function isPqcReady(certificate: Certificate): boolean {
@@ -202,6 +242,7 @@ export function Dashboard() {
   const secretsCount = useApiQuery(["secrets-count"], readSecretsCount, { live: { intervalMs: 30_000 } });
   const openIncidents = useApiQuery(["open-incidents"], readOpenIncidents, { live: { intervalMs: 30_000 } });
   const recentAudit = useApiQuery(["recent-audit"], readRecentAudit, { live: { intervalMs: 60_000 } });
+  const codeSigningHealth = useApiQuery(["code-signing-health"], readCodeSigningHealth, { live: { intervalMs: 30_000 } });
   const [dismissed, setDismissed] = useState(false);
 
   const riskRows = risk.data ?? [];
@@ -248,16 +289,33 @@ export function Dashboard() {
     .map((row) => ({
       subject: row.subject,
       detail: t("dashboard.attention.itemReason", { kind: dashboardRiskKind(row.kind), reason: dashboardRiskReason(row) }),
+      workspace: dashboardWorkspace(row.kind),
+      consequence: dashboardConsequence(row),
+      deadline: dashboardDeadline(row.expires_at),
+      automation: t("dashboard.attention.automationUnknown"),
+      owner: row.owner_active ? t("dashboard.attention.ownerPresent") : t("dashboard.attention.ownerMissing"),
+      nextAction: row.recommended_action || t("dashboard.attention.nextActionReview"),
       score: Math.round(row.contextual_score),
     }));
   const rotateFirst = contextualRotateFirst.length
     ? contextualRotateFirst
-    : topRisk.map((r) => ({ subject: r.subject, detail: t("dashboard.attention.reviewReason"), score: Math.round(r.score) }));
+    : topRisk.map((r) => ({
+        subject: r.subject,
+        detail: t("dashboard.attention.reviewReason"),
+        workspace: dashboardWorkspace(r.kind),
+        consequence: t("dashboard.attention.consequence.review"),
+        deadline: dashboardDeadline(r.expires_at),
+        automation: t("dashboard.attention.automationUnknown"),
+        owner: r.owner_active ? t("dashboard.attention.ownerPresent") : t("dashboard.attention.ownerMissing"),
+        nextAction: t("dashboard.attention.nextActionReview"),
+        score: Math.round(r.score),
+      }));
   const contextualPriorities = urgentRisk.data?.priorities ?? [];
   const criticalAttention = contextualPriorities.filter((row) => row.severity === "critical").length;
   const highAttention = contextualPriorities.filter((row) => row.severity === "high").length;
   const attentionCount = urgentSummary?.status === "complete" ? urgentSummary.urgent : null;
   const attentionRows = attentionCount && attentionCount > 0 ? rotateFirst.slice(0, 3) : [];
+  const machineIdentityCount = (identities.data ?? []).filter((identity) => /spiffe|workload|ssh|machine|host/i.test(identity.kind)).length;
 
   if (showOnboarding) {
     return (
@@ -357,11 +415,30 @@ export function Dashboard() {
         {attentionRows.length > 0 ? (
           <ul className="mt-4 divide-y divide-border" aria-label={t("dashboard.attention.listLabel")}>
             {attentionRows.map((row) => (
-              <li key={row.subject} className="flex min-w-0 items-center justify-between gap-4 py-3">
+              <li key={row.subject} className="grid min-w-0 gap-3 py-4 lg:grid-cols-[minmax(12rem,1fr)_minmax(18rem,1.4fr)_auto] lg:items-center">
                 <span className="min-w-0">
                   <strong className="block truncate text-body">{row.subject}</strong>
-                  <span className="block truncate text-caption text-muted-foreground">{row.detail}</span>
+                  <span className="mt-1 block text-caption font-medium text-brand-accent">{row.workspace}</span>
+                  <span className="mt-1 block text-caption text-muted-foreground">{row.deadline}</span>
                 </span>
+                <dl className="grid gap-1 text-sm">
+                  <div>
+                    <dt className="sr-only">{t("dashboard.attention.consequenceLabel")}</dt>
+                    <dd className="font-medium">{row.consequence}</dd>
+                  </div>
+                  <div>
+                    <dt className="sr-only">{t("dashboard.attention.automationLabel")}</dt>
+                    <dd className="text-muted-foreground">{row.automation}</dd>
+                  </div>
+                  <div>
+                    <dt className="sr-only">{t("dashboard.attention.ownerLabel")}</dt>
+                    <dd className="text-muted-foreground">{row.owner}</dd>
+                  </div>
+                  <div>
+                    <dt className="sr-only">{t("dashboard.attention.nextActionLabel")}</dt>
+                    <dd className="text-muted-foreground">{row.nextAction}</dd>
+                  </div>
+                </dl>
                 <Link to="/risk?sort=score" className="shrink-0 text-sm font-medium text-brand-accent hover:underline">
                   {t("dashboard.attention.review")}
                 </Link>
@@ -377,6 +454,72 @@ export function Dashboard() {
             expiring: formatNumber(kpis.expiring7d),
           })}
         </p>
+      </section>
+
+      <section aria-labelledby="dashboard-workspace-health-heading" className="space-y-3">
+        <div>
+          <h2 id="dashboard-workspace-health-heading" className="text-title font-semibold">
+            {t("dashboard.workspaceHealth.title")}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t("dashboard.workspaceHealth.help")}</p>
+        </div>
+        <ul aria-label={t("dashboard.workspaceHealth.label")} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <WorkspaceHealthLink
+            to="/certificates"
+            icon={<ScrollText className="h-4 w-4" aria-hidden="true" />}
+            workspace={t("nav.module.certificates")}
+            state={certs.error ? t("dashboard.workspaceHealth.unavailable") : t("dashboard.workspaceHealth.certificates", { count: String(kpis.expiring7d) })}
+            urgent={certs.error !== null || kpis.expiring7d > 0}
+          />
+          <WorkspaceHealthLink
+            to="/workloads"
+            icon={<Bot className="h-4 w-4" aria-hidden="true" />}
+            workspace={t("nav.space.workload")}
+            state={
+              identities.error ? t("dashboard.workspaceHealth.unavailable") : t("dashboard.workspaceHealth.machines", { count: String(machineIdentityCount) })
+            }
+            urgent={identities.error !== null}
+          />
+          <WorkspaceHealthLink
+            to="/secrets"
+            icon={<Boxes className="h-4 w-4" aria-hidden="true" />}
+            workspace={t("nav.module.secrets")}
+            state={
+              secretsCount.loading
+                ? t("dashboard.workspaceHealth.loading")
+                : secretsCount.data === null
+                  ? t("dashboard.workspaceHealth.unavailable")
+                  : t("dashboard.workspaceHealth.secrets", { count: String(secretsCount.data) })
+            }
+            urgent={!secretsCount.loading && secretsCount.data === null}
+          />
+          <WorkspaceHealthLink
+            to="/codesign"
+            icon={<FileSignature className="h-4 w-4" aria-hidden="true" />}
+            workspace={t("nav.space.posture")}
+            state={
+              codeSigningHealth.loading
+                ? t("dashboard.workspaceHealth.loading")
+                : codeSigningHealth.data === null
+                  ? t("dashboard.workspaceHealth.unavailable")
+                  : t("dashboard.workspaceHealth.signing", { failures: String(codeSigningHealth.data.failures), total: String(codeSigningHealth.data.total) })
+            }
+            urgent={!codeSigningHealth.loading && (codeSigningHealth.data === null || codeSigningHealth.data.failures > 0)}
+          />
+          <WorkspaceHealthLink
+            to="/trust-operations"
+            icon={<Siren className="h-4 w-4" aria-hidden="true" />}
+            workspace={t("nav.space.platform")}
+            state={
+              openIncidents.loading
+                ? t("dashboard.workspaceHealth.loading")
+                : openIncidents.data === null
+                  ? t("dashboard.workspaceHealth.unavailable")
+                  : t("dashboard.workspaceHealth.incidents", { count: String(openIncidents.data) })
+            }
+            urgent={!openIncidents.loading && (openIncidents.data === null || openIncidents.data > 0)}
+          />
+        </ul>
       </section>
 
       {/* 47-day renewal readiness on the global home (C-D1, 07-closeout plan):
@@ -581,6 +724,20 @@ function ActionLink({ to, icon, children, primary }: { to: string; icon: ReactNo
       <span className={primary ? "" : "text-brand-accent"}>{icon}</span>
       {children}
     </Link>
+  );
+}
+
+function WorkspaceHealthLink({ to, icon, workspace, state, urgent }: { to: string; icon: ReactNode; workspace: string; state: string; urgent: boolean }) {
+  return (
+    <li>
+      <Link to={to} className="ui-panel flex min-h-24 items-start gap-3 p-4 hover:border-brand-accent/50">
+        <span className={urgent ? "mt-0.5 text-status-warning" : "mt-0.5 text-status-success"}>{icon}</span>
+        <span className="min-w-0">
+          <strong className="block text-sm font-semibold">{workspace}</strong>
+          <span className="mt-1 block text-caption text-muted-foreground">{state}</span>
+        </span>
+      </Link>
+    </li>
   );
 }
 

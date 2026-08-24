@@ -124,6 +124,8 @@ import type {
   CertificateIngest,
   CertificateList,
   CloudSecretManagerIntegration,
+  CodeSigningIdentity,
+  CodeSigningIdentityList,
   CodeSigningKeylessRequest,
   CodeSigningRequest,
   CodeSigningSignature,
@@ -716,6 +718,8 @@ export type {
   CBOMScan,
   CBOMScanRequest,
   CloudSecretManagerIntegration,
+  CodeSigningIdentity,
+  CodeSigningIdentityList,
   CodeSigningKeylessRequest,
   CodeSigningRequest,
   CodeSigningSignature,
@@ -1649,6 +1653,7 @@ export interface Api {
   breakglassReconcile(input: BreakglassReconcileRequest): Promise<BreakglassReconcileResponse>;
   signCode(input: CodeSigningRequest): Promise<CodeSigningSignature>;
   signCodeKeyless(input: CodeSigningKeylessRequest): Promise<CodeSigningSignature>;
+  codeSigningIdentities(): Promise<CodeSigningIdentityList>;
   risk(options?: RiskQuery): Promise<CredentialRisk[]>;
   contextualRiskPriorities(): Promise<ContextualRiskPriorities>;
   profiles(): Promise<Profile[]>;
@@ -2129,6 +2134,7 @@ const liveApi: Api = {
   breakglassReconcile: (input) => mutate<BreakglassReconcileResponse>("POST", "/api/v1/breakglass/reconcile", input),
   signCode: (input) => mutate<CodeSigningSignature>("POST", "/api/v1/code-signing/sign", input),
   signCodeKeyless: (input) => mutate<CodeSigningSignature>("POST", "/api/v1/code-signing/keyless", input),
+  codeSigningIdentities: () => req<CodeSigningIdentityList>("/api/v1/code-signing/identities"),
   risk: (options) => req<CredentialRiskList>(`/api/v1/risk/credentials${riskQueryString(options)}`).then((r) => r.credentials ?? []),
   contextualRiskPriorities: () => req<ContextualRiskPriorities>("/api/v1/risk/contextual-priorities"),
   profiles: () => req<{ items: Profile[] }>("/api/v1/profiles").then((r) => r.items ?? []),

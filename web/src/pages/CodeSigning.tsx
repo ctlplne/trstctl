@@ -1,10 +1,13 @@
-import { FormEvent, useState } from "react";
-import { api, type CodeSigningSignature } from "@/lib/api";
+import { FormEvent, useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
+import { AlertTriangle, CheckCircle2, Clock3, FileSignature, KeyRound, Stamp } from "lucide-react";
+import { api, type CodeSigningIdentity, type CodeSigningSignature } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { SectionCard } from "@/components/dashboard";
 import { Button } from "@/components/ui/button";
-import { ErrorState } from "@/components/StatePrimitives";
+import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
+import { useApiQuery } from "@/lib/query";
 
 type Mode = "key" | "keyless";
 
@@ -45,6 +48,9 @@ const auditReceipts = [
  * Only the digest is sent; artifact bytes and private keys never touch the SPA. */
 export function CodeSigning() {
   const { t } = useTranslation();
+  const operations = useApiQuery(["code-signing", "identities"], api.codeSigningIdentities, { live: { intervalMs: 30_000 } });
+  const approvals = useApiQuery(["approval-requests"], api.approvalRequests, { live: { intervalMs: 30_000 } });
+  const protocols = useApiQuery(["protocol-statuses"], api.protocolStatuses, { live: { intervalMs: 60_000 } });
   const [mode, setMode] = useState<Mode>("key");
   const [artifactType, setArtifactType] = useState("container");
   const [digest, setDigest] = useState("");
@@ -54,6 +60,13 @@ export function CodeSigning() {
   const [signature, setSignature] = useState<CodeSigningSignature | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const loading = operations.loading || approvals.loading || protocols.loading;
+  const sourceUnavailable = operations.error !== null || approvals.error !== null || protocols.error !== null;
+  const signingApprovals = (approvals.data ?? []).filter((row) => row.status === "pending" && row.resource_kind === "code_signing");
+  const failedOperations = (operations.data?.items ?? []).filter((row) => row.status === "failed" || row.transparency === "failed");
+  const tsa = protocols.data?.items.find((row) => row.protocol.toLowerCase() === "tsa");
+  const tsaNeedsAction = protocols.data !== null && (!tsa || !tsa.enabled || !tsa.served);
+  const attentionCount = failedOperations.length + signingApprovals.length + (tsaNeedsAction ? 1 : 0);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -82,12 +95,100 @@ export function CodeSigning() {
 
   return (
     <section aria-labelledby="codesign-heading" className="grid gap-6">
-      <PageHeader
-        titleId="codesign-heading"
-        title={t("nav.item.codeSigning")}
-        description="See which release digests can be signed, where the keys stay, and how someone verifies each signature. The software and private key never enter this browser."
-        technicalDetails="Exact evidence includes the artifact digest, signing mode, managed key or provider identity, policy and approval decision, signature receipt, timestamp or transparency proof, signer identity, and immutable audit event."
-      />
+      <PageHeader titleId="codesign-heading" title={t("nav.item.codeSigning")} description={t("codesign.answer")} technicalDetails={t("codesign.technical")} />
+
+      {loading ? (
+        <LoadingState>{t("codesign.overview.loading")}</LoadingState>
+      ) : (
+        <>
+          <section aria-labelledby="codesign-attention-heading" className="ui-panel space-y-3 p-comfortable">
+            <div className="flex items-start gap-3">
+              {sourceUnavailable || attentionCount > 0 ? (
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-status-warning" aria-hidden="true" />
+              ) : (
+                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-status-success" aria-hidden="true" />
+              )}
+              <div>
+                <h2 id="codesign-attention-heading" className="text-title font-semibold">
+                  {sourceUnavailable
+                    ? t("codesign.attention.unknown")
+                    : attentionCount > 0
+                      ? t("codesign.attention.count", { count: String(attentionCount) })
+                      : t("codesign.attention.clear")}
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">{sourceUnavailable ? t("codesign.attention.unknownHelp") : t("codesign.attention.help")}</p>
+              </div>
+            </div>
+            {sourceUnavailable ? (
+              <ul className="grid gap-1 text-sm text-muted-foreground">
+                {operations.error ? <li>{t("codesign.source.operationsUnavailable")}</li> : null}
+                {approvals.error ? <li>{t("codesign.source.approvalsUnavailable")}</li> : null}
+                {protocols.error ? <li>{t("codesign.source.tsaUnavailable")}</li> : null}
+              </ul>
+            ) : null}
+          </section>
+
+          <section aria-labelledby="codesign-health-heading" className="space-y-3">
+            <div>
+              <h2 id="codesign-health-heading" className="text-title font-semibold">
+                {t("codesign.health.title")}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">{t("codesign.health.help")}</p>
+            </div>
+            <ul aria-label={t("codesign.health.label")} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <SoftwareHealth
+                icon={<FileSignature className="h-4 w-4" aria-hidden="true" />}
+                urgent={operations.error !== null || failedOperations.length > 0}
+                label={
+                  operations.error
+                    ? t("codesign.health.operationsUnavailable")
+                    : failedOperations.length === 1
+                      ? t("codesign.health.failures.one")
+                      : t("codesign.health.failures.many", { count: String(failedOperations.length) })
+                }
+              />
+              <SoftwareHealth
+                icon={<Clock3 className="h-4 w-4" aria-hidden="true" />}
+                urgent={approvals.error !== null || signingApprovals.length > 0}
+                label={
+                  approvals.error
+                    ? t("codesign.health.approvalsUnavailable")
+                    : signingApprovals.length === 1
+                      ? t("codesign.health.approvals.one")
+                      : t("codesign.health.approvals.many", { count: String(signingApprovals.length) })
+                }
+                to="/operations?type=approval"
+              />
+              <SoftwareHealth
+                icon={<Stamp className="h-4 w-4" aria-hidden="true" />}
+                urgent={protocols.error !== null || tsaNeedsAction}
+                label={
+                  protocols.error
+                    ? t("codesign.health.tsaUnavailable")
+                    : tsa?.enabled && tsa.served
+                      ? t("codesign.health.tsaServing")
+                      : t("codesign.health.tsaReview")
+                }
+                to="/tsa"
+              />
+              <SoftwareHealth icon={<KeyRound className="h-4 w-4" aria-hidden="true" />} urgent label={t("codesign.health.keysUnavailable")} to="/ca" />
+              <SoftwareHealth
+                icon={<CheckCircle2 className="h-4 w-4" aria-hidden="true" />}
+                urgent={operations.error !== null}
+                label={
+                  operations.error
+                    ? t("codesign.health.operationsUnavailable")
+                    : operations.data?.total === 1
+                      ? t("codesign.health.operations.one")
+                      : t("codesign.health.operations.many", { count: String(operations.data?.total ?? 0) })
+                }
+              />
+            </ul>
+          </section>
+
+          {(operations.data?.items ?? []).length > 0 ? <SigningOutcomes items={operations.data?.items ?? []} /> : null}
+        </>
+      )}
 
       <SectionCard
         title={translateNow("source.sign.an.artifact.fb729a3d5b")}
@@ -236,6 +337,74 @@ export function CodeSigning() {
           ))}
         </ul>
       </SectionCard>
+    </section>
+  );
+}
+
+function SoftwareHealth({ icon, label, urgent, to }: { icon: ReactNode; label: string; urgent: boolean; to?: string }) {
+  const content = (
+    <>
+      <span className={urgent ? "text-status-warning" : "text-status-success"}>{icon}</span>
+      <span className="text-sm font-semibold">{label}</span>
+    </>
+  );
+  return (
+    <li>
+      {to ? (
+        <Link to={to} className="ui-panel flex min-h-20 items-center gap-3 p-4 hover:border-brand-accent/50">
+          {content}
+        </Link>
+      ) : (
+        <div className="ui-panel flex min-h-20 items-center gap-3 p-4">{content}</div>
+      )}
+    </li>
+  );
+}
+
+function SigningOutcomes({ items }: { items: CodeSigningIdentity[] }) {
+  const { t } = useTranslation();
+  return (
+    <section aria-labelledby="codesign-outcomes-heading" className="space-y-3">
+      <div>
+        <h2 id="codesign-outcomes-heading" className="text-title font-semibold">
+          {t("codesign.outcomes.title")}
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">{t("codesign.outcomes.help")}</p>
+      </div>
+      <div className="overflow-x-auto rounded-panel border border-border">
+        <table aria-label={t("codesign.outcomes.label")} className="ui-table min-w-full">
+          <thead>
+            <tr>
+              <th scope="col">{t("codesign.outcomes.operation")}</th>
+              <th scope="col">{t("codesign.outcomes.mode")}</th>
+              <th scope="col">{t("codesign.outcomes.result")}</th>
+              <th scope="col">{t("codesign.outcomes.transparency")}</th>
+              <th scope="col">{t("codesign.outcomes.evidence")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.slice(0, 10).map((item) => (
+              <tr key={item.operation_id}>
+                <td className="font-mono text-xs">{item.operation_id}</td>
+                <td>{t(item.mode === "managed" ? "codesign.mode.managed" : "codesign.mode.keyless")}</td>
+                <td>{item.status}</td>
+                <td>
+                  {t(
+                    item.transparency === "verified"
+                      ? "codesign.transparency.verified"
+                      : item.transparency === "pending"
+                        ? "codesign.transparency.pending"
+                        : item.transparency === "failed"
+                          ? "codesign.transparency.failed"
+                          : "codesign.transparency.notPublished",
+                  )}
+                </td>
+                <td className="max-w-sm text-sm text-muted-foreground">{item.last_error || item.transparency_error || t("codesign.outcomes.noError")}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }
