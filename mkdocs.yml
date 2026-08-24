@@ -49,6 +49,7 @@ nav:
       - Demo browser walkthrough: demo-click-through.html
       - Install: install.md
       - Air-gapped install: airgap.md
+      - Support and defect reporting: support.md
       - Current limitations: limitations.md
       - Editions: editions.md
       - Pricing and billing posture: pricing.md

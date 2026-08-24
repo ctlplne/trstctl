@@ -10,6 +10,7 @@ const platform = readFileSync(path.join(root, "src/pages/Platform.tsx"), "utf8")
 const notifications = readFileSync(path.join(root, "src/pages/Notifications.tsx"), "utf8");
 const limitations = readFileSync(path.join(root, "../docs/limitations.md"), "utf8");
 const troubleshooting = readFileSync(path.join(root, "../docs/troubleshooting.md"), "utf8");
+const support = readFileSync(path.join(root, "../docs/support.md"), "utf8");
 
 describe("cold design-partner credibility findings", () => {
   it("invalidates every cross-page read model changed by discovery triage", () => {
@@ -38,7 +39,9 @@ describe("cold design-partner credibility findings", () => {
     expect(matrix).toBeGreaterThan(summary);
   });
 
-  it("gives ordinary defects an actionable public issue path", () => {
-    expect(troubleshooting).toContain("https://github.com/ctlplne/trstctl/issues/new/choose");
+  it("gives ordinary defects an actionable authenticated issue path", () => {
+    expect(troubleshooting).toContain("[support and defect reporting](support.md)");
+    expect(support).toContain("gh issue create --repo ctlplne/trstctl");
+    expect(support).toContain("Repository access is required");
   });
 });
