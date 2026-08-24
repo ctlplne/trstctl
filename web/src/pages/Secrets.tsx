@@ -204,6 +204,7 @@ export function Secrets() {
   const [createOpen, setCreateOpen] = useState(false);
   const createNameRef = useRef<HTMLInputElement>(null);
   const [owners, setOwners] = useState<Owner[]>([]);
+  const [ownersAvailable, setOwnersAvailable] = useState<boolean | null>(null);
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -441,8 +442,10 @@ export function Secrets() {
         const orderedOwners = [...ownerRows].sort((left, right) => left.name.localeCompare(right.name));
         setOwners(orderedOwners);
       }
+      setOwnersAvailable(ownerRows !== null);
     } catch (err) {
       setLoadError(apiProblemMessage(err, "Secrets API unavailable or disabled"));
+      setOwnersAvailable(false);
     } finally {
       setLoading(false);
     }
@@ -498,6 +501,7 @@ export function Secrets() {
     [rotationSchedules],
   );
   const leakedFindings = unvaultedPosture?.summary.leaked_secret_findings ?? 0;
+  const secretOverviewComplete = !loading && !loadError && rotationSchedules !== null && unvaultedPosture !== null && ownersAvailable === true;
   const secretAttention = useMemo(() => {
     const rows: Array<{ id: string; name: string; detail: string; consequence: string; to: string; action: string }> = [];
     const failed = new Set<string>();
@@ -1548,10 +1552,12 @@ export function Secrets() {
               <h2 id="secrets-attention-heading" className="text-title font-semibold">
                 {secretAttention.length > 0
                   ? t("secrets.overview.attentionTitle", { count: String(secretAttention.length) })
-                  : t("secrets.overview.attentionHealthy")}
+                  : t(secretOverviewComplete ? "secrets.overview.attentionHealthy" : "secrets.overview.attentionUnknown")}
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                {secretAttention.length > 0 ? t("secrets.overview.attentionHelp") : t("secrets.overview.attentionHealthyHelp")}
+                {secretAttention.length > 0
+                  ? t(secretOverviewComplete ? "secrets.overview.attentionHelp" : "secrets.overview.attentionPartialHelp")
+                  : t(secretOverviewComplete ? "secrets.overview.attentionHealthyHelp" : "secrets.overview.attentionUnknownHelp")}
               </p>
             </div>
             {secretAttention.length > 0 ? (
@@ -1572,46 +1578,48 @@ export function Secrets() {
             ) : null}
           </section>
 
-          <section aria-labelledby="secrets-health-heading" className="space-y-3">
-            <div>
-              <h2 id="secrets-health-heading" className="text-title font-semibold">
-                {t("secrets.overview.healthTitle")}
-              </h2>
-              <p className="mt-1 text-sm text-muted-foreground">{t("secrets.overview.healthHelp", { count: String(items.length) })}</p>
-            </div>
-            <ul aria-label={t("secrets.overview.healthLabel")} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <SecretsHealthLink
-                to="/secrets/scanning"
-                icon={<AlertTriangle className="h-4 w-4" aria-hidden="true" />}
-                label={t(leakedFindings === 1 ? "secrets.overview.leaksOne" : "secrets.overview.leaksMany", { count: String(leakedFindings) })}
-                urgent={leakedFindings > 0}
-              />
-              <SecretsHealthLink
-                to="/secrets?focus=rotation"
-                icon={<Clock3 className="h-4 w-4" aria-hidden="true" />}
-                label={t(overdueSchedules.length === 1 ? "secrets.overview.overdueOne" : "secrets.overview.overdueMany", {
-                  count: String(overdueSchedules.length),
-                })}
-                urgent={overdueSchedules.length > 0}
-              />
-              <SecretsHealthLink
-                to="/secrets/sync"
-                icon={<Send className="h-4 w-4" aria-hidden="true" />}
-                label={t(failedSchedules.length === 1 ? "secrets.overview.failuresOne" : "secrets.overview.failuresMany", {
-                  count: String(failedSchedules.length),
-                })}
-                urgent={failedSchedules.length > 0}
-              />
-              <SecretsHealthLink
-                to="/secrets?owner=missing"
-                icon={<UserRoundX className="h-4 w-4" aria-hidden="true" />}
-                label={t(unownedSecrets.length === 1 ? "secrets.overview.unownedOne" : "secrets.overview.unownedMany", {
-                  count: String(unownedSecrets.length),
-                })}
-                urgent={unownedSecrets.length > 0}
-              />
-            </ul>
-          </section>
+          {secretOverviewComplete ? (
+            <section aria-labelledby="secrets-health-heading" className="space-y-3">
+              <div>
+                <h2 id="secrets-health-heading" className="text-title font-semibold">
+                  {t("secrets.overview.healthTitle")}
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">{t("secrets.overview.healthHelp", { count: String(items.length) })}</p>
+              </div>
+              <ul aria-label={t("secrets.overview.healthLabel")} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <SecretsHealthLink
+                  to="/secrets/scanning"
+                  icon={<AlertTriangle className="h-4 w-4" aria-hidden="true" />}
+                  label={t(leakedFindings === 1 ? "secrets.overview.leaksOne" : "secrets.overview.leaksMany", { count: String(leakedFindings) })}
+                  urgent={leakedFindings > 0}
+                />
+                <SecretsHealthLink
+                  to="/secrets?focus=rotation"
+                  icon={<Clock3 className="h-4 w-4" aria-hidden="true" />}
+                  label={t(overdueSchedules.length === 1 ? "secrets.overview.overdueOne" : "secrets.overview.overdueMany", {
+                    count: String(overdueSchedules.length),
+                  })}
+                  urgent={overdueSchedules.length > 0}
+                />
+                <SecretsHealthLink
+                  to="/secrets/sync"
+                  icon={<Send className="h-4 w-4" aria-hidden="true" />}
+                  label={t(failedSchedules.length === 1 ? "secrets.overview.failuresOne" : "secrets.overview.failuresMany", {
+                    count: String(failedSchedules.length),
+                  })}
+                  urgent={failedSchedules.length > 0}
+                />
+                <SecretsHealthLink
+                  to="/secrets?owner=missing"
+                  icon={<UserRoundX className="h-4 w-4" aria-hidden="true" />}
+                  label={t(unownedSecrets.length === 1 ? "secrets.overview.unownedOne" : "secrets.overview.unownedMany", {
+                    count: String(unownedSecrets.length),
+                  })}
+                  urgent={unownedSecrets.length > 0}
+                />
+              </ul>
+            </section>
+          ) : null}
           <details className="ui-panel group p-comfortable">
             <summary className="cursor-pointer font-medium text-foreground">
               {t("secrets.store.exploreTools")}

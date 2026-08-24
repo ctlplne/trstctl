@@ -1084,8 +1084,13 @@ describe("i18n boundary", () => {
       // plain language. The workspace names also match their rail labels and
       // document titles. Machine-authored es/de — FLAGGED FOR HUMAN
       // TRANSLATION REVIEW before release.
-      "es-ES": "ebf225e03d3118f313f422723f6692812386b66f777e35338419c9492014187c",
-      "de-DE": "e3739f3dd50fd3d878ae5761201e5a31521f01beb80ac0044747c082a1ebe592",
+      // Missing-evidence G6R1 re-pin: Secrets and Workloads now say urgency is
+      // unknown when a required check cannot be read. Available Workloads
+      // counts remain visible, but every missing check says unavailable rather
+      // than presenting a safe zero. Machine-authored es/de — FLAGGED FOR
+      // HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "4cc3c02f906d8c6817dc0a2ec06b556a1f3f8644d641f84dd14e0b480459617e",
+      "de-DE": "99b6ef9b0b3148985bf1efacafeb63d02411d535cde465fa5d9f5ba4f1fab6f9",
     });
   });
 

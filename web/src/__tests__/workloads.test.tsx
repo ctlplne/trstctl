@@ -129,6 +129,23 @@ describe("workload identity disclosure surface", () => {
     expect(apiMock.kubernetesTrustBundles).toHaveBeenCalledTimes(1);
   });
 
+  it("renders missing overview evidence as unknown instead of safe zeroes", async () => {
+    apiMock.agents.mockResolvedValueOnce([]);
+    apiMock.identities.mockRejectedValueOnce(new Error("identity read unavailable"));
+    apiMock.contextualRiskPriorities.mockResolvedValueOnce({ priorities: [] });
+    apiMock.sshStatus.mockResolvedValueOnce({ served: true });
+    apiMock.sshFleet.mockResolvedValueOnce({ hosts_not_under_ca: 0, hosts: [] });
+    apiMock.connectorDeliveries.mockResolvedValueOnce({ items: [] });
+    apiMock.rotationRuns.mockResolvedValueOnce({ items: [] });
+
+    renderWorkloads();
+
+    expect(await screen.findByRole("heading", { name: "Machine and workload urgency is not fully known" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "No urgent machine or workload work" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Identity health unavailable" })).toHaveAttribute("href", "/identities");
+    expect(screen.getByRole("link", { name: "0 agents need attention" })).toBeInTheDocument();
+  });
+
   it("renders dynamic lease controls with expiry visualization and no fixture lease rows", async () => {
     const user = userEvent.setup();
     renderWorkloads();

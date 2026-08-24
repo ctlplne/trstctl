@@ -68,15 +68,26 @@ const deDECatalog = {
   "workloads.overview.loading": "Maschinen- und Workload-Zustand wird geladen…",
   "workloads.overview.attentionTitle": "{count} Maschinen- und Workload-Probleme benötigen Aufmerksamkeit",
   "workloads.overview.attentionHealthy": "Keine dringende Maschinen- oder Workload-Arbeit",
+  "workloads.overview.attentionUnknown": "Die Dringlichkeit für Maschinen und Workloads ist nicht vollständig bekannt",
   "workloads.overview.attentionHelp":
     "Beginnen Sie mit der ersten Frist oder fehlgeschlagenen Zustellung. Jede Zeile öffnet die bestehende Stelle, die die Reparatur steuert.",
   "workloads.overview.attentionHealthyHelp":
     "Keine Maschinenidentität, kein Agent, SSH-Host, keine Rotation oder Zustellung benötigt laut den verfügbaren Ergebnissen eine dringende Aktion.",
+  "workloads.overview.attentionUnknownHelp":
+    "Eine oder mehrere Prüfungen für Identitäten, Agenten, SSH, Rotation oder Zustellung konnten nicht gelesen werden. Versuchen Sie es erneut, bevor Sie diesen Arbeitsbereich als fehlerfrei einstufen.",
+  "workloads.overview.attentionPartialHelp":
+    "Diese Einträge erfordern eine Aktion, aber eine oder mehrere Prüfungen konnten nicht gelesen werden. Die Liste kann daher unvollständig sein.",
   "workloads.overview.attentionLabel": "Maschinen- und Workload-Aufmerksamkeit",
   "workloads.overview.healthTitle": "Arbeitsbereichszustand",
   "workloads.overview.healthHelp":
     "Die aktuellen Zahlen stammen aus Identitäten, Agenten, SSH-Hosts, Rotationen und Zustellungen. Öffnen Sie eine Zahl, um die passenden Einträge zu prüfen.",
+  "workloads.overview.healthPartialHelp":
+    "Verfügbare Zahlen bleiben sichtbar. Eine nicht lesbare Prüfung wird als nicht verfügbar angezeigt, statt eine sichere Null vorzutäuschen.",
   "workloads.overview.healthLabel": "Maschinen- und Workload-Zustand",
+  "workloads.overview.identitiesUnavailable": "Identitätszustand nicht verfügbar",
+  "workloads.overview.agentsUnavailable": "Agentenzustand nicht verfügbar",
+  "workloads.overview.sshUnavailable": "SSH-Vertrauenszustand nicht verfügbar",
+  "workloads.overview.deliveriesUnavailable": "Workload-Zustellungszustand nicht verfügbar",
   "workloads.overview.identitiesOne": "1 kurzlebige Identität",
   "workloads.overview.identitiesMany": "{count} kurzlebige Identitäten",
   "workloads.overview.agentsOne": "1 Agent benötigt Aufmerksamkeit",
@@ -468,10 +479,15 @@ const deDECatalog = {
   "secrets.route.storeAction": "Secret hinzufügen",
   "secrets.overview.attentionTitle": "{count} Secret- und Zugriffsprobleme benötigen Aufmerksamkeit",
   "secrets.overview.attentionHealthy": "Keine dringende Secret-Arbeit",
+  "secrets.overview.attentionUnknown": "Die Dringlichkeit für Secrets ist nicht vollständig bekannt",
   "secrets.overview.attentionHelp":
     "Beginnen Sie mit geleakten Werten und fehlgeschlagener Rotationszustellung. Jede Zeile erklärt die Folge und öffnet die sicherste Reparatur.",
   "secrets.overview.attentionHealthyHelp":
     "Kein gespeichertes Secret benötigt wegen eines erkannten Leaks, einer verspäteten Rotation, einer fehlgeschlagenen Zustellung oder eines fehlenden Verantwortlichen eine dringende Aktion.",
+  "secrets.overview.attentionUnknownHelp":
+    "Eine oder mehrere Prüfungen für Secrets, Leaks, Rotation, Zustellung oder Verantwortlichkeit konnten nicht gelesen werden. Versuchen Sie es erneut, bevor Sie diesen Arbeitsbereich als fehlerfrei einstufen.",
+  "secrets.overview.attentionPartialHelp":
+    "Diese Einträge erfordern eine Aktion, aber eine oder mehrere Prüfungen konnten nicht gelesen werden. Die Liste kann daher unvollständig sein.",
   "secrets.overview.attentionLabel": "Secret- und Zugriffsaufmerksamkeit",
   "secrets.overview.healthTitle": "Arbeitsbereichszustand",
   "secrets.overview.healthHelp":

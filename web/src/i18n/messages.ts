@@ -1278,6 +1278,10 @@ export const messages = {
     description: "Heading above the served Secrets and Access action queue.",
   },
   "secrets.overview.attentionHealthy": { defaultMessage: "No urgent secrets work", description: "Healthy Secrets and Access action heading." },
+  "secrets.overview.attentionUnknown": {
+    defaultMessage: "Secret urgency is not fully known",
+    description: "Secrets and Access heading when one or more required checks could not be read.",
+  },
   "secrets.overview.attentionHelp": {
     defaultMessage: "Start with leaked values and failed rotation delivery. Each row explains the consequence and opens the safest repair surface.",
     description: "Help above the Secrets and Access action queue.",
@@ -1285,6 +1289,14 @@ export const messages = {
   "secrets.overview.attentionHealthyHelp": {
     defaultMessage: "No stored secret needs urgent action for a detected leak, late rotation, failed delivery, or missing owner.",
     description: "Honest healthy-state explanation for the Secrets and Access queue.",
+  },
+  "secrets.overview.attentionUnknownHelp": {
+    defaultMessage: "One or more secret, leak, rotation, delivery, or ownership checks could not be read. Retry before treating this workspace as healthy.",
+    description: "Secrets and Access explanation when no complete health decision can be made.",
+  },
+  "secrets.overview.attentionPartialHelp": {
+    defaultMessage: "These items need action, but one or more checks could not be read, so this may not be the full list.",
+    description: "Secrets and Access explanation when action rows exist but the evidence set is incomplete.",
   },
   "secrets.overview.attentionLabel": {
     defaultMessage: "Secrets and access attention",
@@ -12021,6 +12033,10 @@ export const messages = {
     description: "Heading above the Machine and Workload Trust action queue.",
   },
   "workloads.overview.attentionHealthy": { defaultMessage: "No urgent machine or workload work", description: "Healthy machine and workload action heading." },
+  "workloads.overview.attentionUnknown": {
+    defaultMessage: "Machine and workload urgency is not fully known",
+    description: "Machine and Workload Trust heading when one or more required checks could not be read.",
+  },
   "workloads.overview.attentionHelp": {
     defaultMessage: "Start with the first deadline or failed delivery. Each row opens the existing authority that owns the repair.",
     description: "Help above the Machine and Workload Trust action queue.",
@@ -12028,6 +12044,14 @@ export const messages = {
   "workloads.overview.attentionHealthyHelp": {
     defaultMessage: "No machine identity, agent, SSH host, rotation, or delivery currently needs urgent action in the available results.",
     description: "Honest healthy-state explanation for Machine and Workload Trust.",
+  },
+  "workloads.overview.attentionUnknownHelp": {
+    defaultMessage: "One or more identity, agent, SSH, rotation, or delivery checks could not be read. Retry before treating this workspace as healthy.",
+    description: "Machine and Workload Trust explanation when no complete health decision can be made.",
+  },
+  "workloads.overview.attentionPartialHelp": {
+    defaultMessage: "These items need action, but one or more checks could not be read, so this may not be the full list.",
+    description: "Machine and Workload Trust explanation when action rows exist but the evidence set is incomplete.",
   },
   "workloads.overview.attentionLabel": {
     defaultMessage: "Machine and workload attention",
@@ -12038,9 +12062,29 @@ export const messages = {
     defaultMessage: "Current counts come from identities, agents, SSH hosts, rotations, and deliveries. Open one to inspect the matching items.",
     description: "Explanation of Machine and Workload Trust health counts.",
   },
+  "workloads.overview.healthPartialHelp": {
+    defaultMessage: "Available counts stay visible. A check that could not be read says unavailable instead of showing a safe zero.",
+    description: "Machine and Workload Trust health help when some checks are unavailable.",
+  },
   "workloads.overview.healthLabel": {
     defaultMessage: "Machine and workload health",
     description: "Accessible label for Machine and Workload Trust health links.",
+  },
+  "workloads.overview.identitiesUnavailable": {
+    defaultMessage: "Identity health unavailable",
+    description: "Machine and Workload Trust identity health check unavailable state.",
+  },
+  "workloads.overview.agentsUnavailable": {
+    defaultMessage: "Agent health unavailable",
+    description: "Machine and Workload Trust agent health check unavailable state.",
+  },
+  "workloads.overview.sshUnavailable": {
+    defaultMessage: "SSH trust health unavailable",
+    description: "Machine and Workload Trust SSH health check unavailable state.",
+  },
+  "workloads.overview.deliveriesUnavailable": {
+    defaultMessage: "Workload delivery health unavailable",
+    description: "Machine and Workload Trust delivery health check unavailable state.",
   },
   "workloads.overview.identitiesOne": { defaultMessage: "1 short-lived identity", description: "Single machine/workload identity count." },
   "workloads.overview.identitiesMany": { defaultMessage: "{count} short-lived identities", description: "Machine/workload identity count." },

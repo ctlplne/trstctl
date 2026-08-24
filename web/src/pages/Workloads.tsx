@@ -40,6 +40,7 @@ type TrustSourceMethod = WorkloadAttesterTrustSourceRequest["method"];
 type TrustSourceStatusLabels = { revoked: string; disabled: string; enabled: string };
 
 type WorkloadOverviewState = {
+  agents: Agent[] | null;
   identities: Identity[] | null;
   risks: ContextualRiskPriority[] | null;
   ssh: SSHStatus | null;
@@ -145,6 +146,7 @@ export function Workloads() {
   // separately so a deployment without the agent fleet still renders the rest.
   const [workloadAPIHosts, setWorkloadAPIHosts] = useState<Agent[]>([]);
   const [overview, setOverview] = useState<WorkloadOverviewState>({
+    agents: null,
     identities: null,
     risks: null,
     ssh: null,
@@ -180,10 +182,11 @@ export function Workloads() {
       if (!active) return;
       setWorkloadAPIHosts(agents ?? []);
       setOverview({
-        identities,
+        agents: agents ?? null,
+        identities: identities ?? null,
         risks: risks?.priorities ?? null,
-        ssh,
-        sshFleet,
+        ssh: ssh ?? null,
+        sshFleet: sshFleet ?? null,
         deliveries: deliveries?.items ?? null,
         rotations: rotations?.items ?? null,
       });
@@ -446,6 +449,11 @@ export function Workloads() {
       Boolean(delivery.identity_id && identityIDs.has(delivery.identity_id)) && ["failed", "verify_failed", "rollback_failed"].includes(delivery.status),
   );
   const failedRotations = (overview.rotations ?? []).filter((rotation) => identityIDs.has(rotation.identity_id) && rotation.status === "failed");
+  const identityHealthAvailable = overview.identities !== null && overview.risks !== null;
+  const agentHealthAvailable = overview.agents !== null;
+  const sshHealthAvailable = overview.ssh !== null && overview.sshFleet !== null;
+  const deliveryHealthAvailable = overview.identities !== null && overview.deliveries !== null && overview.rotations !== null;
+  const overviewComplete = identityHealthAvailable && agentHealthAvailable && sshHealthAvailable && deliveryHealthAvailable;
   const attentionRows: Array<{
     id: string;
     name: string;
@@ -536,10 +544,12 @@ export function Workloads() {
               <h2 id="workload-attention-heading" className="text-title font-semibold">
                 {attentionRows.length > 0
                   ? t("workloads.overview.attentionTitle", { count: String(attentionRows.length) })
-                  : t("workloads.overview.attentionHealthy")}
+                  : t(overviewComplete ? "workloads.overview.attentionHealthy" : "workloads.overview.attentionUnknown")}
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                {attentionRows.length > 0 ? t("workloads.overview.attentionHelp") : t("workloads.overview.attentionHealthyHelp")}
+                {attentionRows.length > 0
+                  ? t(overviewComplete ? "workloads.overview.attentionHelp" : "workloads.overview.attentionPartialHelp")
+                  : t(overviewComplete ? "workloads.overview.attentionHealthyHelp" : "workloads.overview.attentionUnknownHelp")}
               </p>
             </div>
             {attentionRows.length > 0 ? (
@@ -565,40 +575,58 @@ export function Workloads() {
               <h2 id="workload-health-heading" className="text-title font-semibold">
                 {t("workloads.overview.healthTitle")}
               </h2>
-              <p className="mt-1 text-sm text-muted-foreground">{t("workloads.overview.healthHelp")}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {t(overviewComplete ? "workloads.overview.healthHelp" : "workloads.overview.healthPartialHelp")}
+              </p>
             </div>
             <ul aria-label={t("workloads.overview.healthLabel")} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <WorkloadHealthLink
                 to="/identities"
                 icon={<Waypoints className="h-4 w-4" aria-hidden="true" />}
-                label={t(identities.length === 1 ? "workloads.overview.identitiesOne" : "workloads.overview.identitiesMany", {
-                  count: String(identities.length),
-                })}
-                urgent={expiringIdentities.length > 0 || urgentRisks.length > 0}
+                label={
+                  identityHealthAvailable
+                    ? t(identities.length === 1 ? "workloads.overview.identitiesOne" : "workloads.overview.identitiesMany", {
+                        count: String(identities.length),
+                      })
+                    : t("workloads.overview.identitiesUnavailable")
+                }
+                urgent={identityHealthAvailable && (expiringIdentities.length > 0 || urgentRisks.length > 0)}
               />
               <WorkloadHealthLink
                 to="/agents"
                 icon={<ServerOff className="h-4 w-4" aria-hidden="true" />}
-                label={t(agentsNeedingAttention.length === 1 ? "workloads.overview.agentsOne" : "workloads.overview.agentsMany", {
-                  count: String(agentsNeedingAttention.length),
-                })}
-                urgent={agentsNeedingAttention.length > 0}
+                label={
+                  agentHealthAvailable
+                    ? t(agentsNeedingAttention.length === 1 ? "workloads.overview.agentsOne" : "workloads.overview.agentsMany", {
+                        count: String(agentsNeedingAttention.length),
+                      })
+                    : t("workloads.overview.agentsUnavailable")
+                }
+                urgent={agentHealthAvailable && agentsNeedingAttention.length > 0}
               />
               <WorkloadHealthLink
                 to="/ssh"
                 icon={<Network className="h-4 w-4" aria-hidden="true" />}
-                label={t((overview.sshFleet?.hosts_not_under_ca ?? 0) === 1 ? "workloads.overview.sshOne" : "workloads.overview.sshMany", {
-                  count: String(overview.sshFleet?.hosts_not_under_ca ?? 0),
-                })}
-                urgent={(overview.sshFleet?.hosts_not_under_ca ?? 0) > 0 || overview.ssh?.served === false}
+                label={
+                  sshHealthAvailable
+                    ? t((overview.sshFleet?.hosts_not_under_ca ?? 0) === 1 ? "workloads.overview.sshOne" : "workloads.overview.sshMany", {
+                        count: String(overview.sshFleet?.hosts_not_under_ca ?? 0),
+                      })
+                    : t("workloads.overview.sshUnavailable")
+                }
+                urgent={sshHealthAvailable && ((overview.sshFleet?.hosts_not_under_ca ?? 0) > 0 || overview.ssh?.served === false)}
               />
               <WorkloadHealthLink
                 to="/connectors"
                 icon={<ShieldAlert className="h-4 w-4" aria-hidden="true" />}
-                label={t(failedDeliveries.length + failedRotations.length === 1 ? "workloads.overview.deliveriesOne" : "workloads.overview.deliveriesMany", {
-                  count: String(failedDeliveries.length + failedRotations.length),
-                })}
-                urgent={failedDeliveries.length + failedRotations.length > 0}
+                label={
+                  deliveryHealthAvailable
+                    ? t(failedDeliveries.length + failedRotations.length === 1 ? "workloads.overview.deliveriesOne" : "workloads.overview.deliveriesMany", {
+                        count: String(failedDeliveries.length + failedRotations.length),
+                      })
+                    : t("workloads.overview.deliveriesUnavailable")
+                }
+                urgent={deliveryHealthAvailable && failedDeliveries.length + failedRotations.length > 0}
               />
             </ul>
           </section>

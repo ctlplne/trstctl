@@ -1490,6 +1490,9 @@ describe("secrets surface", () => {
     expect(screen.getByText(/secrets.enable_api disabled or KEK missing/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /add secret/i })).toBeDisabled();
     expect(screen.queryByRole("form", { name: /create secret/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Secret urgency is not fully known" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "No urgent secrets work" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "Secrets and access health" })).not.toBeInTheDocument();
   });
 
   it("renders the shared grid empty state for an enabled store with no metadata", async () => {

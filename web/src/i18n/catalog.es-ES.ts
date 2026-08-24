@@ -63,15 +63,26 @@ const esESCatalog = {
   "workloads.overview.loading": "Cargando el estado de máquinas y cargas de trabajo…",
   "workloads.overview.attentionTitle": "{count} problemas de máquinas y cargas de trabajo requieren atención",
   "workloads.overview.attentionHealthy": "No hay trabajo urgente de máquinas o cargas",
+  "workloads.overview.attentionUnknown": "La urgencia de máquinas y cargas de trabajo no se conoce por completo",
   "workloads.overview.attentionHelp":
     "Empiece por la primera fecha límite o entrega fallida. Cada fila abre la autoridad existente que controla la reparación.",
   "workloads.overview.attentionHealthyHelp":
     "Ninguna identidad de máquina, agente, host SSH, rotación o entrega necesita una acción urgente según los resultados disponibles.",
+  "workloads.overview.attentionUnknownHelp":
+    "No se pudieron leer una o más comprobaciones de identidades, agentes, SSH, rotación o entrega. Vuelva a intentarlo antes de considerar saludable este espacio de trabajo.",
+  "workloads.overview.attentionPartialHelp":
+    "Estos elementos necesitan atención, pero no se pudieron leer una o más comprobaciones, por lo que esta lista puede estar incompleta.",
   "workloads.overview.attentionLabel": "Atención de máquinas y cargas de trabajo",
   "workloads.overview.healthTitle": "Estado del espacio de trabajo",
   "workloads.overview.healthHelp":
     "Los recuentos actuales proceden de identidades, agentes, hosts SSH, rotaciones y entregas. Abra uno para inspeccionar los elementos correspondientes.",
+  "workloads.overview.healthPartialHelp":
+    "Los recuentos disponibles siguen visibles. Una comprobación que no pudo leerse indica que no está disponible en lugar de mostrar un cero seguro.",
   "workloads.overview.healthLabel": "Estado de máquinas y cargas de trabajo",
+  "workloads.overview.identitiesUnavailable": "Estado de identidades no disponible",
+  "workloads.overview.agentsUnavailable": "Estado de agentes no disponible",
+  "workloads.overview.sshUnavailable": "Estado de confianza SSH no disponible",
+  "workloads.overview.deliveriesUnavailable": "Estado de entrega de cargas de trabajo no disponible",
   "workloads.overview.identitiesOne": "1 identidad de corta duración",
   "workloads.overview.identitiesMany": "{count} identidades de corta duración",
   "workloads.overview.agentsOne": "1 agente requiere atención",
@@ -455,10 +466,15 @@ const esESCatalog = {
   "secrets.route.storeAction": "Añadir secreto",
   "secrets.overview.attentionTitle": "{count} problemas de secretos y acceso requieren atención",
   "secrets.overview.attentionHealthy": "No hay trabajo urgente de secretos",
+  "secrets.overview.attentionUnknown": "La urgencia de los secretos no se conoce por completo",
   "secrets.overview.attentionHelp":
     "Empiece por los valores filtrados y las entregas de rotación fallidas. Cada fila explica la consecuencia y abre la reparación más segura.",
   "secrets.overview.attentionHealthyHelp":
     "Ningún secreto almacenado necesita una acción urgente por una filtración detectada, una rotación tardía, una entrega fallida o la falta de responsable.",
+  "secrets.overview.attentionUnknownHelp":
+    "No se pudieron leer una o más comprobaciones de secretos, filtraciones, rotación, entrega o responsables. Vuelva a intentarlo antes de considerar saludable este espacio de trabajo.",
+  "secrets.overview.attentionPartialHelp":
+    "Estos elementos necesitan atención, pero no se pudieron leer una o más comprobaciones, por lo que esta lista puede estar incompleta.",
   "secrets.overview.attentionLabel": "Atención de secretos y acceso",
   "secrets.overview.healthTitle": "Estado del espacio de trabajo",
   "secrets.overview.healthHelp":
