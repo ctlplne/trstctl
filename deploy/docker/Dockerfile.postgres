@@ -2,13 +2,15 @@
 
 # PostgreSQL for the local evaluation, demo, and restore-rehearsal stacks.
 #
-# The exact upstream 16.15 Bookworm filesystem is digest-pinned. Its Debian
+# The exact upstream 16.15 Alpine filesystem is digest-pinned. Its Alpine
 # packages scan clean, but the upstream convenience helper `/usr/local/bin/gosu`
 # was built with a vulnerable Go toolchain. trstctl does not need that helper:
 # Compose and the rehearsal start this image directly as the image's existing
-# `postgres` account. Removing the unused helper gives us fewer executable bytes
-# and avoids claiming a clean image while carrying a known-vulnerable binary.
-FROM postgres:16.15-bookworm@sha256:60f4761b9035e0b8d5218f701a8c3382f641bf12b1604822574cf5be3baeb537
+# `postgres` account. Alpine keeps that account at UID/GID 70, preserving access
+# to volumes created by every earlier Alpine-based trstctl Compose release.
+# Removing the unused helper gives us fewer executable bytes and avoids claiming
+# a clean image while carrying a known-vulnerable binary.
+FROM postgres:16.15-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
 
 USER root
 RUN rm -f /usr/local/bin/gosu && test ! -e /usr/local/bin/gosu

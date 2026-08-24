@@ -144,11 +144,12 @@ $ bash scripts/ci/npm-audit-dependency-surfaces.sh
 ### embedded-postgres binary — committed checksum pin (CI and runtime) + Trivy
 
 The external PostgreSQL runtime used by Docker Compose, the demo, and the disaster
-recovery rehearsal is built from the exact official PostgreSQL 16.15 Bookworm
-digest in `deploy/docker/Dockerfile.postgres`. The upstream Debian packages scan
+recovery rehearsal is built from the exact official PostgreSQL 16.15 Alpine
+digest in `deploy/docker/Dockerfile.postgres`. The upstream Alpine packages scan
 clean, but its unused `gosu` helper was built with a vulnerable Go toolchain. Our
 three-line derivative removes that helper and starts directly as the existing
-non-root `postgres` account; it downloads and installs nothing else. That does not
+non-root `postgres` account (UID/GID 70, preserving earlier Compose volumes); it
+downloads and installs nothing else. That does not
 repair or conceal the bundled path described below: its vendor wrapper remains on
 16.14.0, and the supply-chain gate stays red when the official PostgreSQL catalog
 reports a HIGH/CRITICAL advisory fixed after that exact pin.

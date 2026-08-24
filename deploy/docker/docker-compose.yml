@@ -28,7 +28,7 @@ name: trstctl
 
 services:
   postgres:
-    # Built locally from the exact upstream 16.15 Bookworm digest. The small
+    # Built locally from the exact upstream 16.15 Alpine digest. The small
     # derivative removes upstream's unused vulnerable gosu helper, then starts
     # directly as the existing postgres account. See Dockerfile.postgres.
     build:

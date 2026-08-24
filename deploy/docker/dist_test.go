@@ -188,13 +188,14 @@ func TestDockerfileStagesLocalModuleReplacementsBeforeDownload(t *testing.T) {
 // execute, and PostgreSQL must not begin life as root merely to change users.
 func TestPostgresRuntimeImageIsHardenedAndNonRoot(t *testing.T) {
 	const (
-		base       = "postgres:16.15-bookworm@sha256:60f4761b9035e0b8d5218f701a8c3382f641bf12b1604822574cf5be3baeb537"
+		base       = "postgres:16.15-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685"
 		localImage = "trstctl-postgres-hardened:local"
 	)
 
 	df := readArtifact(t, "Dockerfile.postgres")
 	mustContainAll(t, "hardened PostgreSQL Dockerfile", df,
 		"FROM "+base,
+		"UID/GID 70",
 		"RUN rm -f /usr/local/bin/gosu",
 		"test ! -e /usr/local/bin/gosu",
 		"USER postgres",
