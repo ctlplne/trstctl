@@ -130,7 +130,7 @@ updating a user appends a tenant-member upsert event; `active:false` or DELETE a
 an offboarding event. SCIM groups map to existing RBAC role names: a group named
 `viewer` gives its members the `viewer` role, and removing a member removes that role.
 Browser sessions consult the current tenant-member roles on each API request, so
-SCIM provisioning and deprovisioning change real authorization, not just an admin list.
+SCIM provisioning and deprovisioning change real authorization, beyond an admin list.
 Supported IdP operations are SCIM Users create/get/list/put/patch/delete and Groups
 create/get/list/patch/delete. **Served when `auth.scim.enabled` is configured.**
 
@@ -196,7 +196,7 @@ Every table carries a `tenant_id` and has [row-level security](../glossary.md) t
 all rows when the tenant context is unset (fail-closed). `WithTenant` drops to the
 non-superuser role and sets the tenant for the transaction, so every query is confined
 automatically — and a custom build check _fails the build_ if any repository query omits
-the tenant filter. A single-company deployment simply runs one tenant.
+the tenant filter. A single-company deployment runs one tenant.
 
 ### Managed offering / SaaS provider plane (CAP-MODEL-02)
 

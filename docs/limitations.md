@@ -182,7 +182,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | Agent job ledger | Served: agents claim, lease, extend, report and lose work over the mTLS channel; aggregate waiting/claimed health is on Operations. The shipped agent census executes `connector.deploy`, `connector.test`, `connector.rollback`, `endpoint.renew`, `endpoint.verify`, `discovery.run`, `revocation.probe`, `adcs.inventory`, `trust.distribute`, `cmdb.sync`, `mdm.sync`, `ticket.sync`, and `agent.upgrade`; each row's role and agent constraints select the eligible host agent or network relay. Nothing is claimable until an operator names that kind in `agent_channel.claimable_job_kinds` — including `connector.rollback`, which must be enabled separately from deploying | [The agent job ledger](#the-agent-job-ledger-served-executors-and-signed-receipts) |
 | Agent job receipts | Served: every terminal report is signed by the agent with the key behind its channel certificate, verified against the certificate that authenticated, stored with the event, and refused fail-closed with an audit event when it does not verify. A successful host-generated renewal uses the v2 statement, which also binds the installed certificate fingerprint plus origin, storage, exportability, and generator; the projected custody event is replayable. Verified and refused counts, and the reason for the most recent refusal, are on Operations. The signature is over the report's facts and a digest of its text — it attests what the agent SAID, not that the appliance changed | [The agent job ledger](#the-agent-job-ledger-served-executors-and-signed-receipts) |
 | Renewal windows, canaries and SLOs (D6) | Served: maintenance windows restrict when the scheduler may renew (`lifecycle.maintenance_windows`, e.g. `Mon,Tue,Wed,Thu,Fri 22:00-06:00 Europe/London`); a closed window **defers** with a recorded reason naming when it reopens, never drops. Fleet re-issuance is a durable outbox-backed batch state machine: start publishes only the canary, an accepted signed agent receipt is required to advance, pause/halt stores the cursor and reason, and resume/restart reuses deterministic ids. Any failed verification fails the gate and any unverified replacement keeps it `not_evaluated`; later batches remain unpublished after a canary failure. Renewal success SLO with error-budget burn on `GET /api/v1/operations/renewal-slo`, window and target both operator inputs | [Renewal windows, canaries and SLOs](#renewal-windows-canaries-and-slos) |
-| Endpoint verification (D2) | Served: after a deploy the host agent handshakes the listener it just changed — the only observation of whether the **reload took effect** — and a network relay probes the same endpoints as a client would, which is the only witness for an appliance. Divergence is classed (`fingerprint`, `sans`, `chain`, `expired`, `not_yet_valid`) because the remedies differ; `unreachable` is neither a pass nor a divergence. Results are signed: the probe transcript's digest travels inside the agent's receipt, so a verdict is checkable rather than asserted. **Verification is opt-in per target**: an endpoint with no configured listener address is never verified and never claims to be. `verified %` on the dashboard is a percentage of OBSERVED endpoints and the tile is hidden entirely until something has been observed. Sweeps re-probe hourly; divergence raises a `critical` alert (unreachable: `warning`) through the notification outbox; automatic rollback to the predecessor is available per target, opt-in and off by default | [Endpoint verification](#endpoint-verification) |
+| Endpoint verification (D2) | Served: after a deploy the host agent handshakes the changed listener — the only observation of whether the **reload took effect** — and a network relay probes the same endpoints as a client would, which is the only witness for an appliance. Divergence is classed (`fingerprint`, `sans`, `chain`, `expired`, `not_yet_valid`) because the remedies differ; `unreachable` is neither a pass nor a divergence. Results are signed: the probe transcript's digest travels inside the agent's receipt, so a verdict is checkable rather than asserted. **Verification is opt-in per target**: an endpoint with no configured listener address is never verified and never claims to be. `verified %` on the dashboard is a percentage of OBSERVED endpoints and the tile is hidden entirely until something has been observed. Sweeps re-probe hourly; divergence raises a `critical` alert (unreachable: `warning`) through the notification outbox; automatic rollback to the predecessor is available per target, opt-in and off by default | [Endpoint verification](#endpoint-verification) |
 | Connector rollback | Served through two honest execution models. **f5, kemp, netscaler, a10** re-bind a fingerprint-named object already on the appliance. All 14 host connectors restore the one encrypted predecessor bundle retained only by the exact enrolled host agent, run the connector reload, and reverify the listener when configured. Deploy and rollback share a serialized per-target lane. Unsupported cloud/appliance/plugin routes return `409` and write no rollback-shaped receipt. Automatic rollback after `verify_failed` is opt-in per target; manual rollback uses the same job and signed transcript | [The agent job ledger](#the-agent-job-ledger-served-executors-and-signed-receipts) |
 | CA migration waves (H2) | Served for internally issued X.509 identities on host-agent connectors: read-only assessment, reviewed exact-authority manifest, durable trust-before-leaf waves, signed trust/live gates, pause/resume, halt, and newest-first rollback | [Migration waves](#conditional-partial-and-residual-boundaries) |
 | Agent roles (host / network relay) | Served: an operator grants host and/or network at enrollment, the CA stamps it into the certificate, and the claim path refuses out-of-role work. Role badges on Agents. Agents redeem credential material just-in-time, once per job attempt. **Connector deploys carry a per-row role demand** stamped at enqueue from the shipped vantage census — an F5 deploy is claimable only by a relay, an nginx deploy only by a host agent, a cloud-store deploy by no agent. The control-plane dispatcher structurally refuses host-stamped and legacy host-family rows before native lookup or I/O, so 14 host families execute only on the enrolled host agent; an unavailable agent leaves pending work, never a control-plane fallback | [Agent roles](#agent-roles-a-vantage-in-the-certificate) |
@@ -1322,7 +1322,7 @@ and a clock skew cannot replay an alert the operator already saw.
 The second check is the one that hides. A CA cannot issue a leaf that outlives
 it, so once an authority has less life left than the validity its leaves are
 issued with, every new leaf is silently truncated to the parent's expiry.
-Issuance keeps succeeding; the certificates just get shorter until something
+Issuance keeps succeeding; certificate lifetimes become shorter until something
 downstream rejects one. That case raises `ca.validity_compression` rather than a
 plain horizon alert, because the fix is different: renew or re-key the authority.
 
@@ -1499,8 +1499,8 @@ posture finding an operator cannot check against the template's own property
 page is one they have to take on faith, and the first false positive they cannot
 check costs the credibility of every true finding after it. A test asserts a
 deliberately hardened template set produces *no* findings at all, which is the
-harder half of getting this right: rules that fire are easy, rules that stay
-quiet are what make the output worth reading. The SAN variant is reported separately and is the
+harder half of getting this right: firing a rule is only half the problem; keeping it
+quiet is what makes the output worth reading. The SAN variant is reported separately and is the
 more urgent of the two, since SAN-based mapping is what Windows authentication
 actually reads. An empty EKU list counts as authenticating, because unrestricted
 is not harmless. Every finding names the specific change that removes it, and
@@ -1547,7 +1547,7 @@ directory dumps is useless — attribute values are bit fields, and
 change says what it means and which way it moved: somebody turning on
 enrollee-supplies-subject, or removing manager approval, or publishing a
 template that carries findings so a latent risk became an offered one. Only a
-change for the WORSE emits an alerting event. An operator who has just hardened
+change for the WORSE emits an alerting event. An operator who has hardened
 a template does not need waking, and a tool that alerts on improvement teaches
 people to mute it — after which it will not reach them on the day it matters.
 Better and neutral changes are still recorded, because an incident timeline
@@ -1582,7 +1582,7 @@ ninety notifications. The template is stored exactly as the directory reported
 it so the next sweep diffs against what was really there; a row written before
 that column existed is skipped and re-baselines on one quiet sweep, rather than
 being reconstructed into a template whose flags all read false and reported as
-having just turned dangerous.
+becoming dangerous.
 
 **What is not inferred:** effective user access. The descriptor parser handles
 self-relative DACLs, standard and object allow/deny ACEs, Generic All, the
@@ -1658,7 +1658,7 @@ a vantage question, so it demands the network role. A host agent's own
 filesystem inventory still travels on the inventory path rather than as a
 claimed job, so nothing was taken away from it.
 
-### Revocation distribution points are monitored, not just recorded
+### Revocation distribution points are monitored and recorded
 
 Every inventoried certificate has carried its CDP and OCSP URLs since discovery
 shipped — `internal/crypto/certinfo` parses them — and until now nothing fetched
@@ -1788,7 +1788,7 @@ values are moved straight into locked buffers and the wire copies wiped, so the
 only surviving copy is the one destroyed on the way out, including on panic. What
 a connector or an appliance says on failure is never forwarded: the relay reports
 a closed phrase and keeps the target's words local, because an appliance can and
-does echo the credential it was just handed back in an error body. A sandbox
+does echo the credential it received back in an error body. A sandbox
 denial is reported as a failure, not as a deploy with a footnote.
 
 Seven connectors are relay-executable — `f5`, `netscaler`, `a10`, `kemp`,
@@ -1835,7 +1835,7 @@ appliance; what a deploy changed was which installed object the listener points
 at, and a rollback points it back. Nothing is uploaded, no key moves, and the
 operation is possible precisely because the control plane holds nothing.
 
-That required a change to deploys, not just an added operation. Every appliance
+That required a change to deploys, in addition to a new operation. Every appliance
 connector installed under a name derived from the target, so each deploy
 **overwrote** the object before it — there was never a predecessor to bind back
 to. Deployments now install under a name carrying the certificate's fingerprint,
@@ -1868,12 +1868,12 @@ rollable target on day one: every certificate deployed before this change was
 installed under the old target-derived name, which no rollback looks for. A
 target becomes rollable once two deployments have landed under the new naming —
 one to be the predecessor, one to be the current. Nothing warns about this; the
-rollback simply reports that the predecessor object is not installed, which is
+rollback reports that the predecessor object is not installed, which is
 the truthful answer.
 
 Second, objects now accumulate. Each deployment leaves its predecessor on the
 appliance rather than overwriting it, which is the entire point, and nothing
-prunes them — trstctl does not delete objects it did not just create on a
+prunes them — trstctl does not delete objects it did not create during the
 customer's appliance. On a target renewed every 90 days that is a handful of
 objects a year; on a short-lived-certificate target it is not, and operators
 running those should expect to prune. Automatic pruning is deliberately not
@@ -1920,7 +1920,7 @@ still at-least-once. What changed is the consumer: `ClaimJobs` and
 while it is still going, and report executed or failed.
 
 A claim is a **lease**, not an assignment. An agent that is killed, partitioned,
-or simply stops calling home leaves work behind; because the claim expires rather
+or stops calling home leaves work behind; because the claim expires rather
 than sticking, that work returns to the queue without anyone noticing the machine
 is gone. Claims use `SKIP LOCKED`, so a fleet polling in lockstep fans out across
 the queue instead of serializing on its head. Extend, complete and release all
@@ -3478,7 +3478,7 @@ This is a deliberate, documented trust boundary, not an accident.
   Roadmap residual: a dedicated ACME admin console for account/order/challenge
   drilldown, revocation operations, and richer client setup controls remains
   outside the F5 GA-served protocol denominator.
-- **External account bindings are authorizations, not just door keys.** RFC 8555
+- **External account bindings are authorizations, not door keys.** RFC 8555
   §7.3.4 EAB proves an ACME account key was pre-authorized out of band. The
   server used to verify that proof and discard the key id, which made every
   admitted account identical: nothing recorded which credential let it in, so
@@ -3617,7 +3617,7 @@ This is a deliberate, documented trust boundary, not an accident.
   and public discovery payload, so console HTML cannot masquerade as ACME, EST, SCEP,
   CMP, SSH CA, or TSA readiness.
   - Reference-implementation differentials: cross-checked against
-    an *independent* implementation, not just our own parser. ACME: a
+    an *independent* implementation in addition to our own parser. ACME: a
     differential against Pebble (the reference test ACME CA) as a dedicated
     CI job, plus a stock certbot CI transcript (certbot manual DNS-01
     issues, renews, and revokes through the served `/directory` endpoint
@@ -4361,7 +4361,7 @@ downstream observes whether it took effect.
 writes the file. The reload fails, or the service ignores it. Every delivery
 receipt stays green, the inventory correctly describes the new certificate, and
 clients keep getting the old one until it expires. Inventory-based expiry
-alerting cannot see this, because the inventory is *right* — it just does not
+alerting cannot see this, because the inventory is *right* but does not
 describe what is being served.
 
 **Two vantages, and the difference is not redundancy.** The host agent's check
@@ -4374,7 +4374,7 @@ pass means the box thinks it is fine; only a relay pass means a client could get
 it. The two are stored as separate rows and never merged.
 
 **A verdict never claims more than it checked.** Each record carries whether the
-name set and the chain were actually compared, not just the fingerprint. An
+name set and chain were compared in addition to the fingerprint. An
 expectation that supplied no SAN set yields a verification that does not claim to
 have checked names.
 
@@ -4658,7 +4658,7 @@ over-claimed.
 
 ## How to read the roadmap against this
 
-The [README capability table](https://github.com/ctlplne/trstctl#capabilities)
+The source-checkout `README.md` capability table
 describes what is built and tested; this page tells you what is served by
 the binary today. When the two differ, this page is the authority for what
 you can rely on at runtime.

@@ -674,6 +674,21 @@ func TestCommandHelpIncludesExampleForEveryAPIOperation(t *testing.T) {
 	}
 }
 
+func TestRootHelpIsSuccessfulAndScriptFriendly(t *testing.T) {
+	for _, args := range [][]string{{"--help"}, {"-h"}, {"help"}} {
+		code, stdout, stderr := run(t, args, cli.Env{}, "")
+		if code != 0 {
+			t.Errorf("%v exit = %d, want 0; stderr = %q", args, code, stderr)
+		}
+		if !strings.Contains(stdout, "Usage: trstctl") {
+			t.Errorf("%v stdout does not contain root usage: %q", args, stdout)
+		}
+		if stderr != "" {
+			t.Errorf("%v wrote successful help to stderr: %q", args, stderr)
+		}
+	}
+}
+
 func TestAttestedIssuanceCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 201, `{"certificate_pem":"-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n","credential_id":"cred:test","subject":"ns/default/sa/web","not_after":"2026-06-24T12:00:00Z","attestation":{"id":"att:k8s","method":"k8s_sat","subject":"ns/default/sa/web","issuer":"kubernetes","expires_at":"2026-06-24T12:00:00Z","verified_at":"2026-06-24T11:50:00Z"}}`, &cap)

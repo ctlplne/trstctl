@@ -46,6 +46,10 @@ type Env struct {
 // response to stdout, and returns a process exit code: 0 on success, 1 on a
 // request/response error, 2 on a usage error.
 func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, stderr io.Writer) int {
+	if commandHelpRequested(args) {
+		usage(stdout)
+		return 0
+	}
 	fs := flag.NewFlagSet("trstctl", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	server := fs.String("server", env.Server, "control-plane base URL (env TRSTCTL_SERVER)")
@@ -56,6 +60,9 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 	globalForce := fs.Bool("force", false, "allow a destructive command")
 	fs.Usage = func() { usage(stderr) }
 	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
 		return 2
 	}
 	rest := fs.Args()

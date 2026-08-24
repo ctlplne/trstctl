@@ -6,13 +6,13 @@ credential leak. It assumes you operate trstctl per the other runbooks
 ([backup/DR](../disaster-recovery.md), [migrations](../migrations.md),
 [key ceremony](key-ceremony.md)).
 
-> **Maturity note.** The served binary now publishes tenant-scoped OCSP/CRL status,
-> serves root/intermediate CA creation through m-of-n ceremonies, and can answer
-> blast-radius reads from the credential graph. Some response capabilities remain
-> library/operator work - notably cross-sign ceremonies, CT alert scheduling,
-> and connector-driven redeploys. Where a step depends on an
-> as-yet-unserved subsystem, this runbook says so and gives the operational
-> alternative.
+> **Maturity note.** The served binary publishes tenant-scoped OCSP/CRL status,
+> serves root/intermediate CA creation and cross-signing through m-of-n ceremonies,
+> answers blast-radius reads, monitors configured Certificate Transparency (CT)
+> sources with outbox-backed alerts, and coordinates exact-H1 fleet reissuance.
+> trstctl cannot install trust or replacement credentials on a target with no
+> configured connector or enrolled agent. This runbook names those operator-owned
+> boundaries instead of claiming the software completed them.
 
 ## First moves (any incident)
 
@@ -30,9 +30,11 @@ credential leak. It assumes you operate trstctl per the other runbooks
    the PostgreSQL-state stream keeps auth, CA, approval, secret, policy, and outbox
    state recoverable too.
 4. **Verify the audit chain.** trstctl's audit trail is a hash-linked, signed chain
-   (R2.1). Verify it (`audit.VerifyChain`) to confirm the record has not been
-   tampered with and to establish a trustworthy timeline of who did what
-   (`Actor` is recorded on every event).
+   (R2.1). Export the incident window, pin the public audit key and timestamp-authority
+   root from a separate trusted channel, then run `trstctl-cli audit verify` as
+   described in [Verify audit exports offline](../cli.md#verify-audit-exports-offline).
+   The command recomputes the chain and rejects an invalid signature, timestamp, or
+   anchor delay. This establishes a checkable timeline; every event records its actor.
 5. **Scope the blast radius.** Identify the affected credentials and everything that
    depends on them with the served graph API (`/api/v1/graph/blast-radius/{id}`) or
    the `trstctl-cli graph blast-radius` command.
@@ -59,17 +61,21 @@ process; its compromise is the worst case.
 4. **Revoke** suspect leaves through the served lifecycle path; OCSP answers change
    immediately and trusted revocation paths publish a fresh tenant CRL. If the CA
    itself is compromised, distribute a replacement CA bundle and re-issue under the
-   new CA; CA-level revocation and cross-sign choreography remains an operator/key
-   ceremony procedure.
-5. **Re-issue** active credentials under the new CA and **redeploy** them to their
-   targets.
+   new CA. Ceremony-gated rotation and cross-signing are served. Trust-store
+   distribution remains operator-owned for any target without a configured
+   connector or enrolled agent.
+5. **Re-issue and redeploy** active credentials under the new CA. Use the exact-H1
+   fleet workflow at `POST /api/v1/incidents/fleet-reissuance-runs` (or
+   `trstctl-cli incidents fleet-reissuance start`) so pause, resume, rollback, and
+   signed evidence stay attached to the incident. Verify each target after delivery.
 6. **Recover** any lost state from backup ([DR runbook](../disaster-recovery.md)).
 
 ## Scenario: unexpected certificate (mis-issuance)
 
-1. trstctl's **Certificate Transparency monitoring** watches your domains and raises
-   an alert on issuance it does not recognize (library-level today; when served it
-   notifies on unexpected issuance).
+1. trstctl's **Certificate Transparency monitoring** watches domains configured on
+   a Discovery `ct_log` source and raises an outbox-backed alert for unrecognized
+   issuance. Confirm the source checkpoint is current and the Alert Center shows a
+   successful delivery; no configured source means no monitoring claim.
 2. Confirm whether the certificate is yours (check inventory) or truly unexpected.
 3. If unexpected and for your domain, treat it as a CA-trust incident: revoke,
    rotate if your CA issued it in error, and notify per policy.
@@ -83,8 +89,8 @@ process; its compromise is the worst case.
 
 ## Communications & closeout
 
-- Notify affected owners and relying parties per your disclosure policy
-  ([SECURITY.md](https://github.com/ctlplne/trstctl/blob/main/SECURITY.md)).
+- Notify affected owners and relying parties per your
+  [private disclosure policy](../security/reporting.md).
 - Capture a timeline from the audit chain; write a post-incident review with
   concrete follow-ups (shorter validity, tighter custody, added monitoring).
 - Confirm `/readyz` is green and the inventory is consistent before closing.
@@ -94,7 +100,7 @@ process; its compromise is the worst case.
 | Lever | Where | Served today? |
 | --- | --- | --- |
 | Stop new issuance | stop the signer (fails closed) | yes |
-| Verify audit timeline | `audit.VerifyChain` (R2.1) | yes |
+| Verify audit timeline | `trstctl-cli audit verify` with separately pinned audit JWK and TSA root | yes |
 | Backup / restore | `trstctl --full-backup-dir` / `--full-restore-dir` | yes |
 | Rotate or re-key the CA | m-of-n [key ceremony](key-ceremony.md) plus `POST /api/v1/ca/authorities/{id}/rotate` or `/rekey` | yes |
 | Revoke leaves (CRL/OCSP) | served revocation surface (`/ocsp/{tenant}`, `/crl/{tenant}`) | yes |

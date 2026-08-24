@@ -1,74 +1,96 @@
-# trstctl
+# trstctl: machine trust without the maze
 
-trstctl is a Machine Identity Security Control Plane for every credential that
-is not a human: X.509 certificates, SSH host and user certificates, secrets,
-API keys, tokens, and SPIFFE workload identities. It discovers, issues,
-deploys, rotates, revokes, and retires those credentials across hybrid
-infrastructure.
+trstctl is a self-hosted control plane for every credential used by software and
+machines instead of a person. It manages X.509 and SSH certificates, secrets, API
+keys, tokens, and SPIFFE workload identities across hybrid infrastructure.
 
-trstctl is MPL-2.0 open core: the Free/Community core is open source under the
-repository `LICENSE`; Enterprise and Provider features are proprietary, live
-under `ee/`, and activate with an offline Ed25519-signed license. Billing
-units are control-plane deployments — never credentials or rotations.
-trstctl is pre-1.0 and under active hardening: **[Current
-limitations](limitations.md)** states what the running binary serves today
-versus what exists only as library code. Check it before relying on a
-capability.
+You do not need public-key infrastructure vocabulary to find the first action.
+**Home** tells you what needs attention, what can break, when it is due, whether
+automation is proven, who owns it, and what to do next. Five workspaces keep each
+kind of daily work focused:
 
-## Where to start
+| Workspace | Plain-language question |
+| --- | --- |
+| **Certificate Lifecycle** | Which certificates could expire or fail renewal? |
+| **Machine & Workload Trust** | Which machines can prove who they are? |
+| **Secrets & Access** | Which secrets need rotation, delivery repair, or access review? |
+| **Software Trust** | What was signed, who approved it, and was the signing key healthy? |
+| **Trust Operations** | Which cross-product risk, incident, owner, alert, or system issue needs action? |
 
-**[Getting started](getting-started.md)** brings up a control plane and
-issues your first certificate — the wizard path and the CLI path. Then pick
-the journey that matches your goal; each chains the features you need,
-end to end:
+[Learn the product map](product-map.md) in five minutes. It explains non-human
+identity (NHI), certificate lifecycle management (CLM), the five workspaces, shared
+safety rails, status words, and the shortest path for each role.
 
-- [Automate TLS across your fleet](journeys/automate-fleet-tls.md) — ACME, DNS-01, renewal, deploy.
-- [Give Kubernetes workloads an identity](journeys/kubernetes-workload-identity.md) — SPIFFE, no static secrets.
-- [Enroll devices & IoT fleets](journeys/enroll-devices.md) — EST, SCEP, CMP.
-- [Migrate from your existing CA](journeys/migrate-from-existing-ca.md) — discover, stand up, cut over.
-- [Onboard a team as a tenant](journeys/onboard-a-team.md) — SSO, RBAC, policy, audit.
-- [Manage application secrets](journeys/manage-secrets.md) — rotation, dynamic secrets, sharing.
-- [Issue & trust SSH at scale](journeys/ssh-at-scale.md) — SSH CA, deploy/trust, attested certs.
-- [Respond to a compromise](journeys/respond-to-compromise.md) — revoke, re-issue, break-glass.
-- [Run in production](journeys/run-in-production.md) — TLS, monitoring, backup/DR, compliance.
-- [Build on the API, CLI & SDKs](journeys/build-on-the-api.md) — OpenAPI, Go/TS SDKs, the graph.
-- [Stay crypto-agile & migrate to PQC](journeys/crypto-agility-pqc.md) — inventory, plan, migrate.
+## Choose your first outcome
 
-## Reference
+### I want to evaluate the product
 
-- [All features](features.md) — the full capability catalog with a deep-dive
-  page per domain; keep the [glossary](glossary.md) open if a term is new.
-- [The web console](web-console.md) — every screen in the browser UI, mapped
-  to the served endpoints behind it (same binary as the API).
-- [Install](install.md) — Linux, macOS, Windows, Docker, Kubernetes; plus
-  [air-gapped installs](airgap.md) with the no-phone-home guard.
-- [Configuration](configuration.md) — datastore switches, server settings,
-  lifecycle thresholds.
-- [Performance SLOs](performance.md), [capacity planning](performance-capacity.md),
-  and [usability outcome SLOs](usability.md).
-- [Compliance](compliance.md) — framework mapping and evidence packs.
-- [Pricing](pricing.md) and [editions](editions.md) — the
-  Free/Enterprise/Provider matrix and billable units.
-- [CLI](cli.md) — drive trstctl from scripts and CI with `trstctl-cli`.
-- [Terraform provider](terraform-provider.md) — profiles, short-lived PKI
-  credentials, and secrets from infrastructure-as-code.
-- [Troubleshooting](troubleshooting.md) — fixes for the issues people hit first.
+- **Blank installation:** [start the real stack and issue one certificate](getting-started.md).
+- **Populated tour:** [follow the seeded demo browser walkthrough](demo-click-through.html).
+- **Before relying on a capability:** read [Current limitations](limitations.md).
 
-## Extend it
+Success is concrete: verified HTTPS health, local single sign-on (SSO), one served
+certificate, and visible event/audit readback. If any proof is missing, the
+[troubleshooting guide](troubleshooting.md) starts with the safest diagnostic.
 
-- [Authoring a connector](guides/connector-authoring.md) — deploy renewed
-  credentials to a new target.
-- [Authoring a plugin](guides/plugin-authoring.md) — add a CA or connector as
-  a sandboxed WASM plugin.
+### I operate credentials every day
 
-## How it is built
+Start on Home, then follow the workspace named on the highest-priority item. For a
+complete task, choose a journey:
 
-Event-sourced and multi-tenant from the first commit; all cryptography routes
-through a single boundary, with private-key operations isolated in their own
-process — the [signing service design](design/signing-service.md) explains
-that boundary. [Telemetry](telemetry.md) is opt-in and off by default. State
-lives in PostgreSQL, the event log in NATS JetStream — bundled for
-single-node evaluation, external for production. It runs entirely on
-infrastructure you control; the licenses are in the repository:
-[MPL-2.0 core](https://github.com/ctlplne/trstctl/blob/main/LICENSE) and
-[ee/LICENSE](https://github.com/ctlplne/trstctl/blob/main/ee/LICENSE).
+- [Automate TLS across your fleet](journeys/automate-fleet-tls.md)
+- [Give Kubernetes workloads an identity](journeys/kubernetes-workload-identity.md)
+- [Manage application secrets](journeys/manage-secrets.md)
+- [Issue and trust SSH at scale](journeys/ssh-at-scale.md)
+- [Migrate from an existing certificate authority](journeys/migrate-from-existing-ca.md)
+
+### I am responding to an incident
+
+Open [Respond to a compromise](journeys/respond-to-compromise.md). It starts with
+evidence preservation and blast-radius discovery, then replaces and revokes in an
+order designed to avoid turning containment into an outage. Keep the
+[incident-response runbook](runbooks/incident-response.md) open during the event.
+
+### I need assurance evidence
+
+Start with [Audit and compliance](compliance.md), then read the
+[architecture invariants](design/architecture-invariants.md),
+[key-custody boundary](custody.md), [threat model](security/threat-model.md), and
+[privacy data catalog](privacy-data-catalog.md). These pages distinguish shipped
+controls from external assessments that have not occurred.
+
+### I am building automation
+
+Follow [Build on the API, CLI, and SDKs](journeys/build-on-the-api.md). The running
+control plane publishes its OpenAPI 3.1 contract. The CLI and generated clients use
+that served contract, but each surface has its own documented coverage and edition
+rules.
+
+## What trstctl does
+
+trstctl discovers, issues, deploys, rotates, revokes, and retires machine
+credentials. It connects work that separate certificate, secrets, workload, and
+software-signing products often hide from one another: ownership, dependency
+blast radius, expiry alerts, delivery proof, policy, and audit history.
+
+It is MPL-2.0 open core. Community code is open source under the repository
+`LICENSE`. Proprietary Enterprise and Provider code lives under `ee/` and activates
+with an offline Ed25519-signed license. Billing units are control-plane deployments,
+never credential or rotation counts. trstctl is pre-1.0 and under active hardening;
+[Current limitations](limitations.md) is the authority for what the running binary
+serves today.
+
+## How it protects the trust boundary
+
+State changes enter an append-only event log. PostgreSQL enforces tenant isolation.
+Private-key operations run in a separate signing process. External effects use a
+transactional outbox, and bounded queues keep one slow subsystem from starving the
+rest. [Architecture invariants](design/architecture-invariants.md) explains the
+exact design and its test boundaries.
+
+Everything runs on infrastructure you control. Telemetry is opt-in and off by
+default. Exact license terms ship in the source checkout at `LICENSE` (MPL-2.0 core)
+and `ee/LICENSE` (commercial code); [Editions](editions.md) explains the boundary.
+
+Next: [understand the product map](product-map.md) or
+[start a blank evaluation](getting-started.md).

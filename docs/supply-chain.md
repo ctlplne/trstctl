@@ -264,18 +264,18 @@ required. The full set of required status checks, plus enforce-admins,
 linear history, and code-owner review, is codified in the repository —
 see [Branch protection & required checks](branch-protection.md) for the
 exact list and
-[`.github/branch-protection.json`](https://github.com/ctlplne/trstctl/blob/main/.github/branch-protection.json)
+`.github/branch-protection.json`
 for the machine-applicable form. Code ownership of the root-of-trust paths
 is codified in
-[`.github/CODEOWNERS`](https://github.com/ctlplne/trstctl/blob/main/.github/CODEOWNERS).
+`.github/CODEOWNERS`.
 
 ## Run it yourself
 
 ```bash
 make supply-chain   # module SBOM + Go/npm/embedded-postgres SCA (network needed for npm + PG legs)
-make vuln           # just the pinned govulncheck gate
-make sbom           # just the module SBOM
-make dependency-freshness # just the committed dependency freshness SLO report
+make vuln           # run only the pinned govulncheck gate
+make sbom           # build only the module SBOM
+make dependency-freshness # build only the committed dependency freshness SLO report
 make coverage-critical   # per-package coverage gate on the critical set (needs cover.out from `make test`)
 ```
 

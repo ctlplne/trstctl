@@ -2,8 +2,9 @@
 
 ## What it is
 
-trstctl doesn't just hold a flat list of credentials — it builds a graph of how they
-connect (who owns which key, who issued it, what it can reach), exposes a unified query
+trstctl builds a dependency graph instead of holding only a flat credential list.
+The graph shows how credentials connect (who owns which key, who issued it, what it
+can reach), exposes a unified query
 layer to ask questions across all its data safely, and layers AI on top: a pluggable
 model adapter, grounded root-cause analysis with natural-language questions, and an
 [MCP](../glossary.md) server so external AI agents can query trstctl through a safe,

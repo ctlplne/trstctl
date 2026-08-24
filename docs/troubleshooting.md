@@ -131,11 +131,10 @@ deployment volumes as a browser-recovery step.
 
 If the same page fails again, capture the browser console error and build a
 redacted support bundle with the command below. Report ordinary product defects
-through [GitHub Issues](https://github.com/ctlplne/trstctl/issues). Report a
-possible security vulnerability privately through the repository's **Security →
-Report a vulnerability** flow or the address in the
-[security policy](https://github.com/ctlplne/trstctl/blob/main/SECURITY.md); do not
-put sensitive evidence in a public issue.
+through the issue tracker provided with your repository access, or the support
+channel agreed for your evaluation. Report a possible security vulnerability using
+the [private reporting path](security/reporting.md); do not put sensitive evidence
+in a public issue.
 
 ## Still stuck?
 

@@ -95,7 +95,7 @@ collapse to `:id` — so per-id paths do not explode label cardinality, and no
 identifier leaks into a label.
 
 Scrape it with the example config in
-[`deploy/observability/prometheus.example.yml`](https://github.com/ctlplne/trstctl/blob/main/deploy/observability/prometheus.example.yml).
+`deploy/observability/prometheus.example.yml` in the source checkout.
 
 ## Endurance / soak gate
 
@@ -179,7 +179,7 @@ route, and status. This is asserted by a test.
 ## Dashboards & alerts
 
 Baseline operator assets ship under
-[`deploy/observability/`](https://github.com/ctlplne/trstctl/tree/main/deploy/observability):
+`deploy/observability/` in the source checkout:
 
 - **`alerts.yml`** — Prometheus alerting rules for control-plane health, error
   rate/latency (including the per-`PERF-SLO-*` SLO group, which mirrors the

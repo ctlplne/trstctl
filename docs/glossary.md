@@ -5,6 +5,8 @@ defines every term of art the rest of the docs use, in plain language: what it i
 why it matters, and where it shows up. Skim it once, or jump back whenever a word
 trips you up.
 
+## Terms
+
 ### Non-human identity (NHI)
 
 Any actor on a network that is *not* a person: a server, a container, a script, a CI
@@ -118,13 +120,13 @@ rather than planting a secret in it.
 Cryptographic proof of *what* and *where* something is before it is trusted —
 "this really is a pod in this cluster," "this really is an AWS EC2 instance with this
 role," "this really is a genuine TPM chip." trstctl issues credentials only to
-workloads that pass attestation, so an attacker can't just ask for one. See
+workloads that pass attestation, so an attacker cannot obtain one by asking. See
 [Workload identity](features/workload-identity.md).
 
 ### Secret
 
 Any sensitive value a workload needs: a database password, an API key, a token, an
-encryption key. Unlike a certificate, a secret is usually just an opaque string with
+encryption key. Unlike a certificate, a secret is usually an opaque string with
 no built-in expiry, which is exactly why leaked secrets are so dangerous. trstctl
 stores, rotates, and issues secrets. See [Secrets](features/secrets.md).
 
@@ -234,7 +236,7 @@ a database transaction open or starve unrelated tenants.
 Running many isolated customers (tenants) on one deployment, where no tenant can ever
 see another's data. trstctl carries a `tenant_id` on every row and enforces isolation
 in the database itself (see *RLS*), not in fragile application code (non-negotiable
-**AN-1**). A single-company deployment simply has one tenant.
+**AN-1**). A single-company deployment has one tenant.
 
 ### Row-level security (RLS)
 

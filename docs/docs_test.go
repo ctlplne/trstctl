@@ -1069,11 +1069,7 @@ func TestMkdocsNavResolves(t *testing.T) {
 // entry. Every entry states why. Keep this list short: an un-navigated page is
 // still a live public URL that no menu reaches, so nothing routes a reviewer to
 // it before it ships.
-var navAllowlist = map[string]string{
-	"journeys/first-certificate.md": "redirect stub only: the walkthrough merged into getting-started.md in the 2026-07-14 docs overhaul (see docs_test.go TestJourneyRedirectStubs); the page survives so existing inbound links keep resolving",
-	"guides/est-enrollment.md":      "redirect stub only: the EST content moved into features/enrollment-protocols.md (navigated); this page survives so existing inbound links, including README.md, keep resolving",
-	"design/ssh-trust-rewrite.md":   "historical design record for F44, superseded by features/ssh.md (navigated), which links to it inline; kept because limitations.md and internal/agent/sshtrust cite it as the design of record",
-}
+var navAllowlist = map[string]string{}
 
 // TestMkdocsNavCoversEveryPage is the reverse direction of
 // TestMkdocsNavResolves. MkDocs renders every Markdown file under docs_dir, not

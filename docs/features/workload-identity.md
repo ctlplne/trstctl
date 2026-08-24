@@ -213,7 +213,7 @@ identity-lifecycle primitive: `POST /api/v1/nhi/decommission`
 revokes or retires them via these same transitions. Canonical home:
 [Policy & governance](policy-and-governance.md#automated-nhi-decommissioning).
 
-Deploying against an existing SPIRE cluster is just installing the plugin binary (or
+Deploying against an existing SPIRE cluster requires installing the plugin binary (or
 mounting it read-only) and adding the `UpstreamAuthority "trstctl"` block above with a
 `token_file` scoped to `certs:issue` on the owning tenant.
 

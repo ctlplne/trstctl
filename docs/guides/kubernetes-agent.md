@@ -4,7 +4,7 @@ This guide covers the trstctl Kubernetes agent's integration paths — cert-mana
 native `CertificateSigningRequest`s, `TrustBundle` distribution, and the
 trstctl-native `Certificate` API — plus how to exercise all of them end-to-end,
 including the kind-based CI path. Deploy the agent first with
-[`deploy/kubernetes/README.md`](https://github.com/ctlplne/trstctl/tree/main/deploy/kubernetes); come here once
+`deploy/kubernetes/README.md` in the source checkout; come here once
 it is running and you need to wire in one of these integrations or reproduce the
 e2e/kind test locally.
 

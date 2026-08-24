@@ -1,14 +1,15 @@
 # The web console — what you can do in the browser
 
-trstctl ships a full web console served by the binary itself — a React 18 + Vite SPA
-from an embedded filesystem, on the same port and TLS certificate as the API, nothing
-separate to deploy. It sits behind the same `/auth/login` session as every other
-surface, and it is a _view_ over that served control plane: anything you can do here
-you can also do through the [REST API](features/platform-and-api.md), the
-[CLI](cli.md), or the [SDKs](features/client-sdks.md). This page maps the navigation,
-every real screen, the served endpoints behind each one, and the feature page that
-explains the mechanics — and says so plainly where a screen only summarizes, or a
-related capability is API-only today.
+This page is for operators and integrators who need an exact map from the browser
+to the running control plane. Start with the [product map](product-map.md) if the
+workspace names are new.
+
+trstctl serves its React console from the control-plane binary, on the same port and
+TLS certificate as the API. There is no second UI service to deploy. The console and
+API enforce the same session and tenant boundary, but feature coverage differs
+between the browser, [REST API](features/platform-and-api.md), [CLI](cli.md), and
+[SDKs](features/client-sdks.md). This page names the served endpoint behind each
+screen and calls out summary-only or API-only behavior.
 
 ## Navigation
 
@@ -47,18 +48,26 @@ binary serves real data.
 
 ## The surfaces
 
-### Overview dashboard (`/`)
+### Home (`/`)
 
-The single pane of glass: KPI tiles (certificates, identities, secrets, agents
-online, expiring ≤7 days, high-risk, open incidents, PQC-ready), an issuance trend,
-an issuance-rate chart, a renewal/job success-vs-failure trend, algorithm mix, a
-90-day expiration timeline, a rotate-first worklist, and a recent audit-activity
-stream. Below the KPIs, a non-human-identity inventory summary breaks the fleet down
-by served `/api/v1/nhi/inventory` kind (certificates, SSH keys, secrets, API keys,
-and more), and a severity-ranked alert center projects credentials needing attention
-now from served risk and expiry events (no dedicated alerts endpoint).
-Channel and routing-policy authoring, plus channel-test delivery, live on
-`/notifications`; scheduled digest delivery is not implied by the preview.
+Home opens with the highest-priority credential work, not a wall of metrics. Each
+row names the affected workspace, operational consequence, deadline, current
+automation evidence, effective owner, and safest next action. The ranking comes
+from served contextual-risk evidence; current asset-specific ownership assignments
+override older discovery metadata. When either source cannot be read, Home says
+unknown or unavailable instead of showing a false zero.
+
+Five compact workspace health doors then report certificate expiry, machine
+identities, stored secrets, recent signing outcomes, and open incidents. Their
+counts come from the current served APIs. The 47-day certificate-renewal readiness
+panel remains visible. Detailed KPI charts, including the issuance-rate chart, plus
+inventory mix, expiry distribution, endpoint verification, and audit activity are
+retained under **Explore detailed
+metrics** so the first screen answers what to do before it exposes analysis.
+
+Alert channel and routing-policy authoring, test delivery, failures, and history
+live on `/notifications` in Trust Operations. A summary on Home is not proof that a
+notification was delivered.
 
 ### Journeys (`/journeys`)
 

@@ -21,7 +21,7 @@ A private key can be created in exactly three places in a trstctl deployment:
 - **The control plane** — the remaining legacy paths, each named below with what
   replaces it.
 
-## Per certificate, not just per kind
+## Per certificate and per kind
 
 The table below answers this per credential KIND, which is the right level for a
 design review and the wrong level for an audit. An auditor is not asking about

@@ -397,7 +397,7 @@ when set, it cannot enable cleartext delivery to a non-loopback host.
 
 The shipped code-signing routes stay fail-closed until `code_signing.enabled` is true.
 Tenant-to-key and tenant-to-OIDC associations are structured JSON only: putting these
-parallel lists in environment variables would make it too easy to attach one tenant's
+parallel lists in environment variables increase the risk of attaching one tenant's
 trust to another tenant. A minimal key-backed plus GitHub Actions keyless configuration
 looks like this:
 
@@ -1391,7 +1391,7 @@ Back up the sealed key store, the signer custody input, and the CA cert together
 For local-KEK mode that custody input is the signer KEK Secret; for externalKMS
 mode it is access to the same provider keyRef plus the wrapper adapter and provider
 credentials. The
-[`docker-compose.yml`](https://github.com/ctlplne/trstctl/blob/main/deploy/docker/docker-compose.yml)
+`deploy/docker/docker-compose.yml` in the source checkout
 runs the signer as its **own service** in `external` mode.
 
 ## Regulated CA governance mode

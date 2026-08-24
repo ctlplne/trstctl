@@ -1,5 +1,12 @@
 # Operations & resilience
 
+This page is for the operator responsible for keeping a running trstctl deployment
+available. It explains the controls, signals, and recovery behavior for overload,
+slow external systems, shutdown, and signer failure. Before changing production,
+have a verified backup, alert access, the current configuration, and a tested
+rollback path. Start diagnostics in **Trust Operations**, then use `/healthz`,
+`/readyz`, and `/metrics` to separate service health from tenant work.
+
 The serving control plane is built so one overloaded or failing part cannot take
 down the rest: each subsystem runs in its own bounded lane and rejects fast when
 full. This page covers the resilience controls in the live path: bulkheads, the

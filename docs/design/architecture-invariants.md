@@ -27,7 +27,7 @@ and how to extend it when the product grows.
 The architecture guard is a custom `go/analysis` linter that runs under
 `make lint`. It is deliberately source based: it looks for imports, handler
 shapes, SQL strings, and key-material types that violate the contracts above.
-That makes the guard easy to run in a local checkout and easy to reason about in
+That makes the guard repeatable in a local checkout and reviewable in
 code review.
 
 Enforcement is not symmetric, and this page states the split rather than letting

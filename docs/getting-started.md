@@ -1,7 +1,18 @@
 # Getting started
 
-This walkthrough takes a fresh machine to its first issued certificate. One
-Compose command builds and starts the blank evaluation services. You then trust
+This walkthrough is for a first-time evaluator on a disposable workstation. It
+takes a fresh machine to a healthy blank control plane and its first issued
+certificate. It does not prepare a production deployment.
+
+**Outcome:** verified HTTPS, local single sign-on (SSO), a signer-backed
+certificate, and visible inventory/audit readback. **Time:** about 10 minutes after
+the first image build. **Safest next diagnostic:** if a step fails, keep the stack
+running and use [Troubleshooting](troubleshooting.md); do not delete volumes before
+you preserve the error and inspect service health.
+
+New to the product? Read the [five-workspace product map](product-map.md) first.
+
+One Compose command builds and starts the blank evaluation services. You then trust
 one certificate-only file, sign in through the loopback-only local identity
 provider, and follow the in-product wizard. The control plane is usually ready
 about two minutes after a cached build; a first image download/build takes
@@ -9,7 +20,7 @@ longer. Issuance itself is sub-second (measured under
 [Issue your first cert](#issue-your-first-cert)). Most of the remaining time is
 the optional agent-install step.
 
-If you want a pre-populated sales/demo environment instead of a blank
+If you want a pre-populated demo environment instead of a blank
 first-run, use the demo stack: `docker compose -f deploy/demo/docker-compose.yml up --build`
 serves a seeded UI (owners, certificates, secrets, transit keys, managed keys)
 with local SSO at <https://127.0.0.1:9443>. Everything below uses the blank
@@ -39,6 +50,18 @@ For a read-only, click-by-click product tour, open the
   it at `./bin/trstctl-cli`; it is not installed on the host by Compose.
 - A patched Go
   1.26.6+ toolchain only when building host binaries from source.
+
+## Shortest safe path
+
+1. Start the blank Compose project and wait for its health gates.
+2. Copy and inspect the public certificate-only trust file.
+3. Verify `/healthz` with that certificate.
+4. Trust the certificate in the evaluation browser; never bypass the warning.
+5. Sign in with the loopback identity provider and complete the wizard.
+6. Confirm the issued certificate appears in **Certificate Lifecycle** and its
+   creation appears in change history.
+
+The detailed commands and recovery notes follow in the same order.
 
 ## 1. Bring up the control plane (about 2 minutes)
 
@@ -160,7 +183,7 @@ manual, one-click action today.
 This optional screen demonstrates that integration packages are reachable
 from the shipped control plane, not merely present in the source tree.
 Against systems an operator has already configured, it: reads the served
-connector catalog, creates a target, and deploys the identity just issued via
+connector catalog, creates a target, and deploys the newly issued identity via
 `POST /api/v1/connectors/targets/{id}/deploy`; submits an operator-supplied
 CSR to `POST /api/v1/external-cas/{id}/issue`; and opens a 15-minute
 dynamic-secret lease through `POST /api/v1/secrets/leases`. The wizard

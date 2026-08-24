@@ -118,7 +118,7 @@ npm --prefix web audit --omit=dev --audit-level=high
 
 Update `deploy/supply-chain/dependency-freshness.json` with the new observation date,
 observed latest versions, owners, next-review dates, and any accepted deferral windows.
-A row that has just fallen behind gets a `behind_since` of the date it was observed
+A row that newly falls behind gets a `behind_since` of the date it was observed
 behind; a row that has caught up moves to `status: current` and clears `behind_since`.
 Major upgrades must name an owner and a reason. An accepted deferral is allowed only
 when it has an explicit `deferral_until` date and explains the compatibility work that

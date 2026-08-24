@@ -141,7 +141,7 @@ For a full no-phone-home Kubernetes install, use
 [Air-gapped install](airgap.md); it turns on `TRSTCTL_AIRGAP_ENABLED` and scopes
 datastore egress to operator-owned private CIDRs.
 
-See [`deploy/helm/trstctl/README.md`](https://github.com/ctlplne/trstctl/tree/main/deploy/helm/trstctl)
+See `deploy/helm/trstctl/README.md` in the source checkout
 for the full values reference. The chart runs the signer co-located (sidecar, over
 an in-memory UDS) by default; set `signer.mode=isolated` plus the required
 `signer.mtls.*` values to render a separate signer pod reached over mutually

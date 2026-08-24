@@ -90,7 +90,7 @@ The response is a posture view, not the raw source record: counts for compliant 
 violating NHIs, per-control violation totals, severity, risk score, disallowed
 scopes/geographies, recommendation text, and evidence refs such as `inventory:<id>` and
 `discovery.finding:<id>`. Raw credential values are never returned. A row isn't counted
-as compliant just for existing — it becomes governed only once it carries a rotation/TTL
+as compliant because it exists — it becomes governed only once it carries a rotation/TTL
 policy, a scope or geography envelope, an expiry, or business-purpose metadata.
 
 The same read path is available as `trstctl-cli nhi policy compliance`; the Risk console

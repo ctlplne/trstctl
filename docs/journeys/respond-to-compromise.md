@@ -15,7 +15,7 @@
 When you finish this journey you will have contained a compromised credential:
 the leaked certificate revoked and visible as `revoked` on the served surface, a
 replacement issued and deployed, and the whole response captured as a sealed,
-tamper-evident evidence pack. It is for the on-call operator who has just learned a
+tamper-evident evidence pack. It is for the on-call operator who learned that a
 private key leaked, a certificate was mis-issued, or a CA may be compromised, and
 needs to act safely under pressure. In plain terms: you preserve evidence, find
 everything the bad credential can reach, replace-then-revoke in the right order so

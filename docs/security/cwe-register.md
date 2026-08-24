@@ -593,7 +593,7 @@ not this file.
 | `deploy/helm/airgap_bundle_test.go:163` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/ai_surface_placement_test.go:27` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/deferred_wipe_guard_test.go:45` | walking the repo's own tree (CWE-22) |
-| `docs/docs_test.go:2541` | test walks the repo's own checkout; no hostile symlink exposure (CWE-367) |
+| `docs/docs_test.go:2537` | test walks the repo's own checkout; no hostile symlink exposure (CWE-367) |
 | `docs/embedded_postgres_teardown_test.go:43` | walks this repository's own test sources (CWE-22) |
 | `docs/est_differential_test.go:190` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_completeness_test.go:260` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
@@ -733,7 +733,7 @@ not this file.
 | `internal/api/headerauth_guard_test.go:34` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/api/headerauth_guard_test.go:39` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/ca/shellca/shellca.go:120` | the shell-CA backend exists to run the operator's configured signing command (CWE-78) |
-| `internal/cli/cli_test.go:1785` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/cli/cli_test.go:1800` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/connector/localops.go:260` | operator-configured local-ops action command; running it is the feature (CWE-78) |
 | `internal/crypto/kmswrap/external_kms.go:122` | operator-configured external KMS helper command (CWE-78) |
 | `internal/kms/pkcs11/softhsm_container_test.go:116` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
@@ -1049,9 +1049,9 @@ not this file.
 | `internal/ca/shellca/shellca_test.go:161` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/cbom/hostsource/hostsource.go:38` | declared host-config path from the discovery source's own config (CWE-22) |
 | `internal/cli/audit_verify.go:103` | path is the explicit read-only local artifact selected by this CLI command (CWE-22). |
-| `internal/cli/cli.go:152` | the operator explicitly names the public trust-bundle path (CWE-22) |
-| `internal/cli/cli.go:475` | operator-passed local file argument on their own command line (CWE-22) |
-| `internal/cli/cli_test.go:1364` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/cli/cli.go:159` | the operator explicitly names the public trust-bundle path (CWE-22) |
+| `internal/cli/cli.go:482` | operator-passed local file argument on their own command line (CWE-22) |
+| `internal/cli/cli_test.go:1379` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/cli/doctor/doctor_test.go:98` | test reads its own tempdir receipt (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/config/config.go:2259` | the config loader reading the operator's own config file (CWE-22) |
@@ -1313,7 +1313,7 @@ not this file.
 | `internal/ca/profilelint/profilelint_test.go:241` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/ca/profilelint/profilelint_test.go:254` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/cbom/hostsource/hostsource_test.go:22` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/cli/cli_test.go:1815` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/cli/cli_test.go:1830` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/cli/secret_scan_local.go:137` | a git hook must be executable; 0755 is the working minimum (CWE-276) |
 | `internal/connector/localops_test.go:87` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/crypto/external_kms_test.go:88` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -1413,7 +1413,7 @@ not this file.
 | `cmd/trstctl-agent/rotation_schedule_test.go:77` | jitter spread (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:88` | jitter spread (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:105` | jitter spread (CWE-338) |
-| `internal/cli/cli.go:483` | idempotency-key uniqueness suffix; deliberately outside the AN-3 boundary, not a secret (CWE-338) |
+| `internal/cli/cli.go:490` | idempotency-key uniqueness suffix; deliberately outside the AN-3 boundary, not a secret (CWE-338) |
 | `internal/crypto/scep_property_test.go:145` | deterministic property-test stream, not security randomness (CWE-338) |
 | `internal/crypto/scep_property_test.go:184` | deterministic property-test stream, not security randomness (CWE-338) |
 | `internal/crypto/sshkeys/property_test.go:100` | deterministic property-test stream, not security randomness (CWE-338) |

@@ -68,7 +68,7 @@ SELECT version, name, checksum_adopted_at
 ```
 
 Rolling *back* to a pre-checksum binary is also safe: the three columns are
-nullable, the older binary simply ignores them, and the newer binary adopts
+nullable, the older binary ignores them, and the newer binary adopts
 whatever the older one recorded on the next boot.
 
 ### If a node refuses to start (break-glass)
@@ -311,7 +311,7 @@ custody and retention policy; do not claim that this cutover erased them.
     # -> "applied N migration(s)"
     ```
 
-5. **Start (or roll) the new version.** With auto-migration on, simply deploying
+5. **Start (or roll) the new version.** With auto-migration on, deploying
    the new binary applies anything still pending on first boot; replicas booting
    together are serialized by the lock.
 6. **Verify** `/readyz` is green and spot-check the inventory.

@@ -10,8 +10,8 @@ the repository**, not an invisible server-side setting.
 > — invisible to the repository and to a reviewer. A job that *runs* but is **not
 > required** is theater: a red build could merge, an admin could force-push, and
 > nothing in-repo would show it. Codifying the policy in
-> [`.github/branch-protection.json`](https://github.com/ctlplne/trstctl/blob/main/.github/branch-protection.json)
-> (owners mirrored in [`.github/CODEOWNERS`](https://github.com/ctlplne/trstctl/blob/main/.github/CODEOWNERS))
+> `.github/branch-protection.json`
+> (owners mirrored in `.github/CODEOWNERS`)
 > makes the gate auditable; `docs/branch_protection_test.go` matches the
 > required-check list to real CI job names in both directions, with an explicit
 > reason for any non-PR exemption.
@@ -19,7 +19,7 @@ the repository**, not an invisible server-side setting.
 ## The policy for `main`
 
 The canonical, machine-applicable form lives in
-[`.github/branch-protection.json`](https://github.com/ctlplne/trstctl/blob/main/.github/branch-protection.json).
+`.github/branch-protection.json` in the source checkout.
 Merging to `main` requires:
 
 - **All required status checks green**, branch up to date (`strict`) — every CI
@@ -131,7 +131,7 @@ The scheduled/manual CI job `branch protection / live policy drift` runs
 watched control, not a one-time admin click. Each run uploads
 `branch-protection-live-drift-receipt`, containing
 `branch-protection-drift-receipt.json`; release review attaches the latest green
-receipt so the shipped tag is backed by live GitHub state, not just committed
+receipt so the shipped tag is backed by live GitHub state, not only committed
 policy.
 If the default workflow token can't read branch-protection settings, set repository
 secret `TRSTCTL_BRANCH_PROTECTION_READ_TOKEN` to one with admin/branch-protection
@@ -139,7 +139,7 @@ read access.
 
 ## Code ownership
 
-[`.github/CODEOWNERS`](https://github.com/ctlplne/trstctl/blob/main/.github/CODEOWNERS)
+`.github/CODEOWNERS`
 assigns mandatory reviewers: the AN-3 crypto boundary (`internal/crypto`), the AN-4
 isolated signer (`internal/signing`, `cmd/trstctl-signer`, `proto`), the AN-1
 multi-tenant store (`internal/store`), and the architecture linter
@@ -181,4 +181,4 @@ in-repo file is the intended policy; re-apply it.
 
 [Supply chain & build integrity](supply-chain.md) ·
 [Vulnerability management](security/vulnerability-management.md) ·
-[`SECURITY.md`](https://github.com/ctlplne/trstctl/blob/main/SECURITY.md)
+the [private security reporting policy](security/reporting.md)

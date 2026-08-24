@@ -96,6 +96,4 @@ defenses.
 
 ## Reporting
 
-Security issues: see
-[SECURITY.md](https://github.com/ctlplne/trstctl/blob/main/SECURITY.md) for
-the private disclosure process and contact.
+Security issues: use the [private disclosure process](reporting.md).

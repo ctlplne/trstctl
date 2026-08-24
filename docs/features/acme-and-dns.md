@@ -57,7 +57,7 @@ When `protocols.acme_eab.required` is on, the directory advertises
 binding is checked as an HS256 JWS over the account JWK using the configured `kid` and
 HMAC key.
 
-**A credential is an authorization, not just a door key.** The account remembers which
+**A credential is an authorization, not a door key.** The account remembers which
 `kid` admitted it, and every order under that account is checked against that
 credential's scope. A credential in `protocols.acme_eab.keys[]` may carry
 `allowed_identifiers` (exact names, or `*.example.com`, which covers the apex and
@@ -263,7 +263,7 @@ an ACME client. Operators use the separate, authenticated
 `lifecycle:read`; PostgreSQL RLS constrains the certificate and lifecycle evidence
 to the caller's tenant.
 
-The response separates three facts that are easy to confuse:
+The response separates three facts that operators often confuse:
 
 - `publication_status` says whether ACME renewal information is actually served for
   this tenant;

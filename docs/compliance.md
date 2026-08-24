@@ -230,7 +230,7 @@ audit-view policy in four ordered steps:
    offline-verifiable bundle and written to
    `ARCHIVE_DIR/<tenant>/audit-<sequence>.jws` (`0600`), verifiable with
    the audit verification key like a live export.
-2. Verify. The worker re-verifies the bundle it just wrote — recovers it
+2. Verify. The worker re-verifies the bundle it wrote — recovers it
    and checks the hash chain — before advancing any served boundary; a
    failed verification aborts the run and the visible view is unchanged.
 3. Record a replayable checkpoint. An `audit.archived` v2 event carries

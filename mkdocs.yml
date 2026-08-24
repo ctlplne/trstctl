@@ -1,6 +1,5 @@
 site_name: trstctl
 site_description: Self-hosted control plane for every non-human identity.
-repo_url: https://github.com/ctlplne/trstctl
 docs_dir: docs
 site_dir: .site
 
@@ -26,8 +25,10 @@ theme:
   features:
     - navigation.sections
     - navigation.top
+    - navigation.tracking
     - content.code.copy
     - search.suggest
+    - search.highlight
 
 extra_css:
   - stylesheets/quiet-confidence.css
@@ -41,74 +42,51 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Getting started: getting-started.md
-  - Trust local evaluation TLS: local-evaluation-tls.md
-  - Demo browser walkthrough: demo-click-through.html
-  - Journeys:
+  - Start here:
+      - Product map: product-map.md
+      - First evaluation: getting-started.md
+      - Trust local evaluation TLS: local-evaluation-tls.md
+      - Demo browser walkthrough: demo-click-through.html
+      - Install: install.md
+      - Air-gapped install: airgap.md
+      - Current limitations: limitations.md
+      - Editions: editions.md
+      - Pricing and billing posture: pricing.md
+  - Choose a goal:
+      - Issue your first certificate: journeys/first-certificate.md
       - Automate TLS across your fleet: journeys/automate-fleet-tls.md
       - Kubernetes workload identity: journeys/kubernetes-workload-identity.md
-      - Enroll devices & IoT fleets: journeys/enroll-devices.md
+      - Enroll devices and IoT fleets: journeys/enroll-devices.md
       - Migrate from your existing CA: journeys/migrate-from-existing-ca.md
       - Onboard a team as a tenant: journeys/onboard-a-team.md
       - Manage application secrets: journeys/manage-secrets.md
       - SSH access at scale: journeys/ssh-at-scale.md
       - Respond to a compromise: journeys/respond-to-compromise.md
       - Run in production: journeys/run-in-production.md
-      - Build on the API, CLI & SDKs: journeys/build-on-the-api.md
-      - Crypto-agility & PQC migration: journeys/crypto-agility-pqc.md
-  - Current limitations: limitations.md
-  - Editions & pricing:
-      - Editions: editions.md
-      - Pricing and billing posture: pricing.md
-  - Features:
-      - All features (index): features.md
-      - Discovery & inventory: features/discovery-and-inventory.md
-      - Observability & risk: features/observability-and-risk.md
-      - Issuance & certificate authorities: features/issuance-and-cas.md
-      - ACME & DNS validation: features/acme-and-dns.md
-      - Enrollment protocols: features/enrollment-protocols.md
-      - Workload identity: features/workload-identity.md
-      - Agent delegation: features/agent-delegation.md
-      - SSH: features/ssh.md
-      - Lifecycle & PQC: features/lifecycle-and-pqc.md
-      - Deployment connectors: features/deployment-connectors.md
-      - Connector support matrix: features/connector-support-matrix.md
-      - Issuer capability matrix: features/issuer-capability-matrix.md
-      - Code signing & timestamping: features/code-signing-and-timestamping.md
-      - Incident response & JIT: features/incident-and-jit.md
-      - Secrets: features/secrets.md
-      - Policy & governance: features/policy-and-governance.md
-      - Platform & API: features/platform-and-api.md
-      - Client SDKs: features/client-sdks.md
-      - Extensibility & plugins: features/extensibility-plugins.md
-      - Graph, query & AI: features/graph-query-ai.md
-  - The web console: web-console.md
-  - Glossary: glossary.md
-  - Install: install.md
-  - Air-gapped install: airgap.md
-  - Configuration: configuration.md
-  - Audit & compliance: compliance.md
-  - Key custody: custody.md
-  - Disconnected edge CA custody: edge-ca-custody.md
-  - Accessibility (VPAT): accessibility-vpat.md
-  - Observability: observability.md
-  - Performance:
-      - SLO matrix: performance.md
-      - Capacity and cost model: performance-capacity.md
-      - Usability outcome SLOs: usability.md
-  - Operations & resilience: operations.md
-  - Prove isolation (trstctl doctor): operations/doctor.md
-  - CLI: cli.md
-  - Terraform provider: terraform-provider.md
-  - Telemetry: telemetry.md
-  - Privacy data catalog: privacy-data-catalog.md
-  - Troubleshooting: troubleshooting.md
-  - Uninstall: uninstall.md
-  - Runbooks:
-      - Backup & disaster recovery: disaster-recovery.md
-      - Disaster recovery drill: runbooks/disaster-recovery-drill.md
-      - Migrations & upgrades: migrations.md
-      - OIDC runbooks:
+      - Crypto-agility and PQC migration: journeys/crypto-agility-pqc.md
+  - Use the product:
+      - Daily operator:
+          - The web console: web-console.md
+          - Configuration: configuration.md
+          - Observability: observability.md
+          - Operations and resilience: operations.md
+          - Prove isolation (trstctl doctor): operations/doctor.md
+          - Troubleshooting: troubleshooting.md
+          - Uninstall: uninstall.md
+      - On-call responder:
+          - Incident response: runbooks/incident-response.md
+          - Outbox dead letters: runbooks/outbox-dead-letters.md
+          - Outbox reconciliation conflicts: runbooks/outbox-reconciliation-conflicts.md
+          - Signer recovery: runbooks/signer-recovery.md
+          - PCAS operations: runbooks/pcas-operations.md
+      - Backup, upgrade, and fleet:
+          - Backup and disaster recovery: disaster-recovery.md
+          - Disaster recovery drill: runbooks/disaster-recovery-drill.md
+          - Migrations and upgrades: migrations.md
+          - Upgrade rollback: runbooks/upgrade-rollback.md
+          - Fleet rollout: runbooks/fleet-rollout.md
+          - Fleet rollback: runbooks/fleet-rollback.md
+      - Identity provider runbooks:
           - Overview: operator/oidc-runbooks/index.md
           - Keycloak: operator/oidc-runbooks/keycloak.md
           - Authentik: operator/oidc-runbooks/authentik.md
@@ -117,28 +95,63 @@ nav:
           - Microsoft Entra ID: operator/oidc-runbooks/entra-id.md
           - Google Workspace: operator/oidc-runbooks/google-workspace.md
       - CA key ceremony: runbooks/key-ceremony.md
-      - Incident response: runbooks/incident-response.md
-      - Outbox dead letters: runbooks/outbox-dead-letters.md
-      - Outbox reconciliation conflicts: runbooks/outbox-reconciliation-conflicts.md
-      - Fleet rollout: runbooks/fleet-rollout.md
-      - Fleet rollback: runbooks/fleet-rollback.md
-      - Signer recovery: runbooks/signer-recovery.md
-      - PCAS operations: runbooks/pcas-operations.md
-      - Upgrade rollback: runbooks/upgrade-rollback.md
-  - Security:
-      - Product threat model: security/threat-model.md
-      - Architecture invariants: design/architecture-invariants.md
-      - Vulnerability management: security/vulnerability-management.md
-      - CWE register: security/cwe-register.md
-      - CWE coverage ledger: security/cwe-coverage.md
-      - Accepted advisory debt: security-exceptions.md
-      - Dependency freshness: security/dependency-freshness.md
-      - Supply chain: supply-chain.md
-      - Branch protection & required checks: branch-protection.md
-      - Signing service design: design/signing-service.md
-      - Discovery coverage model: design/cbom-coverage.md
-  - Authoring guides:
-      - Connectors: guides/connector-authoring.md
-      - Plugins: guides/plugin-authoring.md
-      - Certificate profiles: guides/profile-authoring.md
-      - Kubernetes agent (kind e2e): guides/kubernetes-agent.md
+  - Build and automate:
+      - API and CLI integrator: journeys/build-on-the-api.md
+      - CLI reference: cli.md
+      - Platform and API: features/platform-and-api.md
+      - Client SDKs: features/client-sdks.md
+      - Terraform provider: terraform-provider.md
+      - Authoring guides:
+          - Connectors: guides/connector-authoring.md
+          - Plugins: guides/plugin-authoring.md
+          - Certificate profiles: guides/profile-authoring.md
+          - EST enrollment: guides/est-enrollment.md
+          - Kubernetes agent (kind E2E): guides/kubernetes-agent.md
+  - Security and assurance:
+      - Auditor:
+          - Audit and compliance: compliance.md
+          - Product threat model: security/threat-model.md
+          - Architecture invariants: design/architecture-invariants.md
+          - Key custody: custody.md
+          - Disconnected edge CA custody: edge-ca-custody.md
+          - Privacy data catalog: privacy-data-catalog.md
+          - Accessibility (VPAT): accessibility-vpat.md
+      - Security operations:
+          - Report a vulnerability: security/reporting.md
+          - Vulnerability management: security/vulnerability-management.md
+          - CWE register: security/cwe-register.md
+          - CWE coverage ledger: security/cwe-coverage.md
+          - Accepted advisory debt: security-exceptions.md
+          - Dependency freshness: security/dependency-freshness.md
+          - Supply chain: supply-chain.md
+          - Branch protection and required checks: branch-protection.md
+          - Signing service design: design/signing-service.md
+          - SSH trust rewrite design: design/ssh-trust-rewrite.md
+          - Discovery coverage model: design/cbom-coverage.md
+  - Feature reference:
+      - All features: features.md
+      - Discovery and inventory: features/discovery-and-inventory.md
+      - Observability and risk: features/observability-and-risk.md
+      - Issuance and certificate authorities: features/issuance-and-cas.md
+      - ACME and DNS validation: features/acme-and-dns.md
+      - Enrollment protocols: features/enrollment-protocols.md
+      - Workload identity: features/workload-identity.md
+      - Agent delegation: features/agent-delegation.md
+      - SSH: features/ssh.md
+      - Lifecycle and PQC: features/lifecycle-and-pqc.md
+      - Deployment connectors: features/deployment-connectors.md
+      - Connector support matrix: features/connector-support-matrix.md
+      - Issuer capability matrix: features/issuer-capability-matrix.md
+      - Code signing and timestamping: features/code-signing-and-timestamping.md
+      - Incident response and JIT: features/incident-and-jit.md
+      - Secrets: features/secrets.md
+      - Policy and governance: features/policy-and-governance.md
+      - Extensibility and plugins: features/extensibility-plugins.md
+      - Graph, query, and AI: features/graph-query-ai.md
+  - Reference:
+      - Glossary: glossary.md
+      - Performance:
+          - SLO matrix: performance.md
+          - Capacity and cost model: performance-capacity.md
+          - Usability outcome SLOs: usability.md
+      - Telemetry: telemetry.md

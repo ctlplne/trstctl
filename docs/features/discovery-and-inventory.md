@@ -47,7 +47,7 @@ orchestrator appends a `certificate.recorded` event to the append-only, tamper-e
 log, and a _projector_ reads that event and builds the table row. The table is a
 **projection** — a derived view you could delete and rebuild from the log — which is
 why trstctl can survive a database loss: the truth is the event log, and the inventory
-is just a fast index into it.
+is a fast index into it.
 
 Ingestion is idempotent: the row key is `(tenant_id, fingerprint)`, so seeing the same
 certificate twice refreshes one row instead of creating a duplicate, and the ingest API
@@ -85,7 +85,7 @@ of being done inline by the request handler.
 
 `GET /api/v1/discovery/monitoring` (CLI: `trstctl discovery monitoring`) is a single
 read-side rollup over the tenant's discovery sources, enabled schedules, last runs,
-findings, and certificate inventory — it creates no new state, just joins the same
+findings, and certificate inventory — it creates no new state and joins the same
 `discovery.*` and `certificate.recorded` projections other endpoints already read. Each
 source row shows whether it's scheduled, the monitoring interval, the latest run
 status, finding counts, and pointers to `/api/v1/certificates` and
@@ -240,7 +240,7 @@ with its provenance and risk score; a related bridge ingests leaked-credential f
 from scanners (gitleaks, trufflehog) into the same graph, again excluding the secret
 value structurally.
 
-One worked example — the shape is identical for the other seven kinds, just swap `kind`
+One worked example — the shape is identical for the other seven kinds; change `kind`
 and `config` (the create → run → findings CLI flow is the same one shown for `network`
 under **Use it** below):
 
