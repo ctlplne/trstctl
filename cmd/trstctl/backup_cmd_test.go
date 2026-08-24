@@ -67,7 +67,7 @@ func TestRestoreRehearsalUsesFreshExternalDatastores(t *testing.T) {
 	}
 	body := string(raw)
 	for _, want := range []string{
-		`POSTGRES_IMAGE="postgres:16-alpine@sha256:`,
+		`POSTGRES_IMAGE="postgres:16.15-alpine@sha256:`,
 		`NATS_IMAGE="nats:2.10-alpine@sha256:`,
 		`"postgres": {"mode": "external", "dsn":`,
 		`"nats": {"mode": "external", "url":`,

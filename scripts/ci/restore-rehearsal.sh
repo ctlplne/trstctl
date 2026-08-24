@@ -47,7 +47,7 @@ fi
 BIN="$BIN_DIR/trstctl"
 
 command -v docker >/dev/null 2>&1 || fail "Docker is required for fresh external PostgreSQL/NATS datastores"
-POSTGRES_IMAGE="postgres:16-alpine@sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229"
+POSTGRES_IMAGE="postgres:16.15-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685"
 NATS_IMAGE="nats:2.10-alpine@sha256:b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927"
 POSTGRES_PASSWORD="trstctl-dr-rehearsal-password"
 

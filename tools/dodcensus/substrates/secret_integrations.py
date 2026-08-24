@@ -30,7 +30,7 @@ from urllib.parse import parse_qs, parse_qsl, quote, unquote, urlparse
 
 
 IMAGES = {
-    "postgresql": "postgres:16-alpine@sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229",
+    "postgresql": "postgres:16.15-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685",
     "mysql": "mysql:8.4@sha256:d36d39a64cd12a5c1cc9e6aa2bfb5f8d4c81a2f6586e0a04a9ae13939db02209",
     # MongoDB 8.x refuses to start on Docker Desktop's Linux 6.19 kernel
     # (SERVER-121912). The still-supported 7.0 line exercises the same native

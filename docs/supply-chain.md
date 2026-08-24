@@ -143,6 +143,12 @@ $ bash scripts/ci/npm-audit-dependency-surfaces.sh
 
 ### embedded-postgres binary — committed checksum pin (CI and runtime) + Trivy
 
+The external PostgreSQL image used by Docker Compose, the demo, and the disaster
+recovery rehearsal is separately pinned to official PostgreSQL 16.15 by digest.
+That does not repair or conceal the bundled path described below: its vendor
+wrapper remains on 16.14.0, and the supply-chain gate stays red when the official
+PostgreSQL catalog reports a HIGH/CRITICAL advisory fixed after that exact pin.
+
 The `embedded-postgres` dependency downloads a real PostgreSQL 16.14.0 binary
 from Maven Central at runtime — outside `go.sum`. It backs both the
 integration tests and the served single-node/eval path that starts bundled

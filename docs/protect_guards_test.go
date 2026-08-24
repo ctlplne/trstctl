@@ -1153,7 +1153,7 @@ func TestComposeE2EGateStaysRequired(t *testing.T) {
 		"signerkeys:/data/signer",
 		"secrets:/data/secrets",
 		"trstctl-eval:local",
-		"postgres:16-alpine@sha256:",
+		"postgres:16.15-alpine@sha256:",
 		"nats:2.10-alpine@sha256:",
 		"healthcheck:",
 	} {

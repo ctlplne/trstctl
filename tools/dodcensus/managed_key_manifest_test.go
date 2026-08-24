@@ -120,7 +120,7 @@ func TestManagedKeyClosureRejectsRehashedMutableBuildInputs(t *testing.T) {
 		{"runtime image inspection drops platform", "internal/server/dod_managed_key_runtime_test.go", `"--format={{.Id}} {{.Os}}/{{.Architecture}}"`, `"--format={{.Id}}"`},
 		{"base pull drops platform", "internal/server/dod_managed_key_runtime_test.go", `"docker", "pull", "--platform", dodManagedKeyRuntimePlatform, taggedImage`, `"docker", "pull", taggedImage`},
 		{"runtime restores embedded postgres sibling", "internal/server/dod_managed_key_runtime_test.go", `postgresDSN: dodManagedKeyPostgresDSN(t)`, `postgresDSN: serverTestPostgresDSN(t)`},
-		{"postgres image becomes mutable", "internal/server/dod_managed_key_runtime_test.go", `postgres:16-alpine@sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229`, `postgres:16-alpine`},
+		{"postgres image becomes mutable", "internal/server/dod_managed_key_runtime_test.go", `postgres:16.15-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685`, `postgres:16.15-alpine`},
 		{"postgres publishes on every interface", "internal/server/dod_managed_key_runtime_test.go", `fmt.Sprintf("127.0.0.1:%d:5432", port)`, `fmt.Sprintf("0.0.0.0:%d:5432", port)`},
 		{"postgres runs as root", "internal/server/dod_managed_key_runtime_test.go", `postgresUser := strconv.Itoa(uid) + ":" + strconv.Itoa(gid)`, `postgresUser := "0:0"`},
 		{"postgres shares host PID namespace", "internal/server/dod_managed_key_runtime_test.go", `"--network", route.network, "--pids-limit", "256", "--memory", "512m"`, `"--network", route.network, "--pid", "host", "--pids-limit", "256", "--memory", "512m"`},

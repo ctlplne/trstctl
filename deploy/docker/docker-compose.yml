@@ -31,8 +31,8 @@ services:
     # Pinned by digest, not a floating tag, so the eval stack is reproducible and
     # cannot silently inherit a changed/ vulnerable image (SUPPLY-008). Dependabot's
     # docker updater (directory /deploy/docker) bumps this in place. Tag for humans:
-    # postgres:16-alpine.
-    image: postgres:16-alpine@sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229
+    # postgres:16.15-alpine.
+    image: postgres:16.15-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
     environment:
       POSTGRES_DB: trstctl
       # EVAL-ONLY static credentials (OPS-007): public and identical for everyone.
