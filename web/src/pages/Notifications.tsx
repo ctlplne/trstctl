@@ -1100,10 +1100,10 @@ function RoutingPolicyAuthoring({
             <div className="grid gap-2 rounded-control border border-border bg-muted/20 p-3" role="status">
               <p className="text-sm font-medium">{routePreview.explanation}</p>
               <p className="text-sm text-muted-foreground">
-                {t("notifications.routing.resolution")}: {routePreview.resolution_order.join(" → ")}
+                {t("notifications.routing.resolution")}: {(routePreview.resolution_order ?? []).join(" → ")}
               </p>
               <p className="text-sm text-muted-foreground">
-                {t("notifications.routing.channelsLabel")}: {routePreview.effective_channels.join(", ") || t("notifications.routing.none")} ·{" "}
+                {t("notifications.routing.channelsLabel")}: {(routePreview.effective_channels ?? []).join(", ") || t("notifications.routing.none")} ·{" "}
                 {t(routePreview.delivery_ready ? "notifications.routing.previewReady" : "notifications.routing.previewNotReady")}
               </p>
             </div>

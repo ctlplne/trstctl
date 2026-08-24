@@ -435,6 +435,8 @@ func (a *API) previewNotificationRouting(w http.ResponseWriter, r *http.Request)
 	}
 	response := notificationRoutingPreviewResponse{
 		ResolutionOrder: []string{"asset", "owner", "workspace", "global"},
+		Effective:       []string{},
+		Missing:         []string{},
 		DeliveryReady:   false,
 		Explanation:     "No automatic rule matches this asset. The alert will use the server's explicit fallback, if one exists.",
 	}

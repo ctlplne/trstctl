@@ -59,8 +59,10 @@ describe("Global Alert Center", () => {
     apiMock.notificationRoutingPolicies.mockResolvedValue({ items: [] });
     apiMock.notificationRoutingPreview.mockResolvedValue({
       resolution_order: ["asset", "owner", "workspace", "global"],
-      effective_channels: [],
-      missing_channels: [],
+      // A stale or partially upgraded server may still encode empty slices as
+      // null. The console must degrade to an empty answer, not lose the page.
+      effective_channels: null,
+      missing_channels: null,
       delivery_ready: false,
       explanation: "No automatic rule matches this asset.",
     });

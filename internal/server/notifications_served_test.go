@@ -323,7 +323,12 @@ func TestServedNotificationRoutingPolicyAuthoringAndChannelTestDESIGN003(t *test
 	})
 	tok := seedScopedToken(t, h.store, h.tenant, "notifications:read", "notifications:write")
 
-	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/notification-routing-policies", tok, "design-003-policy-create", map[string]any{
+	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/notification-routing-preview?workspace=certificate-lifecycle&severity=critical", tok, nil)
+	if status != http.StatusOK || !strings.Contains(string(body), `"effective_channels":[]`) || !strings.Contains(string(body), `"missing_channels":[]`) {
+		t.Fatalf("empty routing preview must return arrays the console can render: status %d body %s", status, body)
+	}
+
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/notification-routing-policies", tok, "design-003-policy-create", map[string]any{
 		"name":       "Expiry escalation",
 		"scope_kind": "workspace",
 		"scope_ref":  "certificate-lifecycle",
