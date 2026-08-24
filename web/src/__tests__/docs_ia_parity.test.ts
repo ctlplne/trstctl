@@ -15,7 +15,15 @@ function docsDir(): string {
   throw new Error("could not locate docs/ directory");
 }
 
-const OLD_LABELS = ["Issue & renew", "Discover & inventory", "Monitor posture", "Approve & respond"];
+const OLD_LABELS = [
+  "Issue & renew",
+  "Discover & inventory",
+  "Monitor posture",
+  "Approve & respond",
+  "Certificates & PKI",
+  "Workload & SSH",
+  "Posture & response",
+];
 
 const FILES = ["demo-click-through.html", "web-console.md", "features/platform-and-api.md"];
 
@@ -44,13 +52,21 @@ describe("docs IA parity (S-R2)", () => {
     });
   }
 
-  it("the demo click-through names the spaces shell and its groups", () => {
+  it("the demo click-through names the final five-workspace shell", () => {
     const full = path.join(dir, "demo-click-through.html");
     if (!existsSync(full)) return;
     const src = readFileSync(full, "utf8");
-    expect(src).toMatch(/Certificates &amp; PKI/);
-    expect(src).toMatch(/Detect &amp; respond/);
-    expect(src).toMatch(/Editions &amp; license/);
+    for (const label of [
+      "Certificate Lifecycle",
+      "Machine &amp; Workload Trust",
+      "Secrets &amp; Access",
+      "Software Trust",
+      "Trust Operations",
+    ]) {
+      expect(src).toContain(label);
+    }
+    expect(src).toContain("data-demo-path");
+    expect(src).toContain("demoOriginFromQuery");
   });
 
   it("documents bare /platform as the API-free Platform setup doorway", () => {

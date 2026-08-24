@@ -387,7 +387,7 @@
       <h1>Learn trstctl by clicking through the real control plane</h1>
       <p class="lede">No PKI background required. Start with the 10-minute proof loop, then continue into the full read-only tour when you want the detail.</p>
       <div class="hero-actions">
-        <a class="button primary" href="https://127.0.0.1:9443/" target="_blank" rel="noopener">Open the trstctl demo</a>
+        <a class="button primary" href="https://127.0.0.1:9443/" data-demo-path="/" target="_blank" rel="noopener">Open the trstctl demo</a>
         <a class="button secondary" href="#quick-tour">Take the 10-minute tour</a>
         <a class="button secondary" href="#before-you-start">See the full walkthrough</a>
         <a class="button secondary" href="getting-started/">Back to the documentation</a>
@@ -406,7 +406,7 @@
           <li><a href="#before-you-start">Before you start</a></li>
           <li><a href="#quick-tour">10-minute proof loop</a></li>
           <li><a href="#stop-1">1. Sign in</a></li>
-          <li><a href="#stop-2">2. Dashboard</a></li>
+          <li><a href="#stop-2">2. Home</a></li>
           <li><a href="#stop-3">3. Journeys</a></li>
           <li><a href="#stop-4">4. Discovery</a></li>
           <li><a href="#stop-5">5. Certificates</a></li>
@@ -437,7 +437,7 @@
       <div class="intro-grid">
         <article class="mini-card">
           <strong>Demo address</strong>
-          <p><a href="https://127.0.0.1:9443/" target="_blank" rel="noopener">https://127.0.0.1:9443</a></p>
+          <p><a href="https://127.0.0.1:9443/" data-demo-path="/" data-demo-origin target="_blank" rel="noopener">https://127.0.0.1:9443</a></p>
         </article>
         <article class="mini-card">
           <strong>Demo user</strong>
@@ -452,6 +452,7 @@
       <div class="callout tip">
         <h3>Use two browser tabs</h3>
         <p>Right-click <strong>Open the trstctl demo</strong> and choose “Open Link in New Tab.” Leave this walkthrough open so you can move back and forth.</p>
+        <p>The link above defaults to the HTTPS origin shipped by <code>deploy/demo/docker-compose.yml</code>. If your demo operator supplied a different HTTPS loopback port, append its URL as the encoded <code>?demo=</code> query parameter; this page accepts only <code>https://localhost</code> or <code>https://127.0.0.1</code> and updates every demo link.</p>
       </div>
 
       <section class="mental-model" aria-labelledby="mental-model-title">
@@ -505,12 +506,12 @@
         <div class="tour-body">
           <h4>Click</h4>
           <ol>
-            <li><a class="button small primary" href="https://127.0.0.1:9443/" target="_blank" rel="noopener">Open demo home</a></li>
+            <li><a class="button small primary" href="https://127.0.0.1:9443/" data-demo-path="/" target="_blank" rel="noopener">Open demo home</a></li>
             <li>If you see the sign-in page, click <strong>Continue with SSO</strong>. The local identity provider signs you in automatically.</li>
             <li>Look at the top-right corner for <code>demo-admin@trstctl.local</code>.</li>
             <li>Look at the top bar for <strong>Tenant</strong> and the UUID beginning <code>11111111</code>.</li>
           </ol>
-          <div class="expected"><strong>Expected:</strong> You land on <strong>Dashboard</strong>; the demo administrator and tenant are visible.</div>
+          <div class="expected"><strong>Expected:</strong> You land on <strong>Home</strong>; the demo administrator, non-production tenant, and urgent work are visible.</div>
           <div class="meaning"><strong>Why it matters:</strong> The session supplies the tenant. The browser does not get to invent a tenant ID, and PostgreSQL row-level security enforces that boundary below the API.</div>
         </div>
       </article>
@@ -518,18 +519,18 @@
       <article class="tour-card" id="stop-2">
         <header class="tour-header">
           <span class="step-number">2</span>
-          <div><h3>Read the control-plane dashboard</h3><p><span class="badge readonly">Read only</span> See inventory, alerts, expiry, issuance, and activity together.</p></div>
+          <div><h3>Read Home as the cross-product cockpit</h3><p><span class="badge readonly">Read only</span> See consequence, automation, accountability, and next action together.</p></div>
           <label class="complete"><input class="step-check" type="checkbox" data-step="2"> Mark complete</label>
         </header>
         <div class="tour-body">
           <h4>Click and inspect</h4>
           <ol>
-            <li>Click <strong>Dashboard</strong> in the left navigation.</li>
-            <li>Notice the shell has two parts: an icon rail of <strong>spaces</strong> at the far edge (Home, Certificates &amp; PKI, Secrets, Workload &amp; SSH, Posture &amp; response, Platform), and a sidebar scoped to whichever space is active. <strong>Home</strong> carries the Dashboard, Journeys, and the <strong>Needs action</strong> worklists; each space owns its own grouped rows (for example Posture &amp; response holds the Detect &amp; respond group). Picking a space navigates to it — the URL always decides which space is lit.</li>
-            <li>Read the four top counters: <strong>Certificates</strong>, <strong>Identities (NHI)</strong>, <strong>Secrets</strong>, and <strong>Agents online</strong>. The action tiles below (<strong>Expiring ≤7d</strong>, <strong>High-risk</strong>, <strong>Open incidents</strong>, <strong>Future-ready</strong>) are wired to live tenant data.</li>
-            <li>In <strong>Non-human identity inventory</strong>, compare certificates, tokens, and API keys. One control plane models several credential types.</li>
-            <li>Scroll through <strong>Alert center</strong>, <strong>Issuance rate</strong>, <strong>Renewal jobs</strong>, <strong>Expiration timeline</strong>, and <strong>Algorithm mix</strong>.</li>
-            <li>Find <strong>Rotate first</strong> and <strong>Recent activity</strong>. These connect posture to the next operator action and its audit evidence.</li>
+            <li>Click <strong>Home</strong> in the workspace rail.</li>
+            <li>Notice the shell has Home plus five focused workspaces: <strong>Certificate Lifecycle</strong>, <strong>Machine &amp; Workload Trust</strong>, <strong>Secrets &amp; Access</strong>, <strong>Software Trust</strong>, and <strong>Trust Operations</strong>. Picking a workspace changes its scoped navigation; the URL always decides which workspace is active.</li>
+            <li>Start with <strong>What needs attention</strong>. Each row should name the affected workspace, consequence, deadline, automation state, accountable owner or team, and safest next action.</li>
+            <li>Use the compact workspace-health doors to compare certificate, workload, secret, software-signing, and cross-domain operational evidence without turning Home into five dashboards at once.</li>
+            <li>Open <strong>See diagnostic evidence</strong> only after you understand the primary work. Raw identifiers, projection details, and proof belong there; urgent work does not.</li>
+            <li>Confirm seeded demo data is recognizable as non-production evidence rather than a claim about your own environment.</li>
           </ol>
           <div class="expected"><strong>Expected:</strong> A populated tenant overview, including expiring demo certificates and algorithm distribution.</div>
           <div class="meaning"><strong>Capability:</strong> Unified inventory and lifecycle telemetry across X.509, machine identities, secrets, tokens, and agents.</div>
@@ -544,7 +545,7 @@
         </header>
         <div class="tour-body">
           <ol>
-            <li>Click <strong>Journeys</strong> in the left navigation, or <a href="https://127.0.0.1:9443/journeys" target="_blank" rel="noopener">open it directly</a>.</li>
+            <li>Click <strong>Journeys</strong> in the left navigation, or <a href="https://127.0.0.1:9443/journeys" data-demo-path="/journeys" target="_blank" rel="noopener">open it directly</a>.</li>
             <li>Notice the <strong>Verified path · shipped wiring 81/81</strong> badge. This means the journey is backed by capabilities wired into the shipped binary.</li>
             <li>Select <strong>First certificate</strong>. Read its four steps: setup, request, approval, inventory.</li>
             <li>Select <strong>Migrate from an existing CA</strong>, then <strong>Respond to a compromise</strong>. Observe how each journey crosses several product screens.</li>
@@ -563,7 +564,7 @@
         </header>
         <div class="tour-body">
           <ol>
-            <li>In the <strong>Posture &amp; response</strong> space, click <strong>Discovery</strong>.</li>
+            <li>In <strong>Trust Operations</strong>, click <strong>Discovery</strong>.</li>
             <li>Read the <strong>Shadow inventory</strong> counters: findings, high risk, and finding types.</li>
             <li>On the <strong>Findings</strong> tab, inspect the demo findings. A finding is something trstctl observed but does not yet fully manage.</li>
             <li>Open <strong>Sources</strong>. Look for network, manual, CT-log, cloud certificate, cloud secret, and drift sources.</li>
@@ -582,7 +583,7 @@
         </header>
         <div class="tour-body">
           <ol>
-            <li>In the space rail select <strong>Certificates &amp; PKI</strong> — it lands on <strong>Certificates</strong>.</li>
+            <li>In the workspace rail select <strong>Certificate Lifecycle</strong> — it lands on the certificate cockpit and inventory.</li>
             <li>Stay on <strong>Inventory</strong>. Use the search box to search for <code>demo.trstctl.local</code>.</li>
             <li>Open one row to inspect subject, issuer, owner, fingerprint, algorithm, validity, source, and deployment location.</li>
             <li>Click <strong>Estate health</strong> to view expiry and inventory posture across the tenant.</li>
@@ -603,7 +604,7 @@
         </header>
         <div class="tour-body">
           <ol>
-            <li>In the <strong>Workload &amp; SSH</strong> space, click <strong>Identities</strong>.</li>
+            <li>In <strong>Machine &amp; Workload Trust</strong>, click <strong>Identities</strong>.</li>
             <li>Read the <strong>Issuance pipeline</strong>: issued, deployed, and revoked are lifecycle states.</li>
             <li>Find a demo identity such as <code>payments-api.demo.trstctl.local</code> or <code>iot-est-gateway.demo.trstctl.local</code>.</li>
             <li>Click <strong>View details</strong>. Inspect owner, issuer, status, attributes, and credential relationships.</li>
@@ -622,7 +623,7 @@
         </header>
         <div class="tour-body">
           <ol>
-            <li>In the <strong>Certificates &amp; PKI</strong> space, click <strong>Protocols</strong>.</li>
+            <li>In <strong>Certificate Lifecycle</strong>, click <strong>Protocols</strong>.</li>
             <li>Read <strong>Protocol responder status</strong> and the fail-closed explanation.</li>
             <li>Scroll through the register. The evaluation profile activates <strong>ACME, EST, SCEP, CMP, SSH, TSA, and SPIFFE</strong>.</li>
             <li>For ACME, connect “account + challenge + profile” to automated web-service certificates.</li>
@@ -643,7 +644,7 @@
         </header>
         <div class="tour-body">
           <ol>
-            <li>In the space rail select <strong>Secrets</strong> — it lands on the store. Each workspace is its own sidebar row now (S-C2), not an in-page tab.</li>
+            <li>In the workspace rail select <strong>Secrets &amp; Access</strong> — it lands on the operational overview. Each function remains a stable route, not an in-page imitation of a separate product.</li>
             <li>On <strong>Secret store</strong>, use <strong>Add secret</strong> for the direct path. Expand <strong>Browse folders and references</strong> only when you need path-like organization such as <code>demo/github/actions</code>.</li>
             <li>Click <strong>Machine access</strong>: the machine-auth console. Grant a workload a scoped credential (reveal-once, then a list+revoke ledger), review the configured auth methods with their per-tenant disable overlay, and read the event-sourced issued-session ledger. Read-only during the tour.</li>
             <li>Click <strong>One-time secret links</strong>. A link exposes its value once and then self-destructs; ephemeral API keys are separate short-lived machine credentials.</li>
@@ -664,7 +665,7 @@
         </header>
         <div class="tour-body">
           <ol>
-            <li>In the <strong>Posture &amp; response</strong> space, click <strong>Crypto posture</strong>.</li>
+            <li>In <strong>Trust Operations</strong>, click <strong>Crypto posture</strong>.</li>
             <li>Read <strong>Certificate Transparency monitoring</strong>. CT logs reveal publicly issued certificates, including ones trstctl did not request.</li>
             <li>Read <strong>Drift detection</strong>. Drift means the deployed credential or file state no longer matches intent.</li>
             <li>Find <strong>CBOM and cryptographic observability</strong>. CBOM means “cryptographic bill of materials”: algorithms, key sizes, and TLS posture.</li>
@@ -683,7 +684,7 @@
         </header>
         <div class="tour-body">
           <ol>
-            <li>In the <strong>Posture &amp; response</strong> space, click <strong>What to fix first</strong>.</li>
+            <li>In <strong>Trust Operations</strong>, click <strong>What to fix first</strong>.</li>
             <li>Start with <strong>Highest-risk credentials</strong>: each row states why the credential matters in plain language.</li>
             <li>Click <strong>Review risk</strong> on an item. Read the recommended action, then open <strong>Exact score and evidence</strong> to inspect its model contract, score inputs, raw reason codes, evidence IDs, and projection coverage.</li>
             <li>Find the demo entries such as <code>old-vpn.demo.trstctl.local:443</code> and <code>ci/buildkite/release-token</code>.</li>
@@ -744,7 +745,7 @@
         </header>
         <div class="tour-body">
           <ol>
-            <li>In the <strong>Posture &amp; response</strong> space, click <strong>Incidents</strong>.</li>
+            <li>In <strong>Trust Operations</strong>, click <strong>Incidents</strong>.</li>
             <li>Read <strong>Credential compromise execution</strong>. The intended order is: scope, issue replacement, deploy replacement, then revoke the old credential.</li>
             <li>Select an affected identity if the field is populated, then click <strong>Preview blast radius</strong>. Do not click <strong>Execute incident</strong>.</li>
             <li>Review <strong>Automated remediation playbooks</strong>: revoke, rotate, and right-size.</li>
@@ -880,7 +881,7 @@
       </section>
       <details open>
         <summary>The page says “token exchange failed”</summary>
-        <div><p>Close the error tab, reopen <a href="https://127.0.0.1:9443/" target="_blank" rel="noopener">the demo root</a>, and click <strong>Continue with SSO</strong> again. If it repeats, the local OIDC sidecar needs to be reattached; ask the demo operator to restart it.</p></div>
+        <div><p>Close the error tab, reopen <a href="https://127.0.0.1:9443/" data-demo-path="/" target="_blank" rel="noopener">the demo root</a>, and click <strong>Continue with SSO</strong> again. If it repeats, the local OIDC sidecar needs to be reattached; ask the demo operator to restart it.</p></div>
       </details>
       <details>
         <summary>The browser cannot connect</summary>
@@ -913,6 +914,27 @@
 
   <script>
     (() => {
+      function demoOriginFromQuery() {
+        const supplied = new URLSearchParams(window.location.search).get("demo");
+        if (!supplied) return "https://127.0.0.1:9443";
+        try {
+          const parsed = new URL(supplied);
+          const loopback = parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost";
+          if (parsed.protocol !== "https:" || !loopback || parsed.username || parsed.password || parsed.search || parsed.hash) {
+            return "https://127.0.0.1:9443";
+          }
+          return parsed.origin;
+        } catch {
+          return "https://127.0.0.1:9443";
+        }
+      }
+
+      const demoOrigin = demoOriginFromQuery();
+      document.querySelectorAll("[data-demo-path]").forEach((link) => {
+        link.href = new URL(link.dataset.demoPath || "/", `${demoOrigin}/`).href;
+        if (link.hasAttribute("data-demo-origin")) link.textContent = demoOrigin;
+      });
+
       const storageKey = "trstctl-demo-walkthrough-progress-v1";
       const boxes = Array.from(document.querySelectorAll(".step-check"));
       const bar = document.getElementById("progress-bar");
