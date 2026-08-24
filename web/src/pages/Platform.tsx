@@ -379,7 +379,9 @@ export function AdminSystem() {
               </div>
             ) : null}
             {systemReadout ? (
-              <dl className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
+              <dl className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-3">
+                <SystemFact label={t("admin.system.runningBuild")} value={systemReadout.version || "-"} />
+                <SystemFact label={t("admin.system.runningCommit")} value={systemReadout.commit || "-"} mono />
                 <SystemCheck
                   label={t("admin.system.dependenciesCheck")}
                   value={t("admin.system.dependenciesReady", {
@@ -940,6 +942,15 @@ function SystemCheck({ label, value, issue }: { label: string; value: string; is
     <div className="rounded-control border border-border bg-background p-3">
       <dt className="font-medium text-muted-foreground">{label}</dt>
       <dd className={issue ? "mt-1 font-semibold text-status-warning" : "mt-1 font-semibold text-status-success"}>{value}</dd>
+    </div>
+  );
+}
+
+function SystemFact({ label, mono = false, value }: { label: string; mono?: boolean; value: string }) {
+  return (
+    <div className="rounded-control border border-border bg-background p-3">
+      <dt className="font-medium text-muted-foreground">{label}</dt>
+      <dd className={mono ? "mt-1 break-all font-mono text-xs text-foreground" : "mt-1 font-semibold text-foreground"}>{value}</dd>
     </div>
   );
 }

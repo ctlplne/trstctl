@@ -2046,7 +2046,12 @@ export const messages = {
   "admin.system.dependenciesReady": { defaultMessage: "{ready} of {total} ready", description: "Ready dependency count." },
   "admin.system.signerCheck": { defaultMessage: "Signer isolation", description: "Health check label for signer process mode." },
   "admin.system.retryProtectionCheck": { defaultMessage: "Retry-result protection", description: "Health check label for encrypted idempotency results." },
-  "admin.system.deliveryCheck": { defaultMessage: "Verified delivery", description: "Health check label for failed serving verification." },
+  "admin.system.deliveryCheck": {
+    defaultMessage: "Deployment verification failures",
+    description: "Health check label for failed serving verification without implying a successful delivery.",
+  },
+  "admin.system.runningBuild": { defaultMessage: "Running build", description: "Exact version label for the active control-plane process." },
+  "admin.system.runningCommit": { defaultMessage: "Source commit", description: "Exact source commit label for the active control-plane process." },
   "admin.system.deliveryFailures": { defaultMessage: "{count} failures", description: "Number of serving-verification failures." },
   "admin.system.healthReadFailed": { defaultMessage: "System health could not be read.", description: "Sanitized internal state for the minimal read." },
   "admin.system.detailReadFailed": {
@@ -3844,6 +3849,10 @@ export const messages = {
     defaultMessage: "Sign-out failed",
     description: "Short error shown when the current browser session could not be ended.",
   },
+  "shell.seededDemoBanner": {
+    defaultMessage: "Seeded non-production demo · Sample records and failed states are intentional. Do not use this deployment for production.",
+    description: "Persistent safety and provenance notice for the local seeded demo deployment.",
+  },
   "shell.routeAnnouncement": {
     defaultMessage: "Navigated to {page}",
     description: "Live-region announcement after a single-page navigation moves focus to the new page.",
@@ -4630,7 +4639,10 @@ export const messages = {
   "certificateCockpit.reason.review": { defaultMessage: "Evidence needs review", description: "Fallback certificate queue reason." },
   "certificateCockpit.action.retryRenewal": { defaultMessage: "Retry renewal", description: "Retry failed certificate renewal action." },
   "certificateCockpit.action.reviewRenewal": { defaultMessage: "Review delayed renewal", description: "Review delayed certificate renewal action." },
-  "certificateCockpit.action.repairDeployment": { defaultMessage: "Repair deployment", description: "Repair failed certificate deployment action." },
+  "certificateCockpit.action.repairDeployment": {
+    defaultMessage: "Review deployment path",
+    description: "Review failed deployment evidence without promising that a destination is already configured.",
+  },
   "certificateCockpit.action.renew": { defaultMessage: "Start renewal", description: "Start managed certificate renewal action." },
   "certificateCockpit.action.replace": { defaultMessage: "Replace certificate", description: "Replace manual certificate action." },
   "certificateCockpit.action.review": { defaultMessage: "Review certificate", description: "Fallback certificate action." },

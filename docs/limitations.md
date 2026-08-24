@@ -11,6 +11,23 @@ material under `ee/LICENSE`.
 
 If a capability matters to your evaluation, check this page before relying on it.
 
+## The 60-second boundary summary
+
+Read this first; use the exhaustive ledger below only for the capability you plan
+to operate.
+
+| Question | Short answer | What to verify next |
+| --- | --- | --- |
+| Can I run the core control plane myself? | **Yes.** Inventory, lifecycle state, ownership, policy, audit, the REST API, CLI, web console, PostgreSQL tenant isolation, and the separate signer are served. | Complete the [blank evaluation](getting-started.md), then rehearse [production operations](journeys/run-in-production.md). |
+| Does every integration work immediately? | **No.** Protocols, connectors, HSMs, cloud discovery, SSO, and commercial workflows are conditional on explicit configuration, reachable infrastructure, and sometimes a signed license. | Open the relevant feature page and the matching matrix row below before promising it. |
+| Does “delivered” mean a workload is serving the credential? | **No.** Delivery records what the connector did. Only a successful endpoint handshake earns **verified**. | Review the [served status vocabulary](#served-status-vocabulary-what-each-status-claims) and configure a verification address. |
+| Is a green System page a production certification? | **No.** It proves the running process's bounded checks, not an external penetration test, customer topology, disaster-recovery rehearsal, or third-party certification. | Use the [production journey](journeys/run-in-production.md), threat model, and your own acceptance controls. |
+| Is every feature production-mature? | **No.** trstctl is pre-1.0. The tables below distinguish Served, Conditional, Partial, and Roadmap without turning source code into a product claim. | Search this page for the feature ID or plain-language capability name. |
+
+The safe decision rule is simple: **served** says the running binary has a real
+path; **verified** says the required external effect was observed; neither word
+replaces your deployment-specific acceptance test.
+
 ## Historical scheduled-rotation detail
 
 The current live event generation does not serve arbitrary provider error text

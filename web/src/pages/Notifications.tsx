@@ -605,7 +605,9 @@ export function Notifications() {
                 <NotificationDetailRow term="Serial" mono>
                   {detail.serial || "-"}
                 </NotificationDetailRow>
-                <NotificationDetailRow term="Not after">{detail.not_after ? formatDateTime(detail.not_after) : "-"}</NotificationDetailRow>
+                <NotificationDetailRow term="Not after">
+                  {detail.not_after ? formatDateTime(detail.not_after) : t("notifications.center.noDeadline")}
+                </NotificationDetailRow>
                 <NotificationDetailRow term="Threshold days">{detail.threshold_days != null ? String(detail.threshold_days) : "-"}</NotificationDetailRow>
               </dl>
             </section>

@@ -685,7 +685,9 @@ const deDECatalog = {
   "admin.system.dependenciesReady": "{ready} von {total} bereit",
   "admin.system.signerCheck": "Signierer-Isolation",
   "admin.system.retryProtectionCheck": "Schutz von Wiederholungsergebnissen",
-  "admin.system.deliveryCheck": "Verifizierte Zustellung",
+  "admin.system.deliveryCheck": "Fehler bei der Bereitstellungsprüfung",
+  "admin.system.runningBuild": "Laufender Build",
+  "admin.system.runningCommit": "Quell-Commit",
   "admin.system.deliveryFailures": "{count} Fehler",
   "admin.system.healthReadFailed": "Der Systemzustand konnte nicht gelesen werden.",
   "admin.system.detailReadFailed":
@@ -1238,6 +1240,8 @@ const deDECatalog = {
   "shell.openKeyboardShortcuts": "Tastaturkürzel öffnen",
   "shell.signOut": "Abmelden",
   "shell.signOutFailed": "Abmeldung fehlgeschlagen",
+  "shell.seededDemoBanner":
+    "Vorbereitete Nicht-Produktionsdemo · Beispieldaten und Fehlerzustände sind beabsichtigt. Diese Bereitstellung nicht produktiv verwenden.",
   "shell.routeAnnouncement": "Navigiert zu {page}",
   "locale.enUS": "Englisch (Vereinigte Staaten)",
   "locale.esES": "Spanisch (Spanien)",
@@ -1500,7 +1504,7 @@ const deDECatalog = {
   "certificateCockpit.reason.review": "Nachweise müssen geprüft werden",
   "certificateCockpit.action.retryRenewal": "Erneuerung erneut versuchen",
   "certificateCockpit.action.reviewRenewal": "Verspätete Erneuerung prüfen",
-  "certificateCockpit.action.repairDeployment": "Bereitstellung reparieren",
+  "certificateCockpit.action.repairDeployment": "Bereitstellungsweg prüfen",
   "certificateCockpit.action.renew": "Erneuerung starten",
   "certificateCockpit.action.replace": "Zertifikat ersetzen",
   "certificateCockpit.action.review": "Zertifikat prüfen",

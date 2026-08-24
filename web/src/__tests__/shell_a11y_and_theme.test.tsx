@@ -704,6 +704,35 @@ describe("app shell accessibility and theme", () => {
     expect(within(nav).queryByText(/^map$/i)).not.toBeInTheDocument();
   });
 
+  it("keeps a seeded non-production demo labeled on every route", async () => {
+    apiMock.me.mockResolvedValueOnce({
+      permissions: ["*"],
+      subject: "demo-admin",
+      tenant_id: "11111111-1111-4111-8111-111111111111",
+      email: "demo-admin@trstctl.local",
+    });
+    apiMock.editions.mockResolvedValueOnce({
+      tier: "provider",
+      state: "active",
+      features: [],
+      fips: { module_active: false, required: false, self_test_passed: true },
+      deployment_entitlement: {
+        deployment_id: "trstctl-local-demo",
+        environment: "non_production",
+        legacy_unbound: false,
+        non_production_slots_remaining: 2,
+        production_units_consumed: 1,
+        registered_non_production_deployments: 1,
+        bundled_non_production_deployments: 3,
+      },
+    });
+
+    renderShell(["/certificates"]);
+
+    expect(await screen.findByTestId("seeded-demo-banner")).toHaveTextContent("Seeded non-production demo");
+    expect(screen.getByTestId("seeded-demo-banner")).toHaveTextContent("Do not use this deployment for production");
+  });
+
   it("does not mark the plain inventory row active for an expiry worklist URL", async () => {
     renderShell(["/certificates?expiry=30d"]);
     await screen.findByText("u@example.test");
@@ -726,6 +755,8 @@ describe("app shell accessibility and theme", () => {
 
     await user.click(screen.getByRole("link", { name: /^System health$/i }));
     expect(await screen.findByRole("heading", { name: "System health" })).toBeInTheDocument();
+    expect(screen.getByText("Running build").parentElement).toHaveTextContent("test");
+    expect(screen.getByText("Source commit").parentElement).toHaveTextContent("test");
     await user.click(screen.getByText("Dependency health", { exact: true }));
     expect(screen.getByRole("heading", { name: "Tenant boundary" })).toBeInTheDocument();
   });

@@ -130,11 +130,14 @@ state; those live in PostgreSQL and JetStream, not in the page. Do not clear the
 deployment volumes as a browser-recovery step.
 
 If the same page fails again, capture the browser console error and build a
-redacted support bundle with the command below. Report ordinary product defects
-through the issue tracker provided with your repository access, or the support
-channel agreed for your evaluation. Report a possible security vulnerability using
-the [private reporting path](security/reporting.md); do not put sensitive evidence
-in a public issue.
+redacted support bundle with the command below. Report an ordinary product defect
+through the [trstctl issue form](https://github.com/ctlplne/trstctl/issues/new/choose),
+or use the named support channel agreed for your evaluation. Include the exact
+build version and commit from **Trust Operations → System health**, reproduction
+steps, expected behavior, and the sanitized bundle only after you review it.
+Report a possible security vulnerability using the
+[private reporting path](security/reporting.md); do not put sensitive evidence in
+a public issue.
 
 ## Still stuck?
 

@@ -673,7 +673,9 @@ const esESCatalog = {
   "admin.system.dependenciesReady": "{ready} de {total} listas",
   "admin.system.signerCheck": "Aislamiento del firmante",
   "admin.system.retryProtectionCheck": "Protección del resultado de reintento",
-  "admin.system.deliveryCheck": "Entrega verificada",
+  "admin.system.deliveryCheck": "Fallos de verificación del despliegue",
+  "admin.system.runningBuild": "Compilación en ejecución",
+  "admin.system.runningCommit": "Commit de origen",
   "admin.system.deliveryFailures": "{count} fallos",
   "admin.system.healthReadFailed": "No se pudo leer el estado del sistema.",
   "admin.system.detailReadFailed":
@@ -1222,6 +1224,8 @@ const esESCatalog = {
   "shell.openKeyboardShortcuts": "Abrir atajos de teclado",
   "shell.signOut": "Cerrar sesión",
   "shell.signOutFailed": "No se pudo cerrar sesión",
+  "shell.seededDemoBanner":
+    "Demo preconfigurada no productiva · Los registros de muestra y los estados fallidos son intencionados. No use este despliegue en producción.",
   "shell.routeAnnouncement": "Navegaste a {page}",
   "locale.enUS": "Inglés (Estados Unidos)",
   "locale.esES": "Español (España)",
@@ -1486,7 +1490,7 @@ const esESCatalog = {
   "certificateCockpit.reason.review": "La evidencia necesita revisión",
   "certificateCockpit.action.retryRenewal": "Reintentar renovación",
   "certificateCockpit.action.reviewRenewal": "Revisar renovación retrasada",
-  "certificateCockpit.action.repairDeployment": "Reparar despliegue",
+  "certificateCockpit.action.repairDeployment": "Revisar ruta de despliegue",
   "certificateCockpit.action.renew": "Iniciar renovación",
   "certificateCockpit.action.replace": "Reemplazar certificado",
   "certificateCockpit.action.review": "Revisar certificado",

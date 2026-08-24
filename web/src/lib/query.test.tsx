@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { act, render, screen, waitFor } from "@testing-library/react";
-import { AppQueryProvider, liveRefetchInterval, useApiQuery } from "@/lib/query";
+import { AppQueryProvider, invalidateAppQueryKeys, liveRefetchInterval, useApiQuery } from "@/lib/query";
 
 /** S-C5 live tiles: the visibility-aware polling contract (certctl PERF-H1).
  * Hidden tabs poll nothing; visible tabs poll at the tile's cadence; returning
@@ -52,5 +52,19 @@ describe("visibility-aware live queries (S-C5)", () => {
     await waitFor(() => expect(liveLoader).toHaveBeenCalledTimes(2));
     // The non-live query is untouched by the visibility catch-up.
     expect(staticLoader).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshes exact cross-page keys after a local-state mutation", async () => {
+    const loader = vi.fn().mockResolvedValue("current");
+    render(
+      <AppQueryProvider>
+        <StaticProbe loader={loader} />
+      </AppQueryProvider>,
+    );
+    await waitFor(() => expect(loader).toHaveBeenCalledTimes(1));
+
+    act(() => invalidateAppQueryKeys([["static-probe"]]));
+
+    await waitFor(() => expect(loader).toHaveBeenCalledTimes(2));
   });
 });

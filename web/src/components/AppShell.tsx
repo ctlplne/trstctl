@@ -670,6 +670,8 @@ export function AppShell() {
         </div>
       )}
 
+      {!preview ? <SeededDemoBanner user={user} /> : null}
+
       {!isDesktop && (
         <Dialog
           open={mobileNavOpen}
@@ -728,6 +730,35 @@ export function AppShell() {
       </div>
       <CommandPalette open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} returnFocusRef={commandButtonRef} user={user} />
       <ShortcutsHelp open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} returnFocusRef={shortcutsButtonRef} />
+    </div>
+  );
+}
+
+function SeededDemoBanner({ user }: { user: Me | null }) {
+  const { t } = useTranslation();
+  const hasQueryProvider = useHasAppQueryProvider();
+  const isDemoPrincipal =
+    user?.subject === "demo-admin" &&
+    user.email === "demo-admin@trstctl.local" &&
+    user.tenant_id === "11111111-1111-4111-8111-111111111111";
+  // Ordinary deployments never pay for the Editions self-test here. Only the
+  // exact local-demo principal asks the public license readout to prove that
+  // this process is the bound demo deployment before the banner is shown.
+  if (!hasQueryProvider || !isDemoPrincipal || typeof api.editions !== "function") return null;
+  return <LiveSeededDemoBanner label={t("shell.seededDemoBanner")} />;
+}
+
+function LiveSeededDemoBanner({ label }: { label: string }) {
+  const editions = useApiQuery(["deployment-edition"], api.editions);
+  const isSeededDemo = editions.data?.deployment_entitlement?.deployment_id === "trstctl-local-demo";
+  if (!isSeededDemo) return null;
+  return (
+    <div
+      role="note"
+      data-testid="seeded-demo-banner"
+      className="border-b border-status-warning/40 bg-status-warning/10 px-4 py-2 text-center text-sm text-foreground"
+    >
+      {label}
     </div>
   );
 }

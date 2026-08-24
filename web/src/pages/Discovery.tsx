@@ -33,6 +33,7 @@ import {
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import type { MessageKey } from "@/i18n/messages";
 import type { GridViewPrimitive } from "@/lib/gridViews";
+import { invalidateAppQueryKeys } from "@/lib/query";
 
 type Notice = { kind: "permission" | "error" | "success"; message: string };
 type SourceKind = DiscoverySourceRequest["kind"];
@@ -690,6 +691,16 @@ export function Discovery() {
 
   function replaceFinding(updated: DiscoveryFinding) {
     setFindings((current) => current.map((finding) => (finding.id === updated.id ? updated : finding)));
+    // Claim/dismiss changes the cross-domain posture that Home, Risk, NHI, and
+    // Ownership cache independently. Refresh them immediately so navigating
+    // away cannot show the pre-triage count for another 30 seconds.
+    invalidateAppQueryKeys([
+      ["nhi-shadow-posture"],
+      ["nhi-inventory"],
+      ["risk"],
+      ["contextual-priorities"],
+      ["ownership-attribution"],
+    ]);
   }
 
   async function createSource(event: FormEvent<HTMLFormElement>) {

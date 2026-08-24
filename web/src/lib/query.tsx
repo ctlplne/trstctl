@@ -2,6 +2,15 @@ import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tan
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
 
 const AppQueryContext = createContext(false);
+const invalidateEventName = "trstctl:invalidate-app-queries";
+
+/** Existing pages that still own local state can publish the exact cached read
+ * models their mutation made stale. The provider performs the invalidation;
+ * callers do not need a QueryClient hook and remain usable in isolated tests. */
+export function invalidateAppQueryKeys(keys: readonly (readonly unknown[])[]): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(invalidateEventName, { detail: keys }));
+}
 
 /** S-C5: the TanStack Query layer. Adoption policy (see web/DESIGN.md): new
  * surfaces use useApiQuery/useQueryClient directly; existing pages migrate off
@@ -46,6 +55,18 @@ export function AppQueryProvider({ children }: { children: ReactNode }) {
     }
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [client]);
+
+  useEffect(() => {
+    function onInvalidate(event: Event) {
+      const keys = (event as CustomEvent<readonly (readonly unknown[])[]>).detail;
+      if (!Array.isArray(keys)) return;
+      for (const queryKey of keys) {
+        if (Array.isArray(queryKey)) void client.invalidateQueries({ queryKey });
+      }
+    }
+    window.addEventListener(invalidateEventName, onInvalidate);
+    return () => window.removeEventListener(invalidateEventName, onInvalidate);
   }, [client]);
 
   return (
