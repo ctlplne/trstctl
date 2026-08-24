@@ -155,3 +155,11 @@ c5a260d61b49b2d9f70e3c406ee6bf463c86f60e:internal/store/migration_content_test.g
 # `req7c2f9a_03dd4e` message identifier as its value. The immutable fingerprint
 # suppresses only this commit/path/rule/line; any new match still fails.
 89b00febd786690475ccd4b2beede7ad1a444505:web/src/i18n/catalog.en-US.runtime.gen.ts:generic-api-key:3056
+
+# QA ownership checkpoint (2026-08-24): these exact historical matches are
+# deterministic idempotency/retry identifiers in tests, not credentials. Each
+# immutable fingerprint covers one commit, path, rule, and line; any changed or
+# newly introduced value still fails the served secret scanner.
+3b59fa92057ce64aab8e982c74f31efe5eb8ad05:internal/cli/cli_test.go:generic-api-key:599
+3b59fa92057ce64aab8e982c74f31efe5eb8ad05:internal/server/ownership_assignment_served_test.go:generic-api-key:49
+3b59fa92057ce64aab8e982c74f31efe5eb8ad05:internal/server/ownership_assignment_served_test.go:generic-api-key:68
