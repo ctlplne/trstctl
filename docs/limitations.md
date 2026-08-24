@@ -2287,6 +2287,15 @@ than sending an operator looking for a credential that was never there.
   console, which can create/edit the full model, attest it, separate all four queue
   counts, and grant a bounded exception. Expiry is enforced from event time and
   needs no cleanup timer to become effective.
+- Asset-specific ownership assignment: `POST /api/v1/ownership/assignments`,
+  `trstctl owners assign`, and the Owners action queue accept one durable owner,
+  1–100 canonical NHI inventory IDs, and an attributed reason. The mutation is
+  tenant-scoped, permission-gated, idempotency-protected, and capped at 2,000 reason
+  characters and 1,024 characters per inventory ID. It emits one immutable
+  `ownership.assigned` event. The projector updates the current override and, for
+  native identities or certificates, the lifecycle `owner_id` in one transaction.
+  A cold replay reconstructs both. An asset-specific decision wins over older native
+  or imported owner hints; its event ID stays visible as exact attribution evidence.
 - Ownership provenance and CMDB reconcile (I2): owners record WHERE an ownership
   claim came from — `ownership_source` (unset / `manual` / `csv-import` / `cmdb`),
   `ownership_source_ref`, `ownership_source_observed_at`. All three are nullable

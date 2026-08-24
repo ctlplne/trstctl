@@ -2,6 +2,7 @@ import { type ReactNode, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, type Owner, type OwnershipAttribution, type OwnershipAttributionItem } from "@/lib/api";
 import { OwnershipConflictsPanel } from "@/components/OwnershipConflictsPanel";
+import { OwnershipCockpit } from "@/components/ownership/OwnershipCockpit";
 import { CMDBSyncPanel } from "@/components/CMDBSyncPanel";
 import { useApiQuery, useQueryClient } from "@/lib/query";
 import { PageHeader } from "@/components/PageHeader";
@@ -26,11 +27,6 @@ function emptyOwnershipAttribution(): OwnershipAttribution {
 function readOwnershipAttribution(): Promise<OwnershipAttribution> {
   const client = api as typeof api & { ownershipAttribution?: () => Promise<OwnershipAttribution> };
   return client.ownershipAttribution ? client.ownershipAttribution() : Promise.resolve(emptyOwnershipAttribution());
-}
-
-function attributionCount(summary: Record<string, unknown> | undefined, key: string, fallback: number): number {
-  const value = summary?.[key];
-  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : fallback;
 }
 
 // UnownedQueuePanel surfaces the ownership gaps that block an incident (I1).
@@ -192,6 +188,7 @@ export function Owners() {
   const queryClient = useQueryClient();
   const { data, loading, error } = useApiQuery(["owners"], api.owners);
   const attribution = useApiQuery(["ownership-attribution"], readOwnershipAttribution);
+  const readiness = useApiQuery(["unowned-identities"], api.unownedIdentities);
   const { toast } = useToast();
   const rows = data;
   const [editorOpen, setEditorOpen] = useState(false);
@@ -226,10 +223,6 @@ export function Owners() {
   );
   const kinds = useMemo(() => Array.from(new Set(owners.map((owner) => owner.kind).filter(Boolean))).sort(), [owners]);
   const filteredOwners = useMemo(() => filterOwners(owners, query, kind), [kind, owners, query]);
-  const knownCount = attributionCount(attribution.data?.summary, "total", attributionRows.length);
-  const ownerGapCount = attributionCount(attribution.data?.summary, "orphaned", attributionRows.filter((item) => !item.owner).length);
-  const assignedCount = attributionCount(attribution.data?.summary, "attributed", Math.max(0, knownCount - ownerGapCount));
-  const currentOwnerCount = owners.filter((owner) => owner.ownership_current).length;
 
   function openEdit(owner: Owner) {
     setEditTarget(owner);
@@ -418,7 +411,7 @@ export function Owners() {
         technicalDetails={t("owners.design.technicalDetails")}
         actions={
           <Button type="button" onClick={openCreate}>
-            {t("owners.design.assign")}
+            {t("owners.readiness.add")}
           </Button>
         }
       />
@@ -428,25 +421,15 @@ export function Owners() {
       ) : error || attribution.error ? (
         <ErrorState title={t("owners.design.coverageError")}>{error || attribution.error}</ErrorState>
       ) : (
-        <div className="ui-panel grid gap-2 p-comfortable" role="status" aria-live="polite">
-          <h2 className="text-title font-semibold">
-            {knownCount === 0
-              ? t("owners.design.statusEmpty")
-              : ownerGapCount === 0
-                ? t("owners.design.statusComplete")
-                : ownerGapCount === 1
-                  ? t("owners.design.statusNeedsOne")
-                  : t("owners.design.statusNeedsMany", { count: String(ownerGapCount) })}
-          </h2>
-          <p className="max-w-3xl text-sm text-muted-foreground">
-            {t("owners.design.statusBody", {
-              assigned: String(assignedCount),
-              known: String(knownCount),
-              current: String(currentOwnerCount),
-              owners: String(owners.length),
-            })}
-          </p>
-        </div>
+        <OwnershipCockpit
+          owners={owners}
+          attribution={attribution.data ?? emptyOwnershipAttribution()}
+          readiness={readiness.data ?? undefined}
+          onCreateOwner={openCreate}
+          onEditOwner={openEdit}
+          onAttestOwner={(owner) => void attestOwner(owner)}
+          attestingID={attestingID}
+        />
       )}
 
       <OwnerDetails
@@ -565,7 +548,7 @@ export function Owners() {
             }}
           >
             <h2 id="owner-edit-title" className="text-title font-semibold">
-              {editTarget ? t("owners.readiness.editTitle", { name: editTarget.name }) : t("owners.design.assign")}
+              {editTarget ? t("owners.readiness.editTitle", { name: editTarget.name }) : t("owners.readiness.add")}
             </h2>
             {!editTarget && <p className="text-sm text-muted-foreground">{t("owners.design.assignHelp")}</p>}
             <label className="grid gap-1 text-body font-medium" htmlFor="owner-edit-name">

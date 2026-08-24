@@ -1071,8 +1071,12 @@ describe("i18n boundary", () => {
       // Work-arrival range re-pin: the inclusive day-window label is now
       // explicit production copy rather than an ad-hoc English abbreviation.
       // Placeholders and meaning were reviewed in all three catalogs.
-      "es-ES": "b05c7f43db8464924247c7e0334a5abbbd0a320e1f087171c9aaf20b54151516",
-      "de-DE": "89968a11a30a8fe2235ec96535670643b5562f502c5176a31b268ad63a913af8",
+      // Ownership-operations re-pin: hierarchy, incident routes, gap reasons,
+      // asset/owner filters, assignment, reassignment, and success copy are
+      // present with placeholder parity in both production catalogs. Machine-
+      // authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "442f8d1acfa70fa36bd2a37154dc76d3ad3797469f4860d07e43f0c3039fafd5",
+      "de-DE": "3d721c72c6207b8291d09ed598c77c5f2090033c1446d4b12c9d6959990f46de",
     });
   });
 

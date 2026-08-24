@@ -5,8 +5,9 @@ package api
 import (
 	"net/http"
 	"strings"
-	"trstctl.com/trstctl/internal/issuancerequest"
 
+	"trstctl.com/trstctl/internal/issuancerequest"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/servedstatus"
 )
 
@@ -101,6 +102,10 @@ type Schema struct {
 	Required    []string           `json:"required,omitempty"`
 	OneOf       []*Schema          `json:"oneOf,omitempty"`
 	Enum        []string           `json:"enum,omitempty"`
+	MinLength   int                `json:"minLength,omitempty"`
+	MaxLength   int                `json:"maxLength,omitempty"`
+	MinItems    int                `json:"minItems,omitempty"`
+	MaxItems    int                `json:"maxItems,omitempty"`
 	// AdditionalProperties types free-key maps (e.g. principal -> scopes).
 	AdditionalProperties *Schema `json:"additionalProperties,omitempty"`
 }
@@ -289,6 +294,23 @@ func componentSchemas() map[string]*Schema {
 		"application_id": str(), "service": str(), "business_unit": str(), "environment": str(),
 		"escalation_chain": {Type: "array", Items: str()},
 	}, "kind", "name")
+	ownershipAssignmentReq := object(map[string]*Schema{
+		"owner_id": uuid(),
+		"inventory_ids": {
+			Type: "array", MinItems: 1, MaxItems: projections.MaxOwnershipAssignmentAssets,
+			Items: &Schema{Type: "string", MinLength: 3, MaxLength: projections.MaxOwnershipAssignmentInventoryIDLength},
+		},
+		"reason": {Type: "string", MinLength: 1, MaxLength: projections.MaxOwnershipAssignmentReasonLength},
+	}, "owner_id", "inventory_ids", "reason")
+	ownershipAssignmentResult := object(map[string]*Schema{
+		"owner_id": uuid(),
+		"assigned": {
+			Type: "array", MinItems: 1, MaxItems: projections.MaxOwnershipAssignmentAssets,
+			Items: &Schema{Type: "string", MinLength: 3, MaxLength: projections.MaxOwnershipAssignmentInventoryIDLength},
+		},
+		"assigned_by": {Type: "string", MinLength: 1, MaxLength: projections.MaxOwnershipAssignmentPrincipalLength},
+		"assigned_at": timestamp(),
+	}, "owner_id", "assigned", "assigned_by", "assigned_at")
 	ownershipException := object(map[string]*Schema{
 		"id": uuid(), "identity_id": uuid(), "reason": str(), "granted_by": str(),
 		"granted_at": timestamp(), "expires_at": timestamp(), "revoked_by": str(),
@@ -5351,6 +5373,8 @@ func componentSchemas() map[string]*Schema {
 		"Owner":                                    owner,
 		"OwnerRequest":                             ownerReq,
 		"OwnerList":                                list("Owner"),
+		"OwnershipAssignmentRequest":               ownershipAssignmentReq,
+		"OwnershipAssignmentResult":                ownershipAssignmentResult,
 		"OwnershipException":                       ownershipException,
 		"OwnershipExceptionRequest":                ownershipExceptionReq,
 		"OwnershipExceptionRevokeRequest":          ownershipExceptionRevokeReq,

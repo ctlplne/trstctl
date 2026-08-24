@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -142,6 +143,79 @@ func (o *Orchestrator) AttestOwnership(ctx context.Context, tenantID, ownerID, a
 		return err
 	})
 	return attested, err
+}
+
+// AssignOwnership records one attributed decision for up to 100 canonical NHI
+// inventory records. The projector owns every read-model write; this command
+// only validates the durable owner and appends the immutable source event.
+func (o *Orchestrator) AssignOwnership(
+	ctx context.Context,
+	tenantID, ownerID string,
+	inventoryIDs []string,
+	reason, assignedBy string,
+) (projections.OwnershipAssigned, error) {
+	ownerID, reason, assignedBy = strings.TrimSpace(ownerID), strings.TrimSpace(reason), strings.TrimSpace(assignedBy)
+	if ownerID == "" || reason == "" || assignedBy == "" {
+		return projections.OwnershipAssigned{}, errors.New("orchestrator: ownership assignment requires an owner, authenticated principal, and reason")
+	}
+	if len(reason) > projections.MaxOwnershipAssignmentReasonLength || len(assignedBy) > projections.MaxOwnershipAssignmentPrincipalLength {
+		return projections.OwnershipAssigned{}, errors.New("orchestrator: ownership assignment reason or principal is too long")
+	}
+	if len(inventoryIDs) == 0 || len(inventoryIDs) > projections.MaxOwnershipAssignmentAssets {
+		return projections.OwnershipAssigned{}, errors.New("orchestrator: ownership assignment requires between 1 and 100 assets")
+	}
+	canonical := make([]string, 0, len(inventoryIDs))
+	seen := make(map[string]bool, len(inventoryIDs))
+	for _, inventoryID := range inventoryIDs {
+		inventoryID = strings.TrimSpace(inventoryID)
+		parts := strings.SplitN(inventoryID, "/", 2)
+		if len(inventoryID) > projections.MaxOwnershipAssignmentInventoryIDLength || len(parts) != 2 ||
+			len(parts[0]) > projections.MaxOwnershipAssignmentSourceLength || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
+			return projections.OwnershipAssigned{}, fmt.Errorf("orchestrator: invalid ownership inventory id %q", inventoryID)
+		}
+		if seen[inventoryID] {
+			return projections.OwnershipAssigned{}, fmt.Errorf("orchestrator: duplicate ownership inventory id %q", inventoryID)
+		}
+		seen[inventoryID] = true
+		canonical = append(canonical, inventoryID)
+	}
+	sort.Strings(canonical)
+	var assignment projections.OwnershipAssigned
+	err := o.store.WithProjectionLock(ctx, func(lockCtx context.Context) error {
+		if _, err := o.store.GetOwner(lockCtx, tenantID, ownerID); err != nil {
+			return err
+		}
+		// The API first proves that every canonical ID is in the tenant's served
+		// NHI inventory. Recheck native rows while holding the projection lock so
+		// an identity/certificate deletion cannot win between that read and event
+		// append, leaving an immutable event that the projector cannot apply.
+		for _, inventoryID := range canonical {
+			if ref, ok := strings.CutPrefix(inventoryID, "identity/"); ok {
+				if _, err := o.store.GetIdentity(lockCtx, tenantID, ref); err != nil {
+					return err
+				}
+				continue
+			}
+			if ref, ok := strings.CutPrefix(inventoryID, "certificate/"); ok {
+				if _, err := o.store.GetCertificate(lockCtx, tenantID, ref); err != nil {
+					return err
+				}
+			}
+		}
+		now := time.Now().UTC()
+		assignment = projections.OwnershipAssigned{
+			OwnerID: ownerID, InventoryIDs: canonical, Reason: reason, AssignedBy: assignedBy, AssignedAt: now,
+		}
+		payload, err := json.Marshal(assignment)
+		if err != nil {
+			return err
+		}
+		_, err = o.emitPrepared(lockCtx, events.Event{
+			Type: projections.EventOwnershipAssigned, TenantID: tenantID, Time: now, Data: payload,
+		})
+		return err
+	})
+	return assignment, err
 }
 
 func (o *Orchestrator) GrantOwnershipException(

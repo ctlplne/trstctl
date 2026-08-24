@@ -204,9 +204,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// offline verifier, yielding 382. AUD-65 adds graph-bound readiness action
 	// creation plus the signed canonical JSON/CSV/NDJSON export, yielding 384.
 	// The approved-request prepare and evidence-backed complete commands close
-	// I3's missing issuance bridge, yielding 386.
-	if len(out) != 386 {
-		t.Fatalf("CLI commands = %d, want 386", len(out))
+	// I3's missing issuance bridge, yielding 386. The event-backed ownership
+	// assignment command raises it to 387 and keeps browser/headless parity.
+	if len(out) != 387 {
+		t.Fatalf("CLI commands = %d, want 387", len(out))
 	}
 	return out
 }

@@ -84,6 +84,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"owners", "update"}, Method: "PUT", Path: "/api/v1/owners/{id}", Body: bodyFile, Summary: "Replace an owner"},
 	{Name: []string{"owners", "delete"}, Method: "DELETE", Path: "/api/v1/owners/{id}", Summary: "Delete an owner"},
 	{Name: []string{"owners", "attest"}, Method: "POST", Path: "/api/v1/owners/{id}/attest", Body: bodyOptionalFile, Summary: "Attest the current owner application and environment"},
+	{Name: []string{"owners", "assign"}, Method: "POST", Path: "/api/v1/ownership/assignments", Body: bodyFile, Summary: "Assign one accountable owner to 1-100 NHI inventory records with an attributed reason"},
 	{Name: []string{"owners", "exceptions", "list"}, Method: "GET", Path: "/api/v1/identities/{id}/ownership-exceptions", Summary: "List temporary ownership-readiness exceptions for an identity"},
 	{Name: []string{"owners", "exceptions", "grant"}, Method: "POST", Path: "/api/v1/identities/{id}/ownership-exceptions", Body: bodyFile, Summary: "Grant a reasoned, attributed, expiring ownership-readiness exception"},
 	{Name: []string{"owners", "exceptions", "revoke"}, Method: "POST", Path: "/api/v1/identities/{id}/ownership-exceptions/{exception_id}/revoke", Body: bodyFile, Summary: "Revoke an ownership-readiness exception"},

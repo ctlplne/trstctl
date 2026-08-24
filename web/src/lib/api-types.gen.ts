@@ -4416,6 +4416,19 @@ export interface OwnerRequest {
   service?: string;
 }
 
+export interface OwnershipAssignmentRequest {
+  inventory_ids: string[];
+  owner_id: string;
+  reason: string;
+}
+
+export interface OwnershipAssignmentResult {
+  assigned: string[];
+  assigned_at: string;
+  assigned_by: string;
+  owner_id: string;
+}
+
 export interface OwnershipAttribution {
   coverage: string[];
   generated_at: string;

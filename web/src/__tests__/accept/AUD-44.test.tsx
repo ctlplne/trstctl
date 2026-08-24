@@ -88,9 +88,7 @@ describe("AUD-44 ownership readiness console", () => {
     });
     renderOwners();
 
-    expect(
-      await screen.findByText("0 of 0 known identities and credentials are assigned. 0 of 1 owner records have current review evidence."),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 2, name: "No identities or credentials are known yet" })).toBeInTheDocument();
     await user.click(screen.getByText("Owner records, inheritance, and attestations"));
     const table = await screen.findByRole("table", { name: "Credential owners" });
     expect(screen.queryByText("Ownership coverage")).not.toBeInTheDocument();

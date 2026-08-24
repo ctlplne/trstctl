@@ -44,13 +44,23 @@ awk -v module="$MODULE" '
 	}
 	function is_orphan_fragment(s,    fragment) {
 		fragment = trim(s)
-		return fragment == "" || index(module, fragment) == 1 || index(fragment, module) == 1 || fragment ~ /^[0-9]+([[:space:]]+[0-9]+)?$/
+		return fragment == "" || index(module, fragment) == 1 || index(fragment, module) == 1 || fragment ~ /^[0-9]+([[:space:]]+[0-9]+)?([[:space:]]+[0-9]+)?$/
 	}
-	function add_row(row, line_no,    fields, block, stmts, count) {
+	function add_row(row, line_no,    fields, block, stmts, count, tail, nested) {
 		split(row, fields, " ")
 		block = fields[1]
 		stmts = fields[2]
 		count = fields[3] + 0
+		# A very large multi-package profile can contain a source path fused to
+		# the front of the next complete module path. Keep the complete suffix;
+		# its coordinates and counters are intact, while the prefix is not a
+		# source file that can exist in this module.
+		tail = substr(block, length(module) + 2)
+		nested = index(tail, module "/")
+		if (nested > 0) {
+			block = substr(tail, nested)
+			malformed_fragments++
+		}
 		if (!(block in seen)) {
 			seen[block] = 1
 			order[++norder] = block

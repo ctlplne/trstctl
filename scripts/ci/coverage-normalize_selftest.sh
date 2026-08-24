@@ -80,6 +80,22 @@ else
 	fails=1
 fi
 
+cat >"$repaired_profile" <<EOF
+mode: atomic
+trstctl.com/trstctl/internal/${covered_block} 2 0
+${covered_block} 2 3
+EOF
+
+"$normalizer" "$repaired_profile" "$repaired_out"
+if go tool cover -func="$repaired_out" >/dev/null \
+	&& grep -qx "${covered_block} 2 3" "$repaired_out" \
+	&& ! grep -q 'internal/trstctl.com/trstctl/' "$repaired_out"; then
+	echo "PASS: repairs a source-path prefix fused to a complete module row"
+else
+	echo "FAIL: fused source-path repair did not preserve the complete valid row"
+	fails=1
+fi
+
 cat >"$orphan_profile" <<EOF
 mode: atomic
 trstc
@@ -97,14 +113,14 @@ fi
 cat >"$numeric_orphan_profile" <<EOF
 mode: atomic
 ${covered_block} 2 3
-2 0
+94 2 0
 EOF
 
 "$normalizer" "$numeric_orphan_profile" "$numeric_orphan_out"
 if go tool cover -func="$numeric_orphan_out" >/dev/null; then
-	echo "PASS: ignores a standalone statement-count and execution-count fragment"
+	echo "PASS: ignores a standalone numeric-only truncated row suffix"
 else
-	echo "FAIL: numeric count-fragment repair is not accepted by go tool cover"
+	echo "FAIL: numeric-only row-suffix repair is not accepted by go tool cover"
 	fails=1
 fi
 

@@ -53,6 +53,7 @@ const (
 	EventOwnerUpdated                = "owner.updated"
 	EventOwnershipAttested           = "owner.ownership_attested"
 	EventOwnerReattestationRequested = "owner.reattestation.requested"
+	EventOwnershipAssigned           = "ownership.assigned"
 	EventOwnershipExceptionGranted   = "ownership.exception.granted"
 	EventOwnershipExceptionRevoked   = "ownership.exception.revoked"
 	// I2: an external source's reconciliation against recorded ownership. It
@@ -373,6 +374,26 @@ type OwnershipAttested struct {
 	AttestedAt  time.Time `json:"attested_at"`
 	ModelDigest string    `json:"model_digest"`
 }
+
+// OwnershipAssigned records one attributed bulk accountability decision. The
+// canonical inventory ids keep the event independent of any one read-model
+// table, while the projector synchronizes native identity/certificate owner
+// fields where lifecycle admission depends on them.
+type OwnershipAssigned struct {
+	OwnerID      string    `json:"owner_id"`
+	InventoryIDs []string  `json:"inventory_ids"`
+	Reason       string    `json:"reason"`
+	AssignedBy   string    `json:"assigned_by"`
+	AssignedAt   time.Time `json:"assigned_at"`
+}
+
+const (
+	MaxOwnershipAssignmentAssets            = 100
+	MaxOwnershipAssignmentInventoryIDLength = 1024
+	MaxOwnershipAssignmentSourceLength      = 128
+	MaxOwnershipAssignmentReasonLength      = 2000
+	MaxOwnershipAssignmentPrincipalLength   = 512
+)
 
 type OwnerReattestationRequested struct {
 	OwnerID              string     `json:"owner_id"`
@@ -3204,6 +3225,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventOwnerUpdated:                             {1: true, OwnerDepthEventSchemaVersion: true},
 	EventOwnershipAttested:                        {1: true},
 	EventOwnerReattestationRequested:              {1: true},
+	EventOwnershipAssigned:                        {1: true},
 	EventOwnershipExceptionGranted:                {1: true},
 	EventOwnershipExceptionRevoked:                {1: true},
 	EventOwnershipReconciled:                      {1: true},
@@ -3551,6 +3573,34 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			ctx, tx, e.TenantID, pl.OwnerID, pl.VerifiedFor, pl.DueAt, pl.RequestedAt,
 			time.Duration(pl.CadenceSeconds)*time.Second,
 		)
+	case EventOwnershipAssigned:
+		var pl OwnershipAssigned
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.OwnerID == "" || len(pl.InventoryIDs) == 0 || len(pl.InventoryIDs) > MaxOwnershipAssignmentAssets ||
+			strings.TrimSpace(pl.Reason) == "" || len(pl.Reason) > MaxOwnershipAssignmentReasonLength ||
+			strings.TrimSpace(pl.AssignedBy) == "" || len(pl.AssignedBy) > MaxOwnershipAssignmentPrincipalLength ||
+			pl.AssignedAt.IsZero() || !pl.AssignedAt.Equal(e.Time) {
+			return fmt.Errorf("projections: %s requires an owner, 1-100 assets, attributed reason, and event time", e.Type)
+		}
+		seen := make(map[string]bool, len(pl.InventoryIDs))
+		for _, inventoryID := range pl.InventoryIDs {
+			parts := strings.SplitN(inventoryID, "/", 2)
+			if inventoryID != strings.TrimSpace(inventoryID) || len(inventoryID) > MaxOwnershipAssignmentInventoryIDLength ||
+				len(parts) != 2 || len(parts[0]) > MaxOwnershipAssignmentSourceLength ||
+				strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" || seen[inventoryID] {
+				return fmt.Errorf("projections: %s carries an invalid or duplicate inventory id", e.Type)
+			}
+			seen[inventoryID] = true
+			if err := p.store.ApplyOwnershipAssignmentTx(ctx, tx, store.OwnershipAssignment{
+				TenantID: e.TenantID, InventoryID: inventoryID, Source: parts[0], OwnerID: pl.OwnerID,
+				AssignedAt: pl.AssignedAt, SourceEventID: e.ID, LastEventSeq: e.Sequence,
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
 	case EventOwnershipExceptionGranted:
 		var pl OwnershipExceptionGranted
 		if err := decode(e, &pl); err != nil {

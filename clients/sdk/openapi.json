@@ -17418,6 +17418,69 @@
         ],
         "type": "object"
       },
+      "OwnershipAssignmentRequest": {
+        "properties": {
+          "inventory_ids": {
+            "items": {
+              "maxLength": 1024,
+              "minLength": 3,
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "owner_id",
+          "inventory_ids",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "OwnershipAssignmentResult": {
+        "properties": {
+          "assigned": {
+            "items": {
+              "maxLength": 1024,
+              "minLength": 3,
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          },
+          "assigned_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "assigned_by": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "owner_id",
+          "assigned",
+          "assigned_by",
+          "assigned_at"
+        ],
+        "type": "object"
+      },
       "OwnershipAttribution": {
         "properties": {
           "coverage": {
@@ -41155,6 +41218,74 @@
           }
         ],
         "summary": "Attest the current owner application and environment",
+        "x-trstctl-permission": "owners:write"
+      }
+    },
+    "/api/v1/ownership/assignments": {
+      "post": {
+        "operationId": "assignOwnership",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OwnershipAssignmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnershipAssignmentResult"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Assign one accountable owner to 1-100 canonical NHI inventory records with an attributed reason",
         "x-trstctl-permission": "owners:write"
       }
     },

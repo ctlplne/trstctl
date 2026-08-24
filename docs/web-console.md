@@ -100,12 +100,22 @@ See [Workload identity](features/workload-identity.md) and
 ### Ownership (`/owners`)
 
 The opening answer is deliberately simple: **which team is accountable for every
-identity and credential**. It reports how many known identities and credentials
-have an owner record and how many owner records are current. **Assign owner** is the
-only primary action. A genuinely empty inventory says that nothing is known yet; it
-does not masquerade as complete ownership. Assigning creates an accountable person,
-team, workload, service, or vendor record; it does not silently rewrite existing
-credential assignments.
+identity and credential**. The visible operations cockpit reports known assets,
+assets without an effective owner, owner reviews due, and missing contact or
+escalation routes. A genuinely empty inventory says that nothing is known yet; it
+does not masquerade as complete ownership. **Add owner** creates a durable person,
+team, workload, service, or vendor record. It does not silently assign an asset.
+
+The accountability hierarchy then reads like an incident route: business unit →
+durable team or service → application and environment → contact and escalation
+route → affected assets. The ownership action queue stays visible, explains why
+each unowned asset needs work, and supports one-at-a-time or bulk assignment. An
+assignment requires a selected durable owner and a plain-language reason. The
+browser sends one idempotency-protected command; the server appends one immutable
+`ownership.assigned` event and projects the effective owner. For managed identities
+and certificates, the native lifecycle owner changes in that same projection, so
+admission checks and the browser cannot disagree. Retrying the same command returns
+the first result rather than writing a second decision.
 
 The exact machinery remains available in three closed disclosures so a first-time
 operator does not have to decode two large tables before learning whether there is
@@ -127,7 +137,9 @@ a problem:
 Backed by
 `/api/v1/owners`, `/api/v1/owners/{id}`, `/api/v1/owners/{id}/attest`,
 `/api/v1/identities/{id}/ownership-exceptions`, and
-`/api/v1/ownership/attribution`.
+`/api/v1/ownership/attribution`. Bulk and contextual assignments use
+`POST /api/v1/ownership/assignments`; the headless equivalent is
+`trstctl-cli owners assign -f <decision.json>`.
 
 ### Agents (`/agents`)
 

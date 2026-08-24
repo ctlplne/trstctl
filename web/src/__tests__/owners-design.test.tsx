@@ -12,6 +12,7 @@ const { apiMock } = vi.hoisted(() => ({
     authMethods: vi.fn(),
     owners: vi.fn(),
     ownershipAttribution: vi.fn(),
+    unownedIdentities: vi.fn(),
     createOwner: vi.fn(),
     updateOwner: vi.fn(),
     deleteOwner: vi.fn(),
@@ -83,6 +84,11 @@ describe("route 029 decision-first ownership design", () => {
         },
       ],
     });
+    apiMock.unownedIdentities.mockResolvedValue({
+      counts: { no_owner: 1, owner_missing_application_model: 0, ownership_never_attested: 0, ownership_attestation_stale: 0 },
+      items: [{ identity_id: "unowned", name: "unowned deployer token", reason: "no_owner", detail: "No owner is assigned." }],
+      guidance: "Assign a durable owner.",
+    });
   });
 
   it("answers accountability before revealing owner machinery", async () => {
@@ -92,15 +98,13 @@ describe("route 029 decision-first ownership design", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "Ownership" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /^Ownership$/ })).toHaveAttribute("href", "/owners");
     expect(screen.getByText("Which team is accountable for every identity and credential.", { exact: true })).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { level: 2, name: "1 known identity or credential needs an owner" })).toBeInTheDocument();
-    expect(
-      screen.getByText("1 of 2 known identities and credentials are assigned. 1 of 1 owner records have current review evidence.", { exact: true }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 2, name: "1 asset needs accountable ownership" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Accountability hierarchy" })).toHaveTextContent("Platform team");
+    expect(screen.getByRole("table", { name: "Ownership action queue" })).toHaveTextContent("unowned deployer token");
 
     const actions = screen.getByTestId("page-depth-operate");
     expect(within(actions).getAllByRole("button")).toHaveLength(1);
-    const assign = within(actions).getByRole("button", { name: /^Assign owner$/ });
-    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    const assign = within(actions).getByRole("button", { name: /^Add owner$/ });
     expect(screen.queryByRole("searchbox", { name: "Search owners" })).not.toBeInTheDocument();
 
     const disclosures = [
@@ -112,7 +116,7 @@ describe("route 029 decision-first ownership design", () => {
 
     await user.click(assign);
     const assignDialog = screen.getByRole("dialog");
-    expect(within(assignDialog).getByRole("heading", { level: 2, name: "Assign owner" })).toBeInTheDocument();
+    expect(within(assignDialog).getByRole("heading", { level: 2, name: "Add owner" })).toBeInTheDocument();
     expect(assignDialog).toHaveClass("max-h-[calc(100dvh-2rem)]", "overflow-y-auto", "overscroll-contain");
     expect(assignDialog).not.toHaveClass("motion-safe:animate-panel-in");
     expect(screen.getByText(/Create the accountable owner record first/, { exact: false })).toBeInTheDocument();

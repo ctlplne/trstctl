@@ -125,6 +125,8 @@ var TenantScopedTables = []string{
 	"edge_segment_policies",
 	// F4: the AD CS certificate-database summary, a per-CA projection.
 	"adcs_ca_databases",
+	// Asset overrides reference owners through a composite tenant FK.
+	"ownership_assignments",
 	"owners",
 	"issuers",
 	"deployment_target_revisions",

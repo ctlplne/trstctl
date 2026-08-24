@@ -163,9 +163,11 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// 372; both map beside graphCryptoReadiness because they complete that same
 	// CBOM/graph workflow rather than creating a parallel product feature. The
 	// request prepare and evidence-backed completion operations close I3's
-	// approved-to-issued bridge, raising the ratchet to 374.
-	if len(out) != 374 {
-		t.Fatalf("OpenAPI operationIds = %d, want 374", len(out))
+	// approved-to-issued bridge, raising the ratchet to 374. Asset-specific,
+	// attributed ownership assignment raises it to 375 and maps beside the
+	// existing ownership-attribution and attestation governance surface.
+	if len(out) != 375 {
+		t.Fatalf("OpenAPI operationIds = %d, want 375", len(out))
 	}
 	return out
 }

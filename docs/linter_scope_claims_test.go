@@ -175,7 +175,7 @@ func TestLinterEnforcementClaimsMatchAnalyzerRegistry(t *testing.T) {
 		t.Fatal("ARCH-010: README.md no longer has a `## How it's built` section; re-point this guard")
 	}
 	rest := readme[start:]
-	end := strings.Index(rest, "\n| |")
+	end := strings.Index(rest, "\n|          | Principle (in plain terms)")
 	if end < 0 {
 		t.Fatal("ARCH-010: README.md `## How it's built` no longer precedes the invariant table; re-point this guard")
 	}

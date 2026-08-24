@@ -80,13 +80,21 @@ func (a *API) ownershipAttribution(ctx context.Context, tenantID string) (owners
 		return ownershipAttributionResponse{}, err
 	}
 	idx := newOwnershipOwnerIndex(owners)
+	assignments, err := a.store.ListOwnershipAssignments(ctx, tenantID)
+	if err != nil {
+		return ownershipAttributionResponse{}, err
+	}
+	assignmentByInventoryID := make(map[string]store.OwnershipAssignment, len(assignments))
+	for _, assignment := range assignments {
+		assignmentByInventoryID[assignment.InventoryID] = assignment
+	}
 	out := ownershipAttributionResponse{
 		GeneratedAt: inventory.GeneratedAt,
 		Summary:     map[string]int{},
 		Coverage:    append([]string(nil), ownershipAttributionCoverage...),
 	}
 	for _, inv := range inventory.Items {
-		owner, source, evidence := resolveOwnershipAttribution(inv, idx)
+		owner, source, evidence := resolveOwnershipAttribution(inv, idx, assignmentByInventoryID[inv.ID])
 		status := "orphaned"
 		out.Summary["total"]++
 		if owner != nil {
@@ -146,7 +154,23 @@ func newOwnershipOwnerIndex(owners []store.Owner) ownershipOwnerIndex {
 	return idx
 }
 
-func resolveOwnershipAttribution(item nhiInventoryItem, idx ownershipOwnerIndex) (*ownershipAttributionOwner, string, []string) {
+func resolveOwnershipAttribution(
+	item nhiInventoryItem,
+	idx ownershipOwnerIndex,
+	assignments ...store.OwnershipAssignment,
+) (*ownershipAttributionOwner, string, []string) {
+	assignment := store.OwnershipAssignment{}
+	if len(assignments) > 0 {
+		assignment = assignments[0]
+	}
+	if assignment.OwnerID != "" {
+		if owner, ok := idx.byID[assignment.OwnerID]; ok {
+			return toOwnershipAttributionOwner(owner), "asset_override", []string{
+				"ownership.assignment:" + assignment.SourceEventID,
+			}
+		}
+		return nil, "unresolved_asset_override", []string{"owner_id:" + assignment.OwnerID}
+	}
 	if ownerID := strings.TrimSpace(item.OwnerID); ownerID != "" {
 		if owner, ok := idx.byID[ownerID]; ok {
 			return toOwnershipAttributionOwner(owner), "owner_id", []string{"owner_id:" + ownerID}

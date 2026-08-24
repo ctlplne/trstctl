@@ -92,6 +92,7 @@ var projectionEventConstants = map[string]string{
 	projections.EventOwnerUpdated:                             "EventOwnerUpdated",
 	projections.EventOwnerDeleted:                             "EventOwnerDeleted",
 	projections.EventOwnershipAttested:                        "EventOwnershipAttested",
+	projections.EventOwnershipAssigned:                        "EventOwnershipAssigned",
 	projections.EventOwnerReattestationRequested:              "EventOwnerReattestationRequested",
 	projections.EventOwnershipExceptionGranted:                "EventOwnershipExceptionGranted",
 	projections.EventOwnershipExceptionRevoked:                "EventOwnershipExceptionRevoked",

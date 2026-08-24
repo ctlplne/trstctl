@@ -454,6 +454,8 @@ public final class OpenApiSchemas {
       "OwnerRemediationRun",
       "OwnerRemediationSummary",
       "OwnerRequest",
+      "OwnershipAssignmentRequest",
+      "OwnershipAssignmentResult",
       "OwnershipAttribution",
       "OwnershipAttributionItem",
       "OwnershipAttributionOwner",

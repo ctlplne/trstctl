@@ -276,6 +276,8 @@ import type {
   OwnerRemediationAcceptRequest,
   OwnerRemediationQueue,
   OwnerRemediationRun,
+  OwnershipAssignmentRequest,
+  OwnershipAssignmentResult,
   OutboxReconciliationConflictList,
   OwnerRequest,
   OwnershipAttribution,
@@ -842,6 +844,8 @@ export type {
   OwnerRemediationAcceptRequest,
   OwnerRemediationQueue,
   OwnerRemediationRun,
+  OwnershipAssignmentRequest,
+  OwnershipAssignmentResult,
   OwnershipAttribution,
   OwnershipAttributionItem,
   PAMSession,
@@ -1549,6 +1553,7 @@ export interface Api {
   ingestCertificate(input: CertificateIngestRequest): Promise<Certificate>;
   owners(): Promise<Owner[]>;
   createOwner(input: OwnerRequest): Promise<Owner>;
+  assignOwnership(input: OwnershipAssignmentRequest): Promise<OwnershipAssignmentResult>;
   attestOwner(id: string): Promise<Owner>;
   ownershipExceptions(identityId: string): Promise<OwnershipException[]>;
   grantOwnershipException(identityId: string, input: OwnershipExceptionRequest): Promise<OwnershipException>;
@@ -1978,6 +1983,7 @@ const liveApi: Api = {
   ingestCertificate: (input) => mutate<Certificate>("POST", "/api/v1/certificates", input),
   owners: () => req<{ items: Owner[] }>("/api/v1/owners").then((r) => r.items ?? []),
   createOwner: (input) => mutate<Owner>("POST", "/api/v1/owners", input),
+  assignOwnership: (input) => mutate<OwnershipAssignmentResult>("POST", "/api/v1/ownership/assignments", input),
   attestOwner: (id) => mutate<Owner>("POST", `/api/v1/owners/${encodeURIComponent(id)}/attest`, {}),
   ownershipExceptions: (identityId) =>
     req<OwnershipExceptionList>(`/api/v1/identities/${encodeURIComponent(identityId)}/ownership-exceptions`).then((result) => result.items ?? []),

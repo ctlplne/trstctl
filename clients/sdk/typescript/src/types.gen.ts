@@ -3750,6 +3750,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ownership/assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Assign one accountable owner to 1-100 canonical NHI inventory records with an attributed reason */
+        post: operations["assignOwnership"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ownership/attribution": {
         parameters: {
             query?: never;
@@ -10073,6 +10090,20 @@ export interface components {
             kind: "user" | "team" | "workload" | "service" | "vendor";
             name: string;
             service?: string;
+        };
+        OwnershipAssignmentRequest: {
+            inventory_ids: string[];
+            /** Format: uuid */
+            owner_id: string;
+            reason: string;
+        };
+        OwnershipAssignmentResult: {
+            assigned: string[];
+            /** Format: date-time */
+            assigned_at: string;
+            assigned_by: string;
+            /** Format: uuid */
+            owner_id: string;
         };
         OwnershipAttribution: {
             coverage: string[];
@@ -23123,6 +23154,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Owner"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    assignOwnership: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OwnershipAssignmentRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnershipAssignmentResult"];
                 };
             };
             /** @description client error */

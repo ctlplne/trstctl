@@ -591,6 +591,30 @@ func TestOwnershipReadinessCommandsAUD44(t *testing.T) {
 	}
 }
 
+func TestOwnershipAssignmentCommandPreservesBodyAndStableRetryKey(t *testing.T) {
+	var got capture
+	srv := mockServer(t, http.StatusOK, `{"owner_id":"owner-1","assigned":["identity/asset-1"]}`, &got)
+	body := `{"owner_id":"owner-1","inventory_ids":["identity/asset-1"],"reason":"Platform Trust owns incident response"}`
+	code, _, stderr := run(t, []string{"owners", "assign", "-f", "-"}, cli.Env{
+		Server: srv.URL, Token: "owner-token", Tenant: "tenant-1", HTTPClient: srv.Client(), IdempotencyKey: "ownership-handoff-1",
+	}, body)
+	if code != 0 {
+		t.Fatalf("owners assign exit=%d stderr=%q", code, stderr)
+	}
+	if got.Method != http.MethodPost || got.Path != "/api/v1/ownership/assignments" {
+		t.Fatalf("owners assign request = %s %s", got.Method, got.Path)
+	}
+	if !sameJSON(got.Body, []byte(body)) {
+		t.Fatalf("owners assign body = %s, want %s", got.Body, body)
+	}
+	if got.Header.Get("Idempotency-Key") != "ownership-handoff-1" {
+		t.Fatalf("owners assign retry key = %q", got.Header.Get("Idempotency-Key"))
+	}
+	if got.Header.Get("Authorization") != "Bearer owner-token" || got.Header.Get("X-Tenant-ID") != "tenant-1" {
+		t.Fatalf("owners assign lost authentication: authorization=%q tenant=%q", got.Header.Get("Authorization"), got.Header.Get("X-Tenant-ID"))
+	}
+}
+
 func TestDestructiveCommandRequiresForce(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 200, `{"revoked":1}`, &cap)

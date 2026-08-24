@@ -405,6 +405,14 @@ projection and nullable owner verification-binding columns. Migration 0169 build
 the populated-owner cadence index concurrently in a no-transaction migration, so
 upgrading does not stop owner writes while PostgreSQL scans existing rows.
 
+Migration 0196 adds `ownership_assignments`, the tenant-RLS current projection for
+asset-specific accountability decisions. The table stores only canonical inventory
+ID, effective owner, event ID, event sequence, and assignment time. The attributed
+reason and authenticated actor remain in the immutable `ownership.assigned` event.
+Its bounded IDs and non-negative sequence constraints reject malformed projection
+rows, and deleting an otherwise-unreferenced owner removes only this current
+override; immutable history remains in the event log.
+
 ## Bounded lock waits (OPS-MIG-LOCK-001)
 
 The migration runner pins its session to `lock_timeout = 5s`,

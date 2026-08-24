@@ -76,6 +76,11 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/owner_id", opaque), privacyRule("/attested_by", exact),
 		privacyRule("/attested_at", opaque), privacyRule("/model_digest", opaque),
 	)
+	ownershipAssigned := privacyRules(
+		privacyRule("/owner_id", opaque), privacyRule("/inventory_ids/*", opaque),
+		privacyRule("/reason", clear), privacyRule("/assigned_by", exact),
+		privacyRule("/assigned_at", opaque),
+	)
 	ownerReattestationRequested := privacyRules(
 		privacyRule("/owner_id", opaque), privacyRule("/verified_for", opaque),
 		privacyRule("/due_at", opaque), privacyRule("/requested_at", opaque),
@@ -617,6 +622,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		{EventOwnerUpdated, OwnerDepthEventSchemaVersion}: ownerDepth,
 		{EventOwnerDeleted, 1}:                            ownerDeleted,
 		{EventOwnershipAttested, 1}:                       ownershipAttested,
+		{EventOwnershipAssigned, 1}:                       ownershipAssigned,
 		{EventOwnerReattestationRequested, 1}:             ownerReattestationRequested,
 		{EventOwnershipExceptionGranted, 1}:               ownershipExceptionGranted,
 		{EventOwnershipExceptionRevoked, 1}:               ownershipExceptionRevoked,
@@ -1166,6 +1172,7 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventOwnerUpdated, OwnerDepthEventSchemaVersion}:                            privacyPayloadShape[OwnerUpdated](),
 		{EventOwnerDeleted, 1}:                                                       privacyPayloadShape[OwnerDeleted](),
 		{EventOwnershipAttested, 1}:                                                  privacyPayloadShape[OwnershipAttested](),
+		{EventOwnershipAssigned, 1}:                                                  privacyPayloadShape[OwnershipAssigned](),
 		{EventOwnerReattestationRequested, 1}:                                        privacyPayloadShape[OwnerReattestationRequested](),
 		{EventOwnershipExceptionGranted, 1}:                                          privacyPayloadShape[OwnershipExceptionGranted](),
 		{EventOwnershipExceptionRevoked, 1}:                                          privacyPayloadShape[OwnershipExceptionRevoked](),

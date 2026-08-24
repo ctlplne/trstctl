@@ -6182,6 +6182,27 @@ OwnerRequest = TypedDict(
     total=False,
 )
 
+OwnershipAssignmentRequest = TypedDict(
+    'OwnershipAssignmentRequest',
+    {
+        'inventory_ids': list[str],
+        'owner_id': str,
+        'reason': str,
+    },
+    total=False,
+)
+
+OwnershipAssignmentResult = TypedDict(
+    'OwnershipAssignmentResult',
+    {
+        'assigned': list[str],
+        'assigned_at': str,
+        'assigned_by': str,
+        'owner_id': str,
+    },
+    total=False,
+)
+
 OwnershipAttribution = TypedDict(
     'OwnershipAttribution',
     {
