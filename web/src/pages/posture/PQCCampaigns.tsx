@@ -238,11 +238,11 @@ export function PQCCampaigns({ assets }: { assets: CBOMAsset[] }) {
         </h4>
         {campaigns.loading ? <LoadingState>{t("posture.pqcCampaign.loading")}</LoadingState> : null}
         {campaigns.error ? <ErrorState title={t("posture.pqcCampaign.error")}>{campaigns.error}</ErrorState> : null}
-        {!campaigns.loading && !campaigns.error && (campaigns.data?.items.length ?? 0) === 0 ? (
+        {!campaigns.loading && !campaigns.error && (campaigns.data?.items ?? []).length === 0 ? (
           <EmptyState title={t("posture.pqcCampaign.empty")}>{t("posture.pqcCampaign.emptyBody")}</EmptyState>
         ) : null}
         <div className="grid gap-2">
-          {campaigns.data?.items.map((campaign) => (
+          {(campaigns.data?.items ?? []).map((campaign) => (
             <button
               key={campaign.id}
               type="button"

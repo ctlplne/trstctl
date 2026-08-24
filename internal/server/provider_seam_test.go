@@ -14,6 +14,12 @@ import (
 
 func TestProviderSurfaceIs404UnlessEditionHandlerIsAttached(t *testing.T) {
 	core := newProviderSeamServer(t, nil)
+	consoleReq := httptest.NewRequest(http.MethodGet, "/provider", nil)
+	consoleRec := httptest.NewRecorder()
+	core.handler.ServeHTTP(consoleRec, consoleReq)
+	if consoleRec.Code != http.StatusOK || consoleRec.Header().Get("Content-Type") != "text/html; charset=utf-8" {
+		t.Fatalf("provider console = %d content-type=%q, want embedded SPA", consoleRec.Code, consoleRec.Header().Get("Content-Type"))
+	}
 	coreReq := httptest.NewRequest(http.MethodGet, "/provider/v1/tenants", nil)
 	coreRec := httptest.NewRecorder()
 	core.handler.ServeHTTP(coreRec, coreReq)

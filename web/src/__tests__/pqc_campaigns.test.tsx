@@ -110,6 +110,13 @@ describe("core PQC migration campaigns", () => {
     expect(await axe(container)).toHaveNoViolations();
   });
 
+  it("treats a JSON null campaign list as an honest empty state", async () => {
+    apiMock.pqcCampaigns.mockResolvedValue({ items: null, next_cursor: "" });
+    renderCampaigns();
+    expect(await screen.findByText("No PQC campaigns yet")).toBeInTheDocument();
+    expect(screen.queryByText("This page stopped unexpectedly")).not.toBeInTheDocument();
+  });
+
   it("creates a campaign from CBOM findings", async () => {
     const user = userEvent.setup();
     renderCampaigns();

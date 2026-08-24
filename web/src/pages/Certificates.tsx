@@ -1058,7 +1058,7 @@ export function Certificates() {
   }, [certificates, environmentFilter, issuerFilter, ownerByID, profileFilter, query, teamFilter]);
 
   return (
-    <section aria-labelledby="certs-heading">
+    <section aria-labelledby="certs-heading" className="min-w-0 max-w-full">
       <PageHeader
         titleId="certs-heading"
         title={t("nav.item.certificates")}
@@ -1253,7 +1253,7 @@ export function Certificates() {
             </div>
           )}
           {tab === "inventory" && (
-            <div {...tabPanelProps("certs", "inventory")} className="grid gap-4">
+            <div {...tabPanelProps("certs", "inventory")} className="grid min-w-0 max-w-full gap-4">
               {health && (
                 <LifecycleCockpit
                   certificates={certificates}

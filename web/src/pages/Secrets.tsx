@@ -2173,7 +2173,7 @@ export function Secrets() {
                 </p>
               )}
               {canReadTokens && tokenRows && (
-                <div className="overflow-x-auto rounded-panel border border-border">
+                <ScrollableTableRegion label={t("secrets.grant.ledgerCaption")}>
                   <table className="ui-table min-w-[44rem]">
                     <caption className="sr-only">{t("secrets.grant.ledgerCaption")}</caption>
                     <thead>
@@ -2217,7 +2217,7 @@ export function Secrets() {
                       )}
                     </tbody>
                   </table>
-                </div>
+                </ScrollableTableRegion>
               )}
             </section>
           )}

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, BellRing, CheckCircle2 } from "lucide-react";
 import { StackedTimeBarChart, TimeBarChart, type StackedTimeBarDatum, type TimeBarDatum } from "@/components/charts";
+import { ScrollableTableRegion } from "@/components/ScrollableTableRegion";
 import type {
   Certificate,
   CertificateHealthDashboard,
@@ -352,7 +353,7 @@ export function LifecycleCockpit(props: LifecycleCockpitProps) {
   const routingReady = routingObserved && readyChannels > 0 && policyCount > 0;
 
   return (
-    <section aria-labelledby="certificate-cockpit-heading" className="mb-6 space-y-5">
+    <section aria-labelledby="certificate-cockpit-heading" className="mb-6 min-w-0 max-w-full space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-4">
         <div>
           <h2 id="certificate-cockpit-heading" className="text-title font-semibold">
@@ -445,14 +446,14 @@ export function LifecycleCockpit(props: LifecycleCockpitProps) {
         </ChartPanel>
       </div>
 
-      <section aria-labelledby="certificate-action-queue-heading" className="ui-panel overflow-hidden">
+      <section aria-labelledby="certificate-action-queue-heading" className="ui-panel min-w-0 max-w-full overflow-hidden">
         <div className="border-b border-border p-4">
           <h3 id="certificate-action-queue-heading" className="text-body font-semibold">
             {t("certificateCockpit.queue.title")}
           </h3>
           <p className="mt-1 text-caption text-muted-foreground">{t("certificateCockpit.queue.help")}</p>
         </div>
-        <div className="overflow-x-auto">
+        <ScrollableTableRegion label={t("certificateCockpit.queue.title")} className="rounded-none border-0">
           <table aria-label={t("certificateCockpit.queue.title")} className="w-full min-w-[68rem] text-left text-sm">
             <thead className="bg-muted/50 text-caption text-muted-foreground">
               <tr>
@@ -506,7 +507,7 @@ export function LifecycleCockpit(props: LifecycleCockpitProps) {
               ) : null}
             </tbody>
           </table>
-        </div>
+        </ScrollableTableRegion>
       </section>
 
       <section aria-labelledby="certificate-alert-safety-heading" className="border-s-2 border-border ps-4">

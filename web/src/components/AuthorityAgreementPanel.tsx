@@ -99,7 +99,7 @@ export function AuthorityAgreementPanel() {
                   </span>
                 </div>
               </dl>
-              {report.authorities.length > 0 ? (
+              {(report.authorities ?? []).length > 0 ? (
                 <div className="mt-4 overflow-x-auto">
                   <table className="w-full text-caption">
                     <thead>
@@ -110,11 +110,11 @@ export function AuthorityAgreementPanel() {
                       </tr>
                     </thead>
                     <tbody>
-                      {report.authorities.map((authority) => (
+                      {(report.authorities ?? []).map((authority) => (
                         <tr key={authority.authority_id}>
                           <td className="font-medium">{authority.authority_id}</td>
                           <td className="tabular-nums">{authority.total}</td>
-                          <td>{authority.witnesses.map((w) => `${w.class} (${w.count})`).join(", ")}</td>
+                          <td>{(authority.witnesses ?? []).map((w) => `${w.class} (${w.count})`).join(", ")}</td>
                         </tr>
                       ))}
                     </tbody>

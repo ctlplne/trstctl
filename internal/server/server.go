@@ -2046,6 +2046,12 @@ func (s *Server) configureRootMux(d Deps, a *api.API) {
 	} else {
 		mux.HandleFunc("/provider/", http.NotFound)
 	}
+	// Exact /provider is the provider console SPA entry. Its child namespace is
+	// a separate API plane and remains dark unless the licensed handler above is
+	// attached. Without this exact pattern net/http redirects /provider to
+	// /provider/, where the API namespace correctly answers 404, making the
+	// shipped provider console impossible to open in every edition.
+	mux.Handle("/provider", consoleHandler)
 	// Exact /ssh is the browser's SSH Trust workspace; only its children belong
 	// to the SSH machine protocol. Registering /ssh/ for /ssh/ca and /ssh/krl
 	// makes net/http redirect a bare /ssh to /ssh/ unless this exact pattern is

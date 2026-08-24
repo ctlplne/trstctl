@@ -765,7 +765,7 @@ function HeaderAlertLink({ label, count = 0 }: { label: string; count?: number }
       <Bell className="h-4 w-4" aria-hidden="true" />
       {count > 0 ? (
         <span
-          className="absolute -end-1 -top-1 min-w-4 rounded-control bg-status-critical px-1 text-center text-2xs font-semibold leading-4 text-white"
+          className="absolute -end-1 -top-1 min-w-4 rounded-control bg-risk-critical px-1 text-center text-2xs font-semibold leading-4 text-white"
           aria-hidden="true"
         >
           {count > 99 ? "99+" : count}

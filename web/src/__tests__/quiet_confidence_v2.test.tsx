@@ -9,9 +9,11 @@ import { Button } from "@/components/ui/button";
 const webRoot = process.cwd();
 const css = readFileSync(path.join(webRoot, "src/index.css"), "utf8");
 const shellSource = readFileSync(path.join(webRoot, "src/components/AppShell.tsx"), "utf8");
+const lifecycleSource = readFileSync(path.join(webRoot, "src/components/certs/LifecycleCockpit.tsx"), "utf8");
 const kpiSource = readFileSync(path.join(webRoot, "src/components/ModuleKpiStrip.tsx"), "utf8");
 const adminHeaderSource = readFileSync(path.join(webRoot, "src/components/AdminHeaderActions.tsx"), "utf8");
 const certificateSource = readFileSync(path.join(webRoot, "src/pages/Certificates.tsx"), "utf8");
+const secretsSource = readFileSync(path.join(webRoot, "src/pages/Secrets.tsx"), "utf8");
 const dashboardSource = readFileSync(path.join(webRoot, "src/pages/Dashboard.tsx"), "utf8");
 const protocolSource = readFileSync(path.join(webRoot, "src/pages/Protocols.tsx"), "utf8");
 const buttonSource = readFileSync(path.join(webRoot, "src/components/ui/button.tsx"), "utf8");
@@ -34,6 +36,17 @@ describe("quiet confidence v2", () => {
     expect(css).toContain("--brand-accent: 166 55% 20%");
     expect(css).toContain("--sidebar: 60 15% 92%");
     expect(css).toContain("--sidebar-foreground: 163 14% 22%");
+  });
+
+  it("uses a real high-contrast risk token for the global attention count", () => {
+    expect(shellSource).toContain("bg-risk-critical");
+    expect(shellSource).not.toContain("bg-status-critical");
+  });
+
+  it("contains wide operational tables and exposes them to keyboard users", () => {
+    expect(certificateSource).toContain('className="min-w-0 max-w-full"');
+    expect(lifecycleSource).toContain('<ScrollableTableRegion label={t("certificateCockpit.queue.title")}');
+    expect(secretsSource).toContain('<ScrollableTableRegion label={t("secrets.grant.ledgerCaption")}');
   });
 
   it("uses one reusable circular identity mark in sign-in and shell chrome", () => {
