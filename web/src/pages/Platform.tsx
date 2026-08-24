@@ -379,29 +379,32 @@ export function AdminSystem() {
               </div>
             ) : null}
             {systemReadout ? (
-              <dl className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-3">
-                <SystemFact label={t("admin.system.runningBuild")} value={systemReadout.version || "-"} />
-                <SystemFact label={t("admin.system.runningCommit")} value={systemReadout.commit || "-"} mono />
-                <SystemCheck
-                  label={t("admin.system.dependenciesCheck")}
-                  value={t("admin.system.dependenciesReady", {
-                    ready: String(dependencies.length - dependencyIssues.length),
-                    total: String(dependencies.length),
-                  })}
-                  issue={dependencyIssues.length > 0}
-                />
-                <SystemCheck label={t("admin.system.signerCheck")} value={systemReadout.signer_mode} issue={systemReadout.signer_mode === "none"} />
-                <SystemCheck
-                  label={t("admin.system.retryProtectionCheck")}
-                  value={resultProtectionState ? resultProtectionState.replaceAll("_", " ") : t("platform.idempotency.stateUnavailable")}
-                  issue={resultProtectionNeedsWork}
-                />
-                <SystemCheck
-                  label={t("admin.system.deliveryCheck")}
-                  value={t("admin.system.deliveryFailures", { count: String(deliveryIssues) })}
-                  issue={deliveryIssues > 0}
-                />
-              </dl>
+              <>
+                <dl className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-3">
+                  <SystemFact label={t("admin.system.runningBuild")} value={systemReadout.version || "-"} />
+                  <SystemFact label={t("admin.system.runningCommit")} value={systemReadout.commit || "-"} mono />
+                  <SystemCheck
+                    label={t("admin.system.dependenciesCheck")}
+                    value={t("admin.system.dependenciesReady", {
+                      ready: String(dependencies.length - dependencyIssues.length),
+                      total: String(dependencies.length),
+                    })}
+                    issue={dependencyIssues.length > 0}
+                  />
+                  <SystemCheck label={t("admin.system.signerCheck")} value={systemReadout.signer_mode} issue={systemReadout.signer_mode === "none"} />
+                  <SystemCheck
+                    label={t("admin.system.retryProtectionCheck")}
+                    value={resultProtectionState ? resultProtectionState.replaceAll("_", " ") : t("platform.idempotency.stateUnavailable")}
+                    issue={resultProtectionNeedsWork}
+                  />
+                  <SystemCheck
+                    label={t("admin.system.deliveryCheck")}
+                    value={t("admin.system.deliveryFailures", { count: String(deliveryIssues) })}
+                    issue={deliveryIssues > 0}
+                  />
+                </dl>
+                <p className="text-caption text-muted-foreground">{t("admin.system.deliveryScope")}</p>
+              </>
             ) : null}
           </div>
         </SystemDisclosure>

@@ -611,6 +611,32 @@ describe("auth + dashboards", () => {
     expect(within(health).getByRole("link", { name: /Trust Operations/ })).toHaveAttribute("href", "/trust-operations");
   });
 
+  it("treats the backend zero-time sentinel as an unknown deadline", async () => {
+    seededTenant();
+    apiMock.contextualRiskPriorities.mockResolvedValue({
+      ...contextualRiskFixture(1, 0),
+      priorities: [
+        {
+          credential_id: "cert-no-deadline",
+          subject: "old-vpn.example.test",
+          kind: "certificate",
+          severity: "critical",
+          contextual_score: 96,
+          expires_at: "0001-01-01T00:00:00Z",
+          owner_active: true,
+          priority_reasons: ["high_blast_radius"],
+          recommended_action: "Confirm the source deadline before acting.",
+        },
+      ],
+    });
+
+    renderAt("/");
+    const dash = await screen.findByRole("region", { name: "Home" });
+    const queue = await within(dash).findByRole("list", { name: "Highest-priority credentials" });
+    expect(within(queue).getByText("Deadline not reported")).toBeInTheDocument();
+    expect(within(queue).queryByText("Already expired")).not.toBeInTheDocument();
+  });
+
   it("AUD-67 reports contextual critical work when certificate risk is empty", async () => {
     apiMock.me.mockResolvedValue(sessionForRole("viewer"));
     apiMock.risk.mockResolvedValue([]);

@@ -2047,12 +2047,16 @@ export const messages = {
   "admin.system.signerCheck": { defaultMessage: "Signer isolation", description: "Health check label for signer process mode." },
   "admin.system.retryProtectionCheck": { defaultMessage: "Retry-result protection", description: "Health check label for encrypted idempotency results." },
   "admin.system.deliveryCheck": {
-    defaultMessage: "Deployment verification failures",
-    description: "Health check label for failed serving verification without implying a successful delivery.",
+    defaultMessage: "Live endpoint probe failures",
+    description: "Health check label for failed live endpoint probes without implying a connector delivery result.",
   },
   "admin.system.runningBuild": { defaultMessage: "Running build", description: "Exact version label for the active control-plane process." },
   "admin.system.runningCommit": { defaultMessage: "Source commit", description: "Exact source commit label for the active control-plane process." },
-  "admin.system.deliveryFailures": { defaultMessage: "{count} failures", description: "Number of serving-verification failures." },
+  "admin.system.deliveryFailures": { defaultMessage: "{count} endpoint probe failures", description: "Number of failed live endpoint probes." },
+  "admin.system.deliveryScope": {
+    defaultMessage: "This check counts live endpoint probes only. Certificate Lifecycle separately counts connector delivery receipts.",
+    description: "Explains why System health and Certificate Lifecycle may show different delivery-related counts.",
+  },
   "admin.system.healthReadFailed": { defaultMessage: "System health could not be read.", description: "Sanitized internal state for the minimal read." },
   "admin.system.detailReadFailed": {
     defaultMessage: "Some expert evidence could not be loaded. No configuration change was made. Check the control-plane logs, then retry.",

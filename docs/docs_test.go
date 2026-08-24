@@ -2754,6 +2754,9 @@ func TestDemoClickThroughUsesShippedTLSAddress(t *testing.T) {
 	if !strings.Contains(walkthrough, "https://127.0.0.1:9443/") {
 		t.Error("demo click-through must link to the shipped HTTPS demo origin")
 	}
+	if !strings.Contains(walkthrough, `window.location.protocol === "http:"`) || !strings.Contains(walkthrough, "direct HTTPS check remains the transport proof") {
+		t.Error("demo click-through must allow only a loopback-hosted HTTP visual bridge and keep direct HTTPS as transport proof")
+	}
 	for _, stale := range []string{"http://127.0.0.1:18081", "https://localhost:9443", "not HTTPS, not port 9443"} {
 		if strings.Contains(walkthrough, stale) {
 			t.Errorf("demo click-through still contains stale plaintext demo guidance %q", stale)

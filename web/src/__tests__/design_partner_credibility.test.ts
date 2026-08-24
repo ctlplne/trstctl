@@ -21,7 +21,9 @@ describe("cold design-partner credibility findings", () => {
 
   it("does not promise a deployment repair or verified delivery when only evidence is available", () => {
     expect(messages["certificateCockpit.action.repairDeployment"].defaultMessage).toBe("Review deployment path");
-    expect(messages["admin.system.deliveryCheck"].defaultMessage).toBe("Deployment verification failures");
+    expect(messages["admin.system.deliveryCheck"].defaultMessage).toBe("Live endpoint probe failures");
+    expect(messages["admin.system.deliveryScope"].defaultMessage).toContain("connector delivery receipts");
+    expect(platform).toContain('t("admin.system.deliveryScope")');
     expect(notifications).toContain('detail.not_after ? formatDateTime(detail.not_after) : t("notifications.center.noDeadline")');
   });
 

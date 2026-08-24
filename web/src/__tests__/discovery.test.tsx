@@ -478,6 +478,13 @@ describe("discovery control-plane surface", () => {
 
   it("claims and dismisses findings while keeping owner and tag filters URL-addressable", async () => {
     const user = userEvent.setup();
+    const initialPosture = await apiMock.nhiShadowPosture();
+    apiMock.nhiShadowPosture.mockReset();
+    apiMock.nhiShadowPosture.mockResolvedValueOnce(initialPosture).mockResolvedValue({
+      ...initialPosture,
+      generated_at: "2026-06-20T10:04:01Z",
+      summary: { ...initialPosture.summary, unmanaged: 1, findings: 1 },
+    });
     apiMock.claimDiscoveryFinding.mockResolvedValue({
       id: "finding-1",
       tenant_id: "tenant-1",
@@ -516,6 +523,16 @@ describe("discovery control-plane surface", () => {
 
     renderDiscovery();
 
+    const attention = (await screen.findByText("What needs attention")).closest("section");
+    expect(attention).toBeTruthy();
+    expect(
+      within(
+        within(attention as HTMLElement)
+          .getByText("Unmanaged")
+          .closest(".rounded-panel") as HTMLElement,
+      ).getByText("3"),
+    ).toBeInTheDocument();
+
     const certRow = (await screen.findByText("10.0.0.10:443")).closest("tr");
     expect(certRow).toBeTruthy();
     expect(within(certRow as HTMLTableRowElement).getByText("platform")).toBeInTheDocument();
@@ -540,6 +557,24 @@ describe("discovery control-plane surface", () => {
       tags: ["internet", "tls", "follow-up"],
     });
     expect(await within(certRow as HTMLTableRowElement).findByText("Managed")).toBeInTheDocument();
+    expect(
+      within(
+        within(attention as HTMLElement)
+          .getByText("Unmanaged")
+          .closest(".rounded-panel") as HTMLElement,
+      ).getByText("2"),
+    ).toBeInTheDocument();
+    expect(apiMock.nhiShadowPosture).toHaveBeenCalledTimes(2);
+    await user.click(screen.getByText("Monitoring and exact scan evidence"));
+    const shadow = screen.getByRole("heading", { name: "Shadow NHI posture" }).closest("section");
+    expect(shadow).toBeTruthy();
+    expect(
+      within(
+        within(shadow as HTMLElement)
+          .getByText("Unmanaged")
+          .closest(".ui-panel") as HTMLElement,
+      ).getByText("1"),
+    ).toBeInTheDocument();
     expect(await within(claimPanel as HTMLElement).findByText("follow-up")).toBeInTheDocument();
     await user.click(within(claimPanel as HTMLElement).getByRole("button", { name: "Close" }));
 

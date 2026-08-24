@@ -169,8 +169,11 @@ function dashboardOwner(owner: EffectiveOwner): string {
 }
 
 function dashboardDeadline(expiresAt?: string): string {
-  const deadline = expiresAt ? new Date(expiresAt).getTime() : Number.NaN;
-  if (!Number.isFinite(deadline)) return translateNow("dashboard.attention.deadlineUnknown");
+  const parsed = expiresAt ? new Date(expiresAt) : null;
+  const deadline = parsed?.getTime() ?? Number.NaN;
+  // Go's zero time is a wire-level "not provided" sentinel, not an expired
+  // credential. Treat it exactly like an absent/invalid deadline.
+  if (!Number.isFinite(deadline) || (parsed?.getUTCFullYear() ?? 0) <= 1) return translateNow("dashboard.attention.deadlineUnknown");
   const days = Math.ceil((deadline - Date.now()) / dayMs);
   if (days < 0) return translateNow("dashboard.attention.deadlineExpired");
   if (days === 0) return translateNow("dashboard.attention.deadlineToday");

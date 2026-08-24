@@ -673,10 +673,12 @@ const esESCatalog = {
   "admin.system.dependenciesReady": "{ready} de {total} listas",
   "admin.system.signerCheck": "Aislamiento del firmante",
   "admin.system.retryProtectionCheck": "Protección del resultado de reintento",
-  "admin.system.deliveryCheck": "Fallos de verificación del despliegue",
+  "admin.system.deliveryCheck": "Fallos de sondeo de endpoints en vivo",
   "admin.system.runningBuild": "Compilación en ejecución",
   "admin.system.runningCommit": "Commit de origen",
-  "admin.system.deliveryFailures": "{count} fallos",
+  "admin.system.deliveryFailures": "{count} fallos de sondeo de endpoints",
+  "admin.system.deliveryScope":
+    "Esta comprobación solo cuenta sondeos de endpoints en vivo. Certificate Lifecycle cuenta por separado los recibos de entrega de conectores.",
   "admin.system.healthReadFailed": "No se pudo leer el estado del sistema.",
   "admin.system.detailReadFailed":
     "No se pudieron cargar algunas pruebas expertas. No se cambió la configuración. Revise los registros del plano de control y vuelva a intentarlo.",

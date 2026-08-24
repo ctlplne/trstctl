@@ -452,7 +452,7 @@
       <div class="callout tip">
         <h3>Use two browser tabs</h3>
         <p>Right-click <strong>Open the trstctl demo</strong> and choose “Open Link in New Tab.” Leave this walkthrough open so you can move back and forth.</p>
-        <p>The link above defaults to the HTTPS origin shipped by <code>deploy/demo/docker-compose.yml</code>. If your demo operator supplied a different HTTPS loopback port, append its URL as the encoded <code>?demo=</code> query parameter; this page accepts only <code>https://localhost</code> or <code>https://127.0.0.1</code> and updates every demo link.</p>
+        <p>The link above defaults to the HTTPS origin shipped by <code>deploy/demo/docker-compose.yml</code>. If your demo operator supplied a different loopback port, append its URL as the encoded <code>?demo=</code> query parameter. This page accepts <code>https://localhost</code> or <code>https://127.0.0.1</code>. When this walkthrough itself is served over plain HTTP on loopback, it also accepts an HTTP loopback visual-test bridge. That bridge is only for browser QA; the direct HTTPS check remains the transport proof.</p>
       </div>
 
       <section class="mental-model" aria-labelledby="mental-model-title">
@@ -509,7 +509,7 @@
             <li><a class="button small primary" href="https://127.0.0.1:9443/" data-demo-path="/" target="_blank" rel="noopener">Open demo home</a></li>
             <li>If you see the sign-in page, click <strong>Continue with SSO</strong>. The local identity provider signs you in automatically.</li>
             <li>Look at the top-right corner for <code>demo-admin@trstctl.local</code>.</li>
-            <li>Look at the top bar for <strong>Tenant</strong> and the UUID beginning <code>11111111</code>.</li>
+            <li>Open <strong>Account and preferences</strong> in the top-right corner. Confirm <strong>Tenant</strong> has the UUID beginning <code>11111111</code>, then close the dialog.</li>
           </ol>
           <div class="expected"><strong>Expected:</strong> You land on <strong>Home</strong>; the demo administrator, non-production tenant, and urgent work are visible.</div>
           <div class="meaning"><strong>Why it matters:</strong> The session supplies the tenant. The browser does not get to invent a tenant ID, and PostgreSQL row-level security enforces that boundary below the API.</div>
@@ -724,7 +724,7 @@
         </header>
         <div class="tour-body">
           <ol>
-            <li>In the <strong>Platform</strong> space under <strong>Govern &amp; administer</strong>, click <strong>Approvals</strong>.</li>
+            <li>In <strong>Trust Operations</strong>, under <strong>Govern &amp; administer</strong>, click <strong>Approvals</strong>.</li>
             <li>Inspect pending issue/rotate/revoke decisions. Do <strong>not</strong> click an approve button during the read-only tour.</li>
             <li>Click an <strong>Audit trail</strong> link for a request.</li>
             <li>Next click <strong>Policy</strong>. Read <strong>Enforcement path</strong>: the backend evaluates policy before it emits the state-change event.</li>
@@ -765,7 +765,7 @@
         </header>
         <div class="tour-body">
           <ol>
-            <li>In the <strong>Platform</strong> space under <strong>Infrastructure</strong>, click <strong>Deployment connectors</strong>.</li>
+            <li>In <strong>Trust Operations</strong>, under <strong>Infrastructure</strong>, click <strong>Deployment connectors</strong>.</li>
             <li>Read the four concepts: target setup, identity binding, action, and receipt evidence.</li>
             <li>Scroll through <strong>Connector registry</strong>. The shipped registry covers infrastructure targets such as web servers, proxies, clouds, Kubernetes, and secret platforms.</li>
             <li>Inspect <strong>Recent delivery receipts</strong>. A failed demo receipt is still useful evidence: it proves an attempted external delivery and its error path.</li>
@@ -812,7 +812,7 @@
         <summary>Exercise A — create a harmless owner record</summary>
         <div>
           <ol>
-            <li>Open <strong>Ownership</strong> under <strong>Platform → Govern &amp; administer</strong>.</li>
+            <li>Open <strong>Ownership</strong> under <strong>Trust Operations → Govern &amp; administer</strong>.</li>
             <li>Choose <strong>Assign owner</strong>.</li>
             <li>Use kind <code>team</code>, name <code>Walkthrough Team</code>, and the reserved local example address <code>walkthrough@example.invalid</code>.</li>
             <li>Submit once. If the UI asks for an idempotency key, keep the generated value rather than resubmitting with a different one.</li>
@@ -920,7 +920,10 @@
         try {
           const parsed = new URL(supplied);
           const loopback = parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost";
-          if (parsed.protocol !== "https:" || !loopback || parsed.username || parsed.password || parsed.search || parsed.hash) {
+          const walkthroughLoopback = window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost";
+          const secureLoopback = parsed.protocol === "https:";
+          const localVisualBridge = parsed.protocol === "http:" && window.location.protocol === "http:" && walkthroughLoopback;
+          if ((!secureLoopback && !localVisualBridge) || !loopback || parsed.username || parsed.password || parsed.search || parsed.hash) {
             return "https://127.0.0.1:9443";
           }
           return parsed.origin;

@@ -56,17 +56,14 @@ describe("docs IA parity (S-R2)", () => {
     const full = path.join(dir, "demo-click-through.html");
     if (!existsSync(full)) return;
     const src = readFileSync(full, "utf8");
-    for (const label of [
-      "Certificate Lifecycle",
-      "Machine &amp; Workload Trust",
-      "Secrets &amp; Access",
-      "Software Trust",
-      "Trust Operations",
-    ]) {
+    for (const label of ["Certificate Lifecycle", "Machine &amp; Workload Trust", "Secrets &amp; Access", "Software Trust", "Trust Operations"]) {
       expect(src).toContain(label);
     }
     expect(src).toContain("data-demo-path");
     expect(src).toContain("demoOriginFromQuery");
+    expect(src).toContain('window.location.protocol === "http:"');
+    expect(src).not.toContain("<strong>Platform</strong> space");
+    expect(src).not.toContain("top bar for <strong>Tenant</strong>");
   });
 
   it("documents bare /platform as the API-free Platform setup doorway", () => {

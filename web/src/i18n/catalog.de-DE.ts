@@ -685,10 +685,11 @@ const deDECatalog = {
   "admin.system.dependenciesReady": "{ready} von {total} bereit",
   "admin.system.signerCheck": "Signierer-Isolation",
   "admin.system.retryProtectionCheck": "Schutz von Wiederholungsergebnissen",
-  "admin.system.deliveryCheck": "Fehler bei der Bereitstellungsprüfung",
+  "admin.system.deliveryCheck": "Fehler bei Live-Endpunktprüfungen",
   "admin.system.runningBuild": "Laufender Build",
   "admin.system.runningCommit": "Quell-Commit",
-  "admin.system.deliveryFailures": "{count} Fehler",
+  "admin.system.deliveryFailures": "{count} Fehler bei Endpunktprüfungen",
+  "admin.system.deliveryScope": "Diese Prüfung zählt nur Live-Endpunktprüfungen. Certificate Lifecycle zählt Connector-Zustellbelege separat.",
   "admin.system.healthReadFailed": "Der Systemzustand konnte nicht gelesen werden.",
   "admin.system.detailReadFailed":
     "Einige Expertennachweise konnten nicht geladen werden. Die Konfiguration wurde nicht geändert. Prüfen Sie die Control-Plane-Protokolle und versuchen Sie es erneut.",

@@ -11,12 +11,13 @@ function kindCounts(findings: DiscoveryFinding[]): Array<[string, number]> {
 
 export function DiscoveryHero({ findings }: { findings: DiscoveryFinding[] }) {
   const { t } = useTranslation();
-  const kinds = kindCounts(findings);
-  const highRisk = findings.filter((finding) => (finding.risk_score ?? 0) >= 70).length;
+  const unmanaged = findings.filter((finding) => (finding.triage_status ?? "unmanaged") === "unmanaged");
+  const kinds = kindCounts(unmanaged);
+  const highRisk = unmanaged.filter((finding) => (finding.risk_score ?? 0) >= 70).length;
   return (
     <SectionCard title={t("discovery.attention.title")} description={t("discovery.attention.description")}>
       <DashboardGrid>
-        <StatTile label={t("discovery.attention.unmanaged")} value={findings.length} />
+        <StatTile label={t("discovery.attention.unmanaged")} value={unmanaged.length} />
         <StatTile label={t("discovery.attention.highRisk")} value={highRisk} tone={highRisk ? "high" : undefined} />
         <StatTile label={t("discovery.attention.types")} value={kinds.length} />
       </DashboardGrid>

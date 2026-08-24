@@ -689,18 +689,21 @@ export function Discovery() {
     );
   }
 
-  function replaceFinding(updated: DiscoveryFinding) {
+  async function replaceFinding(updated: DiscoveryFinding) {
     setFindings((current) => current.map((finding) => (finding.id === updated.id ? updated : finding)));
     // Claim/dismiss changes the cross-domain posture that Home, Risk, NHI, and
     // Ownership cache independently. Refresh them immediately so navigating
     // away cannot show the pre-triage count for another 30 seconds.
-    invalidateAppQueryKeys([
-      ["nhi-shadow-posture"],
-      ["nhi-inventory"],
-      ["risk"],
-      ["contextual-priorities"],
-      ["ownership-attribution"],
-    ]);
+    invalidateAppQueryKeys([["nhi-shadow-posture"], ["nhi-inventory"], ["risk"], ["contextual-priorities"], ["ownership-attribution"]]);
+    // This page owns its shadow-posture state outside React Query. Re-read the
+    // projection after triage so the open evidence panel cannot retain the old
+    // unmanaged count. If that read fails, remove the stale number instead of
+    // presenting it as current; the successful claim/dismiss remains intact.
+    try {
+      setShadowPosture(await api.nhiShadowPosture());
+    } catch {
+      setShadowPosture(null);
+    }
   }
 
   async function createSource(event: FormEvent<HTMLFormElement>) {
@@ -1893,7 +1896,7 @@ function FindingTable({
   facetOptions: { owners: string[]; teams: string[]; tags: string[] };
   onFilterChange: (key: keyof FindingFilters, value: string) => void;
   onFiltersRestore: (filters: FindingFilters) => void;
-  onFindingUpdated: (finding: DiscoveryFinding) => void;
+  onFindingUpdated: (finding: DiscoveryFinding) => Promise<void>;
   onNotice: (notice: Notice | null) => void;
 }) {
   const { t } = useTranslation();
@@ -1946,7 +1949,7 @@ function FindingTable({
         action === "claim"
           ? await api.claimDiscoveryFinding(selected.id, input)
           : await api.dismissDiscoveryFinding(selected.id, { reason: input.reason, owner: input.owner, team: input.team, tags: input.tags });
-      onFindingUpdated(updated);
+      await onFindingUpdated(updated);
       setSelectedID(updated.id);
       setAction(null);
       setReason("");
