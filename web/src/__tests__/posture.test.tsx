@@ -467,6 +467,39 @@ describe("posture collector disclosures", () => {
     expect(screen.queryByText("Dedicated CT dashboard coming soon")).not.toBeInTheDocument();
   });
 
+  it("renders a valid empty CT checkpoint list without crashing", async () => {
+    apiMock.ctMonitoring.mockResolvedValue({
+      capability: "F17",
+      watchlist_path: "/api/v1/discovery/ct-monitoring",
+      sources_path: "/api/v1/discovery/sources",
+      runs_path: "/api/v1/discovery/runs",
+      findings_path: "/api/v1/discovery/findings",
+      notification_destination: "notification.unexpected_issuance",
+      outbox_backed_alerts: true,
+      watched_domains: [],
+      logs: null,
+      source: null,
+      summary: {
+        source_count: 0,
+        watched_domain_count: 0,
+        log_count: 0,
+        finding_count: 0,
+        unexpected_issuance_count: 0,
+        open_finding_count: 0,
+        outbox_alert_channel_count: 0,
+      },
+      findings: [],
+    });
+
+    const user = userEvent.setup();
+    await renderPosture();
+    await user.click(screen.getByText("Certificate, AD CS, authority, and drift evidence", { exact: true }));
+
+    expect(screen.getByRole("heading", { name: "Certificate Transparency monitoring" })).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "CT log checkpoints" })).toBeInTheDocument();
+    expect(screen.getByLabelText("CT log URLs")).toHaveValue("");
+  });
+
   it("renders drift remediation workflow and records an operator decision", async () => {
     const user = userEvent.setup();
     await renderPosture();

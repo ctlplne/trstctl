@@ -359,7 +359,7 @@ export function Posture() {
                   <Metric label="Alert channels" value={String(ctMonitoring.summary.outbox_alert_channel_count)} />
                 </dl>
                 <PreviewTable title={translateNow("source.ct.log.checkpoints.4f19929a7b")} headers={["Log URL", "Next index"]}>
-                  {ctMonitoring.logs.map((log) => (
+                  {(ctMonitoring.logs ?? []).map((log) => (
                     <tr key={log.url} className="align-top">
                       <td className="font-mono text-xs">{log.url}</td>
                       <td>{log.next_index}</td>
