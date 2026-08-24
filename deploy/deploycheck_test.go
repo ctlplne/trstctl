@@ -521,6 +521,47 @@ func literalFlagTokens(tpl string) []string {
 // stays on the same line on purpose).
 var imageRefRe = regexp.MustCompile(`(?m)^[ \t]*image:[ \t]*["']?([^"'\s{}]+)`)
 
+// composeLocallyBuildsImage reports whether a concrete image is the output of a
+// build stanza on a service in the same Compose file. ELI5: `thing:local` is not
+// something Docker pulls; it is safe only when this exact file tells Docker how
+// to build that exact thing. Parsing per service prevents an unrelated build
+// stanza elsewhere in the file from laundering a phantom image reference.
+func composeLocallyBuildsImage(body []byte, image string) bool {
+	var compose struct {
+		Services map[string]struct {
+			Image string    `yaml:"image"`
+			Build yaml.Node `yaml:"build"`
+		} `yaml:"services"`
+	}
+	if err := yaml.Unmarshal(body, &compose); err != nil {
+		return false
+	}
+	for _, service := range compose.Services {
+		if service.Image == image && service.Build.Kind != 0 && service.Build.Tag != "!!null" {
+			return true
+		}
+	}
+	return false
+}
+
+func TestComposeLocallyBuildsImageBindsImageToItsOwnService(t *testing.T) {
+	fixture := []byte(`services:
+  built:
+    build:
+      context: .
+      dockerfile: Dockerfile.built
+    image: trstctl-built:local
+  phantom:
+    image: trstctl-phantom:local
+`)
+	if !composeLocallyBuildsImage(fixture, "trstctl-built:local") {
+		t.Fatal("exact image with its own build stanza was not recognized as locally built")
+	}
+	if composeLocallyBuildsImage(fixture, "trstctl-phantom:local") {
+		t.Fatal("unrelated service build stanza laundered an unbuilt local image")
+	}
+}
+
 func TestEveryDeployImageIsBuiltOrMarkedPlanned(t *testing.T) {
 	root := repoRoot(t)
 	deployDir := filepath.Join(root, "deploy")
@@ -578,9 +619,7 @@ func TestEveryDeployImageIsBuiltOrMarkedPlanned(t *testing.T) {
 				offenders = append(offenders, rel(deployDir, path)+": "+ref+" (unrecognized templated image)")
 				continue
 			}
-			if rel(deployDir, path) == "docker/docker-compose.yml" &&
-				strings.HasPrefix(ref, "trstctl-eval:") &&
-				strings.Contains(string(b), "dockerfile: deploy/docker/Dockerfile") {
+			if strings.HasSuffix(ref, ":local") && composeLocallyBuildsImage(b, ref) {
 				continue
 			}
 			// Concrete reference. Strip the tag/digest for the build check.

@@ -41,7 +41,7 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1325 annotated sites across 26 rules. Each row is
+1326 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -52,9 +52,9 @@ not this file.
 | `cmd/trstctl-agent/bootstrap_token_test.go:96` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `cmd/trstctl/main_test.go:371` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/demo/demo_test.go:78` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/deploycheck_test.go:1444` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/deploycheck_test.go:1446` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/deploycheck_test.go:1466` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/deploycheck_test.go:1483` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/deploycheck_test.go:1485` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/deploycheck_test.go:1505` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/docker/dist_test.go:346` | names are non-secret evaluation OIDC configuration keys (CWE-798) |
 | `deploy/helm/helm_test.go:164` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/helm/helm_test.go:600` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -589,7 +589,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `deploy/deploycheck_test.go:558` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `deploy/deploycheck_test.go:599` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `deploy/helm/airgap_bundle_test.go:163` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/ai_surface_placement_test.go:27` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/deferred_wipe_guard_test.go:45` | walking the repo's own tree (CWE-22) |
@@ -913,7 +913,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (360 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (361 sites)
 
 | Location | Reason |
 |---|---|
@@ -937,6 +937,7 @@ not this file.
 | `cmd/trstctl-license/aud56_test.go:35` | licensePath is created inside this test's TempDir (CWE-22). |
 | `cmd/trstctl/backup_cmd_test.go:46` | test reads its own fixture/tempdir path (CWE-22) |
 | `cmd/trstctl/backup_cmd_test.go:64` | test reads its own fixture/tempdir path (CWE-22) |
+| `cmd/trstctl/backup_cmd_test.go:86` | test reads a fixed repository artifact (CWE-22) |
 | `cmd/trstctl/ee_attach.go:503` | operator-supplied path to their own IdP's JWKS (CWE-22) |
 | `cmd/trstctl/ee_attach.go:531` | operator-pinned local IdP metadata, validated as configuration. |
 | `deploy/demo/aud66_test.go:105` | fixed repository test path (CWE-22) |
@@ -946,17 +947,17 @@ not this file.
 | `deploy/deploycheck_test.go:294` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/deploycheck_test.go:364` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/deploycheck_test.go:462` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/deploycheck_test.go:558` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `deploy/deploycheck_test.go:651` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/deploycheck_test.go:720` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/deploycheck_test.go:808` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/deploycheck_test.go:938` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/deploycheck_test.go:944` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/deploycheck_test.go:950` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/deploycheck_test.go:1013` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/deploycheck_test.go:1103` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/deploycheck_test.go:1286` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/deploycheck_test.go:1530` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/deploycheck_test.go:599` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `deploy/deploycheck_test.go:690` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/deploycheck_test.go:759` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/deploycheck_test.go:847` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/deploycheck_test.go:977` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/deploycheck_test.go:983` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/deploycheck_test.go:989` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/deploycheck_test.go:1052` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/deploycheck_test.go:1142` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/deploycheck_test.go:1325` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/deploycheck_test.go:1569` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/docker/dist_test.go:25` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/docker/dist_test.go:1067` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/docker/reproducible_test.go:35` | test reads its own fixture/tempdir path (CWE-22) |

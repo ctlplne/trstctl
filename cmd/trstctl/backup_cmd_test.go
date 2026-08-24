@@ -67,7 +67,9 @@ func TestRestoreRehearsalUsesFreshExternalDatastores(t *testing.T) {
 	}
 	body := string(raw)
 	for _, want := range []string{
-		`POSTGRES_IMAGE="postgres:16.15-alpine@sha256:`,
+		`POSTGRES_IMAGE="trstctl-postgres-hardened:local"`,
+		`docker build -f "$REPO_ROOT/deploy/docker/Dockerfile.postgres" -t "$POSTGRES_IMAGE" "$REPO_ROOT"`,
+		`--user postgres`,
 		`NATS_IMAGE="nats:2.10-alpine@sha256:`,
 		`"postgres": {"mode": "external", "dsn":`,
 		`"nats": {"mode": "external", "url":`,
@@ -79,6 +81,19 @@ func TestRestoreRehearsalUsesFreshExternalDatastores(t *testing.T) {
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("restore rehearsal no longer requires %q", want)
+		}
+	}
+	postgresDockerfile, err := os.ReadFile(filepath.Join("..", "..", "deploy", "docker", "Dockerfile.postgres")) // #nosec G304 -- test reads a fixed repository artifact (CWE-22)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`FROM postgres:16.15-alpine@sha256:`,
+		`RUN rm -f /usr/local/bin/gosu`,
+		`USER postgres`,
+	} {
+		if !strings.Contains(string(postgresDockerfile), want) {
+			t.Errorf("restore rehearsal hardened PostgreSQL build no longer requires %q", want)
 		}
 	}
 }
