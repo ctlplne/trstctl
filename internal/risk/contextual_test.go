@@ -197,12 +197,37 @@ func TestContextualScorersNormalizeNHIKindsAndMetadata(t *testing.T) {
 			"roles":           "workflow:write,deploy",
 		}),
 		DiscoveredAt: now.Add(-24 * time.Hour),
-	}, now)
+	}, now, false)
 	if finding.Kind != "oauth_app" || finding.Subject != "Payments OAuth grant" || finding.Score < 91 {
 		t.Fatalf("discovery finding risk did not normalize metadata/risk floor: %+v", finding)
 	}
 	if finding.Privilege != PrivilegeHigh || finding.Sensitivity != SensitivityHigh || !finding.OwnerActive {
 		t.Fatalf("discovery finding privilege/sensitivity/owner = %+v", finding)
+	}
+}
+
+func TestAssetOwnershipAssignmentOverridesStaleDiscoveryMetadata(t *testing.T) {
+	now := time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC)
+	g := graph.New()
+	finding := scoreDiscoveryFinding(g, store.DiscoveryFinding{
+		ID: "finding-1", Kind: "non_human_identity", Ref: "ci/buildkite/release-token", RiskScore: 60,
+		Metadata: mustJSON(t, map[string]any{ // #nosec G101 -- fabricated identifier, not credential material (CWE-798)
+			"credential_kind": "api_key",
+			"display_name":    "ci/buildkite/release-token",
+			"owner_status":    "missing",
+		}),
+		DiscoveredAt: now.Add(-90 * 24 * time.Hour),
+	}, now, true)
+
+	if !finding.OwnerActive || finding.Components.Owner != 0 {
+		t.Fatalf("asset assignment did not become the scoring authority: %+v", finding)
+	}
+	priority := contextualPriority(finding, graph.Impact{ByKind: map[graph.NodeKind][]graph.Node{}}, now)
+	if slices.Contains(priority.PriorityReasons, "orphaned_owner") {
+		t.Fatalf("current assignment retained stale orphan reason: %+v", priority)
+	}
+	if !priority.OwnerActive || strings.HasPrefix(priority.RecommendedAction, "Assign an owner") {
+		t.Fatalf("current assignment retained stale owner action: %+v", priority)
 	}
 }
 

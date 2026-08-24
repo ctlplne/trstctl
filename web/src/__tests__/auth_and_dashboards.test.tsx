@@ -29,6 +29,7 @@ const { apiMock } = vi.hoisted(() => ({
     transitionIdentity: vi.fn(),
     endpointVerifications: vi.fn(),
     codeSigningIdentities: vi.fn(),
+    ownershipAttribution: vi.fn(),
   },
 }));
 
@@ -182,6 +183,8 @@ describe("auth + dashboards", () => {
     });
     apiMock.codeSigningIdentities.mockReset();
     apiMock.codeSigningIdentities.mockResolvedValue({ items: [], total: 0, verified_count: 0, not_published_count: 0 });
+    apiMock.ownershipAttribution.mockReset();
+    apiMock.ownershipAttribution.mockResolvedValue({ generated_at: dayFromNow(0), coverage: [], summary: { total: 0, attributed: 0, orphaned: 0 }, items: [] });
     apiMock.connectorDeliveries.mockResolvedValue({ items: [] });
     apiMock.secretPage.mockResolvedValue({ items: [] });
     apiMock.incidentExecutions.mockResolvedValue({ items: [] });
@@ -539,6 +542,7 @@ describe("auth + dashboards", () => {
     // Secrets KPI comes from the served secret store, not a stub.
     const secrets = kpiTile(dash, /^Secrets$/);
     await waitFor(() => expect(within(secrets).getByText("2")).toBeInTheDocument());
+    expect(apiMock.secretPage).toHaveBeenCalledWith({ limit: 100 });
   });
 
   it("answers domain, consequence, automation, accountability, and next action in the Home worklist", async () => {
@@ -571,6 +575,25 @@ describe("auth + dashboards", () => {
         },
       ],
     });
+    apiMock.ownershipAttribution.mockResolvedValue({
+      generated_at: dayFromNow(0),
+      coverage: ["asset_override"],
+      summary: { total: 1, attributed: 1, orphaned: 0 },
+      items: [
+        {
+          id: "cert-payments",
+          tenant_id: "t1",
+          kind: "certificate",
+          source: "inventory",
+          display_name: "payments.example.test",
+          attribution_status: "attributed",
+          attribution_source: "asset_override",
+          attribution_evidence: ["assignment:owner-payments"],
+          created_at: dayFromNow(-30),
+          owner: { id: "owner-payments", tenant_id: "t1", kind: "team", name: "Payments team" },
+        },
+      ],
+    });
 
     renderAt("/");
     const dash = await screen.findByRole("region", { name: "Home" });
@@ -578,7 +601,8 @@ describe("auth + dashboards", () => {
     expect(within(queue).getByText("Certificate Lifecycle")).toBeInTheDocument();
     expect(within(queue).getByText("Machines may lose trust after this credential expires.")).toBeInTheDocument();
     expect(within(queue).getByText("Automation not proven on Home")).toBeInTheDocument();
-    expect(within(queue).getByText("No accountable owner")).toBeInTheDocument();
+    expect(within(queue).getByText("Owned by Payments team")).toBeInTheDocument();
+    expect(within(queue).queryByText("No accountable owner")).not.toBeInTheDocument();
     expect(within(queue).getByText("Assign the Payments team, verify the alert route, then renew.")).toBeInTheDocument();
 
     const health = within(dash).getByRole("list", { name: "Workspace health" });

@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { LoadingState } from "@/components/StatePrimitives";
 import { api, type ContextualRiskPriority } from "@/lib/api";
 import { useApiQuery } from "@/lib/query";
+import { effectiveOwnerForRisk, type EffectiveOwner } from "@/lib/effectiveOwnership";
 import { useTranslation } from "@/i18n/I18nProvider";
 
 function summaryCount(summary: Record<string, unknown> | undefined, key: string): number {
@@ -31,6 +32,19 @@ function riskDeadline(priority: ContextualRiskPriority, t: ReturnType<typeof use
   if (days < 0) return t("trustOperations.deadline.expired");
   if (days === 0) return t("trustOperations.deadline.today");
   return t(days === 1 ? "trustOperations.deadline.one" : "trustOperations.deadline.many", { count: String(days) });
+}
+
+function ownerLabel(owner: EffectiveOwner, t: ReturnType<typeof useTranslation>["t"]): string {
+  switch (owner.state) {
+    case "named":
+      return t("trustOperations.owner.named", { owner: owner.name });
+    case "present":
+      return t("trustOperations.owner.present");
+    case "missing":
+      return t("trustOperations.owner.missing");
+    case "unknown":
+      return t("trustOperations.owner.unknown");
+  }
 }
 
 /** TrustOperations is the calm cross-domain cockpit. It composes existing
@@ -141,7 +155,7 @@ export function TrustOperations() {
                       </div>
                       <div>
                         <dt className="sr-only">{t("trustOperations.ownerLabel")}</dt>
-                        <dd>{priority.owner_active ? t("trustOperations.owner.present") : t("trustOperations.owner.missing")}</dd>
+                        <dd>{ownerLabel(effectiveOwnerForRisk(priority, ownership.data, ownership.error !== null), t)}</dd>
                       </div>
                       <div className="sm:col-span-2 text-muted-foreground">
                         <dt className="sr-only">{t("trustOperations.nextActionLabel")}</dt>

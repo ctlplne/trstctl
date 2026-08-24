@@ -52,6 +52,14 @@ func ContextualPriorities(ctx context.Context, st *store.Store, tenantID string)
 		return nil, err
 	}
 	now := time.Now()
+	assignments, err := st.ListOwnershipAssignments(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	assignmentByInventoryID := make(map[string]store.OwnershipAssignment, len(assignments))
+	for _, assignment := range assignments {
+		assignmentByInventoryID[assignment.InventoryID] = assignment
+	}
 
 	var out []ContextualPriority
 	after := store.ZeroUUID
@@ -83,7 +91,7 @@ func ContextualPriorities(ctx context.Context, st *store.Store, tenantID string)
 	}
 	out = append(out, sshKeyPriorities...)
 
-	discoveryPriorities, err := contextualDiscoveryPriorities(ctx, st, tenantID, g, now)
+	discoveryPriorities, err := contextualDiscoveryPriorities(ctx, st, tenantID, g, now, assignmentByInventoryID)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +145,14 @@ func contextualSSHKeyPriorities(ctx context.Context, st *store.Store, tenantID s
 	}
 }
 
-func contextualDiscoveryPriorities(ctx context.Context, st *store.Store, tenantID string, g *graph.Graph, now time.Time) ([]ContextualPriority, error) {
+func contextualDiscoveryPriorities(
+	ctx context.Context,
+	st *store.Store,
+	tenantID string,
+	g *graph.Graph,
+	now time.Time,
+	assignmentByInventoryID map[string]store.OwnershipAssignment,
+) ([]ContextualPriority, error) {
 	var out []ContextualPriority
 	after := store.ZeroUUID
 	for {
@@ -146,7 +161,11 @@ func contextualDiscoveryPriorities(ctx context.Context, st *store.Store, tenantI
 			return nil, err
 		}
 		for _, finding := range page {
-			base := scoreDiscoveryFinding(g, finding, now)
+			assignment, assigned := assignmentByInventoryID["finding/"+finding.ID]
+			base := scoreDiscoveryFinding(g, finding, now, assigned)
+			if assigned {
+				base.EvidenceRefs = append(base.EvidenceRefs, "ownership.assignment:"+assignment.SourceEventID)
+			}
 			out = append(out, contextualPriority(base, g.BlastRadius(base.GraphNodeID), now))
 		}
 		if len(page) < pageSize {
@@ -238,14 +257,17 @@ func scoreSSHKey(g *graph.Graph, key store.SSHKey, now time.Time) CredentialRisk
 	}
 }
 
-func scoreDiscoveryFinding(g *graph.Graph, finding store.DiscoveryFinding, now time.Time) CredentialRisk {
+func scoreDiscoveryFinding(g *graph.Graph, finding store.DiscoveryFinding, now time.Time, assetOwnerAssigned bool) CredentialRisk {
 	meta := metadataMap(finding.Metadata)
 	nodeID := "disc:" + finding.ID
 	exposure := credentialExposure(g, nodeID)
 	kind := discoveryCredentialKind(finding.Kind, meta)
 	priv := inferNHIPrivilege(kind, meta, exposure)
 	sens := inferNHISensitivity(kind, meta)
-	ownerActive := metadataOwnerActive(meta)
+	// Asset-level assignment is the newest, most specific ownership decision.
+	// Discovery metadata is historical evidence and must not keep saying
+	// "orphaned" after an operator assigns this exact inventory row.
+	ownerActive := assetOwnerAssigned || metadataOwnerActive(meta)
 	notBefore := metadataTime(meta, "not_before", "issued_at", "created_at")
 	if notBefore.IsZero() {
 		notBefore = finding.DiscoveredAt

@@ -1,0 +1,1 @@
+import{rt as e}from"./index-CEE4kDed.js";function t(t,n,...r){let i=e[t];return typeof i==`function`?i(...r):Promise.resolve(n)}export{t};

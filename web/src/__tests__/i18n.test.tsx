@@ -1099,8 +1099,13 @@ describe("i18n boundary", () => {
       // action. The five-workspace strip labels missing reads unavailable.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
       // release.
-      "es-ES": "602d5c93589e21270e115c1557641aa32cd5e791c12c6eb19b016c25635209bc",
-      "de-DE": "9fb49ebd4e1c135e062eab1155518a56394c6968eee9f71b4642c39acbcd45cd",
+      // Live G7R1 truthfulness re-pin: Home and Trust Operations now name the
+      // current effective owner and say unavailable when ownership cannot be
+      // verified. These strings preserve the distinction between missing and
+      // unreadable evidence. Machine-authored es/de — FLAGGED FOR HUMAN
+      // TRANSLATION REVIEW before release.
+      "es-ES": "2c622253f598beb20e4b3334eee931ea9f05aca16ac6edcdad96ba86381d93d6",
+      "de-DE": "901abcfe1a637997d545423faa95a33ce6ca9699432c96edccb6bf2101840042",
     });
   });
 

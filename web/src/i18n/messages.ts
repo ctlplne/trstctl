@@ -914,6 +914,8 @@ export const messages = {
   },
   "dashboard.attention.ownerPresent": { defaultMessage: "Accountable owner recorded", description: "Home work-item owner present." },
   "dashboard.attention.ownerMissing": { defaultMessage: "No accountable owner", description: "Home work-item owner missing." },
+  "dashboard.attention.ownerNamed": { defaultMessage: "Owned by {owner}", description: "Home work-item current effective owner name." },
+  "dashboard.attention.ownerUnknown": { defaultMessage: "Ownership evidence unavailable", description: "Home work-item owner cannot be verified." },
   "dashboard.attention.nextActionReview": {
     defaultMessage: "Open the risk evidence before changing the credential.",
     description: "Home fallback safest next action.",
@@ -4409,6 +4411,14 @@ export const messages = {
   "trustOperations.owner.missing": {
     defaultMessage: "No accountable owner",
     description: "Trust Operations missing-owner state.",
+  },
+  "trustOperations.owner.named": {
+    defaultMessage: "Owned by {owner}",
+    description: "Trust Operations current effective owner name.",
+  },
+  "trustOperations.owner.unknown": {
+    defaultMessage: "Ownership evidence unavailable",
+    description: "Trust Operations owner cannot be verified.",
   },
   "trustOperations.remediate": {
     defaultMessage: "Review and remediate",

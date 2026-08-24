@@ -4,6 +4,7 @@ import { Activity, AlertTriangle, Boxes, Bot, FileSignature, KeyRound, Rocket, S
 import { api, type AuditEvent, type Certificate, type ContextualRiskPriority, type NHIInventory as NHIInventoryResponse, type RotationRun } from "@/lib/api";
 import { useAuth } from "@/auth/AuthProvider";
 import { useApiQuery } from "@/lib/query";
+import { effectiveOwnerForRisk, type EffectiveOwner } from "@/lib/effectiveOwnership";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Donut,
@@ -100,7 +101,7 @@ function dashboardRiskReason(priority: ContextualRiskPriority): string {
 function readSecretsCount(): Promise<number | null> {
   const client = api as typeof api & { secretPage?: (o?: { limit?: number }) => Promise<{ items?: unknown[] }> };
   if (!client.secretPage) return Promise.resolve(null);
-  return Promise.resolve(client.secretPage({ limit: 200 }))
+  return Promise.resolve(client.secretPage({ limit: 100 }))
     .then((r) => (r?.items ?? []).length)
     .catch(() => null);
 }
@@ -152,6 +153,19 @@ function dashboardConsequence(priority: Pick<ContextualRiskPriority, "priority_r
   if (reasons.includes("high_blast_radius") || reasons.includes("resource_blast_radius")) return translateNow("dashboard.attention.consequence.impact");
   if (reasons.includes("stale_rotation")) return translateNow("dashboard.attention.consequence.rotation");
   return translateNow("dashboard.attention.consequence.review");
+}
+
+function dashboardOwner(owner: EffectiveOwner): string {
+  switch (owner.state) {
+    case "named":
+      return translateNow("dashboard.attention.ownerNamed", { owner: owner.name });
+    case "present":
+      return translateNow("dashboard.attention.ownerPresent");
+    case "missing":
+      return translateNow("dashboard.attention.ownerMissing");
+    case "unknown":
+      return translateNow("dashboard.attention.ownerUnknown");
+  }
 }
 
 function dashboardDeadline(expiresAt?: string): string {
@@ -243,6 +257,7 @@ export function Dashboard() {
   const openIncidents = useApiQuery(["open-incidents"], readOpenIncidents, { live: { intervalMs: 30_000 } });
   const recentAudit = useApiQuery(["recent-audit"], readRecentAudit, { live: { intervalMs: 60_000 } });
   const codeSigningHealth = useApiQuery(["code-signing-health"], readCodeSigningHealth, { live: { intervalMs: 30_000 } });
+  const ownership = useApiQuery(["ownership-attribution"], api.ownershipAttribution, { live: { intervalMs: 60_000 } });
   const [dismissed, setDismissed] = useState(false);
 
   const riskRows = risk.data ?? [];
@@ -293,7 +308,7 @@ export function Dashboard() {
       consequence: dashboardConsequence(row),
       deadline: dashboardDeadline(row.expires_at),
       automation: t("dashboard.attention.automationUnknown"),
-      owner: row.owner_active ? t("dashboard.attention.ownerPresent") : t("dashboard.attention.ownerMissing"),
+      owner: dashboardOwner(effectiveOwnerForRisk(row, ownership.data, ownership.loading || ownership.error !== null)),
       nextAction: row.recommended_action || t("dashboard.attention.nextActionReview"),
       score: Math.round(row.contextual_score),
     }));
@@ -306,7 +321,7 @@ export function Dashboard() {
         consequence: t("dashboard.attention.consequence.review"),
         deadline: dashboardDeadline(r.expires_at),
         automation: t("dashboard.attention.automationUnknown"),
-        owner: r.owner_active ? t("dashboard.attention.ownerPresent") : t("dashboard.attention.ownerMissing"),
+        owner: dashboardOwner(effectiveOwnerForRisk(r, ownership.data, ownership.loading || ownership.error !== null)),
         nextAction: t("dashboard.attention.nextActionReview"),
         score: Math.round(r.score),
       }));

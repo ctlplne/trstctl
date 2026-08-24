@@ -106,7 +106,20 @@ describe("Trust Operations overview", () => {
       generated_at: "2026-08-24T12:00:00Z",
       coverage: [],
       summary: { total: 8, attributed: 6, orphaned: 2 },
-      items: [],
+      items: [
+        {
+          id: "cert-1",
+          tenant_id: "tenant-1",
+          kind: "certificate",
+          source: "inventory",
+          display_name: "payments.example.test",
+          attribution_status: "attributed",
+          attribution_source: "asset_override",
+          attribution_evidence: ["assignment:owner-payments"],
+          created_at: "2026-08-24T10:00:00Z",
+          owner: { id: "owner-payments", tenant_id: "tenant-1", kind: "team", name: "Payments team" },
+        },
+      ],
     });
     apiMock.bulkheadStats.mockResolvedValue({
       served: true,
@@ -164,7 +177,7 @@ describe("Trust Operations overview", () => {
     expect(within(attention).getByText("payments.example.test")).toBeInTheDocument();
     expect(within(attention).getByText("Certificate Lifecycle")).toBeInTheDocument();
     expect(within(attention).getByText(/expires in 1 day/i)).toBeInTheDocument();
-    expect(within(attention).getByText("No accountable owner")).toBeInTheDocument();
+    expect(within(attention).getByText("Owned by Payments team")).toBeInTheDocument();
     expect(within(attention).getByRole("link", { name: "Review and remediate" })).toHaveAttribute("href", "/risk?sort=score");
 
     const health = screen.getByRole("list", { name: "Trust Operations health" });
