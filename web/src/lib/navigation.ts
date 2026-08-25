@@ -741,8 +741,9 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     featureId: "F38",
     routes: ["/secrets/sharing"],
     component: "Secrets",
-    kind: "observe",
-    evidence: "ephemeral API-key issuance with reveal-once token handling",
+    kind: "operate",
+    evidence:
+      "scoped short-TTL API-key issuance, reveal-once handling, expiry evidence, and access-service availability independent of the optional native secret store",
   },
   {
     featureId: "F39",

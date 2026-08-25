@@ -411,6 +411,8 @@ const esESCatalog = {
   "secrets.grant.statusRevoked": "revocado",
   "secrets.grant.revoke": "Revocar",
   "secrets.grant.ledgerEmpty": "Aún no hay tokens concedidos.",
+  "secrets.ephemeral.independentFromStore":
+    "Las claves de API temporales usan el servicio de acceso, por lo que este flujo sigue disponible cuando el almacén de secretos nativo está deshabilitado. Aún requiere el permiso access:write.",
   "secrets.access.machineAdministration": "Administración del acceso de máquinas",
   "secrets.access.developerTools": "Herramientas para desarrolladores",
   "secrets.methods.heading": "Métodos de autenticación",

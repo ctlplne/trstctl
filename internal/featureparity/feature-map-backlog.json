@@ -9382,8 +9382,8 @@
             "priority": 75,
             "served_state": "served",
             "backend_status": "served-api-cli-leaseworker",
-            "current_frontend_mapping": "disclosure: Secrets at /secrets - ephemeral API-key issuance is served through POST /api/v1/ephemeral/api-keys and trstctl-cli ephemeral api-keys issue",
-            "target_gui_mapping": "Ephemeral API key UI for scoped, time-bound key requests, approvals, expiry, revocation, and copy-once presentation.",
+            "current_frontend_mapping": "operate: Secrets at /secrets/sharing issues scoped short-TTL API keys, returns the raw token once, clears it on dismissal, explains expiry, and remains available through the access service when the optional native secret store is disabled; the API token ledger at /secrets/access supports revocation while the lease worker automatically expires ephemeral keys.",
+            "target_gui_mapping": "Delivered: scoped, time-bound key issuance, reveal-once handling, expiry, access verification, token-ledger revocation, and an explicit native-secret-store independence state.",
             "acceptance_test": "UI ensures token value is visible once only, cannot be recovered, and is never stored in localStorage/sessionStorage.",
             "source_docs": [
                 "docs/features/secrets.md"
@@ -9399,7 +9399,7 @@
                 "web/src/pages/Secrets.tsx"
             ],
             "status": "closed",
-            "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+            "notes": "The earlier disclosure label was stale and hid a real coupling bug: the served console already issued reveal-once ephemeral keys, but its button was disabled by unrelated native-secret-store readiness. The operate mapping now covers the independent access-service workflow and is pinned by route-parity plus degraded-state browser tests.",
             "api_surface": [
                 "issueEphemeralAPIKey"
             ],
@@ -9428,8 +9428,8 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: disclosure: Secrets at /secrets - ephemeral API-key issuance is served through POST /api/v1/ephemeral/api-keys and trstctl-cli ephemeral api-keys issue",
-                        "target_gui_mapping: Ephemeral API key UI for scoped, time-bound key requests, approvals, expiry, revocation, and copy-once presentation."
+                        "current_frontend_mapping: operate: Secrets at /secrets/sharing issues scoped short-TTL API keys, returns the raw token once, clears it on dismissal, explains expiry, and remains available through the access service when the optional native secret store is disabled; the API token ledger at /secrets/access supports revocation while the lease worker automatically expires ephemeral keys.",
+                        "target_gui_mapping: Delivered: scoped, time-bound key issuance, reveal-once handling, expiry, access verification, token-ledger revocation, and an explicit native-secret-store independence state."
                     ],
                     "refs": [
                         "web/src/pages/Secrets.tsx",
@@ -9466,6 +9466,7 @@
                         "internal/featureparity/feature_facet_coverage_test.go",
                         "internal/server/ephemeral_served_test.go",
                         "web/src/__tests__/feature_coverage.test.tsx",
+                        "web/src/__tests__/secrets.test.tsx",
                         "web/src/__tests__/route_parity.test.ts"
                     ]
                 },

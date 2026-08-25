@@ -2575,6 +2575,11 @@ export function Secrets() {
                 </p>
                 {/* TRACE-005 source anchor: ephemeral API-key issuance is served; POST /api/v1/ephemeral/api-keys; trstctl-cli ephemeral api-keys issue; api_token.revoked */}
               </div>
+              {loadError ? (
+                <p role="note" className="rounded-control border border-brand-accent/25 bg-brand-accent/5 p-3 text-sm text-muted-foreground">
+                  {t("secrets.ephemeral.independentFromStore")}
+                </p>
+              ) : null}
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)]">
                 <form
                   aria-label={translateNow("source.issue.ephemeral.api.key.d864784cc7")}
@@ -2612,7 +2617,7 @@ export function Secrets() {
                       required
                     />
                   </label>
-                  <Button type="submit" disabled={ephemeralBusy || Boolean(loadError)}>
+                  <Button type="submit" disabled={ephemeralBusy || !canGrant}>
                     {ephemeralBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
                     {translateNow("source.issue.api.key.3cdf19cbb9")}
                   </Button>

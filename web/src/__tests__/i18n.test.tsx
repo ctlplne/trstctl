@@ -1123,8 +1123,13 @@ describe("i18n boundary", () => {
       // preflight, and source rows distinguish ready from blocked and explain
       // that saving does not queue an impossible scan. Machine-authored es/de
       // — FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "6be1d3d3c139ea5336864894bf3d6af08bb1289ffc170a024f2efee61e02b7e3",
-      "de-DE": "da192eeb38a7fa18e9d2ea90e95e601123d7e0b07030f26c65aee82bc84ce5e7",
+      // Product-overhaul access-service re-pin: the degraded Secrets state now
+      // explains that temporary API keys remain independently available and
+      // still require access:write. The permission token stays byte-identical.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
+      // release.
+      "es-ES": "943d0aaf29026dd033a35d8895a082312b3478e9941b1b5cbb272530c90ad2aa",
+      "de-DE": "b45e52f7dbc576ff29cb0b58cda4e4d0e71eebfe33d2d6de05e600e7e48e085c",
     });
   });
 

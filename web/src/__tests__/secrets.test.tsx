@@ -1495,6 +1495,32 @@ describe("secrets surface", () => {
     expect(screen.queryByRole("list", { name: "Secrets and access health" })).not.toBeInTheDocument();
   });
 
+  it("keeps independently served ephemeral API keys usable when the native secret store is unavailable", async () => {
+    const user = userEvent.setup();
+    apiMock.secretPage.mockRejectedValueOnce(new ApiError(503, JSON.stringify({ detail: "secrets.enable_api disabled or KEK missing" })));
+    renderSecrets("/secrets/sharing");
+
+    expect(await screen.findByText("Secrets API unavailable or disabled")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Open temporary access" }));
+    expect(await screen.findByText(/Temporary API keys use the access service/)).toBeInTheDocument();
+
+    const form = within(screen.getByRole("form", { name: "Issue ephemeral API key" }));
+    const submit = form.getByRole("button", { name: /issue api key/i });
+    expect(submit).toBeEnabled();
+    await user.type(form.getByLabelText("Subject"), "ci/deploy-preview");
+    await user.type(form.getByLabelText("Scopes"), "repo:payments:read");
+    await user.click(submit);
+
+    await waitFor(() =>
+      expect(apiMock.issueEphemeralAPIKey).toHaveBeenCalledWith({
+        subject: "ci/deploy-preview",
+        scopes: ["repo:payments:read"],
+        ttl_seconds: 900,
+      }),
+    );
+    expect(await screen.findByText("epk_live_reveal_once_123")).toBeInTheDocument();
+  });
+
   it("renders the shared grid empty state for an enabled store with no metadata", async () => {
     apiMock.secretPage.mockResolvedValueOnce({ items: [] });
     renderSecrets();

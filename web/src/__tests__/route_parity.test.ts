@@ -187,6 +187,23 @@ describe("route-level product surface parity", () => {
     expect(feature?.current_frontend_mapping).not.toMatch(/\b(?:none|basic|disclosure|observe only|partial)\b/i);
   });
 
+  it("keeps ephemeral API-key issuance attached to its independent operate workflow", () => {
+    const surface = realGuiSurfaces.find((candidate) => candidate.featureId === "F38");
+    const feature = servedFeatureMap().items.find((candidate) => candidate.feature_id === "F38");
+
+    expect(surface).toMatchObject({
+      routes: ["/secrets/sharing"],
+      component: "Secrets",
+      kind: "operate",
+    });
+    expect(surface?.evidence).toMatch(/scoped/i);
+    expect(surface?.evidence).toMatch(/reveal-once/i);
+    expect(surface?.evidence).toMatch(/native secret store/i);
+    expect(feature?.current_frontend_mapping).toMatch(/^operate:/);
+    expect(feature?.current_frontend_mapping).toMatch(/\/secrets\/sharing/);
+    expect(feature?.current_frontend_mapping).not.toMatch(/\b(?:none|basic|disclosure|observe only|partial)\b/i);
+  });
+
   it("keeps COVER-004 UI cells workflow-backed or explicitly non-UI", () => {
     const featureMap = new Map(servedFeatureMap().items.map((item) => [item.feature_id, item]));
     const surfaces = new Map(realGuiSurfaces.map((surface) => [surface.featureId, surface]));

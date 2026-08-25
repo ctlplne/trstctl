@@ -423,6 +423,8 @@ const deDECatalog = {
   "secrets.grant.statusRevoked": "widerrufen",
   "secrets.grant.revoke": "Widerrufen",
   "secrets.grant.ledgerEmpty": "Noch keine gewährten Token.",
+  "secrets.ephemeral.independentFromStore":
+    "Temporäre API-Schlüssel verwenden den Zugriffsdienst. Deshalb bleibt dieser Ablauf verfügbar, wenn der native Secret-Speicher deaktiviert ist. Er benötigt weiterhin die Berechtigung access:write.",
   "secrets.access.machineAdministration": "Maschinenanmeldung verwalten",
   "secrets.access.developerTools": "Entwicklerwerkzeuge",
   "secrets.methods.heading": "Auth-Methoden",

@@ -1118,6 +1118,11 @@ export const messages = {
     defaultMessage: "No granted tokens yet.",
     description: "Grant console ledger: empty state row.",
   },
+  "secrets.ephemeral.independentFromStore": {
+    defaultMessage:
+      "Temporary API keys use the access service, so this workflow remains available while native secret storage is disabled. It still requires access:write permission.",
+    description: "Ephemeral key workflow: explains why temporary API-key issuance remains usable when the optional native secret store is unavailable.",
+  },
   "secrets.access.machineAdministration": {
     defaultMessage: "Machine login administration",
     description: "Closed disclosure summary for advanced machine-login methods and issued sessions.",
