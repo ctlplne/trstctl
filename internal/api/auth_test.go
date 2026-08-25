@@ -53,6 +53,10 @@ func authConfig() (api.AuthConfig, *auth.SessionIssuer) {
 			AllowDefault:  true,
 		}.ResolveTenant,
 		Sessions: sessions,
+		// Production and the evaluation stack serve browser auth over TLS. Keep the
+		// shared fixture on that path so existing tests continue to assert the
+		// browser-enforced __Host- cookie contract.
+		Secure: true,
 	}
 	return cfg, sessions
 }
@@ -224,6 +228,40 @@ func TestAuthCallbackEstablishesSession(t *testing.T) {
 	}
 	if exchangedVerifier != verifier {
 		t.Fatalf("token exchange verifier = %q, want %q", exchangedVerifier, verifier)
+	}
+}
+
+func TestAuthCallbackUsesPlainSessionCookieOnlyInExplicitPlaintextDevMode(t *testing.T) {
+	cfg, sessions := authConfig()
+	cfg.Secure = false
+	h := api.New(nil, nil, nil, api.WithAuth(cfg))
+
+	login := httptest.NewRecorder()
+	h.ServeHTTP(login, httptest.NewRequest(http.MethodGet, "/auth/login", nil))
+	callback := callbackFromLogin(t, login.Result().Cookies(), "good-code")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, callback)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("plaintext callback = %d, want 302: %s", rec.Code, rec.Body.String())
+	}
+	if got := cookieValue(rec.Result().Cookies(), "__Host-trstctl_session"); got != "" {
+		t.Fatal("plaintext callback emitted a browser-invalid __Host- session cookie")
+	}
+	plainSession := cookieValue(rec.Result().Cookies(), "trstctl_session")
+	if plainSession == "" {
+		t.Fatal("plaintext callback did not emit the development session cookie")
+	}
+	if _, err := sessions.Verify(plainSession); err != nil {
+		t.Fatalf("plaintext development session cookie does not verify: %v", err)
+	}
+
+	me := httptest.NewRequest(http.MethodGet, "/auth/me", nil)
+	me.AddCookie(&http.Cookie{Name: "trstctl_session", Value: plainSession}) // #nosec G124 -- explicit loopback-only plaintext development test (CWE-1004)
+	meRec := httptest.NewRecorder()
+	h.ServeHTTP(meRec, me)
+	if meRec.Code != http.StatusOK {
+		t.Fatalf("plaintext session /auth/me = %d, want 200: %s", meRec.Code, meRec.Body.String())
 	}
 }
 

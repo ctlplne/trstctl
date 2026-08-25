@@ -34,7 +34,14 @@ func TestBreakglassAdminLoginIssuesAdminSession(t *testing.T) {
 	if err := svc.SetPassword("admin-1", []byte("correct horse battery staple")); err != nil {
 		t.Fatalf("SetPassword: %v", err)
 	}
-	h := api.New(nil, nil, nil, api.WithBreakglassAdmin(svc))
+	// The shipped recovery login runs on the same TLS listener as browser SSO.
+	// Declare that transport here so this test keeps asserting the hardened
+	// __Host- cookie while the separate plaintext-development regression proves
+	// its deliberately non-prefixed fallback.
+	h := api.New(nil, nil, nil,
+		api.WithAuth(api.AuthConfig{Sessions: sessions, Secure: true}),
+		api.WithBreakglassAdmin(svc),
+	)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/auth/breakglass/login",
 		bytes.NewReader([]byte(`{"actor_id":"admin-1","password":"correct horse battery staple"}`)))

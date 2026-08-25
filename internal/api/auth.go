@@ -24,6 +24,7 @@ import (
 // Cookie names for the browser SSO login + session flow.
 const (
 	sessionCookieName       = "__Host-trstctl_session"
+	devSessionCookieName    = "trstctl_session"
 	preLoginCookieName      = "trstctl_oidc_prelogin"
 	stateCookieName         = "trstctl_oidc_state"
 	nonceCookieName         = "trstctl_oidc_nonce"
@@ -596,13 +597,13 @@ func (a *API) sessionRoleSummary(ctx context.Context, sess auth.Session) ([]stri
 // authLogout clears the session and CSRF cookies.
 func (a *API) authLogout(w http.ResponseWriter, r *http.Request) {
 	if a.auth != nil && a.auth.Sessions != nil {
-		if cookie, err := r.Cookie(sessionCookieName); err == nil {
+		if cookie, err := r.Cookie(a.browserSessionCookieName()); err == nil {
 			if session, err := a.auth.Sessions.VerifyForLogoutContext(r.Context(), cookie.Value); err == nil {
 				_ = a.auth.Sessions.RevokeContext(r.Context(), session.TenantID, session.ID)
 			}
 		}
 	}
-	a.clearCookie(w, sessionCookieName)
+	a.clearCookie(w, a.browserSessionCookieName())
 	a.clearCookie(w, csrfCookieName)
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -724,7 +725,7 @@ func (a *API) enforceCSRF(w http.ResponseWriter, r *http.Request) bool {
 	}
 	// Only the cookie-session path needs the check; if there is no session cookie the
 	// request is not session-authenticated and other auth (or rejection) applies.
-	if _, err := r.Cookie(sessionCookieName); err != nil {
+	if _, err := r.Cookie(a.browserSessionCookieName()); err != nil {
 		return true
 	}
 	cookie, err := r.Cookie(csrfCookieName)
@@ -738,7 +739,7 @@ func (a *API) enforceCSRF(w http.ResponseWriter, r *http.Request) bool {
 }
 
 func (a *API) sessionFrom(r *http.Request) (auth.Session, bool) {
-	c, err := r.Cookie(sessionCookieName)
+	c, err := r.Cookie(a.browserSessionCookieName())
 	if err != nil {
 		return auth.Session{}, false
 	}
@@ -783,9 +784,21 @@ func (a *API) setSessionCookie(w http.ResponseWriter, value string) {
 	// hardening. The post-login redirect is same-site (this server's /), so Strict
 	// does not break the flow.
 	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004)
-		Name: sessionCookieName, Value: value, Path: "/", HttpOnly: true,
+		Name: a.browserSessionCookieName(), Value: value, Path: "/", HttpOnly: true,
 		Secure: a.auth.Secure, SameSite: http.SameSiteStrictMode, Expires: time.Now().Add(12 * time.Hour),
 	})
+}
+
+// browserSessionCookieName preserves the browser-enforced __Host- prefix whenever
+// TLS is active. The explicitly guarded plaintext development mode cannot use that
+// prefix: browsers reject __Host- cookies unless Secure is present. Use a distinct
+// non-prefixed name there so local OIDC remains testable without weakening the TLS
+// cookie contract or accepting both cookie names in one deployment mode.
+func (a *API) browserSessionCookieName() string {
+	if a.auth != nil && a.auth.Secure {
+		return sessionCookieName
+	}
+	return devSessionCookieName
 }
 
 // setCSRFCookie sets the double-submit CSRF token cookie. It is intentionally NOT
