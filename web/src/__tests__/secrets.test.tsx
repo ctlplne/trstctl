@@ -3,6 +3,8 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { ApiError } from "@/lib/api";
+import type { CapabilityView, CapabilityViewItem } from "@/lib/api-types.gen";
+import { CapabilityFixtureProvider } from "@/lib/capabilities";
 import { AppQueryProvider } from "@/lib/query";
 import { Secrets } from "@/pages/Secrets";
 
@@ -76,6 +78,69 @@ function renderSecrets(path = "/secrets") {
         </Routes>
       </AppQueryProvider>
     </MemoryRouter>,
+  );
+}
+
+const nativeStoreUnavailableDetail =
+  "The native secret store is turned off in this deployment. Enable it before storing, revealing, rotating, sharing, or leasing application secrets.";
+
+function secretsCapabilityItem(
+  capabilityId: "F37" | "F58" | "F63",
+  operations: string[],
+  available: boolean,
+): CapabilityViewItem {
+  return {
+    capability_id: capabilityId,
+    name: `Fixture ${capabilityId}`,
+    purpose: "Prove that the page obeys exact runtime readiness before making an optional request.",
+    tool: "secrets",
+    classification: "primary",
+    console_route: "/secrets",
+    maturity: "partial_workflow",
+    release_blocking: true,
+    edition: "core",
+    runtime_state: available ? "available" : "unavailable",
+    authorization_state: available ? "full" : "none",
+    dependency_state: "none",
+    dependencies: [],
+    stages: [{ name: "observe", completion: available ? "complete" : "blocked", ...(available ? {} : { reason: nativeStoreUnavailableDetail }) }],
+    actions: {
+      allowed: available ? operations : [],
+      scoped: [],
+      denied: [],
+      unavailable: available
+        ? []
+        : operations.map((operation_id) => ({ operation_id, code: "dependency_not_configured" as const, detail: nativeStoreUnavailableDetail })),
+    },
+  };
+}
+
+function secretsRuntime(available: boolean): CapabilityView {
+  return {
+    schema_version: 1,
+    contract_schema_version: 3,
+    enforcement_note: "The server checks every operation again when it executes.",
+    license: { tier: "community", state: "community" },
+    items: [
+      secretsCapabilityItem("F63", ["listSecrets"], available),
+      secretsCapabilityItem("F37", ["listSecretRotationSchedules"], available),
+      secretsCapabilityItem("F58", ["listMachineAuthMethods", "listMachineSessions"], available),
+    ],
+  };
+}
+
+function renderSecretsWithRuntime(view: CapabilityView, path = "/secrets") {
+  return render(
+    <CapabilityFixtureProvider view={view}>
+      <MemoryRouter initialEntries={[path]}>
+        <AppQueryProvider>
+          <Routes>
+            <Route path="/secrets" element={<Secrets />} />
+            <Route path="/secrets/:workspace" element={<Secrets />} />
+          </Routes>
+        </AppQueryProvider>
+      </MemoryRouter>
+    </CapabilityFixtureProvider>,
   );
 }
 
@@ -1541,6 +1606,39 @@ describe("secrets surface", () => {
     expect(screen.getByRole("heading", { name: "Secret urgency is not fully known" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "No urgent secrets work" })).not.toBeInTheDocument();
     expect(screen.queryByRole("list", { name: "Secrets and access health" })).not.toBeInTheDocument();
+  });
+
+  it("preflights unavailable optional Secrets APIs while preserving independent posture reads", async () => {
+    renderSecretsWithRuntime(secretsRuntime(false));
+
+    expect((await screen.findAllByText(/native secret store is turned off/i)).length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(apiMock.secretRepositoryScanning).toHaveBeenCalledTimes(1);
+      expect(apiMock.thirdPartySecretScanning).toHaveBeenCalledTimes(1);
+      expect(apiMock.secretSyncTargets).toHaveBeenCalledTimes(1);
+      expect(apiMock.cloudSecretManagers).toHaveBeenCalledTimes(1);
+      expect(apiMock.kubernetesSecretOperator).toHaveBeenCalledTimes(1);
+      expect(apiMock.secretWorkloadInjection).toHaveBeenCalledTimes(1);
+      expect(apiMock.unvaultedSecrets).toHaveBeenCalledTimes(1);
+    });
+    expect(apiMock.secretPage).not.toHaveBeenCalled();
+    expect(apiMock.secretRotationSchedules).not.toHaveBeenCalled();
+    expect(apiMock.machineAuthMethods).not.toHaveBeenCalled();
+    expect(apiMock.machineSessions).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /add secret/i })).toBeDisabled();
+  });
+
+  it("restores each optional Secrets read when the runtime capability view allows it", async () => {
+    renderSecretsWithRuntime(secretsRuntime(true));
+
+    await waitFor(() => {
+      expect(apiMock.secretPage).toHaveBeenCalledTimes(1);
+      expect(apiMock.secretRotationSchedules).toHaveBeenCalledTimes(1);
+      expect(apiMock.machineAuthMethods).toHaveBeenCalledTimes(1);
+      expect(apiMock.machineSessions).toHaveBeenCalledTimes(1);
+    });
+    expect(await screen.findByText("app/db/password")).toBeInTheDocument();
+    expect(screen.queryByText(nativeStoreUnavailableDetail)).not.toBeInTheDocument();
   });
 
   it("keeps independently served ephemeral API keys usable when the native secret store is unavailable", async () => {

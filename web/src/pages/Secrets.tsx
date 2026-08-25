@@ -89,6 +89,7 @@ import {
   type SecretRotationDueEvidence,
 } from "./secrets/SecretsPageParts";
 import { apiProblemMessage } from "@/lib/apiProblem";
+import { useCapabilityExecution } from "@/lib/capabilities";
 import { SecretSyncWorkloadIdentityPanel } from "./secrets/SecretSyncWorkloadIdentityPanel";
 import { TransitOperations } from "./secrets/TransitOperations";
 
@@ -177,6 +178,10 @@ function SecretsHealthLink({ to, label, urgent, icon }: { to: string; label: str
 
 export function Secrets() {
   const { t } = useTranslation();
+  const nativeStoreList = useCapabilityExecution("F63", "listSecrets");
+  const rotationScheduleList = useCapabilityExecution("F37", "listSecretRotationSchedules");
+  const machineAuthMethodList = useCapabilityExecution("F58", "listMachineAuthMethods");
+  const machineSessionList = useCapabilityExecution("F58", "listMachineSessions");
   const [overviewNow] = useState(() => Date.now());
   const location = useLocation();
   const navigate = useNavigate();
@@ -362,6 +367,7 @@ export function Secrets() {
   const [credentialCopied, setCredentialCopied] = useState<"request_id" | "certificate" | null>(null);
 
   async function load(cursor?: string) {
+    if (nativeStoreList.checking) return;
     setLoadError(null);
     setLoading(true);
     try {
@@ -390,8 +396,9 @@ export function Secrets() {
       const unvaultedPosturePromise =
         typeof api.unvaultedSecrets === "function" ? api.unvaultedSecrets().catch(() => null) : Promise.resolve<UnvaultedSecretPosture | null>(null);
       const ownersPromise = typeof api.owners === "function" ? api.owners().catch(() => null) : Promise.resolve<Owner[] | null>(null);
+      const pagePromise = nativeStoreList.runnable ? api.secretPage({ limit: 20, cursor }) : Promise.resolve(null);
       const [page, posture, thirdParty, catalog, cloudManagerPosture, operator, injection, unvaulted, ownerRows] = await Promise.all([
-        api.secretPage({ limit: 20, cursor }),
+        pagePromise,
         posturePromise,
         thirdPartyPosturePromise,
         syncCatalogPromise,
@@ -401,10 +408,19 @@ export function Secrets() {
         unvaultedPosturePromise,
         ownersPromise,
       ]);
-      setItems((current) => (cursor ? mergeMeta(current, page.items) : page.items));
-      setNextCursor(page.next_cursor);
-      setAccessName((current) => current || page.items[0]?.name || "");
-      setSyncName((current) => current || page.items[0]?.name || "");
+      if (page) {
+        setItems((current) => (cursor ? mergeMeta(current, page.items) : page.items));
+        setNextCursor(page.next_cursor);
+        setAccessName((current) => current || page.items[0]?.name || "");
+        setSyncName((current) => current || page.items[0]?.name || "");
+      } else {
+        setItems([]);
+        setNextCursor(undefined);
+        setLoadError(
+          nativeStoreList.unavailable?.detail ??
+            "The runtime capability check could not confirm that the native secret store is available. No secret operation was attempted.",
+        );
+      }
       if (posture) setRepoScanPosture(posture);
       if (thirdParty) setThirdPartyPosture(thirdParty);
       if (catalog) {
@@ -436,18 +452,28 @@ export function Secrets() {
   }
 
   useEffect(() => {
-    void load();
-  }, []);
+    if (!nativeStoreList.checking) void load();
+    // The primitive posture fields intentionally retrigger the first read when
+    // the live capability projection finishes loading or changes at runtime.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nativeStoreList.checking, nativeStoreList.runnable, nativeStoreList.unavailable?.detail]);
 
-  const refreshRotationSchedules = () =>
-    Promise.resolve()
+  const refreshRotationSchedules = () => {
+    if (rotationScheduleList.checking) return Promise.resolve();
+    if (!rotationScheduleList.runnable) {
+      setRotationSchedules(null);
+      return Promise.resolve();
+    }
+    return Promise.resolve()
       .then(() => api.secretRotationSchedules({ limit: 20 }))
       .then((page) => setRotationSchedules(page.items ?? []))
       .catch(() => undefined);
+  };
 
   useEffect(() => {
-    void refreshRotationSchedules();
-  }, []);
+    if (!rotationScheduleList.checking) void refreshRotationSchedules();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rotationScheduleList.checking, rotationScheduleList.runnable]);
 
   const selectedMeta = useMemo(() => items.find((item) => item.name === accessName) ?? items[0] ?? null, [items, accessName]);
   const ownerByID = useMemo(() => new Map(owners.map((owner) => [owner.id, owner])), [owners]);
@@ -919,11 +945,19 @@ export function Secrets() {
   }
 
   async function refreshAuthMethods() {
+    if (!machineAuthMethodList.runnable) {
+      setAuthMethods(null);
+      return;
+    }
     const page = await readGrantRoster(() => api.machineAuthMethods());
     setAuthMethods(page?.items ?? null);
   }
 
   async function refreshMachineSessions() {
+    if (!machineSessionList.runnable) {
+      setMachineSessions(null);
+      return;
+    }
     const page = await readGrantRoster(() => api.machineSessions({ limit: 50 }));
     setMachineSessions(page?.items ?? null);
   }
@@ -968,17 +1002,36 @@ export function Secrets() {
         if (active) setTokenRows(page?.items ?? null);
       });
     }
-    void readGrantRoster(() => api.machineAuthMethods()).then((page) => {
-      if (active) setAuthMethods(page?.items ?? null);
-    });
-    void readGrantRoster(() => api.machineSessions({ limit: 50 })).then((page) => {
-      if (active) setMachineSessions(page?.items ?? null);
-    });
     return () => {
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    if (!machineAuthMethodList.checking) {
+      if (machineAuthMethodList.runnable) {
+        void readGrantRoster(() => api.machineAuthMethods()).then((page) => {
+          if (active) setAuthMethods(page?.items ?? null);
+        });
+      } else {
+        setAuthMethods(null);
+      }
+    }
+    if (!machineSessionList.checking) {
+      if (machineSessionList.runnable) {
+        void readGrantRoster(() => api.machineSessions({ limit: 50 })).then((page) => {
+          if (active) setMachineSessions(page?.items ?? null);
+        });
+      } else {
+        setMachineSessions(null);
+      }
+    }
+    return () => {
+      active = false;
+    };
+  }, [machineAuthMethodList.checking, machineAuthMethodList.runnable, machineSessionList.checking, machineSessionList.runnable]);
 
   async function submitGrant(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -2180,7 +2233,7 @@ export function Secrets() {
                 </div>
                 {methodError && <ErrorState title={t("secrets.methods.failedTitle")}>{methodError}</ErrorState>}
                 {authMethods === null ? (
-                  <p className="text-sm text-muted-foreground">{t("secrets.methods.unavailable")}</p>
+                  <p className="text-sm text-muted-foreground">{machineAuthMethodList.unavailable?.detail ?? t("secrets.methods.unavailable")}</p>
                 ) : (
                   <ScrollableTableRegion className="rounded-panel" label={t("secrets.methods.heading")}>
                     <table className="ui-table min-w-[52rem]">
@@ -2250,7 +2303,7 @@ export function Secrets() {
                 </div>
                 {sessionError && <ErrorState title={t("secrets.sessions.failedTitle")}>{sessionError}</ErrorState>}
                 {machineSessions === null ? (
-                  <p className="text-sm text-muted-foreground">{t("secrets.sessions.unavailable")}</p>
+                  <p className="text-sm text-muted-foreground">{machineSessionList.unavailable?.detail ?? t("secrets.sessions.unavailable")}</p>
                 ) : (
                   <ScrollableTableRegion className="rounded-panel" label={t("secrets.sessions.heading")}>
                     <table className="ui-table min-w-[52rem]">
