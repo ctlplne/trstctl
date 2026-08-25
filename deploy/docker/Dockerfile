@@ -45,6 +45,7 @@ RUN npm --prefix web ci
 
 COPY web/ ./web/
 COPY internal/api/testdata/openapi.golden.json ./internal/api/testdata/openapi.golden.json
+COPY internal/featureparity/feature-map-backlog.json ./internal/featureparity/feature-map-backlog.json
 RUN npm --prefix web run build
 
 # ---- build stage ----------------------------------------------------------

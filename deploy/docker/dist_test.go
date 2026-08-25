@@ -145,6 +145,28 @@ func TestDockerfileIsMinimalAndReproducible(t *testing.T) {
 	})
 }
 
+// TestDockerWebBuildStagesGeneratedContractInputs keeps exact image builds on
+// the same fail-closed frontend contract as local and CI builds. The web build
+// must see both server-owned generators' inputs before npm runs; copying only
+// the web directory makes a host build green while Docker fails with ENOENT.
+func TestDockerWebBuildStagesGeneratedContractInputs(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		path string
+	}{
+		{name: "release", path: "Dockerfile"},
+		{name: "seeded_demo", path: filepath.Join("..", "demo", "Dockerfile.seed")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dockerfile := readArtifact(t, tc.path)
+			mustContainAll(t, tc.name+" web-build contract inputs", dockerfile,
+				"COPY internal/api/testdata/openapi.golden.json ./internal/api/testdata/openapi.golden.json",
+				"COPY internal/featureparity/feature-map-backlog.json ./internal/featureparity/feature-map-backlog.json",
+				"RUN npm --prefix web run build")
+		})
+	}
+}
+
 // TestDockerfileStagesLocalModuleReplacementsBeforeDownload closes the gap
 // between a host build and the release image. A local `replace` in go.mod is a
 // second little module tree; Docker must copy its go.mod before `go mod download`
