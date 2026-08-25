@@ -159,10 +159,20 @@ func TestDockerWebBuildStagesGeneratedContractInputs(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dockerfile := readArtifact(t, tc.path)
-			mustContainAll(t, tc.name+" web-build contract inputs", dockerfile,
-				"COPY internal/api/testdata/openapi.golden.json ./internal/api/testdata/openapi.golden.json",
-				"COPY internal/featureparity/feature-map-backlog.json ./internal/featureparity/feature-map-backlog.json",
-				"RUN npm --prefix web run build")
+			stageStart := strings.Index(dockerfile, " AS web-build")
+			if stageStart < 0 {
+				t.Fatal("web-build stage is missing")
+			}
+			stage := dockerfile[stageStart:]
+			if next := strings.Index(stage[1:], "\nFROM "); next >= 0 {
+				stage = stage[:next+1]
+			}
+			installAt := strings.Index(stage, "RUN npm --prefix web ci")
+			contextAt := strings.Index(stage, "COPY . .")
+			buildAt := strings.Index(stage, "RUN npm --prefix web run build")
+			if installAt < 0 || contextAt < 0 || buildAt < 0 || installAt >= contextAt || contextAt >= buildAt {
+				t.Fatalf("%s web-build must install locked dependencies, copy the Docker-filtered repository evidence context, then run the fail-closed frontend build", tc.name)
+			}
 		})
 	}
 }

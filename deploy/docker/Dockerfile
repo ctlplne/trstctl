@@ -43,9 +43,10 @@ WORKDIR /src
 COPY web/package.json web/package-lock.json ./web/
 RUN npm --prefix web ci
 
-COPY web/ ./web/
-COPY internal/api/testdata/openapi.golden.json ./internal/api/testdata/openapi.golden.json
-COPY internal/featureparity/feature-map-backlog.json ./internal/featureparity/feature-map-backlog.json
+# The feature-contract generator validates every referenced evidence path, so
+# this stage needs the complete Docker-filtered repository context. The final
+# image still receives only the built dist directory from this stage.
+COPY . .
 RUN npm --prefix web run build
 
 # ---- build stage ----------------------------------------------------------

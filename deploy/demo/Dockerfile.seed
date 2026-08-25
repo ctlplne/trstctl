@@ -8,9 +8,7 @@ FROM ${WEB_BUILD_IMAGE} AS web-build
 WORKDIR /src
 COPY web/package.json web/package-lock.json ./web/
 RUN npm --prefix web ci
-COPY web/ ./web/
-COPY internal/api/testdata/openapi.golden.json ./internal/api/testdata/openapi.golden.json
-COPY internal/featureparity/feature-map-backlog.json ./internal/featureparity/feature-map-backlog.json
+COPY . .
 RUN npm --prefix web run build
 
 FROM ${BUILD_IMAGE} AS build
