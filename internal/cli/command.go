@@ -78,6 +78,7 @@ func buildCommandTable() []Command {
 }
 
 var coreCommandTable = []Command{
+	{Name: []string{"capabilities", "list"}, Method: "GET", Path: "/api/v1/capabilities", Summary: "List this caller's product capability, runtime, and RBAC posture without QA internals"},
 	{Name: []string{"owners", "create"}, Method: "POST", Path: "/api/v1/owners", Body: bodyFile, Summary: "Create an owner"},
 	{Name: []string{"owners", "list"}, Method: "GET", Path: "/api/v1/owners", Query: []string{"limit", "cursor"}, Summary: "List owners"},
 	{Name: []string{"owners", "get"}, Method: "GET", Path: "/api/v1/owners/{id}", Summary: "Get an owner"},

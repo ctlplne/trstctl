@@ -324,7 +324,7 @@ func Validate(catalog Catalog) error {
 			return fmt.Errorf("source catalog kind %q is duplicated", item.Kind)
 		}
 		seen[item.Kind] = struct{}{}
-		if item.Permission == "" || item.Edition == "" || item.Route == "" || item.DocumentationRef == "" {
+		if strings.TrimSpace(item.Permission) == "" || strings.TrimSpace(item.Edition) == "" || strings.TrimSpace(item.Route) == "" || strings.TrimSpace(item.DocumentationRef) == "" {
 			return fmt.Errorf("source catalog kind %q has an incomplete permission/edition/route/docs disposition", item.Kind)
 		}
 		if len(item.Configuration) == 0 {

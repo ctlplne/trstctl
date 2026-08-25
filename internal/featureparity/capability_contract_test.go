@@ -3,6 +3,7 @@
 package featureparity
 
 import (
+	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -35,6 +36,29 @@ func TestCanonicalCapabilityContractsCoverEveryFeature(t *testing.T) {
 	}
 	if len(seen) != 79 {
 		t.Fatalf("canonical contract rows = %d, want 79", len(seen))
+	}
+}
+
+func TestEmbeddedCapabilityCatalogLoadsOutsideRepository(t *testing.T) {
+	original, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get working directory: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(original); err != nil {
+			t.Errorf("restore working directory: %v", err)
+		}
+	})
+	if err := os.Chdir(t.TempDir()); err != nil {
+		t.Fatalf("change to isolated working directory: %v", err)
+	}
+
+	catalog, err := LoadEmbedded()
+	if err != nil {
+		t.Fatalf("load embedded capability catalog: %v", err)
+	}
+	if catalog.SchemaVersion != 3 || len(catalog.Items) != 79 {
+		t.Fatalf("embedded catalog schema/items = %d/%d, want 3/79", catalog.SchemaVersion, len(catalog.Items))
 	}
 }
 

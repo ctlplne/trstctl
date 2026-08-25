@@ -1253,6 +1253,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the current caller's sanitized product capability, runtime, and RBAC posture */
+        get: operations["listCapabilities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cbom/assets": {
         parameters: {
             query?: never;
@@ -7037,6 +7054,62 @@ export interface components {
             source_count: number;
             unexpected_issuance_count: number;
             watched_domain_count: number;
+        };
+        CapabilityLicensePosture: {
+            /** @enum {string} */
+            state: "community" | "active" | "grace" | "read_only";
+            /** @enum {string} */
+            tier: "community" | "enterprise" | "provider";
+        };
+        CapabilityUnavailableAction: {
+            /** @enum {string} */
+            code: "not_attached" | "not_implemented" | "dependency_not_configured";
+            detail: string;
+            operation_id: string;
+        };
+        CapabilityView: {
+            contract_schema_version: number;
+            enforcement_note: string;
+            items: components["schemas"]["CapabilityViewItem"][];
+            license: components["schemas"]["CapabilityLicensePosture"];
+            schema_version: number;
+        };
+        CapabilityViewActions: {
+            allowed: string[];
+            denied: string[];
+            scoped: string[];
+            unavailable: components["schemas"]["CapabilityUnavailableAction"][];
+        };
+        CapabilityViewItem: {
+            actions: components["schemas"]["CapabilityViewActions"];
+            /** @enum {string} */
+            authorization_state: "catalog_only" | "none" | "scoped" | "partial" | "full";
+            capability_id: string;
+            /** @enum {string} */
+            classification: "primary" | "supporting";
+            console_route: string;
+            dependencies: string[];
+            /** @enum {string} */
+            dependency_state: "none" | "documented_not_runtime_verified";
+            /** @enum {string} */
+            edition: "core" | "core_with_licensed_extensions";
+            /** @enum {string} */
+            maturity: "absent" | "api_cli_only" | "observe_only" | "partial_workflow" | "complete_vertical_slice";
+            name: string;
+            purpose: string;
+            release_blocking: boolean;
+            /** @enum {string} */
+            runtime_state: "catalog_only" | "unavailable" | "partially_available" | "available";
+            stages: components["schemas"]["CapabilityViewStage"][];
+            /** @enum {string} */
+            tool: "discover" | "certificates" | "workloads_machines" | "secrets" | "software_trust" | "operations" | "platform_integrations";
+        };
+        CapabilityViewStage: {
+            /** @enum {string} */
+            completion: "complete" | "not_applicable" | "intentional_api_only" | "blocked" | "missing";
+            /** @enum {string} */
+            name: "discover" | "understand" | "configure" | "preview" | "execute" | "observe" | "recover" | "verify" | "automate";
+            reason?: string;
         };
         Certificate: {
             /** Format: date-time */
@@ -15802,6 +15875,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetirementChecklist"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listCapabilities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CapabilityView"];
                 };
             };
             /** @description client error */

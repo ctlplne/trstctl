@@ -3,12 +3,20 @@
 package featureparity
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 )
+
+// embeddedCatalogJSON travels with the control-plane binary so the runtime
+// capability view never depends on a source checkout or an operator-mounted QA
+// directory. The served projection deliberately strips evidence and source paths.
+//
+//go:embed feature-map-backlog.json
+var embeddedCatalogJSON []byte
 
 type Catalog struct {
 	SchemaVersion     int             `json:"schema_version"`
@@ -87,6 +95,24 @@ func Load() (Catalog, error) {
 	if err != nil {
 		return Catalog{}, fmt.Errorf("read feature-map backlog: %w", err)
 	}
+	catalog, err := parseCatalog(b)
+	if err != nil {
+		return Catalog{}, err
+	}
+	if err := validateEvidencePaths(root, catalog); err != nil {
+		return Catalog{}, fmt.Errorf("validate canonical capability evidence paths: %w", err)
+	}
+	return catalog, nil
+}
+
+// LoadEmbedded returns the semantically validated canonical capability catalog
+// without touching the filesystem. Runtime callers use this path; authoring and
+// CI use Load so repository evidence paths are also proven to exist.
+func LoadEmbedded() (Catalog, error) {
+	return parseCatalog(embeddedCatalogJSON)
+}
+
+func parseCatalog(b []byte) (Catalog, error) {
 	var catalog Catalog
 	if err := json.Unmarshal(b, &catalog); err != nil {
 		return Catalog{}, fmt.Errorf("parse feature-map backlog: %w", err)
@@ -96,9 +122,6 @@ func Load() (Catalog, error) {
 	}
 	if err := ValidateCatalog(catalog); err != nil {
 		return Catalog{}, fmt.Errorf("validate canonical capability contracts: %w", err)
-	}
-	if err := validateEvidencePaths(root, catalog); err != nil {
-		return Catalog{}, fmt.Errorf("validate canonical capability evidence paths: %w", err)
 	}
 	return catalog, nil
 }

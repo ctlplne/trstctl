@@ -17539,7 +17539,8 @@
                 "getOIDCMappingStatus",
                 "listMembers",
                 "upsertMember",
-                "offboardMember"
+                "offboardMember",
+                "listCapabilities"
             ],
             "api_na": "",
             "cli_surface": [
@@ -17576,7 +17577,8 @@
                 "access oidc-mapping",
                 "access members list",
                 "access members upsert",
-                "access members offboard"
+                "access members offboard",
+                "capabilities list"
             ],
             "cli_na": "",
             "facet_evidence": {
@@ -17612,7 +17614,8 @@
                         "CLI command: access oidc-mapping",
                         "CLI command: access members list",
                         "CLI command: access members upsert",
-                        "CLI command: access members offboard"
+                        "CLI command: access members offboard",
+                        "CLI command: capabilities list"
                     ],
                     "refs": [
                         "internal/cli/command.go",
@@ -17630,7 +17633,8 @@
                         "OpenAPI operationId: getOIDCMappingStatus",
                         "OpenAPI operationId: listMembers",
                         "OpenAPI operationId: upsertMember",
-                        "OpenAPI operationId: offboardMember"
+                        "OpenAPI operationId: offboardMember",
+                        "OpenAPI operationId: listCapabilities"
                     ],
                     "refs": [
                         "internal/api/testdata/openapi.golden.json",
@@ -17789,6 +17793,7 @@
                             "OpenAPI operationId: listMembers",
                             "OpenAPI operationId: upsertMember",
                             "OpenAPI operationId: offboardMember",
+                            "OpenAPI operationId: listCapabilities",
                             "CLI command: owners list",
                             "CLI command: owners create",
                             "CLI command: owners import",
@@ -17822,7 +17827,8 @@
                             "CLI command: access oidc-mapping",
                             "CLI command: access members list",
                             "CLI command: access members upsert",
-                            "CLI command: access members offboard"
+                            "CLI command: access members offboard",
+                            "CLI command: capabilities list"
                         ]
                     }
                 },

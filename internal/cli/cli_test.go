@@ -41,6 +41,22 @@ func TestEveryAPIOperationHasACLICommand(t *testing.T) {
 	}
 }
 
+func TestCapabilitiesListUsesTheAuthenticatedReadSurface(t *testing.T) {
+	var captured capture
+	srv := mockServer(t, http.StatusOK,
+		`{"schema_version":1,"contract_schema_version":3,"license":{"tier":"community","state":"community"},"enforcement_note":"checked again at execution","items":[]}`,
+		&captured)
+	env := cli.Env{Server: srv.URL, Token: "capability-token", Tenant: "tenant-a", HTTPClient: srv.Client()}
+
+	code, stdout, stderr := run(t, []string{"capabilities", "list"}, env, "")
+	if code != 0 || !strings.Contains(stdout, `"contract_schema_version": 3`) || stderr != "" {
+		t.Fatalf("capabilities list = exit %d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if captured.Method != http.MethodGet || captured.Path != "/api/v1/capabilities" || captured.Header.Get("Idempotency-Key") != "" {
+		t.Fatalf("capabilities request = %s %s key=%q", captured.Method, captured.Path, captured.Header.Get("Idempotency-Key"))
+	}
+}
+
 func TestDiscoverySegmentCreateEnablesHeadlessSourceWorkflowAUD118(t *testing.T) {
 	segmentBody := `{"name":"edge-prod","ranges":["10.24.0.0/16"],"staleness_hours":24,"excluded":false}`
 	sourceBody := `{"kind":"network","name":"edge-tls","config":{"segment":"edge-prod","targets":["10.24.1.10:443"]}}`

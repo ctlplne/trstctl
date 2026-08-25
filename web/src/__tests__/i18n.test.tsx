@@ -350,6 +350,9 @@ describe("i18n boundary", () => {
       // labels, calm delivery summaries, and progressive exact evidence.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
       // release.
+      // QA product g13 re-pin: the Spanish tool-health explanation now says
+      // "the system" instead of the ordinary Spanish word that the source-debt
+      // oracle reads as an English marker. Meaning and fail-honest tone reviewed.
       // QA design g16 re-pin: the discovery journey now names the operator goal,
       // puts findings before scan machinery, translates human credential kinds,
       // and keeps raw monitoring and finding evidence behind named disclosures.
@@ -1138,7 +1141,7 @@ describe("i18n boundary", () => {
       // durable create/rotate versions. Cryptographic type names, permission
       // tokens, and ECDSA P-256 stay byte-identical. Machine-authored es/de —
       // FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "72e3b7a2923b5ffdd8a27939848a2fe8830ca1b1948dbb9f78d3c7c60177b3b2",
+      "es-ES": "b62b5f4832009e21228b0d77c0e565c6a4cf251c2edd4e33ede7d8d506821ae7",
       "de-DE": "f3fdb5272f27044ed56f2fc578ac25eb289927dba5ff1abaf72a8cca91124891",
     });
   });

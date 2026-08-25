@@ -13,6 +13,7 @@ import { translateNow } from "@/i18n/I18nProvider";
 import * as estate from "./estateApi";
 import { downloadAuditExport as downloadAuditExportImpl } from "./auditExport";
 import type {
+  CapabilityView,
   CryptoReadiness,
   CryptoReadinessExport,
   CMDBReconcileSchedule,
@@ -511,6 +512,14 @@ export type { TicketIntakeSchedule } from "./api-types.gen";
 export type { MDMDeviceList, MDMDevice, MDMDeviceTrace, MDMPollScheduleList } from "./api-types.gen";
 export type { AgentUpgradeCampaign } from "./api-types.gen";
 export type { OutboxReconciliationConflict, OutboxReconciliationConflictList } from "./api-types.gen";
+export type {
+  CapabilityView,
+  CapabilityViewItem,
+  CapabilityViewStage,
+  CapabilityViewActions,
+  CapabilityUnavailableAction,
+  CapabilityLicensePosture,
+} from "./api-types.gen";
 export type Owner = GenOwner;
 export type { OwnershipException, OwnershipExceptionRequest, OwnershipExceptionRevokeRequest } from "./api-types.gen";
 export type Issuer = GenIssuer;
@@ -1501,6 +1510,8 @@ export interface Api {
   me(): Promise<Me>;
   authMethods(): Promise<AuthMethods>;
   logout(): Promise<void>;
+  /** Server-derived product posture for the current principal. Source paths and QA evidence never cross this boundary. */
+  capabilities(): Promise<CapabilityView>;
   editions(): Promise<EditionsInfo>;
   enterpriseSupportStatus(): Promise<EnterpriseSupportStatus>;
   managedOfferingStatus(): Promise<ManagedOfferingStatus>;
@@ -1931,6 +1942,7 @@ const liveApi: Api = {
   me: () => req<Me>("/auth/me"),
   authMethods: () => req<AuthMethods>("/auth/methods"),
   logout: () => req<void>("/auth/logout", { method: "POST" }),
+  capabilities: () => req<CapabilityView>("/api/v1/capabilities"),
   editions: () => req<EditionsInfo>("/api/v1/editions"),
   enterpriseSupportStatus: () => req<EnterpriseSupportStatus>("/api/v1/support/enterprise"),
   managedOfferingStatus: () => req<ManagedOfferingStatus>("/api/v1/managed-offering/status"),

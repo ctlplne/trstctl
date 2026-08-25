@@ -5560,6 +5560,271 @@
         ],
         "type": "object"
       },
+      "CapabilityLicensePosture": {
+        "properties": {
+          "state": {
+            "enum": [
+              "community",
+              "active",
+              "grace",
+              "read_only"
+            ],
+            "type": "string"
+          },
+          "tier": {
+            "enum": [
+              "community",
+              "enterprise",
+              "provider"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "tier",
+          "state"
+        ],
+        "type": "object"
+      },
+      "CapabilityUnavailableAction": {
+        "properties": {
+          "code": {
+            "enum": [
+              "not_attached",
+              "not_implemented",
+              "dependency_not_configured"
+            ],
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "operation_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id",
+          "code",
+          "detail"
+        ],
+        "type": "object"
+      },
+      "CapabilityView": {
+        "properties": {
+          "contract_schema_version": {
+            "type": "integer"
+          },
+          "enforcement_note": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CapabilityViewItem"
+            },
+            "type": "array"
+          },
+          "license": {
+            "$ref": "#/components/schemas/CapabilityLicensePosture"
+          },
+          "schema_version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schema_version",
+          "contract_schema_version",
+          "license",
+          "enforcement_note",
+          "items"
+        ],
+        "type": "object"
+      },
+      "CapabilityViewActions": {
+        "properties": {
+          "allowed": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "denied": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "scoped": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "unavailable": {
+            "items": {
+              "$ref": "#/components/schemas/CapabilityUnavailableAction"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "allowed",
+          "scoped",
+          "denied",
+          "unavailable"
+        ],
+        "type": "object"
+      },
+      "CapabilityViewItem": {
+        "properties": {
+          "actions": {
+            "$ref": "#/components/schemas/CapabilityViewActions"
+          },
+          "authorization_state": {
+            "enum": [
+              "catalog_only",
+              "none",
+              "scoped",
+              "partial",
+              "full"
+            ],
+            "type": "string"
+          },
+          "capability_id": {
+            "type": "string"
+          },
+          "classification": {
+            "enum": [
+              "primary",
+              "supporting"
+            ],
+            "type": "string"
+          },
+          "console_route": {
+            "type": "string"
+          },
+          "dependencies": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "dependency_state": {
+            "enum": [
+              "none",
+              "documented_not_runtime_verified"
+            ],
+            "type": "string"
+          },
+          "edition": {
+            "enum": [
+              "core",
+              "core_with_licensed_extensions"
+            ],
+            "type": "string"
+          },
+          "maturity": {
+            "enum": [
+              "absent",
+              "api_cli_only",
+              "observe_only",
+              "partial_workflow",
+              "complete_vertical_slice"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "release_blocking": {
+            "type": "boolean"
+          },
+          "runtime_state": {
+            "enum": [
+              "catalog_only",
+              "unavailable",
+              "partially_available",
+              "available"
+            ],
+            "type": "string"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/CapabilityViewStage"
+            },
+            "type": "array"
+          },
+          "tool": {
+            "enum": [
+              "discover",
+              "certificates",
+              "workloads_machines",
+              "secrets",
+              "software_trust",
+              "operations",
+              "platform_integrations"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "capability_id",
+          "name",
+          "purpose",
+          "tool",
+          "classification",
+          "console_route",
+          "maturity",
+          "release_blocking",
+          "edition",
+          "runtime_state",
+          "authorization_state",
+          "dependency_state",
+          "dependencies",
+          "stages",
+          "actions"
+        ],
+        "type": "object"
+      },
+      "CapabilityViewStage": {
+        "properties": {
+          "completion": {
+            "enum": [
+              "complete",
+              "not_applicable",
+              "intentional_api_only",
+              "blocked",
+              "missing"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "enum": [
+              "discover",
+              "understand",
+              "configure",
+              "preview",
+              "execute",
+              "observe",
+              "recover",
+              "verify",
+              "automate"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "completion"
+        ],
+        "type": "object"
+      },
       "Certificate": {
         "properties": {
           "created_at": {
@@ -30712,6 +30977,53 @@
         ],
         "summary": "List the dependents blocking a CA key's destruction, and the destruction record once complete",
         "x-trstctl-permission": "keys:read"
+      }
+    },
+    "/api/v1/capabilities": {
+      "get": {
+        "operationId": "listCapabilities",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilityView"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List the current caller's sanitized product capability, runtime, and RBAC posture",
+        "x-trstctl-permission": "capabilities:read"
       }
     },
     "/api/v1/cbom/assets": {

@@ -2077,6 +2077,80 @@ CTMonitoringSummary = TypedDict(
     total=False,
 )
 
+CapabilityLicensePosture = TypedDict(
+    'CapabilityLicensePosture',
+    {
+        'state': str,
+        'tier': str,
+    },
+    total=False,
+)
+
+CapabilityUnavailableAction = TypedDict(
+    'CapabilityUnavailableAction',
+    {
+        'code': str,
+        'detail': str,
+        'operation_id': str,
+    },
+    total=False,
+)
+
+CapabilityView = TypedDict(
+    'CapabilityView',
+    {
+        'contract_schema_version': int,
+        'enforcement_note': str,
+        'items': list[dict[str, Any]],
+        'license': dict[str, Any],
+        'schema_version': int,
+    },
+    total=False,
+)
+
+CapabilityViewActions = TypedDict(
+    'CapabilityViewActions',
+    {
+        'allowed': list[str],
+        'denied': list[str],
+        'scoped': list[str],
+        'unavailable': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+CapabilityViewItem = TypedDict(
+    'CapabilityViewItem',
+    {
+        'actions': dict[str, Any],
+        'authorization_state': str,
+        'capability_id': str,
+        'classification': str,
+        'console_route': str,
+        'dependencies': list[str],
+        'dependency_state': str,
+        'edition': str,
+        'maturity': str,
+        'name': str,
+        'purpose': str,
+        'release_blocking': bool,
+        'runtime_state': str,
+        'stages': list[dict[str, Any]],
+        'tool': str,
+    },
+    total=False,
+)
+
+CapabilityViewStage = TypedDict(
+    'CapabilityViewStage',
+    {
+        'completion': str,
+        'name': str,
+        'reason': str,
+    },
+    total=False,
+)
+
 Certificate = TypedDict(
     'Certificate',
     {

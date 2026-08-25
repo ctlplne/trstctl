@@ -41,6 +41,14 @@ make feature-parity-report FEATURE_PARITY_REPORT_OUT=/absolute/path/frontend-par
 
 The HTML contains no secret values, external scripts, remote fonts, or second feature list. It shows all 79 capabilities, computed maturity, release blockers, the nine stage cells, security boundaries, evidence, and exact candidate metadata. Supplying `--console-base` to `tools/featureparityreport` makes route links target a specific live candidate.
 
+## Runtime capability view
+
+`GET /api/v1/capabilities` is the customer-safe projection of this same catalog. It is authenticated by the dedicated `capabilities:read` permission and then joins every catalog operation to the routes actually mounted in the running process and the current principal's RBAC grants.
+
+The response tells the console which actions are allowed, resource-scoped, denied, not attached, dependency-disabled, or deliberately unimplemented. It also carries the current license tier/state and the sanitized nine-stage ledger. It does **not** return evidence, repository paths, owner names, candidate SHAs, permission-authority implementation details, or secret-handling internals. Resource scope, ABAC, tenant key state, mutation gates, idempotency, and live dependencies are still enforced when the user runs an action; this read is a preflight, not an authorization bypass.
+
+The web client consumes the generated `CapabilityView` type, and `make sdk` propagates the served OpenAPI contract into the TypeScript, Python, and Java SDK artifacts.
+
 ## Updating a capability safely
 
 1. Change the existing capability row and its explicit stage evidence.

@@ -39,6 +39,23 @@ afterEach(() => {
 });
 
 describe("api error handling (SURFACE-007)", () => {
+  it("loads the current caller's server-derived capability posture", async () => {
+    mockFetch(
+      200,
+      JSON.stringify({
+        schema_version: 1,
+        contract_schema_version: 3,
+        license: { tier: "community", state: "community" },
+        enforcement_note: "checked again at execution",
+        items: [],
+      }),
+    );
+    const result = await api.capabilities();
+    expect(result.schema_version).toBe(1);
+    expect(vi.mocked(fetch).mock.calls[0]?.[0]).toBe("/api/v1/capabilities");
+    expect(vi.mocked(fetch).mock.calls[0]?.[1]?.method).toBeUndefined();
+  });
+
   it("maps 401 to UnauthorizedError", async () => {
     mockFetch(401, "no");
     await expect(api.certificates()).rejects.toBeInstanceOf(UnauthorizedError);

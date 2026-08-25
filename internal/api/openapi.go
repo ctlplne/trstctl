@@ -276,6 +276,51 @@ func object(props map[string]*Schema, required ...string) *Schema {
 }
 
 func componentSchemas() map[string]*Schema {
+	capabilityLicensePosture := object(map[string]*Schema{
+		"tier":  {Type: "string", Enum: []string{"community", "enterprise", "provider"}},
+		"state": {Type: "string", Enum: []string{"community", "active", "grace", "read_only"}},
+	}, "tier", "state")
+	capabilityViewStage := object(map[string]*Schema{
+		"name":       {Type: "string", Enum: []string{"discover", "understand", "configure", "preview", "execute", "observe", "recover", "verify", "automate"}},
+		"completion": {Type: "string", Enum: []string{"complete", "not_applicable", "intentional_api_only", "blocked", "missing"}},
+		"reason":     str(),
+	}, "name", "completion")
+	capabilityUnavailableAction := object(map[string]*Schema{
+		"operation_id": str(),
+		"code":         {Type: "string", Enum: []string{"not_attached", "not_implemented", "dependency_not_configured"}},
+		"detail":       str(),
+	}, "operation_id", "code", "detail")
+	capabilityViewActions := object(map[string]*Schema{
+		"allowed":     {Type: "array", Items: str()},
+		"scoped":      {Type: "array", Items: str()},
+		"denied":      {Type: "array", Items: str()},
+		"unavailable": {Type: "array", Items: ref("CapabilityUnavailableAction")},
+	}, "allowed", "scoped", "denied", "unavailable")
+	capabilityViewItem := object(map[string]*Schema{
+		"capability_id":       str(),
+		"name":                str(),
+		"purpose":             str(),
+		"tool":                {Type: "string", Enum: []string{"discover", "certificates", "workloads_machines", "secrets", "software_trust", "operations", "platform_integrations"}},
+		"classification":      {Type: "string", Enum: []string{"primary", "supporting"}},
+		"console_route":       str(),
+		"maturity":            {Type: "string", Enum: []string{"absent", "api_cli_only", "observe_only", "partial_workflow", "complete_vertical_slice"}},
+		"release_blocking":    {Type: "boolean"},
+		"edition":             {Type: "string", Enum: []string{"core", "core_with_licensed_extensions"}},
+		"runtime_state":       {Type: "string", Enum: []string{"catalog_only", "unavailable", "partially_available", "available"}},
+		"authorization_state": {Type: "string", Enum: []string{"catalog_only", "none", "scoped", "partial", "full"}},
+		"dependency_state":    {Type: "string", Enum: []string{"none", "documented_not_runtime_verified"}},
+		"dependencies":        {Type: "array", Items: str()},
+		"stages":              {Type: "array", Items: ref("CapabilityViewStage")},
+		"actions":             ref("CapabilityViewActions"),
+	}, "capability_id", "name", "purpose", "tool", "classification", "console_route", "maturity", "release_blocking", "edition", "runtime_state", "authorization_state", "dependency_state", "dependencies", "stages", "actions")
+	capabilityView := object(map[string]*Schema{
+		"schema_version":          {Type: "integer"},
+		"contract_schema_version": {Type: "integer"},
+		"license":                 ref("CapabilityLicensePosture"),
+		"enforcement_note":        str(),
+		"items":                   {Type: "array", Items: ref("CapabilityViewItem")},
+	}, "schema_version", "contract_schema_version", "license", "enforcement_note", "items")
+
 	owner := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "kind": {Type: "string", Enum: []string{"user", "team", "workload", "service", "vendor"}},
 		"name": str(), "email": str(), "created_at": timestamp(),
@@ -4985,6 +5030,12 @@ func componentSchemas() map[string]*Schema {
 
 	return map[string]*Schema{
 		"Problem":                                  problemSchema,
+		"CapabilityLicensePosture":                 capabilityLicensePosture,
+		"CapabilityViewStage":                      capabilityViewStage,
+		"CapabilityUnavailableAction":              capabilityUnavailableAction,
+		"CapabilityViewActions":                    capabilityViewActions,
+		"CapabilityViewItem":                       capabilityViewItem,
+		"CapabilityView":                           capabilityView,
 		"EnterpriseSupportStatus":                  enterpriseSupportStatus,
 		"EnterpriseSupportTier":                    enterpriseSupportTier,
 		"EnterpriseSupportSLATarget":               enterpriseSupportSLATarget,

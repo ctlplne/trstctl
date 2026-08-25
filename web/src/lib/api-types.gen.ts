@@ -1447,6 +1447,56 @@ export interface CTMonitoringSummary {
   watched_domain_count: number;
 }
 
+export interface CapabilityLicensePosture {
+  state: "community" | "active" | "grace" | "read_only";
+  tier: "community" | "enterprise" | "provider";
+}
+
+export interface CapabilityUnavailableAction {
+  code: "not_attached" | "not_implemented" | "dependency_not_configured";
+  detail: string;
+  operation_id: string;
+}
+
+export interface CapabilityView {
+  contract_schema_version: number;
+  enforcement_note: string;
+  items: CapabilityViewItem[];
+  license: CapabilityLicensePosture;
+  schema_version: number;
+}
+
+export interface CapabilityViewActions {
+  allowed: string[];
+  denied: string[];
+  scoped: string[];
+  unavailable: CapabilityUnavailableAction[];
+}
+
+export interface CapabilityViewItem {
+  actions: CapabilityViewActions;
+  authorization_state: "catalog_only" | "none" | "scoped" | "partial" | "full";
+  capability_id: string;
+  classification: "primary" | "supporting";
+  console_route: string;
+  dependencies: string[];
+  dependency_state: "none" | "documented_not_runtime_verified";
+  edition: "core" | "core_with_licensed_extensions";
+  maturity: "absent" | "api_cli_only" | "observe_only" | "partial_workflow" | "complete_vertical_slice";
+  name: string;
+  purpose: string;
+  release_blocking: boolean;
+  runtime_state: "catalog_only" | "unavailable" | "partially_available" | "available";
+  stages: CapabilityViewStage[];
+  tool: "discover" | "certificates" | "workloads_machines" | "secrets" | "software_trust" | "operations" | "platform_integrations";
+}
+
+export interface CapabilityViewStage {
+  completion: "complete" | "not_applicable" | "intentional_api_only" | "blocked" | "missing";
+  name: "discover" | "understand" | "configure" | "preview" | "execute" | "observe" | "recover" | "verify" | "automate";
+  reason?: string;
+}
+
 export interface Certificate {
   created_at?: string;
   custody_summary?: string;

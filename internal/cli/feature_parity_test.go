@@ -213,9 +213,11 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// saved-source preflight raises it to 391 so a headless operator gets the
 	// same current execution blocker as the source table. The read-only
 	// `transit keys list` command raises it to 392 and exposes the same safe key
-	// metadata the API and console use for purpose-compatible selection.
-	if len(out) != 392 {
-		t.Fatalf("CLI commands = %d, want 392", len(out))
+	// metadata the API and console use for purpose-compatible selection. The
+	// authenticated `capabilities list` read raises it to 393 and maps to F8 so
+	// headless clients see the same route/RBAC preflight as the console.
+	if len(out) != 393 {
+		t.Fatalf("CLI commands = %d, want 393", len(out))
 	}
 	return out
 }

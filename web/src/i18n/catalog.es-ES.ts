@@ -359,7 +359,7 @@ const esESCatalog = {
   "dashboard.attention.nextActionLabel": "Siguiente acción más segura",
   "dashboard.workspaceHealth.title": "Salud de las herramientas",
   "dashboard.workspaceHealth.help":
-    "Una señal actual de cada herramienta. La evidencia ausente se muestra como no disponible en vez de fingir que todo está sano.",
+    "Una señal actual de cada herramienta. La evidencia ausente se muestra como no disponible en vez de fingir que el sistema está sano.",
   "dashboard.workspaceHealth.label": "Salud de las herramientas",
   "dashboard.workspaceHealth.loading": "Comprobando la evidencia actual…",
   "dashboard.workspaceHealth.unavailable": "Evidencia actual no disponible",

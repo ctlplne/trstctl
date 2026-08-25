@@ -56,6 +56,10 @@ const (
 	// frozen member is non-production.
 	IncidentsGameDay Permission = "incidents:game-day"
 	PrivateEgress    Permission = "egress:private"
+	// CapabilitiesRead reads the secret-free product capability projection. It is
+	// separate from AccessRead because knowing which controls the current caller
+	// can use is navigation posture, not authority to enumerate members or roles.
+	CapabilitiesRead Permission = "capabilities:read"
 	AccessRead       Permission = "access:read"
 	AccessWrite      Permission = "access:write"
 	AccessRoleAssign Permission = "access:role.assign"
@@ -122,7 +126,7 @@ func allResourcePermissions() []Permission {
 		AgentsHeartbeat, AgentsJobPoll, AgentsJobComplete, AgentsJobReport,
 		DiscoveryRead, DiscoveryWrite, NHIRead, PolicyRead, PolicyWrite, NotificationsRead, NotificationsWrite,
 		ConnectorsRead, ConnectorsWrite, LifecycleRead,
-		IncidentsRead, IncidentsWrite, IncidentsGameDay, PrivateEgress,
+		IncidentsRead, IncidentsWrite, IncidentsGameDay, PrivateEgress, CapabilitiesRead,
 		AccessRead, AccessWrite, AccessRoleAssign,
 		ProfilesRead, ProfilesWrite, CertsRequest, CertsIssue,
 		SecretsRead, SecretsWrite,
@@ -149,9 +153,9 @@ func (r Role) Allows(p Permission) bool {
 // BuiltinRoles returns the platform's built-in roles: human/operator roles plus
 // machine-actor roles for enrolled agents, MCP automation, and CLI users.
 func BuiltinRoles() map[string]Role {
-	readOnly := []Permission{OwnersRead, IssuersRead, IdentitiesRead, CertsRead, PrivacyRead, GraphRead, RiskRead, AgentsRead, DiscoveryRead, NHIRead, PolicyRead, NotificationsRead, ConnectorsRead, LifecycleRead, IncidentsRead, AccessRead, ProfilesRead, SecretsRead, KeysRead}
+	readOnly := []Permission{OwnersRead, IssuersRead, IdentitiesRead, CertsRead, PrivacyRead, GraphRead, RiskRead, AgentsRead, DiscoveryRead, NHIRead, PolicyRead, NotificationsRead, ConnectorsRead, LifecycleRead, IncidentsRead, CapabilitiesRead, AccessRead, ProfilesRead, SecretsRead, KeysRead}
 	agent := []Permission{CertsRead, AgentsHeartbeat, AgentsJobPoll, AgentsJobComplete, AgentsJobReport, DiscoveryWrite}
-	mcp := []Permission{OwnersRead, IssuersRead, IdentitiesRead, CertsRead, AuditRead, PrivacyRead, GraphRead, RiskRead, AgentsRead, DiscoveryRead, DiscoveryWrite, NHIRead, PolicyRead, NotificationsRead, ConnectorsRead, LifecycleRead, IncidentsRead, AccessRead, ProfilesRead, CertsRequest, SecretsRead, KeysRead}
+	mcp := []Permission{OwnersRead, IssuersRead, IdentitiesRead, CertsRead, AuditRead, PrivacyRead, GraphRead, RiskRead, AgentsRead, DiscoveryRead, DiscoveryWrite, NHIRead, PolicyRead, NotificationsRead, ConnectorsRead, LifecycleRead, IncidentsRead, CapabilitiesRead, AccessRead, ProfilesRead, CertsRequest, SecretsRead, KeysRead}
 	// The CLI machine role is broad but not sovereign. AccessRoleAssign is withheld
 	// because a CLI token that can hand out roles can hand itself more. A2's
 	// AgentsGrantRelay is withheld on the same reasoning: it authorizes placing an
@@ -163,13 +167,13 @@ func BuiltinRoles() map[string]Role {
 		"admin":    {Name: "admin", Permissions: []Permission{Wildcard}},
 		"operator": {Name: "operator", Permissions: allResourcePermissions()},
 		"viewer":   {Name: "viewer", Permissions: readOnly},
-		"auditor":  {Name: "auditor", Permissions: []Permission{AuditRead}},
+		"auditor":  {Name: "auditor", Permissions: []Permission{AuditRead, CapabilitiesRead}},
 		"agent":    {Name: "agent", Permissions: agent},
 		"mcp":      {Name: "mcp", Permissions: mcp},
 		"cli":      {Name: "cli", Permissions: cli},
 		// Registration authority: may author/read profiles and REQUEST certificates,
 		// but may NOT approve/issue them (no certs:issue) — the RA separation (S8.1).
-		"ra-officer": {Name: "ra-officer", Permissions: []Permission{OwnersRead, ProfilesRead, ProfilesWrite, CertsRead, CertsRequest}},
+		"ra-officer": {Name: "ra-officer", Permissions: []Permission{OwnersRead, ProfilesRead, ProfilesWrite, CertsRead, CertsRequest, CapabilitiesRead}},
 	}
 }
 

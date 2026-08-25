@@ -3723,7 +3723,7 @@ func TestSurfaceStrengthGuardsStayRequired(t *testing.T) {
 	packageJSON := read(t, "../web/package.json")
 	check("web/package.json", packageJSON,
 		`"gen:api": "node scripts/gen-api-types.mjs"`,
-		`"build": "npm run gen:api -- --check && npm run gen:i18n-runtime -- --check && tsc -p tsconfig.build.json && vite build"`,
+		`"build": "npm run gen:api -- --check && npm run gen:feature-contracts -- --check && npm run gen:i18n-runtime -- --check && tsc -p tsconfig.build.json && vite build"`,
 		`"test:coverage": "vitest run --coverage"`,
 	)
 	genScript := read(t, "../web/scripts/gen-api-types.mjs")
@@ -4480,7 +4480,7 @@ func TestReleaseGuardrailCommandsStayFirstClass(t *testing.T) {
 
 	webPackage := read(t, "../web/package.json")
 	for _, want := range []string{
-		`"build": "npm run gen:api -- --check && npm run gen:i18n-runtime -- --check && tsc -p tsconfig.build.json && vite build"`,
+		`"build": "npm run gen:api -- --check && npm run gen:feature-contracts -- --check && npm run gen:i18n-runtime -- --check && tsc -p tsconfig.build.json && vite build"`,
 		`"lint": "eslint . --max-warnings=0"`,
 		`"format:check": "prettier --check ."`,
 		`"typecheck": "tsc -p tsconfig.json --noEmit"`,

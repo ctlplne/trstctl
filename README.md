@@ -252,7 +252,7 @@ worker), `trstctl-operator`, `trstctl-cli`, `terraform-provider-trstctl`,
 `trstctl-license`, and `trstctl-spire-upstream-authority`. In single-node mode
 the control plane supervises the signer as a child; production-style Compose
 connects to the signer in its separate container.
-Under the hood: ~2394 Go files across the internal subsystem packages, with
+Under the hood: ~2422 Go files across the internal subsystem packages, with
 property, differential, fuzz, and real-PostgreSQL/NATS integration tests, plus
 the architecture linter in CI.
 

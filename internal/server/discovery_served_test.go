@@ -580,7 +580,24 @@ func TestServedDiscoveryNetworkScanBlocksReservedTargets(t *testing.T) {
 	h := newDiscoveryRelayHarness(t, "blocked-network-targets")
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
 
-	status, body := secretsReq(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
+	// Keep the declared-denominator boundary honest: these destinations are in
+	// scope for this test, while the independent relay safety policy must still
+	// refuse connections to loopback, link-local, and RFC1918 addresses.
+	status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/segments", tok,
+		"blocked-network-targets-segment", map[string]any{
+			"name": "blocked-network-targets",
+			"ranges": []string{
+				"127.0.0.1",
+				"169.254.169.254",
+				"10.0.0.0",
+			},
+			"staleness_hours": 24,
+		})
+	if status != http.StatusCreated {
+		t.Fatalf("declare blocked-target discovery segment: status %d body %s", status, body)
+	}
+
+	status, body = secretsReq(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
 		"name": "blocked-network-targets",
 		"kind": "network",
 		"config": map[string]any{

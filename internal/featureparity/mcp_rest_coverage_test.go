@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
-package featureparity
+package featureparity_test
 
 import (
 	"encoding/json"
@@ -9,11 +9,12 @@ import (
 	"testing"
 
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/featureparity"
 	"trstctl.com/trstctl/internal/mcpserver"
 )
 
 func TestMCPRESTCoverageGuardFailsUncoveredSyntheticRoute(t *testing.T) {
-	gaps, stale := CheckMCPRESTCoverage([]MCPRESTRoute{{
+	gaps, stale := featureparity.CheckMCPRESTCoverage([]featureparity.MCPRESTRoute{{
 		OperationID: "newSyntheticRoute",
 		Method:      http.MethodGet,
 		Path:        "/api/v1/synthetic",
@@ -27,18 +28,18 @@ func TestMCPRESTCoverageGuardFailsUncoveredSyntheticRoute(t *testing.T) {
 }
 
 func TestMCPRESTCoverageGuardAllowsDocumentedSyntheticException(t *testing.T) {
-	routes := []MCPRESTRoute{{
+	routes := []featureparity.MCPRESTRoute{{
 		OperationID: "browserOnlyCallback",
 		Method:      http.MethodGet,
 		Path:        "/api/v1/browser/callback",
 	}}
-	allowlist := []MCPRESTAllowlistEntry{{
+	allowlist := []featureparity.MCPRESTAllowlistEntry{{
 		OperationID:   "browserOnlyCallback",
 		Method:        http.MethodGet,
 		Path:          "/api/v1/browser/callback",
 		Justification: "browser-only redirect endpoint; no AI client action path",
 	}}
-	gaps, stale := CheckMCPRESTCoverage(routes, nil, allowlist)
+	gaps, stale := featureparity.CheckMCPRESTCoverage(routes, nil, allowlist)
 	if len(gaps) != 0 || len(stale) != 0 {
 		t.Fatalf("allowlisted synthetic route gaps=%+v stale=%+v, want clean", gaps, stale)
 	}
@@ -65,24 +66,24 @@ func TestMCPRESTCoverageGuardCoversServedRoutes(t *testing.T) {
 		t.Fatalf("decode MCP tools: %v body=%s", err, rec.Body.String())
 	}
 
-	routes := make([]MCPRESTRoute, 0, len(h.Routes()))
-	tools := make([]MCPRESTTool, 0, len(listed.Tools))
+	routes := make([]featureparity.MCPRESTRoute, 0, len(h.Routes()))
+	tools := make([]featureparity.MCPRESTTool, 0, len(listed.Tools))
 	for _, rt := range h.Routes() {
-		routes = append(routes, MCPRESTRoute{
+		routes = append(routes, featureparity.MCPRESTRoute{
 			OperationID:       rt.OperationID,
 			Method:            rt.Method,
 			Path:              rt.Path,
 			SensitiveResponse: rt.SensitiveResponse,
 		})
 		if containsString(listed.Tools, mcpserver.RESTToolName(rt.OperationID)) {
-			tools = append(tools, MCPRESTTool{OperationID: rt.OperationID})
+			tools = append(tools, featureparity.MCPRESTTool{OperationID: rt.OperationID})
 		}
 	}
-	allowlist, err := LoadMCPRESTAllowlist()
+	allowlist, err := featureparity.LoadMCPRESTAllowlist()
 	if err != nil {
 		t.Fatalf("load MCP REST allowlist: %v", err)
 	}
-	gaps, stale := CheckMCPRESTCoverage(routes, tools, allowlist.Entries)
+	gaps, stale := featureparity.CheckMCPRESTCoverage(routes, tools, allowlist.Entries)
 	if len(gaps) != 0 || len(stale) != 0 {
 		t.Fatalf("MCP REST coverage guard gaps=%+v stale=%+v", gaps, stale)
 	}

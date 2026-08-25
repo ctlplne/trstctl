@@ -15,6 +15,7 @@ import (
 	xssh "golang.org/x/crypto/ssh"
 
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
 // TestServedSSHAtScaleJourneyJOURNEY002EndToEnd proves the operator-facing SSH
@@ -31,6 +32,7 @@ func TestServedSSHAtScaleJourneyJOURNEY002EndToEnd(t *testing.T) {
 				Enabled: true, TrustDomain: "served.test", DefaultTTL: 10 * time.Minute, MaxTTL: time.Hour,
 			}
 		},
+		withAgentChannel,
 	)
 	token := seedScopedToken(t, h.store, h.tenant,
 		"discovery:write", "discovery:read",
@@ -38,6 +40,11 @@ func TestServedSSHAtScaleJourneyJOURNEY002EndToEnd(t *testing.T) {
 		"certs:issue", "certs:write", "certs:read",
 		"identities:write", "identities:read",
 	)
+	// SSH fleet discovery is relay-owned. Bootstrap the prerequisite through the
+	// real enrollment authority so the journey proves admission against an
+	// enrolled, certificate-stamped network role instead of bypassing readiness.
+	relayAgent := enrollAgentWithRoles(t, h, "journey-002-network-relay", "agent.trstctl.local", []string{mtls.AgentRoleNetwork})
+	heartbeatEnrolledAgent(t, h, relayAgent)
 
 	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/workloads/attester-trust-sources",
 		token, "journey-002-trust-create", map[string]any{

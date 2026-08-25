@@ -6081,6 +6081,7 @@ export const canonicalCapabilities = [
             "OpenAPI operationId: listMembers",
             "OpenAPI operationId: upsertMember",
             "OpenAPI operationId: offboardMember",
+            "OpenAPI operationId: listCapabilities",
             "CLI command: owners list",
             "CLI command: owners create",
             "CLI command: owners import",
@@ -6114,7 +6115,8 @@ export const canonicalCapabilities = [
             "CLI command: access oidc-mapping",
             "CLI command: access members list",
             "CLI command: access members upsert",
-            "CLI command: access members offboard"
+            "CLI command: access members offboard",
+            "CLI command: capabilities list"
           ]
         }
       },

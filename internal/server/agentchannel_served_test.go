@@ -232,6 +232,39 @@ func enrollAgentWithRoles(t *testing.T, h *servedHarness, cn, serverName string,
 	return a
 }
 
+// heartbeatEnrolledAgent records real fleet presence through the served mTLS
+// channel. Bootstrap proves the certificate role grant; the heartbeat is the
+// separate step that makes the enrolled agent eligible for relay-owned work.
+func heartbeatEnrolledAgent(t *testing.T, h *servedHarness, a *agent.Agent) {
+	t.Helper()
+	if !h.srv.AgentChannelServed() {
+		t.Fatal("agent channel is not served")
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	chCtx, chCancel := context.WithCancel(context.Background())
+	chDone := make(chan struct{})
+	go func() { defer close(chDone); h.srv.serveAgentChannel(chCtx, ln) }()
+	t.Cleanup(func() { chCancel(); <-chDone })
+
+	creds, err := a.Credentials()
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, err := transport.Dial(ln.Addr().String(), creds)
+	if err != nil {
+		t.Fatalf("dial agent channel: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	hbCtx, hbCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer hbCancel()
+	if _, err := a.Heartbeat(hbCtx, channelClientAdapter{transport.NewAgentClient(conn)}, nil); err != nil {
+		t.Fatalf("heartbeat enrolled agent: %v", err)
+	}
+}
+
 // bootstrapOnlyEnroller drives the agent's bootstrap directly through the served
 // enrollment authority (in-process, no HTTP), so the e2e test gets a cert signed by
 // the served agent CA without standing up the HTTP enroll route. Renewal over this

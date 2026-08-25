@@ -613,7 +613,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 
 func tenantCryptoExemptOperation(operationID string) bool {
 	switch operationID {
-	case "getPlatformSystem",
+	case "getPlatformSystem", "listCapabilities",
 		"getTenantKeyDomain", "migrateTenantKeyDomain", "sealTenantKeyDomain", "unsealTenantKeyDomain":
 		return true
 	default:
@@ -955,6 +955,7 @@ func (a *API) routes() []route {
 		{name: "subject_ref", typ: "string", desc: "tenant-bound subject reference to filter evidence"},
 	}
 	routes := []route{
+		{method: "GET", path: "/api/v1/capabilities", opID: "listCapabilities", summary: "List the current caller's sanitized product capability, runtime, and RBAC posture", handler: a.listCapabilities, resSchema: "CapabilityView", successCode: "200", perm: authz.CapabilitiesRead},
 
 		{method: "POST", path: "/api/v1/owners", opID: "createOwner", summary: "Create an owner", handler: a.createOwner, reqSchema: "OwnerRequest", resSchema: "Owner", successCode: "201", mutation: true, perm: authz.OwnersWrite},
 		{method: "GET", path: "/api/v1/owners", opID: "listOwners", summary: "List owners", handler: a.listOwners, query: page, resSchema: "OwnerList", successCode: "200", perm: authz.OwnersRead},

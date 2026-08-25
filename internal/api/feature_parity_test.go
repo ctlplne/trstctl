@@ -174,9 +174,11 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// saved-source preflight raises it to 379 and keeps manual and scheduled run
 	// admission aligned with the same current relay-readiness answer. The safe,
 	// tenant-scoped Transit key metadata list raises it to 380 so the console
-	// never has to guess whether an operation-compatible key already exists.
-	if len(out) != 380 {
-		t.Fatalf("OpenAPI operationIds = %d, want 380", len(out))
+	// never has to guess whether an operation-compatible key already exists. The
+	// sanitized current-caller capability projection raises it to 381 and maps to
+	// F8 because it turns the same route RBAC registry into honest UI action state.
+	if len(out) != 381 {
+		t.Fatalf("OpenAPI operationIds = %d, want 381", len(out))
 	}
 	return out
 }
