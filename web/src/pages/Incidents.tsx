@@ -38,12 +38,14 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { BreakGlassReconcile } from "@/components/breakglass";
+import { CapabilityActionNotice, capabilityExecutionReason } from "@/components/CapabilityTruth";
 import { useTranslation, type I18nContextValue, translateNow } from "@/i18n/I18nProvider";
 import { IncidentExecutionProof, IncidentSeverityBadge, IncidentSituationSummary } from "./incidents/IncidentsPageParts";
 import { FleetReissuanceTable, FleetStartAction } from "./incidents/FleetReissuanceParts";
 import { OutboxRecoveryPanel } from "./incidents/OutboxRecoveryPanel";
 import { formatDateTime } from "@/i18n/format";
 import { describeStatus, humanizeStatus, type StatusTone } from "@/lib/statusVocab";
+import { useCapabilityExecution } from "@/lib/capabilities";
 
 const defaultExecution: IncidentExecutionRequest = {
   identity_id: "",
@@ -157,6 +159,17 @@ const breakGlassChecklist = [
 
 export function Incidents() {
   const { t } = useTranslation();
+  const listIncidentExecutionsAction = useCapabilityExecution("F31", "listIncidentExecutions");
+  const listFleetRunsAction = useCapabilityExecution("F32", "listFleetReissuanceRuns");
+  const listPlaybooksAction = useCapabilityExecution("F31", "listRemediationPlaybooks");
+  const listPlaybookRunsAction = useCapabilityExecution("F31", "listRemediationPlaybookRuns");
+  const listOwnerActionsAction = useCapabilityExecution("F31", "listOwnerRemediationActions");
+  const runPlaybookAction = useCapabilityExecution("F31", "runRemediationPlaybook");
+  const acceptOwnerAction = useCapabilityExecution("F31", "acceptOwnerRemediationAction");
+  const dispatchResponseAction = useCapabilityExecution("F31", "dispatchResponseIntegrations");
+  const createServiceNowAction = useCapabilityExecution("F31", "createServiceNowTicket");
+  const listOutboxConflictsAction = useCapabilityExecution("F31", "listOutboxReconciliationConflicts");
+  const previewImpactAction = useCapabilityExecution("F21", "graphBlastRadius");
   // S-C11: /incidents?identity=<id> preselects the affected identity, so the
   // graph and the certificate detail can hand a compromised credential
   // straight into the response form instead of making the operator copy an id
@@ -242,6 +255,17 @@ export function Incidents() {
 
   useEffect(() => {
     let active = true;
+    if (listOutboxConflictsAction.checking) {
+      return () => {
+        active = false;
+      };
+    }
+    if (!listOutboxConflictsAction.runnable) {
+      setOutboxRecovery(null);
+      return () => {
+        active = false;
+      };
+    }
     void readRoster(() => api.outboxReconciliationConflicts()).then((conflicts) => {
       if (active && conflicts && Array.isArray(conflicts.items) && typeof conflicts.guidance === "string") {
         setOutboxRecovery(conflicts);
@@ -250,61 +274,133 @@ export function Incidents() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [listOutboxConflictsAction.checking, listOutboxConflictsAction.runnable]);
 
   useEffect(() => {
     let active = true;
-    Promise.all([
-      api.incidentExecutions({ limit: 10 }),
-      api.fleetReissuanceRuns({ limit: 10 }),
-      api.remediationPlaybooks(),
-      api.remediationPlaybookRuns({ limit: 10 }),
-      api.ownerRemediationActions(),
-    ])
-      .then(([executionResult, fleetResult, playbookCatalog, playbookRunResult, ownerQueue]) => {
-        if (!active) return;
-        setExecutions(executionResult.items ?? []);
-        setFleetRuns(fleetResult.items ?? []);
-        setPlaybooks(playbookCatalog.items ?? []);
-        setPlaybookRuns(playbookRunResult.items ?? []);
-        setOwnerRemediation(ownerQueue);
-        setLoadError(null);
-      })
-      .catch((err) => {
-        if (!active) return;
-        setLoadError(apiProblemMessage(err, "Could not load incident executions"));
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    const checking =
+      listIncidentExecutionsAction.checking ||
+      listFleetRunsAction.checking ||
+      listPlaybooksAction.checking ||
+      listPlaybookRunsAction.checking ||
+      listOwnerActionsAction.checking;
+    if (checking) {
+      setLoading(true);
+      return () => {
+        active = false;
+      };
+    }
+
+    if (!listIncidentExecutionsAction.runnable) setExecutions([]);
+    if (!listFleetRunsAction.runnable) setFleetRuns([]);
+    if (!listPlaybooksAction.runnable) setPlaybooks([]);
+    if (!listPlaybookRunsAction.runnable) setPlaybookRuns([]);
+    if (!listOwnerActionsAction.runnable) setOwnerRemediation(null);
+
+    const hasRunnableRead =
+      listIncidentExecutionsAction.runnable ||
+      listFleetRunsAction.runnable ||
+      listPlaybooksAction.runnable ||
+      listPlaybookRunsAction.runnable ||
+      listOwnerActionsAction.runnable;
+    setLoading(hasRunnableRead);
+    setLoadError(null);
+    if (!hasRunnableRead) {
+      return () => {
+        active = false;
+      };
+    }
+
+    const failures: unknown[] = [];
+    async function collect<T>(enabled: boolean, read: () => Promise<T>, apply: (value: T) => void) {
+      if (!enabled) return;
+      try {
+        const value = await read();
+        if (active) apply(value);
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+
+    void Promise.all([
+      collect(
+        listIncidentExecutionsAction.runnable,
+        () => api.incidentExecutions({ limit: 10 }),
+        (result) => setExecutions(result.items ?? []),
+      ),
+      collect(
+        listFleetRunsAction.runnable,
+        () => api.fleetReissuanceRuns({ limit: 10 }),
+        (result) => setFleetRuns(result.items ?? []),
+      ),
+      collect(
+        listPlaybooksAction.runnable,
+        () => api.remediationPlaybooks(),
+        (result) => setPlaybooks(result.items ?? []),
+      ),
+      collect(
+        listPlaybookRunsAction.runnable,
+        () => api.remediationPlaybookRuns({ limit: 10 }),
+        (result) => setPlaybookRuns(result.items ?? []),
+      ),
+      collect(listOwnerActionsAction.runnable, () => api.ownerRemediationActions(), setOwnerRemediation),
+    ]).then(() => {
+      if (!active) return;
+      setLoadError(failures.length > 0 ? apiProblemMessage(failures[0], "Could not load incident executions") : null);
+      setLoading(false);
+    });
     return () => {
       active = false;
     };
-  }, []);
+  }, [
+    listFleetRunsAction.checking,
+    listFleetRunsAction.runnable,
+    listIncidentExecutionsAction.checking,
+    listIncidentExecutionsAction.runnable,
+    listOwnerActionsAction.checking,
+    listOwnerActionsAction.runnable,
+    listPlaybookRunsAction.checking,
+    listPlaybookRunsAction.runnable,
+    listPlaybooksAction.checking,
+    listPlaybooksAction.runnable,
+  ]);
 
   useEffect(() => {
     let active = true;
-    Promise.resolve()
-      .then(() => api.remediationPlaybookRuns({ limit: 20 }))
-      .then((page) => {
-        if (!active) return;
-        setEvidenceRuns(page.items ?? []);
-        setEvidenceRunsCursor(page.next_cursor);
-      })
-      .catch(() => null);
-    Promise.resolve()
-      .then(() => api.remediationOwnerActions())
-      .then((queue) => {
-        if (active) setOwnerQueueEvidence(queue);
-      })
-      .catch(() => null);
+    if (!listPlaybookRunsAction.checking && listPlaybookRunsAction.runnable) {
+      Promise.resolve()
+        .then(() => api.remediationPlaybookRuns({ limit: 20 }))
+        .then((page) => {
+          if (!active) return;
+          setEvidenceRuns(page.items ?? []);
+          setEvidenceRunsCursor(page.next_cursor);
+        })
+        .catch(() => null);
+    } else if (!listPlaybookRunsAction.checking) {
+      setEvidenceRuns(null);
+      setEvidenceRunsCursor(undefined);
+    }
+    if (!listOwnerActionsAction.checking && listOwnerActionsAction.runnable) {
+      Promise.resolve()
+        .then(() => api.remediationOwnerActions())
+        .then((queue) => {
+          if (active) setOwnerQueueEvidence(queue);
+        })
+        .catch(() => null);
+    } else if (!listOwnerActionsAction.checking) {
+      setOwnerQueueEvidence(null);
+    }
     return () => {
       active = false;
     };
-  }, []);
+  }, [listOwnerActionsAction.checking, listOwnerActionsAction.runnable, listPlaybookRunsAction.checking, listPlaybookRunsAction.runnable]);
 
   async function loadMoreEvidenceRuns() {
     if (!evidenceRunsCursor) return;
+    if (!listPlaybookRunsAction.runnable) {
+      setEvidenceRunsError(capabilityExecutionReason(listPlaybookRunsAction, t));
+      return;
+    }
     setEvidenceRunsLoadingMore(true);
     setEvidenceRunsError(null);
     try {
@@ -319,6 +415,10 @@ export function Incidents() {
   }
 
   async function previewBlastRadius() {
+    if (!previewImpactAction.runnable) {
+      setPreviewError(capabilityExecutionReason(previewImpactAction, t));
+      return;
+    }
     if (!form.identity_id.trim()) {
       setPreviewError("Compromised identity ID is required.");
       return;
@@ -351,6 +451,10 @@ export function Incidents() {
 
   async function runRightSizePlaybook(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!runPlaybookAction.runnable) {
+      setPlaybookError(capabilityExecutionReason(runPlaybookAction, t));
+      return;
+    }
     const targetIdentity = playbookForm.target_identity_id?.trim() ?? "";
     const inventoryID = playbookForm.inventory_id?.trim() ?? "";
     if (!targetIdentity && !inventoryID) {
@@ -381,6 +485,10 @@ export function Incidents() {
   }
 
   async function acceptOwnerRemediationAction(action: OwnerRemediationQueue["items"][number]) {
+    if (!acceptOwnerAction.runnable) {
+      setOwnerRemediationError(capabilityExecutionReason(acceptOwnerAction, t));
+      return;
+    }
     setAcceptingOwnerAction(action.id);
     setOwnerRemediationError(null);
     setLatestOwnerRemediationRun(null);
@@ -405,6 +513,10 @@ export function Incidents() {
 
   async function dispatchResponseIntegrations(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!dispatchResponseAction.runnable) {
+      setResponseError(capabilityExecutionReason(dispatchResponseAction, t));
+      return;
+    }
     if (!responseForm.title.trim()) {
       setResponseError(t("incidents.response.titleRequired"));
       return;
@@ -462,6 +574,10 @@ export function Incidents() {
 
   async function queueServiceNowTicket(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!createServiceNowAction.runnable) {
+      setTicketError(capabilityExecutionReason(createServiceNowAction, t));
+      return;
+    }
     if (!ticketForm.instance_url.trim()) {
       setTicketError("ServiceNow instance URL is required.");
       return;
@@ -660,7 +776,13 @@ export function Incidents() {
             <input className="ui-input" value={form.reason ?? ""} onChange={(event) => setForm({ ...form, reason: event.target.value })} />
           </label>
           <div className="flex flex-wrap gap-2 md:col-span-2">
-            <Button type="button" variant="outline" onClick={previewBlastRadius} disabled={previewing}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={previewBlastRadius}
+              disabled={previewing || !previewImpactAction.runnable}
+              title={!previewImpactAction.runnable ? capabilityExecutionReason(previewImpactAction, t) : undefined}
+            >
               {previewing ? translateNow("source.loading.preview.c02130fa90") : translateNow("source.preview.blast.radius.925ac72409")}
             </Button>
             <Button type="submit">
@@ -679,6 +801,7 @@ export function Incidents() {
           ))}
         </datalist>
         {previewError && <ErrorState title={translateNow("source.blast.radius.preview.unavailable.00a241de01")}>{previewError}</ErrorState>}
+        <CapabilityActionNotice action={previewImpactAction} />
         {impact && <BlastRadiusPreview impact={impact} />}
       </section>
 
@@ -689,6 +812,7 @@ export function Incidents() {
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("incidents.playbooks.description")}</p>
         </div>
+        <CapabilityActionNotice action={!listPlaybooksAction.runnable ? listPlaybooksAction : runPlaybookAction} />
         <div className="grid gap-2 md:grid-cols-3">
           {playbooks.map((item) => (
             <div key={item.id} className="rounded-panel border border-border p-3">
@@ -771,7 +895,11 @@ export function Incidents() {
             />
           </label>
           <div className="md:col-span-2">
-            <Button type="submit" disabled={runningPlaybook}>
+            <Button
+              type="submit"
+              disabled={runningPlaybook || !runPlaybookAction.runnable}
+              title={!runPlaybookAction.runnable ? capabilityExecutionReason(runPlaybookAction, t) : undefined}
+            >
               <RotateCcw className="h-4 w-4" aria-hidden="true" />
               {runningPlaybook ? t("incidents.playbooks.running") : t("incidents.playbooks.runRightSize")}
             </Button>
@@ -823,7 +951,8 @@ export function Incidents() {
           )}
         </div>
         {ownerRemediationError && <ErrorState title={t("incidents.ownerRemediation.failedTitle")}>{ownerRemediationError}</ErrorState>}
-        {ownerRemediation == null ? (
+        <CapabilityActionNotice action={!listOwnerActionsAction.runnable ? listOwnerActionsAction : acceptOwnerAction} />
+        {!listOwnerActionsAction.runnable ? null : ownerRemediation == null ? (
           <LoadingState>{t("incidents.ownerRemediation.loading")}</LoadingState>
         ) : ownerRemediation.items.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t("incidents.ownerRemediation.empty")}</p>
@@ -867,7 +996,8 @@ export function Incidents() {
                         type="button"
                         variant="outline"
                         size="sm"
-                        disabled={action.status === "accepted" || acceptingOwnerAction === action.id}
+                        disabled={!acceptOwnerAction.runnable || action.status === "accepted" || acceptingOwnerAction === action.id}
+                        title={!acceptOwnerAction.runnable ? capabilityExecutionReason(acceptOwnerAction, t) : undefined}
                         onClick={() => void acceptOwnerRemediationAction(action)}
                       >
                         <CheckCircle className="h-4 w-4" aria-hidden="true" />
@@ -918,6 +1048,7 @@ export function Incidents() {
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("incidents.response.description")}</p>
         </div>
+        <CapabilityActionNotice action={dispatchResponseAction} />
         <form className="grid gap-3 md:grid-cols-2" onSubmit={dispatchResponseIntegrations}>
           <label className="grid gap-1 text-sm font-medium">
             {t("incidents.response.title")}
@@ -1035,7 +1166,11 @@ export function Incidents() {
             />
           </label>
           <div className="md:col-span-2">
-            <Button type="submit" disabled={dispatchingResponse}>
+            <Button
+              type="submit"
+              disabled={dispatchingResponse || !dispatchResponseAction.runnable}
+              title={!dispatchResponseAction.runnable ? capabilityExecutionReason(dispatchResponseAction, t) : undefined}
+            >
               <Send className="h-4 w-4" aria-hidden="true" />
               {dispatchingResponse ? t("incidents.response.dispatching") : t("incidents.response.dispatch")}
             </Button>
@@ -1073,6 +1208,7 @@ export function Incidents() {
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.queue.a.servicenow.table.api.ticket.throug.0df778f34b")}</p>
         </div>
+        <CapabilityActionNotice action={createServiceNowAction} />
         <form className="grid gap-3 md:grid-cols-2" onSubmit={queueServiceNowTicket}>
           <label className="grid gap-1 text-sm font-medium">
             {translateNow("source.servicenow.instance.0da2a11806")}
@@ -1147,7 +1283,11 @@ export function Incidents() {
             />
           </label>
           <div className="md:col-span-2">
-            <Button type="submit" disabled={ticketing}>
+            <Button
+              type="submit"
+              disabled={ticketing || !createServiceNowAction.runnable}
+              title={!createServiceNowAction.runnable ? capabilityExecutionReason(createServiceNowAction, t) : undefined}
+            >
               {ticketing ? translateNow("source.queueing.d6e3ff1af9") : translateNow("source.queue.servicenow.ticket.f2988e9681")}
             </Button>
           </div>

@@ -1,6 +1,6 @@
 import { Download, Pause, Play, RotateCcw } from "lucide-react";
 
-import { UnavailableState } from "@/components/StatePrimitives";
+import { CapabilityActionNotice, capabilityExecutionReason } from "@/components/CapabilityTruth";
 import { Button } from "@/components/ui/button";
 import { translateNow, useTranslation } from "@/i18n/I18nProvider";
 import type { FleetReissuanceRun } from "@/lib/api";
@@ -9,23 +9,14 @@ import { useCapabilityExecution } from "@/lib/capabilities";
 export function FleetStartAction({ running, onStart }: { running: boolean; onStart: () => void }) {
   const { t } = useTranslation();
   const action = useCapabilityExecution("F32", "startFleetReissuance");
-  const explanation = action.checking
-    ? t("capabilities.action.checking")
-    : action.unavailable?.detail ||
-      (action.state === "denied"
-        ? t("capabilities.action.denied")
-        : action.state === "unknown"
-          ? t("capabilities.action.unknown")
-          : t("capabilities.action.unavailable"));
+  const explanation = capabilityExecutionReason(action, t);
   return (
     <div className="grid gap-2">
       <Button type="button" onClick={onStart} disabled={running || !action.runnable} title={!action.runnable ? explanation : undefined}>
         <Play className="h-4 w-4" aria-hidden="true" />
         {running ? translateNow("source.starting.82b93630a9") : translateNow("source.start.fleet.run.140963492c")}
       </Button>
-      {action.enforced && !action.checking && !action.runnable ? (
-        <UnavailableState title={t("capabilities.action.unavailableTitle")}>{explanation}</UnavailableState>
-      ) : null}
+      <CapabilityActionNotice action={action} />
     </div>
   );
 }

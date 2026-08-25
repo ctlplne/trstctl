@@ -3,6 +3,8 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { ApiError } from "@/lib/api";
+import type { CapabilityView, CapabilityViewItem } from "@/lib/api-types.gen";
+import { CapabilityFixtureProvider } from "@/lib/capabilities";
 import { Incidents } from "@/pages/Incidents";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -67,6 +69,100 @@ function renderIncidents(initialEntry = "/incidents") {
     <MemoryRouter initialEntries={[initialEntry]}>
       <Incidents />
     </MemoryRouter>,
+  );
+}
+
+function capabilityItem(overrides: Partial<CapabilityViewItem>): CapabilityViewItem {
+  return {
+    capability_id: "F31",
+    name: "Credential compromise workflow",
+    purpose: "Contain and repair a compromised credential.",
+    tool: "operations",
+    classification: "primary",
+    console_route: "/incidents",
+    maturity: "partial_workflow",
+    release_blocking: true,
+    edition: "core",
+    runtime_state: "partially_available",
+    authorization_state: "partial",
+    dependency_state: "documented_not_runtime_verified",
+    dependencies: [],
+    stages: [{ name: "execute", completion: "blocked", reason: "The runtime dependency is not configured." }],
+    actions: { allowed: [], scoped: [], denied: [], unavailable: [] },
+    ...overrides,
+  };
+}
+
+const runtimeUnavailableDetail = "This operation is not mounted because its runtime dependency is not configured.";
+const unavailableF31Operations = [
+  "acceptOwnerRemediationAction",
+  "dispatchResponseIntegrations",
+  "listIncidentExecutions",
+  "listOwnerRemediationActions",
+  "listRemediationPlaybookRuns",
+  "listRemediationPlaybooks",
+  "runRemediationPlaybook",
+];
+
+function incidentRuntime(options: { incidentListAllowed?: boolean } = {}): CapabilityView {
+  const unavailable = unavailableF31Operations
+    .filter((operationId) => !(options.incidentListAllowed && operationId === "listIncidentExecutions"))
+    .map((operation_id) => ({ operation_id, code: "dependency_not_configured" as const, detail: runtimeUnavailableDetail }));
+  return {
+    schema_version: 1,
+    contract_schema_version: 3,
+    enforcement_note: "The server checks every operation again when it executes.",
+    license: { tier: "community", state: "community" },
+    items: [
+      capabilityItem({
+        actions: {
+          allowed: ["createServiceNowTicket", "listOutboxReconciliationConflicts", ...(options.incidentListAllowed ? ["listIncidentExecutions"] : [])],
+          scoped: [],
+          denied: [],
+          unavailable,
+        },
+      }),
+      capabilityItem({
+        capability_id: "F32",
+        name: "Fleet re-issuance for CA compromise",
+        runtime_state: "unavailable",
+        authorization_state: "none",
+        actions: {
+          allowed: [],
+          scoped: [],
+          denied: [],
+          unavailable: [{ operation_id: "listFleetReissuanceRuns", code: "dependency_not_configured", detail: runtimeUnavailableDetail }],
+        },
+      }),
+      capabilityItem({
+        capability_id: "F34",
+        name: "Break-glass procedures",
+        maturity: "complete_vertical_slice",
+        runtime_state: "available",
+        authorization_state: "full",
+        dependency_state: "none",
+        actions: { allowed: ["issueBreakglass", "reconcileBreakglass"], scoped: [], denied: [], unavailable: [] },
+      }),
+      capabilityItem({
+        capability_id: "F21",
+        name: "Credential graph",
+        maturity: "complete_vertical_slice",
+        runtime_state: "available",
+        authorization_state: "full",
+        dependency_state: "none",
+        actions: { allowed: ["graphBlastRadius"], scoped: [], denied: [], unavailable: [] },
+      }),
+    ],
+  };
+}
+
+function renderIncidentsWithRuntime(view: CapabilityView, initialEntry = "/incidents") {
+  return render(
+    <CapabilityFixtureProvider view={view}>
+      <MemoryRouter initialEntries={[initialEntry]}>
+        <Incidents />
+      </MemoryRouter>
+    </CapabilityFixtureProvider>,
   );
 }
 
@@ -436,6 +532,41 @@ describe("incident response served execution surface", () => {
 
     expect(await screen.findByRole("button", { name: "Start response" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Continue response" })).not.toBeInTheDocument();
+  });
+
+  it("does not call unavailable incident feeds or turn expected absence into a page failure", async () => {
+    const user = userEvent.setup();
+    renderIncidentsWithRuntime(incidentRuntime());
+
+    expect(await screen.findByText("No incident response is active.")).toBeInTheDocument();
+    expect(screen.queryByText("Incident evidence could not be loaded.")).not.toBeInTheDocument();
+    expect(apiMock.incidentExecutions).not.toHaveBeenCalled();
+    expect(apiMock.fleetReissuanceRuns).not.toHaveBeenCalled();
+    expect(apiMock.remediationPlaybooks).not.toHaveBeenCalled();
+    expect(apiMock.remediationPlaybookRuns).not.toHaveBeenCalled();
+    expect(apiMock.ownerRemediationActions).not.toHaveBeenCalled();
+    expect(apiMock.remediationOwnerActions).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("tab", { name: "Remediation" }));
+    const remediation = document.getElementById("incidents-panel-remediation");
+    expect(remediation).not.toBeNull();
+    expect(within(remediation as HTMLElement).getByRole("button", { name: "Run right-size" })).toBeDisabled();
+    expect(within(remediation as HTMLElement).getByText(runtimeUnavailableDetail)).toBeInTheDocument();
+    expect(screen.queryByText("Loading owner remediation actions...")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Integrations" }));
+    expect(screen.getByRole("button", { name: "Dispatch response" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Queue ServiceNow ticket" })).toBeEnabled();
+  });
+
+  it("still surfaces an unexpected failure from an operation the server called runnable", async () => {
+    apiMock.incidentExecutions.mockRejectedValueOnce(new ApiError(503, JSON.stringify({ detail: "incident ledger is rebuilding" })));
+    renderIncidentsWithRuntime(incidentRuntime({ incidentListAllowed: true }));
+
+    expect(await screen.findByText("Incident evidence could not be loaded.")).toBeInTheDocument();
+    expect(screen.getByText(/incident ledger is rebuilding/i)).toBeInTheDocument();
+    expect(apiMock.incidentExecutions).toHaveBeenCalledWith({ limit: 10 });
+    expect(apiMock.fleetReissuanceRuns).not.toHaveBeenCalled();
   });
 
   it("opens on execution evidence and gives every response workflow a stable tab", async () => {

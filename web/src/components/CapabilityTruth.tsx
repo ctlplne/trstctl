@@ -1,7 +1,15 @@
 import { AlertTriangle, CircleSlash2 } from "lucide-react";
 import { useLocation } from "react-router-dom";
+import { UnavailableState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
-import { capabilityLimitationReason, capabilitySurfaceState, summarizeCapabilities, useCapabilities, type CapabilitySurfaceState } from "@/lib/capabilities";
+import {
+  capabilityLimitationReason,
+  capabilitySurfaceState,
+  summarizeCapabilities,
+  useCapabilities,
+  type CapabilityExecutionPosture,
+  type CapabilitySurfaceState,
+} from "@/lib/capabilities";
 import type { CapabilityViewItem } from "@/lib/api-types.gen";
 import type { CanonicalCapabilityID } from "@/lib/feature-contracts.gen";
 import { featureIdsForPath } from "@/lib/navigation";
@@ -31,6 +39,25 @@ function itemReason(item: CapabilityViewItem, state: CapabilitySurfaceState, t: 
   if (state === "permission_blocked") return t("capabilities.reason.permissionBlocked");
   if (state === "limited") return t("capabilities.reason.partial");
   return t("capabilities.reason.unknown");
+}
+
+/** One explanation vocabulary for every exact-action preflight. Server detail
+ * wins when it is present; the fallbacks keep unknown and denied distinct. */
+export function capabilityExecutionReason(action: CapabilityExecutionPosture, t: I18nContextValue["t"]): string {
+  if (action.checking) return t("capabilities.action.checking");
+  if (action.unavailable?.detail) return action.unavailable.detail;
+  if (action.state === "denied") return t("capabilities.action.denied");
+  if (action.state === "unknown") return t("capabilities.action.unknown");
+  return t("capabilities.action.unavailable");
+}
+
+/** Reusable, quiet fail-closed state for a form or worklist whose exact server
+ * operation is not runnable. Isolated component tests without the live provider
+ * stay unchanged; the authenticated shell always enforces this boundary. */
+export function CapabilityActionNotice({ action }: { action: CapabilityExecutionPosture }) {
+  const { t } = useTranslation();
+  if (!action.enforced || action.checking || action.runnable) return null;
+  return <UnavailableState title={t("capabilities.action.unavailableTitle")}>{capabilityExecutionReason(action, t)}</UnavailableState>;
 }
 
 export function CapabilityNavStatus({ featureIds }: { featureIds: readonly CanonicalCapabilityID[] }) {

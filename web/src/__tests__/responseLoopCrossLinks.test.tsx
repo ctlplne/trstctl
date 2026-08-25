@@ -39,7 +39,10 @@ describe("incident response deep link", () => {
     apiMock.identities.mockResolvedValue([{ id: "cred-42", name: "payments-api", kind: "x509_certificate", owner_id: "owner-1", status: "issued" }]);
     apiMock.incidentExecutions.mockResolvedValue({ items: [] });
     apiMock.fleetReissuanceRuns.mockResolvedValue({ items: [] });
-    apiMock.ownerRemediationActions.mockResolvedValue({ items: [] });
+    apiMock.ownerRemediationActions.mockResolvedValue({
+      items: [],
+      summary: { total: 0, open: 0, accepted: 0, critical: 0, high: 0, medium: 0, low: 0 },
+    });
 
     render(
       <MemoryRouter initialEntries={["/incidents?identity=cred-42"]}>

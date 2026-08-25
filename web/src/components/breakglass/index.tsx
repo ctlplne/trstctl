@@ -3,7 +3,9 @@ import { api, type BreakglassIssueRequest, type BreakglassIssueResponse, type Br
 import { SectionCard } from "@/components/dashboard";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/StatePrimitives";
+import { CapabilityActionNotice, capabilityExecutionReason } from "@/components/CapabilityTruth";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
+import { useCapabilityExecution } from "@/lib/capabilities";
 
 /** BreakGlassReconcile takes the bundles a quorum issued OFFLINE during an outage
  * (when the control plane could not be reached) and reconciles them back into the
@@ -11,6 +13,8 @@ import { useTranslation, translateNow } from "@/i18n/I18nProvider";
  * emergency certificates become first-class, audited records after the fact. */
 export function BreakGlassReconcile() {
   const { t } = useTranslation();
+  const issueAction = useCapabilityExecution("F34", "issueBreakglass");
+  const reconcileAction = useCapabilityExecution("F34", "reconcileBreakglass");
   const [issueBody, setIssueBody] = useState("");
   const [issueResult, setIssueResult] = useState<BreakglassIssueResponse | null>(null);
   const [issueBusy, setIssueBusy] = useState(false);
@@ -22,6 +26,10 @@ export function BreakGlassReconcile() {
 
   async function issue(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!issueAction.runnable) {
+      setIssueError(capabilityExecutionReason(issueAction, t));
+      return;
+    }
     setIssueBusy(true);
     setIssueError(null);
     setIssueResult(null);
@@ -48,6 +56,10 @@ export function BreakGlassReconcile() {
 
   async function reconcile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!reconcileAction.runnable) {
+      setError(capabilityExecutionReason(reconcileAction, t));
+      return;
+    }
     setBusy(true);
     setError(null);
     setResult(null);
@@ -74,6 +86,7 @@ export function BreakGlassReconcile() {
       title={translateNow("source.break.glass.reconciliation.7351236672")}
       description="Reconcile offline-issued, quorum-approved break-glass certificate bundles back into the control plane once connectivity returns."
     >
+      <CapabilityActionNotice action={issueAction} />
       <form onSubmit={issue} className="mb-5 grid gap-3 border-b border-border pb-5">
         <div>
           <h3 className="text-sm font-semibold">{t("breakglass.issue.heading")}</h3>
@@ -91,7 +104,11 @@ export function BreakGlassReconcile() {
           />
         </label>
         <div>
-          <Button type="submit" disabled={issueBusy || !issueBody.trim()}>
+          <Button
+            type="submit"
+            disabled={issueBusy || !issueBody.trim() || !issueAction.runnable}
+            title={!issueAction.runnable ? capabilityExecutionReason(issueAction, t) : undefined}
+          >
             {issueBusy ? t("breakglass.issue.busy") : t("breakglass.issue.submit")}
           </Button>
         </div>
@@ -102,6 +119,7 @@ export function BreakGlassReconcile() {
           {t("breakglass.issue.status", { count: issueResult.reconciled })}
         </p>
       ) : null}
+      <CapabilityActionNotice action={reconcileAction} />
       <form onSubmit={reconcile} className="grid gap-3">
         <label className="grid gap-1 text-sm font-medium" htmlFor="breakglass-bundles">
           {translateNow("source.offline.issued.bundles.json.58401e65e9")}
@@ -115,7 +133,11 @@ export function BreakGlassReconcile() {
           />
         </label>
         <div>
-          <Button type="submit" disabled={busy || !bundles.trim()}>
+          <Button
+            type="submit"
+            disabled={busy || !bundles.trim() || !reconcileAction.runnable}
+            title={!reconcileAction.runnable ? capabilityExecutionReason(reconcileAction, t) : undefined}
+          >
             {busy ? translateNow("source.reconciling.8adbed64b5") : translateNow("source.reconcile.break.glass.bundles.b664752d57")}
           </Button>
         </div>
