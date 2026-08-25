@@ -94,13 +94,20 @@ func TestCapabilitiesViewIsAuthenticatedSanitizedAndAuthorizationAware(t *testin
 	if err := json.NewDecoder(operatorResponse.Body).Decode(&operator); err != nil {
 		t.Fatalf("decode operator response: %v", err)
 	}
+	for _, item := range operator.Items {
+		for _, action := range item.Actions.Unavailable {
+			if strings.TrimSpace(action.Detail) == "" {
+				t.Errorf("capability %s operation %s has an empty unavailable reason", item.CapabilityID, action.OperationID)
+			}
+		}
+	}
 	f2 = findCapabilityViewItem(t, operator, "F2")
 	if f2.AuthorizationState != "full" || len(f2.Actions.Denied) != 0 {
 		t.Fatalf("operator F2 auth=%q denied=%v, want full/none", f2.AuthorizationState, f2.Actions.Denied)
 	}
 	f64 := findCapabilityViewItem(t, operator, "F64")
-	if f64.RuntimeState != "partially_available" {
-		t.Fatalf("operator F64 runtime=%q, want partially_available", f64.RuntimeState)
+	if f64.RuntimeState != "unavailable" {
+		t.Fatalf("operator F64 runtime=%q, want unavailable without the native secret store", f64.RuntimeState)
 	}
 	foundUnavailable := false
 	for _, action := range f64.Actions.Unavailable {
@@ -110,6 +117,30 @@ func TestCapabilitiesViewIsAuthenticatedSanitizedAndAuthorizationAware(t *testin
 	}
 	if !foundUnavailable {
 		t.Fatalf("F64 unavailable actions=%+v, want honest importSecrets refusal", f64.Actions.Unavailable)
+	}
+	f63 := findCapabilityViewItem(t, operator, "F63")
+	if f63.RuntimeState != "unavailable" || len(f63.Actions.Allowed) != 0 {
+		t.Fatalf("operator F63 runtime=%q allowed=%v, want unavailable/none without the native secret store", f63.RuntimeState, f63.Actions.Allowed)
+	}
+	for _, operationID := range []string{"createSecret", "listSecrets", "getSecret", "getSecretVersion", "recoverSecretAt", "rotateSecret", "deleteSecret"} {
+		action := findUnavailableCapabilityAction(t, f63, operationID)
+		if action.Code != "dependency_not_configured" || !strings.Contains(action.Detail, "native secret store is turned off") {
+			t.Fatalf("F63 %s unavailable=%+v, want exact native-store dependency reason", operationID, action)
+		}
+	}
+	// F68 intentionally mixes independent posture/configuration reads with the
+	// native-store-backed sync execution. Turning the store off must not erase
+	// the useful read-only surfaces.
+	f68 := findCapabilityViewItem(t, operator, "F68")
+	if f68.RuntimeState != "partially_available" || !containsCapabilityString(f68.Actions.Allowed, "listSecretSyncTargets") {
+		t.Fatalf("operator F68 runtime=%q allowed=%v, want independent sync target posture", f68.RuntimeState, f68.Actions.Allowed)
+	}
+	if action := findUnavailableCapabilityAction(t, f68, "syncSecret"); action.Code != "dependency_not_configured" {
+		t.Fatalf("F68 syncSecret unavailable=%+v, want dependency_not_configured", action)
+	}
+	f66 := findCapabilityViewItem(t, operator, "F66")
+	if f66.RuntimeState != "unavailable" {
+		t.Fatalf("operator F66 runtime=%q, want unavailable without Transit service", f66.RuntimeState)
 	}
 
 	capabilityOnlyResponse := httptest.NewRecorder()
@@ -124,6 +155,33 @@ func TestCapabilitiesViewIsAuthenticatedSanitizedAndAuthorizationAware(t *testin
 	f2 = findCapabilityViewItem(t, restricted, "F2")
 	if f2.AuthorizationState != "none" || len(f2.Actions.Allowed) != 0 {
 		t.Fatalf("capability-only F2 auth=%q allowed=%v, want none/none", f2.AuthorizationState, f2.Actions.Allowed)
+	}
+}
+
+func TestCapabilitiesViewPromotesNativeSecretStoreOnlyWhenConfigured(t *testing.T) {
+	const tenantID = "11111111-1111-4111-8111-111111111111"
+	handler := api.New(nil, nil, nil,
+		api.WithInsecureHeaderResolver(),
+		api.WithSecrets(api.SecretsBackend{}),
+	)
+
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, capabilityViewRequest(tenantID, "operator"))
+	if response.Code != http.StatusOK {
+		t.Fatalf("configured capability status=%d body=%s, want 200", response.Code, response.Body.String())
+	}
+	var view capabilityViewTestResponse
+	if err := json.NewDecoder(response.Body).Decode(&view); err != nil {
+		t.Fatalf("decode configured capability response: %v", err)
+	}
+	f63 := findCapabilityViewItem(t, view, "F63")
+	if f63.RuntimeState != "available" || len(f63.Actions.Unavailable) != 0 {
+		t.Fatalf("configured F63 runtime=%q unavailable=%+v, want available/none", f63.RuntimeState, f63.Actions.Unavailable)
+	}
+	for _, operationID := range []string{"createSecret", "listSecrets", "getSecret", "getSecretVersion", "recoverSecretAt", "rotateSecret", "deleteSecret"} {
+		if !containsCapabilityString(f63.Actions.Allowed, operationID) {
+			t.Errorf("configured F63 allowed=%v, want %s", f63.Actions.Allowed, operationID)
+		}
 	}
 }
 
@@ -193,4 +251,34 @@ func containsCapabilityString(items []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func findUnavailableCapabilityAction(t *testing.T, item struct {
+	CapabilityID       string `json:"capability_id"`
+	Name               string `json:"name"`
+	RuntimeState       string `json:"runtime_state"`
+	AuthorizationState string `json:"authorization_state"`
+	Actions            struct {
+		Allowed     []string `json:"allowed"`
+		Scoped      []string `json:"scoped"`
+		Denied      []string `json:"denied"`
+		Unavailable []struct {
+			OperationID string `json:"operation_id"`
+			Code        string `json:"code"`
+			Detail      string `json:"detail"`
+		} `json:"unavailable"`
+	} `json:"actions"`
+}, operationID string) struct {
+	OperationID string `json:"operation_id"`
+	Code        string `json:"code"`
+	Detail      string `json:"detail"`
+} {
+	t.Helper()
+	for _, action := range item.Actions.Unavailable {
+		if action.OperationID == operationID {
+			return action
+		}
+	}
+	t.Fatalf("capability %s unavailable=%+v, want operation %s", item.CapabilityID, item.Actions.Unavailable, operationID)
+	return item.Actions.Unavailable[0]
 }

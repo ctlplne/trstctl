@@ -70,8 +70,9 @@ type capabilityViewResponse struct {
 }
 
 type capabilityRouteState struct {
-	route   route
-	enabled bool
+	route             route
+	enabled           bool
+	unavailableDetail string
 }
 
 func loadRuntimeCapabilityCatalog() (featureparity.Catalog, error) {
@@ -102,7 +103,8 @@ func (a *API) listCapabilities(w http.ResponseWriter, r *http.Request) {
 		if rt.opID == "" {
 			continue
 		}
-		routes[rt.opID] = capabilityRouteState{route: rt, enabled: a.routeEnabled(rt)}
+		enabled, detail := a.runtimeRouteAvailability(rt)
+		routes[rt.opID] = capabilityRouteState{route: rt, enabled: enabled, unavailableDetail: detail}
 	}
 
 	info := a.licenseManager().Info()
@@ -168,7 +170,7 @@ func (a *API) projectCapability(item featureparity.Item, principal authz.Princip
 			out.Actions.Unavailable = append(out.Actions.Unavailable, capabilityUnavailableAction{
 				OperationID: operationID,
 				Code:        "dependency_not_configured",
-				Detail:      "This operation is not mounted because its runtime dependency is not configured.",
+				Detail:      state.unavailableDetail,
 			})
 			continue
 		}

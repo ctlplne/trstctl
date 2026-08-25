@@ -43,7 +43,7 @@ The HTML contains no secret values, external scripts, remote fonts, or second fe
 
 ## Runtime capability view
 
-`GET /api/v1/capabilities` is the customer-safe projection of this same catalog. It is authenticated by the dedicated `capabilities:read` permission and then joins every catalog operation to the routes actually mounted in the running process and the current principal's RBAC grants.
+`GET /api/v1/capabilities` is the customer-safe projection of this same catalog. It is authenticated by the dedicated `capabilities:read` permission and then joins every catalog operation to the declared route, the optional service actually wired into this control-plane process, and the current principal's RBAC grants. A route can remain visible in OpenAPI and fail closed for direct callers while the capability view truthfully marks its operation unavailable; “documented” never means “configured.” Independent posture reads remain available when their optional mutation service is off.
 
 The response tells the console which actions are allowed, resource-scoped, denied, not attached, dependency-disabled, or deliberately unimplemented. It also carries the current license tier/state and the sanitized nine-stage ledger. It does **not** return evidence, repository paths, owner names, candidate SHAs, permission-authority implementation details, or secret-handling internals. Resource scope, ABAC, tenant key state, mutation gates, idempotency, and live dependencies are still enforced when the user runs an action; this read is a preflight, not an authorization bypass.
 
