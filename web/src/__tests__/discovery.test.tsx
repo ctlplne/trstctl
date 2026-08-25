@@ -234,6 +234,10 @@ function seedDiscoveryMocks() {
     observed: 1,
     unobserved: 1,
     structurally_unobservable: 1,
+    segment_coverage_percent: 0,
+    provenance: { total: 0, observed: 0, stale: 0, never_observed: 0, stale_after_hours: 168 },
+    unknowns: [],
+    segments: [{ name: "production-dmz", ranges: ["10.0.0.0/24"], status: "never", staleness_hours: 168 }],
     classes: [
       { class: "tls-endpoint", status: "OBSERVED", source_kinds: ["network"], observed_by: ["edge-net"], last_observed_at: "2026-06-20T10:03:05Z" },
       {

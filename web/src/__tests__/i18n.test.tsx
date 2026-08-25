@@ -1114,8 +1114,13 @@ describe("i18n boundary", () => {
       // names its capability-contract failure, AD CS enrollment/private-CIDR
       // boundary, and AWS/GCP metadata filters. Machine-authored es/de —
       // FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "86f8dce4553aaf4253f6b0912066c9ee919a1861fb414102386cad9c94c7b8ce",
-      "de-DE": "22c4fd4f8c82d54ec2633072560bb070b0b7087ba7be4a6ae10851132f8bc5ab",
+      // Product-overhaul discovery live-parity re-pin: the new-scope action,
+      // existing-scope chooser, exact boundary, fail-closed degraded state,
+      // and the fact that declaration does not start a scan are now explicit.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
+      // release.
+      "es-ES": "886bb817afd8e9f23b450139f2064c03a1a996da4a9f1a06c7a5b1899e49c179",
+      "de-DE": "35cee3481eebe64b89d16c8420e83841245efdeb2026915d5fca04bc699fde59",
     });
   });
 

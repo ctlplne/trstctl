@@ -5,11 +5,13 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AppQueryProvider } from "@/lib/query";
 import { SourceSetup, parsePorts, sourceWizardContractProblems, sourceWizardFieldPaths, type PrimaryKind } from "./SourceSetup";
-import type { DiscoveryCapability, DiscoveryCapabilityCatalog, DiscoverySource } from "@/lib/api";
+import { ApiError, type DiscoveryCapability, type DiscoveryCapabilityCatalog, type DiscoveryCoverage, type DiscoverySource } from "@/lib/api";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     discoveryCapabilities: vi.fn(),
+    discoveryCoverage: vi.fn(),
+    createDiscoverySegment: vi.fn(),
     previewDiscoveryPlan: vi.fn(),
     createDiscoverySource: vi.fn(),
   },
@@ -70,6 +72,18 @@ const catalog: DiscoveryCapabilityCatalog = {
   ],
 };
 
+const emptyCoverage: DiscoveryCoverage = {
+  classes: [],
+  generated_at: "2026-08-25T00:00:00Z",
+  observed: 0,
+  provenance: { total: 0, observed: 0, stale: 0, never_observed: 0, stale_after_hours: 168 },
+  segment_coverage_percent: 0,
+  segments: [],
+  structurally_unobservable: 0,
+  unknowns: [],
+  unobserved: 0,
+};
+
 function renderSetup(onCreated = vi.fn()) {
   return render(
     <AppQueryProvider>
@@ -82,6 +96,16 @@ describe("typed discovery source setup", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     apiMock.discoveryCapabilities.mockResolvedValue(catalog);
+    apiMock.discoveryCoverage.mockResolvedValue(emptyCoverage);
+    apiMock.createDiscoverySegment.mockResolvedValue({
+      id: "segment-1",
+      name: "production-edge",
+      ranges: ["api.example.test", "10.20.30.0/30"],
+      staleness_hours: 168,
+      excluded: false,
+      last_found_count: 0,
+      created_at: "2026-08-25T00:00:00Z",
+    });
     apiMock.previewDiscoveryPlan.mockResolvedValue({
       kind: "network",
       execution: "network-role relay",
@@ -126,8 +150,13 @@ describe("typed discovery source setup", () => {
     await user.clear(ports);
     await user.type(ports, "443, 8443-8444");
 
-    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    await user.click(screen.getByRole("button", { name: "Declare scope and review plan" }));
     expect(await screen.findByRole("region", { name: "Normalized discovery plan" })).toHaveTextContent("3");
+    expect(apiMock.createDiscoverySegment).toHaveBeenCalledWith({
+      name: "production-edge",
+      ranges: ["api.example.test", "10.20.30.0/30"],
+      staleness_hours: 168,
+    });
     expect(apiMock.previewDiscoveryPlan).toHaveBeenCalledWith(
       expect.objectContaining({
         kind: "network",
@@ -196,6 +225,28 @@ describe("typed discovery source setup", () => {
     expect(() => parsePorts("0")).toThrow(/inside 1–65535/);
     expect(() => parsePorts("1000-1400")).toThrow(/at most 256 ports/);
     expect(parsePorts("443,443,8443-8444")).toEqual([443, 8443, 8444]);
+  });
+
+  it("shows the server's exact plan rejection instead of a bare HTTP status", async () => {
+    const user = userEvent.setup();
+    apiMock.discoveryCoverage.mockResolvedValue({
+      ...emptyCoverage,
+      segments: [{ name: "production-edge", ranges: ["api.example.test"], status: "never", staleness_hours: 168 }],
+    });
+    apiMock.previewDiscoveryPlan.mockRejectedValue(
+      new ApiError(400, JSON.stringify({ title: "Invalid discovery plan", detail: "Target api.example.test:8443 is outside the declared safety fence." })),
+    );
+    renderSetup();
+
+    await screen.findByText("What this source does");
+    await user.type(screen.getByRole("textbox", { name: "Source name" }), "Production TLS");
+    await user.type(screen.getByRole("textbox", { name: "Authorized scope" }), "production-edge");
+    await user.type(screen.getByRole("textbox", { name: /Hosts, IPs/ }), "api.example.test");
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("outside the declared safety fence");
+    expect(screen.queryByText("request failed (400)")).not.toBeInTheDocument();
+    expect(apiMock.createDiscoverySegment).not.toHaveBeenCalled();
   });
 
   it("fails the parity oracle when the server adds a field the console cannot configure", () => {

@@ -11,7 +11,8 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { api, type DiscoveryCapability, type DiscoveryPlanPreview, type DiscoverySource } from "@/lib/api";
+import { api, type DiscoveryCapability, type DiscoveryPlanPreview, type DiscoverySegmentCoverage, type DiscoverySource } from "@/lib/api";
+import { apiProblemMessage } from "@/lib/apiProblem";
 import { useApiQuery } from "@/lib/query";
 import { translateNow, useTranslation } from "@/i18n/I18nProvider";
 
@@ -275,6 +276,7 @@ const setupSteps: CarouselStep[] = [
 export function SourceSetup({ onCreated }: { onCreated: (source: DiscoverySource) => Promise<void> | void }) {
   const { t } = useTranslation();
   const capabilities = useApiQuery(["discovery-capabilities"], api.discoveryCapabilities);
+  const coverage = useApiQuery(["discovery-coverage"], () => api.discoveryCoverage());
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [previewing, setPreviewing] = useState(false);
@@ -289,6 +291,12 @@ export function SourceSetup({ onCreated }: { onCreated: (source: DiscoverySource
   const contractProblems = useMemo(() => sourceWizardContractProblems(capabilities.data?.items ?? []), [capabilities.data?.items]);
   const capability = available.find((item) => item.kind === values.kind);
   const providers = capability?.providers ?? noProviders;
+  const declaredScopes = useMemo(
+    () => (coverage.data?.segments ?? []).filter((segment) => segment.status !== "excluded").sort((left, right) => left.name.localeCompare(right.name)),
+    [coverage.data?.segments],
+  );
+  const selectedScope = declaredScopes.find((segment) => segment.name === values.segment.trim());
+  const willDeclareScope = (values.kind === "network" || values.kind === "ssh") && values.segment.trim() !== "" && !selectedScope;
 
   useEffect(() => {
     const firstProvider = providers[0]?.id ?? "";
@@ -332,12 +340,20 @@ export function SourceSetup({ onCreated }: { onCreated: (source: DiscoverySource
     setSubmitError(null);
     try {
       const current = setupSchema.parse(form.getValues());
+      if ((current.kind === "network" || current.kind === "ssh") && !declaredScopes.some((segment) => segment.name === current.segment)) {
+        await api.createDiscoverySegment({
+          name: current.segment,
+          ranges: scopeDeclarations(current),
+          staleness_hours: 168,
+        });
+        coverage.refetch();
+      }
       const preview = await api.previewDiscoveryPlan({ name: current.name, kind: current.kind, config: buildConfig(current) });
       setPlanPreview(preview);
       setStep(1);
     } catch (error) {
       setPlanPreview(null);
-      setSubmitError(error instanceof Error ? error.message : t("discovery.setup.previewError"));
+      setSubmitError(apiProblemMessage(error, t("discovery.setup.previewError")));
     } finally {
       setPreviewing(false);
     }
@@ -353,7 +369,7 @@ export function SourceSetup({ onCreated }: { onCreated: (source: DiscoverySource
       setPlanPreview(null);
       setStep(0);
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : t("discovery.setup.saveError"));
+      setSubmitError(apiProblemMessage(error, t("discovery.setup.saveError")));
     } finally {
       setSubmitting(false);
     }
@@ -373,7 +389,7 @@ export function SourceSetup({ onCreated }: { onCreated: (source: DiscoverySource
             : undefined
         }
         onNext={step === 0 ? review : undefined}
-        nextLabel={previewing ? t("discovery.setup.validating") : t("discovery.setup.step.review")}
+        nextLabel={previewing ? t("discovery.setup.validating") : willDeclareScope ? t("discovery.setup.declareAndReview") : t("discovery.setup.step.review")}
         nextDisabled={previewing}
       >
         {step === 0 ? (
@@ -403,7 +419,16 @@ export function SourceSetup({ onCreated }: { onCreated: (source: DiscoverySource
             </div>
 
             {capability ? <CapabilityExplanation capability={capability} /> : null}
-            {values.kind === "network" || values.kind === "ssh" ? <NetworkFields form={form} kind={values.kind} /> : null}
+            {values.kind === "network" || values.kind === "ssh" ? (
+              <NetworkFields
+                form={form}
+                kind={values.kind}
+                values={values}
+                declaredScopes={declaredScopes}
+                scopesLoading={coverage.loading}
+                scopesError={coverage.error}
+              />
+            ) : null}
             {values.kind === "adcs" ? <ADCSFields form={form} /> : null}
             {values.kind === "cloud_certificate" || values.kind === "cloud_secret" || values.kind === "secret_store" ? (
               <CloudFields form={form} providers={providers} />
@@ -495,9 +520,25 @@ function CapabilityExplanation({ capability }: { capability: DiscoveryCapability
   );
 }
 
-function NetworkFields({ form, kind }: { form: ReturnType<typeof useForm<SetupValues>>; kind: "network" | "ssh" }) {
+function NetworkFields({
+  form,
+  kind,
+  values,
+  declaredScopes,
+  scopesLoading,
+  scopesError,
+}: {
+  form: ReturnType<typeof useForm<SetupValues>>;
+  kind: "network" | "ssh";
+  values: SetupValues;
+  declaredScopes: DiscoverySegmentCoverage[];
+  scopesLoading: boolean;
+  scopesError: string | null;
+}) {
   const { t } = useTranslation();
   const portPreset = kind === "ssh" ? "22" : "443, 8443";
+  const selectedScope = declaredScopes.find((segment) => segment.name === values.segment.trim());
+  const proposedDeclarations = scopeDeclarations(values);
   return (
     <div className="grid gap-4">
       <div className="grid gap-4 lg:grid-cols-2">
@@ -508,6 +549,50 @@ function NetworkFields({ form, kind }: { form: ReturnType<typeof useForm<SetupVa
           {(control) => <Input {...control} {...form.register("relayAgentID")} className="font-mono text-xs" placeholder={examples.agentID} />}
         </Field>
       </div>
+      {scopesLoading ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          {t("discovery.setup.scopesLoading")}
+        </p>
+      ) : null}
+      {scopesError ? (
+        <p role="status" className="rounded-control border border-status-warning/40 bg-status-warning/10 p-3 text-sm">
+          {t("discovery.setup.scopesUnavailable")}
+        </p>
+      ) : null}
+      {declaredScopes.length > 0 ? (
+        <section aria-label={t("discovery.setup.existingScopes")} className="grid gap-2 rounded-panel border border-border p-4">
+          <div>
+            <h3 className="font-medium">{t("discovery.setup.existingScopes")}</h3>
+            <p className="mt-1 text-sm text-muted-foreground">{t("discovery.setup.existingScopesDescription")}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {declaredScopes.map((segment) => (
+              <Button
+                key={segment.name}
+                type="button"
+                size="sm"
+                variant={selectedScope?.name === segment.name ? "default" : "outline"}
+                aria-pressed={selectedScope?.name === segment.name}
+                onClick={() => form.setValue("segment", segment.name, { shouldDirty: true, shouldValidate: true })}
+              >
+                {segment.name}
+              </Button>
+            ))}
+          </div>
+          {selectedScope ? (
+            <p className="text-caption text-muted-foreground">{t("discovery.setup.scopeBoundary", { boundary: selectedScope.ranges.join(", ") })}</p>
+          ) : null}
+        </section>
+      ) : null}
+      {values.segment.trim() && !selectedScope ? (
+        <section role="note" className="rounded-panel border border-brand-accent/25 bg-brand-accent/5 p-4 text-sm">
+          <strong>{t("discovery.setup.newScopeTitle", { scope: values.segment.trim() })}</strong>
+          <p className="mt-1 text-muted-foreground">{t("discovery.setup.newScopeBody")}</p>
+          <p className="mt-2 break-words font-mono text-xs text-muted-foreground">
+            {proposedDeclarations.length > 0 ? proposedDeclarations.join(" · ") : t("discovery.setup.newScopeEmpty")}
+          </p>
+        </section>
+      ) : null}
       <details className="rounded-panel border border-border p-4">
         <summary className="cursor-pointer font-medium">{t("discovery.setup.rangesAndExclusions")}</summary>
         <p className="mt-2 text-sm text-muted-foreground">{t("discovery.setup.rangesAndExclusionsDescription")}</p>
@@ -870,6 +955,25 @@ function normalizedTargets(values: SetupValues): string[] {
     else for (const port of ports) out.add(target.includes(":") ? `[${target}]:${port}` : `${target}:${port}`);
   }
   return [...out];
+}
+
+/** scopeDeclarations turns the operator's plain target inputs into the durable
+ * denominator that the server will enforce. Ports are intentionally removed:
+ * a declared scope answers "which hosts and ranges are authorized", while the
+ * source plan separately answers "which ports will this scan touch". */
+export function scopeDeclarations(values: SetupValues): string[] {
+  const declarations = new Set<string>();
+  for (const raw of splitList(values.targets)) {
+    const bracketed = /^\[([^\]]+)\](?::\d+)?$/.exec(raw);
+    if (bracketed) {
+      declarations.add(bracketed[1]);
+      continue;
+    }
+    const hostPort = /^([^:]+):\d+$/.exec(raw);
+    declarations.add(hostPort ? hostPort[1] : raw);
+  }
+  for (const value of [...splitList(values.cidrs), ...splitList(values.addressRanges)]) declarations.add(value);
+  return [...declarations];
 }
 
 function buildConfig(values: SetupValues): Record<string, unknown> {

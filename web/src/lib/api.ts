@@ -172,6 +172,9 @@ import type {
   DiscoverySchedule,
   DiscoveryScheduleList,
   DiscoveryScheduleRequest,
+  DiscoverySegment,
+  DiscoverySegmentCoverage,
+  DiscoverySegmentRequest,
   DiscoverySource,
   DiscoverySourceList,
   DiscoverySourceRequest,
@@ -762,6 +765,9 @@ export type {
   DiscoverySchedule,
   DiscoveryScheduleList,
   DiscoveryScheduleRequest,
+  DiscoverySegment,
+  DiscoverySegmentCoverage,
+  DiscoverySegmentRequest,
   DiscoverySource,
   DiscoverySourceList,
   DiscoverySourceRequest,
@@ -1613,6 +1619,7 @@ export interface Api {
   offboardAgent(id: string, input: AgentOffboardRequest): Promise<AgentOffboardResponse>;
   discoveryCapabilities(): Promise<DiscoveryCapabilityCatalog>;
   previewDiscoveryPlan(input: DiscoverySourceRequest): Promise<DiscoveryPlanPreview>;
+  createDiscoverySegment(input: DiscoverySegmentRequest): Promise<DiscoverySegment>;
   discoverySources(options?: { limit?: number; cursor?: string }): Promise<DiscoverySourceList>;
   createDiscoverySource(input: DiscoverySourceRequest): Promise<DiscoverySource>;
   discoverySchedules(options?: { limit?: number; cursor?: string }): Promise<DiscoveryScheduleList>;
@@ -2080,6 +2087,7 @@ const liveApi: Api = {
   offboardAgent: (id, input) => mutate<AgentOffboardResponse>("POST", `/api/v1/agents/${encodeURIComponent(id)}/offboard`, input),
   discoveryCapabilities: () => req<DiscoveryCapabilityCatalog>("/api/v1/discovery/capabilities"),
   previewDiscoveryPlan: (input) => mutate<DiscoveryPlanPreview>("POST", "/api/v1/discovery/plans/preview", input),
+  createDiscoverySegment: (input) => mutate<DiscoverySegment>("POST", "/api/v1/discovery/segments", input),
   discoverySources: (options) => req<DiscoverySourceList>(`/api/v1/discovery/sources${pageQueryString(options)}`),
   createDiscoverySource: (input) => mutate<DiscoverySource>("POST", "/api/v1/discovery/sources", input),
   discoverySchedules: (options) => req<DiscoveryScheduleList>(`/api/v1/discovery/schedules${pageQueryString(options)}`),

@@ -6432,7 +6432,8 @@ const esESCatalog = {
   "discovery.setup.step.scope": "Definir un ámbito seguro",
   "discovery.setup.step.scopeDescription": "Asigne un nombre a la fuente, elija desde dónde se originan las conexiones e introduzca solo el límite aprobado.",
   "discovery.setup.step.review": "Revisar el plan exacto",
-  "discovery.setup.step.reviewDescription": "Confirme el ámbito normalizado, el tratamiento de datos, el permiso y el trabajo estimado antes de guardar nada.",
+  "discovery.setup.step.reviewDescription":
+    "Confirme el ámbito normalizado, el tratamiento de datos, el permiso y el trabajo estimado antes de guardar la fuente o iniciar un escaneo.",
   "discovery.setup.loading": "Cargando el contrato de fuentes disponible…",
   "discovery.setup.unavailableTitle": "La configuración de fuentes no está disponible",
   "discovery.setup.unavailableBody":
@@ -6446,6 +6447,7 @@ const esESCatalog = {
   "discovery.setup.saveError": "No se creó la fuente. Revise el error exacto de la API y vuelva a intentarlo.",
   "discovery.setup.formLabel": "Configurar una fuente de descubrimiento",
   "discovery.setup.validating": "Validando con el servidor…",
+  "discovery.setup.declareAndReview": "Declarar el ámbito y revisar el plan",
   "discovery.setup.sourceName": "Nombre de la fuente",
   "discovery.setup.kind": "¿Qué debe inspeccionar trstctl?",
   "discovery.setup.planLabel": "Plan de descubrimiento normalizado",
@@ -6462,7 +6464,19 @@ const esESCatalog = {
   "discovery.setup.dataBoundaryTitle": "Qué datos cruzan el límite",
   "discovery.setup.requires": "Requiere",
   "discovery.setup.scope": "Ámbito autorizado",
-  "discovery.setup.scopeDescription": "Cree primero el ámbito declarado. Es el denominador de una cobertura honesta.",
+  "discovery.setup.scopeDescription":
+    "Elija abajo un ámbito existente o escriba un nombre nuevo. El ámbito es la barrera de seguridad y el denominador de una cobertura honesta.",
+  "discovery.setup.scopesLoading": "Comprobando los ámbitos seguros existentes…",
+  "discovery.setup.scopesUnavailable":
+    "No se pudieron leer los ámbitos existentes. Aún puede declarar uno nuevo; el servidor se detendrá de forma segura si el límite no es válido.",
+  "discovery.setup.existingScopes": "Ámbitos seguros existentes",
+  "discovery.setup.existingScopesDescription":
+    "Elija uno para reutilizar su barrera de seguridad o escriba arriba otro nombre para declarar una barrera nueva.",
+  "discovery.setup.scopeBoundary": "Límite permitido: {boundary}",
+  "discovery.setup.newScopeTitle": "Ámbito nuevo: {scope}",
+  "discovery.setup.newScopeBody":
+    "La siguiente acción solo registra este límite autorizado y después pide al servidor una vista previa del plan exacto. Todavía no se ejecuta ningún escaneo ni se guarda ninguna fuente.",
+  "discovery.setup.newScopeEmpty": "Añada un host, una dirección, un CIDR o un intervalo IP explícito para definir esta barrera.",
   "discovery.setup.relay": "Relay de red",
   "discovery.setup.relayDescription": "Las conexiones se originan aquí. Déjelo vacío solo si el servidor puede elegir un relay activo con rol de red.",
   "discovery.setup.rangesAndExclusions": "Rangos de direcciones y exclusiones explícitos",

@@ -6471,7 +6471,7 @@ const deDECatalog = {
   "discovery.setup.step.scopeDescription": "Benennen Sie die Quelle, wählen Sie den Ursprung der Verbindungen und geben Sie nur die genehmigte Grenze ein.",
   "discovery.setup.step.review": "Exakten Plan prüfen",
   "discovery.setup.step.reviewDescription":
-    "Bestätigen Sie normalisierten Bereich, Datenverarbeitung, Berechtigung und geschätzte Arbeit, bevor etwas gespeichert wird.",
+    "Bestätigen Sie normalisierten Bereich, Datenverarbeitung, Berechtigung und geschätzte Arbeit, bevor die Quelle gespeichert oder ein Scan gestartet wird.",
   "discovery.setup.loading": "Verfügbaren Quellenvertrag laden…",
   "discovery.setup.unavailableTitle": "Quelleneinrichtung ist nicht verfügbar",
   "discovery.setup.unavailableBody":
@@ -6485,6 +6485,7 @@ const deDECatalog = {
   "discovery.setup.saveError": "Die Quelle wurde nicht erstellt. Prüfen Sie den genauen API-Fehler und versuchen Sie es erneut.",
   "discovery.setup.formLabel": "Discovery-Quelle einrichten",
   "discovery.setup.validating": "Mit dem Server validieren…",
+  "discovery.setup.declareAndReview": "Bereich festlegen und Plan prüfen",
   "discovery.setup.sourceName": "Quellenname",
   "discovery.setup.kind": "Was soll trstctl prüfen?",
   "discovery.setup.planLabel": "Normalisierter Discovery-Plan",
@@ -6501,7 +6502,19 @@ const deDECatalog = {
   "discovery.setup.dataBoundaryTitle": "Welche Daten die Grenze überqueren",
   "discovery.setup.requires": "Erfordert",
   "discovery.setup.scope": "Autorisierter Bereich",
-  "discovery.setup.scopeDescription": "Erstellen Sie zuerst den deklarierten Bereich. Er ist der Nenner für eine ehrliche Abdeckung.",
+  "discovery.setup.scopeDescription":
+    "Wählen Sie unten einen vorhandenen Bereich oder geben Sie einen neuen Namen ein. Der Bereich ist der Sicherheitszaun und der Nenner für eine ehrliche Abdeckung.",
+  "discovery.setup.scopesLoading": "Vorhandene sichere Bereiche werden geprüft…",
+  "discovery.setup.scopesUnavailable":
+    "Vorhandene Bereiche konnten nicht gelesen werden. Sie können weiterhin einen neuen Bereich festlegen; der Server bricht sicher ab, wenn die Grenze unsicher ist.",
+  "discovery.setup.existingScopes": "Vorhandene sichere Bereiche",
+  "discovery.setup.existingScopesDescription":
+    "Wählen Sie einen Bereich, um seinen Sicherheitszaun wiederzuverwenden, oder geben Sie oben einen anderen Namen für einen neuen Zaun ein.",
+  "discovery.setup.scopeBoundary": "Erlaubte Grenze: {boundary}",
+  "discovery.setup.newScopeTitle": "Neuer Bereich: {scope}",
+  "discovery.setup.newScopeBody":
+    "Die nächste Aktion speichert nur diese erlaubte Grenze und fordert danach vom Server eine Vorschau des genauen Scanplans an. Es wird noch nichts gescannt und keine Quelle gespeichert.",
+  "discovery.setup.newScopeEmpty": "Fügen Sie einen Host, eine Adresse, ein CIDR oder einen eindeutigen IP-Bereich hinzu, um diesen Zaun festzulegen.",
   "discovery.setup.relay": "Netzwerk-Relay",
   "discovery.setup.relayDescription":
     "Verbindungen beginnen hier. Lassen Sie das Feld nur leer, wenn der Server ein aktives Relay mit Netzwerkrolle auswählen kann.",

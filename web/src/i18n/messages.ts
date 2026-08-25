@@ -5113,7 +5113,7 @@ export const messages = {
   },
   "discovery.setup.step.review": { defaultMessage: "Review exact plan", description: "Discovery setup review step." },
   "discovery.setup.step.reviewDescription": {
-    defaultMessage: "Confirm normalized scope, data handling, permission, and estimated work before anything is saved.",
+    defaultMessage: "Confirm normalized scope, data handling, permission, and estimated work before the source is saved or a scan starts.",
     description: "Discovery setup review step explanation.",
   },
   "discovery.setup.loading": { defaultMessage: "Loading this version's source contract…", description: "Discovery setup loading state." },
@@ -5146,6 +5146,10 @@ export const messages = {
   },
   "discovery.setup.formLabel": { defaultMessage: "Set up a discovery source", description: "Accessible discovery source setup form label." },
   "discovery.setup.validating": { defaultMessage: "Validating with server…", description: "Discovery plan validation progress." },
+  "discovery.setup.declareAndReview": {
+    defaultMessage: "Declare scope and review plan",
+    description: "Discovery action that explicitly persists a new authorization boundary before preview.",
+  },
   "discovery.setup.sourceName": { defaultMessage: "Source name", description: "Discovery source name field." },
   "discovery.setup.kind": { defaultMessage: "What should trstctl inspect?", description: "Discovery source-kind field." },
   "discovery.setup.planLabel": { defaultMessage: "Normalized discovery plan", description: "Accessible normalized discovery plan label." },
@@ -5168,8 +5172,35 @@ export const messages = {
   "discovery.setup.requires": { defaultMessage: "Requires", description: "Discovery capability prerequisite prefix." },
   "discovery.setup.scope": { defaultMessage: "Authorized scope", description: "Discovery authorized-scope field." },
   "discovery.setup.scopeDescription": {
-    defaultMessage: "Create the declared scope first. It is the denominator for honest coverage.",
+    defaultMessage: "Choose an existing scope below, or enter a new name. A scope is the safety fence and the denominator for honest coverage.",
     description: "Discovery authorized-scope explanation.",
+  },
+  "discovery.setup.scopesLoading": { defaultMessage: "Checking existing safe scopes…", description: "Discovery scope loading state." },
+  "discovery.setup.scopesUnavailable": {
+    defaultMessage: "Existing scopes could not be read. You can still declare a new scope; the server will fail closed if the boundary is unsafe.",
+    description: "Discovery existing-scope degraded state.",
+  },
+  "discovery.setup.existingScopes": { defaultMessage: "Existing safe scopes", description: "Discovery existing-scope chooser heading." },
+  "discovery.setup.existingScopesDescription": {
+    defaultMessage: "Choose one to reuse its safety fence, or type a different name above to declare a new fence.",
+    description: "Discovery existing-scope chooser explanation.",
+  },
+  "discovery.setup.scopeBoundary": {
+    defaultMessage: "Allowed boundary: {boundary}",
+    description: "Discovery selected-scope boundary evidence.",
+  },
+  "discovery.setup.newScopeTitle": {
+    defaultMessage: "New scope: {scope}",
+    description: "Discovery proposed-scope heading.",
+  },
+  "discovery.setup.newScopeBody": {
+    defaultMessage:
+      "The next action records only this authorization boundary, then asks the server to preview the exact scan plan. Nothing is scanned and no source is saved yet.",
+    description: "Discovery proposed-scope mutation and side-effect explanation.",
+  },
+  "discovery.setup.newScopeEmpty": {
+    defaultMessage: "Add a host, address, CIDR, or explicit IP range to define this fence.",
+    description: "Discovery empty proposed-scope explanation.",
   },
   "discovery.setup.relay": { defaultMessage: "Network relay", description: "Discovery network-relay field." },
   "discovery.setup.relayDescription": {
