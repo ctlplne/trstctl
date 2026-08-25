@@ -119,10 +119,11 @@ function codeSigningCapability(capabilityId: "F33" | "F50", operationId: string,
 
 function codeSigningRuntime(options: { approvals?: boolean; operations?: boolean } = {}): CapabilityView {
   return {
-    schema_version: 1,
+    schema_version: 2,
     contract_schema_version: 3,
     enforcement_note: "The server checks every operation again when it executes.",
     license: { tier: "community", state: "community" },
+    operations: [],
     items: [
       codeSigningCapability("F50", "listCodeSigningIdentities", options.operations ?? true),
       codeSigningCapability("F33", "listApprovalRequests", options.approvals ?? true),

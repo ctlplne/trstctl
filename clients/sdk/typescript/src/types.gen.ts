@@ -7061,6 +7061,14 @@ export interface components {
             /** @enum {string} */
             tier: "community" | "enterprise" | "provider";
         };
+        CapabilityRuntimeOperation: {
+            /** @enum {string} */
+            code?: "not_implemented" | "dependency_not_configured";
+            detail?: string;
+            operation_id: string;
+            /** @enum {string} */
+            state: "allowed" | "scoped" | "denied" | "unavailable";
+        };
         CapabilityUnavailableAction: {
             /** @enum {string} */
             code: "not_attached" | "not_implemented" | "dependency_not_configured";
@@ -7072,6 +7080,7 @@ export interface components {
             enforcement_note: string;
             items: components["schemas"]["CapabilityViewItem"][];
             license: components["schemas"]["CapabilityLicensePosture"];
+            operations: components["schemas"]["CapabilityRuntimeOperation"][];
             schema_version: number;
         };
         CapabilityViewActions: {

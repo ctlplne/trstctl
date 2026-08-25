@@ -171,6 +171,7 @@ public final class OpenApiSchemas {
       "CTMonitoringRequest",
       "CTMonitoringSummary",
       "CapabilityLicensePosture",
+      "CapabilityRuntimeOperation",
       "CapabilityUnavailableAction",
       "CapabilityView",
       "CapabilityViewActions",

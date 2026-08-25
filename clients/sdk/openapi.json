@@ -5586,6 +5586,37 @@
         ],
         "type": "object"
       },
+      "CapabilityRuntimeOperation": {
+        "properties": {
+          "code": {
+            "enum": [
+              "not_implemented",
+              "dependency_not_configured"
+            ],
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "operation_id": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "allowed",
+              "scoped",
+              "denied",
+              "unavailable"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id",
+          "state"
+        ],
+        "type": "object"
+      },
       "CapabilityUnavailableAction": {
         "properties": {
           "code": {
@@ -5627,6 +5658,12 @@
           "license": {
             "$ref": "#/components/schemas/CapabilityLicensePosture"
           },
+          "operations": {
+            "items": {
+              "$ref": "#/components/schemas/CapabilityRuntimeOperation"
+            },
+            "type": "array"
+          },
           "schema_version": {
             "type": "integer"
           }
@@ -5636,6 +5673,7 @@
           "contract_schema_version",
           "license",
           "enforcement_note",
+          "operations",
           "items"
         ],
         "type": "object"

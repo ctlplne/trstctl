@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CapabilityView, CapabilityViewItem } from "@/lib/api-types.gen";
-import { capabilitySurfaceState, isCapabilityView, resolveCapabilityAction, summarizeCapabilities } from "@/lib/capabilities";
+import { capabilitySurfaceState, isCapabilityView, resolveCapabilityAction, resolveRuntimeOperation, summarizeCapabilities } from "@/lib/capabilities";
 import { featureIdsForPath } from "@/lib/navigation";
 
 function item(overrides: Partial<CapabilityViewItem> = {}): CapabilityViewItem {
@@ -26,10 +26,21 @@ function item(overrides: Partial<CapabilityViewItem> = {}): CapabilityViewItem {
 
 function view(items: CapabilityViewItem[]): CapabilityView {
   return {
-    schema_version: 1,
+    schema_version: 2,
     contract_schema_version: 3,
     enforcement_note: "The server checks again when an operation executes.",
     license: { tier: "community", state: "community" },
+    operations: [
+      { operation_id: "listCertificates", state: "allowed" },
+      { operation_id: "requestCertificate", state: "scoped" },
+      { operation_id: "revokeCertificate", state: "denied" },
+      {
+        operation_id: "deployCertificate",
+        state: "unavailable",
+        code: "dependency_not_configured",
+        detail: "No deployment connector is configured.",
+      },
+    ],
     items,
   };
 }
@@ -50,7 +61,7 @@ describe("runtime capability truth", () => {
   });
 
   it("rejects a malformed or stale projection instead of crashing or guessing", () => {
-    const malformed = { schema_version: 1, contract_schema_version: 3, items: undefined } as unknown as CapabilityView;
+    const malformed = { schema_version: 2, contract_schema_version: 3, items: undefined } as unknown as CapabilityView;
     const stale = { ...view([item()]), contract_schema_version: 2 };
     expect(isCapabilityView(malformed)).toBe(false);
     expect(isCapabilityView(stale)).toBe(false);
@@ -76,6 +87,21 @@ describe("runtime capability truth", () => {
       unavailable: { detail: "No deployment connector is configured." },
     });
     expect(resolveCapabilityAction(runtime, "F1", "inventedBrowserAction").state).toBe("unknown");
+  });
+
+  it("preflights attached licensed operations without putting EE routes in the core feature catalog", () => {
+    const runtime = view([item()]);
+    expect(resolveRuntimeOperation(runtime, "listCertificates").state).toBe("allowed");
+    expect(resolveRuntimeOperation(runtime, "requestCertificate").state).toBe("scoped");
+    expect(resolveRuntimeOperation(runtime, "revokeCertificate").state).toBe("denied");
+    expect(resolveRuntimeOperation(runtime, "deployCertificate")).toMatchObject({
+      state: "unavailable",
+      unavailable: { code: "dependency_not_configured", detail: "No deployment connector is configured." },
+    });
+    expect(resolveRuntimeOperation(runtime, "getAuthorityAgreement")).toMatchObject({
+      state: "unavailable",
+      unavailable: { code: "not_attached" },
+    });
   });
 
   it("derives route capability IDs from the one navigation registry", () => {

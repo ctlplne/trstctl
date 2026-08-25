@@ -117,10 +117,11 @@ function secretsCapabilityItem(
 
 function secretsRuntime(available: boolean): CapabilityView {
   return {
-    schema_version: 1,
+    schema_version: 2,
     contract_schema_version: 3,
     enforcement_note: "The server checks every operation again when it executes.",
     license: { tier: "community", state: "community" },
+    operations: [],
     items: [
       secretsCapabilityItem("F63", ["listSecrets"], available),
       secretsCapabilityItem("F37", ["listSecretRotationSchedules"], available),

@@ -3,6 +3,8 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { ApiError } from "@/lib/api";
+import type { CapabilityView } from "@/lib/api-types.gen";
+import { CapabilityFixtureProvider } from "@/lib/capabilities";
 import { CAHierarchy } from "@/pages/CAHierarchy";
 import { ToastProvider } from "@/components/ToastProvider";
 
@@ -39,14 +41,55 @@ vi.mock("@/lib/api", async (orig) => {
   return { ...actual, api: apiMock };
 });
 
-function renderCAHierarchy(initialEntry = "/ca-hierarchy") {
-  return render(
+function renderCAHierarchy(initialEntry = "/ca-hierarchy", runtime?: CapabilityView) {
+  const page = (
     <MemoryRouter initialEntries={[initialEntry]}>
       <ToastProvider>
         <CAHierarchy />
       </ToastProvider>
-    </MemoryRouter>,
+    </MemoryRouter>
   );
+  return render(
+    runtime ? <CapabilityFixtureProvider view={runtime}>{page}</CapabilityFixtureProvider> : page,
+  );
+}
+
+function externalCAUnavailableRuntime(): CapabilityView {
+  const detail = "No external CA service is configured in this deployment.";
+  return {
+    schema_version: 2,
+    contract_schema_version: 3,
+    enforcement_note: "The server checks again at execution.",
+    license: { tier: "community", state: "community" },
+    operations: [],
+    items: [
+      {
+        capability_id: "F4",
+        name: "CA-agnostic outbound issuance",
+        purpose: "Issue through configured authorities.",
+        tool: "certificates",
+        classification: "primary",
+        console_route: "/ca-hierarchy",
+        maturity: "partial_workflow",
+        release_blocking: false,
+        edition: "core_with_licensed_extensions",
+        runtime_state: "partially_available",
+        authorization_state: "full",
+        dependency_state: "none",
+        dependencies: [],
+        stages: [{ name: "observe", completion: "complete" }],
+        actions: {
+          allowed: ["listIssuers"],
+          scoped: [],
+          denied: [],
+          unavailable: [
+            { operation_id: "listExternalCAs", code: "dependency_not_configured", detail },
+            { operation_id: "issueExternalCA", code: "dependency_not_configured", detail },
+          ],
+        },
+      },
+    ],
+  };
 }
 
 describe("CA hierarchy and custody surface", () => {
@@ -741,6 +784,15 @@ describe("CA hierarchy and custody surface", () => {
     expect(await screen.findByText(/External CA registry is not connected/)).toBeInTheDocument();
     expect(screen.getByText("external CA registry is not enabled")).toBeInTheDocument();
     expect(screen.queryByText("External CA registry is unavailable")).not.toBeInTheDocument();
+  });
+
+  it("uses runtime capability truth instead of probing an unavailable external CA service", async () => {
+    renderCAHierarchy("/ca-hierarchy", externalCAUnavailableRuntime());
+
+    expect(await screen.findByText("No external CA service is configured in this deployment.")).toBeInTheDocument();
+    expect(apiMock.externalCAs).not.toHaveBeenCalled();
+    expect(apiMock.issuers).toHaveBeenCalledTimes(1);
+    expect(apiMock.caAuthorities).toHaveBeenCalledTimes(1);
   });
 
   it("requires explicit confirmation, requests signer-gated retirement, and downloads the projected record", async () => {

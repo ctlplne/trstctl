@@ -8,10 +8,11 @@ import type { CapabilityView, CapabilityViewItem } from "@/lib/api-types.gen";
 
 function runtime(item: CapabilityViewItem): CapabilityView {
   return {
-    schema_version: 1,
+    schema_version: 2,
     contract_schema_version: 3,
     enforcement_note: "The server checks again at execution.",
     license: { tier: "community", state: "community" },
+    operations: [],
     items: [item],
   };
 }

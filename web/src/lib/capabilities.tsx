@@ -1,8 +1,9 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { api, type Api } from "@/lib/api";
-import type { CapabilityUnavailableAction, CapabilityView, CapabilityViewItem } from "@/lib/api-types.gen";
+import type { CapabilityRuntimeOperation, CapabilityUnavailableAction, CapabilityView, CapabilityViewItem } from "@/lib/api-types.gen";
 import { canonicalCapabilityIDs, type CanonicalCapabilityID } from "@/lib/feature-contracts.gen";
 import { useApiQuery, useHasAppQueryProvider } from "@/lib/query";
+import { translateNow } from "@/i18n/I18nProvider";
 
 export type CapabilitySurfaceState = "ready" | "limited" | "permission_blocked" | "unavailable" | "unknown";
 
@@ -33,6 +34,18 @@ export interface CapabilityActionPosture {
 export interface CapabilityExecutionPosture extends CapabilityActionPosture {
   /** False only in isolated workbenches/legacy tests where no runtime provider
    * exists. The real authenticated shell always enables enforcement. */
+  enforced: boolean;
+  checking: boolean;
+  runnable: boolean;
+}
+
+export interface RuntimeOperationPosture {
+  state: CapabilityActionState;
+  operation: CapabilityRuntimeOperation | null;
+  unavailable: CapabilityUnavailableAction | null;
+}
+
+export interface RuntimeOperationExecutionPosture extends RuntimeOperationPosture {
   enforced: boolean;
   checking: boolean;
   runnable: boolean;
@@ -88,15 +101,32 @@ function isCapabilityViewItem(value: unknown): value is CapabilityViewItem {
   );
 }
 
+function isCapabilityRuntimeOperation(value: unknown): value is CapabilityRuntimeOperation {
+  if (!isRecord(value) || typeof value.operation_id !== "string") return false;
+  if (!new Set(["allowed", "scoped", "denied", "unavailable"]).has(String(value.state))) return false;
+  if (value.code !== undefined && !new Set(["not_implemented", "dependency_not_configured"]).has(String(value.code))) return false;
+  if (value.detail !== undefined && typeof value.detail !== "string") return false;
+  return value.state !== "unavailable" || (typeof value.code === "string" && typeof value.detail === "string");
+}
+
 /** Rejects malformed, partial, or stale capability projections before shell
  * chrome consumes them. A future contract must update the generated client and
  * this boundary together; an old browser never guesses from a new schema. */
 export function isCapabilityView(value: unknown): value is CapabilityView {
-  if (!isRecord(value) || value.schema_version !== 1 || value.contract_schema_version !== 3 || !Array.isArray(value.items)) return false;
+  if (
+    !isRecord(value) ||
+    value.schema_version !== 2 ||
+    value.contract_schema_version !== 3 ||
+    !Array.isArray(value.items) ||
+    !Array.isArray(value.operations)
+  )
+    return false;
   if (!isRecord(value.license) || typeof value.enforcement_note !== "string") return false;
   if (!value.items.every(isCapabilityViewItem)) return false;
+  if (!value.operations.every(isCapabilityRuntimeOperation)) return false;
   const ids = value.items.map((item) => item.capability_id);
-  return ids.length === new Set(ids).size;
+  const operationIds = value.operations.map((operation) => operation.operation_id);
+  return ids.length === new Set(ids).size && operationIds.length === new Set(operationIds).size;
 }
 
 function emptyCounts(): CapabilityStateCounts {
@@ -173,6 +203,37 @@ export function resolveCapabilityAction(view: CapabilityView | null, capabilityI
   return { state: "unknown", capability, unavailable: null };
 }
 
+/** Exact process-level preflight for routes that cannot live in the MPL feature
+ * catalog, including proprietary routes attached through AN-9's edition seam.
+ * A valid registry that omits an operation proves it is not attached. */
+export function resolveRuntimeOperation(view: CapabilityView | null, operationId: string): RuntimeOperationPosture {
+  if (!isCapabilityView(view)) return { state: "unknown", operation: null, unavailable: null };
+  const operation = view.operations.find((candidate) => candidate.operation_id === operationId) ?? null;
+  if (!operation) {
+    return {
+      state: "unavailable",
+      operation: null,
+      unavailable: {
+        operation_id: operationId,
+        code: "not_attached",
+        detail: translateNow("capabilities.reason.notAttached"),
+      },
+    };
+  }
+  if (operation.state === "unavailable") {
+    return {
+      state: "unavailable",
+      operation,
+      unavailable: {
+        operation_id: operation.operation_id,
+        code: operation.code ?? "not_implemented",
+        detail: operation.detail ?? translateNow("capabilities.reason.unknown"),
+      },
+    };
+  }
+  return { state: operation.state, operation, unavailable: null };
+}
+
 export function capabilityLimitationReason(item: CapabilityViewItem): string | null {
   const unavailable = item.actions.unavailable[0];
   if (unavailable?.detail) return unavailable.detail;
@@ -229,6 +290,18 @@ export function useCapabilityAction(capabilityId: CanonicalCapabilityID, operati
 export function useCapabilityExecution(capabilityId: CanonicalCapabilityID, operationId: string): CapabilityExecutionPosture {
   const context = useCapabilities();
   const posture = resolveCapabilityAction(context.view, capabilityId, operationId);
+  const checking = context.enabled && context.loading;
+  return {
+    ...posture,
+    enforced: context.enabled,
+    checking,
+    runnable: !context.enabled || (!checking && (posture.state === "allowed" || posture.state === "scoped")),
+  };
+}
+
+export function useRuntimeOperationExecution(operationId: string): RuntimeOperationExecutionPosture {
+  const context = useCapabilities();
+  const posture = resolveRuntimeOperation(context.view, operationId);
   const checking = context.enabled && context.loading;
   return {
     ...posture,

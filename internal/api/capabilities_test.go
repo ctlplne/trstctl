@@ -35,6 +35,12 @@ type capabilityViewTestResponse struct {
 		Tier  string `json:"tier"`
 		State string `json:"state"`
 	} `json:"license"`
+	Operations []struct {
+		OperationID string `json:"operation_id"`
+		State       string `json:"state"`
+		Code        string `json:"code"`
+		Detail      string `json:"detail"`
+	} `json:"operations"`
 	Items []struct {
 		CapabilityID       string `json:"capability_id"`
 		Name               string `json:"name"`
@@ -51,6 +57,71 @@ type capabilityViewTestResponse struct {
 			} `json:"unavailable"`
 		} `json:"actions"`
 	} `json:"items"`
+}
+
+func TestCapabilitiesViewIncludesExactLicensedRuntimeOperations(t *testing.T) {
+	const tenantID = "11111111-1111-4111-8111-111111111111"
+	handler := api.New(nil, nil, nil,
+		api.WithInsecureHeaderResolver(),
+		api.WithLicensedRoutes(api.LicensedRoute{
+			Method:      http.MethodGet,
+			Path:        "/api/v1/reconcile/agreement",
+			OperationID: "getAuthorityAgreement",
+			Summary:     "Report whether configured authorities agree",
+			Handler: func(*api.API) http.HandlerFunc {
+				return func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }
+			},
+			SuccessCode: "204",
+			Permission:  authz.CertsRead,
+		}),
+	)
+
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, capabilityViewRequest(tenantID, "viewer"))
+	if response.Code != http.StatusOK {
+		t.Fatalf("capabilities status=%d body=%s, want 200", response.Code, response.Body.String())
+	}
+	var got capabilityViewTestResponse
+	if err := json.NewDecoder(response.Body).Decode(&got); err != nil {
+		t.Fatalf("decode capabilities: %v", err)
+	}
+	operation, ok := findRuntimeOperation(got, "getAuthorityAgreement")
+	if !ok {
+		t.Fatalf("runtime operations omit attached licensed route; operations=%+v", got.Operations)
+	}
+	if operation.State != "allowed" || operation.Code != "" || operation.Detail != "" {
+		t.Fatalf("licensed runtime operation=%+v, want allowed with no refusal", operation)
+	}
+
+	coreOnly := api.New(nil, nil, nil, api.WithInsecureHeaderResolver())
+	coreResponse := httptest.NewRecorder()
+	coreOnly.ServeHTTP(coreResponse, capabilityViewRequest(tenantID, "viewer"))
+	var core capabilityViewTestResponse
+	if err := json.NewDecoder(coreResponse.Body).Decode(&core); err != nil {
+		t.Fatalf("decode core capabilities: %v", err)
+	}
+	if _, ok := findRuntimeOperation(core, "getAuthorityAgreement"); ok {
+		t.Fatalf("core-only runtime falsely advertised unattached licensed operation")
+	}
+}
+
+func findRuntimeOperation(view capabilityViewTestResponse, operationID string) (struct {
+	OperationID string `json:"operation_id"`
+	State       string `json:"state"`
+	Code        string `json:"code"`
+	Detail      string `json:"detail"`
+}, bool) {
+	for _, operation := range view.Operations {
+		if operation.OperationID == operationID {
+			return operation, true
+		}
+	}
+	return struct {
+		OperationID string `json:"operation_id"`
+		State       string `json:"state"`
+		Code        string `json:"code"`
+		Detail      string `json:"detail"`
+	}{}, false
 }
 
 func TestCapabilitiesViewIsAuthenticatedSanitizedAndAuthorizationAware(t *testing.T) {
@@ -86,8 +157,11 @@ func TestCapabilitiesViewIsAuthenticatedSanitizedAndAuthorizationAware(t *testin
 	if err := json.Unmarshal([]byte(viewerBody), &viewer); err != nil {
 		t.Fatalf("decode viewer response: %v", err)
 	}
-	if viewer.SchemaVersion != 1 || viewer.ContractSchemaVersion != 3 || len(viewer.Items) != 79 {
-		t.Fatalf("viewer schema/contract/items=%d/%d/%d, want 1/3/79", viewer.SchemaVersion, viewer.ContractSchemaVersion, len(viewer.Items))
+	if viewer.SchemaVersion != 2 || viewer.ContractSchemaVersion != 3 || len(viewer.Items) != 79 {
+		t.Fatalf("viewer schema/contract/items=%d/%d/%d, want 2/3/79", viewer.SchemaVersion, viewer.ContractSchemaVersion, len(viewer.Items))
+	}
+	if len(viewer.Operations) == 0 {
+		t.Fatal("viewer runtime operation registry is empty")
 	}
 	if viewer.License.Tier != "community" || viewer.License.State != "community" {
 		t.Fatalf("community license posture=%+v", viewer.License)

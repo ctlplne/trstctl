@@ -11,7 +11,7 @@ import (
 	"trstctl.com/trstctl/internal/featureparity"
 )
 
-const capabilityViewSchemaVersion = 1
+const capabilityViewSchemaVersion = 2
 
 var (
 	runtimeCapabilityCatalogOnce sync.Once
@@ -43,6 +43,19 @@ type capabilityViewActions struct {
 	Unavailable []capabilityUnavailableAction `json:"unavailable"`
 }
 
+// capabilityRuntimeOperation is the exact operation registry for this process.
+// It deliberately sits beside the canonical product catalog instead of inside
+// it: proprietary edition routes can be attached at runtime without making the
+// MPL catalog import or pretend to serve EE code (AN-9). An absent operation is
+// therefore provably not attached; a present one names its dependency and RBAC
+// posture without exposing paths, source packages, or implementation details.
+type capabilityRuntimeOperation struct {
+	OperationID string `json:"operation_id"`
+	State       string `json:"state"`
+	Code        string `json:"code,omitempty"`
+	Detail      string `json:"detail,omitempty"`
+}
+
 type capabilityViewItem struct {
 	CapabilityID       string                                 `json:"capability_id"`
 	Name               string                                 `json:"name"`
@@ -62,11 +75,12 @@ type capabilityViewItem struct {
 }
 
 type capabilityViewResponse struct {
-	SchemaVersion         int                      `json:"schema_version"`
-	ContractSchemaVersion int                      `json:"contract_schema_version"`
-	License               capabilityLicensePosture `json:"license"`
-	EnforcementNote       string                   `json:"enforcement_note"`
-	Items                 []capabilityViewItem     `json:"items"`
+	SchemaVersion         int                          `json:"schema_version"`
+	ContractSchemaVersion int                          `json:"contract_schema_version"`
+	License               capabilityLicensePosture     `json:"license"`
+	EnforcementNote       string                       `json:"enforcement_note"`
+	Operations            []capabilityRuntimeOperation `json:"operations"`
+	Items                 []capabilityViewItem         `json:"items"`
 }
 
 type capabilityRouteState struct {
@@ -113,12 +127,41 @@ func (a *API) listCapabilities(w http.ResponseWriter, r *http.Request) {
 		ContractSchemaVersion: catalog.SchemaVersion,
 		License:               capabilityLicensePosture{Tier: string(info.Tier), State: string(info.State)},
 		EnforcementNote:       "This is a route and RBAC preflight, not a bypass. Resource scope, ABAC policy, tenant key state, mutation gates, idempotency, and live dependencies are checked again when an action runs.",
+		Operations:            projectRuntimeOperations(principal, routes),
 		Items:                 make([]capabilityViewItem, 0, len(catalog.Items)),
 	}
 	for _, item := range catalog.Items {
 		response.Items = append(response.Items, a.projectCapability(item, principal, routes))
 	}
 	a.writeJSON(w, http.StatusOK, response)
+}
+
+func projectRuntimeOperations(principal authz.Principal, routes map[string]capabilityRouteState) []capabilityRuntimeOperation {
+	operationIDs := make([]string, 0, len(routes))
+	for operationID := range routes {
+		operationIDs = append(operationIDs, operationID)
+	}
+	sort.Strings(operationIDs)
+
+	out := make([]capabilityRuntimeOperation, 0, len(operationIDs))
+	for _, operationID := range operationIDs {
+		state := routes[operationID]
+		operation := capabilityRuntimeOperation{OperationID: operationID}
+		switch {
+		case state.route.unavailableReason != "":
+			operation.State = "unavailable"
+			operation.Code = "not_implemented"
+			operation.Detail = state.route.unavailableReason
+		case !state.enabled:
+			operation.State = "unavailable"
+			operation.Code = "dependency_not_configured"
+			operation.Detail = state.unavailableDetail
+		default:
+			operation.State = capabilityOperationAccess(principal, state.route)
+		}
+		out = append(out, operation)
+	}
+	return out
 }
 
 func (a *API) projectCapability(item featureparity.Item, principal authz.Principal, routes map[string]capabilityRouteState) capabilityViewItem {

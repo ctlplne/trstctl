@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   Building2,
@@ -53,6 +53,7 @@ import {
 } from "@/lib/api";
 import { defaultIssuerConfigValues, issuerTypes, splitPEMChain, type IssuerConfigField, type IssuerTypeConfig } from "@/lib/issuerCatalog";
 import { apiProblemMessage } from "@/lib/apiProblem";
+import { useCapabilityExecution } from "@/lib/capabilities";
 
 type Notice = { kind: "permission" | "error"; message: string };
 type ProbeState = { issuerID: string; issuerName: string; status: "pending" | "passed" | "failed"; message: string };
@@ -324,6 +325,8 @@ export function CAHierarchy() {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = caWorkspaceTabFromSearchParam(searchParams.get("tab"));
+  const externalCAList = useCapabilityExecution("F4", "listExternalCAs");
+  const externalCAIssue = useCapabilityExecution("F4", "issueExternalCA");
   const [issuers, setIssuers] = useState<Issuer[]>([]);
   // R2: the served capability matrix. Null means it could not be read, and the
   // table says "unknown" rather than implying revocation is unavailable — an
@@ -391,7 +394,7 @@ export function CAHierarchy() {
   const [signTarget, setSignTarget] = useState<CAAuthority | null>(null);
   const [ceremonyDetail, setCeremonyDetail] = useState<CAKeyCeremony | null>(null);
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     setNotice(null);
     // R2: the capability matrix is read defensively. A control plane that does
@@ -400,7 +403,17 @@ export function CAHierarchy() {
     // console already treats an absent matrix as a different fact from a
     // negative one, so this degrades to the honest answer.
     const capabilityRead = typeof api.issuerCapabilities === "function" ? api.issuerCapabilities() : Promise.reject(new Error("unavailable"));
-    const externalCARead = typeof api.externalCAs === "function" ? api.externalCAs() : Promise.reject(new Error("unavailable"));
+    const externalCARead =
+      externalCAList.runnable && typeof api.externalCAs === "function"
+        ? api.externalCAs()
+        : Promise.reject(
+            new Error(
+              externalCAList.unavailable?.detail ??
+                (externalCAList.state === "denied"
+                  ? translateNow("capabilities.reason.permissionBlocked")
+                  : translateNow("capabilities.reason.unknown")),
+            ),
+          );
     const [issuerResult, discoveryResult, authoritiesResult, capabilityResult, externalCAResult] = await Promise.allSettled([
       api.issuers(),
       api.caDiscoveryInventory(),
@@ -431,11 +444,12 @@ export function CAHierarchy() {
       setAuthoritiesError(errorText(authoritiesResult.reason, "Could not load served authorities"));
     }
     setLoading(false);
-  }
+  }, [externalCAList.runnable, externalCAList.state, externalCAList.unavailable?.detail]);
 
   useEffect(() => {
+    if (externalCAList.checking) return;
     void load();
-  }, []);
+  }, [externalCAList.checking, load]);
 
   useEffect(() => {
     let cancelled = false;
@@ -563,6 +577,17 @@ export function CAHierarchy() {
     setProbe({ issuerID: issuer.id, issuerName: issuer.name, status: "pending", message: translateNow("source.connection.pending.31378595b4") });
     if (issuer.internal) {
       setProbe({ issuerID: issuer.id, issuerName: issuer.name, status: "passed", message: translateNow("source.connection.passed.49369abdb8") });
+      return;
+    }
+    if (!externalCAList.runnable) {
+      setProbe({
+        issuerID: issuer.id,
+        issuerName: issuer.name,
+        status: "failed",
+        message:
+          externalCAList.unavailable?.detail ??
+          translateNow("capabilities.reason.notAttached"),
+      });
       return;
     }
     try {
@@ -774,8 +799,18 @@ export function CAHierarchy() {
   async function issueExternalCA() {
     const caID = externalIssueForm.caID.trim();
     const path = externalCAIssuePath(caDiscovery, caID);
-    setExternalIssueBusy(true);
     setExternalIssueError(null);
+    if (!externalCAIssue.runnable) {
+      setExternalIssueResult(null);
+      setExternalIssueError(
+        externalCAIssue.unavailable?.detail ??
+          (externalCAIssue.state === "denied"
+            ? translateNow("capabilities.reason.permissionBlocked")
+            : translateNow("capabilities.reason.unknown")),
+      );
+      return;
+    }
+    setExternalIssueBusy(true);
     setExternalIssueResult({ state: "outbox-pending", caID, path });
     try {
       const certificate = await api.issueExternalCA(caID, externalCAIssueRequest(externalIssueForm));

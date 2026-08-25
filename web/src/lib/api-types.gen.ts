@@ -1452,6 +1452,13 @@ export interface CapabilityLicensePosture {
   tier: "community" | "enterprise" | "provider";
 }
 
+export interface CapabilityRuntimeOperation {
+  code?: "not_implemented" | "dependency_not_configured";
+  detail?: string;
+  operation_id: string;
+  state: "allowed" | "scoped" | "denied" | "unavailable";
+}
+
 export interface CapabilityUnavailableAction {
   code: "not_attached" | "not_implemented" | "dependency_not_configured";
   detail: string;
@@ -1463,6 +1470,7 @@ export interface CapabilityView {
   enforcement_note: string;
   items: CapabilityViewItem[];
   license: CapabilityLicensePosture;
+  operations: CapabilityRuntimeOperation[];
   schema_version: number;
 }
 

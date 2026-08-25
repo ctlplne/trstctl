@@ -290,6 +290,12 @@ func componentSchemas() map[string]*Schema {
 		"code":         {Type: "string", Enum: []string{"not_attached", "not_implemented", "dependency_not_configured"}},
 		"detail":       str(),
 	}, "operation_id", "code", "detail")
+	capabilityRuntimeOperation := object(map[string]*Schema{
+		"operation_id": str(),
+		"state":        {Type: "string", Enum: []string{"allowed", "scoped", "denied", "unavailable"}},
+		"code":         {Type: "string", Enum: []string{"not_implemented", "dependency_not_configured"}},
+		"detail":       str(),
+	}, "operation_id", "state")
 	capabilityViewActions := object(map[string]*Schema{
 		"allowed":     {Type: "array", Items: str()},
 		"scoped":      {Type: "array", Items: str()},
@@ -318,8 +324,9 @@ func componentSchemas() map[string]*Schema {
 		"contract_schema_version": {Type: "integer"},
 		"license":                 ref("CapabilityLicensePosture"),
 		"enforcement_note":        str(),
+		"operations":              {Type: "array", Items: ref("CapabilityRuntimeOperation")},
 		"items":                   {Type: "array", Items: ref("CapabilityViewItem")},
-	}, "schema_version", "contract_schema_version", "license", "enforcement_note", "items")
+	}, "schema_version", "contract_schema_version", "license", "enforcement_note", "operations", "items")
 
 	owner := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "kind": {Type: "string", Enum: []string{"user", "team", "workload", "service", "vendor"}},
@@ -5033,6 +5040,7 @@ func componentSchemas() map[string]*Schema {
 		"CapabilityLicensePosture":                 capabilityLicensePosture,
 		"CapabilityViewStage":                      capabilityViewStage,
 		"CapabilityUnavailableAction":              capabilityUnavailableAction,
+		"CapabilityRuntimeOperation":               capabilityRuntimeOperation,
 		"CapabilityViewActions":                    capabilityViewActions,
 		"CapabilityViewItem":                       capabilityViewItem,
 		"CapabilityView":                           capabilityView,

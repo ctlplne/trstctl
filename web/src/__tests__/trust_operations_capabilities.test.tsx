@@ -70,10 +70,11 @@ function incidentCapability(available: boolean): CapabilityViewItem {
 
 function incidentRuntime(available: boolean): CapabilityView {
   return {
-    schema_version: 1,
+    schema_version: 2,
     contract_schema_version: 3,
     enforcement_note: "The server checks every operation again when it executes.",
     license: { tier: "community", state: "community" },
+    operations: [],
     items: [incidentCapability(available)],
   };
 }

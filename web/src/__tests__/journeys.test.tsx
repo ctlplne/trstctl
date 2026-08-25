@@ -70,10 +70,11 @@ function capabilityItem(
 }
 
 const journeyRuntime: CapabilityView = {
-  schema_version: 1,
+  schema_version: 2,
   contract_schema_version: 3,
   license: { tier: "community", state: "community" },
   enforcement_note: "The server checks every operation again when it executes.",
+  operations: [],
   items: [
     capabilityItem("F4", ["listIssuers"]),
     capabilityItem("F59", ["listIdentities"]),

@@ -16,10 +16,11 @@ vi.mock("@/lib/api", async (orig) => {
 
 const unavailableDetail = "This operation is not mounted because its runtime dependency is not configured.";
 const unavailableRuntime: CapabilityView = {
-  schema_version: 1,
+  schema_version: 2,
   contract_schema_version: 3,
   enforcement_note: "The server checks every operation again when it executes.",
   license: { tier: "community", state: "community" },
+  operations: [],
   items: [
     {
       capability_id: "F34",

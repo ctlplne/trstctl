@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { translateNow } from "@/i18n/I18nProvider";
 import { api, type AuthorityAgreementReport } from "@/lib/api";
+import { useRuntimeOperationExecution } from "@/lib/capabilities";
 
 // C4: do the configured authorities agree, and where do they not?
 //
@@ -20,9 +21,27 @@ import { api, type AuthorityAgreementReport } from "@/lib/api";
 export function AuthorityAgreementPanel() {
   const [report, setReport] = useState<AuthorityAgreementReport | null>(null);
   const [unavailable, setUnavailable] = useState<string | null>(null);
+  const agreementRead = useRuntimeOperationExecution("getAuthorityAgreement");
 
   useEffect(() => {
     let active = true;
+    if (agreementRead.checking) {
+      return () => {
+        active = false;
+      };
+    }
+    if (!agreementRead.runnable) {
+      setReport(null);
+      setUnavailable(
+        agreementRead.unavailable?.detail ??
+          (agreementRead.state === "denied"
+            ? translateNow("capabilities.reason.permissionBlocked")
+            : translateNow("capabilities.reason.notAttached")),
+      );
+      return () => {
+        active = false;
+      };
+    }
     api
       .authorityAgreement()
       .then((r) => {
@@ -41,7 +60,7 @@ export function AuthorityAgreementPanel() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [agreementRead.checking, agreementRead.runnable, agreementRead.state, agreementRead.unavailable?.detail]);
 
   if (unavailable) {
     return (

@@ -86,10 +86,11 @@ function homeCapabilityItem(capabilityId: "F31" | "F63", operationId: string, av
 
 function homeRuntime(available: boolean): CapabilityView {
   return {
-    schema_version: 1,
+    schema_version: 2,
     contract_schema_version: 3,
     enforcement_note: "The server checks every operation again when it executes.",
     license: { tier: "community", state: "community" },
+    operations: [],
     items: [homeCapabilityItem("F63", "listSecrets", available), homeCapabilityItem("F31", "listIncidentExecutions", available)],
   };
 }

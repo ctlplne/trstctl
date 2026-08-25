@@ -25,10 +25,11 @@ function row(overrides: Partial<CapabilityViewItem>): CapabilityViewItem {
 }
 
 const limitedView: CapabilityView = {
-  schema_version: 1,
+  schema_version: 2,
   contract_schema_version: 3,
   enforcement_note: "The server checks again at execution.",
   license: { tier: "community", state: "community" },
+  operations: [],
   items: [
     row({}),
     row({

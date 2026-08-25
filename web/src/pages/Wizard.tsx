@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
 import { markOnboardingComplete, resetOnboarding } from "@/lib/onboardingState";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
+import { useCapabilityExecution } from "@/lib/capabilities";
 
 type WizardStepID = "issuer" | "protocols" | "certificate" | "integrations" | "agent" | "complete";
 
@@ -461,6 +462,8 @@ function CertificateStep({ certificate, onIssued }: { certificate: Identity | nu
 
 function IntegrationProofStep({ identity, onReady }: { identity: Identity; onReady: (summary: string) => void }) {
   const { t } = useTranslation();
+  const externalCAList = useCapabilityExecution("F4", "listExternalCAs");
+  const externalCAIssue = useCapabilityExecution("F4", "issueExternalCA");
   const [connectorKinds, setConnectorKinds] = useState<Array<{ kind: string; name: string }>>([]);
   const [externalCAs, setExternalCAs] = useState<Array<{ id: string; name: string }>>([]);
   const [connectorKind, setConnectorKind] = useState("nginx");
@@ -481,12 +484,14 @@ function IntegrationProofStep({ identity, onReady }: { identity: Identity; onRea
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (externalCAList.checking) return;
     let active = true;
     setLoadingCatalogs(true);
     setCatalogFailed(false);
     setConnectorKinds([]);
     setExternalCAs([]);
-    void Promise.allSettled([api.connectorCatalog(), api.externalCAs()])
+    const externalCARead = externalCAList.runnable ? api.externalCAs() : Promise.resolve([]);
+    void Promise.allSettled([api.connectorCatalog(), externalCARead])
       .then(([catalogResult, caResult]) => {
         if (!active) return;
         try {
@@ -514,7 +519,7 @@ function IntegrationProofStep({ identity, onReady }: { identity: Identity; onRea
       active = false;
     };
     // Catalog discovery is one served read when this optional carousel step mounts.
-  }, [catalogAttempt]);
+  }, [catalogAttempt, externalCAList.checking, externalCAList.runnable]);
 
   useEffect(() => {
     if (connectorStatus && externalCAStatus && leaseStatus) {
@@ -541,8 +546,19 @@ function IntegrationProofStep({ identity, onReady }: { identity: Identity; onRea
 
   async function issueExternalCA(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setBusy("external-ca");
     setError(null);
+    if (!externalCAIssue.runnable) {
+      setError(
+        `External-CA issuance is unavailable: ${
+          externalCAIssue.unavailable?.detail ??
+          (externalCAIssue.state === "denied"
+            ? translateNow("capabilities.reason.permissionBlocked")
+            : translateNow("capabilities.reason.notAttached"))
+        }`,
+      );
+      return;
+    }
+    setBusy("external-ca");
     try {
       const issued = await api.issueExternalCA(externalCAID, {
         csr_pem: csrPEM,

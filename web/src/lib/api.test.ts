@@ -43,15 +43,16 @@ describe("api error handling (SURFACE-007)", () => {
     mockFetch(
       200,
       JSON.stringify({
-        schema_version: 1,
+        schema_version: 2,
         contract_schema_version: 3,
         license: { tier: "community", state: "community" },
         enforcement_note: "checked again at execution",
+        operations: [],
         items: [],
       }),
     );
     const result = await api.capabilities();
-    expect(result.schema_version).toBe(1);
+    expect(result.schema_version).toBe(2);
     expect(vi.mocked(fetch).mock.calls[0]?.[0]).toBe("/api/v1/capabilities");
     expect(vi.mocked(fetch).mock.calls[0]?.[1]?.method).toBeUndefined();
   });

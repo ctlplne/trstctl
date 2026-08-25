@@ -109,10 +109,11 @@ function incidentRuntime(options: { incidentListAllowed?: boolean } = {}): Capab
     .filter((operationId) => !(options.incidentListAllowed && operationId === "listIncidentExecutions"))
     .map((operation_id) => ({ operation_id, code: "dependency_not_configured" as const, detail: runtimeUnavailableDetail }));
   return {
-    schema_version: 1,
+    schema_version: 2,
     contract_schema_version: 3,
     enforcement_note: "The server checks every operation again when it executes.",
     license: { tier: "community", state: "community" },
+    operations: [],
     items: [
       capabilityItem({
         actions: {

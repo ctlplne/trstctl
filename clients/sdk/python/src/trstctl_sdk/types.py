@@ -2086,6 +2086,17 @@ CapabilityLicensePosture = TypedDict(
     total=False,
 )
 
+CapabilityRuntimeOperation = TypedDict(
+    'CapabilityRuntimeOperation',
+    {
+        'code': str,
+        'detail': str,
+        'operation_id': str,
+        'state': str,
+    },
+    total=False,
+)
+
 CapabilityUnavailableAction = TypedDict(
     'CapabilityUnavailableAction',
     {
@@ -2103,6 +2114,7 @@ CapabilityView = TypedDict(
         'enforcement_note': str,
         'items': list[dict[str, Any]],
         'license': dict[str, Any],
+        'operations': list[dict[str, Any]],
         'schema_version': int,
     },
     total=False,
