@@ -93,8 +93,11 @@ the same change.
 12. **Journeys beat menus.** Cross-page workflows live in the `/journeys` hub
     (`src/lib/journeys.ts`): each step deep-links to the exact surface — a
     space route or a `?tab=` lens — and steps with a detector check themselves
-    off from served data. New multi-page flows get a journey definition, not a doc-only
-    walkthrough.
+    off only from served evidence. Moving between steps never fabricates
+    completion: evidence-backed journeys pass explicit done, blocked, and
+    pending states into `StepShell`, while unavailable checks name the exact
+    runtime dependency and are not called. New multi-page flows get a journey
+    definition, not a doc-only walkthrough.
 13. **Never make the operator retype a value the console already knows.**
     Known entities render as selects or `datalist` autocomplete fed from
     loaded data (owners, members, secret names), and created identifiers carry

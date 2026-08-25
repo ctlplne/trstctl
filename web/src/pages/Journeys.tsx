@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ArrowUpRight, Check, Copy, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { capabilityExecutionReason } from "@/components/CapabilityTruth";
+import { ErrorState, UnavailableState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
@@ -9,33 +11,68 @@ import { api } from "@/lib/api";
 import { hasJourneyMark, readJourneyMarks, toggleJourneyMark } from "@/lib/journeyProgress";
 import { journeyCensus } from "@/lib/journeyCensus.gen";
 import { journeyById, journeyDocUrl, journeys, type Journey, type JourneyDetector, type JourneyStep } from "@/lib/journeys";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { resolveCapabilityAction, useCapabilities } from "@/lib/capabilities";
+import type { CanonicalCapabilityID } from "@/lib/feature-contracts.gen";
+import { translateNow, useTranslation } from "@/i18n/I18nProvider";
 import { cn } from "@/lib/utils";
 
-/** Each detector answers "has the tenant already done this?" from served data,
- * fail-closed to "not yet" so a flaky endpoint never fakes progress. */
-const detectorRuns: Record<JourneyDetector, () => Promise<boolean>> = {
-  issuers: () => api.issuers().then((rows) => rows.length > 0),
-  requests: () => api.identities().then((rows) => rows.length > 0),
-  certificates: () => api.certificatePage({ limit: 1 }).then((page) => (page.items ?? []).length > 0),
-  sources: () => api.discoverySources({ limit: 1 }).then((page) => (page.items ?? []).length > 0),
-  runs: () => api.discoveryRuns({ limit: 1 }).then((page) => (page.items ?? []).length > 0),
-  findings: () => api.discoveryFindings({ limit: 1 }).then((page) => (page.items ?? []).length > 0),
-  profiles: () => api.profiles().then((rows) => rows.length > 0),
-  incidents: () => api.incidentExecutions({ limit: 1 }).then((page) => (page.items ?? []).length > 0),
-  agents: () => api.agents().then((rows) => rows.length > 0),
-  secrets: () => api.secretPage({ limit: 1 }).then((page) => (page.items ?? []).length > 0),
-  members: () => api.members({ limit: 1 }).then((page) => (page.items ?? []).length > 0),
-  audit: () => api.auditEvents({ limit: 1 }).then((rows) => rows.length > 0),
+interface DetectorDefinition {
+  capabilityId: CanonicalCapabilityID;
+  operationId: string;
+  run: () => Promise<boolean>;
+}
+
+/** Each detector names the exact server operation that answers “has the tenant
+ * already done this?”. The capability projection is checked before the read, so
+ * an unavailable feed becomes a visible blocked step instead of a hidden 404 or
+ * a false ordinary “Pending”. */
+const detectorDefinitions: Record<JourneyDetector, DetectorDefinition> = {
+  issuers: { capabilityId: "F4", operationId: "listIssuers", run: () => api.issuers().then((rows) => rows.length > 0) },
+  requests: { capabilityId: "F59", operationId: "listIdentities", run: () => api.identities().then((rows) => rows.length > 0) },
+  certificates: {
+    capabilityId: "F1",
+    operationId: "listCertificates",
+    run: () => api.certificatePage({ limit: 1 }).then((page) => (page.items ?? []).length > 0),
+  },
+  sources: {
+    capabilityId: "F2",
+    operationId: "listDiscoverySources",
+    run: () => api.discoverySources({ limit: 1 }).then((page) => (page.items ?? []).length > 0),
+  },
+  runs: {
+    capabilityId: "F2",
+    operationId: "listDiscoveryRuns",
+    run: () => api.discoveryRuns({ limit: 1 }).then((page) => (page.items ?? []).length > 0),
+  },
+  findings: {
+    capabilityId: "F2",
+    operationId: "listDiscoveryFindings",
+    run: () => api.discoveryFindings({ limit: 1 }).then((page) => (page.items ?? []).length > 0),
+  },
+  profiles: { capabilityId: "F53", operationId: "listProfiles", run: () => api.profiles().then((rows) => rows.length > 0) },
+  incidents: {
+    capabilityId: "F31",
+    operationId: "listIncidentExecutions",
+    run: () => api.incidentExecutions({ limit: 1 }).then((page) => (page.items ?? []).length > 0),
+  },
+  agents: { capabilityId: "F3", operationId: "listAgents", run: () => api.agents().then((rows) => rows.length > 0) },
+  secrets: {
+    capabilityId: "F63",
+    operationId: "listSecrets",
+    run: () => api.secretPage({ limit: 1 }).then((page) => (page.items ?? []).length > 0),
+  },
+  members: { capabilityId: "F8", operationId: "listMembers", run: () => api.members({ limit: 1 }).then((page) => (page.items ?? []).length > 0) },
+  audit: { capabilityId: "F9", operationId: "searchAudit", run: () => api.auditEvents({ limit: 1 }).then((rows) => rows.length > 0) },
 };
 
-type DetectorState = Partial<Record<JourneyDetector, boolean>>;
+type DetectorResult = { state: "done" | "pending" | "blocked" | "error"; reason?: string };
+type DetectorState = Partial<Record<JourneyDetector, DetectorResult>>;
 
 /** A step counts as done when served data confirms it (detector) or, for the
  * command/config steps the console cannot observe, when the operator has
  * marked it done by hand. Progress is always out of every step. */
 function stepDone(journey: Journey, step: JourneyStep, detected: DetectorState, marks: Set<string>): boolean {
-  if (step.detect) return detected[step.detect] === true;
+  if (step.detect) return detected[step.detect]?.state === "done";
   return hasJourneyMark(marks, journey.id, step.id);
 }
 
@@ -46,6 +83,7 @@ function journeyProgress(journey: Journey, detected: DetectorState, marks: Set<s
 
 export function Journeys() {
   const { t, formatMessage } = useTranslation();
+  const capabilities = useCapabilities();
   const [searchParams, setSearchParams] = useSearchParams();
   const active = journeyById(searchParams.get("j"));
   const [detected, setDetected] = useState<DetectorState>({});
@@ -54,12 +92,38 @@ export function Journeys() {
   const [step, setStep] = useState(0);
 
   const refreshStatus = useCallback(async () => {
+    if (capabilities.enabled && capabilities.loading) return;
     setChecking(true);
     const ids = Array.from(new Set(journeys.flatMap((journey) => journey.steps.flatMap((s) => (s.detect ? [s.detect] : [])))));
-    const results = await Promise.allSettled(ids.map((id) => detectorRuns[id]()));
-    setDetected(Object.fromEntries(ids.map((id, index) => [id, results[index].status === "fulfilled" && results[index].value === true])));
+    const next: DetectorState = {};
+    const runnable: JourneyDetector[] = [];
+    for (const id of ids) {
+      const definition = detectorDefinitions[id];
+      if (!capabilities.enabled) {
+        runnable.push(id);
+        continue;
+      }
+      const action = resolveCapabilityAction(capabilities.view, definition.capabilityId, definition.operationId);
+      if (action.state === "allowed" || action.state === "scoped") {
+        runnable.push(id);
+      } else {
+        next[id] = {
+          state: "blocked",
+          reason: capabilityExecutionReason({ ...action, enforced: true, checking: false, runnable: false }, translateNow),
+        };
+      }
+    }
+    const results = await Promise.allSettled(runnable.map((id) => detectorDefinitions[id].run()));
+    runnable.forEach((id, index) => {
+      const result = results[index];
+      next[id] =
+        result.status === "fulfilled"
+          ? { state: result.value ? "done" : "pending" }
+          : { state: "error", reason: translateNow("journeys.detector.checkFailed") };
+    });
+    setDetected(next);
     setChecking(false);
-  }, []);
+  }, [capabilities.enabled, capabilities.loading, capabilities.view]);
 
   useEffect(() => {
     void refreshStatus();
@@ -85,9 +149,22 @@ export function Journeys() {
     );
   }
 
-  const shellSteps: CarouselStep[] = useMemo(() => active.steps.map((s) => ({ id: s.id, label: t(s.titleKey), description: t(s.bodyKey) })), [active, t]);
+  const shellSteps: CarouselStep[] = useMemo(
+    () =>
+      active.steps.map((s) => {
+        const detector = s.detect ? detected[s.detect] : undefined;
+        return {
+          id: s.id,
+          label: t(s.titleKey),
+          description: t(s.bodyKey),
+          progressState: stepDone(active, s, detected, marks) ? "done" : detector?.state === "blocked" || detector?.state === "error" ? "blocked" : "pending",
+        };
+      }),
+    [active, detected, marks, t],
+  );
   const current = active.steps[step];
   const currentDone = current ? stepDone(active, current, detected, marks) : false;
+  const currentDetector = current?.detect ? detected[current.detect] : undefined;
   // Keep the active path visible for deep links, then add only two nearby
   // recommendations. The remaining valid paths stay one disclosure away.
   const recommendedJourneys = [active, ...journeys.filter((journey) => journey.id !== active.id).slice(0, 2)];
@@ -157,6 +234,7 @@ export function Journeys() {
           <StepShell
             steps={shellSteps}
             currentIndex={step}
+            progressLabel={t("journeys.progressLabel")}
             nextDisabled={step >= active.steps.length - 1}
             onNext={step < active.steps.length - 1 ? () => setStep((currentStep) => Math.min(currentStep + 1, active.steps.length - 1)) : undefined}
             onPrevious={() => setStep((currentStep) => Math.max(currentStep - 1, 0))}
@@ -166,11 +244,20 @@ export function Journeys() {
                 <div className="flex flex-wrap items-center gap-3">
                   {currentDone ? (
                     <StatusBadge value="issued" label={t("journeys.status.done")} tone="success" />
+                  ) : currentDetector?.state === "blocked" ? (
+                    <StatusBadge value="unavailable" label={t("journeys.status.unavailable")} tone="warning" />
+                  ) : currentDetector?.state === "error" ? (
+                    <StatusBadge value="error" label={t("journeys.status.checkFailed")} tone="warning" />
                   ) : (
                     <StatusBadge value="requested" label={t("journeys.status.pending")} tone="neutral" />
                   )}
                   <p className="text-body text-muted-foreground">{t(current.bodyKey)}</p>
                 </div>
+                {currentDetector?.state === "blocked" ? (
+                  <UnavailableState title={t("journeys.detector.unavailableTitle")}>{currentDetector.reason}</UnavailableState>
+                ) : currentDetector?.state === "error" ? (
+                  <ErrorState title={t("journeys.detector.checkFailedTitle")}>{currentDetector.reason}</ErrorState>
+                ) : null}
                 {current.command && (
                   <div className="grid gap-2 rounded-panel border border-border bg-muted/40 p-3">
                     <pre className="overflow-x-auto whitespace-pre font-mono text-caption leading-relaxed">{current.command}</pre>

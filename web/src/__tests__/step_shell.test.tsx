@@ -38,4 +38,22 @@ describe("StepShell quiet mobile progress", () => {
     expect(fullCurrent?.firstElementChild).toHaveClass("text-foreground");
     expect(fullCurrent?.firstElementChild).not.toHaveClass("text-brand-accent");
   });
+
+  it("uses explicit evidence progress when browsing a long-lived journey", () => {
+    const evidenceSteps = steps.map((step, index) => ({
+      ...step,
+      progressState: (index === 0 ? "blocked" : "pending") as "blocked" | "pending",
+    }));
+    render(
+      <StepShell steps={evidenceSteps} currentIndex={1} progressLabel="Verified journey progress" onNext={() => undefined} onPrevious={() => undefined}>
+        <p>Current journey step</p>
+      </StepShell>,
+    );
+
+    const progress = screen.getByRole("progressbar", { name: "Verified journey progress" });
+    expect(progress).toHaveAttribute("aria-valuenow", "0");
+    const compact = screen.getByTestId("compact-step-progress");
+    expect(compact).toHaveTextContent("!");
+    expect(compact).not.toHaveTextContent("✓");
+  });
 });

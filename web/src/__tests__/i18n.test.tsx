@@ -1147,8 +1147,15 @@ describe("i18n boundary", () => {
       // a broader role. Negations in unknown/unavailable states and technical
       // capability/permission identifiers keep their meaning. Machine-authored
       // es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "11883d21a4731d78e054809031a5b86c3f1794459e0eb0538b5b456323a89daa",
-      "de-DE": "8503fded36e4627f0ea524b8383b72a098dd7b2b7bb50c81a770944abfa004fd",
+      // Product-overhaul journey-truth re-pin: six keys distinguish pending,
+      // runtime-unavailable, and failed detector checks and label progress as
+      // evidence rather than navigation position. The unavailable and failed
+      // meanings remain distinct in every locale. The failed-check recovery
+      // copy intentionally says what is available, without leaking internal
+      // server/served-state vocabulary. Machine-authored es/de — FLAGGED FOR
+      // HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "ac924031fef0c45688889887d814a3a61b3d99a623c8aaa5b6323e741446ff98",
+      "de-DE": "5453135fe5998bfffa48981d4bb500c5179720c5ec3deb551bd3e359bb853402",
     });
   });
 

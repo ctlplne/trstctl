@@ -3,6 +3,8 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { axe } from "vitest-axe";
 import { MemoryRouter } from "react-router-dom";
+import type { CapabilityView, CapabilityViewItem } from "@/lib/api-types.gen";
+import { CapabilityFixtureProvider } from "@/lib/capabilities";
 import { appRoutePaths } from "@/lib/navigation";
 import { journeyDocUrl, journeys } from "@/lib/journeys";
 import { journeyCensus } from "@/lib/journeyCensus.gen";
@@ -39,6 +41,51 @@ const workspaceTabs: Record<string, string[]> = {
   "/certificates": ["inventory", "health", "crlct", "renewal"],
   "/secrets": ["store", "access", "sharing", "engines", "scanning", "sync"],
   "/discovery": ["findings", "sources", "schedules", "runs"],
+};
+
+const unavailableIncidentDetail = "This operation is not mounted because its runtime dependency is not configured.";
+
+function capabilityItem(
+  capabilityId: CapabilityViewItem["capability_id"],
+  allowed: string[],
+  unavailable: CapabilityViewItem["actions"]["unavailable"] = [],
+): CapabilityViewItem {
+  return {
+    capability_id: capabilityId,
+    name: `Fixture ${capabilityId}`,
+    purpose: "Verify journey progress from served tenant state.",
+    tool: "operations",
+    classification: "primary",
+    console_route: "/journeys",
+    maturity: "partial_workflow",
+    release_blocking: true,
+    edition: "core",
+    runtime_state: allowed.length > 0 ? (unavailable.length > 0 ? "partially_available" : "available") : "unavailable",
+    authorization_state: allowed.length > 0 ? (unavailable.length > 0 ? "partial" : "full") : "none",
+    dependency_state: "none",
+    dependencies: [],
+    stages: [{ name: "observe", completion: "complete" }],
+    actions: { allowed, scoped: [], denied: [], unavailable },
+  };
+}
+
+const journeyRuntime: CapabilityView = {
+  schema_version: 1,
+  contract_schema_version: 3,
+  license: { tier: "community", state: "community" },
+  enforcement_note: "The server checks every operation again when it executes.",
+  items: [
+    capabilityItem("F4", ["listIssuers"]),
+    capabilityItem("F59", ["listIdentities"]),
+    capabilityItem("F1", ["listCertificates"]),
+    capabilityItem("F2", ["listDiscoverySources", "listDiscoveryRuns", "listDiscoveryFindings"]),
+    capabilityItem("F53", ["listProfiles"]),
+    capabilityItem("F31", [], [{ operation_id: "listIncidentExecutions", code: "dependency_not_configured", detail: unavailableIncidentDetail }]),
+    capabilityItem("F3", ["listAgents"]),
+    capabilityItem("F63", ["listSecrets"]),
+    capabilityItem("F8", ["listMembers"]),
+    capabilityItem("F9", ["searchAudit"]),
+  ],
 };
 
 function basePath(to: string): string {
@@ -110,6 +157,16 @@ describe("journeys hub", () => {
       <MemoryRouter initialEntries={["/journeys"]}>
         <Journeys />
       </MemoryRouter>,
+    );
+  }
+
+  function renderJourneysWithRuntime(initialEntry = "/journeys") {
+    return render(
+      <CapabilityFixtureProvider view={journeyRuntime}>
+        <MemoryRouter initialEntries={[initialEntry]}>
+          <Journeys />
+        </MemoryRouter>
+      </CapabilityFixtureProvider>,
     );
   }
 
@@ -185,5 +242,20 @@ describe("journeys hub", () => {
 
     const firstCert = screen.getByRole("button", { name: /First certificate/ });
     expect(await within(firstCert).findByText("4 of 4 steps done")).toBeInTheDocument();
+  });
+
+  it("shows an unavailable detector as blocked without calling it or fabricating carousel progress", async () => {
+    const user = userEvent.setup();
+    renderJourneysWithRuntime("/journeys?j=respond-to-compromise");
+
+    expect(await screen.findByRole("heading", { name: "Guided setup" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(await screen.findByText("Unavailable")).toBeInTheDocument();
+    expect(screen.getByText("This step cannot be checked yet")).toBeInTheDocument();
+    expect(screen.getByText(unavailableIncidentDetail)).toBeInTheDocument();
+    expect(apiMock.incidentExecutions).not.toHaveBeenCalled();
+    expect(screen.getByRole("progressbar", { name: "Verified journey progress" })).toHaveAttribute("aria-valuenow", "0");
+    expect(screen.getByTestId("compact-step-progress")).not.toHaveTextContent("✓");
   });
 });

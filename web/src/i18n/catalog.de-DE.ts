@@ -1104,6 +1104,7 @@ const deDECatalog = {
   "journeys.startHere": "Hier starten",
   "journeys.morePaths": "Weitere geführte Wege ({count})",
   "journeys.progress": "{done} von {total} Schritten erledigt",
+  "journeys.progressLabel": "Verifizierter Journey-Fortschritt",
   "journeys.census.verified": "Verifizierter Pfad · ausgelieferte Verdrahtung {passed}/{total}",
   "journeys.testingDetails": "So haben wir dies getestet",
   "journeys.testingSummary":
@@ -1114,6 +1115,12 @@ const deDECatalog = {
   "journeys.doc": "Referenz-Walkthrough",
   "journeys.status.done": "Erledigt",
   "journeys.status.pending": "Ausstehend",
+  "journeys.status.unavailable": "Nicht verfügbar",
+  "journeys.status.checkFailed": "Nicht verifiziert",
+  "journeys.detector.unavailableTitle": "Dieser Schritt kann noch nicht geprüft werden",
+  "journeys.detector.checkFailedTitle": "Dieser Schritt konnte nicht verifiziert werden",
+  "journeys.detector.checkFailed":
+    "trstctl konnte diesen Schritt nicht prüfen. Aktualisieren Sie den Status oder öffnen Sie den Schritt, um zu sehen, was verfügbar ist.",
   "journeys.fc.title": "Erstes Zertifikat",
   "journeys.fc.description": "Von einer leeren Control Plane zu einem ausgestellten, inventarisierten Zertifikat.",
   "journeys.fc.wizard.title": "Ersteinsatz-Anleitung abschließen",

@@ -3454,6 +3454,10 @@ export const messages = {
     defaultMessage: "{done} of {total} steps done",
     description: "Progress line on a journey card.",
   },
+  "journeys.progressLabel": {
+    defaultMessage: "Verified journey progress",
+    description: "Accessible label for journey progress computed from served evidence and explicit operator confirmation.",
+  },
   "journeys.census.verified": {
     defaultMessage: "Verified path · shipped wiring {passed}/{total}",
     description: "Generated shipped-binary census badge inside the one journey evidence disclosure.",
@@ -3490,6 +3494,26 @@ export const messages = {
   "journeys.status.pending": {
     defaultMessage: "Pending",
     description: "Badge for an incomplete journey step.",
+  },
+  "journeys.status.unavailable": {
+    defaultMessage: "Unavailable",
+    description: "Badge for a journey step whose exact server evidence operation is unavailable.",
+  },
+  "journeys.status.checkFailed": {
+    defaultMessage: "Could not verify",
+    description: "Badge for a journey step whose runnable server evidence check failed unexpectedly.",
+  },
+  "journeys.detector.unavailableTitle": {
+    defaultMessage: "This step cannot be checked yet",
+    description: "Title above the exact runtime reason a journey detector is unavailable.",
+  },
+  "journeys.detector.checkFailedTitle": {
+    defaultMessage: "This step could not be verified",
+    description: "Title above recovery guidance when a journey detector fails unexpectedly.",
+  },
+  "journeys.detector.checkFailed": {
+    defaultMessage: "trstctl could not check this step. Refresh status, or open the step to inspect what is available.",
+    description: "Recovery guidance for an unexpected journey detector failure.",
   },
   "journeys.fc.title": {
     defaultMessage: "First certificate",

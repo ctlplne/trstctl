@@ -8,6 +8,10 @@ export type CarouselStep = {
   id: string;
   label: string;
   description: string;
+  /** Wizards may omit this and use navigation position as progress. Long-lived
+   * journeys set it from durable evidence so browsing ahead never fabricates a
+   * checkmark or completion percentage. */
+  progressState?: "done" | "blocked" | "pending";
 };
 
 export function StepShell({
@@ -17,6 +21,7 @@ export function StepShell({
   nextLabel,
   onNext,
   onPrevious,
+  progressLabel,
   steps,
 }: {
   children: ReactNode;
@@ -25,12 +30,24 @@ export function StepShell({
   nextLabel?: string;
   onNext?: () => void;
   onPrevious?: () => void;
+  progressLabel?: string;
   steps: CarouselStep[];
 }) {
   const reducedMotion = usePrefersReducedMotion();
   const currentStep = steps[currentIndex];
-  const progress = Math.round(((currentIndex + 1) / steps.length) * 100);
+  const usesEvidenceProgress = steps.some((step) => step.progressState !== undefined);
+  const progress = usesEvidenceProgress
+    ? Math.round((steps.filter((step) => step.progressState === "done").length / steps.length) * 100)
+    : Math.round(((currentIndex + 1) / steps.length) * 100);
   const compactSteps = steps.map((step, index) => ({ step, index })).filter(({ index }) => Math.abs(index - currentIndex) <= 1);
+
+  function visualState(step: CarouselStep, index: number): "current" | "done" | "blocked" | "upcoming" {
+    if (index === currentIndex) return "current";
+    if (!usesEvidenceProgress) return index < currentIndex ? "done" : "upcoming";
+    if (step.progressState === "done") return "done";
+    if (step.progressState === "blocked") return "blocked";
+    return "upcoming";
+  }
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -65,7 +82,7 @@ export function StepShell({
         <div
           className="mt-4 h-1 overflow-hidden rounded-full bg-muted"
           role="progressbar"
-          aria-label={translateNow("source.onboarding.progress.ad8a0dac00")}
+          aria-label={progressLabel ?? translateNow("source.onboarding.progress.ad8a0dac00")}
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={progress}
@@ -74,7 +91,7 @@ export function StepShell({
         </div>
         <ol className="mt-3 grid gap-1 sm:grid-cols-3" aria-label={translateNow("wizard.progress.nearby")} data-testid="compact-step-progress">
           {compactSteps.map(({ step, index }) => {
-            const state = index < currentIndex ? "done" : index === currentIndex ? "current" : "upcoming";
+            const state = visualState(step, index);
             return (
               <li
                 key={`compact-${step.id}`}
@@ -85,7 +102,7 @@ export function StepShell({
                 )}
               >
                 <span className="w-5 shrink-0 text-center text-caption tabular-nums" aria-hidden="true">
-                  {state === "done" ? "✓" : index + 1}
+                  {state === "done" ? "✓" : state === "blocked" ? "!" : index + 1}
                 </span>
                 <span className="min-w-0 flex-1 break-words leading-snug">{step.label}</span>
               </li>
@@ -97,14 +114,14 @@ export function StepShell({
             {translateNow("wizard.progress.viewAll")}
             <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" aria-hidden="true" />
           </summary>
-          <ol className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3" aria-label={translateNow("source.onboarding.progress.ad8a0dac00")}>
+          <ol className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3" aria-label={progressLabel ?? translateNow("source.onboarding.progress.ad8a0dac00")}>
             {steps.map((step, index) => {
-              const state = index < currentIndex ? "done" : index === currentIndex ? "current" : "upcoming";
+              const state = visualState(step, index);
               return (
                 <li key={step.id} aria-current={state === "current" ? "step" : undefined} className="min-w-0">
                   <div className={cn("flex items-center gap-2 rounded-control border px-2 py-2 text-sm", stepStateClass(state))}>
                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-current">
-                      {state === "done" ? <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> : index + 1}
+                      {state === "done" ? <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> : state === "blocked" ? "!" : index + 1}
                     </span>
                     <span className="min-w-0 break-words leading-snug">{step.label}</span>
                   </div>
@@ -140,8 +157,9 @@ export function StepShell({
   );
 }
 
-function stepStateClass(state: "current" | "done" | "upcoming") {
+function stepStateClass(state: "current" | "done" | "blocked" | "upcoming") {
   if (state === "done") return "border-status-success/40 bg-status-success/10 text-status-success";
+  if (state === "blocked") return "border-status-warning/40 bg-status-warning/10 text-status-warning";
   if (state === "current") return "border-brand-accent/50 bg-brand-accent/10 text-foreground";
   return "border-border bg-muted/40 text-muted-foreground";
 }
