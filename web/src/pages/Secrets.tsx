@@ -511,6 +511,7 @@ export function Secrets() {
     [rotationSchedules],
   );
   const leakedFindings = unvaultedPosture?.summary.leaked_secret_findings ?? 0;
+  const nativeStoreUnavailable = nativeStoreList.enforced && nativeStoreList.state === "unavailable";
   const secretOverviewComplete = !loading && !loadError && rotationSchedules !== null && unvaultedPosture !== null && ownersAvailable === true;
   const secretAttention = useMemo(() => {
     const rows: Array<{ id: string; name: string; detail: string; consequence: string; to: string; action: string }> = [];
@@ -1495,6 +1496,7 @@ export function Secrets() {
       {loadError && (
         <UnavailableState title={translateNow("source.secrets.api.unavailable.or.disabled.90f9a5c4b4")}>
           {loadError}
+          {/[.!?]$/.test(loadError.trim()) ? " " : ". "}
           {translateNow("source.secret.operations.are.fail.closed.until.th.09b52b9f62")}
         </UnavailableState>
       )}
@@ -1506,12 +1508,30 @@ export function Secrets() {
               <h2 id="secrets-attention-heading" className="text-title font-semibold">
                 {secretAttention.length > 0
                   ? t("secrets.overview.attentionTitle", { count: String(secretAttention.length) })
-                  : t(secretOverviewComplete ? "secrets.overview.attentionHealthy" : "secrets.overview.attentionUnknown")}
+                  : t(
+                      secretOverviewComplete
+                        ? "secrets.overview.attentionHealthy"
+                        : nativeStoreUnavailable
+                          ? "secrets.overview.attentionDependencyUnavailable"
+                          : "secrets.overview.attentionUnknown",
+                    )}
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 {secretAttention.length > 0
-                  ? t(secretOverviewComplete ? "secrets.overview.attentionHelp" : "secrets.overview.attentionPartialHelp")
-                  : t(secretOverviewComplete ? "secrets.overview.attentionHealthyHelp" : "secrets.overview.attentionUnknownHelp")}
+                  ? t(
+                      secretOverviewComplete
+                        ? "secrets.overview.attentionHelp"
+                        : nativeStoreUnavailable
+                          ? "secrets.overview.attentionDependencyPartialHelp"
+                          : "secrets.overview.attentionPartialHelp",
+                    )
+                  : t(
+                      secretOverviewComplete
+                        ? "secrets.overview.attentionHealthyHelp"
+                        : nativeStoreUnavailable
+                          ? "secrets.overview.attentionDependencyUnavailableHelp"
+                          : "secrets.overview.attentionUnknownHelp",
+                    )}
               </p>
             </div>
             {secretAttention.length > 0 ? (

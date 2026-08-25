@@ -568,14 +568,19 @@ const deDECatalog = {
   "secrets.overview.attentionTitle": "{count} Secret- und Zugriffsprobleme benötigen Aufmerksamkeit",
   "secrets.overview.attentionHealthy": "Keine dringende Secret-Arbeit",
   "secrets.overview.attentionUnknown": "Die Dringlichkeit für Secrets ist nicht vollständig bekannt",
+  "secrets.overview.attentionDependencyUnavailable": "Einige Secret-Prüfungen sind deaktiviert",
   "secrets.overview.attentionHelp":
     "Beginnen Sie mit geleakten Werten und fehlgeschlagener Rotationszustellung. Jede Zeile erklärt die Folge und öffnet die sicherste Reparatur.",
   "secrets.overview.attentionHealthyHelp":
     "Kein gespeichertes Secret benötigt wegen eines erkannten Leaks, einer verspäteten Rotation, einer fehlgeschlagenen Zustellung oder eines fehlenden Verantwortlichen eine dringende Aktion.",
   "secrets.overview.attentionUnknownHelp":
     "Eine oder mehrere Prüfungen für Secrets, Leaks, Rotation, Zustellung oder Verantwortlichkeit konnten nicht gelesen werden. Versuchen Sie es erneut, bevor Sie diesen Arbeitsbereich als fehlerfrei einstufen.",
+  "secrets.overview.attentionDependencyUnavailableHelp":
+    "In dieser Bereitstellung ist der native Secret-Speicher deaktiviert. Die hier gezeigten Leak- und Integrationsprüfungen sind weiterhin aktiv. Aktivieren Sie den Speicher, um gespeicherte Secrets, Rotationen und Maschinenzugriffe zu prüfen.",
   "secrets.overview.attentionPartialHelp":
     "Diese Einträge erfordern eine Aktion, aber eine oder mehrere Prüfungen konnten nicht gelesen werden. Die Liste kann daher unvollständig sein.",
+  "secrets.overview.attentionDependencyPartialHelp":
+    "Diese Einträge erfordern eine Aktion. Die unabhängigen Prüfungen sind aktiv, aber wegen des deaktivierten nativen Secret-Speichers fehlen in dieser Liste Nachweise zu gespeicherten Secrets, Rotationen und Maschinenzugriffen.",
   "secrets.overview.attentionLabel": "Secret- und Zugriffsaufmerksamkeit",
   "secrets.overview.healthTitle": "Arbeitsbereichszustand",
   "secrets.overview.healthHelp":
@@ -5393,7 +5398,7 @@ const deDECatalog = {
   "source.secret.identity.62453fba82": "Secret-Identität",
   "source.secret.metadata.ad1b1e1608": "Secret-Metadaten",
   "source.secret.operations.are.fail.closed.until.th.09b52b9f62":
-    ". Secret-Operationen werden sicher abgelehnt, bis die Funktion aktiviert und ein Key-Encryption-Key konfiguriert ist.",
+    "Secret-Operationen werden sicher abgelehnt, bis die Funktion aktiviert und ein Key-Encryption-Key konfiguriert ist.",
   "source.secret.payments.db.password.cf46ca15a9": "Secret/payments-db/password",
   "source.secret.scan.failed.61f13676c4": "Scan von Secret fehlgeschlagen",
   "source.secret.scan.findings.3462f78805": "Befunde des Secret-Scans",

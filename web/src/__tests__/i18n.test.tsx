@@ -1154,8 +1154,12 @@ describe("i18n boundary", () => {
       // copy intentionally says what is available, without leaking internal
       // server/served-state vocabulary. Machine-authored es/de — FLAGGED FOR
       // HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "ac924031fef0c45688889887d814a3a61b3d99a623c8aaa5b6323e741446ff98",
-      "de-DE": "5453135fe5998bfffa48981d4bb500c5179720c5ec3deb551bd3e359bb853402",
+      // QA g21 re-pin: the known native-store-off state now explains the
+      // live independent checks and configuration remedy instead of retrying.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
+      // release.
+      "es-ES": "4950ca79a8db5f4a07dc647b5ec3ffed7ba418705c1c67e3076b78c598314919",
+      "de-DE": "bb1b26a9e433704215b26daa72069c68e4f91b69824b8edf567baa6c013474c5",
     });
   });
 

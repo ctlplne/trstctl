@@ -1529,6 +1529,10 @@ export const messages = {
     defaultMessage: "Secret urgency is not fully known",
     description: "Secrets and Access heading when one or more required checks could not be read.",
   },
+  "secrets.overview.attentionDependencyUnavailable": {
+    defaultMessage: "Some secret checks are turned off",
+    description: "Secrets and Access heading when the runtime projection says the native secret dependency is intentionally unavailable.",
+  },
   "secrets.overview.attentionHelp": {
     defaultMessage: "Start with leaked values and failed rotation delivery. Each row explains the consequence and opens the safest repair surface.",
     description: "Help above the Secrets and Access action queue.",
@@ -1541,9 +1545,19 @@ export const messages = {
     defaultMessage: "One or more secret, leak, rotation, delivery, or ownership checks could not be read. Retry before treating this workspace as healthy.",
     description: "Secrets and Access explanation when no complete health decision can be made.",
   },
+  "secrets.overview.attentionDependencyUnavailableHelp": {
+    defaultMessage:
+      "This deployment has the native secret store turned off. The leak and integration checks shown here are still live. Enable the store to add stored-secret, rotation, and machine-access evidence.",
+    description: "Known-dependency Secrets explanation that preserves independent posture truth and recommends configuration instead of retry.",
+  },
   "secrets.overview.attentionPartialHelp": {
     defaultMessage: "These items need action, but one or more checks could not be read, so this may not be the full list.",
     description: "Secrets and Access explanation when action rows exist but the evidence set is incomplete.",
+  },
+  "secrets.overview.attentionDependencyPartialHelp": {
+    defaultMessage:
+      "These items need action. The independent checks are live, but the disabled native secret store means stored-secret, rotation, and machine-access evidence is not in this list.",
+    description: "Known-dependency Secrets explanation when independent checks still found actionable rows.",
   },
   "secrets.overview.attentionLabel": {
     defaultMessage: "Secrets and access attention",
@@ -19794,7 +19808,7 @@ export const messages = {
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
   "source.secret.operations.are.fail.closed.until.th.09b52b9f62": {
-    defaultMessage: ". Secret operations are fail-closed until the feature is enabled and a key-encryption key is configured.",
+    defaultMessage: "Secret operations are fail-closed until the feature is enabled and a key-encryption key is configured.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
   "source.secret.payments.db.password.cf46ca15a9": {

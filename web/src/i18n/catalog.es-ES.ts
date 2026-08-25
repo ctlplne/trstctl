@@ -552,14 +552,19 @@ const esESCatalog = {
   "secrets.overview.attentionTitle": "{count} problemas de secretos y acceso requieren atención",
   "secrets.overview.attentionHealthy": "No hay trabajo urgente de secretos",
   "secrets.overview.attentionUnknown": "La urgencia de los secretos no se conoce por completo",
+  "secrets.overview.attentionDependencyUnavailable": "Algunas comprobaciones de secretos están desactivadas",
   "secrets.overview.attentionHelp":
     "Empiece por los valores filtrados y las entregas de rotación fallidas. Cada fila explica la consecuencia y abre la reparación más segura.",
   "secrets.overview.attentionHealthyHelp":
     "Ningún secreto almacenado necesita una acción urgente por una filtración detectada, una rotación tardía, una entrega fallida o la falta de responsable.",
   "secrets.overview.attentionUnknownHelp":
     "No se pudieron leer una o más comprobaciones de secretos, filtraciones, rotación, entrega o responsables. Vuelva a intentarlo antes de considerar saludable este espacio de trabajo.",
+  "secrets.overview.attentionDependencyUnavailableHelp":
+    "Esta implementación tiene desactivado el almacén nativo de secretos. Las comprobaciones de filtraciones e integraciones que se muestran aquí siguen activas. Active el almacén para incluir evidencia de secretos guardados, rotaciones y acceso de máquinas.",
   "secrets.overview.attentionPartialHelp":
     "Estos elementos necesitan atención, pero no se pudieron leer una o más comprobaciones, por lo que esta lista puede estar incompleta.",
+  "secrets.overview.attentionDependencyPartialHelp":
+    "Estos elementos necesitan atención. Las comprobaciones independientes están activas, pero el almacén nativo de secretos desactivado impide que esta lista incluya evidencia de secretos guardados, rotaciones y acceso de máquinas.",
   "secrets.overview.attentionLabel": "Atención de secretos y acceso",
   "secrets.overview.healthTitle": "Estado del espacio de trabajo",
   "secrets.overview.healthHelp":
@@ -5361,7 +5366,7 @@ const esESCatalog = {
   "source.secret.identity.62453fba82": "Identidad de Secret",
   "source.secret.metadata.ad1b1e1608": "Metadatos de Secret",
   "source.secret.operations.are.fail.closed.until.th.09b52b9f62":
-    ". Las operaciones de Secret fallan de forma segura hasta que se habilite la función y se configure una clave de cifrado de claves.",
+    "Las operaciones de Secret fallan de forma segura hasta que se habilite la función y se configure una clave de cifrado de claves.",
   "source.secret.payments.db.password.cf46ca15a9": "Secret/payments-db/password",
   "source.secret.scan.failed.61f13676c4": "Error al escanear Secret",
   "source.secret.scan.findings.3462f78805": "Hallazgos del análisis de Secret",

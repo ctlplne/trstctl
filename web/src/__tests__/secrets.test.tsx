@@ -1604,11 +1604,16 @@ describe("secrets surface", () => {
     expect(screen.getByRole("button", { name: /add secret/i })).toBeDisabled();
     expect(screen.queryByRole("form", { name: /create secret/i })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Secret urgency is not fully known" })).toBeInTheDocument();
+    expect(screen.getByText(/Retry before treating this workspace as healthy/)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Some secret checks are turned off" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "No urgent secrets work" })).not.toBeInTheDocument();
     expect(screen.queryByRole("list", { name: "Secrets and access health" })).not.toBeInTheDocument();
   });
 
   it("preflights unavailable optional Secrets APIs while preserving independent posture reads", async () => {
+    const unvaulted = unvaultedSecretPostureFixture();
+    unvaulted.summary.leaked_secret_findings = 0;
+    apiMock.unvaultedSecrets.mockResolvedValueOnce(unvaulted);
     renderSecretsWithRuntime(secretsRuntime(false));
 
     expect((await screen.findAllByText(/native secret store is turned off/i)).length).toBeGreaterThan(0);
@@ -1626,6 +1631,10 @@ describe("secrets surface", () => {
     expect(apiMock.machineAuthMethods).not.toHaveBeenCalled();
     expect(apiMock.machineSessions).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: /add secret/i })).toBeDisabled();
+    expect(screen.getByRole("heading", { name: "Some secret checks are turned off" })).toBeInTheDocument();
+    expect(screen.getByText(/The leak and integration checks shown here are still live/)).toBeInTheDocument();
+    expect(screen.queryByText(/Retry before treating this workspace as healthy/)).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toContain("secrets.. Secret");
   });
 
   it("restores each optional Secrets read when the runtime capability view allows it", async () => {
