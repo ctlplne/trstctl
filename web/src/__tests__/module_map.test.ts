@@ -134,8 +134,8 @@ describe("module map (S-B1)", () => {
   });
 
   it("honors an explicit surface owner before route-derived and global fallbacks", () => {
-    expect(surfaceModule({ featureId: "explicit", routes: [], component: "x", kind: "observe", evidence: "x", module: "platform" })).toBe("platform");
-    expect(surfaceModule({ featureId: "derived", routes: ["/not-registered", "/ssh"], component: "x", kind: "observe", evidence: "x" })).toBe("workload");
-    expect(surfaceModule({ featureId: "global", routes: ["/not-registered"], component: "x", kind: "observe", evidence: "x" })).toBe("global");
+    expect(surfaceModule({ featureId: "F1", routes: [], component: "x", kind: "observe", evidence: "x", module: "platform" })).toBe("platform");
+    expect(surfaceModule({ featureId: "F2", routes: ["/not-registered", "/ssh"], component: "x", kind: "observe", evidence: "x" })).toBe("workload");
+    expect(surfaceModule({ featureId: "F3", routes: ["/not-registered"], component: "x", kind: "observe", evidence: "x" })).toBe("global");
   });
 });

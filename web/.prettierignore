@@ -6,5 +6,6 @@ node_modules/
 src/i18n/extractedMessages.gen.ts
 src/i18n/catalog.*.runtime.gen.json
 src/lib/api-types.gen.ts
+src/lib/feature-contracts.gen.ts
 test-results/
 playwright-report/

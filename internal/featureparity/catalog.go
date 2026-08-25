@@ -7,10 +7,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type Catalog struct {
-	Items []Item `json:"items"`
+	SchemaVersion     int             `json:"schema_version"`
+	Items             []Item          `json:"items"`
+	CanonicalTools    []CanonicalTool `json:"canonical_tools"`
+	MaturityValues    []Maturity      `json:"maturity_values"`
+	StageStatusValues []StageStatus   `json:"stage_status_values"`
 }
 
 type Item struct {
@@ -33,6 +38,7 @@ type Item struct {
 	CLISurface      []string             `json:"cli_surface"`
 	CLINA           string               `json:"cli_na"`
 	FacetEvidence   FeatureFacetEvidence `json:"facet_evidence"`
+	Contract        CapabilityContract   `json:"contract"`
 }
 
 type FeatureFacetEvidence struct {
@@ -88,7 +94,43 @@ func Load() (Catalog, error) {
 	if len(catalog.Items) != 79 {
 		return Catalog{}, fmt.Errorf("feature-map backlog rows = %d, want 79", len(catalog.Items))
 	}
+	if err := ValidateCatalog(catalog); err != nil {
+		return Catalog{}, fmt.Errorf("validate canonical capability contracts: %w", err)
+	}
+	if err := validateEvidencePaths(root, catalog); err != nil {
+		return Catalog{}, fmt.Errorf("validate canonical capability evidence paths: %w", err)
+	}
 	return catalog, nil
+}
+
+func validateEvidencePaths(root string, catalog Catalog) error {
+	for _, item := range catalog.Items {
+		for stageName, stage := range item.Contract.Stages.Cells() {
+			for _, evidence := range stage.Evidence {
+				if !isRepositoryEvidencePath(evidence) {
+					continue
+				}
+				clean := filepath.Clean(evidence)
+				rel, err := filepath.Rel(root, filepath.Join(root, clean))
+				if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+					return fmt.Errorf("%s stage %s evidence path %q escapes the repository", item.FeatureID, stageName, evidence)
+				}
+				if _, err := os.Stat(filepath.Join(root, clean)); err != nil {
+					return fmt.Errorf("%s stage %s evidence path %q: %w", item.FeatureID, stageName, evidence, err)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func isRepositoryEvidencePath(value string) bool {
+	for _, prefix := range []string{"clients/", "cmd/", "deploy/", "docs/", "ee/", "internal/", "scripts/", "tools/", "web/"} {
+		if strings.HasPrefix(value, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func repoRoot() (string, error) {

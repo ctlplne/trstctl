@@ -730,7 +730,7 @@ describe("COVER-005 feature-specific a11y receipts", () => {
 
   it("requires UI feature rows to cite this feature-specific a11y receipt instead of shell-only proof", () => {
     const map = featureMap();
-    const surfaceFeatureIds = new Set(realGuiSurfaces.map((surface) => surface.featureId));
+    const surfaceFeatureIds = new Set<string>(realGuiSurfaces.map((surface) => surface.featureId));
 
     for (const item of map.items) {
       const uiEvidence = item.facet_evidence?.ui?.evidence ?? [];

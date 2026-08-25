@@ -84,6 +84,7 @@ GO_TOOL_BIN ?= $(if $(GO_ENV_GOBIN),$(GO_ENV_GOBIN),$(GO_ENV_GOPATH)/bin)
 GOVULNCHECK := $(GO_TOOL_BIN)/govulncheck
 CYCLONEDX_GOMOD := $(GO_TOOL_BIN)/cyclonedx-gomod
 WEB_NPM ?= npm --prefix web
+FEATURE_PARITY_REPORT_OUT ?= bin/frontend-parity-control-panel.html
 
 # Minimum total test coverage (percent), enforced by `make test`. Generated code
 # (*.pb.go) is excluded from the measurement. Measured 70.5% on 2026-08-02 from
@@ -713,8 +714,19 @@ web: ## Install deps, build the web console into internal/webui/dist (embedded b
 	TRSTCTL_REQUIRE_BUILT_UI=1 $(GO) test $(GO_TEST_EXACT_FLAG) ./internal/webui/...
 
 .PHONY: web-contract
-web-contract: ## Regenerate the FE API types from the served OpenAPI contract (SURFACE-005); commit the diff
+web-contract: ## Regenerate FE OpenAPI and capability contracts; commit the reviewed diff
 	cd web && npm run gen:api
+	cd web && npm run gen:feature-contracts
+
+.PHONY: feature-parity-check
+feature-parity-check: ## Fail on invalid capability stages, stale generated contracts, backend-without-UI, or ghost UI
+	$(GO) test $(GO_TEST_EXACT_FLAG) ./internal/featureparity ./tools/featureparityreport
+	cd web && npm run gen:feature-contracts -- --check
+	cd web && npm run test -- --run web/src/__tests__/feature_contract.test.ts web/src/__tests__/feature_contract_parity.test.ts
+
+.PHONY: feature-parity-report
+feature-parity-report: ## Write the standalone HTML parity panel (override FEATURE_PARITY_REPORT_OUT=...)
+	$(GO) run ./tools/featureparityreport --out "$(FEATURE_PARITY_REPORT_OUT)"
 
 .PHONY: sdk
 sdk: ## Regenerate the published client SDKs (Go + TypeScript + Python + Java) from the served OpenAPI contract (PRODUCT-007); commit the diff

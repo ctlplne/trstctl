@@ -677,6 +677,12 @@ jobs:
       - name: Contract check (FE types vs served OpenAPI)
         run: npm run gen:api -- --check
 
+      # Backend capabilities and console workflows share one fail-closed
+      # contract. The paired Vitest guard catches both backend-without-UI and
+      # visible ghost-UI drift.
+      - name: Capability contract check (backend catalog vs console)
+        run: npm run gen:feature-contracts -- --check
+
       - name: Lint
         run: npm run lint
 

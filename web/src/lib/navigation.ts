@@ -1,4 +1,5 @@
 import type { MessageKey } from "@/i18n/messages";
+import type { CanonicalCapabilityID } from "@/lib/feature-contracts.gen";
 
 export type NavIcon =
   | "activity"
@@ -35,7 +36,7 @@ export interface NavItem {
   icon: NavIcon;
   end?: boolean;
   mode: "real" | "disclosure";
-  featureIds: string[];
+  featureIds: CanonicalCapabilityID[];
 }
 
 export interface TaskNavItem {
@@ -43,7 +44,7 @@ export interface TaskNavItem {
   labelKey: MessageKey;
   descriptionKey: MessageKey;
   icon: NavIcon;
-  featureIds: string[];
+  featureIds: CanonicalCapabilityID[];
 }
 
 export interface NavGroup {
@@ -55,7 +56,7 @@ export interface ContextualRouteItem {
   to: string;
   labelKey: MessageKey;
   groupKey: MessageKey;
-  featureIds: string[];
+  featureIds: CanonicalCapabilityID[];
 }
 
 /* S-C1 (tools): the unified-shell registry. Six operator mental models own
@@ -85,7 +86,7 @@ export interface NavModule {
   icon: NavIcon;
   /** Routes scoped to this module — its sidebar band when the space is active. */
   routes: string[];
-  featureIds: string[];
+  featureIds: CanonicalCapabilityID[];
 }
 
 /** navSpaces: the six focused tools of the unified shell. Every customer route lives
@@ -494,7 +495,7 @@ export const navGroups: NavGroup[] = navSpaces.flatMap((space) => space.groups);
 export const contextualRouteItems: ContextualRouteItem[] = [];
 
 export interface RealGuiSurface {
-  featureId: string;
+  featureId: CanonicalCapabilityID;
   routes: string[];
   component: string;
   kind: "operate" | "observe";
