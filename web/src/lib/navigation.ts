@@ -480,6 +480,23 @@ export const taskNavItems: TaskNavItem[] = [
   },
 ];
 
+/** featureIdsForPath returns the canonical capability rows a routed screen
+ * promises to surface. It is intentionally derived from navigation truth so
+ * shell availability explanations cannot drift into a second route map. */
+export function featureIdsForPath(to: string): CanonicalCapabilityID[] {
+  const path = to.split("?")[0] || "/";
+  const ids = new Set<CanonicalCapabilityID>();
+  const basePath = (candidate: string) => candidate.split("?")[0] || "/";
+  for (const item of primaryNavItems) if (basePath(item.to) === path) item.featureIds.forEach((id) => ids.add(id));
+  for (const item of taskNavItems) if (basePath(item.to) === path) item.featureIds.forEach((id) => ids.add(id));
+  for (const space of navSpaces) {
+    for (const group of space.groups) {
+      for (const item of group.items) if (basePath(item.to) === path) item.featureIds.forEach((id) => ids.add(id));
+    }
+  }
+  return Array.from(ids);
+}
+
 /* S-C1: the flat rail is gone — `navGroups` is now DERIVED from the space
  * registry (every space's groups, in space order). Consumers that need "every
  * grouped destination" (routeLabel, the command palette, the parity and

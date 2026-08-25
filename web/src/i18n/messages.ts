@@ -62,6 +62,104 @@ export const messages = {
     defaultMessage: "Skip to main content",
     description: "Keyboard skip-link label.",
   },
+  "capabilities.loading": {
+    defaultMessage: "Checking what this server and your role can do...",
+    description: "Short route-level status while the authorized runtime capability view is loading.",
+  },
+  "capabilities.readFailed.title": {
+    defaultMessage: "Capability status is temporarily unavailable",
+    description: "Heading when the browser cannot read the server-owned capability view.",
+  },
+  "capabilities.readFailed.body": {
+    defaultMessage:
+      "trstctl could not confirm which actions this build attached. The browser will not guess or unlock anything; the server still checks permission, license, and dependencies when an action runs.",
+    description: "Fail-closed ELI5 explanation for an unavailable capability projection.",
+  },
+  "capabilities.retry": { defaultMessage: "Check again", description: "Retry the server-owned capability read." },
+  "capabilities.route.title": {
+    defaultMessage: "{ready} of {total} capabilities on this page are fully ready",
+    description: "Route-level summary when one or more canonical capabilities are limited or unavailable.",
+  },
+  "capabilities.route.body": {
+    defaultMessage:
+      "You can still use the ready parts. Open the details for the exact missing permission, dependency, or build attachment. The server re-checks every change before it happens.",
+    description: "Plain-language route-level remedy and authority boundary.",
+  },
+  "capabilities.route.details": {
+    defaultMessage: "Review {count} limitation(s)",
+    description: "Disclosure label for exact limited capability rows.",
+  },
+  "capabilities.route.detailsLabel": {
+    defaultMessage: "Capability limitations on this page",
+    description: "Accessible label for the route capability limitation list.",
+  },
+  "capabilities.tool.ready": {
+    defaultMessage: "This server reports all {count} tool capabilities ready.",
+    description: "Quiet sidebar summary when every capability mapped to a tool is attached and authorized.",
+  },
+  "capabilities.tool.mixed": {
+    defaultMessage: "{ready} of {total} tool capabilities are fully ready. Limited routes explain the rest.",
+    description: "Quiet sidebar summary when a tool mixes ready and limited capabilities.",
+  },
+  "capabilities.state.ready": { defaultMessage: "Ready", description: "Runtime capability is attached and fully authorized." },
+  "capabilities.state.limited": { defaultMessage: "Limited", description: "Runtime capability has usable and unavailable or scoped actions." },
+  "capabilities.state.permissionBlocked": {
+    defaultMessage: "Permission needed",
+    description: "Runtime capability exists but the current principal has no authorized action.",
+  },
+  "capabilities.state.unavailable": {
+    defaultMessage: "Unavailable",
+    description: "Runtime capability is not attached or its required dependency is unavailable.",
+  },
+  "capabilities.state.unknown": {
+    defaultMessage: "Status unknown",
+    description: "The server capability view lacks enough information to claim readiness.",
+  },
+  "capabilities.reason.catalogOnly": {
+    defaultMessage: "The product catalog describes this capability, but this running build did not attach an executable API action for it.",
+    description: "Explanation for a catalog-only runtime capability.",
+  },
+  "capabilities.reason.notAttached": {
+    defaultMessage: "This running build did not attach the capability. Review the build profile and required dependency before retrying.",
+    description: "Explanation for an unavailable runtime capability.",
+  },
+  "capabilities.reason.permissionBlocked": {
+    defaultMessage: "Your current role does not authorize this capability. Ask for the smallest required permission instead of a broader role.",
+    description: "Least-privilege remedy for a permission-blocked capability.",
+  },
+  "capabilities.reason.partial": {
+    defaultMessage: "Some actions are ready and others need a permission, dependency, or build attachment. Review the exact action before continuing.",
+    description: "Fallback explanation for a partially available capability.",
+  },
+  "capabilities.reason.unknown": {
+    defaultMessage: "trstctl does not have enough runtime evidence to call this capability ready.",
+    description: "Fail-closed fallback when runtime capability state cannot be classified.",
+  },
+  "capabilities.reason.missingRow": {
+    defaultMessage:
+      "The route promises this capability, but the server did not return its canonical row. Treat it as unavailable until the contract is repaired.",
+    description: "Drift explanation when navigation references a capability absent from the authorized manifest.",
+  },
+  "capabilities.action.checking": {
+    defaultMessage: "Checking permission, build attachment, and dependencies before enabling this action.",
+    description: "Explanation while an exact capability operation is being preflighted.",
+  },
+  "capabilities.action.unavailableTitle": {
+    defaultMessage: "This action is not runnable yet",
+    description: "Heading above the exact server-owned reason a control is disabled.",
+  },
+  "capabilities.action.unavailable": {
+    defaultMessage: "This build or one of its required dependencies does not provide the action.",
+    description: "Fallback when an exact unavailable operation has no server detail.",
+  },
+  "capabilities.action.denied": {
+    defaultMessage: "Your current role does not include the smallest permission required for this action.",
+    description: "Least-privilege explanation for an operation denied to the current principal.",
+  },
+  "capabilities.action.unknown": {
+    defaultMessage: "The server did not describe this operation in the canonical capability row, so the browser will not run it.",
+    description: "Fail-closed explanation for a browser operation absent from the runtime contract.",
+  },
   "pageHeader.answer": {
     defaultMessage: "Answer",
     description: "Label for the plain-language outcome at the top of every product page.",

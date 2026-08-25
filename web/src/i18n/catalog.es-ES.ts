@@ -6617,6 +6617,38 @@ const esESCatalog = {
   "discovery.run.blockedFallback": "Este origen no está listo para ejecutarse. Revise sus requisitos de ejecución y vuelva a intentarlo.",
   "discovery.source.readinessBlocked": "Ejecución bloqueada",
   "discovery.source.readinessReady": "Listo para ejecutarse",
+  "capabilities.loading": "Comprobando qué puede hacer este servidor y qué permite su rol...",
+  "capabilities.readFailed.title": "El estado de las capacidades no está disponible temporalmente",
+  "capabilities.readFailed.body":
+    "trstctl no pudo confirmar qué acciones están conectadas en esta compilación. El navegador no adivinará ni habilitará nada; el servidor sigue comprobando permisos, licencia y dependencias cuando se ejecuta una acción.",
+  "capabilities.retry": "Comprobar de nuevo",
+  "capabilities.route.title": "{ready} de {total} capacidades de esta página están totalmente listas",
+  "capabilities.route.body":
+    "Puede seguir usando las partes listas. Abra los detalles para ver el permiso, la dependencia o la conexión de compilación que falta. El servidor vuelve a comprobar cada cambio antes de aplicarlo.",
+  "capabilities.route.details": "Revisar {count} limitación(es)",
+  "capabilities.route.detailsLabel": "Limitaciones de capacidades en esta página",
+  "capabilities.tool.ready": "Este servidor indica que las {count} capacidades de esta herramienta están listas.",
+  "capabilities.tool.mixed": "{ready} de {total} capacidades de la herramienta están totalmente listas. Las rutas limitadas explican el resto.",
+  "capabilities.state.ready": "Lista",
+  "capabilities.state.limited": "Limitada",
+  "capabilities.state.permissionBlocked": "Permiso necesario",
+  "capabilities.state.unavailable": "No disponible",
+  "capabilities.state.unknown": "Estado desconocido",
+  "capabilities.reason.catalogOnly":
+    "El catálogo del producto describe esta capacidad, pero la compilación en ejecución no conectó una acción de API ejecutable para ella.",
+  "capabilities.reason.notAttached":
+    "La compilación en ejecución no conectó esta capacidad. Revise el perfil de compilación y la dependencia requerida antes de volver a intentarlo.",
+  "capabilities.reason.permissionBlocked": "Su rol actual no autoriza esta capacidad. Solicite el permiso mínimo necesario en lugar de un rol más amplio.",
+  "capabilities.reason.partial":
+    "Algunas acciones están listas y otras necesitan un permiso, una dependencia o una conexión de compilación. Revise la acción exacta antes de continuar.",
+  "capabilities.reason.unknown": "trstctl no tiene suficiente evidencia de ejecución para declarar lista esta capacidad.",
+  "capabilities.reason.missingRow":
+    "La ruta promete esta capacidad, pero el servidor no devolvió su fila canónica. Trátela como no disponible hasta reparar el contrato.",
+  "capabilities.action.checking": "Comprobando permisos, conexión de compilación y dependencias antes de habilitar esta acción.",
+  "capabilities.action.unavailableTitle": "Esta acción todavía no se puede ejecutar",
+  "capabilities.action.unavailable": "Esta compilación o una de sus dependencias requeridas no proporciona la acción.",
+  "capabilities.action.denied": "Su rol actual no incluye el permiso mínimo requerido para esta acción.",
+  "capabilities.action.unknown": "El servidor no describió esta operación en la fila canónica de capacidades, por lo que el navegador no la ejecutará.",
 } satisfies Record<MessageKey, string>;
 
 export default esESCatalog;

@@ -9,6 +9,7 @@ import { ToastProvider } from "@/components/ToastProvider";
 import { IntlProvider, useTranslation } from "@/i18n/I18nProvider";
 import { isSupportedLocale } from "@/i18n/messages";
 import { AppQueryProvider } from "@/lib/query";
+import { CapabilityProvider } from "@/lib/capabilities";
 // Login stays an eager import: it is the pre-auth fast path and must render
 // without waiting on a second chunk.
 import { Login } from "@/pages/Login";
@@ -70,7 +71,7 @@ const Journeys = lazyPage(() => import("@/pages/Journeys"), "Journeys");
 /** RequireAuth gates the app behind a resolved session, redirecting to login
  * when there is none. */
 function RequireAuth({ children }: { children: ReactElement }) {
-  const { user, loading } = useAuth();
+  const { user, loading, preview } = useAuth();
   const { t } = useTranslation();
   if (loading) {
     return (
@@ -80,7 +81,11 @@ function RequireAuth({ children }: { children: ReactElement }) {
     );
   }
   if (!user) return <Navigate to="/login" replace />;
-  return <RbacProvider permissions={user.permissions ?? null}>{children}</RbacProvider>;
+  return (
+    <RbacProvider permissions={user.permissions ?? null}>
+      <CapabilityProvider enabled={!preview}>{children}</CapabilityProvider>
+    </RbacProvider>
+  );
 }
 
 /** AppRoutes is the route table, separated from the router so tests can mount it

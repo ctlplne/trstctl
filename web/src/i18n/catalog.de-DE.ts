@@ -6661,6 +6661,39 @@ const deDECatalog = {
   "discovery.run.blockedFallback": "Diese Quelle ist noch nicht ausführbar. Prüfen Sie die Ausführungsvoraussetzungen und versuchen Sie es erneut.",
   "discovery.source.readinessBlocked": "Ausführung blockiert",
   "discovery.source.readinessReady": "Ausführungsbereit",
+  "capabilities.loading": "Es wird geprüft, was dieser Server und Ihre Rolle ausführen dürfen...",
+  "capabilities.readFailed.title": "Der Funktionsstatus ist vorübergehend nicht verfügbar",
+  "capabilities.readFailed.body":
+    "trstctl konnte nicht bestätigen, welche Aktionen dieser Build eingebunden hat. Der Browser rät nicht und schaltet nichts frei; der Server prüft Berechtigung, Lizenz und Abhängigkeiten weiterhin bei jeder Ausführung.",
+  "capabilities.retry": "Erneut prüfen",
+  "capabilities.route.title": "{ready} von {total} Funktionen auf dieser Seite sind vollständig bereit",
+  "capabilities.route.body":
+    "Die bereiten Teile können Sie weiter verwenden. Öffnen Sie die Details für die genau fehlende Berechtigung, Abhängigkeit oder Build-Einbindung. Der Server prüft jede Änderung erneut, bevor sie ausgeführt wird.",
+  "capabilities.route.details": "{count} Einschränkung(en) prüfen",
+  "capabilities.route.detailsLabel": "Funktionseinschränkungen auf dieser Seite",
+  "capabilities.tool.ready": "Dieser Server meldet alle {count} Funktionen dieses Werkzeugs als bereit.",
+  "capabilities.tool.mixed": "{ready} von {total} Werkzeugfunktionen sind vollständig bereit. Eingeschränkte Routen erklären den Rest.",
+  "capabilities.state.ready": "Bereit",
+  "capabilities.state.limited": "Eingeschränkt",
+  "capabilities.state.permissionBlocked": "Berechtigung erforderlich",
+  "capabilities.state.unavailable": "Nicht verfügbar",
+  "capabilities.state.unknown": "Status unbekannt",
+  "capabilities.reason.catalogOnly":
+    "Der Produktkatalog beschreibt diese Funktion, aber der laufende Build hat dafür keine ausführbare API-Aktion eingebunden.",
+  "capabilities.reason.notAttached":
+    "Der laufende Build hat diese Funktion nicht eingebunden. Prüfen Sie das Build-Profil und die erforderliche Abhängigkeit, bevor Sie es erneut versuchen.",
+  "capabilities.reason.permissionBlocked":
+    "Ihre aktuelle Rolle erlaubt diese Funktion nicht. Fordern Sie die kleinste erforderliche Berechtigung statt einer umfassenderen Rolle an.",
+  "capabilities.reason.partial":
+    "Einige Aktionen sind bereit, andere benötigen eine Berechtigung, Abhängigkeit oder Build-Einbindung. Prüfen Sie die genaue Aktion, bevor Sie fortfahren.",
+  "capabilities.reason.unknown": "trstctl hat nicht genügend Laufzeitnachweise, um diese Funktion als bereit zu melden.",
+  "capabilities.reason.missingRow":
+    "Die Route verspricht diese Funktion, aber der Server hat ihre kanonische Zeile nicht zurückgegeben. Behandeln Sie sie als nicht verfügbar, bis der Vertrag repariert ist.",
+  "capabilities.action.checking": "Berechtigung, Build-Einbindung und Abhängigkeiten werden geprüft, bevor diese Aktion aktiviert wird.",
+  "capabilities.action.unavailableTitle": "Diese Aktion ist noch nicht ausführbar",
+  "capabilities.action.unavailable": "Dieser Build oder eine seiner erforderlichen Abhängigkeiten stellt die Aktion nicht bereit.",
+  "capabilities.action.denied": "Ihre aktuelle Rolle enthält nicht die kleinste für diese Aktion erforderliche Berechtigung.",
+  "capabilities.action.unknown": "Der Server hat diese Operation nicht in der kanonischen Funktionszeile beschrieben; deshalb führt der Browser sie nicht aus.",
 } satisfies Record<MessageKey, string>;
 
 export default deDECatalog;

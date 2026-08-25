@@ -1,8 +1,95 @@
 import { Download, Pause, Play, RotateCcw } from "lucide-react";
 
+import { UnavailableState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
-import { translateNow } from "@/i18n/I18nProvider";
+import { translateNow, useTranslation } from "@/i18n/I18nProvider";
 import type { FleetReissuanceRun } from "@/lib/api";
+import { useCapabilityExecution } from "@/lib/capabilities";
+
+export function FleetStartAction({ running, onStart }: { running: boolean; onStart: () => void }) {
+  const { t } = useTranslation();
+  const action = useCapabilityExecution("F32", "startFleetReissuance");
+  const explanation = action.checking
+    ? t("capabilities.action.checking")
+    : action.unavailable?.detail ||
+      (action.state === "denied"
+        ? t("capabilities.action.denied")
+        : action.state === "unknown"
+          ? t("capabilities.action.unknown")
+          : t("capabilities.action.unavailable"));
+  return (
+    <div className="grid gap-2">
+      <Button type="button" onClick={onStart} disabled={running || !action.runnable} title={!action.runnable ? explanation : undefined}>
+        <Play className="h-4 w-4" aria-hidden="true" />
+        {running ? translateNow("source.starting.82b93630a9") : translateNow("source.start.fleet.run.140963492c")}
+      </Button>
+      {action.enforced && !action.checking && !action.runnable ? (
+        <UnavailableState title={t("capabilities.action.unavailableTitle")}>{explanation}</UnavailableState>
+      ) : null}
+    </div>
+  );
+}
+
+function FleetRunActions({
+  run,
+  action,
+  onAction,
+}: {
+  run: FleetReissuanceRun;
+  action: string | null;
+  onAction: (kind: "pause" | "resume" | "rollback" | "evidence", run: FleetReissuanceRun) => void;
+}) {
+  const pause = useCapabilityExecution("F32", "pauseFleetReissuance");
+  const resume = useCapabilityExecution("F32", "resumeFleetReissuance");
+  const rollback = useCapabilityExecution("F32", "rollbackFleetReissuance");
+  const evidence = useCapabilityExecution("F32", "exportFleetReissuanceEvidence");
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() => onAction("pause", run)}
+        disabled={!pause.runnable || action === `pause:${run.id}` || Boolean(run.migration_run_id && run.status !== "running")}
+        title={!pause.runnable ? pause.unavailable?.detail : undefined}
+        aria-label={translateNow("source.pause.fleet.run.value1.225d7f781f", { value1: shortId(run.id) })}
+      >
+        <Pause className="h-4 w-4" aria-hidden="true" />
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() => onAction("resume", run)}
+        disabled={!resume.runnable || action === `resume:${run.id}` || Boolean(run.migration_run_id && run.status !== "paused")}
+        title={!resume.runnable ? resume.unavailable?.detail : undefined}
+        aria-label={translateNow("source.resume.fleet.run.value1.82d98d67fc", { value1: shortId(run.id) })}
+      >
+        <Play className="h-4 w-4" aria-hidden="true" />
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() => onAction("rollback", run)}
+        disabled={
+          !rollback.runnable || action === `rollback:${run.id}` || Boolean(run.migration_run_id && !["running", "paused", "halted"].includes(run.status))
+        }
+        title={!rollback.runnable ? rollback.unavailable?.detail : undefined}
+        aria-label={translateNow("source.rollback.fleet.run.value1.21446f0a1d", { value1: shortId(run.id) })}
+      >
+        <RotateCcw className="h-4 w-4" aria-hidden="true" />
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() => onAction("evidence", run)}
+        disabled={!evidence.runnable || action === `evidence:${run.id}` || Boolean(run.migration_run_id && run.evidence_bundle_format !== "jws")}
+        title={!evidence.runnable ? evidence.unavailable?.detail : undefined}
+        aria-label={translateNow("source.export.fleet.run.value1.evidence.6065920a10", { value1: shortId(run.id) })}
+      >
+        <Download className="h-4 w-4" aria-hidden="true" />
+      </Button>
+    </div>
+  );
+}
 
 export function FleetReissuanceTable({
   runs,
@@ -88,44 +175,7 @@ export function FleetReissuanceTable({
                 <p className="max-w-[14rem] truncate font-mono text-xs text-muted-foreground">{run.evidence_bundle || "-"}</p>
               </td>
               <td>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => onAction("pause", run)}
-                    disabled={action === `pause:${run.id}` || Boolean(run.migration_run_id && run.status !== "running")}
-                    aria-label={translateNow("source.pause.fleet.run.value1.225d7f781f", { value1: shortId(run.id) })}
-                  >
-                    <Pause className="h-4 w-4" aria-hidden="true" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => onAction("resume", run)}
-                    disabled={action === `resume:${run.id}` || Boolean(run.migration_run_id && run.status !== "paused")}
-                    aria-label={translateNow("source.resume.fleet.run.value1.82d98d67fc", { value1: shortId(run.id) })}
-                  >
-                    <Play className="h-4 w-4" aria-hidden="true" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => onAction("rollback", run)}
-                    disabled={action === `rollback:${run.id}` || Boolean(run.migration_run_id && !["running", "paused", "halted"].includes(run.status))}
-                    aria-label={translateNow("source.rollback.fleet.run.value1.21446f0a1d", { value1: shortId(run.id) })}
-                  >
-                    <RotateCcw className="h-4 w-4" aria-hidden="true" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => onAction("evidence", run)}
-                    disabled={action === `evidence:${run.id}` || Boolean(run.migration_run_id && run.evidence_bundle_format !== "jws")}
-                    aria-label={translateNow("source.export.fleet.run.value1.evidence.6065920a10", { value1: shortId(run.id) })}
-                  >
-                    <Download className="h-4 w-4" aria-hidden="true" />
-                  </Button>
-                </div>
+                <FleetRunActions run={run} action={action} onAction={onAction} />
               </td>
             </tr>
           ))}

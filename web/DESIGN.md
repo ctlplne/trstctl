@@ -194,6 +194,15 @@ the same change.
     never becomes a reassuring zero. Tool overviews prefer tenant-scoped,
     event-derived read models over browser-side joins and expose freshness and
     projection lag when the API provides them.
+26. **Runtime capability truth is shared shell state.** `CapabilityProvider`
+    reads the authenticated `/api/v1/capabilities` projection once through the
+    tenant-aware query cache. Navigation badges, tool summaries, route notices,
+    and operation preflights derive from that same response. A missing row or
+    unknown operation is `unknown`, never allowed. Catalog-only, unattached,
+    permission-blocked, dependency-blocked, and partially available states remain
+    distinct and give the shortest safe remedy. The browser uses this truth to
+    explain and gate its controls, but the server remains the authority and checks
+    permission, license, dependency, and policy again when an action executes.
 
 ## Test surfaces
 

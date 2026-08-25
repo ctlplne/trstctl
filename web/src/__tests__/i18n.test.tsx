@@ -1141,8 +1141,14 @@ describe("i18n boundary", () => {
       // durable create/rotate versions. Cryptographic type names, permission
       // tokens, and ECDSA P-256 stay byte-identical. Machine-authored es/de —
       // FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "b62b5f4832009e21228b0d77c0e565c6a4cf251c2edd4e33ede7d8d506821ae7",
-      "de-DE": "f3fdb5272f27044ed56f2fc578ac25eb289927dba5ff1abaf72a8cca91124891",
+      // Product-overhaul runtime-truth re-pin: twenty-six keys explain what the
+      // running server actually attached, what the current role may do, why a
+      // route or exact action is limited, and how to recover without asking for
+      // a broader role. Negations in unknown/unavailable states and technical
+      // capability/permission identifiers keep their meaning. Machine-authored
+      // es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "11883d21a4731d78e054809031a5b86c3f1794459e0eb0538b5b456323a89daa",
+      "de-DE": "8503fded36e4627f0ea524b8383b72a098dd7b2b7bb50c81a770944abfa004fd",
     });
   });
 

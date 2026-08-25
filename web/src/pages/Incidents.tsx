@@ -40,7 +40,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { BreakGlassReconcile } from "@/components/breakglass";
 import { useTranslation, type I18nContextValue, translateNow } from "@/i18n/I18nProvider";
 import { IncidentExecutionProof, IncidentSeverityBadge, IncidentSituationSummary } from "./incidents/IncidentsPageParts";
-import { FleetReissuanceTable } from "./incidents/FleetReissuanceParts";
+import { FleetReissuanceTable, FleetStartAction } from "./incidents/FleetReissuanceParts";
 import { OutboxRecoveryPanel } from "./incidents/OutboxRecoveryPanel";
 import { formatDateTime } from "@/i18n/format";
 import { describeStatus, humanizeStatus, type StatusTone } from "@/lib/statusVocab";
@@ -1299,10 +1299,7 @@ export function Incidents() {
             />
           </div>
           <div className="md:col-span-2">
-            <Button type="button" onClick={() => void startFleetReissuance()} disabled={runningFleet}>
-              <Play className="h-4 w-4" aria-hidden="true" />
-              {runningFleet ? translateNow("source.starting.82b93630a9") : translateNow("source.start.fleet.run.140963492c")}
-            </Button>
+            <FleetStartAction running={runningFleet} onStart={() => void startFleetReissuance()} />
           </div>
         </form>
         {fleetError && <ErrorState title={translateNow("source.fleet.reissuance.failed.734d656156")}>{fleetError}</ErrorState>}

@@ -53,6 +53,7 @@ import { useApiQuery, useHasAppQueryProvider } from "@/lib/query";
 import { meaningfulAttention } from "@/pages/notifications/AlertCenterTabs";
 import { useTranslation, type I18nContextValue, translateNow } from "@/i18n/I18nProvider";
 import { localeLabelKeys, productionLocales, supportedLocales, type Locale, type MessageKey } from "@/i18n/messages";
+import { CapabilityNavStatus, CapabilityRouteNotice, CapabilityToolSummary } from "@/components/CapabilityTruth";
 
 // Pseudo-locales (en-XA/ar-XB) are i18n test fixtures; only offer them in dev
 // builds so real users never see them in the language picker.
@@ -276,13 +277,15 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
         {!activeSpace && visiblePrimaryItems.length > 0 && (
           <li>
             <ul className="space-y-1">
-              {visiblePrimaryItems.map(({ to, labelKey, icon, end }) => {
+              {visiblePrimaryItems.map((item) => {
+                const { to, labelKey, icon, end } = item;
                 const Icon = iconMap[icon];
                 return (
                   <li key={`primary-${to}`}>
                     <NavLink to={to} end={end} onClick={onNavigate} className={({ isActive }) => navItemClass(isActive)}>
                       <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
                       <span className="min-w-0 flex-1 break-words">{t(labelKey)}</span>
+                      <CapabilityNavStatus featureIds={item.featureIds} />
                     </NavLink>
                   </li>
                 );
@@ -296,7 +299,8 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
               {t("nav.section.needsAction")}
             </Eyebrow>
             <ul aria-label={t("nav.section.needsActionWorklists")} className="space-y-1">
-              {visibleTaskItems.map(({ to, labelKey, descriptionKey, icon }) => {
+              {visibleTaskItems.map((item) => {
+                const { to, labelKey, descriptionKey, icon } = item;
                 const Icon = iconMap[icon];
                 const label = t(labelKey);
                 const description = t(descriptionKey);
@@ -312,6 +316,7 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
                         <span className="block break-words leading-snug">{label}</span>
                         <span className="mt-0.5 block break-words text-xs font-normal leading-snug text-sidebar-foreground/80">{description}</span>
                       </span>
+                      <CapabilityNavStatus featureIds={item.featureIds} />
                     </NavLink>
                   </li>
                 );
@@ -325,6 +330,7 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
             <div className="border-b border-sidebar-active/55 px-3 pb-3 pt-0.5">
               <p className="text-sm font-bold text-sidebar-foreground">{t(activeSpace.labelKey)}</p>
               <p className="mt-1 text-caption leading-relaxed text-sidebar-foreground/75">{t(activeSpace.questionKey)}</p>
+              <CapabilityToolSummary featureIds={Array.from(new Set(activeSpace.groups.flatMap((group) => group.items.flatMap((item) => item.featureIds))))} />
             </div>
           </li>
         )}
@@ -354,6 +360,7 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
                       <NavLink to={to} end={end} onClick={onNavigate} className={({ isActive }) => navItemClass(isActive && !suppressed)}>
                         <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
                         <span className="min-w-0 flex-1 break-words">{label}</span>
+                        <CapabilityNavStatus featureIds={item.featureIds} />
                       </NavLink>
                     </li>
                   );
@@ -717,6 +724,7 @@ export function AppShell() {
               </p>
             }
           >
+            <CapabilityRouteNotice />
             <Outlet />
           </Suspense>
         </main>
