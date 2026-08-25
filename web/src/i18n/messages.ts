@@ -1123,6 +1123,11 @@ export const messages = {
       "Temporary API keys use the access service, so this workflow remains available while native secret storage is disabled. It still requires access:write permission.",
     description: "Ephemeral key workflow: explains why temporary API-key issuance remains usable when the optional native secret store is unavailable.",
   },
+  "secrets.transit.independentFromStore": {
+    defaultMessage:
+      "Transit uses the encryption service, so encrypt, decrypt, rewrap, HMAC, and signing remain available while native secret storage is disabled. It still requires the Transit key permissions shown by the API.",
+    description: "Transit workflow: explains why served cryptographic operations remain usable when the optional native secret store is unavailable.",
+  },
   "secrets.access.machineAdministration": {
     defaultMessage: "Machine login administration",
     description: "Closed disclosure summary for advanced machine-login methods and issued sessions.",

@@ -10288,9 +10288,9 @@
             "priority": 78,
             "served_state": "partial",
             "backend_status": "partial: served transit API and CLI; served KMIP mTLS listener for AES-256 SymmetricKey Create/Get/Locate/Revoke/Destroy",
-            "current_frontend_mapping": "disclosure: Secrets at /secrets - served transit API/CLI for key, encrypt/decrypt, HMAC/sign/verify, versions, rewrap, audit, and local-only plaintext disclosure; KMIP mTLS listener served for AES-256 SymmetricKey Create/Get/Locate/Revoke/Destroy",
-            "target_gui_mapping": "Transit/KMIP UI for keys, encrypt/decrypt test, HMAC/sign/verify, key versions, rewrap, audit, and appliance profile status.",
-            "acceptance_test": "UI never logs plaintext by default and marks test plaintext as local-only with explicit wiping behavior where possible.",
+            "current_frontend_mapping": "partial workflow: Secrets at /secrets/engines serves Transit encrypt/decrypt, rewrap, HMAC, signing, and local-only reveal-once plaintext through the independent encryption service even when optional native secret storage is disabled. Key create/rotate, signature verification, key versions, Transit audit, and KMIP appliance profile/status remain API/CLI-only or absent from this console workflow.",
+            "target_gui_mapping": "Complete the existing Transit workflow with key create/rotate, verification, versions, audit receipts, and KMIP appliance profile/status without rendering key material.",
+            "acceptance_test": "Vitest proves Transit encryption remains usable when the native secret store returns 503, keeps plaintext local/reveal-once, and pins the exact partial residuals; served integration tests prove the corresponding Transit and KMIP operations.",
             "source_docs": [
                 "docs/features/secrets.md"
             ],
@@ -10302,9 +10302,11 @@
                 "internal/server/kmip.go",
                 "internal/cli/command.go"
             ],
-            "source_frontend": [],
+            "source_frontend": [
+                "web/src/pages/Secrets.tsx"
+            ],
             "status": "closed",
-            "notes": "Closed by route-level feature-map evidence and TRACE-011 KMIP lifecycle remediation. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage; ee/kmip TestKMIPWireLifecycleOperationsServed proves Create, Locate, Revoke, and Destroy over the served KMIP TTLV handler. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, go test ./ee/kmip, and git diff --check passed after implementation.",
+            "notes": "The earlier disclosure label was stale and its evidence overclaimed UI support for verify, versions, audit, and KMIP posture. The console already served five Transit operations, but an unrelated native-secret-store 503 disabled them. The corrected partial-workflow record names exactly what is operable, removes the false dependency, and preserves the remaining closure debt. TRACE-011 still proves KMIP Create, Locate, Revoke, and Destroy over the served mTLS TTLV handler.",
             "api_surface": [
                 "createTransitKey",
                 "rotateTransitKey",
@@ -10349,12 +10351,16 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: disclosure: Secrets at /secrets - transit/KMIP key, encrypt/decrypt, HMAC/sign/verify, versions, rewrap, audit, and local-only plaintext disclosure",
-                        "target_gui_mapping: Transit/KMIP UI for keys, encrypt/decrypt test, HMAC/sign/verify, key versions, rewrap, audit, and appliance profile status."
+                        "current_frontend_mapping: partial workflow at /secrets/engines for Transit encrypt/decrypt, rewrap, HMAC, signing, and local-only reveal-once plaintext through the independent encryption service",
+                        "residual: key create/rotate, signature verification, key versions, Transit audit, and KMIP appliance profile/status remain outside the console workflow",
+                        "target_gui_mapping: complete the existing Transit workflow without rendering key material"
                     ],
                     "refs": [
                         "web/src/lib/navigation.ts",
-                        "web/src/App.tsx"
+                        "web/src/App.tsx",
+                        "web/src/pages/Secrets.tsx",
+                        "web/src/__tests__/secrets.test.tsx",
+                        "web/src/__tests__/route_parity.test.ts"
                     ]
                 },
                 "cli": {

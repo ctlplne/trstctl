@@ -1128,8 +1128,12 @@ describe("i18n boundary", () => {
       // still require access:write. The permission token stays byte-identical.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
       // release.
-      "es-ES": "943d0aaf29026dd033a35d8895a082312b3478e9941b1b5cbb272530c90ad2aa",
-      "de-DE": "b45e52f7dbc576ff29cb0b58cda4e4d0e71eebfe33d2d6de05e600e7e48e085c",
+      // Product-overhaul Transit readiness re-pin: the degraded Secrets state
+      // now explains that Transit uses its independent encryption service and
+      // names the five operations that remain available. Machine-authored
+      // es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "928adaebbe94b43844b8570684dfa31b32c1a34f65250c1bd38264106425ccaa",
+      "de-DE": "527d9afac1cc0f4036200e337ab956dfdf63c988e3449f88588052f51e988caf",
     });
   });
 

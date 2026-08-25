@@ -909,8 +909,9 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     featureId: "F66",
     routes: ["/secrets/engines"],
     component: "Secrets",
-    kind: "observe",
-    evidence: "transit/KMIP key, encrypt/decrypt, HMAC/sign/verify, versions, rewrap, audit, and local-only plaintext disclosure",
+    kind: "operate",
+    evidence:
+      "Transit encrypt/decrypt, rewrap, HMAC, signing, local-only reveal-once plaintext, and encryption-service availability independent of the optional native secret store; key administration, verify, versions, audit, and KMIP appliance posture remain parity debt",
   },
   { featureId: "F67", routes: ["/secrets/engines"], component: "Secrets", kind: "operate", evidence: "PKI secret issue with reveal-once bundle" },
   {

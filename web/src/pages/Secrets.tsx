@@ -3106,6 +3106,11 @@ export function Secrets() {
                 </h2>
                 <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.transit.operations.keep.key.material.serve.be62c8b11a")}</p>
               </div>
+              {loadError ? (
+                <p role="note" className="rounded-control border border-brand-accent/25 bg-brand-accent/5 p-3 text-sm text-muted-foreground">
+                  {t("secrets.transit.independentFromStore")}
+                </p>
+              ) : null}
               <form
                 aria-label={translateNow("source.transit.encrypt.and.decrypt.f3ae0fd83f")}
                 onSubmit={(event) => void encryptTransit(event)}
@@ -3149,7 +3154,7 @@ export function Secrets() {
                   />
                 </label>
                 <div className="flex flex-wrap gap-2 xl:col-span-2">
-                  <Button type="submit" disabled={transitBusy === "encrypt" || !transitPlaintext.trim() || Boolean(loadError)}>
+                  <Button type="submit" disabled={transitBusy === "encrypt" || !transitPlaintext.trim()}>
                     {transitBusy === "encrypt" ? (
                       <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                     ) : (
@@ -3161,7 +3166,7 @@ export function Secrets() {
                     type="button"
                     variant="outline"
                     onClick={() => void decryptTransit()}
-                    disabled={transitBusy === "decrypt" || !transitCiphertextInput.trim() || Boolean(loadError)}
+                    disabled={transitBusy === "decrypt" || !transitCiphertextInput.trim()}
                   >
                     {transitBusy === "decrypt" ? (
                       <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -3174,7 +3179,7 @@ export function Secrets() {
                     type="button"
                     variant="outline"
                     onClick={() => void rewrapTransit()}
-                    disabled={transitBusy === "rewrap" || !transitCiphertextInput.trim() || Boolean(loadError)}
+                    disabled={transitBusy === "rewrap" || !transitCiphertextInput.trim()}
                   >
                     {transitBusy === "rewrap" ? (
                       <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -3215,12 +3220,7 @@ export function Secrets() {
                     />
                   </label>
                   <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => void hmacTransit()}
-                      disabled={transitBusy === "hmac" || !transitMessage.trim() || Boolean(loadError)}
-                    >
+                    <Button type="button" variant="outline" onClick={() => void hmacTransit()} disabled={transitBusy === "hmac" || !transitMessage.trim()}>
                       {transitBusy === "hmac" ? (
                         <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                       ) : (
@@ -3228,12 +3228,7 @@ export function Secrets() {
                       )}
                       {translateNow("source.compute.hmac.4809a2f350")}
                     </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => void signTransit()}
-                      disabled={transitBusy === "sign" || !transitMessage.trim() || Boolean(loadError)}
-                    >
+                    <Button type="button" variant="outline" onClick={() => void signTransit()} disabled={transitBusy === "sign" || !transitMessage.trim()}>
                       {transitBusy === "sign" ? (
                         <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                       ) : (

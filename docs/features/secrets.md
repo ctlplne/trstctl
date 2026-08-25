@@ -335,6 +335,15 @@ response is written, and in-memory keyrings die on shutdown. Events —
 `transit.hmac`, `transit.sign` — give audit evidence without logging key bytes or
 plaintext.
 
+The console's **Encryption and signing** task at `/secrets/engines` currently operates
+encrypt, decrypt, rewrap, HMAC, and sign. Transit is a separate encryption service, so
+those controls remain available when the optional native secret store is disabled.
+The raw plaintext returned by decrypt is shown in a reveal-once panel and removed from
+the page when dismissed. Key create/rotate, signature verify, the version ledger,
+Transit-filtered audit receipts, and KMIP listener/profile status still require the
+API/CLI or deployment configuration; they are explicit console parity debt, not hidden
+controls.
+
 ```bash
 cat > transit-key.json <<'JSON'
 {"name":"payments","kind":"aead"}
@@ -642,11 +651,11 @@ Approvers call `POST /api/v1/secrets/store/approvals/{name}` with `{"action":"ro
 
 ### In the console
 
-The console renders the store as a **secrets workspace** at `/secrets`: a folder tree,
-a `${secret.path}` reference resolver, an **environment diff** between environments or
-versions, a version-history selector, a disabled bulk-import disclosure, and a
-**transit** sub-console for encrypt/decrypt/HMAC. Import stays disabled because its
-compatibility route returns `501` without writing. See [The web console](../web-console.md).
+The console renders the native store at `/secrets` and separate task-focused workspaces
+for machine access, one-time sharing, engines, scanning, and delivery. Transit lives in
+the **Encryption and signing** task at `/secrets/engines`; the exact console/API
+boundary is listed above. Import stays disabled because its compatibility route returns
+`501` without writing. See [The web console](../web-console.md).
 
 ## Use it
 

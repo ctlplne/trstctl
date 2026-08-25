@@ -413,6 +413,9 @@ const esESCatalog = {
   "secrets.grant.ledgerEmpty": "Aún no hay tokens concedidos.",
   "secrets.ephemeral.independentFromStore":
     "Las claves de API temporales usan el servicio de acceso, por lo que este flujo sigue disponible cuando el almacén de secretos nativo está deshabilitado. Aún requiere el permiso access:write.",
+  // Machine-authored initial translation; a fluent Spanish reviewer must approve before localization sign-off.
+  "secrets.transit.independentFromStore":
+    "Transit usa el servicio de cifrado, por lo que cifrar, descifrar, volver a cifrar, calcular HMAC y firmar siguen disponibles cuando el almacén de secretos nativo está deshabilitado. Aún requiere los permisos de claves Transit indicados por la API.",
   "secrets.access.machineAdministration": "Administración del acceso de máquinas",
   "secrets.access.developerTools": "Herramientas para desarrolladores",
   "secrets.methods.heading": "Métodos de autenticación",

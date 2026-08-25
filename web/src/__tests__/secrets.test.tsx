@@ -1521,6 +1521,31 @@ describe("secrets surface", () => {
     expect(await screen.findByText("epk_live_reveal_once_123")).toBeInTheDocument();
   });
 
+  it("keeps independently served Transit encryption usable when the native secret store is unavailable", async () => {
+    const user = userEvent.setup();
+    apiMock.secretPage.mockRejectedValueOnce(new ApiError(503, JSON.stringify({ detail: "secrets.enable_api disabled or KEK missing" })));
+    renderSecrets("/secrets/engines");
+
+    expect(await screen.findByText("Secrets API unavailable or disabled")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Open encryption and signing" }));
+    expect(await screen.findByText(/Transit uses the encryption service/)).toBeInTheDocument();
+
+    const form = within(screen.getByRole("form", { name: "Transit encrypt and decrypt" }));
+    await user.type(form.getByLabelText("Key name"), "payments-pii");
+    await user.type(form.getByLabelText("Plaintext"), "hello transit");
+    const encrypt = form.getByRole("button", { name: /encrypt/i });
+    expect(encrypt).toBeEnabled();
+    await user.click(encrypt);
+
+    await waitFor(() =>
+      expect(apiMock.encryptTransit).toHaveBeenCalledWith({
+        key: "payments-pii",
+        plaintext: "aGVsbG8gdHJhbnNpdA==",
+      }),
+    );
+    expect((await screen.findAllByText("trst:v1:ciphertext")).length).toBeGreaterThan(0);
+  });
+
   it("renders the shared grid empty state for an enabled store with no metadata", async () => {
     apiMock.secretPage.mockResolvedValueOnce({ items: [] });
     renderSecrets();
