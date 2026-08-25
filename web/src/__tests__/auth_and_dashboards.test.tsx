@@ -7,6 +7,10 @@ import { AuthProvider, beginLogin, useAuth } from "@/auth/AuthProvider";
 import { AppRoutes } from "@/App";
 import { ToastProvider } from "@/components/ToastProvider";
 import { ApiError, type Me } from "@/lib/api";
+import type { CapabilityView, CapabilityViewItem } from "@/lib/api-types.gen";
+import { CapabilityFixtureProvider } from "@/lib/capabilities";
+import { AppQueryProvider } from "@/lib/query";
+import { Dashboard } from "@/pages/Dashboard";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -48,6 +52,59 @@ function renderAt(path: string) {
             <AppRoutes />
           </MemoryRouter>
         </ToastProvider>
+      </AuthProvider>
+    </ThemeProvider>,
+  );
+}
+
+const homeUnavailableDetail = "This operation is unavailable because its runtime dependency is not configured.";
+
+function homeCapabilityItem(capabilityId: "F31" | "F63", operationId: string, available: boolean): CapabilityViewItem {
+  return {
+    capability_id: capabilityId,
+    name: `Fixture ${capabilityId}`,
+    purpose: "Prove that Home checks exact runtime readiness before an optional overview read.",
+    tool: capabilityId === "F31" ? "operations" : "secrets",
+    classification: "primary",
+    console_route: capabilityId === "F31" ? "/incidents" : "/secrets",
+    maturity: "partial_workflow",
+    release_blocking: true,
+    edition: "core",
+    runtime_state: available ? "available" : "unavailable",
+    authorization_state: available ? "full" : "none",
+    dependency_state: "none",
+    dependencies: [],
+    stages: [{ name: "observe", completion: available ? "complete" : "blocked", ...(available ? {} : { reason: homeUnavailableDetail }) }],
+    actions: {
+      allowed: available ? [operationId] : [],
+      scoped: [],
+      denied: [],
+      unavailable: available ? [] : [{ operation_id: operationId, code: "dependency_not_configured", detail: homeUnavailableDetail }],
+    },
+  };
+}
+
+function homeRuntime(available: boolean): CapabilityView {
+  return {
+    schema_version: 1,
+    contract_schema_version: 3,
+    enforcement_note: "The server checks every operation again when it executes.",
+    license: { tier: "community", state: "community" },
+    items: [homeCapabilityItem("F63", "listSecrets", available), homeCapabilityItem("F31", "listIncidentExecutions", available)],
+  };
+}
+
+function renderDashboardWithRuntime(view: CapabilityView) {
+  return render(
+    <ThemeProvider>
+      <AuthProvider>
+        <CapabilityFixtureProvider view={view}>
+          <AppQueryProvider>
+            <MemoryRouter>
+              <Dashboard />
+            </MemoryRouter>
+          </AppQueryProvider>
+        </CapabilityFixtureProvider>
       </AuthProvider>
     </ThemeProvider>,
   );
@@ -189,7 +246,9 @@ describe("auth + dashboards", () => {
     apiMock.ownershipAttribution.mockReset();
     apiMock.ownershipAttribution.mockResolvedValue({ generated_at: dayFromNow(0), coverage: [], summary: { total: 0, attributed: 0, orphaned: 0 }, items: [] });
     apiMock.connectorDeliveries.mockResolvedValue({ items: [] });
+    apiMock.secretPage.mockReset();
     apiMock.secretPage.mockResolvedValue({ items: [] });
+    apiMock.incidentExecutions.mockReset();
     apiMock.incidentExecutions.mockResolvedValue({ items: [] });
     apiMock.transitionIdentity.mockReset();
     apiMock.transitionIdentity.mockResolvedValue({ id: "i1", name: "renewed", kind: "x509_certificate", status: "renewing" });
@@ -506,6 +565,38 @@ describe("auth + dashboards", () => {
     });
     apiMock.auditEvents.mockResolvedValue([{ id: "e1", sequence: 1, tenant_id: "t1", type: "identity.transition", time: dayFromNow(0) }]);
   }
+
+  it("preflights unavailable Home overview APIs while preserving independent cockpit reads", async () => {
+    seededTenant();
+    renderDashboardWithRuntime(homeRuntime(false));
+
+    expect(await screen.findByRole("region", { name: "Home" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(apiMock.certificates).toHaveBeenCalled();
+      expect(apiMock.identities).toHaveBeenCalled();
+      expect(apiMock.risk).toHaveBeenCalled();
+      expect(apiMock.contextualRiskPriorities).toHaveBeenCalled();
+      expect(apiMock.rotationRuns).toHaveBeenCalled();
+      expect(apiMock.endpointVerifications).toHaveBeenCalled();
+      expect(apiMock.codeSigningIdentities).toHaveBeenCalled();
+      expect(apiMock.discoveryMonitoring).toHaveBeenCalled();
+      expect(apiMock.ownershipAttribution).toHaveBeenCalled();
+      expect(apiMock.auditEvents).toHaveBeenCalled();
+    });
+    expect(apiMock.secretPage).not.toHaveBeenCalled();
+    expect(apiMock.incidentExecutions).not.toHaveBeenCalled();
+    expect(screen.getAllByText(/unavailable/i).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("restores both optional Home overview reads when runtime capabilities allow them", async () => {
+    seededTenant();
+    renderDashboardWithRuntime(homeRuntime(true));
+
+    await waitFor(() => {
+      expect(apiMock.secretPage).toHaveBeenCalledWith({ limit: 100 });
+      expect(apiMock.incidentExecutions).toHaveBeenCalledWith({ limit: 100 });
+    });
+  });
 
   function kpiTile(dash: HTMLElement, label: RegExp): HTMLElement {
     const labelNode = within(dash)

@@ -4,6 +4,7 @@ import { Activity, AlertTriangle, Boxes, Bot, FileSignature, KeyRound, Rocket, S
 import { api, type AuditEvent, type Certificate, type ContextualRiskPriority, type NHIInventory as NHIInventoryResponse, type RotationRun } from "@/lib/api";
 import { useAuth } from "@/auth/AuthProvider";
 import { useApiQuery } from "@/lib/query";
+import { useCapabilityExecution } from "@/lib/capabilities";
 import { effectiveOwnerForRisk, type EffectiveOwner } from "@/lib/effectiveOwnership";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -258,6 +259,8 @@ function servedExpiryBands(certificates: Certificate[]): Array<{ label: string; 
 export function Dashboard() {
   const { preview } = useAuth();
   const { formatNumber, t } = useTranslation();
+  const secretsList = useCapabilityExecution("F63", "listSecrets");
+  const incidentList = useCapabilityExecution("F31", "listIncidentExecutions");
   // S-C5 live tiles: Home's answers poll while the tab is visible (30s for
   // KPI feeds, 60s for the audit stream), pause entirely while hidden, and
   // catch up the moment the operator returns (certctl PERF-H1 pattern).
@@ -275,8 +278,14 @@ export function Dashboard() {
     () => (typeof api.endpointVerifications === "function" ? api.endpointVerifications() : Promise.reject(new Error("unavailable"))),
     { live: { intervalMs: 60_000 } },
   );
-  const secretsCount = useApiQuery(["secrets-count"], readSecretsCount, { live: { intervalMs: 30_000 } });
-  const openIncidents = useApiQuery(["open-incidents"], readOpenIncidents, { live: { intervalMs: 30_000 } });
+  const secretsCount = useApiQuery(["secrets-count"], readSecretsCount, {
+    enabled: !secretsList.checking && secretsList.runnable,
+    live: { intervalMs: 30_000 },
+  });
+  const openIncidents = useApiQuery(["open-incidents"], readOpenIncidents, {
+    enabled: !incidentList.checking && incidentList.runnable,
+    live: { intervalMs: 30_000 },
+  });
   const recentAudit = useApiQuery(["recent-audit"], readRecentAudit, { live: { intervalMs: 60_000 } });
   const codeSigningHealth = useApiQuery(["code-signing-health"], readCodeSigningHealth, { live: { intervalMs: 30_000 } });
   const discoveryHealth = useApiQuery(["discovery-health"], readDiscoveryHealth, { live: { intervalMs: 30_000 } });
@@ -317,7 +326,7 @@ export function Dashboard() {
     agentsTotal: inventoryCount(nhiInventory.data, "agent"),
     expiring7d: servedCertificates.filter((c) => expiresWithinDays(c, 7)).length,
     urgentRisk: urgentValue,
-    openIncidents: openIncidents.data ?? 0,
+    openIncidents: incidentList.runnable ? (openIncidents.data ?? 0) : "—",
     pqcReady: servedCertificates.filter(isPqcReady).length,
   };
 
@@ -539,13 +548,13 @@ export function Dashboard() {
             icon={<Boxes className="h-4 w-4" aria-hidden="true" />}
             workspace={t("nav.module.secrets")}
             state={
-              secretsCount.loading
+              secretsList.checking || (secretsList.runnable && secretsCount.loading)
                 ? t("dashboard.workspaceHealth.loading")
-                : secretsCount.data === null
+                : !secretsList.runnable || secretsCount.data === null
                   ? t("dashboard.workspaceHealth.unavailable")
                   : t("dashboard.workspaceHealth.secrets", { count: String(secretsCount.data) })
             }
-            urgent={!secretsCount.loading && secretsCount.data === null}
+            urgent={!secretsList.checking && (!secretsList.runnable || secretsCount.data === null)}
           />
           <WorkspaceHealthLink
             to="/codesign"
@@ -565,13 +574,13 @@ export function Dashboard() {
             icon={<Siren className="h-4 w-4" aria-hidden="true" />}
             workspace={t("nav.space.platform")}
             state={
-              openIncidents.loading
+              incidentList.checking || (incidentList.runnable && openIncidents.loading)
                 ? t("dashboard.workspaceHealth.loading")
-                : openIncidents.data === null
+                : !incidentList.runnable || openIncidents.data === null
                   ? t("dashboard.workspaceHealth.unavailable")
                   : t("dashboard.workspaceHealth.incidents", { count: String(openIncidents.data) })
             }
-            urgent={!openIncidents.loading && (openIncidents.data === null || openIncidents.data > 0)}
+            urgent={!incidentList.checking && (!incidentList.runnable || openIncidents.data === null || openIncidents.data > 0)}
           />
         </ul>
       </section>
@@ -639,8 +648,8 @@ export function Dashboard() {
               icon={<Siren className="h-4 w-4" />}
               label="Open incidents"
               value={kpis.openIncidents}
-              sub={kpis.openIncidents ? `${kpis.openIncidents} active` : "none"}
-              tone={kpis.openIncidents ? "warn" : "ok"}
+              sub={typeof kpis.openIncidents === "number" ? (kpis.openIncidents ? `${kpis.openIncidents} active` : "none") : "unavailable"}
+              tone={typeof kpis.openIncidents === "number" ? (kpis.openIncidents ? "warn" : "ok") : undefined}
               to="/incidents"
             />
             <Kpi icon={<ShieldCheck className="h-4 w-4" />} label="Future-ready" value={kpis.pqcReady} to="/posture" tone="ok" />
