@@ -1271,7 +1271,7 @@ not this file.
 | `tools/dodcensus/runtime_runner_test.go:523` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/secret_integrations_manifest_test.go:113` | test reads the exact committed substrate source (CWE-22) |
 | `tools/dodcensus/secret_integrations_manifest_test.go:145` | test reads the exact committed runtime proof source (CWE-22) |
-| `tools/featureparityreport/main.go:44` | explicit operator-selected local report output |
+| `tools/featureparityreport/main.go:49` | explicit operator-selected local report output |
 | `tools/pqclab/main.go:233` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/pqclab/main.go:298` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/pqclab/main_test.go:76` | test reads its own fixture/tempdir path (CWE-22) |

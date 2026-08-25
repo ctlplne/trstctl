@@ -11,9 +11,10 @@ import (
 )
 
 type ReportOptions struct {
-	Title       string
-	ConsoleBase string
-	GeneratedAt string
+	Title        string
+	ConsoleBase  string
+	GeneratedAt  string
+	CandidateSHA string
 }
 
 type reportStage struct {
@@ -25,9 +26,10 @@ type reportStage struct {
 }
 
 type reportRow struct {
-	Item       Item
-	Stages     []reportStage
-	ConsoleURL string
+	Item            Item
+	Stages          []reportStage
+	ConsoleURL      string
+	ReportCandidate string
 }
 
 type reportTool struct {
@@ -69,6 +71,9 @@ func RenderControlPanel(w io.Writer, catalog Catalog, options ReportOptions) err
 	if err := ValidateCatalog(catalog); err != nil {
 		return fmt.Errorf("validate report catalog: %w", err)
 	}
+	if !exactCandidateSHA.MatchString(options.CandidateSHA) {
+		return fmt.Errorf("exact report candidate %q is not a 40-character lowercase SHA", options.CandidateSHA)
+	}
 	if strings.TrimSpace(options.Title) == "" {
 		options.Title = "trstctl frontend parity control panel"
 	}
@@ -81,12 +86,12 @@ func RenderControlPanel(w io.Writer, catalog Catalog, options ReportOptions) err
 
 func buildReportView(catalog Catalog, options ReportOptions) reportView {
 	byTool := make(map[CanonicalTool][]Item, len(reportToolOrder))
-	view := reportView{Title: options.Title, GeneratedAt: options.GeneratedAt, Total: len(catalog.Items)}
+	view := reportView{
+		Title: options.Title, GeneratedAt: options.GeneratedAt,
+		Candidate: options.CandidateSHA, Total: len(catalog.Items),
+	}
 	for _, item := range catalog.Items {
 		byTool[item.Contract.Tool] = append(byTool[item.Contract.Tool], item)
-		if view.Candidate == "" {
-			view.Candidate = item.Contract.CandidateSHA
-		}
 		if item.Contract.ReleaseBlocking {
 			view.Blockers++
 		}
@@ -108,9 +113,10 @@ func buildReportView(catalog Catalog, options ReportOptions) reportView {
 				group.Complete++
 			}
 			group.Rows = append(group.Rows, reportRow{
-				Item:       item,
-				Stages:     orderedReportStages(item.Contract.Stages),
-				ConsoleURL: strings.TrimRight(options.ConsoleBase, "/") + item.Contract.ConsoleRoute,
+				Item:            item,
+				Stages:          orderedReportStages(item.Contract.Stages),
+				ConsoleURL:      strings.TrimRight(options.ConsoleBase, "/") + item.Contract.ConsoleRoute,
+				ReportCandidate: options.CandidateSHA,
 			})
 		}
 		view.Tools = append(view.Tools, group)
@@ -229,7 +235,7 @@ var controlPanelTemplate = template.Must(template.New("frontend-parity-control-p
 <div class="cap-head"><div><div class="title-line"><span class="fid">{{.Item.FeatureID}}</span><span class="feature">{{.Item.Feature}}</span></div><p class="purpose">{{.Item.Contract.Purpose}}</p></div><div class="badges"><span class="badge {{.Item.Contract.Maturity}}">{{.Item.Contract.Maturity}}</span><span class="badge">{{.Item.Contract.Classification}}</span>{{if .Item.Contract.ReleaseBlocking}}<span class="badge blocker">release blocker</span>{{end}}</div></div>
 <div class="stage-grid" aria-label="Capability stages">{{range .Stages}}<div class="stage {{.Status}}" title="{{if .Reason}}{{.Reason}}{{else}}{{join .Proof "; "}}{{end}}"><span class="stage-name">{{.Name}}</span><span class="stage-status">{{statusLabel .Status}}</span></div>{{end}}</div>
 <details><summary>Evidence, boundaries, and next work</summary><div class="detail-grid">
-<div class="detail-block"><h3>Operator entry</h3><p><a href="{{.ConsoleURL}}">{{.Item.Contract.ConsoleRoute}}</a></p><p>Owner: <strong>{{.Item.Contract.Owner}}</strong></p><p>Edition: {{.Item.Contract.Edition}}</p><p>Candidate: <code>{{.Item.Contract.CandidateSHA}}</code></p></div>
+<div class="detail-block"><h3>Operator entry</h3><p><a href="{{.ConsoleURL}}">{{.Item.Contract.ConsoleRoute}}</a></p><p>Owner: <strong>{{.Item.Contract.Owner}}</strong></p><p>Edition: {{.Item.Contract.Edition}}</p><p>Report candidate: <code>{{.ReportCandidate}}</code></p><p>Contract evidence recorded at: <code>{{.Item.Contract.CandidateSHA}}</code></p></div>
 <div class="detail-block"><h3>Security boundary</h3><p>{{.Item.Contract.PermissionAuthority}}</p><p>Effects: {{.Item.Contract.SideEffects}}</p><p>{{.Item.Contract.SecretDataHandling}}</p>{{if .Item.Contract.Dependencies}}<ul>{{range .Item.Contract.Dependencies}}<li>{{.}}</li>{{end}}</ul>{{end}}</div>
 <div class="detail-block"><h3>API and CLI</h3>{{if .Item.APISurface}}<p><strong>API</strong></p><ul>{{range .Item.APISurface}}<li><code>{{.}}</code></li>{{end}}</ul>{{else}}<p>{{.Item.APINA}}</p>{{end}}{{if .Item.CLISurface}}<p><strong>CLI</strong></p><ul>{{range .Item.CLISurface}}<li><code>{{.}}</code></li>{{end}}</ul>{{else}}<p>{{.Item.CLINA}}</p>{{end}}</div>
 <div class="detail-block"><h3>Current truth</h3><p>{{.Item.CurrentMapping}}</p><p><strong>Target:</strong> {{.Item.TargetMapping}}</p></div>

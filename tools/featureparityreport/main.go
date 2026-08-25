@@ -20,14 +20,19 @@ func main() {
 	var title string
 	var consoleBase string
 	var generatedAt string
+	var candidateSHA string
 	flag.StringVar(&output, "out", "", "output HTML file (required)")
 	flag.StringVar(&title, "title", "trstctl frontend parity control panel", "report title")
 	flag.StringVar(&consoleBase, "console-base", "", "optional served console base URL for route links")
 	flag.StringVar(&generatedAt, "generated-at", "", "exact RFC3339 evidence timestamp (defaults to now)")
+	flag.StringVar(&candidateSHA, "candidate", "", "exact 40-character lowercase candidate SHA (required)")
 	flag.Parse()
 
 	if output == "" {
 		fatalf("--out is required")
+	}
+	if candidateSHA == "" {
+		fatalf("--candidate is required")
 	}
 	if generatedAt == "" {
 		generatedAt = time.Now().UTC().Format(time.RFC3339)
@@ -46,7 +51,7 @@ func main() {
 		fatalf("open report output: %v", err)
 	}
 	renderErr := featureparity.RenderControlPanel(file, catalog, featureparity.ReportOptions{
-		Title: title, ConsoleBase: consoleBase, GeneratedAt: generatedAt,
+		Title: title, ConsoleBase: consoleBase, GeneratedAt: generatedAt, CandidateSHA: candidateSHA,
 	})
 	closeErr := file.Close()
 	if renderErr != nil {

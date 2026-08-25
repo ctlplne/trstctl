@@ -15,17 +15,19 @@ func TestRenderControlPanelUsesCanonicalCatalogOnly(t *testing.T) {
 	}
 	var first bytes.Buffer
 	if err := RenderControlPanel(&first, catalog, ReportOptions{
-		Title:       "trstctl frontend parity control panel",
-		ConsoleBase: "http://127.0.0.1:58780",
-		GeneratedAt: "2026-08-25T09:46:14Z",
+		Title:        "trstctl frontend parity control panel",
+		ConsoleBase:  "http://127.0.0.1:58780",
+		GeneratedAt:  "2026-08-25T09:46:14Z",
+		CandidateSHA: strings.Repeat("b", 40),
 	}); err != nil {
 		t.Fatalf("render control panel: %v", err)
 	}
 	var second bytes.Buffer
 	if err := RenderControlPanel(&second, catalog, ReportOptions{
-		Title:       "trstctl frontend parity control panel",
-		ConsoleBase: "http://127.0.0.1:58780",
-		GeneratedAt: "2026-08-25T09:46:14Z",
+		Title:        "trstctl frontend parity control panel",
+		ConsoleBase:  "http://127.0.0.1:58780",
+		GeneratedAt:  "2026-08-25T09:46:14Z",
+		CandidateSHA: strings.Repeat("b", 40),
 	}); err != nil {
 		t.Fatalf("render control panel twice: %v", err)
 	}
@@ -45,7 +47,9 @@ func TestRenderControlPanelUsesCanonicalCatalogOnly(t *testing.T) {
 		"Encryption-as-a-service and KMIP",
 		"Signature verification, full version history, filtered audit receipts, and KMIP status remain parity debt.",
 		"http://127.0.0.1:58780/secrets/engines",
-		"candidate 73b87108",
+		"candidate bbbbbbbb",
+		"Report candidate: <code>bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb</code>",
+		"Contract evidence recorded at: <code>73b871089f46e4cc9e95ca10473b9ae5872a53cd</code>",
 		"discover",
 		"verify",
 	} {
@@ -102,10 +106,28 @@ func TestRenderControlPanelEscapesCatalogText(t *testing.T) {
 		}},
 	}
 	var out bytes.Buffer
-	if err := RenderControlPanel(&out, catalog, ReportOptions{Title: "Parity", GeneratedAt: "2026-08-25T00:00:00Z"}); err != nil {
+	if err := RenderControlPanel(&out, catalog, ReportOptions{
+		Title: "Parity", GeneratedAt: "2026-08-25T00:00:00Z", CandidateSHA: strings.Repeat("b", 40),
+	}); err != nil {
 		t.Fatalf("render escaped panel: %v", err)
 	}
 	if strings.Contains(out.String(), `<script>alert("unsafe")</script>`) || !strings.Contains(out.String(), "&lt;script&gt;") {
 		t.Fatalf("catalog text was not escaped: %s", out.String())
+	}
+}
+
+func TestRenderControlPanelRequiresExactReportCandidate(t *testing.T) {
+	catalog, err := Load()
+	if err != nil {
+		t.Fatalf("load catalog: %v", err)
+	}
+	for _, candidate := range []string{"", "main", strings.Repeat("a", 39), strings.Repeat("A", 40)} {
+		var out bytes.Buffer
+		err := RenderControlPanel(&out, catalog, ReportOptions{
+			Title: "Parity", GeneratedAt: "2026-08-25T00:00:00Z", CandidateSHA: candidate,
+		})
+		if err == nil || !strings.Contains(err.Error(), "exact report candidate") {
+			t.Errorf("candidate %q error = %v, want exact report candidate rejection", candidate, err)
+		}
 	}
 }

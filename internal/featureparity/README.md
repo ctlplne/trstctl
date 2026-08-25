@@ -39,7 +39,7 @@ Create the standalone, offline reviewer panel:
 make feature-parity-report FEATURE_PARITY_REPORT_OUT=/absolute/path/frontend-parity-control-panel.html
 ```
 
-The HTML contains no secret values, external scripts, remote fonts, or second feature list. It shows all 79 capabilities, computed maturity, release blockers, the nine stage cells, security boundaries, evidence, and exact candidate metadata. Supplying `--console-base` to `tools/featureparityreport` makes route links target a specific live candidate.
+The HTML contains no secret values, external scripts, remote fonts, or second feature list. It shows all 79 capabilities, computed maturity, release blockers, the nine stage cells, security boundaries, evidence, and exact candidate metadata. The Make target stamps the current commit as the report candidate; direct tool calls must supply the exact 40-character SHA with `--candidate`. Each row separately retains the catalog SHA where its contract evidence was recorded, so an evidence reader cannot confuse an older proof snapshot with the candidate currently under qualification. Supplying `--console-base` to `tools/featureparityreport` makes route links target a specific live candidate.
 
 ## Runtime capability view
 
