@@ -3,6 +3,7 @@
 package api_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,20 @@ import (
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/authz"
 )
+
+type capabilityApprovalQueue struct{}
+
+func (capabilityApprovalQueue) ValidateApprovalRequest(context.Context, string, api.ApprovalDecisionCommand) (api.ApprovalRequestRecord, error) {
+	return api.ApprovalRequestRecord{}, nil
+}
+
+func (capabilityApprovalQueue) RecordApproval(context.Context, string, api.ApprovalDecisionCommand) (api.ApprovalRequestRecord, error) {
+	return api.ApprovalRequestRecord{}, nil
+}
+
+func (capabilityApprovalQueue) ListApprovalRequests(context.Context, string, api.ApprovalRequestListOptions) ([]api.ApprovalRequestRecord, error) {
+	return nil, nil
+}
 
 type capabilityViewTestResponse struct {
 	SchemaVersion         int `json:"schema_version"`
@@ -142,6 +157,13 @@ func TestCapabilitiesViewIsAuthenticatedSanitizedAndAuthorizationAware(t *testin
 	if f66.RuntimeState != "unavailable" {
 		t.Fatalf("operator F66 runtime=%q, want unavailable without Transit service", f66.RuntimeState)
 	}
+	f33 := findCapabilityViewItem(t, operator, "F33")
+	for _, operationID := range []string{"listApprovalRequests", "approveApprovalRequest", "denyApprovalRequest"} {
+		action := findUnavailableCapabilityAction(t, f33, operationID)
+		if action.Code != "dependency_not_configured" || !strings.Contains(action.Detail, "dual-control approval") {
+			t.Fatalf("F33 %s unavailable=%+v, want exact approval dependency reason", operationID, action)
+		}
+	}
 
 	capabilityOnlyResponse := httptest.NewRecorder()
 	handler.ServeHTTP(capabilityOnlyResponse, capabilityViewRequest(tenantID, capabilityOnly.Name))
@@ -155,6 +177,30 @@ func TestCapabilitiesViewIsAuthenticatedSanitizedAndAuthorizationAware(t *testin
 	f2 = findCapabilityViewItem(t, restricted, "F2")
 	if f2.AuthorizationState != "none" || len(f2.Actions.Allowed) != 0 {
 		t.Fatalf("capability-only F2 auth=%q allowed=%v, want none/none", f2.AuthorizationState, f2.Actions.Allowed)
+	}
+}
+
+func TestCapabilitiesViewPromotesApprovalQueueOnlyWhenConfigured(t *testing.T) {
+	const tenantID = "11111111-1111-4111-8111-111111111111"
+	handler := api.New(nil, nil, nil,
+		api.WithInsecureHeaderResolver(),
+		api.WithApprovals(capabilityApprovalQueue{}),
+	)
+
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, capabilityViewRequest(tenantID, "operator"))
+	if response.Code != http.StatusOK {
+		t.Fatalf("configured capability status=%d body=%s, want 200", response.Code, response.Body.String())
+	}
+	var view capabilityViewTestResponse
+	if err := json.NewDecoder(response.Body).Decode(&view); err != nil {
+		t.Fatalf("decode configured capability response: %v", err)
+	}
+	f33 := findCapabilityViewItem(t, view, "F33")
+	for _, operationID := range []string{"listApprovalRequests", "approveApprovalRequest", "denyApprovalRequest"} {
+		if !containsCapabilityString(f33.Actions.Allowed, operationID) {
+			t.Errorf("configured F33 allowed=%v, want %s", f33.Actions.Allowed, operationID)
+		}
 	}
 }
 

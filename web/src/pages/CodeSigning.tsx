@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { useApiQuery } from "@/lib/query";
+import { useCapabilityExecution } from "@/lib/capabilities";
 
 type Mode = "key" | "keyless";
 
@@ -48,8 +49,16 @@ const auditReceipts = [
  * Only the digest is sent; artifact bytes and private keys never touch the SPA. */
 export function CodeSigning() {
   const { t } = useTranslation();
-  const operations = useApiQuery(["code-signing", "identities"], api.codeSigningIdentities, { live: { intervalMs: 30_000 } });
-  const approvals = useApiQuery(["approval-requests"], api.approvalRequests, { live: { intervalMs: 30_000 } });
+  const operationList = useCapabilityExecution("F50", "listCodeSigningIdentities");
+  const approvalList = useCapabilityExecution("F33", "listApprovalRequests");
+  const operations = useApiQuery(["code-signing", "identities"], api.codeSigningIdentities, {
+    enabled: !operationList.checking && operationList.runnable,
+    live: { intervalMs: 30_000 },
+  });
+  const approvals = useApiQuery(["approval-requests"], api.approvalRequests, {
+    enabled: !approvalList.checking && approvalList.runnable,
+    live: { intervalMs: 30_000 },
+  });
   const protocols = useApiQuery(["protocol-statuses"], api.protocolStatuses, { live: { intervalMs: 60_000 } });
   const [mode, setMode] = useState<Mode>("key");
   const [artifactType, setArtifactType] = useState("container");
@@ -60,8 +69,15 @@ export function CodeSigning() {
   const [signature, setSignature] = useState<CodeSigningSignature | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const loading = operations.loading || approvals.loading || protocols.loading;
-  const sourceUnavailable = operations.error !== null || approvals.error !== null || protocols.error !== null;
+  const loading =
+    operationList.checking ||
+    approvalList.checking ||
+    (operationList.runnable && operations.loading) ||
+    (approvalList.runnable && approvals.loading) ||
+    protocols.loading;
+  const operationsUnavailable = !operationList.runnable || operations.error !== null;
+  const approvalsUnavailable = !approvalList.runnable || approvals.error !== null;
+  const sourceUnavailable = operationsUnavailable || approvalsUnavailable || protocols.error !== null;
   const signingApprovals = (approvals.data ?? []).filter((row) => row.status === "pending" && row.resource_kind === "code_signing");
   const failedOperations = (operations.data?.items ?? []).filter((row) => row.status === "failed" || row.transparency === "failed");
   const tsa = protocols.data?.items.find((row) => row.protocol.toLowerCase() === "tsa");
@@ -121,8 +137,8 @@ export function CodeSigning() {
             </div>
             {sourceUnavailable ? (
               <ul className="grid gap-1 text-sm text-muted-foreground">
-                {operations.error ? <li>{t("codesign.source.operationsUnavailable")}</li> : null}
-                {approvals.error ? <li>{t("codesign.source.approvalsUnavailable")}</li> : null}
+                {operationsUnavailable ? <li>{t("codesign.source.operationsUnavailable")}</li> : null}
+                {approvalsUnavailable ? <li>{t("codesign.source.approvalsUnavailable")}</li> : null}
                 {protocols.error ? <li>{t("codesign.source.tsaUnavailable")}</li> : null}
               </ul>
             ) : null}
@@ -138,9 +154,9 @@ export function CodeSigning() {
             <ul aria-label={t("codesign.health.label")} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <SoftwareHealth
                 icon={<FileSignature className="h-4 w-4" aria-hidden="true" />}
-                urgent={operations.error !== null || failedOperations.length > 0}
+                urgent={operationsUnavailable || failedOperations.length > 0}
                 label={
-                  operations.error
+                  operationsUnavailable
                     ? t("codesign.health.operationsUnavailable")
                     : failedOperations.length === 1
                       ? t("codesign.health.failures.one")
@@ -149,9 +165,9 @@ export function CodeSigning() {
               />
               <SoftwareHealth
                 icon={<Clock3 className="h-4 w-4" aria-hidden="true" />}
-                urgent={approvals.error !== null || signingApprovals.length > 0}
+                urgent={approvalsUnavailable || signingApprovals.length > 0}
                 label={
-                  approvals.error
+                  approvalsUnavailable
                     ? t("codesign.health.approvalsUnavailable")
                     : signingApprovals.length === 1
                       ? t("codesign.health.approvals.one")
@@ -174,9 +190,9 @@ export function CodeSigning() {
               <SoftwareHealth icon={<KeyRound className="h-4 w-4" aria-hidden="true" />} urgent label={t("codesign.health.keysUnavailable")} to="/ca" />
               <SoftwareHealth
                 icon={<CheckCircle2 className="h-4 w-4" aria-hidden="true" />}
-                urgent={operations.error !== null}
+                urgent={operationsUnavailable}
                 label={
-                  operations.error
+                  operationsUnavailable
                     ? t("codesign.health.operationsUnavailable")
                     : operations.data?.total === 1
                       ? t("codesign.health.operations.one")

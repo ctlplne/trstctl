@@ -54,6 +54,13 @@ func (a *API) runtimeRouteAvailability(r route) (bool, string) {
 	case "openPAMSession", "listPAMSessions", "getPAMSession":
 		return runtimeDependency(a.pam != nil,
 			"The just-in-time privileged access broker is not configured in this deployment.")
+	case "listApprovalRequests":
+		_, listReady := a.approvals.(ApprovalRequestLister)
+		return runtimeDependency(a.approvals != nil && listReady,
+			"The dual-control approval queue is not configured in this deployment.")
+	case "approveApprovalRequest", "denyApprovalRequest":
+		return runtimeDependency(a.approvals != nil,
+			"The dual-control approval service is not configured in this deployment.")
 
 	case "generateManagedKey", "approveManagedKeyAction", "rotateManagedKey", "revokeManagedKey", "zeroizeManagedKey":
 		return runtimeDependency(a.managedKeys != nil,

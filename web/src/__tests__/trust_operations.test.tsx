@@ -9,6 +9,7 @@ const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     authMethods: vi.fn(),
     me: vi.fn(),
+    capabilities: vi.fn(),
     contextualRiskPriorities: vi.fn(),
     incidentExecutions: vi.fn(),
     notifications: vi.fn(),
@@ -45,6 +46,31 @@ describe("Trust Operations overview", () => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
     apiMock.authMethods.mockResolvedValue({ oidc: true, saml: false, ldap: false });
     apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "operator", tenant_id: "tenant-1" });
+    apiMock.capabilities.mockResolvedValue({
+      schema_version: 1,
+      contract_schema_version: 3,
+      enforcement_note: "The server checks every operation again when it executes.",
+      license: { tier: "community", state: "community" },
+      items: [
+        {
+          capability_id: "F31",
+          name: "Credential compromise workflow",
+          purpose: "Contain and repair compromised credentials.",
+          tool: "operations",
+          classification: "primary",
+          console_route: "/incidents",
+          maturity: "partial_workflow",
+          release_blocking: true,
+          edition: "core",
+          runtime_state: "available",
+          authorization_state: "full",
+          dependency_state: "none",
+          dependencies: [],
+          stages: [{ name: "observe", completion: "complete" }],
+          actions: { allowed: ["listIncidentExecutions"], scoped: [], denied: [], unavailable: [] },
+        },
+      ],
+    });
     apiMock.contextualRiskPriorities.mockResolvedValue({
       generated_at: "2026-08-24T12:00:00Z",
       capability: "contextual-risk",

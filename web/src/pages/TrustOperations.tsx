@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { LoadingState } from "@/components/StatePrimitives";
 import { api, type ContextualRiskPriority } from "@/lib/api";
 import { useApiQuery } from "@/lib/query";
+import { useCapabilityExecution } from "@/lib/capabilities";
 import { effectiveOwnerForRisk, type EffectiveOwner } from "@/lib/effectiveOwnership";
 import { useTranslation } from "@/i18n/I18nProvider";
 
@@ -53,8 +54,12 @@ function ownerLabel(owner: EffectiveOwner, t: ReturnType<typeof useTranslation>[
  * each system and inspect exact evidence. */
 export function TrustOperations() {
   const { t } = useTranslation();
+  const incidentList = useCapabilityExecution("F31", "listIncidentExecutions");
   const risks = useApiQuery(["risk", "contextual-priorities"], api.contextualRiskPriorities, { live: { intervalMs: 30_000 } });
-  const incidents = useApiQuery(["incident-executions", { limit: 100 }], () => api.incidentExecutions({ limit: 100 }), { live: { intervalMs: 30_000 } });
+  const incidents = useApiQuery(["incident-executions", { limit: 100 }], () => api.incidentExecutions({ limit: 100 }), {
+    enabled: !incidentList.checking && incidentList.runnable,
+    live: { intervalMs: 30_000 },
+  });
   const notifications = useApiQuery(["notifications", { limit: 100 }], () => api.notifications({ limit: 100 }), { live: { intervalMs: 30_000 } });
   const channels = useApiQuery(["notification-channels"], api.notificationChannels, { live: { intervalMs: 60_000 } });
   const policies = useApiQuery(["notification-routing-policies"], api.notificationRoutingPolicies, { live: { intervalMs: 60_000 } });
@@ -66,8 +71,9 @@ export function TrustOperations() {
   const system = useApiQuery(["platform-system"], api.platformSystem, { live: { intervalMs: 60_000 } });
 
   const sources = [risks, incidents, notifications, channels, policies, ownership, workers, audit, connectors, agentJobs, system];
-  const loading = sources.some((source) => source.loading);
-  const sourceUnavailable = sources.some((source) => source.error !== null);
+  const loading = incidentList.checking || sources.some((source) => source !== incidents && source.loading) || (incidentList.runnable && incidents.loading);
+  const incidentsUnavailable = !incidentList.runnable || incidents.error !== null;
+  const sourceUnavailable = incidentsUnavailable || sources.some((source) => source.error !== null);
   const urgent = (risks.data?.priorities ?? []).filter((row) => row.severity === "critical" || row.severity === "high").slice(0, 5);
   const openIncidents = (incidents.data?.items ?? []).filter((row) => row.status !== "completed" && row.status !== "rolled_back").length;
   const deadDeliveries = (notifications.data?.items ?? []).filter((row) => row.status === "dead").length;
@@ -126,7 +132,7 @@ export function TrustOperations() {
             {sourceUnavailable ? (
               <ul className="grid gap-1 text-sm text-muted-foreground sm:grid-cols-2">
                 {risks.error ? <li>{t("trustOperations.source.risk")}</li> : null}
-                {incidents.error ? <li>{t("trustOperations.source.incidents")}</li> : null}
+                {incidentsUnavailable ? <li>{t("trustOperations.source.incidents")}</li> : null}
                 {notifications.error ? <li>{t("trustOperations.source.notifications")}</li> : null}
                 {ownership.error ? <li>{t("trustOperations.source.ownership")}</li> : null}
                 {workers.error ? <li>{t("trustOperations.source.workers")}</li> : null}
@@ -183,11 +189,11 @@ export function TrustOperations() {
                 to="/incidents"
                 icon={<AlertTriangle className="h-4 w-4" aria-hidden="true" />}
                 label={
-                  incidents.error
+                  incidentsUnavailable
                     ? t("trustOperations.incidents.unavailable")
                     : t(openIncidents === 1 ? "trustOperations.incidents.one" : "trustOperations.incidents.many", { count: String(openIncidents) })
                 }
-                urgent={incidents.error !== null || openIncidents > 0}
+                urgent={incidentsUnavailable || openIncidents > 0}
               />
               <HealthLink
                 to="/owners?status=orphaned"

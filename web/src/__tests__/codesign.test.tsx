@@ -4,6 +4,8 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { CodeSigning } from "@/pages/CodeSigning";
 import { AppQueryProvider } from "@/lib/query";
+import type { CapabilityView, CapabilityViewItem } from "@/lib/api-types.gen";
+import { CapabilityFixtureProvider } from "@/lib/capabilities";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -89,14 +91,54 @@ beforeEach(() => {
   });
 });
 
-function renderPage() {
-  return render(
+function codeSigningCapability(capabilityId: "F33" | "F50", operationId: string, available: boolean): CapabilityViewItem {
+  const detail = "This operation is unavailable because its runtime dependency is not configured.";
+  return {
+    capability_id: capabilityId,
+    name: capabilityId === "F33" ? "Just-in-time issuance with approval flows" : "Code-signing service",
+    purpose: "Prove that Software Trust preflights optional overview reads.",
+    tool: capabilityId === "F33" ? "operations" : "software_trust",
+    classification: "primary",
+    console_route: capabilityId === "F33" ? "/request" : "/codesign",
+    maturity: "partial_workflow",
+    release_blocking: true,
+    edition: "core",
+    runtime_state: available ? "available" : "unavailable",
+    authorization_state: available ? "full" : "none",
+    dependency_state: "none",
+    dependencies: [],
+    stages: [{ name: "observe", completion: available ? "complete" : "blocked", ...(available ? {} : { reason: detail }) }],
+    actions: {
+      allowed: available ? [operationId] : [],
+      scoped: [],
+      denied: [],
+      unavailable: available ? [] : [{ operation_id: operationId, code: "dependency_not_configured", detail }],
+    },
+  };
+}
+
+function codeSigningRuntime(options: { approvals?: boolean; operations?: boolean } = {}): CapabilityView {
+  return {
+    schema_version: 1,
+    contract_schema_version: 3,
+    enforcement_note: "The server checks every operation again when it executes.",
+    license: { tier: "community", state: "community" },
+    items: [
+      codeSigningCapability("F50", "listCodeSigningIdentities", options.operations ?? true),
+      codeSigningCapability("F33", "listApprovalRequests", options.approvals ?? true),
+    ],
+  };
+}
+
+function renderPage(view?: CapabilityView) {
+  const page = (
     <AppQueryProvider>
       <MemoryRouter>
         <CodeSigning />
       </MemoryRouter>
-    </AppQueryProvider>,
+    </AppQueryProvider>
   );
+  return render(view ? <CapabilityFixtureProvider view={view}>{page}</CapabilityFixtureProvider> : page);
 }
 
 describe("code signing console", () => {
@@ -150,5 +192,22 @@ describe("code signing console", () => {
     expect(await screen.findByRole("heading", { name: "Software Trust urgency is not fully known" }, { timeout: 3_000 })).toBeInTheDocument();
     expect(screen.getAllByText("Signing outcomes are unavailable").length).toBeGreaterThan(0);
     expect(screen.queryByText("No Software Trust work needs attention")).not.toBeInTheDocument();
+  });
+
+  it("skips a known-unavailable approval queue while keeping independent Software Trust evidence live", async () => {
+    renderPage(codeSigningRuntime({ approvals: false }));
+
+    await waitFor(() => {
+      expect(apiMock.codeSigningIdentities).toHaveBeenCalledTimes(1);
+      expect(apiMock.protocolStatuses).toHaveBeenCalledTimes(1);
+    });
+    expect(apiMock.approvalRequests).not.toHaveBeenCalled();
+    expect((await screen.findAllByText("Signing approvals are unavailable")).length).toBeGreaterThan(0);
+  });
+
+  it("restores the approval overview read when the exact runtime operation is available", async () => {
+    renderPage(codeSigningRuntime());
+
+    await waitFor(() => expect(apiMock.approvalRequests).toHaveBeenCalledTimes(1));
   });
 });
