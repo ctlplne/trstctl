@@ -2770,6 +2770,57 @@ func TestDemoClickThroughUsesShippedTLSAddress(t *testing.T) {
 	}
 }
 
+// TestDemoClickThroughIsCandidateAwareAndRouteComplete prevents a presenter
+// from silently opening an old local container or getting lost between the
+// guide and the real application. Every numbered stop has one current app
+// doorway, and source-file documentation links remain usable outside MkDocs.
+func TestDemoClickThroughIsCandidateAwareAndRouteComplete(t *testing.T) {
+	walkthrough := read(t, "demo-click-through.html")
+	for _, want := range []string{
+		"This page is the guide, not the trstctl application.",
+		"candidateFromQuery",
+		`data-demo-candidate`,
+		"Expected candidate was not supplied",
+		"Running build",
+		"Source commit",
+		`data-source-href="getting-started.md"`,
+		`data-source-href="local-evaluation-tls.md"`,
+		`window.location.protocol === "file:"`,
+	} {
+		if !strings.Contains(walkthrough, want) {
+			t.Errorf("demo click-through is missing candidate or source-mode truth %q", want)
+		}
+	}
+	if strings.Contains(walkthrough, "Right-click") {
+		t.Error("demo click-through must not require a mouse-only right-click gesture")
+	}
+
+	stopRoutes := []string{
+		"/", "/", "/journeys", "/discovery", "/certificates",
+		"/identities", "/protocols", "/secrets", "/posture", "/risk",
+		"/graph", "/approvals", "/incidents", "/connectors", "/platform",
+	}
+	for index, route := range stopRoutes {
+		startMarker := fmt.Sprintf(`id="stop-%d"`, index+1)
+		start := strings.Index(walkthrough, startMarker)
+		if start < 0 {
+			t.Errorf("demo click-through is missing stop %d", index+1)
+			continue
+		}
+		end := len(walkthrough)
+		if index+1 < len(stopRoutes) {
+			next := strings.Index(walkthrough[start+len(startMarker):], fmt.Sprintf(`id="stop-%d"`, index+2))
+			if next >= 0 {
+				end = start + len(startMarker) + next
+			}
+		}
+		block := walkthrough[start:end]
+		if !strings.Contains(block, fmt.Sprintf(`data-demo-path="%s"`, route)) {
+			t.Errorf("demo stop %d must include a direct app link to %s", index+1, route)
+		}
+	}
+}
+
 // TestDocsNeverTeachCurlToSkipTLS prevents any customer example from turning
 // certificate validation off. The evaluation stacks publish a certificate-only
 // trust file before first use, so even the initial localhost health probe can and

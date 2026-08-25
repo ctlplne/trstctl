@@ -34,6 +34,10 @@
     }
     a { color: var(--blue); }
     a:hover { color: var(--navy); }
+    a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible {
+      outline: 3px solid var(--gold);
+      outline-offset: 3px;
+    }
     code, kbd {
       font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
       font-size: .92em;
@@ -115,9 +119,9 @@
     h1 {
       max-width: 820px;
       margin: 0;
-      font-size: clamp(2.15rem, 5vw, 4.25rem);
-      line-height: 1.04;
-      letter-spacing: -.045em;
+      font-size: clamp(2.05rem, 4vw, 3.55rem);
+      line-height: 1.08;
+      letter-spacing: -.038em;
     }
     .hero .lede {
       max-width: 760px;
@@ -129,6 +133,14 @@
     .hero .button.primary { color: white; background: var(--navy); }
     .hero .button.primary:hover { background: #103b34; }
     .hero .button.secondary { color: var(--navy); border-color: var(--line); background: var(--panel); }
+    .guide-boundary {
+      max-width: 760px;
+      margin: .9rem 0 0;
+      padding-left: .8rem;
+      border-left: 3px solid var(--gold);
+      color: var(--ink);
+      font-weight: 720;
+    }
 
     .layout {
       display: grid;
@@ -182,6 +194,36 @@
     .mini-card { padding: 1rem; }
     .mini-card strong { display: block; color: var(--navy); }
     .mini-card p { margin: .35rem 0 0; color: var(--muted); font-size: .9rem; }
+
+    .identity-panel {
+      margin: 0 0 1.5rem;
+      padding: 1.15rem;
+      border: 1px solid #c9d6d1;
+      border-radius: .8rem;
+      background: #f4f8f6;
+      box-shadow: var(--shadow);
+    }
+    .identity-panel h3 { margin: 0; color: var(--navy); }
+    .identity-panel > p { max-width: 850px; margin: .4rem 0 0; color: var(--muted); }
+    .identity-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: .7rem;
+      margin-top: 1rem;
+    }
+    .identity-fact {
+      min-width: 0;
+      padding: .8rem;
+      border: 1px solid var(--line);
+      border-radius: .55rem;
+      background: var(--panel);
+    }
+    .identity-fact strong { display: block; margin-bottom: .25rem; color: var(--navy); font-size: .82rem; }
+    .identity-value { overflow-wrap: anywhere; font-size: .88rem; }
+    .identity-value.needs-check { color: var(--orange); font-weight: 720; }
+    .identity-value.expected { color: var(--green); font-weight: 720; }
+    .identity-steps { margin: .9rem 0 0; padding-left: 1.35rem; }
+    .identity-steps li + li { margin-top: .35rem; }
 
     .mental-model {
       margin: 1.5rem 0 2rem;
@@ -279,6 +321,19 @@
     .tour-body h4:first-child { margin-top: 0; }
     .tour-body ol, .tour-body ul { padding-left: 1.35rem; }
     .tour-body li + li { margin-top: .38rem; }
+    .route-door {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: .55rem;
+      margin: 0 0 1rem;
+      padding: .7rem;
+      border: 1px solid var(--line);
+      border-radius: .6rem;
+      background: #f8f7f1;
+    }
+    .route-door code { overflow-wrap: anywhere; }
+    .route-door .route-note { color: var(--muted); font-size: .82rem; }
     .tour-body .expected {
       margin-top: .9rem;
       padding: .75rem .85rem;
@@ -347,10 +402,15 @@
       .sidebar { position: relative; top: auto; max-height: none; }
       .toc { columns: 2; }
       .intro-grid { grid-template-columns: 1fr; }
+      .identity-grid { grid-template-columns: 1fr; }
       .flow { grid-template-columns: 1fr; }
       .flow > div:not(:last-child)::after { content: "↓"; top: auto; right: 50%; bottom: -.8rem; transform: translateX(50%); }
       .entity-chain { grid-template-columns: 1fr; }
       .entity-chain > div:not(:last-child)::after { content: "↓"; top: auto; right: 50%; bottom: -.8rem; transform: translateX(50%); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .progress-bar { transition: none; }
     }
     @media (max-width: 620px) {
       .tour-header { grid-template-columns: auto 1fr; }
@@ -386,11 +446,12 @@
       <p class="eyebrow">Local Provider demo · beginner guide</p>
       <h1>Learn trstctl by clicking through the real control plane</h1>
       <p class="lede">No PKI background required. Start with the 10-minute proof loop, then continue into the full read-only tour when you want the detail.</p>
+      <p class="guide-boundary">This page is the guide, not the trstctl application. Every dark-green button opens the real app in a separate tab.</p>
       <div class="hero-actions">
         <a class="button primary" href="https://127.0.0.1:9443/" data-demo-path="/" target="_blank" rel="noopener">Open the trstctl demo</a>
         <a class="button secondary" href="#quick-tour">Take the 10-minute tour</a>
         <a class="button secondary" href="#before-you-start">See the full walkthrough</a>
-        <a class="button secondary" href="getting-started/">Back to the documentation</a>
+        <a class="button secondary" href="getting-started/" data-doc-href="getting-started/" data-source-href="getting-started.md">Back to the documentation</a>
         <button class="secondary" type="button" onclick="window.print()">Print or save as PDF</button>
       </div>
     </div>
@@ -449,9 +510,33 @@
         </article>
       </div>
 
+      <section class="identity-panel" aria-labelledby="candidate-check-title">
+        <h3 id="candidate-check-title">Confirm the build before you present it</h3>
+        <p>This guide can point at a local address, but an address does not prove which container is listening there. Compare the expected Git commit with the running control plane. If they do not match, stop: you are looking at a different build.</p>
+        <div class="identity-grid" aria-live="polite">
+          <div class="identity-fact">
+            <strong>Walkthrough target</strong>
+            <span class="identity-value" data-demo-origin>https://127.0.0.1:9443</span>
+          </div>
+          <div class="identity-fact">
+            <strong>Expected candidate</strong>
+            <span class="identity-value needs-check" id="expected-candidate" data-demo-candidate>Expected candidate was not supplied — verify before presenting.</span>
+          </div>
+          <div class="identity-fact">
+            <strong>Running candidate</strong>
+            <span class="identity-value needs-check">Read it in System health after sign-in; this guide never guesses.</span>
+          </div>
+        </div>
+        <ol class="identity-steps">
+          <li>Ask the demo operator for the candidate Git commit. They can pin it in this guide with <code>?candidate=&lt;7-to-64-character Git SHA&gt;</code>.</li>
+          <li><a class="button small primary" href="https://127.0.0.1:9443/admin/system" data-demo-path="/admin/system" target="_blank" rel="noopener">Open System health</a></li>
+          <li>Under <strong>Checks</strong>, compare <strong>Source commit</strong> with the expected candidate above. <strong>Running build</strong> tells you the release version. A short expected SHA is valid only when it matches the beginning of the running commit.</li>
+        </ol>
+      </section>
+
       <div class="callout tip">
         <h3>Use two browser tabs</h3>
-        <p>Right-click <strong>Open the trstctl demo</strong> and choose “Open Link in New Tab.” Leave this walkthrough open so you can move back and forth.</p>
+        <p>Select <strong>Open the trstctl demo</strong>. It opens in a new tab automatically. Leave this walkthrough open so you can move back and forth.</p>
         <p>The link above defaults to the HTTPS origin shipped by <code>deploy/demo/docker-compose.yml</code>. If your demo operator supplied a different loopback port, append its URL as the encoded <code>?demo=</code> query parameter. This page accepts <code>https://localhost</code> or <code>https://127.0.0.1</code>. When this walkthrough itself is served over plain HTTP on loopback, it also accepts an HTTP loopback visual-test bridge. That bridge is only for browser QA; the direct HTTPS check remains the transport proof.</p>
       </div>
 
@@ -523,6 +608,7 @@
           <label class="complete"><input class="step-check" type="checkbox" data-step="2"> Mark complete</label>
         </header>
         <div class="tour-body">
+          <p class="route-door"><a class="button small primary" href="https://127.0.0.1:9443/" data-demo-path="/" target="_blank" rel="noopener">Open Home</a><code>/</code><span class="route-note">Cross-product attention and health</span></p>
           <h4>Click and inspect</h4>
           <ol>
             <li>Click <strong>Home</strong> in the workspace rail.</li>
@@ -563,6 +649,7 @@
           <label class="complete"><input class="step-check" type="checkbox" data-step="4"> Mark complete</label>
         </header>
         <div class="tour-body">
+          <p class="route-door"><a class="button small primary" href="https://127.0.0.1:9443/discovery" data-demo-path="/discovery" target="_blank" rel="noopener">Open Discovery</a><code>/discovery</code><span class="route-note">Observed credentials not fully managed yet</span></p>
           <ol>
             <li>In <strong>Trust Operations</strong>, click <strong>Discovery</strong>.</li>
             <li>Read the <strong>Shadow inventory</strong> counters: findings, high risk, and finding types.</li>
@@ -582,6 +669,7 @@
           <label class="complete"><input class="step-check" type="checkbox" data-step="5"> Mark complete</label>
         </header>
         <div class="tour-body">
+          <p class="route-door"><a class="button small primary" href="https://127.0.0.1:9443/certificates" data-demo-path="/certificates" target="_blank" rel="noopener">Open Certificate Lifecycle</a><code>/certificates</code><span class="route-note">Expiry, ownership, renewal, and inventory</span></p>
           <ol>
             <li>In the workspace rail select <strong>Certificate Lifecycle</strong> — it lands on the certificate cockpit and inventory.</li>
             <li>Stay on <strong>Inventory</strong>. Use the search box to search for <code>demo.trstctl.local</code>.</li>
@@ -603,6 +691,7 @@
           <label class="complete"><input class="step-check" type="checkbox" data-step="6"> Mark complete</label>
         </header>
         <div class="tour-body">
+          <p class="route-door"><a class="button small primary" href="https://127.0.0.1:9443/identities" data-demo-path="/identities" target="_blank" rel="noopener">Open Identities</a><code>/identities</code><span class="route-note">The machine record across credential rotations</span></p>
           <ol>
             <li>In <strong>Machine &amp; Workload Trust</strong>, click <strong>Identities</strong>.</li>
             <li>Read the <strong>Issuance pipeline</strong>: issued, deployed, and revoked are lifecycle states.</li>
@@ -622,6 +711,7 @@
           <label class="complete"><input class="step-check" type="checkbox" data-step="7"> Mark complete</label>
         </header>
         <div class="tour-body">
+          <p class="route-door"><a class="button small primary" href="https://127.0.0.1:9443/protocols" data-demo-path="/protocols" target="_blank" rel="noopener">Open Protocols</a><code>/protocols</code><span class="route-note">Machine enrollment doorways and responder state</span></p>
           <ol>
             <li>In <strong>Certificate Lifecycle</strong>, click <strong>Protocols</strong>.</li>
             <li>Read <strong>Protocol responder status</strong> and the fail-closed explanation.</li>
@@ -643,6 +733,7 @@
           <label class="complete"><input class="step-check" type="checkbox" data-step="8"> Mark complete</label>
         </header>
         <div class="tour-body">
+          <p class="route-door"><a class="button small primary" href="https://127.0.0.1:9443/secrets" data-demo-path="/secrets" target="_blank" rel="noopener">Open Secrets &amp; Access</a><code>/secrets</code><span class="route-note">Store, grant, share, generate, scan, and sync</span></p>
           <ol>
             <li>In the workspace rail select <strong>Secrets &amp; Access</strong> — it lands on the operational overview. Each function remains a stable route, not an in-page imitation of a separate product.</li>
             <li>On <strong>Secret store</strong>, use <strong>Add secret</strong> for the direct path. Expand <strong>Browse folders and references</strong> only when you need path-like organization such as <code>demo/github/actions</code>.</li>
@@ -664,6 +755,7 @@
           <label class="complete"><input class="step-check" type="checkbox" data-step="9"> Mark complete</label>
         </header>
         <div class="tour-body">
+          <p class="route-door"><a class="button small primary" href="https://127.0.0.1:9443/posture" data-demo-path="/posture" target="_blank" rel="noopener">Open Crypto posture</a><code>/posture</code><span class="route-note">Cryptographic exposure, drift, and migration readiness</span></p>
           <ol>
             <li>In <strong>Trust Operations</strong>, click <strong>Crypto posture</strong>.</li>
             <li>Read <strong>Certificate Transparency monitoring</strong>. CT logs reveal publicly issued certificates, including ones trstctl did not request.</li>
@@ -683,6 +775,7 @@
           <label class="complete"><input class="step-check" type="checkbox" data-step="10"> Mark complete</label>
         </header>
         <div class="tour-body">
+          <p class="route-door"><a class="button small primary" href="https://127.0.0.1:9443/risk" data-demo-path="/risk" target="_blank" rel="noopener">Open What to fix first</a><code>/risk</code><span class="route-note">An explainable, ordered remediation queue</span></p>
           <ol>
             <li>In <strong>Trust Operations</strong>, click <strong>What to fix first</strong>.</li>
             <li>Start with <strong>Highest-risk credentials</strong>: each row states why the credential matters in plain language.</li>
@@ -703,6 +796,7 @@
           <label class="complete"><input class="step-check" type="checkbox" data-step="11"> Mark complete</label>
         </header>
         <div class="tour-body">
+          <p class="route-door"><a class="button small primary" href="https://127.0.0.1:9443/graph" data-demo-path="/graph" target="_blank" rel="noopener">Open Credential graph</a><code>/graph</code><span class="route-note">Relationships and compromise blast radius</span></p>
           <ol>
             <li>Click <strong>Credential graph</strong>.</li>
             <li>Read the node and edge counts. Nodes are identities, credentials, owners, issuers, or resources; edges are relationships.</li>
@@ -723,6 +817,7 @@
           <label class="complete"><input class="step-check" type="checkbox" data-step="12"> Mark complete</label>
         </header>
         <div class="tour-body">
+          <p class="route-door"><a class="button small primary" href="https://127.0.0.1:9443/approvals" data-demo-path="/approvals" target="_blank" rel="noopener">Open Approvals</a><a class="button small secondary" href="https://127.0.0.1:9443/policy" data-demo-path="/policy" target="_blank" rel="noopener">Open Policy</a><a class="button small secondary" href="https://127.0.0.1:9443/audit" data-demo-path="/audit" target="_blank" rel="noopener">Open Audit</a><span class="route-note">Decision → rule → immutable evidence</span></p>
           <ol>
             <li>In <strong>Trust Operations</strong>, under <strong>Govern &amp; administer</strong>, click <strong>Approvals</strong>.</li>
             <li>Inspect pending issue/rotate/revoke decisions. Do <strong>not</strong> click an approve button during the read-only tour.</li>
@@ -744,6 +839,7 @@
           <label class="complete"><input class="step-check" type="checkbox" data-step="13"> Mark complete</label>
         </header>
         <div class="tour-body">
+          <p class="route-door"><a class="button small primary" href="https://127.0.0.1:9443/incidents" data-demo-path="/incidents" target="_blank" rel="noopener">Open Incidents</a><code>/incidents</code><span class="route-note">Replace first, verify, then revoke</span></p>
           <ol>
             <li>In <strong>Trust Operations</strong>, click <strong>Incidents</strong>.</li>
             <li>Read <strong>Credential compromise execution</strong>. The intended order is: scope, issue replacement, deploy replacement, then revoke the old credential.</li>
@@ -764,6 +860,7 @@
           <label class="complete"><input class="step-check" type="checkbox" data-step="14"> Mark complete</label>
         </header>
         <div class="tour-body">
+          <p class="route-door"><a class="button small primary" href="https://127.0.0.1:9443/connectors" data-demo-path="/connectors" target="_blank" rel="noopener">Open Deployment connectors</a><code>/connectors</code><span class="route-note">Delivery attempts, receipts, retries, and circuit breakers</span></p>
           <ol>
             <li>In <strong>Trust Operations</strong>, under <strong>Infrastructure</strong>, click <strong>Deployment connectors</strong>.</li>
             <li>Read the four concepts: target setup, identity binding, action, and receipt evidence.</li>
@@ -784,6 +881,7 @@
           <label class="complete"><input class="step-check" type="checkbox" data-step="15"> Mark complete</label>
         </header>
         <div class="tour-body">
+          <p class="route-door"><a class="button small primary" href="https://127.0.0.1:9443/platform" data-demo-path="/platform" target="_blank" rel="noopener">Open Platform setup</a><a class="button small secondary" href="https://127.0.0.1:9443/admin/system" data-demo-path="/admin/system" target="_blank" rel="noopener">System health</a><a class="button small secondary" href="https://127.0.0.1:9443/admin/editions" data-demo-path="/admin/editions" target="_blank" rel="noopener">Editions &amp; license</a><span class="route-note">Three deliberately separate administration scopes</span></p>
           <ol>
             <li>Open <strong>Platform setup</strong> at <code>/platform</code>. It loads no protected detail: use its three cards to enter separately scoped administration pages. Choose <strong>People and roles</strong>, confirm who can use the control plane, then open <strong>SSO groups and role bindings</strong>, <strong>Sessions and access keys</strong>, and <strong>Certification history</strong> for exact evidence. Do not create a key, open a privileged session, or offboard anyone during the tour. Historical tab-query links still redirect.</li>
             <li>Click <strong>System health</strong>, then <strong>Editions &amp; license</strong>. System health answers from the smallest core check and keeps configuration, dependency, and exception evidence behind intentional disclosures. Licensing and commercial-edition rows stay on their own route.</li>
@@ -885,7 +983,7 @@
       </details>
       <details>
         <summary>The browser cannot connect</summary>
-        <div><p>Confirm the address is exactly <code>https://127.0.0.1:9443</code>. Copy <code>/public-trust/control-plane.crt</code> from the <code>trstctl</code> service, inspect its SHA-256 fingerprint, and import that certificate-only file into the browser trust store. Do not bypass the warning or replace HTTPS with a plaintext proxy. See <a href="local-evaluation-tls/">Trust local evaluation TLS</a>. The demo stack must remain running on this machine.</p></div>
+        <div><p>Confirm the address shown in <strong>Walkthrough target</strong>. Copy <code>/public-trust/control-plane.crt</code> from the <code>trstctl</code> service, inspect its SHA-256 fingerprint, and import that certificate-only file into the browser trust store. Do not bypass the warning or replace HTTPS with a plaintext proxy. See <a href="local-evaluation-tls/" data-doc-href="local-evaluation-tls/" data-source-href="local-evaluation-tls.md">Trust local evaluation TLS</a>. The demo stack must remain running on this machine.</p></div>
       </details>
       <details>
         <summary>A screen has no rows</summary>
@@ -932,10 +1030,34 @@
         }
       }
 
+      function candidateFromQuery() {
+        const supplied = new URLSearchParams(window.location.search).get("candidate");
+        if (supplied === null) return null;
+        const candidate = supplied.trim();
+        return /^[0-9a-f]{7,64}$/i.test(candidate) ? candidate.toLowerCase() : "";
+      }
+
       const demoOrigin = demoOriginFromQuery();
       document.querySelectorAll("[data-demo-path]").forEach((link) => {
         link.href = new URL(link.dataset.demoPath || "/", `${demoOrigin}/`).href;
-        if (link.hasAttribute("data-demo-origin")) link.textContent = demoOrigin;
+      });
+      document.querySelectorAll("[data-demo-origin]").forEach((value) => { value.textContent = demoOrigin; });
+
+      const expectedCandidate = candidateFromQuery();
+      const candidateValue = document.getElementById("expected-candidate");
+      if (expectedCandidate) {
+        candidateValue.textContent = expectedCandidate;
+        candidateValue.classList.remove("needs-check");
+        candidateValue.classList.add("expected");
+      } else if (expectedCandidate === "") {
+        candidateValue.textContent = "Invalid candidate value was ignored — use a 7-to-64-character hexadecimal Git SHA.";
+      }
+
+      document.querySelectorAll("[data-source-href]").forEach((link) => {
+        const servedHref = link.dataset.docHref;
+        const sourceHref = link.dataset.sourceHref;
+        if (window.location.protocol === "file:" && sourceHref) link.href = sourceHref;
+        else if (servedHref) link.href = servedHref;
       });
 
       const storageKey = "trstctl-demo-walkthrough-progress-v1";

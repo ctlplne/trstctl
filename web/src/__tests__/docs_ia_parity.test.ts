@@ -73,4 +73,40 @@ describe("docs IA parity (S-R2)", () => {
     expect(consoleDoc).toMatch(/loads no protected detail/i);
     expect(demo).toMatch(/Open <strong>Platform setup<\/strong>/);
   });
+
+  it("keeps every demo stop linked to a route shipped by App.tsx", () => {
+    const demo = readFileSync(path.join(dir, "demo-click-through.html"), "utf8");
+    const appCandidates = ["src/App.tsx", "web/src/App.tsx"];
+    const appPath = appCandidates.map((candidate) => path.resolve(process.cwd(), candidate)).find(existsSync);
+    expect(appPath, "could not locate web/src/App.tsx").toBeTruthy();
+    const app = readFileSync(appPath!, "utf8");
+    const stopRoutes = [
+      "/",
+      "/",
+      "/journeys",
+      "/discovery",
+      "/certificates",
+      "/identities",
+      "/protocols",
+      "/secrets",
+      "/posture",
+      "/risk",
+      "/graph",
+      "/approvals",
+      "/incidents",
+      "/connectors",
+      "/platform",
+    ];
+
+    stopRoutes.forEach((route, index) => {
+      const start = demo.indexOf(`id="stop-${index + 1}"`);
+      const next = index + 1 < stopRoutes.length ? demo.indexOf(`id="stop-${index + 2}"`, start) : demo.length;
+      expect(start, `stop ${index + 1} is missing`).toBeGreaterThanOrEqual(0);
+      const block = demo.slice(start, next < 0 ? demo.length : next);
+      expect(block, `stop ${index + 1} does not link to ${route}`).toContain(`data-demo-path="${route}"`);
+      if (route !== "/") {
+        expect(app, `App.tsx does not ship ${route}`).toContain(`path="${route.slice(1)}"`);
+      }
+    });
+  });
 });
