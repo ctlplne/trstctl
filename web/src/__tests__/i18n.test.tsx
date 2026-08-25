@@ -1158,8 +1158,14 @@ describe("i18n boundary", () => {
       // live independent checks and configuration remedy instead of retrying.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
       // release.
-      "es-ES": "4950ca79a8db5f4a07dc647b5ec3ffed7ba418705c1c67e3076b78c598314919",
-      "de-DE": "bb1b26a9e433704215b26daa72069c68e4f91b69824b8edf567baa6c013474c5",
+      // QA g26 Provider preflight re-pin: four keys distinguish checking,
+      // unattached, and unknown attachment truth, then send the operator to
+      // the unaffected tenant console. The translations preserve the
+      // fail-closed meaning and never imply that a missing Provider plane is a
+      // tenant-console failure. Machine-authored es/de — FLAGGED FOR HUMAN
+      // TRANSLATION REVIEW before release.
+      "es-ES": "5e1fcb75e0b0b15f4ae136f09a08ae3e853f244084c0a69c52edbfc6acbd1867",
+      "de-DE": "46b6f77ca422c134340ab0c1ab043bffafea3496b47b6bf7fe5b614d08268df3",
     });
   });
 

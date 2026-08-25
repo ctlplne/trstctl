@@ -551,9 +551,7 @@ function IntegrationProofStep({ identity, onReady }: { identity: Identity; onRea
       setError(
         `External-CA issuance is unavailable: ${
           externalCAIssue.unavailable?.detail ??
-          (externalCAIssue.state === "denied"
-            ? translateNow("capabilities.reason.permissionBlocked")
-            : translateNow("capabilities.reason.notAttached"))
+          (externalCAIssue.state === "denied" ? translateNow("capabilities.reason.permissionBlocked") : translateNow("capabilities.reason.notAttached"))
         }`,
       );
       return;

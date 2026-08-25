@@ -10963,6 +10963,23 @@ export const messages = {
     defaultMessage: "Sign in",
     description: "L3: provider sign-in button.",
   },
+  "source.provider.availability.checking.g26prov0001": {
+    defaultMessage: "Checking whether this deployment includes the separately secured Provider plane.",
+    description: "Provider preflight loading state; no Provider API has been called yet.",
+  },
+  "source.provider.availability.unknown.g26prov0002": {
+    defaultMessage: "trstctl could not verify whether the Provider plane is attached, so Provider sign-in stays closed. The tenant console is not affected.",
+    description: "Fail-closed Provider preflight error state.",
+  },
+  "source.provider.availability.unattached.g26prov0003": {
+    defaultMessage:
+      "This deployment does not include the Provider plane. Provider-only APIs stay closed; use the tenant console to manage this trstctl installation.",
+    description: "Honest unattached Provider plane state.",
+  },
+  "source.provider.availability.tenantConsole.g26prov0004": {
+    defaultMessage: "Open the tenant console",
+    description: "Safe next step from an unavailable Provider console.",
+  },
   "source.provider.customers.intro.l3prov0005": {
     defaultMessage: "Your customer tenants and their lifecycle state.",
     description: "L3: provider console subtitle.",

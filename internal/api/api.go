@@ -74,6 +74,7 @@ type API struct {
 	auditTimestamper        auditanchor.Timestamper
 	retirementChecklist     RetirementChecklistSource
 	auth                    *AuthConfig
+	providerPlaneAvailable  bool
 	oidcPreLogin            *oidcPreLoginStore
 	scim                    *SCIMConfig
 	scimTokens              map[string]scimToken
@@ -182,6 +183,7 @@ type config struct {
 	auditTimestamper            auditanchor.Timestamper
 	retirementChecklist         RetirementChecklistSource
 	auth                        *AuthConfig
+	providerPlaneAvailable      bool
 	scim                        *SCIMConfig
 	agentTokens                 BootstrapTokenIssuer
 	agentEnroller               BootstrapEnroller
@@ -256,6 +258,16 @@ type config struct {
 // registry (or the OpenAPI spec).
 func WithAuth(cfg AuthConfig) Option {
 	return func(c *config) { c.auth = &cfg }
+}
+
+// WithProviderPlaneAvailable publishes one public boolean telling the shipped
+// browser whether the separately authenticated Provider plane is attached in
+// this exact process. It does not expose the license, operator IdP, customer
+// tenants, or any Provider configuration. The Provider API namespace remains
+// dark when unattached; this bit prevents the shipped console from probing that
+// dark namespace and turning a known edition state into avoidable 404 traffic.
+func WithProviderPlaneAvailable(available bool) Option {
+	return func(c *config) { c.providerPlaneAvailable = available }
 }
 
 func normalizeOutboundEnvCredentialRefs(refs []string) map[string]struct{} {
@@ -451,6 +463,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		auditTimestamper:            cfg.auditTimestamper,
 		retirementChecklist:         cfg.retirementChecklist,
 		auth:                        cfg.auth,
+		providerPlaneAvailable:      cfg.providerPlaneAvailable,
 		scim:                        cfg.scim,
 		scimTokens:                  normalizeSCIM(cfg.scim),
 		agentTokens:                 cfg.agentTokens,
@@ -1778,6 +1791,12 @@ func errStatus(status int, detail string) *apiError { return &apiError{status: s
 func (a *API) writeError(w http.ResponseWriter, err error) {
 	var ae *apiError
 	switch {
+	case errors.Is(err, context.Canceled):
+		// The caller went away while a bounded datastore read was running (for
+		// example, a browser navigated to another workspace). That is not a
+		// server failure. Use the established 499 code so access logs and SLOs do
+		// not turn a harmless client cancellation into a misleading 500.
+		a.writeProblem(w, problem.New(499, "request canceled by client").WithTitle("Client Closed Request"))
 	case errors.As(err, &ae):
 		p := problem.New(ae.status, ae.detail)
 		for k, v := range ae.ext {

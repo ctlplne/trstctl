@@ -624,28 +624,28 @@ not this file.
 | `ee/provider/saml_authenticator.go:250` | this non-credential double-submit cookie must remain JavaScript-readable; strict and served-mode Secure still apply (CWE-614). |
 | `ee/provider/saml_authenticator.go:346` | short-lived HttpOnly state/request correlation; None is paired with Secure for the required cross-site SAML POST. |
 | `ee/provider/saml_authenticator.go:353` | expiry retains HttpOnly/Lax and uses insecure transport only in explicit loopback development mode (CWE-614). |
-| `internal/api/auth.go:775` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
-| `internal/api/auth.go:786` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
-| `internal/api/auth.go:810` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
-| `internal/api/auth.go:817` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
+| `internal/api/auth.go:778` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
+| `internal/api/auth.go:789` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
+| `internal/api/auth.go:813` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
+| `internal/api/auth.go:820` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
 | `internal/api/auth_hardening_test.go:21` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:203` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:204` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:205` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:206` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:260` | explicit loopback-only plaintext development test (CWE-1004) |
-| `internal/api/auth_test.go:290` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:291` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:292` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:293` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:440` | test cookie against the test's own local server (CWE-1004) (mismatch) |
-| `internal/api/auth_test.go:460` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:461` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:488` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:489` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:518` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:539` | test cookie against the test's own local server (CWE-1004) |
-| `internal/api/auth_test.go:586` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:226` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:227` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:228` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:229` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:283` | explicit loopback-only plaintext development test (CWE-1004) |
+| `internal/api/auth_test.go:313` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:314` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:315` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:316` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:463` | test cookie against the test's own local server (CWE-1004) (mismatch) |
+| `internal/api/auth_test.go:483` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:484` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:511` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:512` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:541` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:562` | test cookie against the test's own local server (CWE-1004) |
+| `internal/api/auth_test.go:609` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/csrf_test.go:37` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/csrf_test.go:52` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/csrf_test.go:53` | test cookie against the test's own local server (CWE-1004) |
@@ -867,7 +867,7 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:103` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/secret_third_party_scan_served_test.go:154` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_rotation_served_test.go:2447` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:2163` | served CA certificate directory; the PEM is public material (CWE-276) |
+| `internal/server/server.go:2168` | served CA certificate directory; the PEM is public material (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:24` | the loose mode IS the attack fixture this test defends against (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:56` | the wide mode IS the precondition this test proves gets narrowed (CWE-276) |
 | `internal/tsa/http_test.go:103` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
@@ -1179,8 +1179,8 @@ not this file.
 | `internal/server/serve_test.go:80` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:81` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:125` | test-owned path under t.TempDir (CWE-22) |
-| `internal/server/server.go:2090` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/server.go:2167` | same operator-configured directory as the target certificate (CWE-22) |
+| `internal/server/server.go:2095` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/server.go:2172` | same operator-configured directory as the target certificate (CWE-22) |
 | `internal/signing/design_test.go:30` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/design_test.go:136` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/gated_destruction_journal.go:226` | exact signer-owned journal path. |
@@ -1347,7 +1347,7 @@ not this file.
 | `internal/server/protocols_served_spiffe_ssh_test.go:537` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/protocols_served_stock_clients_test.go:574` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_scan_served_test.go:36` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:2173` | served CA certificate PEM is public material (CWE-276) |
+| `internal/server/server.go:2178` | served CA certificate PEM is public material (CWE-276) |
 | `internal/server/signer_authorization_test.go:132` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/ssh_journey_served_test.go:203` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |

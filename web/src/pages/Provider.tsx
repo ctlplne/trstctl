@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { translateNow } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
 import { formatDateTime } from "@/i18n/format";
@@ -39,11 +40,39 @@ import {
  */
 export function Provider() {
   const [authed, setAuthed] = useState<boolean>(() => providerToken() !== null);
+  const availability = useApiQuery(["provider", "availability"], providerApi.availability);
+
+  if (availability.loading) {
+    return <ProviderAvailabilityState detail={translateNow("source.provider.availability.checking.g26prov0001")} />;
+  }
+  if (availability.data !== true) {
+    return (
+      <ProviderAvailabilityState
+        detail={
+          availability.data === false
+            ? translateNow("source.provider.availability.unattached.g26prov0003")
+            : translateNow("source.provider.availability.unknown.g26prov0002")
+        }
+      />
+    );
+  }
 
   if (!authed) {
     return <ProviderLogin onAuthed={() => setAuthed(true)} />;
   }
   return <ProviderConsole onSignOut={() => setAuthed(false)} />;
+}
+
+function ProviderAvailabilityState({ detail }: { detail: string }) {
+  return (
+    <main className="mx-auto grid max-w-lg gap-3 p-comfortable">
+      <h1 className="text-headline font-semibold">{translateNow("source.provider.console.l3prov0001")}</h1>
+      <p className="text-caption text-muted-foreground">{detail}</p>
+      <Link className="text-caption font-medium text-link underline" to="/">
+        {translateNow("source.provider.availability.tenantConsole.g26prov0004")}
+      </Link>
+    </main>
+  );
 }
 
 function ProviderLogin({ onAuthed }: { onAuthed: () => void }) {

@@ -34,9 +34,7 @@ export function AuthorityAgreementPanel() {
       setReport(null);
       setUnavailable(
         agreementRead.unavailable?.detail ??
-          (agreementRead.state === "denied"
-            ? translateNow("capabilities.reason.permissionBlocked")
-            : translateNow("capabilities.reason.notAttached")),
+          (agreementRead.state === "denied" ? translateNow("capabilities.reason.permissionBlocked") : translateNow("capabilities.reason.notAttached")),
       );
       return () => {
         active = false;

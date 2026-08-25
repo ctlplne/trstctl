@@ -1064,12 +1064,16 @@ export interface Me {
   time_zone?: string;
 }
 
-/** Public, boolean-only login-route metadata. No IdP endpoint, issuer, tenant
- * mapping, or other pre-auth configuration detail is included. */
+/** Public, boolean-only browser bootstrap metadata. No IdP endpoint, issuer,
+ * tenant mapping, license content, or other pre-auth configuration detail is
+ * included. */
 export interface AuthMethods {
   oidc: boolean;
   saml: boolean;
   ldap: boolean;
+  /** Boolean-only public preflight. Provider identity, license, and customer
+   * metadata remain inside the separately authenticated Provider plane. */
+  provider_plane: boolean;
 }
 
 export interface AuditQuery {

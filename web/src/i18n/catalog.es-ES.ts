@@ -6108,6 +6108,12 @@ const esESCatalog = {
     "Inicie sesión con SAML cuando esté disponible o pegue un token OIDC de operador de corta duración. Este plano gestiona inquilinos de clientes, por lo que su identidad y sesión están separadas de la consola del inquilino.",
   "source.provider.token.l3prov0003": "Token de portador del operador",
   "source.provider.signin.l3prov0004": "Iniciar sesión",
+  "source.provider.availability.checking.g26prov0001": "Comprobando si este despliegue incluye el plano de proveedor protegido por separado.",
+  "source.provider.availability.unknown.g26prov0002":
+    "trstctl no pudo verificar si el plano de proveedor está conectado, por lo que el inicio de sesión del proveedor permanece cerrado. La consola del inquilino no se ve afectada.",
+  "source.provider.availability.unattached.g26prov0003":
+    "Este despliegue no incluye el plano de proveedor. Las API exclusivas del proveedor permanecen cerradas; use la consola del inquilino para administrar esta instalación de trstctl.",
+  "source.provider.availability.tenantConsole.g26prov0004": "Abrir la consola del inquilino",
   "source.provider.customers.intro.l3prov0005": "Sus inquilinos de clientes y su estado de ciclo de vida.",
   "source.provider.signout.l3prov0006": "Cerrar sesión",
   "source.provider.provision.l3prov0007": "Aprovisionar un cliente",

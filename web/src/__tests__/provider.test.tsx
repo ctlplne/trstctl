@@ -2,6 +2,7 @@
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { IntlProvider } from "@/i18n/I18nProvider";
 import { AppQueryProvider } from "@/lib/query";
 
@@ -16,6 +17,7 @@ const { providerMock } = vi.hoisted(() => ({
     setQuota: vi.fn(),
     setBrand: vi.fn(),
     runIsolationDrill: vi.fn(),
+    availability: vi.fn(),
     authMethods: vi.fn(),
     session: vi.fn(),
     listOperatorAccess: vi.fn(),
@@ -43,7 +45,9 @@ function renderProvider() {
   return render(
     <IntlProvider initialLocale="en-US" initialTimeZone="UTC">
       <AppQueryProvider>
-        <Provider />
+        <MemoryRouter>
+          <Provider />
+        </MemoryRouter>
       </AppQueryProvider>
     </IntlProvider>,
   );
@@ -54,6 +58,7 @@ describe("provider console (L3)", () => {
     clearProviderToken();
     for (const fn of Object.values(providerMock)) fn.mockReset();
     providerMock.listActivity.mockResolvedValue([]);
+    providerMock.availability.mockResolvedValue(true);
     providerMock.authMethods.mockResolvedValue([]);
     providerMock.session.mockRejectedValue(new Error("no provider session"));
     providerMock.listOperatorAccess.mockResolvedValue([]);
@@ -64,10 +69,29 @@ describe("provider console (L3)", () => {
     providerMock.signOut.mockResolvedValue(undefined);
   });
 
-  it("gates on an operator token before touching the provider plane", () => {
+  it("gates on an operator token before touching customer data", async () => {
     renderProvider();
-    // No token: the login gate shows and the API is never called.
-    expect(screen.getByLabelText("Operator bearer token")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Operator bearer token")).toBeInTheDocument();
+    expect(providerMock.listTenants).not.toHaveBeenCalled();
+  });
+
+  it("does not probe the dark Provider API when the plane is unattached", async () => {
+    providerMock.availability.mockResolvedValue(false);
+    renderProvider();
+
+    expect(await screen.findByText(/does not include the Provider plane/i)).toBeInTheDocument();
+    expect(providerMock.authMethods).not.toHaveBeenCalled();
+    expect(providerMock.session).not.toHaveBeenCalled();
+    expect(providerMock.listTenants).not.toHaveBeenCalled();
+  });
+
+  it("fails closed without probing the Provider API when attachment truth is unknown", async () => {
+    providerMock.availability.mockResolvedValue(null);
+    renderProvider();
+
+    expect(await screen.findByText(/could not verify whether the Provider plane is attached/i)).toBeInTheDocument();
+    expect(providerMock.authMethods).not.toHaveBeenCalled();
+    expect(providerMock.session).not.toHaveBeenCalled();
     expect(providerMock.listTenants).not.toHaveBeenCalled();
   });
 

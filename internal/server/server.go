@@ -1275,6 +1275,11 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	} else if complianceSvc != nil {
 		defaults = append(defaults, api.WithComplianceEvidence(complianceSvc))
 	}
+	// The Provider console is shipped in every web artifact, while its API is
+	// attached only at the licensed EE seam. Publish that exact attachment bit
+	// through the public auth bootstrap so the browser can fail closed without
+	// probing the intentionally dark /provider/v1 namespace.
+	defaults = append(defaults, api.WithProviderPlaneAvailable(d.ProviderHandler != nil))
 	a := api.New(d.Store, idem, orch, append(defaults, d.APIOptions...)...)
 	s.api = a
 	return a, auditSvc, nil

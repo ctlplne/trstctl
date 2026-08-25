@@ -405,6 +405,10 @@ describe("approval request contract (AUD-77)", () => {
 describe("exported API surface census", () => {
   it("drives every operation through the bounded same-origin transport and preserves mutation idempotency", async () => {
     document.cookie = "trstctl_csrf=csrf-census; path=/";
+    // The census deliberately executes the streaming audit-download method as
+    // well as JSON API calls. jsdom has no navigation/download implementation,
+    // so pin the browser handoff without letting its temporary anchor navigate.
+    const downloadClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
     const transport = vi.fn(async (target: RequestInfo | URL, init?: RequestInit) => {
       void target;
       void init;
@@ -456,6 +460,11 @@ describe("exported API surface census", () => {
       await expect(operation(universalInput, optionBag, "operator reason"), `api.${name}`).resolves.not.toBeUndefined();
       expect(transport.mock.calls.length, `api.${name} bypassed the shared fetch seam`).toBeGreaterThan(before);
     }
+
+    expect(downloadClick).toHaveBeenCalledOnce();
+    const downloadAnchor = downloadClick.mock.instances[0] as HTMLAnchorElement;
+    expect(downloadAnchor.download).toBe("trstctl-audit.ndjson");
+    expect(downloadAnchor.href).toMatch(/^blob:/);
 
     const readOnlyPosts = new Set([
       // H2: assess enumerates what a migration WOULD touch and writes nothing.

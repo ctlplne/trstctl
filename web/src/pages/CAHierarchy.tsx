@@ -409,9 +409,7 @@ export function CAHierarchy() {
         : Promise.reject(
             new Error(
               externalCAList.unavailable?.detail ??
-                (externalCAList.state === "denied"
-                  ? translateNow("capabilities.reason.permissionBlocked")
-                  : translateNow("capabilities.reason.unknown")),
+                (externalCAList.state === "denied" ? translateNow("capabilities.reason.permissionBlocked") : translateNow("capabilities.reason.unknown")),
             ),
           );
     const [issuerResult, discoveryResult, authoritiesResult, capabilityResult, externalCAResult] = await Promise.allSettled([
@@ -584,9 +582,7 @@ export function CAHierarchy() {
         issuerID: issuer.id,
         issuerName: issuer.name,
         status: "failed",
-        message:
-          externalCAList.unavailable?.detail ??
-          translateNow("capabilities.reason.notAttached"),
+        message: externalCAList.unavailable?.detail ?? translateNow("capabilities.reason.notAttached"),
       });
       return;
     }
@@ -804,9 +800,7 @@ export function CAHierarchy() {
       setExternalIssueResult(null);
       setExternalIssueError(
         externalCAIssue.unavailable?.detail ??
-          (externalCAIssue.state === "denied"
-            ? translateNow("capabilities.reason.permissionBlocked")
-            : translateNow("capabilities.reason.unknown")),
+          (externalCAIssue.state === "denied" ? translateNow("capabilities.reason.permissionBlocked") : translateNow("capabilities.reason.unknown")),
       );
       return;
     }

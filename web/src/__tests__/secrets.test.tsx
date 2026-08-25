@@ -84,11 +84,7 @@ function renderSecrets(path = "/secrets") {
 const nativeStoreUnavailableDetail =
   "The native secret store is turned off in this deployment. Enable it before storing, revealing, rotating, sharing, or leasing application secrets.";
 
-function secretsCapabilityItem(
-  capabilityId: "F37" | "F58" | "F63",
-  operations: string[],
-  available: boolean,
-): CapabilityViewItem {
+function secretsCapabilityItem(capabilityId: "F37" | "F58" | "F63", operations: string[], available: boolean): CapabilityViewItem {
   return {
     capability_id: capabilityId,
     name: `Fixture ${capabilityId}`,

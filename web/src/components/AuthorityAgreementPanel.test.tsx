@@ -44,9 +44,7 @@ describe("AuthorityAgreementPanel runtime preflight", () => {
       </CapabilityFixtureProvider>,
     );
 
-    expect(
-      await screen.findByText(/Cross-authority reconciliation is not available on this deployment/),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/Cross-authority reconciliation is not available on this deployment/)).toBeInTheDocument();
     expect(authorityAgreement).not.toHaveBeenCalled();
   });
 

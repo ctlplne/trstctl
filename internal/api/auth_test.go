@@ -83,8 +83,8 @@ func TestAuthMethodsReportsOnlyMountedBrowserLoginRoutes(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 			t.Fatalf("decode auth methods: %v", err)
 		}
-		if len(body) != 3 {
-			t.Fatalf("auth methods fields = %v, want only oidc/saml/ldap", body)
+		if len(body) != 4 {
+			t.Fatalf("auth methods fields = %v, want only oidc/saml/ldap/provider_plane", body)
 		}
 		if _, ok := body["oidc"]; !ok {
 			t.Fatalf("auth methods fields = %v, missing oidc", body)
@@ -95,8 +95,31 @@ func TestAuthMethodsReportsOnlyMountedBrowserLoginRoutes(t *testing.T) {
 		if _, ok := body["ldap"]; !ok {
 			t.Fatalf("auth methods fields = %v, missing ldap", body)
 		}
-		if body["oidc"] || body["saml"] || body["ldap"] {
+		if _, ok := body["provider_plane"]; !ok {
+			t.Fatalf("auth methods fields = %v, missing provider_plane", body)
+		}
+		if body["oidc"] || body["saml"] || body["ldap"] || body["provider_plane"] {
 			t.Fatalf("disabled auth methods = %+v, want all false", body)
+		}
+	})
+
+	t.Run("Provider plane attachment is a boolean-only public preflight", func(t *testing.T) {
+		h := api.New(nil, nil, nil, api.WithProviderPlaneAvailable(true))
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/auth/methods", nil))
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("auth methods = %d, want 200", rec.Code)
+		}
+		var body map[string]bool
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatalf("decode auth methods: %v", err)
+		}
+		if !body["provider_plane"] {
+			t.Fatalf("provider_plane = false, want true: %v", body)
+		}
+		if len(body) != 4 {
+			t.Fatalf("auth methods leaked extra Provider metadata: %v", body)
 		}
 	})
 

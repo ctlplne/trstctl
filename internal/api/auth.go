@@ -149,17 +149,20 @@ type meResponse struct {
 }
 
 type authMethodsResponse struct {
-	OIDC bool `json:"oidc"`
-	SAML bool `json:"saml"`
-	LDAP bool `json:"ldap"`
+	OIDC          bool `json:"oidc"`
+	SAML          bool `json:"saml"`
+	LDAP          bool `json:"ldap"`
+	ProviderPlane bool `json:"provider_plane"`
 }
 
-// authMethods publishes only whether each browser login route is mounted. A
-// fresh fail-closed install intentionally has no browser login, and the SPA
-// needs this bit of public truth so it does not advertise a link that 404s.
-// Provider metadata, tenant mappings, and endpoint URLs remain authenticated.
+// authMethods publishes only boolean browser-bootstrap truth: which tenant login
+// routes are mounted and whether the separately authenticated Provider plane is
+// attached. A fresh fail-closed install intentionally has no browser login, and
+// the SPA needs this public truth so it does not advertise or probe a route that
+// cannot exist. Provider metadata, tenant mappings, license contents, IdP details,
+// and endpoint URLs remain authenticated.
 func (a *API) authMethods(w http.ResponseWriter, _ *http.Request) {
-	methods := authMethodsResponse{}
+	methods := authMethodsResponse{ProviderPlane: a.providerPlaneAvailable}
 	if a.auth != nil {
 		methods.OIDC = a.auth.OIDCEnabled || a.auth.Exchange != nil || a.auth.VerifyIDToken != nil
 		methods.SAML = a.auth.SAMLEnabled || a.auth.VerifySAMLResponse != nil

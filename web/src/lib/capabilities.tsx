@@ -113,13 +113,7 @@ function isCapabilityRuntimeOperation(value: unknown): value is CapabilityRuntim
  * chrome consumes them. A future contract must update the generated client and
  * this boundary together; an old browser never guesses from a new schema. */
 export function isCapabilityView(value: unknown): value is CapabilityView {
-  if (
-    !isRecord(value) ||
-    value.schema_version !== 2 ||
-    value.contract_schema_version !== 3 ||
-    !Array.isArray(value.items) ||
-    !Array.isArray(value.operations)
-  )
+  if (!isRecord(value) || value.schema_version !== 2 || value.contract_schema_version !== 3 || !Array.isArray(value.items) || !Array.isArray(value.operations))
     return false;
   if (!isRecord(value.license) || typeof value.enforcement_note !== "string") return false;
   if (!value.items.every(isCapabilityViewItem)) return false;

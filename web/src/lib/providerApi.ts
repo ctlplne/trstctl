@@ -326,6 +326,16 @@ async function providerCustomerHealth(customerId: string): Promise<ProviderTenan
 }
 
 export const providerApi = {
+  availability: async (): Promise<boolean | null> => {
+    try {
+      const res = await fetch("/auth/methods", { credentials: "same-origin", headers: { Accept: "application/json" } });
+      if (!res.ok) return null;
+      const out = (await res.json()) as { provider_plane?: unknown };
+      return typeof out.provider_plane === "boolean" ? out.provider_plane : null;
+    } catch {
+      return null;
+    }
+  },
   authMethods: async (): Promise<string[]> => {
     const out = await providerReq<{ methods: string[] | null }>("/provider/v1/auth/methods");
     return out.methods ?? [];

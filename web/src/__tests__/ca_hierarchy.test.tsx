@@ -49,9 +49,7 @@ function renderCAHierarchy(initialEntry = "/ca-hierarchy", runtime?: CapabilityV
       </ToastProvider>
     </MemoryRouter>
   );
-  return render(
-    runtime ? <CapabilityFixtureProvider view={runtime}>{page}</CapabilityFixtureProvider> : page,
-  );
+  return render(runtime ? <CapabilityFixtureProvider view={runtime}>{page}</CapabilityFixtureProvider> : page);
 }
 
 function externalCAUnavailableRuntime(): CapabilityView {

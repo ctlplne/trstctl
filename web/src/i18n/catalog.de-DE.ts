@@ -6143,6 +6143,12 @@ const deDECatalog = {
     "Melden Sie sich mit SAML an, wenn es angeboten wird, oder fügen Sie ein kurzlebiges OIDC-Operator-Token ein. Diese Ebene verwaltet Kundenmandanten; Identität und Sitzung sind daher von der Mandantenkonsole getrennt.",
   "source.provider.token.l3prov0003": "Bediener-Bearer-Token",
   "source.provider.signin.l3prov0004": "Anmelden",
+  "source.provider.availability.checking.g26prov0001": "Es wird geprüft, ob diese Bereitstellung die separat abgesicherte Anbieterebene enthält.",
+  "source.provider.availability.unknown.g26prov0002":
+    "trstctl konnte nicht prüfen, ob die Anbieterebene angeschlossen ist. Daher bleibt die Anbieteranmeldung geschlossen. Die Mandantenkonsole ist nicht betroffen.",
+  "source.provider.availability.unattached.g26prov0003":
+    "Diese Bereitstellung enthält keine Anbieterebene. Reine Anbieter-APIs bleiben geschlossen; verwalten Sie diese trstctl-Installation über die Mandantenkonsole.",
+  "source.provider.availability.tenantConsole.g26prov0004": "Mandantenkonsole öffnen",
   "source.provider.customers.intro.l3prov0005": "Ihre Kundenmandanten und ihr Lebenszyklusstatus.",
   "source.provider.signout.l3prov0006": "Abmelden",
   "source.provider.provision.l3prov0007": "Einen Kunden bereitstellen",
