@@ -564,7 +564,14 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     evidence: "required-scope map and permission-denied states",
   },
   { featureId: "F9", routes: ["/audit"], component: "Audit", kind: "observe", evidence: "audit filters, event detail, and signed export" },
-  { featureId: "F10", routes: ["/admin/system"], component: "Platform", kind: "observe", evidence: "static OpenAPI spec view" },
+  {
+    featureId: "F10",
+    routes: ["/integrate/api"],
+    component: "ApiExplorer",
+    kind: "operate",
+    evidence:
+      "served OpenAPI operation browser, exact request preview, least-privilege temporary key, guarded mutation confirmation, live response explanation, cancellation, and key revocation",
+  },
   {
     featureId: "F11",
     routes: ["/admin/system"],

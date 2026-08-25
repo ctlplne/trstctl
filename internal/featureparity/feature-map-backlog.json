@@ -12373,8 +12373,8 @@
             "priority": 10,
             "served_state": "served",
             "backend_status": "served",
-            "current_frontend_mapping": "none as API explorer; used indirectly by typed client; Platform shows served CAP-SCALE-01 scale orchestration posture and CAP-SCALE-02 regional issuance HA posture",
-            "target_gui_mapping": "API explorer/status page showing OpenAPI version, served route groups, auth mode, feature flags, and copyable curl for enabled surfaces.",
+            "current_frontend_mapping": "operate: API playground at /integrate/api loads the exact served OpenAPI contract, lists every operation and permission, starts on a read-only request, builds a validated exact preview, mints a 15-minute least-privilege test key, requires explicit confirmation for mutations, executes or cancels the request, explains the response before raw evidence, and revokes temporary access; Admin System separately shows scale, HA, runtime, and transport posture.",
+            "target_gui_mapping": "Delivered: the API playground provides served route/operation discovery, permissions, typed parameters and request bodies, safe examples, exact request preview, scoped temporary access, mutation confirmation, execution/cancellation, readable and raw responses, error/retry states, and key revocation.",
             "acceptance_test": "UI fetches OpenAPI, lists route groups, and tests unavailable/unauthenticated states without exposing tokens.",
             "source_docs": [
                 "docs/features/platform-and-api.md"
@@ -12389,10 +12389,11 @@
             ],
             "source_frontend": [
                 "web/src/lib/api.ts",
+                "web/src/pages/ApiExplorer.tsx",
                 "web/src/pages/Platform.tsx"
             ],
             "status": "closed",
-            "notes": "Closed by route-level feature-map evidence. COMPETE-044 update: CAP-SCALE-01 is now served through GET /api/v1/scale/orchestration, exposing 100k/250k/1M credential bands, CAP-LARGE capacity posture, hot-path SLOs, execution lanes, bulkhead/backpressure controls, release gates, shard plan, and residuals. COMPETE-045 update: CAP-SCALE-02 is now served through GET /api/v1/scale/ha-issuance, exposing active regional ingress, tenant write fences, failover gates, and RPO/RTO posture without claiming split-brain independent writers. Test evidence: TestServedScaleOrchestrationCAPSCALE01, TestServedActiveActiveIssuanceCAPSCALE02, TestScaleOrchestrationPlanCoversHundredKToMillionCredentials, TestActiveActiveIssuancePlanServesFencedRegionalIssuance, api.scaleOrchestration/api.activeActiveIssuance contract coverage, and Platform scale/HA acceptance coverage. B-1 adds listBulkheadStats: the AN-7 bounded worker-pool snapshot (per-pool queue depth, rejections, saturation) served for operators instead of only on the metrics endpoint; covered by TestBulkheadStatsReportsPoolPressure, TestBulkheadStatsUnwiredReportsNotServed, and TestBulkheadStatsRequiresAuthenticatedTenant.",
+            "notes": "The served API playground closes the historical no-explorer gap through the exact OpenAPI contract, a safe read-first workflow, operation permissions, typed request preparation, a 15-minute least-privilege test key, explicit mutation confirmation, cancellation, readable/raw response evidence, and immediate revocation. The route-parity guard pins F10 to /integrate/api as an operate surface. COMPETE-044 update: CAP-SCALE-01 is served through GET /api/v1/scale/orchestration, exposing 100k/250k/1M credential bands, CAP-LARGE capacity posture, hot-path SLOs, execution lanes, bulkhead/backpressure controls, release gates, shard plan, and residuals. COMPETE-045 update: CAP-SCALE-02 is served through GET /api/v1/scale/ha-issuance, exposing active regional ingress, tenant write fences, failover gates, and RPO/RTO posture without claiming split-brain independent writers. B-1 adds listBulkheadStats: the AN-7 bounded worker-pool snapshot (per-pool queue depth, rejections, saturation) served for operators instead of only on the metrics endpoint.",
             "api_surface": [
                 "aiQuery",
                 "aiRCA",
@@ -12487,13 +12488,14 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: none as API explorer; used indirectly by typed client; Platform shows served CAP-SCALE-01 scale orchestration posture and CAP-SCALE-02 regional issuance HA posture",
-                        "target_gui_mapping: API explorer/status page showing OpenAPI version, served route groups, auth mode, feature flags, and copyable curl for enabled surfaces."
+                        "current_frontend_mapping: operate: API playground at /integrate/api loads the exact served OpenAPI contract, lists every operation and permission, starts on a read-only request, builds a validated exact preview, mints a 15-minute least-privilege test key, requires explicit confirmation for mutations, executes or cancels the request, explains the response before raw evidence, and revokes temporary access; Admin System separately shows scale, HA, runtime, and transport posture.",
+                        "target_gui_mapping: Delivered: the API playground provides served route/operation discovery, permissions, typed parameters and request bodies, safe examples, exact request preview, scoped temporary access, mutation confirmation, execution/cancellation, readable and raw responses, error/retry states, and key revocation."
                     ],
                     "refs": [
                         "web/src/lib/navigation.ts",
                         "web/src/App.tsx",
                         "web/src/lib/api.ts",
+                        "web/src/pages/ApiExplorer.tsx",
                         "web/src/pages/Platform.tsx"
                     ]
                 },

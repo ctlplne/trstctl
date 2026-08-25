@@ -170,6 +170,23 @@ describe("route-level product surface parity", () => {
     }
   });
 
+  it("keeps the REST API feature attached to the real least-privilege playground", () => {
+    const surface = realGuiSurfaces.find((candidate) => candidate.featureId === "F10");
+    const feature = servedFeatureMap().items.find((candidate) => candidate.feature_id === "F10");
+
+    expect(surface).toMatchObject({
+      routes: ["/integrate/api"],
+      component: "ApiExplorer",
+      kind: "operate",
+    });
+    expect(surface?.evidence).toMatch(/request preview/i);
+    expect(surface?.evidence).toMatch(/temporary key/i);
+    expect(surface?.evidence).toMatch(/revocation/i);
+    expect(feature?.current_frontend_mapping).toMatch(/^operate:/);
+    expect(feature?.current_frontend_mapping).toMatch(/\/integrate\/api/);
+    expect(feature?.current_frontend_mapping).not.toMatch(/\b(?:none|basic|disclosure|observe only|partial)\b/i);
+  });
+
   it("keeps COVER-004 UI cells workflow-backed or explicitly non-UI", () => {
     const featureMap = new Map(servedFeatureMap().items.map((item) => [item.feature_id, item]));
     const surfaces = new Map(realGuiSurfaces.map((surface) => [surface.featureId, surface]));
