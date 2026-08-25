@@ -198,7 +198,9 @@ func doSession(t *testing.T, ts *httptest.Server, method, path, session string) 
 	if err != nil {
 		t.Fatalf("new session request: %v", err)
 	}
-	req.AddCookie(&http.Cookie{Name: "__Host-trstctl_session", Value: session}) // #nosec G124 -- test cookie against the test's own local server (CWE-1004)
+	// httptest.NewServer is intentionally plaintext loopback, matching the explicit
+	// local-development cookie mode. TLS compositions use __Host-trstctl_session.
+	req.AddCookie(&http.Cookie{Name: "trstctl_session", Value: session}) // #nosec G124 -- explicit plaintext loopback fixture; the production TLS cookie remains Secure and __Host-prefixed (CWE-1004)
 	resp, err := ts.Client().Do(req)
 	if err != nil {
 		t.Fatalf("%s %s: %v", method, path, err)

@@ -258,11 +258,13 @@ func TestServedOIDCLoginEndToEnd(t *testing.T) {
 		if resp.StatusCode != http.StatusFound {
 			t.Fatalf("GET /auth/callback = %d, want 302 (session established)", resp.StatusCode)
 		}
-		// The session cookie must be HttpOnly (the SEC hardening).
+		// This served-composition test intentionally uses a loopback HTTP listener,
+		// so it exercises the explicit plaintext-development cookie name. The API
+		// package separately proves that TLS mode keeps the __Host- prefixed name.
 		var sawSession bool
 		u, _ := url.Parse(baseURL)
 		for _, c := range jar.Cookies(u) {
-			if c.Name == "__Host-trstctl_session" {
+			if c.Name == "trstctl_session" {
 				sawSession = true
 			}
 		}

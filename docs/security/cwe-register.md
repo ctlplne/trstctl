@@ -655,7 +655,7 @@ not this file.
 | `internal/connector/netscaler/netscaler.go:272` | cookie on an outbound API request; response-cookie attributes do not apply (CWE-1004) |
 | `internal/projections/auth_resolver_test.go:170` | test cookie against the test's own local server (CWE-1004) |
 | `internal/projections/auth_resolver_test.go:179` | test cookie against the test's own local server (CWE-1004) |
-| `internal/server/scim_served_test.go:201` | test cookie against the test's own local server (CWE-1004) |
+| `internal/server/scim_served_test.go:203` | explicit plaintext loopback fixture; the production TLS cookie remains Secure and __Host-prefixed (CWE-1004) |
 
 ### G201 — CWE-? (unmapped rule) (1 sites)
 
