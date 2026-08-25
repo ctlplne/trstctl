@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -32,8 +33,10 @@ type Config struct {
 	LabelKey   string
 	LabelValue string
 	NamePrefix string
-	HTTPClient *http.Client
-	Retry      cloudcert.RetryPolicy
+	// InspectContent is the explicit opt-in to versions/latest:access.
+	InspectContent bool
+	HTTPClient     *http.Client
+	Retry          cloudcert.RetryPolicy
 }
 
 // Enumerator is a read-only GCP Secret Manager certificate-secret source.
@@ -59,17 +62,14 @@ func New(cfg Config) (*Enumerator, error) {
 	if cfg.Retry.Max == 0 && cfg.Retry.Base == 0 {
 		cfg.Retry = cloudcert.DefaultRetry()
 	}
-	if cfg.LabelKey == "" && cfg.LabelValue == "" {
-		cfg.LabelKey, cfg.LabelValue = "type", "certificate"
-	}
 	return &Enumerator{cfg: cfg}, nil
 }
 
 // Name identifies the provider.
 func (e *Enumerator) Name() string { return "gcp-secret-manager" }
 
-// Enumerate lists candidate secrets and returns only those whose latest value
-// contains parseable certificate material.
+// Enumerate always returns metadata for matching resources and accesses a value
+// only when InspectContent was explicitly enabled.
 func (e *Enumerator) Enumerate(ctx context.Context) ([]cloudsecret.Found, error) {
 	secrets, err := e.listSecrets(ctx)
 	if err != nil {
@@ -78,6 +78,16 @@ func (e *Enumerator) Enumerate(ctx context.Context) ([]cloudsecret.Found, error)
 	var out []cloudsecret.Found
 	for _, s := range secrets {
 		if !e.matches(s) {
+			continue
+		}
+		name := shortName(s.Name)
+		provenance := "gcp-sm://" + e.cfg.Project + "/" + name
+		out = append(out, cloudsecret.MetadataFound(e.Name(), s.Name, name, e.cfg.Project, provenance, map[string]string{
+			"secret_name": name, "resource_id": s.Name, "project": e.cfg.Project,
+			"created_at": s.CreatedAt, "expires_at": s.ExpiresAt,
+			"label_count": strconv.Itoa(len(s.Labels)), "content_inspected": "false",
+		}))
+		if !e.cfg.InspectContent {
 			continue
 		}
 		found, err := e.inspectSecret(ctx, s)
@@ -90,8 +100,10 @@ func (e *Enumerator) Enumerate(ctx context.Context) ([]cloudsecret.Found, error)
 }
 
 type secretEntry struct {
-	Name   string
-	Labels map[string]string
+	Name      string
+	Labels    map[string]string
+	CreatedAt string
+	ExpiresAt string
 }
 
 func (e *Enumerator) matches(s secretEntry) bool {
@@ -128,8 +140,10 @@ func (e *Enumerator) listSecrets(ctx context.Context) ([]secretEntry, error) {
 		}
 		var resp struct {
 			Secrets []struct {
-				Name   string            `json:"name"`
-				Labels map[string]string `json:"labels"`
+				Name       string            `json:"name"`
+				Labels     map[string]string `json:"labels"`
+				CreateTime string            `json:"createTime"`
+				ExpireTime string            `json:"expireTime"`
 			} `json:"secrets"`
 			NextPageToken string `json:"nextPageToken"`
 		}
@@ -137,7 +151,7 @@ func (e *Enumerator) listSecrets(ctx context.Context) ([]secretEntry, error) {
 			return nil, fmt.Errorf("gcpsm: parse list: %w", err)
 		}
 		for _, s := range resp.Secrets {
-			out = append(out, secretEntry{Name: s.Name, Labels: s.Labels})
+			out = append(out, secretEntry{Name: s.Name, Labels: s.Labels, CreatedAt: s.CreateTime, ExpiresAt: s.ExpireTime})
 		}
 		if resp.NextPageToken == "" {
 			break
@@ -161,9 +175,10 @@ func (e *Enumerator) inspectSecret(ctx context.Context, s secretEntry) ([]clouds
 		Provenance: "gcp-sm://" + e.cfg.Project + "/" + name,
 		Value:      value,
 		Metadata: map[string]string{
-			"secret_name": name,
-			"resource_id": s.Name,
-			"project":     e.cfg.Project,
+			"secret_name":       name,
+			"resource_id":       s.Name,
+			"project":           e.cfg.Project,
+			"content_inspected": "true",
 		},
 	})
 }

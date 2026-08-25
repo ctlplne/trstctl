@@ -206,10 +206,12 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// The approved-request prepare and evidence-backed complete commands close
 	// I3's missing issuance bridge, yielding 386. The event-backed ownership
 	// assignment command raises it to 387 and keeps browser/headless parity. The
-	// notification routing-preview read raises it to 388 and exposes the same
-	// tenant-safe hierarchy answer as the Alert Center without sending.
-	if len(out) != 388 {
-		t.Fatalf("CLI commands = %d, want 388", len(out))
+	// notification routing-preview read raises it to 388. The shared typed
+	// discovery capability contract raises it to 389 so terminal and console
+	// operators inspect the same fields, prerequisites, and dispositions. The
+	// state-free plan preview raises it to 390 with the same server oracle.
+	if len(out) != 390 {
+		t.Fatalf("CLI commands = %d, want 390", len(out))
 	}
 	return out
 }

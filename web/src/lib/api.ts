@@ -156,11 +156,16 @@ import type {
   DeploymentTarget,
   DeploymentTargetList,
   DeploymentTargetRequest,
+  DiscoveryCapability,
+  DiscoveryCapabilityCatalog,
+  DiscoveryCapabilityField,
+  DiscoveryCapabilityProvider,
   DiscoveryCoverage,
   DiscoveryFinding,
   DiscoveryFindingList,
   DiscoveryFindingTriageRequest,
   DiscoveryMonitoring,
+  DiscoveryPlanPreview,
   DiscoveryRun,
   DiscoveryRunList,
   DiscoveryRunRequest,
@@ -741,11 +746,16 @@ export type {
   DeploymentTarget,
   DeploymentTargetList,
   DeploymentTargetRequest,
+  DiscoveryCapability,
+  DiscoveryCapabilityCatalog,
+  DiscoveryCapabilityField,
+  DiscoveryCapabilityProvider,
   DiscoveryCoverage,
   DiscoveryFinding,
   DiscoveryFindingList,
   DiscoveryFindingTriageRequest,
   DiscoveryMonitoring,
+  DiscoveryPlanPreview,
   DiscoveryRun,
   DiscoveryRunList,
   DiscoveryRunRequest,
@@ -1601,6 +1611,8 @@ export interface Api {
   agentPage(options?: { limit?: number; cursor?: string }): Promise<AgentList>;
   createEnrollmentToken(input?: EnrollmentTokenRequest): Promise<EnrollmentToken>;
   offboardAgent(id: string, input: AgentOffboardRequest): Promise<AgentOffboardResponse>;
+  discoveryCapabilities(): Promise<DiscoveryCapabilityCatalog>;
+  previewDiscoveryPlan(input: DiscoverySourceRequest): Promise<DiscoveryPlanPreview>;
   discoverySources(options?: { limit?: number; cursor?: string }): Promise<DiscoverySourceList>;
   createDiscoverySource(input: DiscoverySourceRequest): Promise<DiscoverySource>;
   discoverySchedules(options?: { limit?: number; cursor?: string }): Promise<DiscoveryScheduleList>;
@@ -2066,6 +2078,8 @@ const liveApi: Api = {
   agentPage: (options) => req<AgentList>(`/api/v1/agents${pageQueryString(options)}`),
   createEnrollmentToken: (input) => mutate<EnrollmentToken>("POST", "/api/v1/agents/enrollment-tokens", enrollmentTokenRequest(input)),
   offboardAgent: (id, input) => mutate<AgentOffboardResponse>("POST", `/api/v1/agents/${encodeURIComponent(id)}/offboard`, input),
+  discoveryCapabilities: () => req<DiscoveryCapabilityCatalog>("/api/v1/discovery/capabilities"),
+  previewDiscoveryPlan: (input) => mutate<DiscoveryPlanPreview>("POST", "/api/v1/discovery/plans/preview", input),
   discoverySources: (options) => req<DiscoverySourceList>(`/api/v1/discovery/sources${pageQueryString(options)}`),
   createDiscoverySource: (input) => mutate<DiscoverySource>("POST", "/api/v1/discovery/sources", input),
   discoverySchedules: (options) => req<DiscoveryScheduleList>(`/api/v1/discovery/schedules${pageQueryString(options)}`),

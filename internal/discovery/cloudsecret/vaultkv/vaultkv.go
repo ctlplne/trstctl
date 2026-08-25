@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -33,8 +34,10 @@ type Config struct {
 	TagKey     string
 	TagValue   string
 	NamePrefix string
-	HTTPClient *http.Client
-	Retry      cloudcert.RetryPolicy
+	// InspectContent is the explicit opt-in to the value-returning data path.
+	InspectContent bool
+	HTTPClient     *http.Client
+	Retry          cloudcert.RetryPolicy
 }
 
 // Enumerator is a read-only Vault KV v2 certificate-secret source.
@@ -68,17 +71,14 @@ func New(cfg Config) (*Enumerator, error) {
 	if cfg.Retry.Max == 0 && cfg.Retry.Base == 0 {
 		cfg.Retry = cloudcert.DefaultRetry()
 	}
-	if cfg.TagKey == "" && cfg.TagValue == "" {
-		cfg.TagKey, cfg.TagValue = "type", "certificate"
-	}
 	return &Enumerator{cfg: cfg, host: u.Host}, nil
 }
 
 // Name identifies the provider.
 func (e *Enumerator) Name() string { return "hashicorp-vault" }
 
-// Enumerate recursively lists KV v2 metadata paths and returns only certificate
-// material from matching secrets.
+// Enumerate recursively inventories KV v2 metadata. It reads the value-bearing
+// data path only when InspectContent was explicitly enabled.
 func (e *Enumerator) Enumerate(ctx context.Context) ([]cloudsecret.Found, error) {
 	paths, err := e.listRecursive(ctx, e.cfg.PathPrefix)
 	if err != nil {
@@ -89,6 +89,23 @@ func (e *Enumerator) Enumerate(ctx context.Context) ([]cloudsecret.Found, error)
 		if e.cfg.NamePrefix != "" && !strings.HasPrefix(path, e.cfg.NamePrefix) {
 			continue
 		}
+		metadata, err := e.readMetadata(ctx, path)
+		if err != nil {
+			return nil, err
+		}
+		if e.cfg.TagKey != "" && metadata.Custom[e.cfg.TagKey] != e.cfg.TagValue {
+			continue
+		}
+		resource := "vault://" + e.host + "/" + joinVaultPath(e.cfg.Mount, path)
+		out = append(out, cloudsecret.MetadataFound(e.Name(), resource, path, e.host, resource, map[string]string{
+			"secret_name": path, "resource_id": resource, "vault": e.host, "mount": e.cfg.Mount,
+			"current_version": strconv.Itoa(metadata.CurrentVersion), "oldest_version": strconv.Itoa(metadata.OldestVersion),
+			"updated_at": metadata.UpdatedAt, "custom_metadata_count": strconv.Itoa(len(metadata.Custom)),
+			"content_inspected": "false",
+		}))
+		if !e.cfg.InspectContent {
+			continue
+		}
 		found, err := e.inspectSecret(ctx, path)
 		if err != nil {
 			return nil, err
@@ -96,6 +113,35 @@ func (e *Enumerator) Enumerate(ctx context.Context) ([]cloudsecret.Found, error)
 		out = append(out, found...)
 	}
 	return out, nil
+}
+
+type secretMetadata struct {
+	CurrentVersion int
+	OldestVersion  int
+	UpdatedAt      string
+	Custom         map[string]string
+}
+
+func (e *Enumerator) readMetadata(ctx context.Context, path string) (secretMetadata, error) {
+	raw, err := e.do(ctx, http.MethodGet, e.endpoint("metadata", path))
+	if err != nil {
+		return secretMetadata{}, err
+	}
+	var resp struct {
+		Data struct {
+			CurrentVersion int               `json:"current_version"`
+			OldestVersion  int               `json:"oldest_version"`
+			UpdatedTime    string            `json:"updated_time"`
+			CustomMetadata map[string]string `json:"custom_metadata"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return secretMetadata{}, fmt.Errorf("vaultkv: parse metadata: %w", err)
+	}
+	return secretMetadata{
+		CurrentVersion: resp.Data.CurrentVersion, OldestVersion: resp.Data.OldestVersion,
+		UpdatedAt: resp.Data.UpdatedTime, Custom: resp.Data.CustomMetadata,
+	}, nil
 }
 
 func (e *Enumerator) listRecursive(ctx context.Context, prefix string) ([]string, error) {
@@ -152,10 +198,11 @@ func (e *Enumerator) inspectSecret(ctx context.Context, path string) ([]cloudsec
 		Provenance: resource,
 		Value:      value,
 		Metadata: map[string]string{
-			"secret_name": path,
-			"resource_id": resource,
-			"vault":       e.host,
-			"mount":       e.cfg.Mount,
+			"secret_name":       path,
+			"resource_id":       resource,
+			"vault":             e.host,
+			"mount":             e.cfg.Mount,
+			"content_inspected": "true",
 		},
 	})
 	return found, err

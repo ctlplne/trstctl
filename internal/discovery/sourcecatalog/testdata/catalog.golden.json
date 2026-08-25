@@ -1,0 +1,1454 @@
+{
+  "schema_version": 1,
+  "items": [
+    {
+      "kind": "network",
+      "label": "TLS endpoints",
+      "purpose": "Find public TLS certificate metadata on explicitly authorized hosts, addresses, and network ranges.",
+      "data_handling": "Connects only to the normalized targets in the approved plan, performs a bounded TLS handshake, and stores public certificate metadata. It does not exploit services or collect private keys.",
+      "tool": "Discover",
+      "route": "/discovery?tab=sources\u0026kind=network",
+      "setup_surface": "source_wizard",
+      "permission": "discovery:write",
+      "edition": "core",
+      "execution": "network-role relay",
+      "configuration": [
+        {
+          "path": "segment",
+          "label": "Authorized scope",
+          "type": "segment_ref",
+          "required": true,
+          "description": "A declared tenant scope that defines the scan denominator."
+        },
+        {
+          "path": "relay_agent_id",
+          "label": "Network relay",
+          "type": "agent_ref",
+          "required": false,
+          "description": "Where connections originate. The relay must have the network role."
+        },
+        {
+          "path": "targets",
+          "label": "Hosts and addresses",
+          "type": "target_list",
+          "required": false,
+          "description": "Individual host:port or address:port targets."
+        },
+        {
+          "path": "cidrs",
+          "label": "CIDR ranges",
+          "type": "cidr_list",
+          "required": false,
+          "description": "IPv4 or IPv6 CIDRs crossed with the selected ports."
+        },
+        {
+          "path": "ranges",
+          "label": "Explicit IP ranges",
+          "type": "ip_range_list",
+          "required": false,
+          "description": "Bounded inclusive start-end address ranges crossed with the selected ports."
+        },
+        {
+          "path": "ports",
+          "label": "Ports",
+          "type": "port_list",
+          "required": false,
+          "description": "Individual ports or bounded ranges normalized before the scan is queued."
+        },
+        {
+          "path": "exclude_targets",
+          "label": "Excluded hosts and targets",
+          "type": "target_list",
+          "required": false,
+          "description": "Exact hostnames, addresses, or host:port destinations removed after normalization."
+        },
+        {
+          "path": "exclude_cidrs",
+          "label": "Excluded CIDR ranges",
+          "type": "cidr_list",
+          "required": false,
+          "description": "Address ranges removed after normalization; exclusions always win."
+        },
+        {
+          "path": "exclude_ports",
+          "label": "Excluded ports",
+          "type": "port_list",
+          "required": false,
+          "description": "Ports removed from every normalized target."
+        },
+        {
+          "path": "allow_rfc1918",
+          "label": "Allow approved RFC1918 targets",
+          "type": "boolean",
+          "required": false,
+          "advanced": true,
+          "description": "Permits private IPv4 targets already covered by the declared scope."
+        },
+        {
+          "path": "allow_loopback",
+          "label": "Allow loopback",
+          "type": "boolean",
+          "required": false,
+          "advanced": true,
+          "description": "Restricted local-testing override; never implied by private-range access."
+        }
+      ],
+      "lifecycle": [
+        "not_configured",
+        "available",
+        "queued",
+        "planning",
+        "running",
+        "succeeded",
+        "succeeded_with_warnings",
+        "failed",
+        "blocked"
+      ],
+      "console_stages": [
+        "configure",
+        "preview",
+        "execute",
+        "observe",
+        "recover",
+        "prove"
+      ],
+      "documentation_ref": "docs/features/discovery-and-inventory.md#network-and-ssh-scopes"
+    },
+    {
+      "kind": "ssh",
+      "label": "SSH endpoints",
+      "purpose": "Find public SSH host-key metadata on explicitly authorized machines and network ranges.",
+      "data_handling": "Connects only to the normalized targets in the approved plan, reads the bounded SSH identification and host-key exchange, and stores public fingerprints. It never attempts a login.",
+      "tool": "Discover",
+      "route": "/discovery?tab=sources\u0026kind=ssh",
+      "setup_surface": "source_wizard",
+      "permission": "discovery:write",
+      "edition": "core",
+      "execution": "network-role relay",
+      "configuration": [
+        {
+          "path": "segment",
+          "label": "Authorized scope",
+          "type": "segment_ref",
+          "required": true,
+          "description": "A declared tenant scope that defines the scan denominator."
+        },
+        {
+          "path": "relay_agent_id",
+          "label": "Network relay",
+          "type": "agent_ref",
+          "required": false,
+          "description": "Where connections originate. The relay must have the network role."
+        },
+        {
+          "path": "targets",
+          "label": "Hosts and addresses",
+          "type": "target_list",
+          "required": false,
+          "description": "Individual host:port or address:port targets."
+        },
+        {
+          "path": "cidrs",
+          "label": "CIDR ranges",
+          "type": "cidr_list",
+          "required": false,
+          "description": "IPv4 or IPv6 CIDRs crossed with the selected ports."
+        },
+        {
+          "path": "ranges",
+          "label": "Explicit IP ranges",
+          "type": "ip_range_list",
+          "required": false,
+          "description": "Bounded inclusive start-end address ranges crossed with the selected ports."
+        },
+        {
+          "path": "ports",
+          "label": "Ports",
+          "type": "port_list",
+          "required": false,
+          "description": "Individual ports or bounded ranges normalized before the scan is queued."
+        },
+        {
+          "path": "exclude_targets",
+          "label": "Excluded hosts and targets",
+          "type": "target_list",
+          "required": false,
+          "description": "Exact hostnames, addresses, or host:port destinations removed after normalization."
+        },
+        {
+          "path": "exclude_cidrs",
+          "label": "Excluded CIDR ranges",
+          "type": "cidr_list",
+          "required": false,
+          "description": "Address ranges removed after normalization; exclusions always win."
+        },
+        {
+          "path": "exclude_ports",
+          "label": "Excluded ports",
+          "type": "port_list",
+          "required": false,
+          "description": "Ports removed from every normalized target."
+        },
+        {
+          "path": "allow_rfc1918",
+          "label": "Allow approved RFC1918 targets",
+          "type": "boolean",
+          "required": false,
+          "advanced": true,
+          "description": "Permits private IPv4 targets already covered by the declared scope."
+        },
+        {
+          "path": "allow_loopback",
+          "label": "Allow loopback",
+          "type": "boolean",
+          "required": false,
+          "advanced": true,
+          "description": "Restricted local-testing override; never implied by private-range access."
+        }
+      ],
+      "lifecycle": [
+        "not_configured",
+        "available",
+        "queued",
+        "planning",
+        "running",
+        "succeeded",
+        "succeeded_with_warnings",
+        "failed",
+        "blocked"
+      ],
+      "console_stages": [
+        "configure",
+        "preview",
+        "execute",
+        "observe",
+        "recover",
+        "prove"
+      ],
+      "documentation_ref": "docs/features/discovery-and-inventory.md#network-and-ssh-scopes"
+    },
+    {
+      "kind": "adcs",
+      "label": "Microsoft AD CS",
+      "purpose": "Inventory AD CS authorities, templates, enrollment rights, and exposed enrollment endpoints through a domain-reachable relay.",
+      "data_handling": "Performs bounded read-only LDAP and configured endpoint checks. Passwords are represented only by credential references; response bodies and private keys are never stored.",
+      "tool": "Discover",
+      "route": "/discovery?tab=sources\u0026kind=adcs",
+      "setup_surface": "source_wizard",
+      "permission": "discovery:write",
+      "edition": "core",
+      "execution": "network-role relay",
+      "configuration": [
+        {
+          "path": "url",
+          "label": "Directory URL",
+          "type": "url",
+          "required": true,
+          "description": "LDAPS or LDAP endpoint reachable from the selected relay."
+        },
+        {
+          "path": "configuration_dn",
+          "label": "Configuration naming context",
+          "type": "string",
+          "required": true,
+          "description": "The AD Configuration partition to inspect."
+        },
+        {
+          "path": "bind_dn",
+          "label": "Bind identity",
+          "type": "string",
+          "required": true,
+          "description": "A least-privilege directory reader."
+        },
+        {
+          "path": "password_ref",
+          "label": "Password reference",
+          "type": "credential_ref",
+          "required": true,
+          "secret_ref": true,
+          "description": "Reference to the bind password; the value is never sent in this configuration."
+        },
+        {
+          "path": "relay_agent_id",
+          "label": "Network relay",
+          "type": "agent_ref",
+          "required": false,
+          "description": "An enrolled network-role agent that can reach the directory."
+        },
+        {
+          "path": "enrollment_endpoints",
+          "label": "Enrollment endpoints",
+          "type": "endpoint_list",
+          "required": false,
+          "advanced": true,
+          "description": "Optional bounded checks for enrollment web services."
+        },
+        {
+          "path": "allow_private_endpoint",
+          "label": "Allow approved private endpoints",
+          "type": "boolean",
+          "required": false,
+          "advanced": true,
+          "description": "Requires private-egress authorization and explicit CIDRs."
+        },
+        {
+          "path": "private_egress_cidrs",
+          "label": "Approved private endpoint CIDRs",
+          "type": "cidr_list",
+          "required": false,
+          "advanced": true,
+          "description": "Private destinations allowed for this source; metadata, loopback, and link-local ranges remain blocked."
+        }
+      ],
+      "lifecycle": [
+        "not_configured",
+        "available",
+        "queued",
+        "planning",
+        "running",
+        "succeeded",
+        "succeeded_with_warnings",
+        "failed",
+        "blocked"
+      ],
+      "console_stages": [
+        "configure",
+        "preview",
+        "execute",
+        "observe",
+        "recover",
+        "prove"
+      ],
+      "documentation_ref": "docs/features/discovery-and-inventory.md#ad-cs"
+    },
+    {
+      "kind": "cloud_certificate",
+      "label": "Cloud certificate services",
+      "purpose": "Inventory certificate metadata from AWS Certificate Manager, Azure Key Vault, and Google Cloud Certificate Manager.",
+      "data_handling": "Uses read-only provider calls and credential references. It stores public certificate metadata and provider provenance, never private keys or inline cloud credentials.",
+      "tool": "Discover",
+      "route": "/discovery?tab=sources\u0026kind=cloud_certificate",
+      "setup_surface": "source_wizard",
+      "permission": "discovery:write",
+      "edition": "core",
+      "execution": "control plane",
+      "configuration": [
+        {
+          "path": "providers[].provider",
+          "label": "Provider",
+          "type": "provider",
+          "required": true,
+          "description": "The exact read-only provider adapter."
+        },
+        {
+          "path": "providers[].region",
+          "label": "Region",
+          "type": "string",
+          "required": false,
+          "description": "Provider region when applicable."
+        },
+        {
+          "path": "providers[].endpoint",
+          "label": "API endpoint",
+          "type": "url",
+          "required": false,
+          "advanced": true,
+          "description": "Optional compatible endpoint; public provider defaults are safer."
+        },
+        {
+          "path": "providers[].allow_private_endpoint",
+          "label": "Allow approved private endpoint",
+          "type": "boolean",
+          "required": false,
+          "advanced": true,
+          "description": "Requires private-egress authorization and explicit CIDRs."
+        },
+        {
+          "path": "providers[].private_egress_cidrs",
+          "label": "Approved private endpoint CIDRs",
+          "type": "cidr_list",
+          "required": false,
+          "advanced": true,
+          "description": "Private destinations allowed for this provider; metadata and loopback remain blocked."
+        },
+        {
+          "path": "providers[].access_key_id_ref",
+          "label": "Access key ID reference",
+          "type": "credential_ref",
+          "required": false,
+          "secret_ref": true,
+          "advanced": true,
+          "description": "Reference only; use a short-lived least-privilege credential."
+        },
+        {
+          "path": "providers[].secret_access_key_ref",
+          "label": "Secret access key reference",
+          "type": "credential_ref",
+          "required": false,
+          "secret_ref": true,
+          "advanced": true,
+          "description": "Reference only; the value never enters source configuration."
+        },
+        {
+          "path": "providers[].session_token_ref",
+          "label": "Session token reference",
+          "type": "credential_ref",
+          "required": false,
+          "secret_ref": true,
+          "advanced": true,
+          "description": "Optional short-lived session-token reference."
+        },
+        {
+          "path": "providers[].vault_url",
+          "label": "Vault URL",
+          "type": "url",
+          "required": false,
+          "description": "Authorized Azure Key Vault or HashiCorp Vault endpoint."
+        },
+        {
+          "path": "providers[].token_ref",
+          "label": "Token reference",
+          "type": "credential_ref",
+          "required": false,
+          "secret_ref": true,
+          "description": "Reference to a least-privilege token; the value never enters source configuration."
+        },
+        {
+          "path": "providers[].project",
+          "label": "Project",
+          "type": "string",
+          "required": false,
+          "description": "Authorized Google Cloud project."
+        },
+        {
+          "path": "providers[].location",
+          "label": "Location",
+          "type": "string",
+          "required": false,
+          "description": "Certificate Manager location."
+        }
+      ],
+      "providers": [
+        {
+          "id": "aws-acm",
+          "label": "AWS Certificate Manager",
+          "least_privilege": "acm:ListCertificates and acm:DescribeCertificate on the authorized account/regions",
+          "preferred_credential": "env: credential references",
+          "fields": [
+            "region",
+            "endpoint",
+            "access_key_id_ref",
+            "secret_access_key_ref",
+            "session_token_ref"
+          ]
+        },
+        {
+          "id": "azure-keyvault",
+          "label": "Azure Key Vault certificates",
+          "least_privilege": "certificates/list and certificates/get on the authorized vault",
+          "preferred_credential": "token_ref",
+          "fields": [
+            "vault_url",
+            "token_ref"
+          ]
+        },
+        {
+          "id": "gcp-certmanager",
+          "label": "Google Cloud Certificate Manager",
+          "least_privilege": "certificatemanager.certificates.list/get on the authorized project/location",
+          "preferred_credential": "token_ref",
+          "fields": [
+            "project",
+            "location",
+            "token_ref"
+          ]
+        }
+      ],
+      "lifecycle": [
+        "not_configured",
+        "available",
+        "queued",
+        "planning",
+        "running",
+        "succeeded",
+        "succeeded_with_warnings",
+        "failed",
+        "blocked"
+      ],
+      "console_stages": [
+        "configure",
+        "preview",
+        "execute",
+        "observe",
+        "recover",
+        "prove"
+      ],
+      "documentation_ref": "docs/features/discovery-and-inventory.md#cloud-certificate-services"
+    },
+    {
+      "kind": "cloud_secret",
+      "label": "Cloud secret managers",
+      "purpose": "Inventory every authorized secret resource's metadata without retrieving its value; optionally inspect content for certificates through a separate explicit choice.",
+      "data_handling": "Metadata-only is the default. Optional content inspection retrieves only candidate values, keeps them in wipeable bytes, emits certificate metadata only, and never persists, logs, or renders the value.",
+      "tool": "Discover",
+      "route": "/discovery?tab=sources\u0026kind=cloud_secret",
+      "setup_surface": "source_wizard",
+      "permission": "discovery:write",
+      "edition": "core",
+      "execution": "control plane",
+      "configuration": [
+        {
+          "path": "providers[].provider",
+          "label": "Provider",
+          "type": "provider",
+          "required": true,
+          "description": "The exact read-only provider adapter."
+        },
+        {
+          "path": "providers[].region",
+          "label": "Region",
+          "type": "string",
+          "required": false,
+          "description": "Provider region when applicable."
+        },
+        {
+          "path": "providers[].endpoint",
+          "label": "API endpoint",
+          "type": "url",
+          "required": false,
+          "advanced": true,
+          "description": "Optional compatible endpoint; public provider defaults are safer."
+        },
+        {
+          "path": "providers[].allow_private_endpoint",
+          "label": "Allow approved private endpoint",
+          "type": "boolean",
+          "required": false,
+          "advanced": true,
+          "description": "Requires private-egress authorization and explicit CIDRs."
+        },
+        {
+          "path": "providers[].private_egress_cidrs",
+          "label": "Approved private endpoint CIDRs",
+          "type": "cidr_list",
+          "required": false,
+          "advanced": true,
+          "description": "Private destinations allowed for this provider; metadata and loopback remain blocked."
+        },
+        {
+          "path": "providers[].access_key_id_ref",
+          "label": "Access key ID reference",
+          "type": "credential_ref",
+          "required": false,
+          "secret_ref": true,
+          "advanced": true,
+          "description": "Reference only; use a short-lived least-privilege credential."
+        },
+        {
+          "path": "providers[].secret_access_key_ref",
+          "label": "Secret access key reference",
+          "type": "credential_ref",
+          "required": false,
+          "secret_ref": true,
+          "advanced": true,
+          "description": "Reference only; the value never enters source configuration."
+        },
+        {
+          "path": "providers[].session_token_ref",
+          "label": "Session token reference",
+          "type": "credential_ref",
+          "required": false,
+          "secret_ref": true,
+          "advanced": true,
+          "description": "Optional short-lived session-token reference."
+        },
+        {
+          "path": "providers[].vault_url",
+          "label": "Vault URL",
+          "type": "url",
+          "required": false,
+          "description": "Authorized Azure Key Vault or HashiCorp Vault endpoint."
+        },
+        {
+          "path": "providers[].token_ref",
+          "label": "Token reference",
+          "type": "credential_ref",
+          "required": false,
+          "secret_ref": true,
+          "description": "Reference to a least-privilege token; the value never enters source configuration."
+        },
+        {
+          "path": "providers[].project",
+          "label": "Project",
+          "type": "string",
+          "required": false,
+          "description": "Authorized Google Cloud project."
+        },
+        {
+          "path": "providers[].location",
+          "label": "Location",
+          "type": "string",
+          "required": false,
+          "description": "Certificate Manager location."
+        },
+        {
+          "path": "providers[].api_version",
+          "label": "Vault KV API version",
+          "type": "string",
+          "required": false,
+          "advanced": true,
+          "description": "KV v1 or v2 as configured on the mount."
+        },
+        {
+          "path": "providers[].mount",
+          "label": "Vault mount",
+          "type": "string",
+          "required": false,
+          "description": "Approved KV mount name."
+        },
+        {
+          "path": "providers[].path_prefix",
+          "label": "Vault path prefix",
+          "type": "string",
+          "required": false,
+          "description": "The least-privilege metadata path to list."
+        },
+        {
+          "path": "providers[].tag_key",
+          "label": "AWS tag key",
+          "type": "string",
+          "required": false,
+          "advanced": true,
+          "description": "Optional metadata-only inventory filter."
+        },
+        {
+          "path": "providers[].tag_value",
+          "label": "AWS tag value",
+          "type": "string",
+          "required": false,
+          "advanced": true,
+          "description": "Optional metadata-only inventory filter."
+        },
+        {
+          "path": "providers[].label_key",
+          "label": "GCP label key",
+          "type": "string",
+          "required": false,
+          "advanced": true,
+          "description": "Optional metadata-only inventory filter."
+        },
+        {
+          "path": "providers[].label_value",
+          "label": "GCP label value",
+          "type": "string",
+          "required": false,
+          "advanced": true,
+          "description": "Optional metadata-only inventory filter."
+        },
+        {
+          "path": "providers[].name_prefix",
+          "label": "Name prefix",
+          "type": "string",
+          "required": false,
+          "advanced": true,
+          "description": "Optional resource-name filter."
+        },
+        {
+          "path": "providers[].inspect_content",
+          "label": "Inspect content for certificates",
+          "type": "boolean",
+          "required": false,
+          "advanced": true,
+          "description": "Explicit opt-in to retrieve candidate values into wipeable memory and emit certificate metadata only."
+        }
+      ],
+      "providers": [
+        {
+          "id": "aws-secrets-manager",
+          "label": "AWS Secrets Manager",
+          "least_privilege": "Metadata: secretsmanager:ListSecrets. Optional content inspection additionally needs GetSecretValue on the filtered scope.",
+          "preferred_credential": "env: credential references",
+          "fields": [
+            "region",
+            "endpoint",
+            "access_key_id_ref",
+            "secret_access_key_ref",
+            "session_token_ref",
+            "tag_key",
+            "tag_value",
+            "name_prefix",
+            "inspect_content"
+          ]
+        },
+        {
+          "id": "gcp-secret-manager",
+          "label": "Google Secret Manager",
+          "least_privilege": "Metadata: secretmanager.secrets.list. Optional content inspection additionally needs secretmanager.versions.access on the filtered scope.",
+          "preferred_credential": "token_ref",
+          "fields": [
+            "project",
+            "token_ref",
+            "label_key",
+            "label_value",
+            "name_prefix",
+            "inspect_content"
+          ]
+        },
+        {
+          "id": "azure-key-vault",
+          "label": "Azure Key Vault secrets",
+          "least_privilege": "Metadata: secrets/list. Optional content inspection additionally needs secrets/get on the filtered scope.",
+          "preferred_credential": "token_ref",
+          "fields": [
+            "vault_url",
+            "token_ref",
+            "name_prefix",
+            "inspect_content"
+          ]
+        },
+        {
+          "id": "hashicorp-vault",
+          "label": "HashiCorp Vault KV",
+          "least_privilege": "Metadata: list/read on the approved metadata path. Optional content inspection additionally needs read on the filtered data path.",
+          "preferred_credential": "token_ref",
+          "fields": [
+            "vault_url",
+            "api_version",
+            "mount",
+            "path_prefix",
+            "token_ref",
+            "inspect_content"
+          ]
+        }
+      ],
+      "lifecycle": [
+        "not_configured",
+        "available",
+        "queued",
+        "planning",
+        "running",
+        "succeeded",
+        "succeeded_with_warnings",
+        "failed",
+        "blocked"
+      ],
+      "console_stages": [
+        "configure",
+        "preview",
+        "execute",
+        "observe",
+        "recover",
+        "prove"
+      ],
+      "documentation_ref": "docs/features/discovery-and-inventory.md#cloud-secret-managers"
+    },
+    {
+      "kind": "secret_store",
+      "label": "Secret stores",
+      "purpose": "Inventory every authorized secret resource's metadata without retrieving its value; optionally inspect content for certificates through a separate explicit choice.",
+      "data_handling": "Metadata-only is the default. Optional content inspection retrieves only candidate values, keeps them in wipeable bytes, emits certificate metadata only, and never persists, logs, or renders the value.",
+      "tool": "Discover",
+      "route": "/discovery?tab=sources\u0026kind=secret_store",
+      "setup_surface": "source_wizard",
+      "permission": "discovery:write",
+      "edition": "core",
+      "execution": "control plane",
+      "configuration": [
+        {
+          "path": "providers[].provider",
+          "label": "Provider",
+          "type": "provider",
+          "required": true,
+          "description": "The exact read-only provider adapter."
+        },
+        {
+          "path": "providers[].region",
+          "label": "Region",
+          "type": "string",
+          "required": false,
+          "description": "Provider region when applicable."
+        },
+        {
+          "path": "providers[].endpoint",
+          "label": "API endpoint",
+          "type": "url",
+          "required": false,
+          "advanced": true,
+          "description": "Optional compatible endpoint; public provider defaults are safer."
+        },
+        {
+          "path": "providers[].allow_private_endpoint",
+          "label": "Allow approved private endpoint",
+          "type": "boolean",
+          "required": false,
+          "advanced": true,
+          "description": "Requires private-egress authorization and explicit CIDRs."
+        },
+        {
+          "path": "providers[].private_egress_cidrs",
+          "label": "Approved private endpoint CIDRs",
+          "type": "cidr_list",
+          "required": false,
+          "advanced": true,
+          "description": "Private destinations allowed for this provider; metadata and loopback remain blocked."
+        },
+        {
+          "path": "providers[].access_key_id_ref",
+          "label": "Access key ID reference",
+          "type": "credential_ref",
+          "required": false,
+          "secret_ref": true,
+          "advanced": true,
+          "description": "Reference only; use a short-lived least-privilege credential."
+        },
+        {
+          "path": "providers[].secret_access_key_ref",
+          "label": "Secret access key reference",
+          "type": "credential_ref",
+          "required": false,
+          "secret_ref": true,
+          "advanced": true,
+          "description": "Reference only; the value never enters source configuration."
+        },
+        {
+          "path": "providers[].session_token_ref",
+          "label": "Session token reference",
+          "type": "credential_ref",
+          "required": false,
+          "secret_ref": true,
+          "advanced": true,
+          "description": "Optional short-lived session-token reference."
+        },
+        {
+          "path": "providers[].vault_url",
+          "label": "Vault URL",
+          "type": "url",
+          "required": false,
+          "description": "Authorized Azure Key Vault or HashiCorp Vault endpoint."
+        },
+        {
+          "path": "providers[].token_ref",
+          "label": "Token reference",
+          "type": "credential_ref",
+          "required": false,
+          "secret_ref": true,
+          "description": "Reference to a least-privilege token; the value never enters source configuration."
+        },
+        {
+          "path": "providers[].project",
+          "label": "Project",
+          "type": "string",
+          "required": false,
+          "description": "Authorized Google Cloud project."
+        },
+        {
+          "path": "providers[].location",
+          "label": "Location",
+          "type": "string",
+          "required": false,
+          "description": "Certificate Manager location."
+        },
+        {
+          "path": "providers[].api_version",
+          "label": "Vault KV API version",
+          "type": "string",
+          "required": false,
+          "advanced": true,
+          "description": "KV v1 or v2 as configured on the mount."
+        },
+        {
+          "path": "providers[].mount",
+          "label": "Vault mount",
+          "type": "string",
+          "required": false,
+          "description": "Approved KV mount name."
+        },
+        {
+          "path": "providers[].path_prefix",
+          "label": "Vault path prefix",
+          "type": "string",
+          "required": false,
+          "description": "The least-privilege metadata path to list."
+        },
+        {
+          "path": "providers[].tag_key",
+          "label": "AWS tag key",
+          "type": "string",
+          "required": false,
+          "advanced": true,
+          "description": "Optional metadata-only inventory filter."
+        },
+        {
+          "path": "providers[].tag_value",
+          "label": "AWS tag value",
+          "type": "string",
+          "required": false,
+          "advanced": true,
+          "description": "Optional metadata-only inventory filter."
+        },
+        {
+          "path": "providers[].label_key",
+          "label": "GCP label key",
+          "type": "string",
+          "required": false,
+          "advanced": true,
+          "description": "Optional metadata-only inventory filter."
+        },
+        {
+          "path": "providers[].label_value",
+          "label": "GCP label value",
+          "type": "string",
+          "required": false,
+          "advanced": true,
+          "description": "Optional metadata-only inventory filter."
+        },
+        {
+          "path": "providers[].name_prefix",
+          "label": "Name prefix",
+          "type": "string",
+          "required": false,
+          "advanced": true,
+          "description": "Optional resource-name filter."
+        },
+        {
+          "path": "providers[].inspect_content",
+          "label": "Inspect content for certificates",
+          "type": "boolean",
+          "required": false,
+          "advanced": true,
+          "description": "Explicit opt-in to retrieve candidate values into wipeable memory and emit certificate metadata only."
+        }
+      ],
+      "providers": [
+        {
+          "id": "aws-secrets-manager",
+          "label": "AWS Secrets Manager",
+          "least_privilege": "Metadata: secretsmanager:ListSecrets. Optional content inspection additionally needs GetSecretValue on the filtered scope.",
+          "preferred_credential": "env: credential references",
+          "fields": [
+            "region",
+            "endpoint",
+            "access_key_id_ref",
+            "secret_access_key_ref",
+            "session_token_ref",
+            "tag_key",
+            "tag_value",
+            "name_prefix",
+            "inspect_content"
+          ]
+        },
+        {
+          "id": "gcp-secret-manager",
+          "label": "Google Secret Manager",
+          "least_privilege": "Metadata: secretmanager.secrets.list. Optional content inspection additionally needs secretmanager.versions.access on the filtered scope.",
+          "preferred_credential": "token_ref",
+          "fields": [
+            "project",
+            "token_ref",
+            "label_key",
+            "label_value",
+            "name_prefix",
+            "inspect_content"
+          ]
+        },
+        {
+          "id": "azure-key-vault",
+          "label": "Azure Key Vault secrets",
+          "least_privilege": "Metadata: secrets/list. Optional content inspection additionally needs secrets/get on the filtered scope.",
+          "preferred_credential": "token_ref",
+          "fields": [
+            "vault_url",
+            "token_ref",
+            "name_prefix",
+            "inspect_content"
+          ]
+        },
+        {
+          "id": "hashicorp-vault",
+          "label": "HashiCorp Vault KV",
+          "least_privilege": "Metadata: list/read on the approved metadata path. Optional content inspection additionally needs read on the filtered data path.",
+          "preferred_credential": "token_ref",
+          "fields": [
+            "vault_url",
+            "api_version",
+            "mount",
+            "path_prefix",
+            "token_ref",
+            "inspect_content"
+          ]
+        }
+      ],
+      "lifecycle": [
+        "not_configured",
+        "available",
+        "queued",
+        "planning",
+        "running",
+        "succeeded",
+        "succeeded_with_warnings",
+        "failed",
+        "blocked"
+      ],
+      "console_stages": [
+        "configure",
+        "preview",
+        "execute",
+        "observe",
+        "recover",
+        "prove"
+      ],
+      "documentation_ref": "docs/features/discovery-and-inventory.md#cloud-secret-managers"
+    },
+    {
+      "kind": "ct_log",
+      "label": "Certificate Transparency",
+      "purpose": "Watch public Certificate Transparency logs for certificates covering approved domains.",
+      "data_handling": "Reads public CT entries and stores public certificate metadata and checkpoints.",
+      "tool": "Discover",
+      "route": "/discovery?tab=findings",
+      "setup_surface": "contextual",
+      "permission": "discovery:write",
+      "edition": "core",
+      "execution": "control plane",
+      "configuration": [
+        {
+          "path": "watched_domains",
+          "label": "Watched domains",
+          "type": "domain_list",
+          "required": true,
+          "description": "Domains trstctl is authorized to monitor in public CT logs."
+        }
+      ],
+      "lifecycle": [
+        "not_configured",
+        "available",
+        "queued",
+        "planning",
+        "running",
+        "succeeded",
+        "succeeded_with_warnings",
+        "failed",
+        "blocked"
+      ],
+      "console_stages": [
+        "configure",
+        "preview",
+        "execute",
+        "observe",
+        "recover",
+        "prove"
+      ],
+      "documentation_ref": "docs/features/discovery-and-inventory.md#certificate-transparency"
+    },
+    {
+      "kind": "drift",
+      "label": "Credential drift",
+      "purpose": "Compare current credential observations with the last approved state.",
+      "data_handling": "Stores stable non-secret fingerprints and the exact changed metadata; it does not store credential values.",
+      "tool": "Discover",
+      "route": "/discovery?tab=findings",
+      "setup_surface": "contextual",
+      "permission": "discovery:write",
+      "edition": "core",
+      "execution": "control plane",
+      "configuration": [
+        {
+          "path": "watched",
+          "label": "Watched credential metadata",
+          "type": "record_list",
+          "required": true,
+          "description": "Public or non-secret observations to compare across scans."
+        }
+      ],
+      "lifecycle": [
+        "not_configured",
+        "available",
+        "queued",
+        "planning",
+        "running",
+        "succeeded",
+        "succeeded_with_warnings",
+        "failed",
+        "blocked"
+      ],
+      "console_stages": [
+        "configure",
+        "preview",
+        "execute",
+        "observe",
+        "recover",
+        "prove"
+      ],
+      "documentation_ref": "docs/features/discovery-and-inventory.md#drift"
+    },
+    {
+      "kind": "api_key",
+      "label": "API keys and tokens",
+      "purpose": "API keys and tokens discovery from bounded, sanitized observations.",
+      "data_handling": "Inventory metadata and references for API keys and non-human tokens; raw token values are rejected.",
+      "tool": "Discover",
+      "route": "/discovery?tab=sources\u0026kind=api_key",
+      "setup_surface": "source_wizard",
+      "permission": "discovery:write",
+      "edition": "core",
+      "execution": "control plane",
+      "configuration": [
+        {
+          "path": "observations",
+          "label": "Observations",
+          "type": "record_list",
+          "required": true,
+          "description": "One or more validated metadata-only observations."
+        }
+      ],
+      "lifecycle": [
+        "not_configured",
+        "available",
+        "queued",
+        "planning",
+        "running",
+        "succeeded",
+        "succeeded_with_warnings",
+        "failed",
+        "blocked"
+      ],
+      "console_stages": [
+        "configure",
+        "preview",
+        "execute",
+        "observe",
+        "recover",
+        "prove"
+      ],
+      "documentation_ref": "docs/features/discovery-and-inventory.md#metadata-sources"
+    },
+    {
+      "kind": "nhi_cross_surface",
+      "label": "Cross-system identities",
+      "purpose": "Cross-system identities discovery from bounded, sanitized observations.",
+      "data_handling": "Correlate the same non-human identity across identity providers, cloud, SaaS, code, and CI without collecting credential values.",
+      "tool": "Discover",
+      "route": "/discovery?tab=sources\u0026kind=nhi_cross_surface",
+      "setup_surface": "source_wizard",
+      "permission": "discovery:write",
+      "edition": "core",
+      "execution": "control plane",
+      "configuration": [
+        {
+          "path": "observations",
+          "label": "Observations",
+          "type": "record_list",
+          "required": true,
+          "description": "One or more validated metadata-only observations."
+        }
+      ],
+      "lifecycle": [
+        "not_configured",
+        "available",
+        "queued",
+        "planning",
+        "running",
+        "succeeded",
+        "succeeded_with_warnings",
+        "failed",
+        "blocked"
+      ],
+      "console_stages": [
+        "configure",
+        "preview",
+        "execute",
+        "observe",
+        "recover",
+        "prove"
+      ],
+      "documentation_ref": "docs/features/discovery-and-inventory.md#metadata-sources"
+    },
+    {
+      "kind": "oauth_grant",
+      "label": "OAuth grants",
+      "purpose": "OAuth grants discovery from bounded, sanitized observations.",
+      "data_handling": "Inventory OAuth application grants, scopes, owners, and consent risk without collecting client secrets or access tokens.",
+      "tool": "Discover",
+      "route": "/discovery?tab=sources\u0026kind=oauth_grant",
+      "setup_surface": "source_wizard",
+      "permission": "discovery:write",
+      "edition": "core",
+      "execution": "control plane",
+      "configuration": [
+        {
+          "path": "grants",
+          "label": "Observations",
+          "type": "record_list",
+          "required": true,
+          "description": "One or more validated metadata-only observations."
+        }
+      ],
+      "lifecycle": [
+        "not_configured",
+        "available",
+        "queued",
+        "planning",
+        "running",
+        "succeeded",
+        "succeeded_with_warnings",
+        "failed",
+        "blocked"
+      ],
+      "console_stages": [
+        "configure",
+        "preview",
+        "execute",
+        "observe",
+        "recover",
+        "prove"
+      ],
+      "documentation_ref": "docs/features/discovery-and-inventory.md#metadata-sources"
+    },
+    {
+      "kind": "service_account",
+      "label": "Service accounts",
+      "purpose": "Service accounts discovery from bounded, sanitized observations.",
+      "data_handling": "Inventory Active Directory and cloud service-account metadata and credential references without collecting passwords or private keys.",
+      "tool": "Discover",
+      "route": "/discovery?tab=sources\u0026kind=service_account",
+      "setup_surface": "source_wizard",
+      "permission": "discovery:write",
+      "edition": "core",
+      "execution": "control plane",
+      "configuration": [
+        {
+          "path": "accounts",
+          "label": "Observations",
+          "type": "record_list",
+          "required": true,
+          "description": "One or more validated metadata-only observations."
+        }
+      ],
+      "lifecycle": [
+        "not_configured",
+        "available",
+        "queued",
+        "planning",
+        "running",
+        "succeeded",
+        "succeeded_with_warnings",
+        "failed",
+        "blocked"
+      ],
+      "console_stages": [
+        "configure",
+        "preview",
+        "execute",
+        "observe",
+        "recover",
+        "prove"
+      ],
+      "documentation_ref": "docs/features/discovery-and-inventory.md#metadata-sources"
+    },
+    {
+      "kind": "nhi_behavior",
+      "label": "Identity behavior",
+      "purpose": "Identity behavior discovery from bounded, sanitized observations.",
+      "data_handling": "Analyze bounded, sanitized use metadata for machine identities; credential material is rejected.",
+      "tool": "Discover",
+      "route": "/discovery?tab=sources\u0026kind=nhi_behavior",
+      "setup_surface": "source_wizard",
+      "permission": "discovery:write",
+      "edition": "core",
+      "execution": "control plane",
+      "configuration": [
+        {
+          "path": "events",
+          "label": "Observations",
+          "type": "record_list",
+          "required": true,
+          "description": "One or more validated metadata-only observations."
+        }
+      ],
+      "lifecycle": [
+        "not_configured",
+        "available",
+        "queued",
+        "planning",
+        "running",
+        "succeeded",
+        "succeeded_with_warnings",
+        "failed",
+        "blocked"
+      ],
+      "console_stages": [
+        "configure",
+        "preview",
+        "execute",
+        "observe",
+        "recover",
+        "prove"
+      ],
+      "documentation_ref": "docs/features/discovery-and-inventory.md#metadata-sources"
+    },
+    {
+      "kind": "credential_compromise",
+      "label": "Compromise signals",
+      "purpose": "Compromise signals discovery from bounded, sanitized observations.",
+      "data_handling": "Ingest sanitized detector evidence and credential references; stolen credential values are rejected.",
+      "tool": "Discover",
+      "route": "/discovery?tab=sources\u0026kind=credential_compromise",
+      "setup_surface": "source_wizard",
+      "permission": "discovery:write",
+      "edition": "core",
+      "execution": "control plane",
+      "configuration": [
+        {
+          "path": "signals",
+          "label": "Observations",
+          "type": "record_list",
+          "required": true,
+          "description": "One or more validated metadata-only observations."
+        }
+      ],
+      "lifecycle": [
+        "not_configured",
+        "available",
+        "queued",
+        "planning",
+        "running",
+        "succeeded",
+        "succeeded_with_warnings",
+        "failed",
+        "blocked"
+      ],
+      "console_stages": [
+        "configure",
+        "preview",
+        "execute",
+        "observe",
+        "recover",
+        "prove"
+      ],
+      "documentation_ref": "docs/features/discovery-and-inventory.md#metadata-sources"
+    },
+    {
+      "kind": "k8s_ingress_gateway",
+      "label": "Kubernetes TLS",
+      "purpose": "Kubernetes TLS discovery from bounded, sanitized observations.",
+      "data_handling": "Inventory Kubernetes Ingress and Gateway TLS metadata; Secret values and private keys are rejected.",
+      "tool": "Discover",
+      "route": "/discovery?tab=sources\u0026kind=k8s_ingress_gateway",
+      "setup_surface": "source_wizard",
+      "permission": "discovery:write",
+      "edition": "core",
+      "execution": "control plane",
+      "configuration": [
+        {
+          "path": "resources",
+          "label": "Observations",
+          "type": "record_list",
+          "required": true,
+          "description": "One or more validated metadata-only observations."
+        }
+      ],
+      "lifecycle": [
+        "not_configured",
+        "available",
+        "queued",
+        "planning",
+        "running",
+        "succeeded",
+        "succeeded_with_warnings",
+        "failed",
+        "blocked"
+      ],
+      "console_stages": [
+        "configure",
+        "preview",
+        "execute",
+        "observe",
+        "recover",
+        "prove"
+      ],
+      "documentation_ref": "docs/features/discovery-and-inventory.md#metadata-sources"
+    },
+    {
+      "kind": "agent",
+      "label": "Agent inventory",
+      "purpose": "Receive signed, tenant-bound inventory from enrolled agents.",
+      "data_handling": "Configured from the Agents tool. The generic discovery-source wizard cannot create a useful agent source.",
+      "tool": "Workloads \u0026 Machines",
+      "route": "/agents",
+      "setup_surface": "contextual",
+      "permission": "agents:write",
+      "edition": "core",
+      "execution": "host or network agent",
+      "configuration": [
+        {
+          "path": "agent_id",
+          "label": "Enrolled agent",
+          "type": "agent_ref",
+          "required": true,
+          "description": "The enrolled agent that signs and reports the observation."
+        }
+      ],
+      "lifecycle": [
+        "not_configured",
+        "available",
+        "queued",
+        "planning",
+        "running",
+        "succeeded",
+        "succeeded_with_warnings",
+        "failed",
+        "blocked"
+      ],
+      "console_stages": [
+        "configure",
+        "preview",
+        "execute",
+        "observe",
+        "recover",
+        "prove"
+      ],
+      "documentation_ref": "docs/features/agent.md"
+    },
+    {
+      "kind": "manual",
+      "label": "Manual evidence import",
+      "purpose": "Import bounded public credential metadata from an approved offline workflow.",
+      "data_handling": "Accepts metadata and non-secret fingerprints only; inline credentials are rejected.",
+      "tool": "Discover",
+      "route": "/discovery?tab=sources\u0026kind=manual",
+      "setup_surface": "contextual",
+      "permission": "discovery:write",
+      "edition": "core",
+      "execution": "control plane",
+      "configuration": [
+        {
+          "path": "findings",
+          "label": "Findings",
+          "type": "record_list",
+          "required": true,
+          "description": "Bounded public metadata records with provenance and fingerprints."
+        }
+      ],
+      "lifecycle": [
+        "not_configured",
+        "available",
+        "queued",
+        "planning",
+        "running",
+        "succeeded",
+        "succeeded_with_warnings",
+        "failed",
+        "blocked"
+      ],
+      "console_stages": [
+        "configure",
+        "preview",
+        "execute",
+        "observe",
+        "recover",
+        "prove"
+      ],
+      "documentation_ref": "docs/features/discovery-and-inventory.md#manual-import"
+    }
+  ]
+}

@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -43,9 +44,12 @@ type Config struct {
 	TagKey          string
 	TagValue        string
 	NamePrefix      string
-	HTTPClient      *http.Client
-	Now             func() time.Time
-	Retry           cloudcert.RetryPolicy
+	// InspectContent is the explicit opt-in to GetSecretValue. The default
+	// metadata-only inventory never calls that API.
+	InspectContent bool
+	HTTPClient     *http.Client
+	Now            func() time.Time
+	Retry          cloudcert.RetryPolicy
 }
 
 // Enumerator is a read-only AWS Secrets Manager certificate-secret source.
@@ -81,9 +85,6 @@ func New(cfg Config) (*Enumerator, error) {
 	if cfg.Retry.Max == 0 && cfg.Retry.Base == 0 {
 		cfg.Retry = cloudcert.DefaultRetry()
 	}
-	if cfg.TagKey == "" && cfg.TagValue == "" {
-		cfg.TagKey, cfg.TagValue = "type", "certificate"
-	}
 	cfg.SecretAccessKey = secrettext.Clone(cfg.SecretAccessKey)
 	cfg.SessionToken = secrettext.Clone(cfg.SessionToken)
 	return &Enumerator{cfg: cfg, host: u.Host}, nil
@@ -98,8 +99,8 @@ func (e *Enumerator) Close() {
 // Name identifies the provider.
 func (e *Enumerator) Name() string { return "aws-secrets-manager" }
 
-// Enumerate lists candidate secrets and returns only those whose value contains
-// parseable certificate material.
+// Enumerate always returns metadata for matching resources. It retrieves values
+// only when InspectContent was explicitly enabled.
 func (e *Enumerator) Enumerate(ctx context.Context) ([]cloudsecret.Found, error) {
 	secrets, err := e.listSecrets(ctx)
 	if err != nil {
@@ -108,6 +109,16 @@ func (e *Enumerator) Enumerate(ctx context.Context) ([]cloudsecret.Found, error)
 	var out []cloudsecret.Found
 	for _, s := range secrets {
 		if !e.matches(s) {
+			continue
+		}
+		provenance := "aws-sm://" + e.cfg.Region + "/" + s.Name
+		out = append(out, cloudsecret.MetadataFound(e.Name(), s.ARN, s.Name, e.cfg.Region, provenance, map[string]string{
+			"secret_name": s.Name, "resource_id": s.ARN, "region": e.cfg.Region,
+			"created_at": s.CreatedAt, "updated_at": s.UpdatedAt,
+			"rotation_enabled": strconv.FormatBool(s.RotationEnabled), "tag_count": strconv.Itoa(len(s.Tags)),
+			"content_inspected": "false",
+		}))
+		if !e.cfg.InspectContent {
 			continue
 		}
 		found, err := e.inspectSecret(ctx, s)
@@ -120,9 +131,12 @@ func (e *Enumerator) Enumerate(ctx context.Context) ([]cloudsecret.Found, error)
 }
 
 type secretSummary struct {
-	Name string
-	ARN  string
-	Tags map[string]string
+	Name            string
+	ARN             string
+	Tags            map[string]string
+	CreatedAt       string
+	UpdatedAt       string
+	RotationEnabled bool
 }
 
 func (e *Enumerator) matches(s secretSummary) bool {
@@ -151,9 +165,12 @@ func (e *Enumerator) listSecrets(ctx context.Context) ([]secretSummary, error) {
 		}
 		var resp struct {
 			SecretList []struct {
-				Name string `json:"Name"`
-				ARN  string `json:"ARN"`
-				Tags []struct {
+				Name            string `json:"Name"`
+				ARN             string `json:"ARN"`
+				CreatedDate     string `json:"CreatedDate"`
+				LastChangedDate string `json:"LastChangedDate"`
+				RotationEnabled bool   `json:"RotationEnabled"`
+				Tags            []struct {
 					Key   string `json:"Key"`
 					Value string `json:"Value"`
 				} `json:"Tags"`
@@ -168,7 +185,10 @@ func (e *Enumerator) listSecrets(ctx context.Context) ([]secretSummary, error) {
 			for _, tag := range s.Tags {
 				tags[tag.Key] = tag.Value
 			}
-			out = append(out, secretSummary{Name: s.Name, ARN: s.ARN, Tags: tags})
+			out = append(out, secretSummary{
+				Name: s.Name, ARN: s.ARN, Tags: tags, CreatedAt: s.CreatedDate,
+				UpdatedAt: s.LastChangedDate, RotationEnabled: s.RotationEnabled,
+			})
 		}
 		if resp.NextToken == "" {
 			break
@@ -192,9 +212,10 @@ func (e *Enumerator) inspectSecret(ctx context.Context, s secretSummary) ([]clou
 		Provenance: provenance,
 		Value:      value,
 		Metadata: map[string]string{
-			"secret_name": s.Name,
-			"resource_id": s.ARN,
-			"region":      e.cfg.Region,
+			"secret_name":       s.Name,
+			"resource_id":       s.ARN,
+			"region":            e.cfg.Region,
+			"content_inspected": "true",
 		},
 	})
 }

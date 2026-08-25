@@ -151,7 +151,7 @@ type SpaceRailProps = {
   orientation: "vertical" | "horizontal";
 };
 
-/** SpaceRail (S-C1): the space switcher. One button per permitted space plus
+/** SpaceRail (S-C1): the tool switcher. One button per permitted tool plus
  * Home; activating a button navigates to that space's landing route, and the
  * active space is derived from the current location — the URL stays the single
  * source of truth, unlike the chrome-only S-B2 chips this replaces. */
@@ -708,7 +708,7 @@ export function AppShell() {
           />
         )}
 
-        <main id="main" ref={mainRef} className="mx-auto min-w-0 w-full max-w-[86rem] flex-1 p-4 md:p-7" tabIndex={-1}>
+        <main id="main" ref={mainRef} className="mx-auto min-w-0 w-full max-w-[104rem] flex-1 p-4 md:p-7" tabIndex={-1}>
           {/* S-C3: pages are lazy chunks; the boundary announces while loading. */}
           <Suspense
             fallback={
@@ -738,9 +738,7 @@ function SeededDemoBanner({ user }: { user: Me | null }) {
   const { t } = useTranslation();
   const hasQueryProvider = useHasAppQueryProvider();
   const isDemoPrincipal =
-    user?.subject === "demo-admin" &&
-    user.email === "demo-admin@trstctl.local" &&
-    user.tenant_id === "11111111-1111-4111-8111-111111111111";
+    user?.subject === "demo-admin" && user.email === "demo-admin@trstctl.local" && user.tenant_id === "11111111-1111-4111-8111-111111111111";
   // Ordinary deployments never pay for the Editions self-test here. Only the
   // exact local-demo principal asks the public license readout to prove that
   // this process is the bound demo deployment before the banner is shown.

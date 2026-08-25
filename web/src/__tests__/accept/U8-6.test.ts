@@ -5,12 +5,12 @@ const basePath = (to: string) => to.split("?")[0] || "/";
 
 describe("U8-6 navigation & IA refresh", () => {
   it("renders task-based groups where every command resolves to one registered route and is RBAC-gated", () => {
-    // S-C1: space-scoped groups across the five spaces (the S-A1 four-band
+    // S-C1: tool-scoped groups across the six focused tools (the S-A1 four-band
     // era ended when the unified shell landed); S-C2 added the two Secrets
     // workspace groups. The certctl-informed carve adds a Machine
     // infrastructure group plus one overview each for Software Trust and Trust
     // Operations; route ownership remains unique.
-    expect(navGroups.length).toBe(15);
+    expect(navGroups.length).toBe(16);
 
     const registered = new Set<string>(appRoutePaths);
     const sidebarItems = navGroups.flatMap((group) => group.items);

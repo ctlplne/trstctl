@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MPL-2.0
 
-// Package cloudsecret discovers certificate material stored inside managed cloud
-// secret managers. It is read-only: providers list secret metadata, fetch each
-// candidate value long enough to inspect it through internal/crypto/certinfo, wipe
-// the value, and return only certificate metadata plus provenance. State changes
-// happen later through the discovery orchestrator, preserving AN-2.
+// Package cloudsecret inventories metadata from managed secret stores. Content
+// inspection is a separate explicit provider option: only then may an adapter
+// fetch a value long enough to inspect it through internal/crypto/certinfo and
+// wipe it. Both modes return non-secret metadata only. State changes happen
+// later through the discovery orchestrator, preserving AN-2.
 package cloudsecret
 
 import (
@@ -24,6 +24,9 @@ const (
 	// FindingKindCertificate is the discovery finding kind emitted for certificate
 	// material imported from a secret manager.
 	FindingKindCertificate = "x509_certificate"
+	// FindingKindSecretResource is emitted for metadata-only inventory without
+	// retrieving the resource value.
+	FindingKindSecretResource = "cloud_secret_resource"
 )
 
 // Secret is one secret-manager value under inspection. Value may contain private
@@ -39,6 +42,7 @@ type Secret struct {
 
 // Found is one certificate discovered inside a managed cloud secret.
 type Found struct {
+	Kind       string
 	Provider   string
 	ResourceID string
 	SecretName string
@@ -46,6 +50,15 @@ type Found struct {
 	Provenance string
 	Cert       certinfo.Info
 	Metadata   map[string]string
+}
+
+// MetadataFound creates a value-free inventory record from a list or metadata
+// response. It is safe to call regardless of content-inspection policy.
+func MetadataFound(provider, resourceID, name, location, provenance string, metadata map[string]string) Found {
+	return Found{
+		Kind: FindingKindSecretResource, Provider: provider, ResourceID: nonempty(resourceID, name),
+		SecretName: name, Location: location, Provenance: provenance, Metadata: cloneMap(metadata),
+	}
 }
 
 // InspectSecret extracts certificate findings from one secret value. Non-certificate
@@ -65,6 +78,7 @@ func InspectSecret(provider string, secret Secret) ([]Found, error) {
 			meta["certificate_index"] = fmt.Sprint(i)
 		}
 		out = append(out, Found{
+			Kind:       FindingKindCertificate,
 			Provider:   provider,
 			ResourceID: nonempty(secret.ResourceID, secret.Name),
 			SecretName: secret.Name,

@@ -1,0 +1,1 @@
+import{t as e}from"./createLucideIcon-C3p2gx1x.js";var t=e(`Play`,[[`polygon`,{points:`6 3 20 12 6 21 6 3`,key:`1oa8hb`}]]);export{t};

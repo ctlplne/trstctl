@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -32,8 +33,10 @@ type Config struct {
 	TagKey     string
 	TagValue   string
 	NamePrefix string
-	HTTPClient *http.Client
-	Retry      cloudcert.RetryPolicy
+	// InspectContent is the explicit opt-in to the value-returning secret GET.
+	InspectContent bool
+	HTTPClient     *http.Client
+	Retry          cloudcert.RetryPolicy
 }
 
 // Enumerator is a read-only Azure Key Vault certificate-secret source.
@@ -66,17 +69,14 @@ func New(cfg Config) (*Enumerator, error) {
 	if cfg.Retry.Max == 0 && cfg.Retry.Base == 0 {
 		cfg.Retry = cloudcert.DefaultRetry()
 	}
-	if cfg.TagKey == "" && cfg.TagValue == "" {
-		cfg.TagKey, cfg.TagValue = "type", "certificate"
-	}
 	return &Enumerator{cfg: cfg, host: u.Host}, nil
 }
 
 // Name identifies the provider.
 func (e *Enumerator) Name() string { return "azure-key-vault" }
 
-// Enumerate lists candidate secrets and returns only those whose value contains
-// parseable certificate material.
+// Enumerate always returns list-response metadata. A value-returning GET occurs
+// only when InspectContent was explicitly enabled.
 func (e *Enumerator) Enumerate(ctx context.Context) ([]cloudsecret.Found, error) {
 	secrets, err := e.listSecrets(ctx)
 	if err != nil {
@@ -85,6 +85,17 @@ func (e *Enumerator) Enumerate(ctx context.Context) ([]cloudsecret.Found, error)
 	var out []cloudsecret.Found
 	for _, s := range secrets {
 		if !e.matches(s) {
+			continue
+		}
+		resourceID := nonempty(s.ID, e.cfg.VaultURL+"/secrets/"+s.Name)
+		provenance := "azure-kv://" + e.host + "/" + s.Name
+		out = append(out, cloudsecret.MetadataFound(e.Name(), resourceID, s.Name, e.host, provenance, map[string]string{
+			"secret_name": s.Name, "resource_id": resourceID, "vault": e.host,
+			"enabled": strconv.FormatBool(s.Enabled), "created_at_unix": strconv.FormatInt(s.CreatedAt, 10),
+			"updated_at_unix": strconv.FormatInt(s.UpdatedAt, 10), "content_type": s.ContentType,
+			"tag_count": strconv.Itoa(len(s.Tags)), "content_inspected": "false",
+		}))
+		if !e.cfg.InspectContent {
 			continue
 		}
 		found, err := e.inspectSecret(ctx, s)
@@ -97,9 +108,13 @@ func (e *Enumerator) Enumerate(ctx context.Context) ([]cloudsecret.Found, error)
 }
 
 type secretSummary struct {
-	ID   string
-	Name string
-	Tags map[string]string
+	ID          string
+	Name        string
+	Tags        map[string]string
+	Enabled     bool
+	CreatedAt   int64
+	UpdatedAt   int64
+	ContentType string
 }
 
 type secretValue struct {
@@ -127,8 +142,14 @@ func (e *Enumerator) listSecrets(ctx context.Context) ([]secretSummary, error) {
 		}
 		var resp struct {
 			Value []struct {
-				ID   string            `json:"id"`
-				Tags map[string]string `json:"tags"`
+				ID          string            `json:"id"`
+				Tags        map[string]string `json:"tags"`
+				ContentType string            `json:"contentType"`
+				Attributes  struct {
+					Enabled bool  `json:"enabled"`
+					Created int64 `json:"created"`
+					Updated int64 `json:"updated"`
+				} `json:"attributes"`
 			} `json:"value"`
 			NextLink string `json:"nextLink"`
 		}
@@ -136,7 +157,10 @@ func (e *Enumerator) listSecrets(ctx context.Context) ([]secretSummary, error) {
 			return nil, fmt.Errorf("azurekv: parse list: %w", err)
 		}
 		for _, s := range resp.Value {
-			out = append(out, secretSummary{ID: s.ID, Name: shortName(s.ID), Tags: s.Tags})
+			out = append(out, secretSummary{
+				ID: s.ID, Name: shortName(s.ID), Tags: s.Tags, Enabled: s.Attributes.Enabled,
+				CreatedAt: s.Attributes.Created, UpdatedAt: s.Attributes.Updated, ContentType: s.ContentType,
+			})
 		}
 		next = resp.NextLink
 	}
@@ -168,9 +192,10 @@ func (e *Enumerator) inspectSecret(ctx context.Context, s secretSummary) ([]clou
 		Provenance: "azure-kv://" + e.host + "/" + s.Name,
 		Value:      candidate,
 		Metadata: map[string]string{
-			"secret_name": s.Name,
-			"resource_id": resourceID,
-			"vault":       e.host,
+			"secret_name":       s.Name,
+			"resource_id":       resourceID,
+			"vault":             e.host,
+			"content_inspected": "true",
 		},
 	})
 }

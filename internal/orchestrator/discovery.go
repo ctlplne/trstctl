@@ -189,6 +189,9 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 		if segment.Excluded {
 			return store.DiscoveryRun{}, fmt.Errorf("orchestrator: discovery segment %q is declared out of scope", segment.Name)
 		}
+		if err := segmentscan.ValidateDeclaredSegment(resolved, segment.Ranges); err != nil {
+			return store.DiscoveryRun{}, fmt.Errorf("orchestrator: discovery segment scope: %w", err)
+		}
 		if err := o.validateDiscoveryNetworkRelay(ctx, tenantID, resolved.RequiredAgentID); err != nil {
 			return store.DiscoveryRun{}, err
 		}

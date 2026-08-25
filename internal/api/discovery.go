@@ -24,6 +24,7 @@ import (
 	"trstctl.com/trstctl/internal/discovery/oauthgrant"
 	"trstctl.com/trstctl/internal/discovery/segmentscan"
 	"trstctl.com/trstctl/internal/discovery/serviceaccount"
+	"trstctl.com/trstctl/internal/discovery/sourcecatalog"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
@@ -43,6 +44,136 @@ type discoverySourceResponse struct {
 	Config    json.RawMessage `json:"config"`
 	CreatedAt time.Time       `json:"created_at"`
 	UpdatedAt time.Time       `json:"updated_at"`
+}
+
+type discoveryPlanPreviewResponse struct {
+	Kind                  string   `json:"kind"`
+	Execution             string   `json:"execution"`
+	Protocol              string   `json:"protocol,omitempty"`
+	ConnectionOrigin      string   `json:"connection_origin"`
+	Segment               string   `json:"segment,omitempty"`
+	NormalizedTargets     []string `json:"normalized_targets,omitempty"`
+	NormalizedTargetCount int      `json:"normalized_target_count"`
+	PreviewTruncated      bool     `json:"preview_truncated"`
+	ExcludedTargetCount   int      `json:"excluded_target_count"`
+	AppliedExclusions     []string `json:"applied_exclusions,omitempty"`
+	ChildJobCount         int      `json:"child_job_count"`
+	Concurrency           int      `json:"concurrency"`
+	QueueDepth            int      `json:"queue_depth"`
+	EstimatedUpperSeconds int      `json:"estimated_upper_seconds"`
+	Permission            string   `json:"permission"`
+	DataHandling          string   `json:"data_handling"`
+	SideEffects           bool     `json:"side_effects"`
+	BlockedReasons        []string `json:"blocked_reasons"`
+}
+
+// listDiscoveryCapabilities serves the exact typed configuration contract used
+// by the console and CLI. It is process capability metadata, but remains behind
+// discovery:read so anonymous callers cannot fingerprint the enabled product.
+func (a *API) listDiscoveryCapabilities(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.tenant(r); !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	a.writeJSON(w, http.StatusOK, sourcecatalog.All())
+}
+
+// previewDiscoveryPlan is a state-free server oracle for the exact scope the
+// candidate would accept. The browser does not recreate segment, relay, range,
+// exclusion, or provider policy decisions locally.
+func (a *API) previewDiscoveryPlan(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	var req discoverySourceRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	if strings.TrimSpace(req.Name) == "" {
+		req.Name = "Discovery plan preview"
+	}
+	cfg, err := validateDiscoverySourceRequest(req)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	if err := a.requireDiscoveryCredentialRefsAllowed(cfg); err != nil {
+		a.writeError(w, err)
+		return
+	}
+	capability, _ := sourcecatalog.Find(strings.TrimSpace(req.Kind))
+	preview := discoveryPlanPreviewResponse{
+		Kind: req.Kind, Execution: capability.Execution, ConnectionOrigin: capability.Execution,
+		Permission: capability.Permission, DataHandling: capability.DataHandling,
+		SideEffects: false, BlockedReasons: []string{}, AppliedExclusions: []string{},
+		ChildJobCount: 1,
+	}
+	if req.Kind == "network" || req.Kind == "ssh" {
+		intent, resolveErr := segmentscan.Resolve(req.Kind, cfg)
+		if resolveErr != nil {
+			a.writeError(w, errStatus(http.StatusBadRequest, resolveErr.Error()))
+			return
+		}
+		segment, segmentErr := a.store.GetDiscoverySegmentByName(r.Context(), tenantID, intent.Segment)
+		if segmentErr != nil {
+			message := "declared segment could not be read"
+			if store.IsNotFound(segmentErr) {
+				message = "segment must be declared before previewing a network or SSH source"
+			}
+			a.writeError(w, errStatus(http.StatusBadRequest, message))
+			return
+		}
+		if segment.Excluded {
+			a.writeError(w, errStatus(http.StatusBadRequest, "an excluded segment cannot back an executable discovery source"))
+			return
+		}
+		if scopeErr := segmentscan.ValidateDeclaredSegment(intent, segment.Ranges); scopeErr != nil {
+			a.writeError(w, errStatus(http.StatusBadRequest, scopeErr.Error()))
+			return
+		}
+		if relayErr := a.validateDiscoveryRelay(r.Context(), tenantID, intent.RequiredAgentID); relayErr != nil {
+			a.writeError(w, relayErr)
+			return
+		}
+		const previewTargetLimit = 100
+		preview.Protocol = intent.Mode
+		preview.ConnectionOrigin = "eligible active network-role relay"
+		if intent.RequiredAgentID != "" {
+			preview.ConnectionOrigin = "network relay " + intent.RequiredAgentID
+		}
+		preview.Segment = intent.Segment
+		preview.NormalizedTargetCount = len(intent.Targets)
+		preview.NormalizedTargets = append([]string(nil), intent.Targets...)
+		if len(preview.NormalizedTargets) > previewTargetLimit {
+			preview.NormalizedTargets = preview.NormalizedTargets[:previewTargetLimit]
+			preview.PreviewTruncated = true
+		}
+		preview.ExcludedTargetCount = intent.ExcludedTargets
+		preview.AppliedExclusions = append([]string(nil), intent.AppliedExclusions...)
+		preview.Concurrency = 16
+		preview.QueueDepth = 256
+		// One bounded handshake attempt can consume roughly ten seconds. This is
+		// a deliberately conservative upper estimate, not a completion promise.
+		preview.EstimatedUpperSeconds = ((len(intent.Targets) + preview.Concurrency - 1) / preview.Concurrency) * 10
+	}
+	a.writeJSON(w, http.StatusOK, preview)
+}
+
+func (a *API) validateDiscoveryRelay(ctx context.Context, tenantID, relayAgentID string) error {
+	if relayAgentID == "" {
+		return nil
+	}
+	agent, err := a.store.GetAgent(ctx, tenantID, relayAgentID)
+	if err != nil {
+		return errStatus(http.StatusBadRequest, "relay_agent_id must name an enrolled tenant agent")
+	}
+	if agent.Status == "offboarded" || !sourceKindsContain(agent.Roles, segmentscan.RequiredRoleNetwork) {
+		return errStatus(http.StatusBadRequest, "relay_agent_id must name an active network-role agent")
+	}
+	return nil
 }
 
 type discoverySegmentRequest struct {
@@ -522,6 +653,12 @@ func (a *API) createDiscoverySource(w http.ResponseWriter, r *http.Request) {
 			if segment.Excluded {
 				return 0, nil, errStatus(http.StatusBadRequest, "an excluded segment cannot back an executable discovery source")
 			}
+			if err := segmentscan.ValidateDeclaredSegment(intent, segment.Ranges); err != nil {
+				return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			}
+			if err := a.validateDiscoveryRelay(ctx, tenantID, intent.RequiredAgentID); err != nil {
+				return 0, nil, err
+			}
 		}
 		if kind == adcsdiscovery.SourceKind {
 			intent, resolveErr := adcsdiscovery.ResolveInventoryIntent(cfg)
@@ -834,10 +971,8 @@ func validateDiscoverySourceRequest(req discoverySourceRequest) (json.RawMessage
 	if req.Name == "" {
 		return nil, errStatus(http.StatusBadRequest, "name is required")
 	}
-	switch req.Kind {
-	case "network", "ssh", adcsdiscovery.SourceKind, "cloud_certificate", "cloud_secret", "ct_log", "drift", "secret_store", apikey.SourceKind, "agent", "manual", nhi.SourceKind, oauthgrant.SourceKind, serviceaccount.SourceKind, nhibehavior.SourceKind, compromise.SourceKind, k8stls.SourceKind:
-	default:
-		return nil, errStatus(http.StatusBadRequest, "kind must be one of network, ssh, adcs, cloud_certificate, cloud_secret, ct_log, drift, secret_store, api_key, agent, manual, nhi_cross_surface, oauth_grant, service_account, nhi_behavior, credential_compromise, k8s_ingress_gateway")
+	if _, ok := sourcecatalog.Find(req.Kind); !ok {
+		return nil, errStatus(http.StatusBadRequest, "kind must be one of "+strings.Join(sourcecatalog.Kinds(), ", "))
 	}
 	cfg := req.Config
 	if len(cfg) == 0 {
@@ -849,6 +984,9 @@ func validateDiscoverySourceRequest(req discoverySourceRequest) (json.RawMessage
 	}
 	if containsInlineSecret(obj) {
 		return nil, errStatus(http.StatusBadRequest, "config may contain credential references, not inline secret values")
+	}
+	if err := sourcecatalog.ValidateConfig(req.Kind, cfg); err != nil {
+		return nil, errStatus(http.StatusBadRequest, err.Error())
 	}
 	if req.Kind == "network" || req.Kind == "ssh" {
 		if _, err := segmentscan.Resolve(req.Kind, cfg); err != nil {
@@ -913,6 +1051,9 @@ func validateDiscoverySegmentRequest(req discoverySegmentRequest) (store.Discove
 			return store.DiscoverySegment{}, errStatus(http.StatusBadRequest, "segment ranges must be non-empty and at most 4096 bytes each")
 		}
 		ranges = append(ranges, value)
+	}
+	if err := segmentscan.ValidateDeclarations(ranges); err != nil {
+		return store.DiscoverySegment{}, errStatus(http.StatusBadRequest, err.Error())
 	}
 	staleness := req.StalenessHours
 	if staleness == 0 {

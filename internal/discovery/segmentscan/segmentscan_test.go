@@ -36,6 +36,55 @@ func TestResolveRejectsUnboundAndOversizedCommands(t *testing.T) {
 	}
 }
 
+func TestResolveNormalizesRangesAndAppliesExactExclusions(t *testing.T) {
+	intent, err := segmentscan.Resolve("network", json.RawMessage(`{
+		"targets":["api.example.test:443","api.example.test:8443"],
+		"ranges":["192.0.2.10-192.0.2.12"],
+		"ports":[443,8443],
+		"exclude_targets":["api.example.test:8443","192.0.2.11"],
+		"exclude_cidrs":["192.0.2.12/32"],
+		"exclude_ports":[8443],
+		"segment":"edge"
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(intent.Targets, ","); got != "192.0.2.10:443,api.example.test:443" {
+		t.Fatalf("normalized included targets = %q", got)
+	}
+	if intent.ExcludedTargets != 6 || len(intent.AppliedExclusions) == 0 {
+		t.Fatalf("exclusion evidence = %+v", intent)
+	}
+}
+
+func TestResolveRejectsUnboundedRangeAndInvalidExclusion(t *testing.T) {
+	if _, err := segmentscan.Resolve("network", json.RawMessage(`{
+		"ranges":["192.0.2.1-192.0.42.1"],"ports":[443],"segment":"edge"
+	}`)); err == nil || !strings.Contains(err.Error(), "maximum") {
+		t.Fatalf("oversized explicit range error = %v", err)
+	}
+	if _, err := segmentscan.Resolve("network", json.RawMessage(`{
+		"targets":["192.0.2.1:443"],"exclude_cidrs":["not-a-cidr"],"segment":"edge"
+	}`)); err == nil || !strings.Contains(err.Error(), "exclude_cidrs") {
+		t.Fatalf("invalid exclusion error = %v", err)
+	}
+}
+
+func TestValidateDeclaredSegmentContainsEveryNormalizedTarget(t *testing.T) {
+	intent, err := segmentscan.Resolve("network", json.RawMessage(`{
+		"targets":["api.example.test:443"],"cidrs":["192.0.2.0/30"],"ports":[443],"segment":"edge"
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := segmentscan.ValidateDeclaredSegment(intent, []string{"api.example.test", "192.0.2.0/30"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := segmentscan.ValidateDeclaredSegment(intent, []string{"api.example.test", "198.51.100.0/24"}); err == nil || !strings.Contains(err.Error(), "outside declared segment") {
+		t.Fatalf("out-of-scope target error = %v", err)
+	}
+}
+
 func TestValidateReportBindsModeTargetsCountsAndMetadata(t *testing.T) {
 	intent := segmentscan.Intent{
 		Execution: segmentscan.ExecutionRelay, Mode: segmentscan.ModeTLS,

@@ -15,6 +15,11 @@ import (
 )
 
 func TestValidateDiscoverySourceRequiresCredentialReferences(t *testing.T) {
+	if _, err := validateDiscoverySourceRequest(discoverySourceRequest{
+		Kind: "cloud_certificate", Name: "empty-cloud-source", Config: json.RawMessage(`{}`),
+	}); err == nil {
+		t.Fatal("empty cloud source config must fail before an unusable source is persisted")
+	}
 	_, err := validateDiscoverySourceRequest(discoverySourceRequest{
 		Kind: "cloud_certificate",
 		Name: "bad-inline-cloud-credential",

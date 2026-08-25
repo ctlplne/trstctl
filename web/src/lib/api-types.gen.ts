@@ -2010,6 +2010,47 @@ export interface DeploymentTriState {
   verify_failed: number;
 }
 
+export interface DiscoveryCapability {
+  configuration: DiscoveryCapabilityField[];
+  console_stages: string[];
+  data_handling: string;
+  documentation_ref: string;
+  edition: string;
+  execution: string;
+  kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh";
+  label: string;
+  lifecycle: string[];
+  permission: string;
+  providers?: DiscoveryCapabilityProvider[];
+  purpose: string;
+  route: string;
+  setup_surface: "source_wizard" | "contextual";
+  tool: string;
+}
+
+export interface DiscoveryCapabilityCatalog {
+  items: DiscoveryCapability[];
+  schema_version: number;
+}
+
+export interface DiscoveryCapabilityField {
+  advanced?: boolean;
+  description: string;
+  label: string;
+  path: string;
+  required: boolean;
+  secret_ref?: boolean;
+  type: string;
+}
+
+export interface DiscoveryCapabilityProvider {
+  fields: string[];
+  id: string;
+  label: string;
+  least_privilege: string;
+  preferred_credential: string;
+}
+
 export interface DiscoveryCoverage {
   classes: DiscoveryCoverageClass[];
   generated_at: string;
@@ -2080,7 +2121,7 @@ export interface DiscoveryMonitoringSource {
   failed_run_count: number;
   finding_count: number;
   findings_path: string;
-  kind: "network" | "ssh" | "adcs" | "cloud_certificate" | "cloud_secret" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual" | "nhi_cross_surface" | "oauth_grant" | "service_account" | "nhi_behavior" | "credential_compromise" | "k8s_ingress_gateway";
+  kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh";
   last_discovery_at?: string;
   last_run_completed_at?: string;
   last_run_error: string;
@@ -2107,6 +2148,27 @@ export interface DiscoveryMonitoringSummary {
   run_count: number;
   scheduled_source_count: number;
   source_count: number;
+}
+
+export interface DiscoveryPlanPreview {
+  applied_exclusions?: string[];
+  blocked_reasons: string[];
+  child_job_count: number;
+  concurrency: number;
+  connection_origin: string;
+  data_handling: string;
+  estimated_upper_seconds: number;
+  excluded_target_count: number;
+  execution: string;
+  kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh";
+  normalized_target_count: number;
+  normalized_targets?: string[];
+  permission: string;
+  preview_truncated: boolean;
+  protocol?: string;
+  queue_depth: number;
+  segment?: string;
+  side_effects: boolean;
 }
 
 export interface DiscoveryProvenanceSummary {
@@ -2211,7 +2273,7 @@ export interface DiscoverySource {
   config: Record<string, unknown>;
   created_at: string;
   id: string;
-  kind: "network" | "ssh" | "adcs" | "cloud_certificate" | "cloud_secret" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual" | "nhi_cross_surface" | "oauth_grant" | "service_account" | "nhi_behavior" | "credential_compromise" | "k8s_ingress_gateway";
+  kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh";
   name: string;
   tenant_id: string;
   updated_at: string;
@@ -2224,7 +2286,7 @@ export interface DiscoverySourceList {
 
 export interface DiscoverySourceRequest {
   config?: Record<string, unknown>;
-  kind: "network" | "ssh" | "adcs" | "cloud_certificate" | "cloud_secret" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual" | "nhi_cross_surface" | "oauth_grant" | "service_account" | "nhi_behavior" | "credential_compromise" | "k8s_ingress_gateway";
+  kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh";
   name: string;
 }
 

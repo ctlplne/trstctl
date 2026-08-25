@@ -24,14 +24,15 @@ describe("UX-03 task-based navigation", () => {
     // Trust Operations overview; moving existing routes adds no rows. Ceiling: 40.
     expect(allSidebarItems.length).toBeLessThanOrEqual(40);
     expect(navGroups.map((group) => messages[group.labelKey].defaultMessage)).toEqual([
+      "Overview",
       "Inventory",
       "Issue & automate",
-      "Store & engines",
-      "Access & sharing",
-      "Delivery & scanning",
       "Workload identity",
       "SSH trust",
       "Infrastructure",
+      "Store & engines",
+      "Access & sharing",
+      "Delivery & scanning",
       "Overview",
       "Overview",
       "Detect & respond",

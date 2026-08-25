@@ -32,7 +32,7 @@ export function PageHeader({
   return (
     <div className={cn("mb-7 border-b border-border/90 pb-5", className)}>
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-        <div className="min-w-0 max-w-3xl">
+        <div className="min-w-0 max-w-4xl">
           {eyebrow && (
             <Eyebrow as="p" className="mb-1.5">
               {eyebrow}
@@ -43,7 +43,7 @@ export function PageHeader({
           </h1>
           <div className="mt-2 min-w-0" data-testid="page-depth-answer">
             <span className="sr-only">{t("pageHeader.answer")}</span>
-            <p className="max-w-3xl text-body text-muted-foreground">{description ?? t("pageHeader.answerFallback")}</p>
+            <p className="max-w-4xl text-body text-muted-foreground">{description ?? t("pageHeader.answerFallback")}</p>
           </div>
         </div>
         {actions && (
@@ -64,7 +64,7 @@ export function PageHeader({
           <span className="font-medium group-open:hidden">{t("pageHeader.openDetails")}</span>
           <span className="hidden font-medium group-open:inline">{t("pageHeader.closeDetails")}</span>
         </summary>
-        <div className="mt-2 max-w-3xl border-s-2 border-border ps-3 text-caption leading-relaxed text-muted-foreground">
+        <div className="mt-2 max-w-4xl border-s-2 border-border ps-3 text-caption leading-relaxed text-muted-foreground">
           {technicalDetails ?? t("pageHeader.proveFallback")}
         </div>
       </details>

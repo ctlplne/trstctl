@@ -29,6 +29,7 @@ const { apiMock } = vi.hoisted(() => ({
     transitionIdentity: vi.fn(),
     endpointVerifications: vi.fn(),
     codeSigningIdentities: vi.fn(),
+    discoveryMonitoring: vi.fn(),
     ownershipAttribution: vi.fn(),
   },
 }));
@@ -183,6 +184,8 @@ describe("auth + dashboards", () => {
     });
     apiMock.codeSigningIdentities.mockReset();
     apiMock.codeSigningIdentities.mockResolvedValue({ items: [], total: 0, verified_count: 0, not_published_count: 0 });
+    apiMock.discoveryMonitoring.mockReset();
+    apiMock.discoveryMonitoring.mockResolvedValue({ summary: { source_count: 0, open_finding_count: 0, failed_run_count: 0 } });
     apiMock.ownershipAttribution.mockReset();
     apiMock.ownershipAttribution.mockResolvedValue({ generated_at: dayFromNow(0), coverage: [], summary: { total: 0, attributed: 0, orphaned: 0 }, items: [] });
     apiMock.connectorDeliveries.mockResolvedValue({ items: [] });
@@ -414,10 +417,10 @@ describe("auth + dashboards", () => {
     expect(await screen.findByRole("heading", { name: "Certificates" })).toBeInTheDocument();
     const nav = screen.getByRole("navigation", { name: "Primary" });
     expect(within(nav).getByRole("link", { name: /Certificates/i })).toHaveAttribute("href", "/certificates");
-    // S-C1: Discovery lives in the Posture & response space — for a viewer the
-    // rail advertises that space, while privileged rows stay hidden.
-    const rail = screen.getByRole("navigation", { name: /Spaces/i });
-    expect(within(rail).getByRole("button", { name: "Trust Operations" })).toBeInTheDocument();
+    // Discover is its own tool. The tool rail remains visible while
+    // permission-gated mutation rows stay hidden.
+    const rail = screen.getByRole("navigation", { name: /Tools/i });
+    expect(within(rail).getByRole("button", { name: "Operations" })).toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: /Request a certificate/i })).not.toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: /Approvals/i })).not.toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: /^Change history$/i })).not.toBeInTheDocument();
@@ -505,7 +508,10 @@ describe("auth + dashboards", () => {
   }
 
   function kpiTile(dash: HTMLElement, label: RegExp): HTMLElement {
-    const labelNode = within(dash).getByText(label);
+    const labelNode = within(dash)
+      .getAllByText(label)
+      .find((node) => node.closest(".group"));
+    if (!labelNode) throw new Error(`no KPI label for ${label}`);
     const tile = labelNode.closest("a") ?? labelNode.closest("div.group");
     if (!tile) throw new Error(`no KPI tile container for ${label}`);
     return tile as HTMLElement;
@@ -598,17 +604,18 @@ describe("auth + dashboards", () => {
     renderAt("/");
     const dash = await screen.findByRole("region", { name: "Home" });
     const queue = await within(dash).findByRole("list", { name: "Highest-priority credentials" });
-    expect(within(queue).getByText("Certificate Lifecycle")).toBeInTheDocument();
+    expect(within(queue).getByText("Certificates")).toBeInTheDocument();
     expect(within(queue).getByText("Machines may lose trust after this credential expires.")).toBeInTheDocument();
     expect(within(queue).getByText("Automation not proven on Home")).toBeInTheDocument();
     expect(within(queue).getByText("Owned by Payments team")).toBeInTheDocument();
     expect(within(queue).queryByText("No accountable owner")).not.toBeInTheDocument();
     expect(within(queue).getByText("Assign the Payments team, verify the alert route, then renew.")).toBeInTheDocument();
 
-    const health = within(dash).getByRole("list", { name: "Workspace health" });
-    expect(within(health).getByRole("link", { name: /Certificate Lifecycle/ })).toHaveAttribute("href", "/certificates");
+    const health = within(dash).getByRole("list", { name: "Tool health" });
+    expect(within(health).getByRole("link", { name: /Discover/ })).toHaveAttribute("href", "/discovery");
+    expect(within(health).getByRole("link", { name: /Certificates/ })).toHaveAttribute("href", "/certificates");
     expect(within(health).getByRole("link", { name: /Software Trust/ })).toHaveAttribute("href", "/codesign");
-    expect(within(health).getByRole("link", { name: /Trust Operations/ })).toHaveAttribute("href", "/trust-operations");
+    expect(within(health).getByRole("link", { name: /Operations/ })).toHaveAttribute("href", "/trust-operations");
   });
 
   it("treats the backend zero-time sentinel as an unknown deadline", async () => {

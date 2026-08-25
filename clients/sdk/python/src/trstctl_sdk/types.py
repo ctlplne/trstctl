@@ -2848,6 +2848,63 @@ DeploymentTriState = TypedDict(
     total=False,
 )
 
+DiscoveryCapability = TypedDict(
+    'DiscoveryCapability',
+    {
+        'configuration': list[dict[str, Any]],
+        'console_stages': list[str],
+        'data_handling': str,
+        'documentation_ref': str,
+        'edition': str,
+        'execution': str,
+        'kind': str,
+        'label': str,
+        'lifecycle': list[str],
+        'permission': str,
+        'providers': list[dict[str, Any]],
+        'purpose': str,
+        'route': str,
+        'setup_surface': str,
+        'tool': str,
+    },
+    total=False,
+)
+
+DiscoveryCapabilityCatalog = TypedDict(
+    'DiscoveryCapabilityCatalog',
+    {
+        'items': list[dict[str, Any]],
+        'schema_version': int,
+    },
+    total=False,
+)
+
+DiscoveryCapabilityField = TypedDict(
+    'DiscoveryCapabilityField',
+    {
+        'advanced': bool,
+        'description': str,
+        'label': str,
+        'path': str,
+        'required': bool,
+        'secret_ref': bool,
+        'type': str,
+    },
+    total=False,
+)
+
+DiscoveryCapabilityProvider = TypedDict(
+    'DiscoveryCapabilityProvider',
+    {
+        'fields': list[str],
+        'id': str,
+        'label': str,
+        'least_privilege': str,
+        'preferred_credential': str,
+    },
+    total=False,
+)
+
 DiscoveryCoverage = TypedDict(
     'DiscoveryCoverage',
     {
@@ -2975,6 +3032,31 @@ DiscoveryMonitoringSummary = TypedDict(
         'run_count': int,
         'scheduled_source_count': int,
         'source_count': int,
+    },
+    total=False,
+)
+
+DiscoveryPlanPreview = TypedDict(
+    'DiscoveryPlanPreview',
+    {
+        'applied_exclusions': list[str],
+        'blocked_reasons': list[str],
+        'child_job_count': int,
+        'concurrency': int,
+        'connection_origin': str,
+        'data_handling': str,
+        'estimated_upper_seconds': int,
+        'excluded_target_count': int,
+        'execution': str,
+        'kind': str,
+        'normalized_target_count': int,
+        'normalized_targets': list[str],
+        'permission': str,
+        'preview_truncated': bool,
+        'protocol': str,
+        'queue_depth': int,
+        'segment': str,
+        'side_effects': bool,
     },
     total=False,
 )

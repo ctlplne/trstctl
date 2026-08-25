@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"trstctl.com/trstctl/internal/discovery/sourcecatalog"
 	"trstctl.com/trstctl/internal/issuancerequest"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/servedstatus"
@@ -1551,7 +1552,7 @@ func componentSchemas() map[string]*Schema {
 		"residuals":  {Type: "array", Items: ref("CTLogSubmissionNote")},
 	}, "capability", "queued", "logs")
 
-	discoverySourceKinds := []string{"network", "ssh", "adcs", "cloud_certificate", "cloud_secret", "ct_log", "drift", "secret_store", "api_key", "agent", "manual", "nhi_cross_surface", "oauth_grant", "service_account", "nhi_behavior", "credential_compromise", "k8s_ingress_gateway"}
+	discoverySourceKinds := sourcecatalog.Kinds()
 	discoverySource := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "kind": {Type: "string", Enum: discoverySourceKinds},
 		"name": str(), "config": {Type: "object"}, "created_at": timestamp(), "updated_at": timestamp(),
@@ -1559,6 +1560,35 @@ func componentSchemas() map[string]*Schema {
 	discoverySourceReq := object(map[string]*Schema{
 		"kind": {Type: "string", Enum: discoverySourceKinds}, "name": str(), "config": {Type: "object"},
 	}, "kind", "name")
+	discoveryCapabilityField := object(map[string]*Schema{
+		"path": str(), "label": str(), "type": str(), "required": {Type: "boolean"},
+		"secret_ref": {Type: "boolean"}, "advanced": {Type: "boolean"}, "description": str(),
+	}, "path", "label", "type", "required", "description")
+	discoveryCapabilityProvider := object(map[string]*Schema{
+		"id": str(), "label": str(), "least_privilege": str(), "preferred_credential": str(),
+		"fields": {Type: "array", Items: str()},
+	}, "id", "label", "least_privilege", "preferred_credential", "fields")
+	discoveryCapability := object(map[string]*Schema{
+		"kind": {Type: "string", Enum: discoverySourceKinds}, "label": str(), "purpose": str(), "data_handling": str(),
+		"tool": str(), "route": str(), "setup_surface": {Type: "string", Enum: []string{"source_wizard", "contextual"}},
+		"permission": str(), "edition": str(), "execution": str(),
+		"configuration": {Type: "array", Items: ref("DiscoveryCapabilityField")},
+		"providers":     {Type: "array", Items: ref("DiscoveryCapabilityProvider")},
+		"lifecycle":     {Type: "array", Items: str()}, "console_stages": {Type: "array", Items: str()}, "documentation_ref": str(),
+	}, "kind", "label", "purpose", "data_handling", "tool", "route", "setup_surface", "permission", "edition", "execution", "configuration", "lifecycle", "console_stages", "documentation_ref")
+	discoveryCapabilityCatalog := object(map[string]*Schema{
+		"schema_version": {Type: "integer"}, "items": {Type: "array", Items: ref("DiscoveryCapability")},
+	}, "schema_version", "items")
+	discoveryPlanPreview := object(map[string]*Schema{
+		"kind": {Type: "string", Enum: discoverySourceKinds}, "execution": str(), "protocol": str(),
+		"connection_origin": str(), "segment": str(),
+		"normalized_targets": {Type: "array", Items: str()}, "normalized_target_count": {Type: "integer"},
+		"preview_truncated": {Type: "boolean"}, "excluded_target_count": {Type: "integer"},
+		"applied_exclusions": {Type: "array", Items: str()}, "child_job_count": {Type: "integer"},
+		"concurrency": {Type: "integer"}, "queue_depth": {Type: "integer"}, "estimated_upper_seconds": {Type: "integer"},
+		"permission": str(), "data_handling": str(), "side_effects": {Type: "boolean"},
+		"blocked_reasons": {Type: "array", Items: str()},
+	}, "kind", "execution", "connection_origin", "normalized_target_count", "preview_truncated", "excluded_target_count", "child_job_count", "concurrency", "queue_depth", "estimated_upper_seconds", "permission", "data_handling", "side_effects", "blocked_reasons")
 	discoverySegmentReq := object(map[string]*Schema{
 		"name": str(), "ranges": {Type: "array", Items: str()},
 		"staleness_hours": {Type: "integer"}, "excluded": {Type: "boolean"},
@@ -5045,6 +5075,11 @@ func componentSchemas() map[string]*Schema {
 		"DiscoverySource":                          discoverySource,
 		"DiscoverySourceRequest":                   discoverySourceReq,
 		"DiscoverySourceList":                      list("DiscoverySource"),
+		"DiscoveryCapabilityField":                 discoveryCapabilityField,
+		"DiscoveryCapabilityProvider":              discoveryCapabilityProvider,
+		"DiscoveryCapability":                      discoveryCapability,
+		"DiscoveryCapabilityCatalog":               discoveryCapabilityCatalog,
+		"DiscoveryPlanPreview":                     discoveryPlanPreview,
 		"DiscoverySegment":                         discoverySegment,
 		"DiscoverySegmentRequest":                  discoverySegmentReq,
 		"DiscoverySchedule":                        discoverySchedule,

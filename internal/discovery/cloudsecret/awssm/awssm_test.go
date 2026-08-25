@@ -85,6 +85,7 @@ func TestAWSSecretsManagerEnumerateCertificateSecrets(t *testing.T) {
 		TagKey:          "type",
 		TagValue:        "certificate",
 		NamePrefix:      "tls/",
+		InspectContent:  true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -95,10 +96,15 @@ func TestAWSSecretsManagerEnumerateCertificateSecrets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Enumerate: %v", err)
 	}
-	if len(found) != 1 {
-		t.Fatalf("found %d TLS secrets, want 1: %+v", len(found), found)
+	if len(found) != 2 {
+		t.Fatalf("found %d metadata/certificate records, want 2: %+v", len(found), found)
 	}
 	got := found[0]
+	for _, item := range found {
+		if item.Kind == "x509_certificate" {
+			got = item
+		}
+	}
 	if got.Provider != "aws-secrets-manager" || got.Location != "us-east-1" {
 		t.Fatalf("bad provider/location: %+v", got)
 	}
@@ -117,6 +123,29 @@ func TestAWSSecretsManagerEnumerateCertificateSecrets(t *testing.T) {
 	for _, target := range seen {
 		if target != "secretsmanager.ListSecrets" && target != "secretsmanager.GetSecretValue" {
 			t.Fatalf("AWS SM discovery invoked non-read-only operation %q; seen=%v", target, seen)
+		}
+	}
+}
+
+func TestAWSSecretsManagerMetadataModeNeverGetsAValue(t *testing.T) {
+	var seen []string
+	srv := awsSMDouble(map[string]string{"app/db": "do-not-read"}, map[string]map[string]string{"app/db": {}}, &seen)
+	defer srv.Close()
+	e, err := awssm.New(awssm.Config{
+		Region: "us-east-1", Endpoint: srv.URL, AccessKeyID: "AKID",
+		SecretAccessKey: []byte("SECRET"), HTTPClient: srv.Client(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Close()
+	found, err := e.Enumerate(context.Background())
+	if err != nil || len(found) != 1 || found[0].Kind != "cloud_secret_resource" {
+		t.Fatalf("metadata inventory = %+v err=%v", found, err)
+	}
+	for _, target := range seen {
+		if target == "secretsmanager.GetSecretValue" {
+			t.Fatalf("metadata-only mode retrieved a secret value: %v", seen)
 		}
 	}
 }

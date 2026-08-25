@@ -45,17 +45,19 @@ describe("nav completeness (S-A1)", () => {
 
   it("keeps the space-scoped groups as the canonical structure (S-C1)", () => {
     expect(navGroups.map((group) => group.labelKey)).toEqual([
-      // Certificate Lifecycle
+      // Discover
+      "nav.group.overview",
+      // Certificates
       "nav.group.inventory",
       "nav.group.issueAutomate",
+      // Workloads & Machines
+      "nav.group.workloadIdentity",
+      "nav.group.sshTrust",
+      "nav.group.infrastructure",
       // Secrets (S-C2: the workspaces are routes, grouped in the sidebar)
       "nav.group.secretsEngines",
       "nav.group.secretsAccess",
       "nav.group.secretsDelivery",
-      // Machine & Workload Trust
-      "nav.group.workloadIdentity",
-      "nav.group.sshTrust",
-      "nav.group.infrastructure",
       // Software Trust
       "nav.group.overview",
       // Trust Operations

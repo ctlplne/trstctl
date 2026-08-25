@@ -924,19 +924,23 @@ export const messages = {
   "dashboard.attention.automationLabel": { defaultMessage: "Automation", description: "Accessible Home automation label." },
   "dashboard.attention.ownerLabel": { defaultMessage: "Accountability", description: "Accessible Home owner label." },
   "dashboard.attention.nextActionLabel": { defaultMessage: "Safest next action", description: "Accessible Home next-action label." },
-  "dashboard.workspaceHealth.title": { defaultMessage: "Workspace health", description: "Home cross-workspace health heading." },
+  "dashboard.workspaceHealth.title": { defaultMessage: "Tool health", description: "Home cross-tool health heading." },
   "dashboard.workspaceHealth.help": {
-    defaultMessage: "A compact door into each trust domain. Missing reads say unavailable instead of showing a safe zero.",
-    description: "Home cross-workspace health explanation.",
+    defaultMessage: "One current signal from each tool. Missing evidence says unavailable instead of pretending everything is healthy.",
+    description: "Home cross-tool health explanation.",
   },
-  "dashboard.workspaceHealth.label": { defaultMessage: "Workspace health", description: "Accessible Home workspace-health list label." },
+  "dashboard.workspaceHealth.label": { defaultMessage: "Tool health", description: "Accessible Home tool-health list label." },
   "dashboard.workspaceHealth.loading": { defaultMessage: "Checking current evidence…", description: "Home workspace-health loading state." },
   "dashboard.workspaceHealth.unavailable": { defaultMessage: "Current evidence unavailable", description: "Home workspace-health unavailable state." },
+  "dashboard.workspaceHealth.discovery": {
+    defaultMessage: "{sources} sources · {findings} open findings",
+    description: "Home Discover health summary.",
+  },
   "dashboard.workspaceHealth.certificates": { defaultMessage: "{count} expire within 7 days", description: "Home Certificate Lifecycle health summary." },
   "dashboard.workspaceHealth.machines": { defaultMessage: "{count} machine identities tracked", description: "Home Machine and Workload Trust summary." },
   "dashboard.workspaceHealth.secrets": { defaultMessage: "{count} stored secrets tracked", description: "Home Secrets and Access summary." },
   "dashboard.workspaceHealth.signing": { defaultMessage: "{failures} failures across {total} recent operations", description: "Home Software Trust summary." },
-  "dashboard.workspaceHealth.incidents": { defaultMessage: "{count} open incidents", description: "Home Trust Operations summary." },
+  "dashboard.workspaceHealth.incidents": { defaultMessage: "{count} open incidents", description: "Home Operations summary." },
   "dashboard.moreActions": {
     defaultMessage: "More actions",
     description: "Dashboard disclosure containing secondary discovery and rotation actions.",
@@ -1698,7 +1702,7 @@ export const messages = {
     description: "C5: label for the domains CT monitoring watches.",
   },
   "discovery.page.title": {
-    defaultMessage: "Find unmanaged credentials",
+    defaultMessage: "Discover",
     description: "Quiet route title that describes the operator's discovery goal in plain language.",
   },
   "discovery.page.answer": {
@@ -4279,7 +4283,7 @@ export const messages = {
     description: "Primary navigation item.",
   },
   "nav.module.certificates": {
-    defaultMessage: "Certificate Lifecycle",
+    defaultMessage: "Certificates",
     description: "Space switcher label: discover, issue, deploy, renew, revoke, and monitor certificates.",
   },
   "nav.spaceQuestion.certificates": {
@@ -4287,7 +4291,7 @@ export const messages = {
     description: "Plain-language orientation question shown inside Certificate Lifecycle.",
   },
   "nav.module.secrets": {
-    defaultMessage: "Secrets & Access",
+    defaultMessage: "Secrets",
     description: "Space switcher label: secret storage, access, rotation, synchronization, and scanning.",
   },
   "nav.spaceQuestion.secrets": {
@@ -4307,7 +4311,7 @@ export const messages = {
     description: "Module switcher label: agents, devices, and workload identity.",
   },
   "nav.space.workload": {
-    defaultMessage: "Machine & Workload Trust",
+    defaultMessage: "Workloads & Machines",
     description: "Space switcher label: agents, SPIFFE workload identity, machine credentials, and SSH trust.",
   },
   "nav.spaceQuestion.workload": {
@@ -4323,19 +4327,27 @@ export const messages = {
     description: "Plain-language orientation question shown inside Software Trust.",
   },
   "nav.space.platform": {
-    defaultMessage: "Trust Operations",
+    defaultMessage: "Operations",
     description: "Space switcher label: cross-domain risk, incidents, ownership, alerts, evidence, integrations, and system health.",
   },
   "nav.spaceQuestion.platform": {
     defaultMessage: "What risk, ownership, alerting, or system work needs attention?",
     description: "Plain-language orientation question shown inside Trust Operations.",
   },
+  "nav.space.discovery": {
+    defaultMessage: "Discover",
+    description: "Space switcher label: safely find and continuously observe machine credentials.",
+  },
+  "nav.spaceQuestion.discovery": {
+    defaultMessage: "Where did trstctl look, what did it find, and what should happen next?",
+    description: "Plain-language orientation question shown inside Discover.",
+  },
   "nav.space.home": {
     defaultMessage: "Home",
     description: "Space switcher label: the cross-space Home plane (Dashboard, Journeys, and the needs-action worklists).",
   },
   "trustOperations.title": {
-    defaultMessage: "Trust Operations",
+    defaultMessage: "Operations",
     description: "Cross-domain operations overview title.",
   },
   "trustOperations.answer": {
@@ -4676,8 +4688,8 @@ export const messages = {
   "certificateCockpit.alert.repair": { defaultMessage: "Repair alert delivery", description: "Repair dead certificate alert action." },
   "certificateCockpit.alert.review": { defaultMessage: "Review alert evidence", description: "Review certificate alert action." },
   "shell.spaces": {
-    defaultMessage: "Spaces",
-    description: "Accessible label for the space-switcher rail in the shell (S-C1).",
+    defaultMessage: "Tools",
+    description: "Accessible label for the six-tool switcher rail in the shell (S-C1).",
   },
   "nav.group.secretsEngines": {
     defaultMessage: "Store & engines",
@@ -4716,11 +4728,11 @@ export const messages = {
     description: "Primary navigation item.",
   },
   "nav.item.discovery": {
-    defaultMessage: "Find unmanaged credentials",
+    defaultMessage: "Discover",
     description: "Primary navigation item.",
   },
   "nav.item.workloads": {
-    defaultMessage: "Machine & Workload Trust",
+    defaultMessage: "Workloads & Machines",
     description: "Primary navigation item.",
   },
   "nav.item.profiles": {
@@ -5036,6 +5048,262 @@ export const messages = {
     defaultMessage: "Could not read CSV upload.",
     description: "Fallback error shown when a discovery source CSV file cannot be read.",
   },
+  "discovery.sourceForm.importTitle": { defaultMessage: "Import sanitized observations", description: "Heading for advanced metadata observation imports." },
+  "discovery.setup.validation.name": { defaultMessage: "Give this source a clear name.", description: "Discovery setup source-name validation." },
+  "discovery.setup.validation.scope": { defaultMessage: "Choose the authorized network scope.", description: "Discovery setup scope validation." },
+  "discovery.setup.validation.target": { defaultMessage: "Add at least one host, address, or CIDR.", description: "Discovery setup target validation." },
+  "discovery.setup.validation.ports": { defaultMessage: "Enter valid ports.", description: "Discovery setup port validation fallback." },
+  "discovery.setup.validation.excludedPorts": {
+    defaultMessage: "Enter valid excluded ports.",
+    description: "Discovery setup excluded-port validation fallback.",
+  },
+  "discovery.setup.validation.adcsUrl": { defaultMessage: "Enter the directory URL the relay can reach.", description: "AD CS source URL validation." },
+  "discovery.setup.validation.adcsEndpoints": {
+    defaultMessage: "Enter valid AD CS enrollment endpoints.",
+    description: "AD CS enrollment endpoint validation fallback.",
+  },
+  "discovery.setup.validation.adcsEndpointLine": {
+    defaultMessage: "Enrollment endpoint line {line} must contain service | kind | URL.",
+    description: "AD CS enrollment endpoint row structure validation.",
+  },
+  "discovery.setup.validation.adcsEndpointKind": {
+    defaultMessage: "Enrollment endpoint line {line} must use web_enrollment, ndes, or ndes_admin.",
+    description: "AD CS enrollment endpoint kind validation.",
+  },
+  "discovery.setup.validation.adcsEndpointUrl": {
+    defaultMessage: "Enrollment endpoint line {line} needs an absolute HTTP(S) URL.",
+    description: "AD CS enrollment endpoint URL validation.",
+  },
+  "discovery.setup.validation.configurationDn": {
+    defaultMessage: "Enter the AD Configuration naming context.",
+    description: "AD CS naming-context validation.",
+  },
+  "discovery.setup.validation.bindDn": { defaultMessage: "Enter the least-privilege bind identity.", description: "AD CS bind identity validation." },
+  "discovery.setup.validation.passwordRef": {
+    defaultMessage: "Choose a credential reference; do not paste the password.",
+    description: "AD CS password-reference validation.",
+  },
+  "discovery.setup.validation.provider": { defaultMessage: "Choose an available provider.", description: "Discovery provider validation." },
+  "discovery.setup.validation.awsRegion": { defaultMessage: "AWS sources need a region.", description: "AWS discovery region validation." },
+  "discovery.setup.validation.accessKeyRef": { defaultMessage: "Choose an access-key ID reference.", description: "AWS access-key reference validation." },
+  "discovery.setup.validation.secretKeyRef": { defaultMessage: "Choose a secret-access-key reference.", description: "AWS secret-key reference validation." },
+  "discovery.setup.validation.vaultUrl": { defaultMessage: "Enter the authorized vault URL.", description: "Vault URL validation." },
+  "discovery.setup.validation.tokenRef": { defaultMessage: "Choose a least-privilege token reference.", description: "Provider token-reference validation." },
+  "discovery.setup.validation.gcpProject": { defaultMessage: "Enter the authorized Google Cloud project.", description: "Google Cloud project validation." },
+  "discovery.setup.validation.gcpLocation": {
+    defaultMessage: "Enter the Certificate Manager location.",
+    description: "Google Certificate Manager location validation.",
+  },
+  "discovery.setup.validation.mount": { defaultMessage: "Enter the approved KV mount.", description: "Vault KV mount validation." },
+  "discovery.setup.validation.privateCidr": {
+    defaultMessage: "Private endpoints need at least one approved CIDR.",
+    description: "Private endpoint CIDR validation.",
+  },
+  "discovery.setup.validation.portRange": {
+    defaultMessage: "Port range {range} must contain at most 256 ports inside 1–65535.",
+    description: "Bounded discovery port-range validation.",
+  },
+  "discovery.setup.validation.port": { defaultMessage: "Port {port} must be a whole number inside 1–65535.", description: "Discovery port-number validation." },
+  "discovery.setup.validation.portLimit": { defaultMessage: "A source may normalize to at most 512 ports.", description: "Discovery total port limit." },
+  "discovery.setup.validation.portRequired": { defaultMessage: "Add at least one port.", description: "Discovery required-port validation." },
+  "discovery.setup.step.scope": { defaultMessage: "Define safe scope", description: "First discovery setup step." },
+  "discovery.setup.step.scopeDescription": {
+    defaultMessage: "Name the source, select where connections originate, and enter only the approved boundary.",
+    description: "First discovery setup step explanation.",
+  },
+  "discovery.setup.step.review": { defaultMessage: "Review exact plan", description: "Discovery setup review step." },
+  "discovery.setup.step.reviewDescription": {
+    defaultMessage: "Confirm normalized scope, data handling, permission, and estimated work before anything is saved.",
+    description: "Discovery setup review step explanation.",
+  },
+  "discovery.setup.loading": { defaultMessage: "Loading this version's source contract…", description: "Discovery setup loading state." },
+  "discovery.setup.unavailableTitle": { defaultMessage: "Source setup is unavailable", description: "Discovery setup unavailable title." },
+  "discovery.setup.unavailableBody": {
+    defaultMessage: "trstctl could not read this build's typed discovery capability contract. No source was created. Restore the API read, then retry.",
+    description: "Discovery setup unavailable recovery guidance.",
+  },
+  "discovery.setup.contractMismatchTitle": {
+    defaultMessage: "Console and server capabilities do not match",
+    description: "Discovery capability parity failure title.",
+  },
+  "discovery.setup.contractMismatchBody": {
+    defaultMessage:
+      "This console cannot safely configure every field available in this trstctl version. No source was created. Install matching console and server versions, then retry.",
+    description: "Discovery capability parity failure recovery guidance.",
+  },
+  "discovery.setup.contractMismatchDetails": {
+    defaultMessage: "Exact contract differences",
+    description: "Discovery capability parity failure detail disclosure.",
+  },
+  "discovery.setup.retryCapability": { defaultMessage: "Retry capability read", description: "Retry the discovery capability contract read." },
+  "discovery.setup.previewError": {
+    defaultMessage: "The server could not validate this plan. Nothing was saved or scanned.",
+    description: "Discovery plan preview fallback error.",
+  },
+  "discovery.setup.saveError": {
+    defaultMessage: "The source was not created. Review the exact API error and retry.",
+    description: "Discovery source save fallback error.",
+  },
+  "discovery.setup.formLabel": { defaultMessage: "Set up a discovery source", description: "Accessible discovery source setup form label." },
+  "discovery.setup.validating": { defaultMessage: "Validating with server…", description: "Discovery plan validation progress." },
+  "discovery.setup.sourceName": { defaultMessage: "Source name", description: "Discovery source name field." },
+  "discovery.setup.kind": { defaultMessage: "What should trstctl inspect?", description: "Discovery source-kind field." },
+  "discovery.setup.planLabel": { defaultMessage: "Normalized discovery plan", description: "Accessible normalized discovery plan label." },
+  "discovery.setup.planTitle": {
+    defaultMessage: "Nothing runs until this source is saved and you start a scan",
+    description: "Discovery preview side-effect explanation.",
+  },
+  "discovery.setup.planBody": {
+    defaultMessage: "The server validates the same configuration again. Saving creates durable configuration only; scanning is a separate audited action.",
+    description: "Discovery preview save-versus-scan explanation.",
+  },
+  "discovery.setup.normalizedTargets": { defaultMessage: "Normalized targets", description: "Discovery normalized-target disclosure." },
+  "discovery.setup.firstTargets": { defaultMessage: "(first {count})", description: "Discovery truncated target-preview count." },
+  "discovery.setup.exactRedactedConfig": { defaultMessage: "Exact redacted configuration", description: "Discovery redacted configuration disclosure." },
+  "discovery.setup.saving": { defaultMessage: "Saving source…", description: "Discovery source save progress." },
+  "discovery.setup.save": { defaultMessage: "Save source", description: "Discovery source save action." },
+  "discovery.setup.purposeLabel": { defaultMessage: "Source purpose and data handling", description: "Accessible source-purpose section label." },
+  "discovery.setup.purposeTitle": { defaultMessage: "What this source does", description: "Discovery source purpose heading." },
+  "discovery.setup.dataBoundaryTitle": { defaultMessage: "What data crosses the boundary", description: "Discovery source data-handling heading." },
+  "discovery.setup.requires": { defaultMessage: "Requires", description: "Discovery capability prerequisite prefix." },
+  "discovery.setup.scope": { defaultMessage: "Authorized scope", description: "Discovery authorized-scope field." },
+  "discovery.setup.scopeDescription": {
+    defaultMessage: "Create the declared scope first. It is the denominator for honest coverage.",
+    description: "Discovery authorized-scope explanation.",
+  },
+  "discovery.setup.relay": { defaultMessage: "Network relay", description: "Discovery network-relay field." },
+  "discovery.setup.relayDescription": {
+    defaultMessage: "Connections originate here. Leave blank only when the server can select an active network-role relay.",
+    description: "Discovery network-relay explanation.",
+  },
+  "discovery.setup.rangesAndExclusions": { defaultMessage: "Explicit address ranges and exclusions", description: "Discovery advanced range section." },
+  "discovery.setup.rangesAndExclusionsDescription": {
+    defaultMessage: "Use exact start–end ranges when CIDR is awkward. Exclusions always win and appear in the server-calculated review.",
+    description: "Discovery range and exclusion explanation.",
+  },
+  "discovery.setup.ipRanges": { defaultMessage: "Explicit IP ranges", description: "Discovery explicit IP range field." },
+  "discovery.setup.ipRangesDescription": {
+    defaultMessage: "One start–end range per line, such as 192.0.2.10-192.0.2.40.",
+    description: "Discovery IP range example.",
+  },
+  "discovery.setup.excludedTargets": { defaultMessage: "Excluded hosts or targets", description: "Discovery excluded-target field." },
+  "discovery.setup.excludedTargetsDescription": {
+    defaultMessage: "A hostname or address excludes every port; host:port excludes only that endpoint.",
+    description: "Discovery target-exclusion behavior.",
+  },
+  "discovery.setup.excludedCidrs": { defaultMessage: "Excluded CIDRs", description: "Discovery excluded-CIDR field." },
+  "discovery.setup.excludedPorts": { defaultMessage: "Excluded ports", description: "Discovery excluded-port field." },
+  "discovery.setup.targets": { defaultMessage: "Hosts, IPs, or explicit host:port targets", description: "Discovery direct-target field." },
+  "discovery.setup.targetsDescription": {
+    defaultMessage: "Enter one per line or separate them with commas. Plain hosts are combined with the ports below.",
+    description: "Discovery direct-target explanation.",
+  },
+  "discovery.setup.cidrs": { defaultMessage: "CIDR ranges", description: "Discovery CIDR field." },
+  "discovery.setup.cidrsDescription": {
+    defaultMessage: "Enter one IPv4 or IPv6 CIDR per line. Large ranges fail closed before a job is queued.",
+    description: "Discovery CIDR explanation.",
+  },
+  "discovery.setup.ports": { defaultMessage: "Ports", description: "Discovery ports field." },
+  "discovery.setup.portsDescription": {
+    defaultMessage: "Use comma-separated ports and bounded ranges. The server normalizes and deduplicates them.",
+    description: "Discovery port syntax explanation.",
+  },
+  "discovery.setup.safePreset": { defaultMessage: "Safe preset", description: "Discovery safe port preset field." },
+  "discovery.setup.presetTls": { defaultMessage: "TLS standard", description: "Standard TLS discovery port preset." },
+  "discovery.setup.presetWeb": { defaultMessage: "TLS web services", description: "Web TLS discovery port preset." },
+  "discovery.setup.presetSsh": { defaultMessage: "SSH", description: "SSH discovery port preset." },
+  "discovery.setup.allowRfc1918": { defaultMessage: "Allow approved RFC1918 targets.", description: "Private-address discovery option." },
+  "discovery.setup.allowRfc1918Description": {
+    defaultMessage: "Only targets already inside the declared scope are eligible. Metadata, link-local, multicast, and other prohibited ranges remain blocked.",
+    description: "Private-address discovery safety explanation.",
+  },
+  "discovery.setup.loopbackBoundary": { defaultMessage: "Advanced local-test boundary", description: "Discovery loopback advanced section." },
+  "discovery.setup.allowLoopback": { defaultMessage: "Allow loopback targets.", description: "Discovery loopback option." },
+  "discovery.setup.allowLoopbackDescription": {
+    defaultMessage: "Use only for an isolated QA target owned by this deployment. Private-network permission does not enable it.",
+    description: "Discovery loopback safety explanation.",
+  },
+  "discovery.setup.directoryUrl": { defaultMessage: "Directory URL", description: "AD CS directory URL field." },
+  "discovery.setup.configurationDn": { defaultMessage: "Configuration naming context", description: "AD CS configuration naming-context field." },
+  "discovery.setup.bindIdentity": { defaultMessage: "Bind identity", description: "AD CS bind-identity field." },
+  "discovery.setup.passwordRef": { defaultMessage: "Password reference", description: "AD CS password-reference field." },
+  "discovery.setup.passwordRefDescription": {
+    defaultMessage: "Use a stored reference such as env:NAME; never paste the password.",
+    description: "AD CS password-reference explanation.",
+  },
+  "discovery.setup.adcsAdvanced": { defaultMessage: "Enrollment endpoint boundary", description: "Advanced AD CS enrollment endpoint section." },
+  "discovery.setup.adcsEndpoints": { defaultMessage: "Enrollment endpoints", description: "AD CS enrollment endpoint list field." },
+  "discovery.setup.adcsEndpointsDescription": {
+    defaultMessage: "One per line: enrollment service | web_enrollment, ndes, or ndes_admin | absolute HTTP(S) URL.",
+    description: "AD CS enrollment endpoint syntax.",
+  },
+  "discovery.setup.provider": { defaultMessage: "Provider", description: "Discovery cloud provider field." },
+  "discovery.setup.endpoint": { defaultMessage: "Optional compatible API endpoint", description: "Discovery provider endpoint field." },
+  "discovery.setup.endpointDescription": {
+    defaultMessage: "Leave this blank for the public provider endpoint. Private endpoints need explicit authorization below.",
+    description: "Discovery provider endpoint explanation.",
+  },
+  "discovery.setup.leastPrivilege": { defaultMessage: "Least privilege:", description: "Discovery provider least-privilege prefix." },
+  "discovery.setup.credentialPath": { defaultMessage: "Credential path:", description: "Discovery provider credential-path prefix." },
+  "discovery.setup.region": { defaultMessage: "Region", description: "Discovery provider region field." },
+  "discovery.setup.accessKeyRef": { defaultMessage: "Access key ID reference", description: "AWS access-key reference field." },
+  "discovery.setup.secretKeyRef": { defaultMessage: "Secret access key reference", description: "AWS secret-key reference field." },
+  "discovery.setup.sessionTokenRef": { defaultMessage: "Session token reference", description: "AWS session-token reference field." },
+  "discovery.setup.tagKey": { defaultMessage: "Optional AWS tag key", description: "AWS secret metadata tag-key filter." },
+  "discovery.setup.tagValue": { defaultMessage: "Optional AWS tag value", description: "AWS secret metadata tag-value filter." },
+  "discovery.setup.vaultUrl": { defaultMessage: "Vault URL", description: "HashiCorp Vault URL field." },
+  "discovery.setup.keyVaultUrl": { defaultMessage: "Key Vault URL", description: "Azure Key Vault URL field." },
+  "discovery.setup.project": { defaultMessage: "Project", description: "Google Cloud project field." },
+  "discovery.setup.location": { defaultMessage: "Location", description: "Google Cloud location field." },
+  "discovery.setup.labelKey": { defaultMessage: "Optional Google Cloud label key", description: "Google Secret Manager metadata label-key filter." },
+  "discovery.setup.labelValue": { defaultMessage: "Optional Google Cloud label value", description: "Google Secret Manager metadata label-value filter." },
+  "discovery.setup.tokenRef": { defaultMessage: "Token reference", description: "Provider token-reference field." },
+  "discovery.setup.tokenRefDescription": {
+    defaultMessage: "Reference only. The source configuration never contains the token value.",
+    description: "Provider token-reference safety explanation.",
+  },
+  "discovery.setup.mount": { defaultMessage: "KV mount", description: "Vault KV mount field." },
+  "discovery.setup.pathPrefix": { defaultMessage: "Path prefix", description: "Vault path-prefix field." },
+  "discovery.setup.apiVersion": { defaultMessage: "API version", description: "Vault API version field." },
+  "discovery.setup.namePrefix": { defaultMessage: "Optional resource-name prefix", description: "Discovery provider name-prefix field." },
+  "discovery.setup.namePrefixDescription": {
+    defaultMessage: "This narrows metadata inventory; it never authorizes resources beyond the provider policy.",
+    description: "Discovery provider name-prefix explanation.",
+  },
+  "discovery.setup.inspectContent": {
+    defaultMessage: "Inspect secret content for certificates.",
+    description: "Optional cloud-secret content inspection choice.",
+  },
+  "discovery.setup.inspectContentDescription": {
+    defaultMessage:
+      "Optional and off by default. The provider value is held only in wipeable memory; trstctl emits certificate metadata and never stores, logs, or renders the value.",
+    description: "Cloud-secret content inspection safety explanation.",
+  },
+  "discovery.setup.privateEndpointBoundary": { defaultMessage: "Private endpoint boundary", description: "Discovery private-endpoint section." },
+  "discovery.setup.allowPrivateEndpoint": { defaultMessage: "Allow an approved private endpoint.", description: "Discovery private-endpoint option." },
+  "discovery.setup.allowPrivateEndpointDescription": {
+    defaultMessage: "This requires separate tenant authorization and exact CIDRs. Metadata, loopback, and link-local destinations remain blocked.",
+    description: "Discovery private-endpoint safety explanation.",
+  },
+  "discovery.setup.privateCidrs": { defaultMessage: "Approved private endpoint CIDRs", description: "Discovery approved private-endpoint CIDR field." },
+  "discovery.setup.preview.connectionOrigin": { defaultMessage: "Connection origin", description: "Discovery plan connection-origin label." },
+  "discovery.setup.preview.normalizedTargets": { defaultMessage: "Normalized targets", description: "Discovery plan normalized-target count label." },
+  "discovery.setup.preview.excludedTargets": { defaultMessage: "Excluded targets", description: "Discovery plan exclusion count label." },
+  "discovery.setup.preview.boundedExecution": { defaultMessage: "Bounded execution", description: "Discovery plan worker and queue label." },
+  "discovery.setup.preview.boundedExecutionValue": {
+    defaultMessage: "{workers} workers · queue {queue} · ≤ {seconds}s estimate",
+    description: "Discovery plan bounded-execution summary.",
+  },
+  "discovery.setup.preview.scope": { defaultMessage: "Declared scope", description: "Discovery plan scope label." },
+  "discovery.setup.preview.providerScope": { defaultMessage: "Provider policy scope", description: "Discovery plan provider-scope fallback." },
+  "discovery.setup.preview.permission": { defaultMessage: "Permission", description: "Discovery plan permission label." },
+  "discovery.setup.preview.childJobs": { defaultMessage: "Child jobs", description: "Discovery plan child-job count label." },
+  "discovery.setup.preview.externalEffects": { defaultMessage: "External effects", description: "Discovery plan external-effects label." },
+  "discovery.setup.preview.externalEffectsPresent": {
+    defaultMessage: "Plan can change external state",
+    description: "Discovery plan external-effects warning.",
+  },
+  "discovery.setup.preview.externalEffectsNone": { defaultMessage: "None during preview or save", description: "Discovery plan no-effects summary." },
   "discovery.shadow.heading": {
     defaultMessage: "Shadow NHI posture",
     description: "Heading for shadow and unmanaged non-human identity posture.",
@@ -5830,7 +6098,7 @@ export const messages = {
     description: "Primary navigation item.",
   },
   "nav.item.secrets": {
-    defaultMessage: "Secrets & Access",
+    defaultMessage: "Secrets",
     description: "Primary navigation item for native secret inventory and lifecycle.",
   },
   "nav.item.nativeSecrets": {
@@ -7413,7 +7681,7 @@ export const messages = {
     description: "Primary navigation item.",
   },
   "nav.item.trustOperations": {
-    defaultMessage: "Trust Operations",
+    defaultMessage: "Operations",
     description: "Trust Operations overview navigation item.",
   },
   "nav.item.notifications": {

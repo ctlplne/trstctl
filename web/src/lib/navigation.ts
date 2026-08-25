@@ -58,14 +58,15 @@ export interface ContextualRouteItem {
   featureIds: string[];
 }
 
-/* S-C1 (spaces): the unified-shell space registry. Five operator mental models
- * own every product surface, and only Home (Dashboard + Journeys + worklists)
+/* S-C1 (tools): the unified-shell registry. Six operator mental models own
+ * every product surface, and only Home (Dashboard + Journeys + worklists)
  * is global. The ids deliberately retain their original internal values so
  * stored preferences and audit deep links survive the 2026-08 product carve:
  * `posture` now presents Software Trust, and `platform` presents Trust
- * Operations. Customer labels and canonical route ownership—not an internal
- * persistence key—define the product. Route URLs remain stable. */
-export type SpaceId = "certificates" | "secrets" | "workload" | "posture" | "platform";
+ * Operations. `discovery` is new because Discover is now a first-class tool,
+ * not an Operations menu item. Customer labels and canonical route ownership
+ * —not an internal persistence key—define the product. Route URLs stay stable. */
+export type SpaceId = "discovery" | "certificates" | "workload" | "secrets" | "posture" | "platform";
 /** Back-compat alias: audit deep links and preferences persist these ids. */
 export type ModuleId = SpaceId;
 
@@ -87,10 +88,10 @@ export interface NavModule {
   featureIds: string[];
 }
 
-/** navSpaces: the five spaces of the unified shell. Every customer route lives
+/** navSpaces: the six focused tools of the unified shell. Every customer route lives
  * in exactly one space group (the module_map partition guard). The visible
- * vocabulary is task-first: Certificate Lifecycle; Machine & Workload Trust;
- * Secrets & Access; Software Trust; and Trust Operations.
+ * vocabulary is task-first: Discover; Certificates; Workloads & Machines;
+ * Secrets; Software Trust; and Operations.
  *
  * S-C7 — the workspaces-vs-lenses rule for in-page tabs. A tab becomes a
  * sidebar ROUTE only when it is a distinct served workspace: its own feature
@@ -107,6 +108,18 @@ export interface NavModule {
  * Splitting a lens into a route (or vice versa) is an IA change: update this
  * comment, the guards, and the docs in the same PR. */
 export const navSpaces: NavSpace[] = [
+  {
+    id: "discovery",
+    labelKey: "nav.space.discovery",
+    questionKey: "nav.spaceQuestion.discovery",
+    icon: "activity",
+    groups: [
+      {
+        labelKey: "nav.group.overview",
+        items: [{ to: "/discovery", labelKey: "nav.item.discovery", icon: "activity", mode: "real", featureIds: ["F2", "F17", "F35", "F36", "F42", "F49"] }],
+      },
+    ],
+  },
   {
     id: "certificates",
     labelKey: "nav.module.certificates",
@@ -131,6 +144,29 @@ export const navSpaces: NavSpace[] = [
             featureIds: ["F5", "F46", "F69", "F70", "F71", "F72", "F73", "F74"],
           },
         ],
+      },
+    ],
+  },
+  {
+    id: "workload",
+    labelKey: "nav.space.workload",
+    questionKey: "nav.spaceQuestion.workload",
+    icon: "spiffe",
+    groups: [
+      {
+        labelKey: "nav.group.workloadIdentity",
+        items: [
+          { to: "/workloads", labelKey: "nav.item.workloads", icon: "spiffe", mode: "real", featureIds: ["F25", "F30", "F61"] },
+          { to: "/identities", labelKey: "nav.item.identities", icon: "identity", mode: "real", featureIds: ["F4", "F6", "F47", "F59"] },
+        ],
+      },
+      {
+        labelKey: "nav.group.sshTrust",
+        items: [{ to: "/ssh", labelKey: "nav.item.sshTrust", icon: "ssh", mode: "real", featureIds: ["F44", "F45"] }],
+      },
+      {
+        labelKey: "nav.group.infrastructure",
+        items: [{ to: "/agents", labelKey: "nav.item.agents", icon: "agent", mode: "real", featureIds: ["F3", "F54"] }],
       },
     ],
   },
@@ -166,29 +202,6 @@ export const navSpaces: NavSpace[] = [
     ],
   },
   {
-    id: "workload",
-    labelKey: "nav.space.workload",
-    questionKey: "nav.spaceQuestion.workload",
-    icon: "spiffe",
-    groups: [
-      {
-        labelKey: "nav.group.workloadIdentity",
-        items: [
-          { to: "/workloads", labelKey: "nav.item.workloads", icon: "spiffe", mode: "real", featureIds: ["F25", "F30", "F61"] },
-          { to: "/identities", labelKey: "nav.item.identities", icon: "identity", mode: "real", featureIds: ["F4", "F6", "F47", "F59"] },
-        ],
-      },
-      {
-        labelKey: "nav.group.sshTrust",
-        items: [{ to: "/ssh", labelKey: "nav.item.sshTrust", icon: "ssh", mode: "real", featureIds: ["F44", "F45"] }],
-      },
-      {
-        labelKey: "nav.group.infrastructure",
-        items: [{ to: "/agents", labelKey: "nav.item.agents", icon: "agent", mode: "real", featureIds: ["F3", "F54"] }],
-      },
-    ],
-  },
-  {
     id: "posture",
     labelKey: "nav.space.posture",
     questionKey: "nav.spaceQuestion.posture",
@@ -213,7 +226,6 @@ export const navSpaces: NavSpace[] = [
       {
         labelKey: "nav.group.detectRespond",
         items: [
-          { to: "/discovery", labelKey: "nav.item.discovery", icon: "activity", mode: "real", featureIds: ["F2", "F17", "F35", "F36", "F42", "F49"] },
           { to: "/risk", labelKey: "nav.item.risk", icon: "risk", mode: "real", featureIds: ["F19"] },
           { to: "/graph", labelKey: "nav.item.graph", icon: "graph", mode: "real", featureIds: ["F21"] },
           { to: "/posture", labelKey: "nav.item.posture", icon: "posture", mode: "real", featureIds: ["F16", "F17", "F18", "F52", "F57"] },
@@ -303,9 +315,10 @@ export function moduleForRoute(to: string): ModuleId | undefined {
  * DigiCert per-manager-audit anti-pattern, 03 §2). FE-only: the term is applied
  * as the existing `q` free-text filter. */
 const moduleScopeTerms: Record<ModuleId, string> = {
+  discovery: "discover",
   certificates: "cert",
-  secrets: "secret",
   workload: "ssh",
+  secrets: "secret",
   posture: "sign",
   platform: "incident",
 };

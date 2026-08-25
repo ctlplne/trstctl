@@ -74,12 +74,13 @@ func TestGCPSecretManagerEnumerateCertificateSecrets(t *testing.T) {
 	defer srv.Close()
 
 	e, err := gcpsm.New(gcpsm.Config{
-		Project:    "p",
-		Endpoint:   srv.URL,
-		Token:      cloudcert.StaticToken("test-token"),
-		HTTPClient: srv.Client(),
-		LabelKey:   "type",
-		LabelValue: "certificate",
+		Project:        "p",
+		Endpoint:       srv.URL,
+		Token:          cloudcert.StaticToken("test-token"),
+		HTTPClient:     srv.Client(),
+		LabelKey:       "type",
+		LabelValue:     "certificate",
+		InspectContent: true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -88,10 +89,15 @@ func TestGCPSecretManagerEnumerateCertificateSecrets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Enumerate: %v", err)
 	}
-	if len(found) != 1 {
-		t.Fatalf("found %d TLS secrets, want 1: %+v", len(found), found)
+	if len(found) != 3 {
+		t.Fatalf("found %d metadata/certificate records, want 3: %+v", len(found), found)
 	}
 	got := found[0]
+	for _, item := range found {
+		if item.Kind == "x509_certificate" {
+			got = item
+		}
+	}
 	if got.Provider != "gcp-secret-manager" || got.Location != "p" || got.SecretName != "web" {
 		t.Fatalf("bad GCP finding identity: %+v", got)
 	}
@@ -105,5 +111,22 @@ func TestGCPSecretManagerEnumerateCertificateSecrets(t *testing.T) {
 		if m != http.MethodGet {
 			t.Fatalf("GCP SM discovery issued %s; it must stay read-only GET-only", m)
 		}
+	}
+}
+
+func TestGCPSecretManagerMetadataModeNeverAccessesAValue(t *testing.T) {
+	var methods []string
+	srv := gcpSMDouble(t, map[string][]byte{"db": []byte("do-not-read")}, map[string]map[string]string{"db": {}}, &methods)
+	defer srv.Close()
+	e, err := gcpsm.New(gcpsm.Config{Project: "p", Endpoint: srv.URL, Token: cloudcert.StaticToken("test-token"), HTTPClient: srv.Client()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found, err := e.Enumerate(context.Background())
+	if err != nil || len(found) != 1 || found[0].Kind != "cloud_secret_resource" {
+		t.Fatalf("metadata inventory = %+v err=%v", found, err)
+	}
+	if len(methods) != 1 {
+		t.Fatalf("metadata-only mode made a value-access request: %v", methods)
 	}
 }

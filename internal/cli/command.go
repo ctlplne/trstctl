@@ -202,6 +202,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"ephemeral", "approve"}, Method: "POST", Path: "/api/v1/ephemeral/{id}/approvals", Body: bodyApprovalFile, Action: "issue", Summary: "Approve an exact immutable ephemeral JIT request"},
 
 	{Name: []string{"discovery", "sources", "create"}, Method: "POST", Path: "/api/v1/discovery/sources", Body: bodyFile, Summary: "Create a discovery source"},
+	{Name: []string{"discovery", "capabilities"}, Method: "GET", Path: "/api/v1/discovery/capabilities", Summary: "List typed discovery source capabilities, prerequisites, and configuration fields"},
+	{Name: []string{"discovery", "plans", "preview"}, Method: "POST", Path: "/api/v1/discovery/plans/preview", Body: bodyFile, Summary: "Validate and normalize a discovery plan without saving or scanning"},
 	{Name: []string{"discovery", "segments", "create"}, Method: "POST", Path: "/api/v1/discovery/segments", Body: bodyFile, Summary: "Declare or update a discovery segment before creating a network or SSH source"},
 	{Name: []string{"discovery", "sources", "list"}, Method: "GET", Path: "/api/v1/discovery/sources", Query: []string{"limit", "cursor"}, Summary: "List discovery sources"},
 	{Name: []string{"discovery", "schedules", "create"}, Method: "POST", Path: "/api/v1/discovery/schedules", Body: bodyFile, Summary: "Create a discovery schedule"},

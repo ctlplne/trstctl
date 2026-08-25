@@ -11,7 +11,9 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -51,21 +53,27 @@ type Intent struct {
 	AllowLoopback bool     `json:"allow_loopback,omitempty"`
 	// AllowReservedRanges is a decode-only compatibility field for pre-C2 unit
 	// fixtures. Live queue producers use the two explicit policy switches above.
-	AllowReservedRanges bool   `json:"allow_reserved_ranges,omitempty"`
-	Segment             string `json:"segment,omitempty"`
-	RequiredAgentRole   string `json:"required_agent_role,omitempty"`
-	RequiredAgentID     string `json:"required_agent_id,omitempty"`
+	AllowReservedRanges bool     `json:"allow_reserved_ranges,omitempty"`
+	Segment             string   `json:"segment,omitempty"`
+	RequiredAgentRole   string   `json:"required_agent_role,omitempty"`
+	RequiredAgentID     string   `json:"required_agent_id,omitempty"`
+	ExcludedTargets     int      `json:"excluded_targets,omitempty"`
+	AppliedExclusions   []string `json:"applied_exclusions,omitempty"`
 }
 
 type sourceConfig struct {
-	Targets       []string `json:"targets"`
-	CIDRs         []string `json:"cidrs"`
-	CIDR          string   `json:"cidr"`
-	Ports         []int    `json:"ports"`
-	AllowRFC1918  bool     `json:"allow_rfc1918"`
-	AllowLoopback bool     `json:"allow_loopback"`
-	Segment       string   `json:"segment"`
-	RelayAgentID  string   `json:"relay_agent_id"`
+	Targets        []string `json:"targets"`
+	CIDRs          []string `json:"cidrs"`
+	CIDR           string   `json:"cidr"`
+	Ranges         []string `json:"ranges"`
+	Ports          []int    `json:"ports"`
+	ExcludeTargets []string `json:"exclude_targets"`
+	ExcludeCIDRs   []string `json:"exclude_cidrs"`
+	ExcludePorts   []int    `json:"exclude_ports"`
+	AllowRFC1918   bool     `json:"allow_rfc1918"`
+	AllowLoopback  bool     `json:"allow_loopback"`
+	Segment        string   `json:"segment"`
+	RelayAgentID   string   `json:"relay_agent_id"`
 }
 
 // Resolve converts source configuration into the exact bounded relay command.
@@ -123,7 +131,18 @@ func Resolve(kind string, raw json.RawMessage) (Intent, error) {
 		}
 		targets = append(targets, expanded...)
 	}
+	for _, addressRange := range cfg.Ranges {
+		expanded, err := expandAddressRange(strings.TrimSpace(addressRange), ports, MaxTargets-len(targets))
+		if err != nil {
+			return Intent{}, err
+		}
+		targets = append(targets, expanded...)
+	}
 	targets = stableUnique(targets)
+	targets, excluded, applied, err := applyExclusions(targets, cfg.ExcludeTargets, cfg.ExcludeCIDRs, cfg.ExcludePorts)
+	if err != nil {
+		return Intent{}, err
+	}
 	if len(targets) == 0 {
 		if mode == ModeSSH {
 			return Intent{}, errors.New("segment scan: SSH discovery source requires targets or cidrs")
@@ -137,7 +156,196 @@ func Resolve(kind string, raw json.RawMessage) (Intent, error) {
 		Execution: ExecutionRelay, Mode: mode, Targets: targets,
 		AllowRFC1918: cfg.AllowRFC1918, AllowLoopback: cfg.AllowLoopback,
 		Segment: segment, RequiredAgentRole: RequiredRoleNetwork, RequiredAgentID: relayAgentID,
+		ExcludedTargets: excluded, AppliedExclusions: applied,
 	}, nil
+}
+
+// ValidateDeclaredSegment proves that every normalized destination belongs to
+// the operator-declared denominator. Hostnames must be declared exactly;
+// literal addresses may be covered by an exact address, CIDR, or bounded range.
+// DNS is deliberately not resolved here: the scanner revalidates the resolved
+// address immediately before connect, which is the DNS-rebinding boundary.
+func ValidateDeclaredSegment(intent Intent, declarations []string) error {
+	if len(declarations) == 0 {
+		return errors.New("segment scan: declared segment has no ranges")
+	}
+	for _, target := range intent.Targets {
+		host, _, err := net.SplitHostPort(target)
+		if err != nil {
+			return fmt.Errorf("segment scan: normalized target %q is invalid", target)
+		}
+		covered := false
+		for _, declaration := range declarations {
+			ok, declarationErr := declarationCovers(strings.TrimSpace(declaration), strings.Trim(host, "[]"), target)
+			if declarationErr != nil {
+				return declarationErr
+			}
+			if ok {
+				covered = true
+				break
+			}
+		}
+		if !covered {
+			return fmt.Errorf("segment scan: normalized target %q is outside declared segment %q", target, intent.Segment)
+		}
+	}
+	return nil
+}
+
+// ValidateDeclarations rejects ambiguous scope syntax at declaration time so a
+// typo cannot become an apparently healthy but ineffective coverage boundary.
+func ValidateDeclarations(declarations []string) error {
+	for _, declaration := range declarations {
+		value := strings.TrimSpace(declaration)
+		if value == "" {
+			return errors.New("segment scan: segment range must not be empty")
+		}
+		if strings.Contains(value, "/") {
+			if _, err := netip.ParsePrefix(value); err != nil {
+				return fmt.Errorf("segment scan: segment range %q must be a hostname, address, CIDR, or explicit address range", value)
+			}
+			continue
+		}
+		if strings.Contains(value, "-") {
+			if _, _, err := parseAddressRange(value); err == nil {
+				continue
+			}
+		}
+		if _, err := netip.ParseAddr(value); err == nil {
+			continue
+		}
+		if strings.ContainsAny(value, " \t\r\n/:") || strings.HasPrefix(value, ".") || strings.HasSuffix(value, ".") {
+			return fmt.Errorf("segment scan: segment range %q must be a hostname, address, CIDR, or explicit address range", value)
+		}
+	}
+	return nil
+}
+
+func expandAddressRange(value string, ports []int, remaining int) ([]string, error) {
+	if len(ports) == 0 {
+		return nil, errors.New("segment scan: explicit address ranges require ports")
+	}
+	start, end, err := parseAddressRange(value)
+	if err != nil {
+		return nil, fmt.Errorf("segment scan: address range %q is invalid", value)
+	}
+	out := make([]string, 0)
+	for current := start; ; current = current.Next() {
+		if !current.IsValid() || current.Compare(end) > 0 {
+			break
+		}
+		for _, port := range ports {
+			if port < 1 || port > 65535 {
+				return nil, fmt.Errorf("segment scan: port %d must be inside 1-65535", port)
+			}
+			if len(out) >= remaining {
+				return nil, fmt.Errorf("segment scan: source has more than the maximum %d targets", MaxTargets)
+			}
+			out = append(out, net.JoinHostPort(current.String(), strconv.Itoa(port)))
+		}
+		if current == end {
+			break
+		}
+	}
+	return out, nil
+}
+
+func parseAddressRange(value string) (netip.Addr, netip.Addr, error) {
+	left, right, ok := strings.Cut(value, "-")
+	if !ok {
+		return netip.Addr{}, netip.Addr{}, errors.New("missing range separator")
+	}
+	start, err := netip.ParseAddr(strings.TrimSpace(left))
+	if err != nil {
+		return netip.Addr{}, netip.Addr{}, err
+	}
+	end, err := netip.ParseAddr(strings.TrimSpace(right))
+	if err != nil || start.BitLen() != end.BitLen() || start.Compare(end) > 0 {
+		return netip.Addr{}, netip.Addr{}, errors.New("range endpoints must use the same address family in ascending order")
+	}
+	return start.Unmap(), end.Unmap(), nil
+}
+
+func applyExclusions(targets, targetRules, cidrRules []string, portRules []int) ([]string, int, []string, error) {
+	exact := map[string]struct{}{}
+	hosts := map[string]struct{}{}
+	for _, raw := range targetRules {
+		value := strings.TrimSpace(raw)
+		if value == "" {
+			continue
+		}
+		if _, _, err := net.SplitHostPort(value); err == nil {
+			exact[value] = struct{}{}
+		} else {
+			hosts[strings.Trim(value, "[]")] = struct{}{}
+		}
+	}
+	prefixes := make([]netip.Prefix, 0, len(cidrRules))
+	for _, raw := range cidrRules {
+		prefix, err := netip.ParsePrefix(strings.TrimSpace(raw))
+		if err != nil {
+			return nil, 0, nil, fmt.Errorf("segment scan: exclude_cidrs entry %q is invalid", raw)
+		}
+		prefixes = append(prefixes, prefix.Masked())
+	}
+	ports := map[int]struct{}{}
+	for _, port := range portRules {
+		if port < 1 || port > 65535 {
+			return nil, 0, nil, fmt.Errorf("segment scan: exclude_ports entry %d must be inside 1-65535", port)
+		}
+		ports[port] = struct{}{}
+	}
+	kept := make([]string, 0, len(targets))
+	applied := map[string]struct{}{}
+	for _, target := range targets {
+		host, portText, _ := net.SplitHostPort(target)
+		host = strings.Trim(host, "[]")
+		port, _ := strconv.Atoi(portText)
+		reason := ""
+		if _, ok := exact[target]; ok {
+			reason = "target:" + target
+		} else if _, ok := hosts[host]; ok {
+			reason = "host:" + host
+		} else if _, ok := ports[port]; ok {
+			reason = "port:" + portText
+		} else if address, err := netip.ParseAddr(host); err == nil {
+			for _, prefix := range prefixes {
+				if prefix.Contains(address.Unmap()) {
+					reason = "cidr:" + prefix.String()
+					break
+				}
+			}
+		}
+		if reason != "" {
+			applied[reason] = struct{}{}
+			continue
+		}
+		kept = append(kept, target)
+	}
+	proof := make([]string, 0, len(applied))
+	for value := range applied {
+		proof = append(proof, value)
+	}
+	sort.Strings(proof)
+	return kept, len(targets) - len(kept), proof, nil
+}
+
+func declarationCovers(declaration, host, target string) (bool, error) {
+	if declaration == target || strings.EqualFold(declaration, host) {
+		return true, nil
+	}
+	address, addressErr := netip.ParseAddr(host)
+	if strings.Contains(declaration, "/") {
+		prefix, err := netip.ParsePrefix(declaration)
+		if err != nil {
+			return false, fmt.Errorf("segment scan: declared range %q is invalid", declaration)
+		}
+		return addressErr == nil && prefix.Contains(address.Unmap()), nil
+	}
+	if start, end, err := parseAddressRange(declaration); err == nil {
+		return addressErr == nil && address.Compare(start) >= 0 && address.Compare(end) <= 0, nil
+	}
+	return false, nil
 }
 
 // Finding is public credential metadata observed at one assigned target. No

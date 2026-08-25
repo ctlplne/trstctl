@@ -122,9 +122,12 @@ the same change.
     `.ui-table` is only for static definition-style data that can never be
     loading/empty/error. A `.ui-table` fed by a fetch is a bug: it has no
     state story.
-16. **The shell is the IA (S-C1/S-C2).** The console is one unified shell: an
-    icon rail of five spaces over a space-scoped sidebar, with Home
-    (Dashboard, Journeys, needs-action worklists) as the only global plane.
+16. **The shell is the IA (S-C1/S-C2).** The console is one unified control
+    plane with six focused tools: Discover, Certificates, Workloads & Machines,
+    Secrets, Software Trust, and Operations. Home (Dashboard, Journeys, and
+    needs-attention worklists) is the global cockpit. Platform & Integrations
+    and account/tenant administration are supporting areas, not a seventh
+    customer tool.
     The single source of IA truth is the space registry `navSpaces` in
     `src/lib/navigation.ts`; `navGroups` and the module helpers derive from
     it. Every customer route lives in exactly one space group (`module_map`
@@ -177,6 +180,20 @@ the same change.
     previous, current, and next step on small screens. The shell groups account,
     language, theme, keyboard help, and sign-out under one account menu so the
     task keeps the chrome.
+24. **A backend feature is a vertical slice, not an endpoint.** The served
+    capability registry owns stable IDs, configuration metadata, permission,
+    edition, execution boundary, lifecycle stages, data handling, route, and
+    documentation. Generated transport types feed deliberate workflow-specific
+    React adapters. Every primary capability must let an operator understand,
+    configure, preview, execute, observe, recover, and prove the outcome against
+    durable server state. Unknown fields fail the parity guard; the browser never
+    drops them silently or invents risk, permission, completion, ownership, or
+    delivery truth.
+25. **Home represents all six tools.** The Tool health row uses served reads and
+    always includes Discover. Missing or partial evidence says unavailable; it
+    never becomes a reassuring zero. Tool overviews prefer tenant-scoped,
+    event-derived read models over browser-side joins and expose freshness and
+    projection lag when the API provides them.
 
 ## Test surfaces
 

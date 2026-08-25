@@ -407,6 +407,7 @@ func TestServedCloudSecretManagerIntegrationCAPSEC04EndToEnd(t *testing.T) {
 					"secret_access_key_ref":  "env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY",
 					"tag_key":                "type",
 					"tag_value":              "certificate",
+					"inspect_content":        true,
 				},
 				{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 					"provider":               "gcp-secret-manager",
@@ -417,6 +418,7 @@ func TestServedCloudSecretManagerIntegrationCAPSEC04EndToEnd(t *testing.T) {
 					"token_ref":              "env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN",
 					"label_key":              "type",
 					"label_value":            "certificate",
+					"inspect_content":        true,
 				},
 				{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 					"provider":               "azure-key-vault",
@@ -426,6 +428,7 @@ func TestServedCloudSecretManagerIntegrationCAPSEC04EndToEnd(t *testing.T) {
 					"token_ref":              "env:TRSTCTL_DISCOVERY_AZURE_KV_TOKEN",
 					"tag_key":                "type",
 					"tag_value":              "certificate",
+					"inspect_content":        true,
 				},
 				{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 					"provider":               "hashicorp-vault",
@@ -437,6 +440,7 @@ func TestServedCloudSecretManagerIntegrationCAPSEC04EndToEnd(t *testing.T) {
 					"path_prefix":            "tls",
 					"tag_key":                "type",
 					"tag_value":              "certificate",
+					"inspect_content":        true,
 				},
 			},
 		},
@@ -476,8 +480,8 @@ func TestServedCloudSecretManagerIntegrationCAPSEC04EndToEnd(t *testing.T) {
 	if err := json.Unmarshal(body, &completed); err != nil {
 		t.Fatalf("decode completed discovery run: %v (%s)", err, body)
 	}
-	if completed.Status != "succeeded" || completed.Targets != 4 || completed.Discovered != 4 || completed.Failed != 0 {
-		t.Fatalf("CAP-SEC-04 discovery run = %+v, want four successful cloud secret-manager findings", completed)
+	if completed.Status != "succeeded" || completed.Targets != 4 || completed.Discovered != 8 || completed.Failed != 0 {
+		t.Fatalf("CAP-SEC-04 discovery run = %+v, want four metadata records plus four explicit classifications", completed)
 	}
 	findings := discoveryFindingsForRun(t, h, tok, queued.ID)
 	for _, leak := range []string{"SECRET", "gcp-token", "azure-token", "vault-token"} {

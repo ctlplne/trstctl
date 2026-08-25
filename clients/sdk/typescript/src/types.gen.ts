@@ -1632,6 +1632,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/discovery/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List typed discovery source capabilities and configuration fields */
+        get: operations["listDiscoveryCapabilities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/discovery/coverage": {
         parameters: {
             query?: never;
@@ -1763,6 +1780,23 @@ export interface paths {
         get: operations["getDiscoveryMonitoring"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/discovery/plans/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate and normalize a state-free discovery plan */
+        post: operations["previewDiscoveryPlan"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7576,6 +7610,45 @@ export interface components {
             verified_percent: number;
             verify_failed: number;
         };
+        DiscoveryCapability: {
+            configuration: components["schemas"]["DiscoveryCapabilityField"][];
+            console_stages: string[];
+            data_handling: string;
+            documentation_ref: string;
+            edition: string;
+            execution: string;
+            /** @enum {string} */
+            kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh";
+            label: string;
+            lifecycle: string[];
+            permission: string;
+            providers?: components["schemas"]["DiscoveryCapabilityProvider"][];
+            purpose: string;
+            route: string;
+            /** @enum {string} */
+            setup_surface: "source_wizard" | "contextual";
+            tool: string;
+        };
+        DiscoveryCapabilityCatalog: {
+            items: components["schemas"]["DiscoveryCapability"][];
+            schema_version: number;
+        };
+        DiscoveryCapabilityField: {
+            advanced?: boolean;
+            description: string;
+            label: string;
+            path: string;
+            required: boolean;
+            secret_ref?: boolean;
+            type: string;
+        };
+        DiscoveryCapabilityProvider: {
+            fields: string[];
+            id: string;
+            label: string;
+            least_privilege: string;
+            preferred_credential: string;
+        };
         DiscoveryCoverage: {
             classes: components["schemas"]["DiscoveryCoverageClass"][];
             /** Format: date-time */
@@ -7652,7 +7725,7 @@ export interface components {
             finding_count: number;
             findings_path: string;
             /** @enum {string} */
-            kind: "network" | "ssh" | "adcs" | "cloud_certificate" | "cloud_secret" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual" | "nhi_cross_surface" | "oauth_grant" | "service_account" | "nhi_behavior" | "credential_compromise" | "k8s_ingress_gateway";
+            kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh";
             /** Format: date-time */
             last_discovery_at?: string;
             /** Format: date-time */
@@ -7682,6 +7755,27 @@ export interface components {
             run_count: number;
             scheduled_source_count: number;
             source_count: number;
+        };
+        DiscoveryPlanPreview: {
+            applied_exclusions?: string[];
+            blocked_reasons: string[];
+            child_job_count: number;
+            concurrency: number;
+            connection_origin: string;
+            data_handling: string;
+            estimated_upper_seconds: number;
+            excluded_target_count: number;
+            execution: string;
+            /** @enum {string} */
+            kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh";
+            normalized_target_count: number;
+            normalized_targets?: string[];
+            permission: string;
+            preview_truncated: boolean;
+            protocol?: string;
+            queue_depth: number;
+            segment?: string;
+            side_effects: boolean;
         };
         DiscoveryProvenanceSummary: {
             never_observed: number;
@@ -7802,7 +7896,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
-            kind: "network" | "ssh" | "adcs" | "cloud_certificate" | "cloud_secret" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual" | "nhi_cross_surface" | "oauth_grant" | "service_account" | "nhi_behavior" | "credential_compromise" | "k8s_ingress_gateway";
+            kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh";
             name: string;
             /** Format: uuid */
             tenant_id: string;
@@ -7816,7 +7910,7 @@ export interface components {
         DiscoverySourceRequest: {
             config?: Record<string, never>;
             /** @enum {string} */
-            kind: "network" | "ssh" | "adcs" | "cloud_certificate" | "cloud_secret" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual" | "nhi_cross_surface" | "oauth_grant" | "service_account" | "nhi_behavior" | "credential_compromise" | "k8s_ingress_gateway";
+            kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh";
             name: string;
         };
         DiscoveryUnknown: {
@@ -16848,6 +16942,44 @@ export interface operations {
             };
         };
     };
+    listDiscoveryCapabilities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoveryCapabilityCatalog"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     getDiscoveryCoverage: {
         parameters: {
             query?: {
@@ -17214,6 +17346,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DiscoveryMonitoring"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewDiscoveryPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscoverySourceRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoveryPlanPreview"];
                 };
             };
             /** @description client error */

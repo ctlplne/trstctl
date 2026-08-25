@@ -8,6 +8,7 @@ import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/St
 import { StatusBadge } from "@/components/StatusBadge";
 import { SourceActivityCell, SourceFindingsCell, sourceActivityByID, type SourceActivity } from "./discovery/DiscoveryPageParts";
 import { ADCSSourceFields, parseADCSEnrollmentEndpoints, parseADCSPrivateEgressCIDRs } from "./discovery/ADCSSourceFields";
+import { SourceSetup } from "./discovery/SourceSetup";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -47,17 +48,7 @@ const remediationPlaybookRevokeIdentity = "identity-revoke";
 const remediationPlaybookRotateIdentity = "credential-rotate";
 
 const sourceKinds: SourceKind[] = [
-  "network",
-  "ssh",
-  "adcs",
-  "cloud_certificate",
-  "cloud_secret",
-  "ct_log",
-  "drift",
-  "secret_store",
   "api_key",
-  "agent",
-  "manual",
   "nhi_cross_surface",
   "oauth_grant",
   "service_account",
@@ -572,7 +563,7 @@ export function Discovery() {
   const [ctRefreshToken, setCTRefreshToken] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
   const [sourceName, setSourceName] = useState("");
-  const [sourceKind, setSourceKind] = useState<SourceKind>("network");
+  const [sourceKind, setSourceKind] = useState<SourceKind>("nhi_cross_surface");
   const [targets, setTargets] = useState("");
   const [segment, setSegment] = useState("");
   const [relayAgentID, setRelayAgentID] = useState("");
@@ -920,11 +911,18 @@ export function Discovery() {
 
       {tab === "sources" && (
         <div {...tabPanelProps("discovery", "sources")} className="grid gap-6">
+          <SourceSetup
+            onCreated={async (created) => {
+              setScheduleSourceID(created.id);
+              setNotice({ kind: "success", message: `Source ${created.name} was saved. No scan has run yet.` });
+              await load();
+            }}
+          />
           <form aria-labelledby="source-form-heading" className="ui-panel grid gap-4 p-comfortable" onSubmit={createSource}>
             <div className="flex items-center gap-2">
               <Search className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
               <h2 id="source-form-heading" className="text-title font-semibold">
-                {translateNow("source.source.0e570ca6fa")}
+                {t("discovery.sourceForm.importTitle")}
               </h2>
             </div>
             <div className="grid gap-3 md:grid-cols-[1fr_14rem]">

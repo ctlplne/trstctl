@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { ApiError } from "@/lib/api";
+import { ApiError, type DiscoveryCapability } from "@/lib/api";
+import { AppQueryProvider } from "@/lib/query";
 import { Discovery } from "@/pages/Discovery";
+import { sourceWizardFieldPaths, type PrimaryKind } from "@/pages/discovery/SourceSetup";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -14,6 +16,8 @@ const { apiMock } = vi.hoisted(() => ({
     discoveryCoverage: vi.fn(),
     nhiShadowPosture: vi.fn(),
     discoveryFindings: vi.fn(),
+    discoveryCapabilities: vi.fn(),
+    previewDiscoveryPlan: vi.fn(),
     claimDiscoveryFinding: vi.fn(),
     dismissDiscoveryFinding: vi.fn(),
     createDiscoverySource: vi.fn(),
@@ -37,14 +41,96 @@ function LocationProbe() {
 
 function renderDiscovery(initialEntries = ["/discovery"]) {
   return render(
-    <MemoryRouter initialEntries={initialEntries}>
-      <Discovery />
-      <LocationProbe />
-    </MemoryRouter>,
+    <AppQueryProvider>
+      <MemoryRouter initialEntries={initialEntries}>
+        <Discovery />
+        <LocationProbe />
+      </MemoryRouter>
+    </AppQueryProvider>,
   );
 }
 
+function wizardCapability(kind: PrimaryKind, providers?: DiscoveryCapability["providers"]): DiscoveryCapability {
+  return {
+    kind,
+    label: kind,
+    purpose: `Purpose for ${kind}.`,
+    data_handling: `Data handling for ${kind}.`,
+    tool: "Discover",
+    route: `/discovery?tab=sources&kind=${kind}`,
+    setup_surface: "source_wizard",
+    permission: "discovery:write",
+    edition: "core",
+    execution: kind === "network" || kind === "ssh" || kind === "adcs" ? "network-role relay" : "control plane",
+    configuration: sourceWizardFieldPaths[kind].map((path) => ({
+      path,
+      label: path,
+      type: path.endsWith("_ref") ? "credential_ref" : "string",
+      required: path === "segment" || path === "providers[].provider",
+      description: `Configuration for ${path}.`,
+    })),
+    providers,
+    lifecycle: ["available", "queued", "running", "succeeded", "failed", "blocked"],
+    console_stages: ["configure", "preview", "execute", "observe", "recover", "prove"],
+    documentation_ref: "docs/features/discovery-and-inventory.md",
+  };
+}
+
 function seedDiscoveryMocks() {
+  apiMock.discoveryCapabilities.mockResolvedValue({
+    schema_version: 1,
+    items: [
+      wizardCapability("network"),
+      wizardCapability("ssh"),
+      wizardCapability("adcs"),
+      wizardCapability("cloud_certificate", [
+        {
+          id: "aws-acm",
+          label: "AWS Certificate Manager",
+          least_privilege: "List certificates",
+          preferred_credential: "env: references",
+          fields: [],
+        },
+      ]),
+      wizardCapability("cloud_secret", [
+        {
+          id: "aws-secrets-manager",
+          label: "AWS Secrets Manager",
+          least_privilege: "List secret metadata",
+          preferred_credential: "env: references",
+          fields: [],
+        },
+      ]),
+      wizardCapability("secret_store", [
+        {
+          id: "hashicorp-vault",
+          label: "HashiCorp Vault",
+          least_privilege: "List metadata",
+          preferred_credential: "token_ref",
+          fields: [],
+        },
+      ]),
+    ],
+  });
+  apiMock.previewDiscoveryPlan.mockResolvedValue({
+    kind: "network",
+    execution: "network-role relay",
+    protocol: "tls",
+    connection_origin: "selected network-role relay",
+    segment: "production-dmz",
+    normalized_targets: ["10.0.0.11:443", "10.0.0.12:8443"],
+    normalized_target_count: 2,
+    preview_truncated: false,
+    excluded_target_count: 0,
+    child_job_count: 1,
+    concurrency: 16,
+    queue_depth: 256,
+    estimated_upper_seconds: 10,
+    permission: "discovery:write",
+    data_handling: "Public metadata only.",
+    side_effects: false,
+    blocked_reasons: [],
+  });
   apiMock.discoverySources.mockResolvedValue({
     items: [
       {
@@ -355,11 +441,11 @@ describe("discovery control-plane surface", () => {
     seedDiscoveryMocks();
   });
 
-  it("implements the quiet Find unmanaged credentials contract while retaining exact evidence", async () => {
+  it("implements the quiet Discover contract while retaining exact evidence", async () => {
     const user = userEvent.setup();
     renderDiscovery();
 
-    expect(await screen.findByRole("heading", { level: 1, name: "Find unmanaged credentials" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Discover" })).toBeInTheDocument();
     expect(screen.getByText("What was found, why it matters, and the next valid action.")).toBeInTheDocument();
     expect(screen.getByText("What needs attention")).toBeInTheDocument();
 
@@ -433,7 +519,7 @@ describe("discovery control-plane surface", () => {
     const user = userEvent.setup();
     renderDiscovery();
 
-    expect(await screen.findByRole("heading", { name: "Find unmanaged credentials" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Discover" })).toBeInTheDocument();
     expect(screen.queryByText("Discovery scan API not served yet")).not.toBeInTheDocument();
 
     // Findings are the default reading path; exact monitoring/shadow posture is
@@ -621,22 +707,22 @@ describe("discovery control-plane surface", () => {
     const user = userEvent.setup();
     renderDiscovery(["/discovery?tab=sources"]);
 
-    await screen.findByRole("heading", { name: "Source" });
-    const sourceForm = screen.getByRole("heading", { name: "Source" }).closest("form");
-    expect(sourceForm).toBeTruthy();
+    const sourceForm = await screen.findByRole("form", { name: "Set up a discovery source" });
     expect(screen.getByRole("columnheader", { name: "Execution binding" })).toBeInTheDocument();
     expect(screen.getByText(/Relay · production-dmz/)).toBeInTheDocument();
-    await user.type(within(sourceForm as HTMLFormElement).getByLabelText("Name"), "edge-2");
-    await user.type(within(sourceForm as HTMLFormElement).getByLabelText("Declared segment"), "production-dmz");
-    await user.type(within(sourceForm as HTMLFormElement).getByLabelText(/^Relay agent ID/), "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
-    await user.type(within(sourceForm as HTMLFormElement).getByLabelText("Targets"), "10.0.0.11:443\n10.0.0.12:8443");
-    await user.click(within(sourceForm as HTMLFormElement).getByRole("button", { name: "Create source" }));
+    await user.type(within(sourceForm).getByLabelText("Source name"), "edge-2");
+    await user.type(within(sourceForm).getByLabelText("Authorized scope"), "production-dmz");
+    await user.type(within(sourceForm).getByLabelText("Network relay"), "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+    await user.type(within(sourceForm).getByLabelText(/Hosts, IPs/), "10.0.0.11:443\n10.0.0.12:8443");
+    await user.click(within(sourceForm).getByRole("button", { name: "Review exact plan" }));
+    await user.click(await within(sourceForm).findByRole("button", { name: "Save source" }));
 
     expect(apiMock.createDiscoverySource).toHaveBeenCalledWith({
       name: "edge-2",
       kind: "network",
       config: {
         targets: ["10.0.0.11:443", "10.0.0.12:8443"],
+        ports: [443, 8443],
         segment: "production-dmz",
         relay_agent_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
       },
@@ -657,8 +743,8 @@ describe("discovery control-plane surface", () => {
     const user = userEvent.setup();
     renderDiscovery(["/discovery?tab=sources"]);
 
-    await screen.findByRole("heading", { name: "Source" });
-    const sourceForm = screen.getByRole("heading", { name: "Source" }).closest("form");
+    await screen.findByRole("heading", { name: "Import sanitized observations" });
+    const sourceForm = screen.getByRole("heading", { name: "Import sanitized observations" }).closest("form");
     expect(sourceForm).toBeTruthy();
 
     const complexSources = [
@@ -686,8 +772,8 @@ describe("discovery control-plane surface", () => {
     const user = userEvent.setup();
     renderDiscovery(["/discovery?tab=sources"]);
 
-    await screen.findByRole("heading", { name: "Source" });
-    const sourceForm = screen.getByRole("heading", { name: "Source" }).closest("form");
+    await screen.findByRole("heading", { name: "Import sanitized observations" });
+    const sourceForm = screen.getByRole("heading", { name: "Import sanitized observations" }).closest("form");
     expect(sourceForm).toBeTruthy();
     await user.type(within(sourceForm as HTMLFormElement).getByLabelText("Name"), "nhi-quarterly");
     await user.selectOptions(within(sourceForm as HTMLFormElement).getByLabelText("Kind"), "nhi_cross_surface");
@@ -722,19 +808,22 @@ describe("discovery control-plane surface", () => {
     const user = userEvent.setup();
     renderDiscovery(["/discovery?tab=sources"]);
 
-    await screen.findByRole("heading", { name: "Source" });
-    const sourceForm = screen.getByRole("heading", { name: "Source" }).closest("form");
-    expect(sourceForm).toBeTruthy();
-    const form = within(sourceForm as HTMLFormElement);
-    await user.type(form.getByLabelText("Name"), "corp-adcs");
-    await user.selectOptions(form.getByLabelText("Kind"), "adcs");
+    const sourceForm = await screen.findByRole("form", { name: "Set up a discovery source" });
+    const form = within(sourceForm);
+    await user.type(form.getByLabelText("Source name"), "corp-adcs");
+    await user.selectOptions(form.getByLabelText("What should trstctl inspect?"), "adcs");
     await user.clear(form.getByLabelText("Directory URL"));
     await user.type(form.getByLabelText("Directory URL"), "ldaps://dc01.corp.example:636");
-    await user.type(form.getByLabelText("Config"), "CN=Configuration,DC=corp,DC=example");
-    await user.type(form.getByLabelText("Bind"), "CN=trstctl-reader,OU=Service Accounts,DC=corp,DC=example");
-    await user.type(form.getByLabelText("Credential reference"), "secret://adcs/domain-reader");
-    await user.type(form.getByLabelText(/^Relay agent ID/), "11111111-1111-4111-8111-111111111111");
-    await user.click(form.getByRole("button", { name: "Create source" }));
+    await user.type(form.getByLabelText("Configuration naming context"), "CN=Configuration,DC=corp,DC=example");
+    await user.type(form.getByLabelText("Bind identity"), "CN=trstctl-reader,OU=Service Accounts,DC=corp,DC=example");
+    await user.type(form.getByLabelText("Password reference"), "secret://adcs/domain-reader");
+    await user.type(form.getByLabelText("Network relay"), "11111111-1111-4111-8111-111111111111");
+    await user.click(form.getByText("Enrollment endpoint boundary"));
+    await user.type(form.getByLabelText("Enrollment endpoints"), "Corporate web enrollment | web_enrollment | https://certs.corp.example/certsrv/");
+    await user.click(form.getByRole("checkbox", { name: /Allow an approved private endpoint/ }));
+    await user.type(form.getByLabelText("Approved private endpoint CIDRs"), "10.42.0.0/16");
+    await user.click(form.getByRole("button", { name: "Review exact plan" }));
+    await user.click(await form.findByRole("button", { name: "Save source" }));
 
     expect(apiMock.createDiscoverySource).toHaveBeenCalledWith({
       name: "corp-adcs",
@@ -745,6 +834,15 @@ describe("discovery control-plane surface", () => {
         bind_dn: "CN=trstctl-reader,OU=Service Accounts,DC=corp,DC=example",
         password_ref: "secret://adcs/domain-reader",
         relay_agent_id: "11111111-1111-4111-8111-111111111111",
+        enrollment_endpoints: [
+          {
+            enrollment_service: "Corporate web enrollment",
+            kind: "web_enrollment",
+            url: "https://certs.corp.example/certsrv/",
+          },
+        ],
+        allow_private_endpoint: true,
+        private_egress_cidrs: ["10.42.0.0/16"],
       },
     });
   });
@@ -753,8 +851,8 @@ describe("discovery control-plane surface", () => {
     const user = userEvent.setup();
     renderDiscovery(["/discovery?tab=sources"]);
 
-    await screen.findByRole("heading", { name: "Source" });
-    const sourceForm = screen.getByRole("heading", { name: "Source" }).closest("form");
+    await screen.findByRole("heading", { name: "Import sanitized observations" });
+    const sourceForm = screen.getByRole("heading", { name: "Import sanitized observations" }).closest("form");
     expect(sourceForm).toBeTruthy();
     await user.type(within(sourceForm as HTMLFormElement).getByLabelText("Name"), "tokens-quarterly");
     await user.selectOptions(within(sourceForm as HTMLFormElement).getByLabelText("Kind"), "api_key");
@@ -803,8 +901,8 @@ describe("discovery control-plane surface", () => {
     const user = userEvent.setup();
     renderDiscovery(["/discovery?tab=sources"]);
 
-    await screen.findByRole("heading", { name: "Source" });
-    const sourceForm = screen.getByRole("heading", { name: "Source" }).closest("form");
+    await screen.findByRole("heading", { name: "Import sanitized observations" });
+    const sourceForm = screen.getByRole("heading", { name: "Import sanitized observations" }).closest("form");
     expect(sourceForm).toBeTruthy();
     await user.type(within(sourceForm as HTMLFormElement).getByLabelText("Name"), "oauth-quarterly");
     await user.selectOptions(within(sourceForm as HTMLFormElement).getByLabelText("Kind"), "oauth_grant");
@@ -837,8 +935,8 @@ describe("discovery control-plane surface", () => {
     const user = userEvent.setup();
     renderDiscovery(["/discovery?tab=sources"]);
 
-    await screen.findByRole("heading", { name: "Source" });
-    const sourceForm = screen.getByRole("heading", { name: "Source" }).closest("form");
+    await screen.findByRole("heading", { name: "Import sanitized observations" });
+    const sourceForm = screen.getByRole("heading", { name: "Import sanitized observations" }).closest("form");
     expect(sourceForm).toBeTruthy();
     await user.type(within(sourceForm as HTMLFormElement).getByLabelText("Name"), "service-accounts");
     await user.selectOptions(within(sourceForm as HTMLFormElement).getByLabelText("Kind"), "service_account");
@@ -888,8 +986,8 @@ describe("discovery control-plane surface", () => {
     const user = userEvent.setup();
     renderDiscovery(["/discovery?tab=sources"]);
 
-    await screen.findByRole("heading", { name: "Source" });
-    const sourceForm = screen.getByRole("heading", { name: "Source" }).closest("form");
+    await screen.findByRole("heading", { name: "Import sanitized observations" });
+    const sourceForm = screen.getByRole("heading", { name: "Import sanitized observations" }).closest("form");
     expect(sourceForm).toBeTruthy();
     await user.type(within(sourceForm as HTMLFormElement).getByLabelText("Name"), "behavior-quarterly");
     await user.selectOptions(within(sourceForm as HTMLFormElement).getByLabelText("Kind"), "nhi_behavior");
@@ -933,8 +1031,8 @@ describe("discovery control-plane surface", () => {
     const user = userEvent.setup();
     renderDiscovery(["/discovery?tab=sources"]);
 
-    await screen.findByRole("heading", { name: "Source" });
-    const sourceForm = screen.getByRole("heading", { name: "Source" }).closest("form");
+    await screen.findByRole("heading", { name: "Import sanitized observations" });
+    const sourceForm = screen.getByRole("heading", { name: "Import sanitized observations" }).closest("form");
     expect(sourceForm).toBeTruthy();
     await user.type(within(sourceForm as HTMLFormElement).getByLabelText("Name"), "compromise-signals");
     await user.selectOptions(within(sourceForm as HTMLFormElement).getByLabelText("Kind"), "credential_compromise");
@@ -977,8 +1075,8 @@ describe("discovery control-plane surface", () => {
     const user = userEvent.setup();
     renderDiscovery(["/discovery?tab=sources"]);
 
-    await screen.findByRole("heading", { name: "Source" });
-    const sourceForm = screen.getByRole("heading", { name: "Source" }).closest("form");
+    await screen.findByRole("heading", { name: "Import sanitized observations" });
+    const sourceForm = screen.getByRole("heading", { name: "Import sanitized observations" }).closest("form");
     expect(sourceForm).toBeTruthy();
     await user.type(within(sourceForm as HTMLFormElement).getByLabelText("Name"), "k8s-tls");
     await user.selectOptions(within(sourceForm as HTMLFormElement).getByLabelText("Kind"), "k8s_ingress_gateway");

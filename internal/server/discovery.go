@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/agent/drift"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/discovery/apikey"
 	"trstctl.com/trstctl/internal/discovery/cloudcert"
@@ -92,6 +93,7 @@ type cloudSecretProviderConfig struct {
 	LabelKey             string   `json:"label_key"`
 	LabelValue           string   `json:"label_value"`
 	NamePrefix           string   `json:"name_prefix"`
+	InspectContent       bool     `json:"inspect_content"`
 }
 
 type ctLogDiscoveryConfig struct {
@@ -953,7 +955,8 @@ func cloudSecretProvider(ctx context.Context, p cloudSecretProviderConfig) (clou
 		return awssmdisc.New(awssmdisc.Config{
 			Region: region, Endpoint: endpoint, AccessKeyID: accessKeyID,
 			SecretAccessKey: secretAccessKey, SessionToken: sessionToken,
-			TagKey: p.TagKey, TagValue: p.TagValue, NamePrefix: p.NamePrefix, HTTPClient: client,
+			TagKey: p.TagKey, TagValue: p.TagValue, NamePrefix: p.NamePrefix,
+			InspectContent: p.InspectContent, HTTPClient: client,
 		})
 	case "gcp-secret-manager":
 		project := strings.TrimSpace(p.Project)
@@ -975,7 +978,8 @@ func cloudSecretProvider(ctx context.Context, p cloudSecretProviderConfig) (clou
 		}
 		return gcpsmdisc.New(gcpsmdisc.Config{
 			Project: project, Endpoint: endpoint, Token: cloudcert.StaticToken(token),
-			LabelKey: p.LabelKey, LabelValue: p.LabelValue, NamePrefix: p.NamePrefix, HTTPClient: client,
+			LabelKey: p.LabelKey, LabelValue: p.LabelValue, NamePrefix: p.NamePrefix,
+			InspectContent: p.InspectContent, HTTPClient: client,
 		})
 	case "azure-key-vault":
 		vaultURL := strings.TrimSpace(p.VaultURL)
@@ -992,7 +996,8 @@ func cloudSecretProvider(ctx context.Context, p cloudSecretProviderConfig) (clou
 		}
 		return azurekvsecretdisc.New(azurekvsecretdisc.Config{
 			VaultURL: vaultURL, APIVersion: p.APIVersion, Token: cloudcert.StaticToken(token),
-			TagKey: p.TagKey, TagValue: p.TagValue, NamePrefix: p.NamePrefix, HTTPClient: client,
+			TagKey: p.TagKey, TagValue: p.TagValue, NamePrefix: p.NamePrefix,
+			InspectContent: p.InspectContent, HTTPClient: client,
 		})
 	case "hashicorp-vault", "vault":
 		vaultURL := strings.TrimSpace(p.VaultURL)
@@ -1009,7 +1014,8 @@ func cloudSecretProvider(ctx context.Context, p cloudSecretProviderConfig) (clou
 		}
 		return vaultkvdisc.New(vaultkvdisc.Config{
 			VaultURL: vaultURL, Mount: p.Mount, PathPrefix: p.PathPrefix, Token: cloudcert.StaticToken(token),
-			TagKey: p.TagKey, TagValue: p.TagValue, NamePrefix: p.NamePrefix, HTTPClient: client,
+			TagKey: p.TagKey, TagValue: p.TagValue, NamePrefix: p.NamePrefix,
+			InspectContent: p.InspectContent, HTTPClient: client,
 		})
 	default:
 		return nil, fmt.Errorf("unsupported cloud secret-manager provider %q", p.Provider)
@@ -1439,6 +1445,29 @@ func (s cloudDiscoveryRunSink) Record(ctx context.Context, f cloudcert.Found) er
 }
 
 func (s cloudSecretDiscoveryRunSink) Record(ctx context.Context, f cloudsecret.Found) error {
+	location := f.ResourceID
+	if location == "" {
+		location = f.SecretName
+	}
+	if f.Kind == cloudsecret.FindingKindSecretResource {
+		metaMap := map[string]any{
+			"provider": f.Provider, "resource_id": f.ResourceID, "secret_name": f.SecretName,
+			"location": f.Location, "content_inspected": false,
+		}
+		for k, v := range f.Metadata {
+			metaMap[k] = v
+		}
+		meta, err := json.Marshal(metaMap)
+		if err != nil {
+			return err
+		}
+		_, err = s.orch.RecordDiscoveryFinding(ctx, s.tenantID, store.DiscoveryFinding{
+			RunID: s.runID, SourceID: s.sourceID, Kind: cloudsecret.FindingKindSecretResource, Ref: location,
+			Provenance: f.Provenance, Fingerprint: crypto.SHA256Hex([]byte(f.Provider + "\x00" + location)),
+			RiskScore: 10, Metadata: meta,
+		})
+		return err
+	}
 	metaMap := map[string]any{
 		"provider":        f.Provider,
 		"resource_id":     f.ResourceID,
@@ -1462,10 +1491,6 @@ func (s cloudSecretDiscoveryRunSink) Record(ctx context.Context, f cloudsecret.F
 		return err
 	}
 	nb, na := f.Cert.NotBefore, f.Cert.NotAfter
-	location := f.ResourceID
-	if location == "" {
-		location = f.SecretName
-	}
 	if _, err := s.orch.RecordCertificate(ctx, s.tenantID, store.Certificate{
 		Subject: f.Cert.Subject, SANs: sansOf(f.Cert), Issuer: f.Cert.Issuer,
 		Serial: f.Cert.SerialNumber, Fingerprint: f.Cert.SHA256Fingerprint,

@@ -2546,6 +2546,7 @@ func TestServedCloudSecretDiscoveryAWSSecretsManagerEndToEnd(t *testing.T) {
 					"secret_access_key_ref":  "env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY",
 					"tag_key":                "type",
 					"tag_value":              "certificate",
+					"inspect_content":        true,
 				},
 			},
 		},
@@ -2597,8 +2598,8 @@ func TestServedCloudSecretDiscoveryAWSSecretsManagerEndToEnd(t *testing.T) {
 	if err := json.Unmarshal(body, &completed); err != nil {
 		t.Fatalf("decode completed cloud-secret run: %v (%s)", err, body)
 	}
-	if completed.Status != "succeeded" || completed.Targets != 1 || completed.Discovered != 1 || completed.Failed != 0 {
-		t.Fatalf("completed cloud-secret run = %+v, want one successful import finding", completed)
+	if completed.Status != "succeeded" || completed.Targets != 1 || completed.Discovered != 3 || completed.Failed != 0 {
+		t.Fatalf("completed cloud-secret run = %+v, want two metadata records plus one explicit content classification", completed)
 	}
 
 	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/findings?run_id="+queued.ID, tok, nil)
@@ -2621,10 +2622,15 @@ func TestServedCloudSecretDiscoveryAWSSecretsManagerEndToEnd(t *testing.T) {
 	if err := json.Unmarshal(body, &findings); err != nil {
 		t.Fatalf("decode cloud-secret findings: %v (%s)", err, body)
 	}
-	if len(findings.Items) != 1 {
-		t.Fatalf("cloud-secret findings count = %d body %s, want 1", len(findings.Items), body)
+	if len(findings.Items) != 3 {
+		t.Fatalf("cloud-secret findings count = %d body %s, want 3", len(findings.Items), body)
 	}
 	f := findings.Items[0]
+	for _, item := range findings.Items {
+		if item.Kind == "x509_certificate" {
+			f = item
+		}
+	}
 	wantRef := "arn:aws:secretsmanager:us-east-1:111111111111:secret:" + certSecret
 	if f.Kind != "x509_certificate" || f.Ref != wantRef || f.Provenance != "aws-sm://us-east-1/"+certSecret || f.Fingerprint == "" || f.TriageStatus != "unmanaged" {
 		t.Fatalf("bad cloud-secret finding: %+v", f)
@@ -2714,6 +2720,7 @@ func TestServedCloudSecretDiscoveryAWSGCPVaultEndToEnd(t *testing.T) {
 					"secret_access_key_ref":  "env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY",
 					"tag_key":                "type",
 					"tag_value":              "certificate",
+					"inspect_content":        true,
 				},
 				{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 					"provider":               "gcp-secret-manager",
@@ -2724,6 +2731,7 @@ func TestServedCloudSecretDiscoveryAWSGCPVaultEndToEnd(t *testing.T) {
 					"token_ref":              "env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN",
 					"label_key":              "type",
 					"label_value":            "certificate",
+					"inspect_content":        true,
 				},
 				{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 					"provider":               "hashicorp-vault",
@@ -2735,6 +2743,7 @@ func TestServedCloudSecretDiscoveryAWSGCPVaultEndToEnd(t *testing.T) {
 					"path_prefix":            "tls",
 					"tag_key":                "type",
 					"tag_value":              "certificate",
+					"inspect_content":        true,
 				},
 			},
 		},
@@ -2776,8 +2785,8 @@ func TestServedCloudSecretDiscoveryAWSGCPVaultEndToEnd(t *testing.T) {
 	if err := json.Unmarshal(body, &completed); err != nil {
 		t.Fatalf("decode completed run: %v (%s)", err, body)
 	}
-	if completed.Status != "succeeded" || completed.Targets != 3 || completed.Discovered != 3 || completed.Failed != 0 {
-		t.Fatalf("completed multi-provider run = %+v, want three successful provider findings", completed)
+	if completed.Status != "succeeded" || completed.Targets != 3 || completed.Discovered != 9 || completed.Failed != 0 {
+		t.Fatalf("completed multi-provider run = %+v, want six metadata records plus three explicit classifications", completed)
 	}
 
 	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/findings?run_id="+queued.ID, tok, nil)
@@ -2799,13 +2808,17 @@ func TestServedCloudSecretDiscoveryAWSGCPVaultEndToEnd(t *testing.T) {
 	if err := json.Unmarshal(body, &findings); err != nil {
 		t.Fatalf("decode findings: %v (%s)", err, body)
 	}
-	if len(findings.Items) != 3 {
-		t.Fatalf("cloud-secret findings count = %d body %s, want 3", len(findings.Items), body)
+	if len(findings.Items) != 9 {
+		t.Fatalf("cloud-secret findings count = %d body %s, want 9", len(findings.Items), body)
 	}
 	seenProviders := map[string]bool{}
+	certificateFindings := 0
 	for _, f := range findings.Items {
-		if f.Kind != "x509_certificate" || f.Fingerprint == "" {
+		if (f.Kind != "x509_certificate" && f.Kind != "cloud_secret_resource") || f.Fingerprint == "" {
 			t.Fatalf("bad cloud-secret finding: %+v", f)
+		}
+		if f.Kind == "x509_certificate" {
+			certificateFindings++
 		}
 		var meta map[string]any
 		if err := json.Unmarshal(f.Metadata, &meta); err != nil {
@@ -2813,6 +2826,9 @@ func TestServedCloudSecretDiscoveryAWSGCPVaultEndToEnd(t *testing.T) {
 		}
 		provider, _ := meta["provider"].(string)
 		seenProviders[provider] = true
+	}
+	if certificateFindings != 3 {
+		t.Fatalf("explicit content-classification findings = %d, want 3", certificateFindings)
 	}
 	for _, provider := range []string{"aws-secrets-manager", "gcp-secret-manager", "hashicorp-vault"} {
 		if !seenProviders[provider] {
@@ -2951,6 +2967,12 @@ func servedVaultKVDouble(secrets map[string]string, customMetadata map[string]ma
 				keys = append(keys, strings.TrimPrefix(name, "tls/"))
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"keys": keys}})
+		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/v1/secret/metadata/"):
+			name := strings.TrimPrefix(r.URL.Path, "/v1/secret/metadata/")
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{
+				"current_version": 1, "oldest_version": 1, "updated_time": "2026-08-25T00:00:00Z",
+				"custom_metadata": customMetadata[name],
+			}})
 		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/v1/secret/data/"):
 			name := strings.TrimPrefix(r.URL.Path, "/v1/secret/data/")
 			_ = json.NewEncoder(w).Encode(map[string]any{

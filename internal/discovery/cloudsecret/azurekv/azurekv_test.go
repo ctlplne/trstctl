@@ -80,12 +80,13 @@ func TestAzureKeyVaultEnumerateCertificateSecrets(t *testing.T) {
 	defer srv.Close()
 
 	e, err := azurekv.New(azurekv.Config{
-		VaultURL:   srv.URL,
-		Token:      cloudcert.StaticToken("azure-token"),
-		HTTPClient: srv.Client(),
-		TagKey:     "type",
-		TagValue:   "certificate",
-		NamePrefix: "tls-",
+		VaultURL:       srv.URL,
+		Token:          cloudcert.StaticToken("azure-token"),
+		HTTPClient:     srv.Client(),
+		TagKey:         "type",
+		TagValue:       "certificate",
+		NamePrefix:     "tls-",
+		InspectContent: true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -95,10 +96,15 @@ func TestAzureKeyVaultEnumerateCertificateSecrets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Enumerate: %v", err)
 	}
-	if len(found) != 1 {
-		t.Fatalf("found %d TLS secrets, want 1: %+v", len(found), found)
+	if len(found) != 2 {
+		t.Fatalf("found %d metadata/certificate records, want 2: %+v", len(found), found)
 	}
 	got := found[0]
+	for _, item := range found {
+		if item.Kind == "x509_certificate" {
+			got = item
+		}
+	}
 	if got.Provider != "azure-key-vault" || got.Location == "" {
 		t.Fatalf("bad provider/location: %+v", got)
 	}
@@ -118,5 +124,22 @@ func TestAzureKeyVaultEnumerateCertificateSecrets(t *testing.T) {
 		if !strings.HasPrefix(op, "GET ") {
 			t.Fatalf("Azure Key Vault discovery invoked non-read-only operation %q; seen=%v", op, seen)
 		}
+	}
+}
+
+func TestAzureKeyVaultMetadataModeNeverGetsAValue(t *testing.T) {
+	var seen []string
+	srv := azureKVDouble(map[string]string{"app-db": "do-not-read"}, map[string]map[string]string{"app-db": {}}, &seen)
+	defer srv.Close()
+	e, err := azurekv.New(azurekv.Config{VaultURL: srv.URL, Token: cloudcert.StaticToken("azure-token"), HTTPClient: srv.Client()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found, err := e.Enumerate(context.Background())
+	if err != nil || len(found) != 1 || found[0].Kind != "cloud_secret_resource" {
+		t.Fatalf("metadata inventory = %+v err=%v", found, err)
+	}
+	if len(seen) != 1 || seen[0] != "GET secrets" {
+		t.Fatalf("metadata-only mode made a value GET: %v", seen)
 	}
 }

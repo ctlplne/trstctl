@@ -166,10 +166,13 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// approved-to-issued bridge, raising the ratchet to 374. Asset-specific,
 	// attributed ownership assignment raises it to 375 and maps beside the
 	// existing ownership-attribution and attestation governance surface. The
-	// read-only effective notification-route preview raises it to 376 and maps
-	// onto F29 beside the policy hierarchy it resolves without sending.
-	if len(out) != 376 {
-		t.Fatalf("OpenAPI operationIds = %d, want 376", len(out))
+	// read-only effective notification-route preview raises it to 376. The
+	// shared typed discovery capability catalog raises it to 377 and maps beside
+	// F2 so a backend field cannot quietly outrun the console contract. The
+	// state-free server plan preview raises it to 378 and prevents the browser
+	// from inventing segment, exclusion, relay, or capacity decisions.
+	if len(out) != 378 {
+		t.Fatalf("OpenAPI operationIds = %d, want 378", len(out))
 	}
 	return out
 }

@@ -137,6 +137,25 @@ function readCodeSigningHealth(): Promise<{ total: number; failures: number } | 
     .catch(() => null);
 }
 
+function readDiscoveryHealth(): Promise<{ sources: number; openFindings: number; failedRuns: number } | null> {
+  const client = api as typeof api & {
+    discoveryMonitoring?: () => Promise<{
+      summary?: { source_count?: number; open_finding_count?: number; failed_run_count?: number };
+    }>;
+  };
+  if (!client.discoveryMonitoring) return Promise.resolve(null);
+  return Promise.resolve(client.discoveryMonitoring())
+    .then((result) => {
+      if (!result?.summary) return null;
+      return {
+        sources: Number(result.summary.source_count ?? 0),
+        openFindings: Number(result.summary.open_finding_count ?? 0),
+        failedRuns: Number(result.summary.failed_run_count ?? 0),
+      };
+    })
+    .catch(() => null);
+}
+
 function dashboardWorkspace(kind?: string | null): string {
   const normalized = kind?.toLowerCase() ?? "";
   if (normalized.includes("cert") || normalized === "x509") return translateNow("nav.module.certificates");
@@ -260,6 +279,7 @@ export function Dashboard() {
   const openIncidents = useApiQuery(["open-incidents"], readOpenIncidents, { live: { intervalMs: 30_000 } });
   const recentAudit = useApiQuery(["recent-audit"], readRecentAudit, { live: { intervalMs: 60_000 } });
   const codeSigningHealth = useApiQuery(["code-signing-health"], readCodeSigningHealth, { live: { intervalMs: 30_000 } });
+  const discoveryHealth = useApiQuery(["discovery-health"], readDiscoveryHealth, { live: { intervalMs: 30_000 } });
   const ownership = useApiQuery(["ownership-attribution"], api.ownershipAttribution, { live: { intervalMs: 60_000 } });
   const [dismissed, setDismissed] = useState(false);
 
@@ -481,7 +501,23 @@ export function Dashboard() {
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">{t("dashboard.workspaceHealth.help")}</p>
         </div>
-        <ul aria-label={t("dashboard.workspaceHealth.label")} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <ul aria-label={t("dashboard.workspaceHealth.label")} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+          <WorkspaceHealthLink
+            to="/discovery"
+            icon={<Activity className="h-4 w-4" aria-hidden="true" />}
+            workspace={t("nav.space.discovery")}
+            state={
+              discoveryHealth.loading
+                ? t("dashboard.workspaceHealth.loading")
+                : discoveryHealth.data === null
+                  ? t("dashboard.workspaceHealth.unavailable")
+                  : t("dashboard.workspaceHealth.discovery", {
+                      sources: String(discoveryHealth.data.sources),
+                      findings: String(discoveryHealth.data.openFindings),
+                    })
+            }
+            urgent={!discoveryHealth.loading && (discoveryHealth.data === null || discoveryHealth.data.failedRuns > 0)}
+          />
           <WorkspaceHealthLink
             to="/certificates"
             icon={<ScrollText className="h-4 w-4" aria-hidden="true" />}

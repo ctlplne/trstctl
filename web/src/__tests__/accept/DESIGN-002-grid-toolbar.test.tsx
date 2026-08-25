@@ -3,8 +3,10 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { ToastProvider } from "@/components/ToastProvider";
+import { AppQueryProvider } from "@/lib/query";
 import { Certificates } from "@/pages/Certificates";
 import { Discovery } from "@/pages/Discovery";
+import { sourceWizardFieldPaths, type PrimaryKind } from "@/pages/discovery/SourceSetup";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -24,6 +26,8 @@ const { apiMock } = vi.hoisted(() => ({
     discoveryCoverage: vi.fn(),
     nhiShadowPosture: vi.fn(),
     discoveryFindings: vi.fn(),
+    discoveryCapabilities: vi.fn(),
+    previewDiscoveryPlan: vi.fn(),
     claimDiscoveryFinding: vi.fn(),
     dismissDiscoveryFinding: vi.fn(),
     createDiscoverySource: vi.fn(),
@@ -49,11 +53,13 @@ function renderCertificates() {
 
 function renderDiscovery() {
   return render(
-    <MemoryRouter initialEntries={["/discovery"]}>
-      <ToastProvider>
-        <Discovery />
-      </ToastProvider>
-    </MemoryRouter>,
+    <AppQueryProvider>
+      <MemoryRouter initialEntries={["/discovery"]}>
+        <ToastProvider>
+          <Discovery />
+        </ToastProvider>
+      </MemoryRouter>
+    </AppQueryProvider>,
   );
 }
 
@@ -95,7 +101,7 @@ describe("DESIGN-002 dense grid and toolbar consistency", () => {
     const user = userEvent.setup();
     renderDiscovery();
 
-    expect(await screen.findByRole("heading", { name: "Find unmanaged credentials" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Discover" })).toBeInTheDocument();
     // Each surface lives on its workspace tab; monitoring + findings share the default tab.
     const surfaces: Array<{ heading: string; tab?: string }> = [
       { heading: "Continuous monitoring" },
@@ -152,6 +158,31 @@ function seedCertificateMocks() {
 }
 
 function seedDiscoveryMocks() {
+  apiMock.discoveryCapabilities.mockResolvedValue({
+    schema_version: 1,
+    items: (Object.keys(sourceWizardFieldPaths) as PrimaryKind[]).map((kind) => ({
+      kind,
+      label: kind,
+      purpose: `Purpose for ${kind}.`,
+      data_handling: `Data handling for ${kind}.`,
+      tool: "Discover",
+      route: `/discovery?tab=sources&kind=${kind}`,
+      setup_surface: "source_wizard",
+      permission: "discovery:write",
+      edition: "core",
+      execution: kind === "network" || kind === "ssh" || kind === "adcs" ? "network-role relay" : "control plane",
+      configuration: sourceWizardFieldPaths[kind].map((path) => ({
+        path,
+        label: path,
+        type: "string",
+        required: path === "segment" || path === "providers[].provider",
+        description: path,
+      })),
+      lifecycle: ["available", "queued", "running", "succeeded", "failed", "blocked"],
+      console_stages: ["configure", "preview", "execute", "observe", "recover", "prove"],
+      documentation_ref: "docs/features/discovery-and-inventory.md",
+    })),
+  });
   apiMock.discoverySources.mockResolvedValue({
     items: [
       {

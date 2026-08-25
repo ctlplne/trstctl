@@ -1096,7 +1096,7 @@ describe("i18n boundary", () => {
       // FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
       // Home G7 re-pin: each urgent row names the affected workspace,
       // consequence, deadline, automation uncertainty, owner, and safest next
-      // action. The five-workspace strip labels missing reads unavailable.
+      // action. The six-tool strip labels missing reads unavailable.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
       // release.
       // Live G7R1 truthfulness re-pin: Home and Trust Operations now name the
@@ -1104,8 +1104,18 @@ describe("i18n boundary", () => {
       // verified. These strings preserve the distinction between missing and
       // unreadable evidence. Machine-authored es/de — FLAGGED FOR HUMAN
       // TRANSLATION REVIEW before release.
-      "es-ES": "2c622253f598beb20e4b3334eee931ea9f05aca16ac6edcdad96ba86381d93d6",
-      "de-DE": "901abcfe1a637997d545423faa95a33ce6ca9699432c96edccb6bf2101840042",
+      // Product-overhaul g5 re-pin: reviewed the complete guided discovery
+      // source workflow in Spanish and German, including field-level errors,
+      // least-privilege and secret-handling boundaries, normalized-plan proof,
+      // and recovery copy. Technical examples (CIDRs, env: references, ports,
+      // DNs, and URLs) remain byte-identical. Machine-authored es/de — FLAGGED
+      // FOR HUMAN TRANSLATION REVIEW before release.
+      // Product-overhaul discovery parity re-pin: the typed source wizard now
+      // names its capability-contract failure, AD CS enrollment/private-CIDR
+      // boundary, and AWS/GCP metadata filters. Machine-authored es/de —
+      // FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "86f8dce4553aaf4253f6b0912066c9ee919a1861fb414102386cad9c94c7b8ce",
+      "de-DE": "22c4fd4f8c82d54ec2633072560bb070b0b7087ba7be4a6ae10851132f8bc5ab",
     });
   });
 

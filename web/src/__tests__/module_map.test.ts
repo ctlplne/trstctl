@@ -85,42 +85,32 @@ describe("module map (S-B1)", () => {
     }
   });
 
-  it("keeps the curated space set small (Infisical lesson: shrink, do not sprawl)", () => {
-    // The persistent ids remain stable for stored preferences and audit links,
-    // while the visible product language follows the five operator mental
-    // models. Home is a global cockpit, not a sixth product space.
-    expect(navModules.length).toBeLessThanOrEqual(5);
-    expect(navModules.map((m) => m.id)).toEqual(["certificates", "secrets", "workload", "posture", "platform"]);
+  it("pins the six focused tools without turning support configuration into a seventh product", () => {
+    // Five existing persistence ids remain stable; Discover is the deliberate
+    // addition because it is the front door to every credential domain.
+    expect(navModules.length).toBe(6);
+    expect(navModules.map((m) => m.id)).toEqual(["discovery", "certificates", "workload", "secrets", "posture", "platform"]);
     expect(navSpaces.map((space) => space.labelKey)).toEqual([
+      "nav.space.discovery",
       "nav.module.certificates",
-      "nav.module.secrets",
       "nav.space.workload",
+      "nav.module.secrets",
       "nav.space.posture",
       "nav.space.platform",
     ]);
   });
 
-  it("maps the old surfaces into the five certctl-informed operator domains without changing URLs", () => {
+  it("maps the stable routes into the six certctl-informed operator domains", () => {
+    expect(moduleForRoute("/discovery")).toBe("discovery");
     expect(moduleForRoute("/certificates")).toBe("certificates");
     expect(moduleForRoute("/workloads")).toBe("workload");
     expect(moduleForRoute("/agents")).toBe("workload");
     expect(moduleForRoute("/secrets")).toBe("secrets");
     expect(moduleForRoute("/codesign")).toBe("posture");
 
-    // Cross-domain risk, discovery, people, alerts, evidence, and system
-    // readiness have one canonical home in Trust Operations.
-    for (const route of [
-      "/trust-operations",
-      "/discovery",
-      "/risk",
-      "/posture",
-      "/incidents",
-      "/operations",
-      "/owners",
-      "/notifications",
-      "/audit",
-      "/admin/system",
-    ]) {
+    // Cross-domain risk, people, alerts, evidence, and system readiness have
+    // one canonical home in Operations; discovery no longer hides there.
+    for (const route of ["/trust-operations", "/risk", "/posture", "/incidents", "/operations", "/owners", "/notifications", "/audit", "/admin/system"]) {
       expect(moduleForRoute(route), route).toBe("platform");
     }
   });
@@ -134,6 +124,7 @@ describe("module map (S-B1)", () => {
 
     expect(moduleForRoute("/secrets/sync?status=failed")).toBe("secrets");
     expect(moduleForRoute("/not-registered")).toBeUndefined();
+    expect(moduleLabelKey("discovery")).toBe("nav.space.discovery");
     expect(moduleLabelKey("workload")).toBe("nav.space.workload");
     expect(moduleLabelKey("not-a-space")).toBeUndefined();
 

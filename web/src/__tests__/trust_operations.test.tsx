@@ -170,12 +170,12 @@ describe("Trust Operations overview", () => {
   it("answers cross-product urgency before exposing control-plane machinery", async () => {
     renderPage();
 
-    expect(await screen.findByRole("heading", { level: 1, name: "Trust Operations" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Operations" })).toBeInTheDocument();
     expect(screen.getByText("What needs attention across every trust domain.", { exact: true })).toBeInTheDocument();
 
     const attention = await screen.findByRole("list", { name: "Cross-product attention queue" });
     expect(within(attention).getByText("payments.example.test")).toBeInTheDocument();
-    expect(within(attention).getByText("Certificate Lifecycle")).toBeInTheDocument();
+    expect(within(attention).getByText("Certificates")).toBeInTheDocument();
     expect(within(attention).getByText(/expires in 1 day/i)).toBeInTheDocument();
     expect(within(attention).getByText("Owned by Payments team")).toBeInTheDocument();
     expect(within(attention).getByRole("link", { name: "Review and remediate" })).toHaveAttribute("href", "/risk?sort=score");

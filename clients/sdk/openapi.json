@@ -7857,6 +7857,188 @@
         ],
         "type": "object"
       },
+      "DiscoveryCapability": {
+        "properties": {
+          "configuration": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoveryCapabilityField"
+            },
+            "type": "array"
+          },
+          "console_stages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "data_handling": {
+            "type": "string"
+          },
+          "documentation_ref": {
+            "type": "string"
+          },
+          "edition": {
+            "type": "string"
+          },
+          "execution": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "adcs",
+              "agent",
+              "api_key",
+              "cloud_certificate",
+              "cloud_secret",
+              "credential_compromise",
+              "ct_log",
+              "drift",
+              "k8s_ingress_gateway",
+              "manual",
+              "network",
+              "nhi_behavior",
+              "nhi_cross_surface",
+              "oauth_grant",
+              "secret_store",
+              "service_account",
+              "ssh"
+            ],
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "lifecycle": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "permission": {
+            "type": "string"
+          },
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoveryCapabilityProvider"
+            },
+            "type": "array"
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "route": {
+            "type": "string"
+          },
+          "setup_surface": {
+            "enum": [
+              "source_wizard",
+              "contextual"
+            ],
+            "type": "string"
+          },
+          "tool": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "label",
+          "purpose",
+          "data_handling",
+          "tool",
+          "route",
+          "setup_surface",
+          "permission",
+          "edition",
+          "execution",
+          "configuration",
+          "lifecycle",
+          "console_stages",
+          "documentation_ref"
+        ],
+        "type": "object"
+      },
+      "DiscoveryCapabilityCatalog": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoveryCapability"
+            },
+            "type": "array"
+          },
+          "schema_version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schema_version",
+          "items"
+        ],
+        "type": "object"
+      },
+      "DiscoveryCapabilityField": {
+        "properties": {
+          "advanced": {
+            "type": "boolean"
+          },
+          "description": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "secret_ref": {
+            "type": "boolean"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "label",
+          "type",
+          "required",
+          "description"
+        ],
+        "type": "object"
+      },
+      "DiscoveryCapabilityProvider": {
+        "properties": {
+          "fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "least_privilege": {
+            "type": "string"
+          },
+          "preferred_credential": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "least_privilege",
+          "preferred_credential",
+          "fields"
+        ],
+        "type": "object"
+      },
       "DiscoveryCoverage": {
         "properties": {
           "classes": {
@@ -8123,23 +8305,23 @@
           },
           "kind": {
             "enum": [
-              "network",
-              "ssh",
               "adcs",
+              "agent",
+              "api_key",
               "cloud_certificate",
               "cloud_secret",
+              "credential_compromise",
               "ct_log",
               "drift",
-              "secret_store",
-              "api_key",
-              "agent",
+              "k8s_ingress_gateway",
               "manual",
+              "network",
+              "nhi_behavior",
               "nhi_cross_surface",
               "oauth_grant",
+              "secret_store",
               "service_account",
-              "nhi_behavior",
-              "credential_compromise",
-              "k8s_ingress_gateway"
+              "ssh"
             ],
             "type": "string"
           },
@@ -8252,6 +8434,109 @@
           "finding_count",
           "open_finding_count",
           "certificate_inventory_count"
+        ],
+        "type": "object"
+      },
+      "DiscoveryPlanPreview": {
+        "properties": {
+          "applied_exclusions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "blocked_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "child_job_count": {
+            "type": "integer"
+          },
+          "concurrency": {
+            "type": "integer"
+          },
+          "connection_origin": {
+            "type": "string"
+          },
+          "data_handling": {
+            "type": "string"
+          },
+          "estimated_upper_seconds": {
+            "type": "integer"
+          },
+          "excluded_target_count": {
+            "type": "integer"
+          },
+          "execution": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "adcs",
+              "agent",
+              "api_key",
+              "cloud_certificate",
+              "cloud_secret",
+              "credential_compromise",
+              "ct_log",
+              "drift",
+              "k8s_ingress_gateway",
+              "manual",
+              "network",
+              "nhi_behavior",
+              "nhi_cross_surface",
+              "oauth_grant",
+              "secret_store",
+              "service_account",
+              "ssh"
+            ],
+            "type": "string"
+          },
+          "normalized_target_count": {
+            "type": "integer"
+          },
+          "normalized_targets": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "permission": {
+            "type": "string"
+          },
+          "preview_truncated": {
+            "type": "boolean"
+          },
+          "protocol": {
+            "type": "string"
+          },
+          "queue_depth": {
+            "type": "integer"
+          },
+          "segment": {
+            "type": "string"
+          },
+          "side_effects": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "execution",
+          "connection_origin",
+          "normalized_target_count",
+          "preview_truncated",
+          "excluded_target_count",
+          "child_job_count",
+          "concurrency",
+          "queue_depth",
+          "estimated_upper_seconds",
+          "permission",
+          "data_handling",
+          "side_effects",
+          "blocked_reasons"
         ],
         "type": "object"
       },
@@ -8639,23 +8924,23 @@
           },
           "kind": {
             "enum": [
-              "network",
-              "ssh",
               "adcs",
+              "agent",
+              "api_key",
               "cloud_certificate",
               "cloud_secret",
+              "credential_compromise",
               "ct_log",
               "drift",
-              "secret_store",
-              "api_key",
-              "agent",
+              "k8s_ingress_gateway",
               "manual",
+              "network",
+              "nhi_behavior",
               "nhi_cross_surface",
               "oauth_grant",
+              "secret_store",
               "service_account",
-              "nhi_behavior",
-              "credential_compromise",
-              "k8s_ingress_gateway"
+              "ssh"
             ],
             "type": "string"
           },
@@ -8706,23 +8991,23 @@
           },
           "kind": {
             "enum": [
-              "network",
-              "ssh",
               "adcs",
+              "agent",
+              "api_key",
               "cloud_certificate",
               "cloud_secret",
+              "credential_compromise",
               "ct_log",
               "drift",
-              "secret_store",
-              "api_key",
-              "agent",
+              "k8s_ingress_gateway",
               "manual",
+              "network",
+              "nhi_behavior",
               "nhi_cross_surface",
               "oauth_grant",
+              "secret_store",
               "service_account",
-              "nhi_behavior",
-              "credential_compromise",
-              "k8s_ingress_gateway"
+              "ssh"
             ],
             "type": "string"
           },
@@ -32062,6 +32347,53 @@
         "x-trstctl-permission": "connectors:write"
       }
     },
+    "/api/v1/discovery/capabilities": {
+      "get": {
+        "operationId": "listDiscoveryCapabilities",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryCapabilityCatalog"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List typed discovery source capabilities and configuration fields",
+        "x-trstctl-permission": "discovery:read"
+      }
+    },
     "/api/v1/discovery/coverage": {
       "get": {
         "operationId": "getDiscoveryCoverage",
@@ -32637,6 +32969,63 @@
         ],
         "summary": "Get continuous monitoring and centralized inventory posture",
         "x-trstctl-permission": "discovery:read"
+      }
+    },
+    "/api/v1/discovery/plans/preview": {
+      "post": {
+        "operationId": "previewDiscoveryPlan",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscoverySourceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryPlanPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Validate and normalize a state-free discovery plan",
+        "x-trstctl-permission": "discovery:write"
       }
     },
     "/api/v1/discovery/runs": {

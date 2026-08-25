@@ -43,6 +43,12 @@ func vaultKVDouble(t *testing.T, values map[string]string, customMetadata map[st
 			}
 			sort.Strings(keys)
 			_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"keys": keys}})
+		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/v1/secret/metadata/"):
+			name := strings.TrimPrefix(r.URL.Path, "/v1/secret/metadata/")
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{
+				"current_version": 2, "oldest_version": 1, "updated_time": "2026-08-25T00:00:00Z",
+				"custom_metadata": customMetadata[name],
+			}})
 		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/v1/secret/data/"):
 			name := strings.TrimPrefix(r.URL.Path, "/v1/secret/data/")
 			_ = json.NewEncoder(w).Encode(map[string]any{
@@ -77,13 +83,14 @@ func TestVaultKVEnumerateCertificateSecrets(t *testing.T) {
 	defer srv.Close()
 
 	e, err := vaultkv.New(vaultkv.Config{
-		VaultURL:   srv.URL,
-		Mount:      "secret",
-		PathPrefix: "tls",
-		Token:      cloudcert.StaticToken("vault-token"),
-		HTTPClient: srv.Client(),
-		TagKey:     "type",
-		TagValue:   "certificate",
+		VaultURL:       srv.URL,
+		Mount:          "secret",
+		PathPrefix:     "tls",
+		Token:          cloudcert.StaticToken("vault-token"),
+		HTTPClient:     srv.Client(),
+		TagKey:         "type",
+		TagValue:       "certificate",
+		InspectContent: true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -92,10 +99,15 @@ func TestVaultKVEnumerateCertificateSecrets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Enumerate: %v", err)
 	}
-	if len(found) != 1 {
-		t.Fatalf("found %d TLS secrets, want 1: %+v", len(found), found)
+	if len(found) != 3 {
+		t.Fatalf("found %d metadata/certificate records, want 3: %+v", len(found), found)
 	}
 	got := found[0]
+	for _, item := range found {
+		if item.Kind == "x509_certificate" {
+			got = item
+		}
+	}
 	if got.Provider != "hashicorp-vault" || got.SecretName != "tls/web" {
 		t.Fatalf("bad Vault finding identity: %+v", got)
 	}
@@ -111,6 +123,28 @@ func TestVaultKVEnumerateCertificateSecrets(t *testing.T) {
 	for _, op := range seen {
 		if !strings.HasPrefix(op, "LIST ") && !strings.HasPrefix(op, "GET ") {
 			t.Fatalf("Vault KV discovery invoked non-read-only operation %q; seen=%v", op, seen)
+		}
+	}
+}
+
+func TestVaultKVMetadataModeNeverReadsTheDataPath(t *testing.T) {
+	var seen []string
+	srv := vaultKVDouble(t, map[string]string{"tls/db": "do-not-read"}, map[string]map[string]string{"tls/db": {}}, &seen)
+	defer srv.Close()
+	e, err := vaultkv.New(vaultkv.Config{
+		VaultURL: srv.URL, Mount: "secret", PathPrefix: "tls",
+		Token: cloudcert.StaticToken("vault-token"), HTTPClient: srv.Client(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found, err := e.Enumerate(context.Background())
+	if err != nil || len(found) != 1 || found[0].Kind != "cloud_secret_resource" {
+		t.Fatalf("metadata inventory = %+v err=%v", found, err)
+	}
+	for _, operation := range seen {
+		if strings.Contains(operation, "/data/") {
+			t.Fatalf("metadata-only mode read the value-bearing data path: %v", seen)
 		}
 	}
 }

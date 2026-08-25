@@ -109,7 +109,7 @@ describe("workload identity disclosure surface", () => {
     const user = userEvent.setup();
     renderWorkloads();
 
-    expect(await screen.findByRole("heading", { level: 1, name: "Machine & Workload Trust" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Workloads & Machines" })).toBeInTheDocument();
     const attention = await screen.findByRole("list", { name: "Machine and workload attention" });
     expect(within(attention).getByText("spiffe://prod/payments-api")).toBeInTheDocument();
     expect(within(attention).getByText(/expires in 5 days/i)).toBeInTheDocument();
@@ -150,7 +150,7 @@ describe("workload identity disclosure surface", () => {
     const user = userEvent.setup();
     renderWorkloads();
 
-    expect(screen.getByRole("heading", { name: "Machine & Workload Trust" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Workloads & Machines" })).toBeInTheDocument();
     expect(screen.getByText(/which machine identities may stop working.*agents are stale/i)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Workload identity needs a trust source" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Set up workload identity" })).toHaveAttribute("aria-expanded", "false");
@@ -184,7 +184,7 @@ describe("workload identity disclosure surface", () => {
     const user = userEvent.setup();
     renderWorkloads();
 
-    expect(await screen.findByRole("heading", { level: 1, name: "Machine & Workload Trust" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Workloads & Machines" })).toBeInTheDocument();
     expect(screen.getByText("Workload attestation chain")).toBeInTheDocument();
     const setup = screen.getByRole("button", { name: "Set up workload identity" });
     expect(setup).toHaveAttribute("aria-expanded", "false");
@@ -218,7 +218,7 @@ describe("workload identity disclosure surface", () => {
   it("renders scoped AI-agent broker controls as metadata-only", async () => {
     renderWorkloads();
 
-    expect(await screen.findByRole("heading", { level: 1, name: "Machine & Workload Trust" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Workloads & Machines" })).toBeInTheDocument();
     expect(screen.getByText("AI-agent / NHI broker")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Issue broker identity" })).toBeInTheDocument();
     expect(screen.getByLabelText("Agent ID")).toHaveValue("agent-build-1");

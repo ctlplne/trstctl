@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -32,7 +33,7 @@ func newDiscoveryRelayHarness(t *testing.T, segmentName string) *roleHarness {
 		t.Fatalf("relay heartbeat: %v", err)
 	}
 	if _, err := h.store.UpsertDiscoverySegment(t.Context(), h.tenant, store.DiscoverySegment{
-		Name: segmentName, Ranges: []string{"10.42.0.0/16"}, StalenessHours: 24,
+		Name: segmentName, Ranges: []string{"10.42.0.0/16", "127.0.0.1"}, StalenessHours: 24,
 	}); err != nil {
 		t.Fatalf("declare discovery segment: %v", err)
 	}
@@ -96,7 +97,7 @@ func TestServedNetworkDiscoveryUsesTheBoundRelayAUD28(t *testing.T) {
 		t.Fatalf("relay heartbeat: %v", err)
 	}
 	segment, err := h.store.UpsertDiscoverySegment(t.Context(), h.tenant, store.DiscoverySegment{
-		Name: "isolated-core", Ranges: []string{"10.42.0.0/16"}, StalenessHours: 24,
+		Name: "isolated-core", Ranges: []string{"127.0.0.1"}, StalenessHours: 24,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -356,6 +357,35 @@ func TestServedNetworkDiscoveryRequiresDeclaredSegmentAUD28(t *testing.T) {
 	})
 	if statusCode != http.StatusCreated || string(body) != string(firstBody) {
 		t.Fatalf("segment declaration replay = %d %s, want exact cached 201", statusCode, body)
+	}
+	statusCode, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/plans/preview", tok, map[string]any{
+		"name": "bounded-preview", "kind": "network",
+		"config": map[string]any{
+			"cidrs": []string{"192.0.2.0/30"}, "ports": []int{443},
+			"exclude_cidrs": []string{"192.0.2.1/32"}, "segment": "served-dmz",
+		},
+	})
+	if statusCode != http.StatusOK {
+		t.Fatalf("preview served segment: %d %s", statusCode, body)
+	}
+	var preview struct {
+		NormalizedTargetCount int      `json:"normalized_target_count"`
+		ExcludedTargetCount   int      `json:"excluded_target_count"`
+		NormalizedTargets     []string `json:"normalized_targets"`
+		SideEffects           bool     `json:"side_effects"`
+	}
+	if err := json.Unmarshal(body, &preview); err != nil {
+		t.Fatal(err)
+	}
+	if preview.NormalizedTargetCount != 3 || preview.ExcludedTargetCount != 1 || len(preview.NormalizedTargets) != 3 || preview.SideEffects {
+		t.Fatalf("server-calculated plan = %+v", preview)
+	}
+	statusCode, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/plans/preview", tok, map[string]any{
+		"name": "outside-preview", "kind": "network",
+		"config": map[string]any{"targets": []string{"198.51.100.10:443"}, "segment": "served-dmz"},
+	})
+	if statusCode != http.StatusBadRequest || !strings.Contains(string(body), "outside declared segment") {
+		t.Fatalf("out-of-scope preview = %d %s, want structured 400", statusCode, body)
 	}
 	statusCode, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
 		"name": "bound-network", "kind": "network",

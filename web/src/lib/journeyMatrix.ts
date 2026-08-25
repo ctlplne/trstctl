@@ -38,7 +38,7 @@ const routeCatalog = {
   audit: { path: "/audit", heading: "Change history" },
   caHierarchy: { path: "/ca-hierarchy", heading: "Certificate authorities" },
   certificates: { path: "/certificates", heading: "Certificates" },
-  discovery: { path: "/discovery", heading: "Find unmanaged credentials" },
+  discovery: { path: "/discovery", heading: "Discover" },
   graph: { path: "/graph", heading: "What could be affected" },
   identities: { path: "/identities", heading: "Machine identities" },
   migration: { path: "/migration", heading: "Move to trstctl" },
@@ -51,7 +51,7 @@ const routeCatalog = {
   profiles: { path: "/profiles", heading: "Certificate rules" },
   request: { path: "/request", heading: "Request a certificate" },
   risk: { path: "/risk", heading: "What to fix first" },
-  workloads: { path: "/workloads", heading: "Machine & Workload Trust" },
+  workloads: { path: "/workloads", heading: "Workloads & Machines" },
   wizard: { path: "/wizard", heading: "Set up trstctl" },
 } as const satisfies Record<string, JourneySmokeRoute>;
 
