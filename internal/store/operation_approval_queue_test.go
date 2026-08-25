@@ -10,6 +10,22 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
+func TestOperationApprovalQueueIsEmptyBeforeTenantProjectionMaterializes(t *testing.T) {
+	s := newOperationApprovalStore(t)
+	ctx := context.Background()
+	const blankTenant = "77000000-0000-4000-8000-000000000099"
+
+	rows, err := s.ListOperationApprovalsPage(ctx, blankTenant, store.OperationApprovalListOptions{
+		Status: store.ApprovalStatusPending, Limit: 20, Visibility: store.AllOperationApprovalDomains(),
+	})
+	if err != nil {
+		t.Fatalf("list blank tenant approval queue: %v", err)
+	}
+	if rows == nil || len(rows) != 0 {
+		t.Fatalf("blank tenant approval queue = %#v, want a non-nil empty page", rows)
+	}
+}
+
 func TestOperationApprovalQueueStatusFilterUsesEffectiveExpiry(t *testing.T) {
 	s := newOperationApprovalStore(t)
 	ctx := context.Background()

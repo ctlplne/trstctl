@@ -557,9 +557,25 @@ func (s *Store) ListOperationApprovalsPage(ctx context.Context, tenantID string,
 		// when shaping effective status after the SQL filter so a request that
 		// crosses its deadline while rows are being read cannot appear as
 		// "expired" inside a pending/approved page.
-		var effectiveAt time.Time
-		if err := tx.QueryRow(ctx, `SELECT now() FROM tenants WHERE tenant_id = $1`, tenantID).Scan(&effectiveAt); err != nil {
+		var (
+			effectiveAt    time.Time
+			scopedTenantID string
+		)
+		// WithTenant has already established this request's tenant-scoped RLS
+		// transaction. Reading the transaction clock must not additionally require
+		// a materialized tenants row: the authenticated blank-install journey can
+		// legitimately reach an empty approval projection before any domain event
+		// creates that row. Coupling the clock read to tenants turned an empty queue
+		// into pgx.ErrNoRows and the served API translated that into a false 404.
+		// Return the RLS GUC beside the clock and verify it before reading rows, so
+		// this control query proves the transaction did not drift out of its tenant.
+		if err := tx.QueryRow(ctx,
+			`SELECT now(), COALESCE(current_setting('trstctl.tenant_id', true), '')`).Scan(
+			&effectiveAt, &scopedTenantID); err != nil {
 			return err
+		}
+		if scopedTenantID != tenantID {
+			return fmt.Errorf("store: approval queue tenant scope mismatch")
 		}
 		rows, err := tx.Query(ctx, `
 			SELECT `+operationApprovalColumns+` FROM operation_approval_requests r
