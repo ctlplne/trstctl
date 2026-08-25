@@ -131,7 +131,10 @@ func TestTokenForTenantACannotReachTenantB(t *testing.T) {
 // cosmetic relative to the API.
 func TestOIDCSessionAuthorizesAPIByRoles(t *testing.T) {
 	sessions := auth.NewSessionIssuer([]byte("test-session-secret-0123456789ab"), time.Hour)
-	cfg := api.AuthConfig{Sessions: sessions, DefaultTenant: tenantA, DefaultRoles: []string{"operator"}}
+	// prodAPIServer models the shipped HTTPS composition. Keep the fixture in
+	// secure-cookie mode so this cross-package test exercises the same cookie
+	// contract as production instead of the explicit loopback-only dev mode.
+	cfg := api.AuthConfig{Sessions: sessions, DefaultTenant: tenantA, DefaultRoles: []string{"operator"}, Secure: true}
 	srv, _ := prodAPIServer(t, api.WithAuth(cfg))
 
 	// An operator session may write.
