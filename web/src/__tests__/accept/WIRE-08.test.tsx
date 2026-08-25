@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { AppQueryProvider } from "@/lib/query";
 import { Secrets } from "@/pages/Secrets";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -21,6 +22,9 @@ const { apiMock } = vi.hoisted(() => ({
     issueDynamicLease: vi.fn(),
     renewDynamicLease: vi.fn(),
     revokeDynamicLease: vi.fn(),
+    transitKeys: vi.fn(),
+    createTransitKey: vi.fn(),
+    rotateTransitKey: vi.fn(),
     encryptTransit: vi.fn(),
     decryptTransit: vi.fn(),
     hmacTransit: vi.fn(),
@@ -38,10 +42,12 @@ vi.mock("@/lib/api", async (orig) => {
 function renderSecrets(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route path="/secrets" element={<Secrets />} />
-        <Route path="/secrets/:workspace" element={<Secrets />} />
-      </Routes>
+      <AppQueryProvider>
+        <Routes>
+          <Route path="/secrets" element={<Secrets />} />
+          <Route path="/secrets/:workspace" element={<Secrets />} />
+        </Routes>
+      </AppQueryProvider>
     </MemoryRouter>,
   );
 }
@@ -62,6 +68,12 @@ describe("WIRE-08 transit operation wiring", () => {
         },
       ],
     });
+    apiMock.transitKeys.mockResolvedValue({ items: [] });
+    apiMock.createTransitKey.mockImplementation(async (input: { name: string; kind: "aead" | "hmac" | "sign" }) => ({
+      name: input.name,
+      kind: input.kind,
+      version: 1,
+    }));
     apiMock.encryptTransit.mockResolvedValue({ ciphertext: "trst:v1:ciphertext", version: 4 });
     apiMock.decryptTransit.mockResolvedValue({ plaintext: "aGVsbG8gdHJhbnNpdA==" });
   });
@@ -73,8 +85,14 @@ describe("WIRE-08 transit operation wiring", () => {
 
     await user.click(await screen.findByRole("button", { name: "Open encryption and signing" }));
     expect(await screen.findByRole("heading", { name: "Transit and KMIP" })).toBeInTheDocument();
+    const keyForm = within(screen.getByRole("form", { name: "Create a Transit key" }));
+    await user.type(keyForm.getByLabelText("Key name"), "payments-pii");
+    await user.selectOptions(keyForm.getByLabelText("Key purpose"), "aead");
+    await user.click(keyForm.getByRole("button", { name: "Create key" }));
+    await waitFor(() => expect(apiMock.createTransitKey).toHaveBeenCalledWith({ name: "payments-pii", kind: "aead" }));
+
     const transitForm = within(screen.getByRole("form", { name: "Transit encrypt and decrypt" }));
-    await user.type(transitForm.getByLabelText("Key name"), "payments-pii");
+    expect(transitForm.getByLabelText("Encryption key")).toHaveValue("payments-pii");
     await user.type(transitForm.getByLabelText("Plaintext"), "hello transit");
     await user.type(transitForm.getByLabelText("AAD"), "tenant-a");
     await user.click(transitForm.getByRole("button", { name: /encrypt/i }));

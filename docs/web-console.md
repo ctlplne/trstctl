@@ -309,8 +309,11 @@ diff, a version-history selector, and an explicit disabled bulk-import disclosur
 [Secrets](features/secrets.md). Backed by `/api/v1/secrets/store` and
 `/api/v1/secrets/store/{name}`. **Automatic secret sources** (`/secrets/engines`) holds
 dynamic leases, CSR-first PKI-as-a-secrets-engine (the default; certificate-only),
-an explicit deprecated key-returning mode linked to its Audit receipts, and the transit console for
-encrypt/decrypt/HMAC against a managed key (`/api/v1/transit/*`).
+an explicit deprecated key-returning mode linked to its Audit receipts, and the
+Transit console for safe key-metadata readback, typed key creation/selection/rotation,
+and encrypt/decrypt/rewrap/HMAC/sign operations (`/api/v1/transit/*`). Key material
+never enters the browser; a decrypted value appears only in the dismissible reveal
+panel.
 **One-time secret links** (`/secrets/sharing`) covers self-destructing shares and
 separate ephemeral API keys. **Find leaked secrets in code** (`/secrets/scanning`)
 covers repository and pipeline checks; **Send secrets to systems** (`/secrets/sync`)

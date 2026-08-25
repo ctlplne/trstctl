@@ -27,6 +27,23 @@ func TestServedTransitAPIEncryptDecryptRewrap(t *testing.T) {
 	if code != http.StatusCreated {
 		t.Fatalf("create transit key = %d, want 201; body=%s", code, body)
 	}
+	code, body = doBearer(t, h.ts, http.MethodGet, "/api/v1/transit/keys", token, "", nil)
+	if code != http.StatusOK {
+		t.Fatalf("list transit keys = %d, want 200; body=%s", code, body)
+	}
+	var listed struct {
+		Items []struct {
+			Name    string `json:"name"`
+			Kind    string `json:"kind"`
+			Version int    `json:"version"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &listed); err != nil {
+		t.Fatalf("decode transit key list: %v; body=%s", err, body)
+	}
+	if len(listed.Items) != 1 || listed.Items[0].Name != "payments" || listed.Items[0].Kind != "aead" || listed.Items[0].Version != 1 {
+		t.Fatalf("transit key list exposed wrong metadata: %+v", listed.Items)
+	}
 
 	plaintext := []byte("card-number-tokenization-test")
 	aad := []byte("tenant=payments")
@@ -52,6 +69,10 @@ func TestServedTransitAPIEncryptDecryptRewrap(t *testing.T) {
 	})
 	if code != http.StatusOK {
 		t.Fatalf("rotate transit key = %d, want 200; body=%s", code, body)
+	}
+	code, body = doBearer(t, h.ts, http.MethodGet, "/api/v1/transit/keys", token, "", nil)
+	if code != http.StatusOK || json.Unmarshal(body, &listed) != nil || len(listed.Items) != 1 || listed.Items[0].Version != 2 {
+		t.Fatalf("transit key list did not durably read back rotation: code=%d items=%+v body=%s", code, listed.Items, body)
 	}
 
 	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/transit/rewrap", token, "kms-01-rewrap", map[string]any{

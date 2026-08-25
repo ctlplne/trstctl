@@ -65,9 +65,6 @@ import {
   type SecretValue,
   type ShareToken,
   type ShareValue,
-  type TransitCiphertext,
-  type TransitHMAC,
-  type TransitSignature,
 } from "@/lib/api";
 import {
   DynamicLeaseMetadata,
@@ -79,9 +76,7 @@ import {
   SecretApprovalQueue,
   Snippet,
   ThirdPartyScanPosture,
-  decodeTransitBytes,
   defaultThirdPartyProviders,
-  encodeTransitBytes,
   leaseMetadataOnly,
   mergeMeta,
   parseScopeList,
@@ -95,6 +90,7 @@ import {
 } from "./secrets/SecretsPageParts";
 import { apiProblemMessage } from "@/lib/apiProblem";
 import { SecretSyncWorkloadIdentityPanel } from "./secrets/SecretSyncWorkloadIdentityPanel";
+import { TransitOperations } from "./secrets/TransitOperations";
 
 /** The store (tree + table + lifecycle) renders at /secrets; every other
  * workflow is its own route in the Secrets space sidebar (S-C2) instead of
@@ -300,18 +296,6 @@ export function Secrets() {
   const [leaseError, setLeaseError] = useState<string | null>(null);
   const [lease, setLease] = useState<DynamicLease | null>(null);
   const [leaseCredential, setLeaseCredential] = useState<{ id: string; credential: string } | null>(null);
-
-  const [transitKey, setTransitKey] = useState("");
-  const [transitPlaintext, setTransitPlaintext] = useState("");
-  const [transitAAD, setTransitAAD] = useState("");
-  const [transitCiphertextInput, setTransitCiphertextInput] = useState("");
-  const [transitMessage, setTransitMessage] = useState("");
-  const [transitBusy, setTransitBusy] = useState<"encrypt" | "decrypt" | "hmac" | "rewrap" | "sign" | null>(null);
-  const [transitError, setTransitError] = useState<string | null>(null);
-  const [transitCiphertext, setTransitCiphertext] = useState<TransitCiphertext | null>(null);
-  const [transitPlaintextResult, setTransitPlaintextResult] = useState<string | null>(null);
-  const [transitHMACResult, setTransitHMACResult] = useState<TransitHMAC | null>(null);
-  const [transitSignature, setTransitSignature] = useState<TransitSignature | null>(null);
 
   const [scanPath, setScanPath] = useState("");
   const [scanMode, setScanMode] = useState<"workspace" | "git_history">("workspace");
@@ -1161,89 +1145,6 @@ export function Secrets() {
       setLeaseError(apiProblemMessage(err, "Could not revoke dynamic lease"));
     } finally {
       setLeaseBusy(null);
-    }
-  }
-
-  async function encryptTransit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setTransitError(null);
-    setTransitPlaintextResult(null);
-    setTransitBusy("encrypt");
-    try {
-      const ciphertext = await api.encryptTransit({
-        key: transitKey.trim(),
-        plaintext: encodeTransitBytes(transitPlaintext),
-        ...(transitAAD.trim() ? { aad: encodeTransitBytes(transitAAD.trim()) } : {}),
-      });
-      setTransitCiphertext(ciphertext);
-      setTransitCiphertextInput(ciphertext.ciphertext);
-      setTransitPlaintext("");
-    } catch (err) {
-      setTransitError(apiProblemMessage(err, "Could not encrypt plaintext"));
-    } finally {
-      setTransitBusy(null);
-    }
-  }
-
-  async function decryptTransit() {
-    setTransitError(null);
-    setTransitPlaintextResult(null);
-    setTransitBusy("decrypt");
-    try {
-      const result = await api.decryptTransit({
-        key: transitKey.trim(),
-        ciphertext: transitCiphertextInput.trim(),
-        ...(transitAAD.trim() ? { aad: encodeTransitBytes(transitAAD.trim()) } : {}),
-      });
-      setTransitPlaintextResult(decodeTransitBytes(result.plaintext));
-    } catch (err) {
-      setTransitError(apiProblemMessage(err, "Could not decrypt ciphertext"));
-    } finally {
-      setTransitBusy(null);
-    }
-  }
-
-  async function hmacTransit() {
-    setTransitError(null);
-    setTransitHMACResult(null);
-    setTransitBusy("hmac");
-    try {
-      setTransitHMACResult(await api.hmacTransit({ key: transitKey.trim(), data: encodeTransitBytes(transitMessage) }));
-    } catch (err) {
-      setTransitError(apiProblemMessage(err, "Could not compute HMAC"));
-    } finally {
-      setTransitBusy(null);
-    }
-  }
-
-  async function rewrapTransit() {
-    setTransitError(null);
-    setTransitBusy("rewrap");
-    try {
-      const result = await api.rewrapTransit({
-        key: transitKey.trim(),
-        ciphertext: transitCiphertextInput.trim(),
-        ...(transitAAD.trim() ? { aad: encodeTransitBytes(transitAAD.trim()) } : {}),
-      });
-      setTransitCiphertext(result);
-      setTransitCiphertextInput(result.ciphertext);
-    } catch (err) {
-      setTransitError(apiProblemMessage(err, "Could not rewrap ciphertext"));
-    } finally {
-      setTransitBusy(null);
-    }
-  }
-
-  async function signTransit() {
-    setTransitError(null);
-    setTransitSignature(null);
-    setTransitBusy("sign");
-    try {
-      setTransitSignature(await api.signTransit({ key: transitKey.trim(), message: encodeTransitBytes(transitMessage) }));
-    } catch (err) {
-      setTransitError(apiProblemMessage(err, "Could not sign message"));
-    } finally {
-      setTransitBusy(null);
     }
   }
 
@@ -3098,166 +2999,7 @@ export function Secrets() {
             </section>
           )}
 
-          {engineTask === "transit" && (
-            <section id="task-panel-transit" aria-labelledby="transit-heading" className="grid gap-4 border-y border-border py-4">
-              <div>
-                <h2 id="transit-heading" className="text-title font-semibold">
-                  {translateNow("source.transit.and.kmip.bbf61786e0")}
-                </h2>
-                <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.transit.operations.keep.key.material.serve.be62c8b11a")}</p>
-              </div>
-              {loadError ? (
-                <p role="note" className="rounded-control border border-brand-accent/25 bg-brand-accent/5 p-3 text-sm text-muted-foreground">
-                  {t("secrets.transit.independentFromStore")}
-                </p>
-              ) : null}
-              <form
-                aria-label={translateNow("source.transit.encrypt.and.decrypt.f3ae0fd83f")}
-                onSubmit={(event) => void encryptTransit(event)}
-                className="grid gap-3 xl:grid-cols-[14rem_minmax(0,1fr)]"
-              >
-                <label className="grid gap-1 text-sm">
-                  <span className="font-medium">{translateNow("source.key.name.6f245e973f")}</span>
-                  <input
-                    className="rounded-md border border-border bg-background px-3 py-2"
-                    value={transitKey}
-                    onChange={(event) => setTransitKey(event.target.value)}
-                    placeholder={translateNow("source.payments.pii.643f35ba95")}
-                    required
-                  />
-                </label>
-                <label className="grid gap-1 text-sm">
-                  <span className="font-medium">{translateNow("source.aad.9adbaf62d8")}</span>
-                  <input
-                    className="rounded-md border border-border bg-background px-3 py-2"
-                    value={transitAAD}
-                    onChange={(event) => setTransitAAD(event.target.value)}
-                    placeholder={translateNow("source.optional.associated.data.52eba643ce")}
-                  />
-                </label>
-                <label className="grid gap-1 text-sm xl:col-span-2">
-                  <span className="font-medium">{translateNow("source.plaintext.0707c5d972")}</span>
-                  <textarea
-                    className="min-h-24 rounded-md border border-border bg-background px-3 py-2"
-                    value={transitPlaintext}
-                    onChange={(event) => setTransitPlaintext(event.target.value)}
-                    placeholder={translateNow("source.local.plaintext.to.encrypt.a67b9e7b54")}
-                  />
-                </label>
-                <label className="grid gap-1 text-sm xl:col-span-2">
-                  <span className="font-medium">{translateNow("source.ciphertext.47955e6673")}</span>
-                  <textarea
-                    className="min-h-24 rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-                    value={transitCiphertextInput}
-                    onChange={(event) => setTransitCiphertextInput(event.target.value)}
-                    placeholder={translateNow("source.encrypted.result.or.ciphertext.to.decrypt.88441adfe9")}
-                  />
-                </label>
-                <div className="flex flex-wrap gap-2 xl:col-span-2">
-                  <Button type="submit" disabled={transitBusy === "encrypt" || !transitPlaintext.trim()}>
-                    {transitBusy === "encrypt" ? (
-                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                    ) : (
-                      <KeyRound className="h-4 w-4" aria-hidden="true" />
-                    )}
-                    {translateNow("source.encrypt.4f03bf1cdf")}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => void decryptTransit()}
-                    disabled={transitBusy === "decrypt" || !transitCiphertextInput.trim()}
-                  >
-                    {transitBusy === "decrypt" ? (
-                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                    ) : (
-                      <Eye className="h-4 w-4" aria-hidden="true" />
-                    )}
-                    {translateNow("source.decrypt.2e4629449b")}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => void rewrapTransit()}
-                    disabled={transitBusy === "rewrap" || !transitCiphertextInput.trim()}
-                  >
-                    {transitBusy === "rewrap" ? (
-                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                    ) : (
-                      <RotateCw className="h-4 w-4" aria-hidden="true" />
-                    )}
-                    {translateNow("source.rewrap.49c8c07065")}
-                  </Button>
-                </div>
-              </form>
-              <div className="grid gap-4 xl:grid-cols-2">
-                <div className="ui-panel grid gap-3 p-comfortable text-sm">
-                  <h3 className="text-title font-semibold">{translateNow("source.transit.result.7a54cd2a67")}</h3>
-                  {transitCiphertext ? (
-                    <dl className="grid gap-2">
-                      <div>
-                        <dt className="font-medium text-muted-foreground">{translateNow("source.ciphertext.47955e6673")}</dt>
-                        <dd className="break-all font-mono text-xs">{transitCiphertext.ciphertext}</dd>
-                      </div>
-                      <div>
-                        <dt className="font-medium text-muted-foreground">{translateNow("source.key.version.aa5d87c789")}</dt>
-                        <dd className="font-mono text-xs">v{transitCiphertext.version}</dd>
-                      </div>
-                    </dl>
-                  ) : (
-                    <p className="text-muted-foreground">{translateNow("source.no.transit.ciphertext.yet.f9d6c9870b")}</p>
-                  )}
-                </div>
-                <div className="ui-panel grid gap-3 p-comfortable text-sm">
-                  <h3 className="text-title font-semibold">{translateNow("source.hmac.and.signing.a21f893b5b")}</h3>
-                  <label className="grid gap-1">
-                    <span className="font-medium">{translateNow("source.message.2f77668a9d")}</span>
-                    <textarea
-                      className="min-h-20 rounded-md border border-border bg-background px-3 py-2"
-                      value={transitMessage}
-                      onChange={(event) => setTransitMessage(event.target.value)}
-                      placeholder={translateNow("source.message.bytes.to.mac.or.sign.1400a97072")}
-                    />
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    <Button type="button" variant="outline" onClick={() => void hmacTransit()} disabled={transitBusy === "hmac" || !transitMessage.trim()}>
-                      {transitBusy === "hmac" ? (
-                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                      ) : (
-                        <KeyRound className="h-4 w-4" aria-hidden="true" />
-                      )}
-                      {translateNow("source.compute.hmac.4809a2f350")}
-                    </Button>
-                    <Button type="button" variant="outline" onClick={() => void signTransit()} disabled={transitBusy === "sign" || !transitMessage.trim()}>
-                      {transitBusy === "sign" ? (
-                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                      ) : (
-                        <KeyRound className="h-4 w-4" aria-hidden="true" />
-                      )}
-                      {translateNow("source.sign.message.516e35c2fc")}
-                    </Button>
-                  </div>
-                  {transitHMACResult && <Snippet title={translateNow("source.hmac.32fd6f051c")} text={transitHMACResult.hmac} />}
-                  {transitSignature && (
-                    <Snippet
-                      title={translateNow("source.signature.f1a73e2204")}
-                      text={`${transitSignature.signature}\npublic_der: ${transitSignature.public_der}`}
-                    />
-                  )}
-                </div>
-              </div>
-              {transitError && <ErrorState title={translateNow("source.transit.operation.failed.22502fa40b")}>{transitError}</ErrorState>}
-              {transitPlaintextResult && (
-                <RevealPanel
-                  title={translateNow("source.decrypted.plaintext.675dd9b983")}
-                  onDismiss={() => setTransitPlaintextResult(null)}
-                  value={transitPlaintextResult}
-                >
-                  {translateNow("source.this.plaintext.was.decoded.locally.from.th.fbd3275222")}
-                </RevealPanel>
-              )}
-            </section>
-          )}
+          {engineTask === "transit" && <TransitOperations nativeStoreUnavailable={Boolean(loadError)} />}
 
           {engineTask === "pki" && (
             <section id="task-panel-pki" aria-labelledby="pki-heading" className="grid gap-4 border-y border-border py-4">

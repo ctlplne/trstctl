@@ -8741,6 +8741,14 @@ TransitKey = TypedDict(
     total=False,
 )
 
+TransitKeyList = TypedDict(
+    'TransitKeyList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
 TransitKeyRequest = TypedDict(
     'TransitKeyRequest',
     {

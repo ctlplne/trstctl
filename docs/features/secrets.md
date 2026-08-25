@@ -321,7 +321,9 @@ needing a narrow bearer credential for minutes, not a reusable key.
 
 Transit encrypts, decrypts, HMACs, signs, verifies, and rewraps data using tenant-scoped
 named keys the application _never sees_, mounted at `/api/v1/transit/*` with a
-one-for-one CLI: `POST /api/v1/transit/keys` / `transit keys create` mints a key,
+one-for-one CLI: `GET /api/v1/transit/keys` / `transit keys list` reads only
+tenant-scoped name, purpose, and current-version metadata;
+`POST /api/v1/transit/keys` / `transit keys create` mints a key,
 `.../keys/rotate` / `transit keys rotate` rotates it, and the same
 `POST /api/v1/transit/<op>` / `trstctl-cli transit <op>` pairing covers `encrypt`,
 `decrypt`, `rewrap`, `hmac`, `sign`, and `verify`.
@@ -335,20 +337,22 @@ response is written, and in-memory keyrings die on shutdown. Events —
 `transit.hmac`, `transit.sign` — give audit evidence without logging key bytes or
 plaintext.
 
-The console's **Encryption and signing** task at `/secrets/engines` currently operates
-encrypt, decrypt, rewrap, HMAC, and sign. Transit is a separate encryption service, so
-those controls remain available when the optional native secret store is disabled.
-The raw plaintext returned by decrypt is shown in a reveal-once panel and removed from
-the page when dismissed. Key create/rotate, signature verify, the version ledger,
-Transit-filtered audit receipts, and KMIP listener/profile status still require the
-API/CLI or deployment configuration; they are explicit console parity debt, not hidden
-controls.
+The console's **Encryption and signing** task at `/secrets/engines` reads back safe
+key metadata, creates AEAD/HMAC/signing keys, selects only a compatible key for each
+operation, rotates the selected key of each type, and operates encrypt, decrypt,
+rewrap, HMAC, and sign. Transit is a separate encryption service, so those controls
+remain available when the optional native secret store is disabled. No key bytes
+enter the browser. The raw plaintext returned by decrypt is shown in a reveal-once
+panel and removed from the page when dismissed. Signature verify, full version
+history, Transit-filtered audit receipts, and KMIP listener/profile status remain
+explicit console parity debt.
 
 ```bash
 cat > transit-key.json <<'JSON'
 {"name":"payments","kind":"aead"}
 JSON
 trstctl-cli --idempotency-key transit-payments-create transit keys create -f transit-key.json
+trstctl-cli transit keys list
 
 cat > transit-encrypt.json <<'JSON'
 {"key":"payments","plaintext":"Y2FyZC10b2tlbi0xMjM=","aad":"dGVuYW50PXBheW1lbnRz"}

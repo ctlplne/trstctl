@@ -172,9 +172,11 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// state-free server plan preview raises it to 378 and prevents the browser
 	// from inventing segment, exclusion, relay, or capacity decisions. The
 	// saved-source preflight raises it to 379 and keeps manual and scheduled run
-	// admission aligned with the same current relay-readiness answer.
-	if len(out) != 379 {
-		t.Fatalf("OpenAPI operationIds = %d, want 379", len(out))
+	// admission aligned with the same current relay-readiness answer. The safe,
+	// tenant-scoped Transit key metadata list raises it to 380 so the console
+	// never has to guess whether an operation-compatible key already exists.
+	if len(out) != 380 {
+		t.Fatalf("OpenAPI operationIds = %d, want 380", len(out))
 	}
 	return out
 }

@@ -17,6 +17,7 @@ import (
 // it; the API keeps this narrow so route handling never chooses providers at
 // runtime.
 type TransitService interface {
+	ListKeys(ctx context.Context, tenantID string) ([]transit.KeyInfo, error)
 	CreateKey(ctx context.Context, tenantID, name string, kind transit.Kind) (transit.KeyInfo, error)
 	Rotate(ctx context.Context, tenantID, name string) (transit.KeyInfo, error)
 	Encrypt(ctx context.Context, tenantID, name string, plaintext, aad []byte) (string, error)
@@ -47,6 +48,10 @@ type transitKeyResponse struct {
 	Name    string `json:"name"`
 	Kind    string `json:"kind"`
 	Version int    `json:"version"`
+}
+
+type transitKeyListResponse struct {
+	Items []transitKeyResponse `json:"items"`
 }
 
 type transitEncryptRequest struct {
@@ -122,6 +127,28 @@ func mapTransitError(err error) error {
 	default:
 		return err
 	}
+}
+
+func (a *API) listTransitKeys(w http.ResponseWriter, r *http.Request) {
+	if a.transit == nil {
+		a.writeError(w, transitDisabledProblem())
+		return
+	}
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	infos, err := a.transit.ListKeys(r.Context(), tenantID)
+	if err != nil {
+		a.writeError(w, mapTransitError(err))
+		return
+	}
+	items := make([]transitKeyResponse, 0, len(infos))
+	for _, info := range infos {
+		items = append(items, toTransitKeyResponse(info))
+	}
+	a.writeJSON(w, http.StatusOK, transitKeyListResponse{Items: items})
 }
 
 //trstctl:mutation

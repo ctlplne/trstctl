@@ -12,6 +12,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -133,6 +134,18 @@ func (s *Service) CreateKey(ctx context.Context, tenantID, name string, kind Kin
 		return KeyInfo{}, fmt.Errorf("transit: persist keyring after create: %w", err)
 	}
 	return KeyInfo{Name: name, Kind: kind, Version: 1}, nil
+}
+
+// ListKeys returns only non-secret metadata for the tenant's current keyring.
+// A read for an empty tenant does not allocate a ring or create mutable state.
+func (s *Service) ListKeys(_ context.Context, tenantID string) ([]KeyInfo, error) {
+	s.mu.Lock()
+	k := s.rings[tenantID]
+	s.mu.Unlock()
+	if k == nil {
+		return []KeyInfo{}, nil
+	}
+	return k.ListKeys(), nil
 }
 
 // Rotate adds a new version to a tenant-scoped key.
@@ -291,6 +304,19 @@ func (k *Keyring) Kind(name string) (Kind, error) {
 		return "", fmt.Errorf("transit: unknown key %q", name)
 	}
 	return nk.kind, nil
+}
+
+// ListKeys projects stable metadata without exposing key bytes. Sorting makes
+// API responses and operator evidence deterministic across process restores.
+func (k *Keyring) ListKeys() []KeyInfo {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	items := make([]KeyInfo, 0, len(k.keys))
+	for name, key := range k.keys {
+		items = append(items, KeyInfo{Name: name, Kind: key.kind, Version: key.latest})
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Name < items[j].Name })
+	return items
 }
 
 // Rotate adds a new version to a key and returns the new version number.

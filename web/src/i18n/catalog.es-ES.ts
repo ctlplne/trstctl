@@ -416,6 +416,53 @@ const esESCatalog = {
   // Machine-authored initial translation; a fluent Spanish reviewer must approve before localization sign-off.
   "secrets.transit.independentFromStore":
     "Transit usa el servicio de cifrado, por lo que cifrar, descifrar, volver a cifrar, calcular HMAC y firmar siguen disponibles cuando el almacén de secretos nativo está deshabilitado. Aún requiere los permisos de claves Transit indicados por la API.",
+  // Machine-authored initial translations; a fluent Spanish reviewer must approve before localization sign-off.
+  "secrets.transit.keySetupHeading": "Configurar claves Transit",
+  "secrets.transit.keySetupDescription":
+    "Una clave Transit permanece dentro de trstctl. Elija un solo propósito para que una solicitud de cifrado no use por accidente una clave de firma o HMAC. La consola solo lee el nombre, el tipo y la versión; nunca los bytes de la clave.",
+  "secrets.transit.createFormLabel": "Crear una clave Transit",
+  "secrets.transit.keyName": "Nombre de la clave",
+  "secrets.transit.keyNameDescription":
+    "Use un nombre estable para la aplicación y el propósito. La clave no se puede exportar ni cambiar a otro tipo después.",
+  "secrets.transit.keyNameRequired": "El nombre de la clave es obligatorio.",
+  "secrets.transit.keyPurpose": "Propósito de la clave",
+  "secrets.transit.keyPurposeDescription": "Esto fija qué operaciones puede realizar la clave.",
+  "secrets.transit.kindAEAD": "Cifrar, descifrar y reenvelopar (AEAD)",
+  "secrets.transit.kindHMAC": "Probar la integridad del mensaje (HMAC)",
+  "secrets.transit.kindSign": "Firmar mensajes (ECDSA P-256)",
+  "secrets.transit.createKey": "Crear clave",
+  "secrets.transit.createFailed": "No se pudo crear la clave Transit",
+  "secrets.transit.rotateFailed": "No se pudo rotar la clave Transit",
+  "secrets.transit.lifecycleFailed": "Falló el cambio de la clave Transit",
+  "secrets.transit.inventoryUnavailable": "El inventario de claves Transit no está disponible",
+  "secrets.transit.contractMismatch":
+    "Transit devolvió el tipo de clave no compatible {kind} para {name}. Actualice la consola o el servidor para que sus contratos coincidan.",
+  "secrets.transit.loadingKeys": "Leyendo metadatos de claves Transit…",
+  "secrets.transit.inventorySummary":
+    "Hay {count} claves Transit disponibles. Esta página solo recibió los metadatos no secretos de nombre, propósito y versión.",
+  "secrets.transit.keyReadBlocked": "Las claves Transit están ocultas para esta sesión",
+  "secrets.transit.keyReadBlockedDetail":
+    "Solicite keys:read para seleccionar una clave compatible. Las acciones criptográficas permanecen deshabilitadas en vez de adivinar el nombre o el tipo.",
+  "secrets.transit.keyWriteBlocked": "Esta sesión puede inspeccionar metadatos, pero se requiere keys:write para crear, rotar o usar una clave Transit.",
+  "secrets.transit.createdNotice": "Se creó {name}. La versión {version} es duradera y quedó seleccionada para sus operaciones compatibles.",
+  "secrets.transit.rotatedNotice":
+    "Se rotó {name}. La versión {version} es la actual; el texto cifrado antiguo conserva la versión necesaria para descifrarlo.",
+  "secrets.transit.encryptionKey": "Clave de cifrado",
+  "secrets.transit.hmacKey": "Clave HMAC",
+  "secrets.transit.signingKey": "Clave de firma",
+  "secrets.transit.selectKey": "Seleccione una clave compatible",
+  "secrets.transit.noEncryptionKey": "Aún no hay una clave AEAD. Cree arriba una clave para cifrar, descifrar y reenvelopar.",
+  "secrets.transit.noHMACKey": "Aún no hay una clave HMAC. Cree arriba una clave de integridad de mensajes.",
+  "secrets.transit.noSigningKey": "Aún no hay una clave de firma. Cree arriba una clave de firma ECDSA P-256.",
+  "secrets.transit.selectedVersion": "Versión {version}",
+  "secrets.transit.rotate": "Rotar",
+  "secrets.transit.rotateAria": "Rotar {name}",
+  "secrets.transit.aadDescription": "Los datos asociados opcionales se autentican, pero no se cifran. Se necesita el mismo valor para descifrar.",
+  "secrets.transit.encryptFailed": "No se pudo cifrar el texto plano",
+  "secrets.transit.decryptFailed": "No se pudo descifrar el texto cifrado",
+  "secrets.transit.rewrapFailed": "No se pudo reenvelopar el texto cifrado",
+  "secrets.transit.hmacFailed": "No se pudo calcular el HMAC",
+  "secrets.transit.signFailed": "No se pudo firmar el mensaje",
   "secrets.access.machineAdministration": "Administración del acceso de máquinas",
   "secrets.access.developerTools": "Herramientas para desarrolladores",
   "secrets.methods.heading": "Métodos de autenticación",

@@ -400,6 +400,7 @@ import type {
   TransitHMACRequest,
   TransitionRequest,
   TransitKey,
+  TransitKeyList,
   TransitKeyRequest,
   TransitPlaintext,
   TransitRewrapRequest,
@@ -957,6 +958,7 @@ export type {
   TransitHMAC,
   TransitHMACRequest,
   TransitKey,
+  TransitKeyList,
   TransitKeyRequest,
   TransitPlaintext,
   TransitRewrapRequest,
@@ -1876,6 +1878,7 @@ export interface Api {
   enableMachineAuthMethod(name: string): Promise<MachineAuthMethodOverride>;
   createShare(input: ShareRequest): Promise<ShareToken>;
   redeemShare(input: ShareRedeemRequest): Promise<ShareValue>;
+  transitKeys(): Promise<TransitKeyList>;
   createTransitKey(input: TransitKeyRequest): Promise<TransitKey>;
   rotateTransitKey(input: TransitRotateRequest): Promise<TransitKey>;
   encryptTransit(input: TransitEncryptRequest): Promise<TransitCiphertext>;
@@ -2385,6 +2388,7 @@ const liveApi: Api = {
   enableMachineAuthMethod: (name) => mutate<MachineAuthMethodOverride>("POST", `/api/v1/secrets/auth-methods/${encodeURIComponent(name)}/enable`),
   createShare: (input) => mutate<ShareToken>("POST", "/api/v1/secrets/shares", input),
   redeemShare: (input) => mutate<ShareValue>("POST", "/api/v1/secrets/shares/redeem", input),
+  transitKeys: () => req<TransitKeyList>("/api/v1/transit/keys"),
   createTransitKey: (input) => mutate<TransitKey>("POST", "/api/v1/transit/keys", input),
   rotateTransitKey: (input) => mutate<TransitKey>("POST", "/api/v1/transit/keys/rotate", input),
   encryptTransit: (input) => mutate<TransitCiphertext>("POST", "/api/v1/transit/encrypt", input),

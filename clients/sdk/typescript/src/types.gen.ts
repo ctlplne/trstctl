@@ -5372,7 +5372,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List tenant-scoped Transit key metadata */
+        get: operations["listTransitKeys"];
         put?: never;
         /** Create a tenant-scoped transit key */
         post: operations["createTransitKey"];
@@ -12063,6 +12064,9 @@ export interface components {
             kind: string;
             name: string;
             version: number;
+        };
+        TransitKeyList: {
+            items: components["schemas"]["TransitKey"][];
         };
         TransitKeyRequest: {
             kind: string;
@@ -27892,6 +27896,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TransitHMAC"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listTransitKeys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitKeyList"];
                 };
             };
             /** @description client error */

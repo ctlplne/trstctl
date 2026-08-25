@@ -4809,6 +4809,9 @@ func componentSchemas() map[string]*Schema {
 	transitKey := object(map[string]*Schema{
 		"name": str(), "kind": str(), "version": {Type: "integer"},
 	}, "name", "kind", "version")
+	transitKeyList := object(map[string]*Schema{
+		"items": {Type: "array", Items: ref("TransitKey")},
+	}, "items")
 	transitEncryptReq := object(map[string]*Schema{
 		"key": str(), "plaintext": {Type: "string", Format: "byte"}, "aad": {Type: "string", Format: "byte"},
 	}, "key", "plaintext")
@@ -5614,6 +5617,7 @@ func componentSchemas() map[string]*Schema {
 		"TransitKeyRequest":                 transitKeyReq,
 		"TransitRotateRequest":              transitRotateReq,
 		"TransitKey":                        transitKey,
+		"TransitKeyList":                    transitKeyList,
 		"TransitEncryptRequest":             transitEncryptReq,
 		"TransitDecryptRequest":             transitCiphertextReq,
 		"TransitRewrapRequest":              transitCiphertextReq,

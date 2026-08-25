@@ -28,6 +28,9 @@ const { apiMock } = vi.hoisted(() => ({
     issueDynamicLease: vi.fn(),
     renewDynamicLease: vi.fn(),
     revokeDynamicLease: vi.fn(),
+    transitKeys: vi.fn(),
+    createTransitKey: vi.fn(),
+    rotateTransitKey: vi.fn(),
     encryptTransit: vi.fn(),
     decryptTransit: vi.fn(),
     hmacTransit: vi.fn(),
@@ -302,6 +305,13 @@ function primeSecretsMocks() {
     issued_at: "2026-06-19T13:00:00Z",
     expires_at: "2026-06-19T13:25:00Z",
   });
+  apiMock.transitKeys.mockResolvedValue({ items: [] });
+  apiMock.createTransitKey.mockImplementation(async (input: { name: string; kind: string }) => ({ ...input, version: 1 }));
+  apiMock.rotateTransitKey.mockImplementation(async (input: { name: string }) => ({
+    name: input.name,
+    kind: input.name.includes("integrity") ? "hmac" : input.name.includes("signing") ? "sign" : "aead",
+    version: 2,
+  }));
   apiMock.encryptTransit.mockResolvedValue({ ciphertext: "trst:v1:ciphertext", version: 4 });
   apiMock.decryptTransit.mockResolvedValue({ plaintext: "aGVsbG8gdHJhbnNpdA==" });
   apiMock.hmacTransit.mockResolvedValue({ hmac: "hmac-base64" });
@@ -1346,8 +1356,25 @@ describe("secrets surface", () => {
 
     await user.click(await screen.findByRole("button", { name: "Open encryption and signing" }));
     expect(await screen.findByRole("heading", { name: "Transit and KMIP" })).toBeInTheDocument();
+
+    const keyForm = within(screen.getByRole("form", { name: "Create a Transit key" }));
+    await user.type(keyForm.getByLabelText("Key name"), "payments-pii");
+    await user.selectOptions(keyForm.getByLabelText("Key purpose"), "aead");
+    await user.click(keyForm.getByRole("button", { name: "Create key" }));
+    await waitFor(() => expect(apiMock.createTransitKey).toHaveBeenCalledWith({ name: "payments-pii", kind: "aead" }));
+
+    await user.type(keyForm.getByLabelText("Key name"), "payments-integrity");
+    await user.selectOptions(keyForm.getByLabelText("Key purpose"), "hmac");
+    await user.click(keyForm.getByRole("button", { name: "Create key" }));
+    await waitFor(() => expect(apiMock.createTransitKey).toHaveBeenCalledWith({ name: "payments-integrity", kind: "hmac" }));
+
+    await user.type(keyForm.getByLabelText("Key name"), "payments-signing");
+    await user.selectOptions(keyForm.getByLabelText("Key purpose"), "sign");
+    await user.click(keyForm.getByRole("button", { name: "Create key" }));
+    await waitFor(() => expect(apiMock.createTransitKey).toHaveBeenCalledWith({ name: "payments-signing", kind: "sign" }));
+
     const transitForm = within(screen.getByRole("form", { name: "Transit encrypt and decrypt" }));
-    await user.type(transitForm.getByLabelText("Key name"), "payments-pii");
+    expect(transitForm.getByLabelText("Encryption key")).toHaveValue("payments-pii");
     await user.type(transitForm.getByLabelText("Plaintext"), "hello transit");
     await user.type(transitForm.getByLabelText("AAD"), "tenant-a");
     await user.click(transitForm.getByRole("button", { name: /encrypt/i }));
@@ -1372,8 +1399,29 @@ describe("secrets surface", () => {
     expect(await screen.findByText("hello transit")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /dismiss/i }));
     expect(screen.queryByText("hello transit")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /compute hmac/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /sign message/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Rotate payments-pii" }));
+    await waitFor(() => expect(apiMock.rotateTransitKey).toHaveBeenCalledWith({ name: "payments-pii" }));
+    expect(await screen.findByText("Version 2")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Rotate payments-integrity" }));
+    await waitFor(() => expect(apiMock.rotateTransitKey).toHaveBeenCalledWith({ name: "payments-integrity" }));
+    await user.click(screen.getByRole("button", { name: "Rotate payments-signing" }));
+    await waitFor(() => expect(apiMock.rotateTransitKey).toHaveBeenCalledWith({ name: "payments-signing" }));
+    await user.type(screen.getByLabelText("Message"), "receipt body");
+    await user.click(screen.getByRole("button", { name: /compute hmac/i }));
+    await waitFor(() =>
+      expect(apiMock.hmacTransit).toHaveBeenCalledWith({
+        key: "payments-integrity",
+        data: "cmVjZWlwdCBib2R5",
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: /sign message/i }));
+    await waitFor(() =>
+      expect(apiMock.signTransit).toHaveBeenCalledWith({
+        key: "payments-signing",
+        message: "cmVjZWlwdCBib2R5",
+      }),
+    );
 
     cleanup();
     renderSecrets("/secrets/sync");
@@ -1530,8 +1578,12 @@ describe("secrets surface", () => {
     await user.click(screen.getByRole("button", { name: "Open encryption and signing" }));
     expect(await screen.findByText(/Transit uses the encryption service/)).toBeInTheDocument();
 
+    const keyForm = within(screen.getByRole("form", { name: "Create a Transit key" }));
+    await user.type(keyForm.getByLabelText("Key name"), "payments-pii");
+    await user.click(keyForm.getByRole("button", { name: "Create key" }));
+    await waitFor(() => expect(apiMock.createTransitKey).toHaveBeenCalledWith({ name: "payments-pii", kind: "aead" }));
+
     const form = within(screen.getByRole("form", { name: "Transit encrypt and decrypt" }));
-    await user.type(form.getByLabelText("Key name"), "payments-pii");
     await user.type(form.getByLabelText("Plaintext"), "hello transit");
     const encrypt = form.getByRole("button", { name: /encrypt/i });
     expect(encrypt).toBeEnabled();

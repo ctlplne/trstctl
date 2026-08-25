@@ -6247,6 +6247,10 @@ export interface TransitKey {
   version: number;
 }
 
+export interface TransitKeyList {
+  items: TransitKey[];
+}
+
 export interface TransitKeyRequest {
   kind: string;
   name: string;

@@ -213,9 +213,10 @@ describe("route-level product surface parity", () => {
       component: "Secrets",
       kind: "operate",
     });
+    expect(surface?.evidence).toMatch(/purpose-locked create\/select\/rotate/i);
     expect(surface?.evidence).toMatch(/encrypt\/decrypt/i);
     expect(surface?.evidence).toMatch(/native secret store/i);
-    expect(surface?.evidence).toMatch(/verify, versions, audit, and KMIP appliance posture remain parity debt/i);
+    expect(surface?.evidence).toMatch(/verify, full version history, audit, and KMIP appliance posture remain parity debt/i);
     expect(feature?.current_frontend_mapping).toMatch(/^partial workflow:/);
     expect(feature?.current_frontend_mapping).toMatch(/\/secrets\/engines/);
     expect(feature?.current_frontend_mapping).toMatch(/native secret stor(?:e|age)/i);

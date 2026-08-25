@@ -1326,6 +1326,7 @@ func (a *API) routes() []route {
 		// ENGINE adapter boundaries, and does not introduce runtime crypto suite
 		// registration, DLL/plugin engines, or a policy controller that feeds provider
 		// behavior at runtime.
+		{method: "GET", path: "/api/v1/transit/keys", opID: "listTransitKeys", summary: "List tenant-scoped Transit key metadata", handler: a.listTransitKeys, resSchema: "TransitKeyList", successCode: "200", perm: authz.KeysRead},
 		{method: "POST", path: "/api/v1/transit/keys", opID: "createTransitKey", summary: "Create a tenant-scoped transit key", handler: a.createTransitKey, reqSchema: "TransitKeyRequest", resSchema: "TransitKey", successCode: "201", mutation: true, perm: authz.KeysWrite},
 		{method: "POST", path: "/api/v1/transit/keys/rotate", opID: "rotateTransitKey", summary: "Rotate a tenant-scoped transit key", handler: a.rotateTransitKey, reqSchema: "TransitRotateRequest", resSchema: "TransitKey", successCode: "200", mutation: true, perm: authz.KeysWrite},
 		{method: "POST", path: "/api/v1/transit/encrypt", opID: "encryptTransit", summary: "Encrypt plaintext with a transit key", handler: a.encryptTransit, reqSchema: "TransitEncryptRequest", resSchema: "TransitCiphertext", successCode: "200", mutation: true, perm: authz.KeysWrite},

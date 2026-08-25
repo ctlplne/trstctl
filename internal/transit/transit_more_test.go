@@ -4,8 +4,51 @@ package transit
 
 import (
 	"context"
+	"reflect"
 	"testing"
 )
+
+func TestServiceListsOnlyTenantKeyMetadataInStableOrder(t *testing.T) {
+	ctx := context.Background()
+	svc := NewService(nil)
+	t.Cleanup(svc.Destroy)
+
+	for _, tc := range []struct {
+		tenant string
+		name   string
+		kind   Kind
+	}{
+		{tenant: "tenant-a", name: "signing", kind: KindSign},
+		{tenant: "tenant-b", name: "other-tenant", kind: KindAEAD},
+		{tenant: "tenant-a", name: "encryption", kind: KindAEAD},
+		{tenant: "tenant-a", name: "integrity", kind: KindHMAC},
+	} {
+		if _, err := svc.CreateKey(ctx, tc.tenant, tc.name, tc.kind); err != nil {
+			t.Fatalf("CreateKey(%s/%s): %v", tc.tenant, tc.name, err)
+		}
+	}
+
+	got, err := svc.ListKeys(ctx, "tenant-a")
+	if err != nil {
+		t.Fatalf("ListKeys(tenant-a): %v", err)
+	}
+	want := []KeyInfo{
+		{Name: "encryption", Kind: KindAEAD, Version: 1},
+		{Name: "integrity", Kind: KindHMAC, Version: 1},
+		{Name: "signing", Kind: KindSign, Version: 1},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ListKeys(tenant-a) = %+v, want %+v", got, want)
+	}
+
+	empty, err := svc.ListKeys(ctx, "tenant-with-no-keys")
+	if err != nil {
+		t.Fatalf("ListKeys(empty tenant): %v", err)
+	}
+	if len(empty) != 0 {
+		t.Fatalf("ListKeys(empty tenant) returned metadata: %+v", empty)
+	}
+}
 
 func TestTransitErrorPaths(t *testing.T) {
 	ctx := context.Background()

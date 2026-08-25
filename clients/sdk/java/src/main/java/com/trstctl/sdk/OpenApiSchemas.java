@@ -636,6 +636,7 @@ public final class OpenApiSchemas {
       "TransitHMAC",
       "TransitHMACRequest",
       "TransitKey",
+      "TransitKeyList",
       "TransitKeyRequest",
       "TransitPlaintext",
       "TransitRewrapRequest",

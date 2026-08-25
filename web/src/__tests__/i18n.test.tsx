@@ -1132,8 +1132,14 @@ describe("i18n boundary", () => {
       // now explains that Transit uses its independent encryption service and
       // names the five operations that remain available. Machine-authored
       // es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "928adaebbe94b43844b8570684dfa31b32c1a34f65250c1bd38264106425ccaa",
-      "de-DE": "527d9afac1cc0f4036200e337ab956dfdf63c988e3449f88588052f51e988caf",
+      // Product-overhaul Transit key-prerequisite re-pin: the console now
+      // distinguishes AEAD, HMAC, and signing keys, explains metadata-only
+      // readback, gives exact keys:read/keys:write recovery, and reports
+      // durable create/rotate versions. Cryptographic type names, permission
+      // tokens, and ECDSA P-256 stay byte-identical. Machine-authored es/de —
+      // FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "72e3b7a2923b5ffdd8a27939848a2fe8830ca1b1948dbb9f78d3c7c60177b3b2",
+      "de-DE": "f3fdb5272f27044ed56f2fc578ac25eb289927dba5ff1abaf72a8cca91124891",
     });
   });
 

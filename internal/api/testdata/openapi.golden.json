@@ -24549,6 +24549,20 @@
         ],
         "type": "object"
       },
+      "TransitKeyList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TransitKey"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "TransitKeyRequest": {
         "properties": {
           "kind": {
@@ -48178,6 +48192,51 @@
       }
     },
     "/api/v1/transit/keys": {
+      "get": {
+        "operationId": "listTransitKeys",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitKeyList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List tenant-scoped Transit key metadata",
+        "x-trstctl-permission": "keys:read"
+      },
       "post": {
         "operationId": "createTransitKey",
         "parameters": [

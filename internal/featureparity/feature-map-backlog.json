@@ -10288,9 +10288,9 @@
             "priority": 78,
             "served_state": "partial",
             "backend_status": "partial: served transit API and CLI; served KMIP mTLS listener for AES-256 SymmetricKey Create/Get/Locate/Revoke/Destroy",
-            "current_frontend_mapping": "partial workflow: Secrets at /secrets/engines serves Transit encrypt/decrypt, rewrap, HMAC, signing, and local-only reveal-once plaintext through the independent encryption service even when optional native secret storage is disabled. Key create/rotate, signature verification, key versions, Transit audit, and KMIP appliance profile/status remain API/CLI-only or absent from this console workflow.",
-            "target_gui_mapping": "Complete the existing Transit workflow with key create/rotate, verification, versions, audit receipts, and KMIP appliance profile/status without rendering key material.",
-            "acceptance_test": "Vitest proves Transit encryption remains usable when the native secret store returns 503, keeps plaintext local/reveal-once, and pins the exact partial residuals; served integration tests prove the corresponding Transit and KMIP operations.",
+            "current_frontend_mapping": "partial workflow: Secrets at /secrets/engines lists non-secret Transit key metadata, creates purpose-locked AEAD/HMAC/signing keys, selects only compatible keys, rotates the selected key of each type, and serves encrypt/decrypt, rewrap, HMAC, signing, and local-only reveal-once plaintext through the independent encryption service even when optional native secret storage is disabled. Signature verification, full key-version history, Transit-filtered audit, and KMIP appliance profile/status remain API/CLI-only or absent from this console workflow.",
+            "target_gui_mapping": "Complete the existing Transit workflow with signature verification, full version history, audit receipts, and KMIP appliance profile/status without rendering key material.",
+            "acceptance_test": "Vitest proves a blank console can create purpose-locked Transit keys, select only compatible types, rotate with durable metadata readback, and encrypt/decrypt/HMAC/sign while native secret storage returns 503; served integration tests prove list/create/rotate/encrypt/decrypt/rewrap and the corresponding KMIP operations.",
             "source_docs": [
                 "docs/features/secrets.md"
             ],
@@ -10303,11 +10303,13 @@
                 "internal/cli/command.go"
             ],
             "source_frontend": [
-                "web/src/pages/Secrets.tsx"
+                "web/src/pages/Secrets.tsx",
+                "web/src/pages/secrets/TransitOperations.tsx"
             ],
             "status": "closed",
-            "notes": "The earlier disclosure label was stale and its evidence overclaimed UI support for verify, versions, audit, and KMIP posture. The console already served five Transit operations, but an unrelated native-secret-store 503 disabled them. The corrected partial-workflow record names exactly what is operable, removes the false dependency, and preserves the remaining closure debt. TRACE-011 still proves KMIP Create, Locate, Revoke, and Destroy over the served mTLS TTLV handler.",
+            "notes": "The earlier disclosure label was stale and its evidence overclaimed UI support for verify, versions, audit, and KMIP posture. g10 removed the unrelated native-secret-store dependency, then live proof exposed the missing compatible-key prerequisite. The extracted Transit workflow now owns safe metadata readback plus purpose-locked list/create/select/rotate before operation. The remaining partial debt is verification, full history, filtered audit, and KMIP posture. TRACE-011 still proves KMIP Create, Locate, Revoke, and Destroy over the served mTLS TTLV handler.",
             "api_surface": [
+                "listTransitKeys",
                 "createTransitKey",
                 "rotateTransitKey",
                 "encryptTransit",
@@ -10319,6 +10321,7 @@
             ],
             "api_na": "",
             "cli_surface": [
+                "transit keys list",
                 "transit keys create",
                 "transit keys rotate",
                 "transit encrypt",
@@ -10332,7 +10335,7 @@
             "facet_evidence": {
                 "served": {
                     "evidence": [
-                        "served transit API mounted at /api/v1/transit for key create/rotate, encrypt/decrypt, rewrap, HMAC, sign, and verify",
+                        "served transit API mounted at /api/v1/transit for safe key metadata list, key create/rotate, encrypt/decrypt, rewrap, HMAC, sign, and verify",
                         "served KMIP mTLS listener handles AES-256 SymmetricKey Create/Get/Locate/Revoke/Destroy over bounded TTLV frames",
                         "served_state=partial",
                         "backend_status=partial: served transit API and CLI; served KMIP mTLS listener for AES-256 SymmetricKey Create/Get/Locate/Revoke/Destroy"
@@ -10351,20 +10354,22 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: partial workflow at /secrets/engines for Transit encrypt/decrypt, rewrap, HMAC, signing, and local-only reveal-once plaintext through the independent encryption service",
-                        "residual: key create/rotate, signature verification, key versions, Transit audit, and KMIP appliance profile/status remain outside the console workflow",
+                        "current_frontend_mapping: partial workflow at /secrets/engines for safe key metadata list, purpose-locked create/select/rotate, Transit encrypt/decrypt, rewrap, HMAC, signing, and local-only reveal-once plaintext through the independent encryption service",
+                        "residual: signature verification, full key-version history, Transit audit, and KMIP appliance profile/status remain outside the console workflow",
                         "target_gui_mapping: complete the existing Transit workflow without rendering key material"
                     ],
                     "refs": [
                         "web/src/lib/navigation.ts",
                         "web/src/App.tsx",
                         "web/src/pages/Secrets.tsx",
+                        "web/src/pages/secrets/TransitOperations.tsx",
                         "web/src/__tests__/secrets.test.tsx",
                         "web/src/__tests__/route_parity.test.ts"
                     ]
                 },
                 "cli": {
                     "evidence": [
+                        "CLI command: transit keys list",
                         "CLI command: transit keys create",
                         "CLI command: transit keys rotate",
                         "CLI command: transit encrypt",
@@ -10382,6 +10387,7 @@
                 },
                 "api": {
                     "evidence": [
+                        "OpenAPI operationId: listTransitKeys",
                         "OpenAPI operationId: createTransitKey",
                         "OpenAPI operationId: rotateTransitKey",
                         "OpenAPI operationId: encryptTransit",
@@ -10399,7 +10405,7 @@
                 },
                 "test": {
                     "evidence": [
-                        "acceptance_test: served Transit API creates a key, encrypts, rotates, rewraps, decrypts, and records audit events.",
+                        "acceptance_test: served Transit API lists safe metadata, creates a key, encrypts, rotates, reads back the new version, rewraps, decrypts, and records audit events.",
                         "acceptance_test: real PyKMIP client container creates and retrieves an AES-256 SymmetricKey over the served KMIP mTLS listener.",
                         "acceptance_test: served KMIP wire handler creates, locates, revokes, destroys, and rejects post-destroy Get for an AES-256 SymmetricKey.",
                         "memory-hygiene acceptance confirms Destroy zeroizes held AEAD key bytes.",

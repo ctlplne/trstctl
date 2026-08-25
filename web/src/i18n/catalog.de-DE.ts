@@ -428,6 +428,56 @@ const deDECatalog = {
   // Machine-authored initial translation; a fluent German reviewer must approve before localization sign-off.
   "secrets.transit.independentFromStore":
     "Transit verwendet den Verschlüsselungsdienst. Deshalb bleiben Verschlüsseln, Entschlüsseln, erneutes Verschlüsseln, HMAC und Signieren verfügbar, wenn der native Secret-Speicher deaktiviert ist. Es gelten weiterhin die in der API angegebenen Transit-Schlüsselberechtigungen.",
+  // Machine-authored initial translations; a fluent German reviewer must approve before localization sign-off.
+  "secrets.transit.keySetupHeading": "Transit-Schlüssel einrichten",
+  "secrets.transit.keySetupDescription":
+    "Ein Transit-Schlüssel bleibt in trstctl. Wählen Sie genau einen Zweck, damit eine Verschlüsselungsanfrage nicht versehentlich einen Signier- oder HMAC-Schlüssel verwendet. Die Konsole liest nur Name, Typ und Version zurück — niemals Schlüsselbytes.",
+  "secrets.transit.createFormLabel": "Transit-Schlüssel erstellen",
+  "secrets.transit.keyName": "Schlüsselname",
+  "secrets.transit.keyNameDescription":
+    "Verwenden Sie einen stabilen Namen für Anwendung und Zweck. Der Schlüssel kann nicht exportiert oder später in einen anderen Typ geändert werden.",
+  "secrets.transit.keyNameRequired": "Ein Schlüsselname ist erforderlich.",
+  "secrets.transit.keyPurpose": "Schlüsselzweck",
+  "secrets.transit.keyPurposeDescription": "Damit wird festgelegt, welche Operationen der Schlüssel ausführen darf.",
+  "secrets.transit.kindAEAD": "Verschlüsseln, entschlüsseln und neu verpacken (AEAD)",
+  "secrets.transit.kindHMAC": "Nachrichtenintegrität nachweisen (HMAC)",
+  "secrets.transit.kindSign": "Nachrichten signieren (ECDSA P-256)",
+  "secrets.transit.createKey": "Schlüssel erstellen",
+  "secrets.transit.createFailed": "Der Transit-Schlüssel konnte nicht erstellt werden",
+  "secrets.transit.rotateFailed": "Der Transit-Schlüssel konnte nicht rotiert werden",
+  "secrets.transit.lifecycleFailed": "Transit-Schlüsseländerung fehlgeschlagen",
+  "secrets.transit.inventoryUnavailable": "Das Transit-Schlüsselinventar ist nicht verfügbar",
+  "secrets.transit.contractMismatch":
+    "Transit hat für {name} den nicht unterstützten Schlüsseltyp {kind} zurückgegeben. Aktualisieren Sie Konsole oder Server, damit ihre Verträge übereinstimmen.",
+  "secrets.transit.loadingKeys": "Transit-Schlüsselmetadaten werden gelesen…",
+  "secrets.transit.inventorySummary":
+    "{count} Transit-Schlüssel verfügbar. Nur die nicht geheimen Metadaten Name, Zweck und Version wurden auf diese Seite geladen.",
+  "secrets.transit.keyReadBlocked": "Transit-Schlüssel sind für diese Sitzung ausgeblendet",
+  "secrets.transit.keyReadBlockedDetail":
+    "Fordern Sie keys:read an, um einen kompatiblen Schlüssel auszuwählen. Kryptografische Aktionen bleiben deaktiviert, statt Schlüsselname oder Typ zu erraten.",
+  "secrets.transit.keyWriteBlocked":
+    "Diese Sitzung kann Schlüsselmetadaten prüfen; zum Erstellen, Rotieren oder Verwenden eines Transit-Schlüssels ist jedoch keys:write erforderlich.",
+  "secrets.transit.createdNotice": "{name} wurde erstellt. Version {version} ist dauerhaft gespeichert und für kompatible Operationen ausgewählt.",
+  "secrets.transit.rotatedNotice":
+    "{name} wurde rotiert. Version {version} ist jetzt aktuell; ältere Ciphertexte nennen weiterhin die zum Entschlüsseln benötigte Version.",
+  "secrets.transit.encryptionKey": "Verschlüsselungsschlüssel",
+  "secrets.transit.hmacKey": "HMAC-Schlüssel",
+  "secrets.transit.signingKey": "Signierschlüssel",
+  "secrets.transit.selectKey": "Kompatiblen Schlüssel auswählen",
+  "secrets.transit.noEncryptionKey":
+    "Noch kein AEAD-Schlüssel vorhanden. Erstellen Sie oben einen Schlüssel zum Verschlüsseln, Entschlüsseln und Neuverpacken.",
+  "secrets.transit.noHMACKey": "Noch kein HMAC-Schlüssel vorhanden. Erstellen Sie oben einen Schlüssel für Nachrichtenintegrität.",
+  "secrets.transit.noSigningKey": "Noch kein Signierschlüssel vorhanden. Erstellen Sie oben einen ECDSA-P-256-Signierschlüssel.",
+  "secrets.transit.selectedVersion": "Version {version}",
+  "secrets.transit.rotate": "Rotieren",
+  "secrets.transit.rotateAria": "{name} rotieren",
+  "secrets.transit.aadDescription":
+    "Optionale zugeordnete Daten werden authentifiziert, aber nicht verschlüsselt. Zum Entschlüsseln ist derselbe Wert erforderlich.",
+  "secrets.transit.encryptFailed": "Klartext konnte nicht verschlüsselt werden",
+  "secrets.transit.decryptFailed": "Ciphertext konnte nicht entschlüsselt werden",
+  "secrets.transit.rewrapFailed": "Ciphertext konnte nicht neu verpackt werden",
+  "secrets.transit.hmacFailed": "HMAC konnte nicht berechnet werden",
+  "secrets.transit.signFailed": "Nachricht konnte nicht signiert werden",
   "secrets.access.machineAdministration": "Maschinenanmeldung verwalten",
   "secrets.access.developerTools": "Entwicklerwerkzeuge",
   "secrets.methods.heading": "Auth-Methoden",

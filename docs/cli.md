@@ -209,7 +209,7 @@ exhaustive subcommand list:
 | `setup`                            | Tenant-bound eval protocol profile status and activation (`protocols status` · `protocols activate`)                                                         |
 | `ssh`                              | SSH CA/KRL/attestation workflow status, trust rollout, attested user-cert issuance, revoke, host retirement (`fleet` · `status` · `trust-rollout` · `issue-attested-user` · `revoke` · `retire-host`) |
 | `support`                          | Show enterprise support, SLA, and services posture (`enterprise`)                                                                                            |
-| `transit keys`                     | Create and rotate a tenant-scoped transit key (`create` · `rotate`)                                                                                          |
+| `transit keys`                     | List safe metadata, create, and rotate a tenant-scoped Transit key (`list` · `create` · `rotate`)                                                            |
 | `transit`                          | Encrypt, decrypt, rewrap, HMAC, sign, verify with a transit key (`encrypt` · `decrypt` · `rewrap` · `hmac` · `sign` · `verify`)                              |
 | `workloads`                        | Workload attester trust sources and attested X.509-SVID issuance (`attester-trust-sources create/list/get/update/rotate/revoke/delete` · `attested-issuance`) |
 
