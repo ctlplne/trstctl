@@ -170,9 +170,11 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// shared typed discovery capability catalog raises it to 377 and maps beside
 	// F2 so a backend field cannot quietly outrun the console contract. The
 	// state-free server plan preview raises it to 378 and prevents the browser
-	// from inventing segment, exclusion, relay, or capacity decisions.
-	if len(out) != 378 {
-		t.Fatalf("OpenAPI operationIds = %d, want 378", len(out))
+	// from inventing segment, exclusion, relay, or capacity decisions. The
+	// saved-source preflight raises it to 379 and keeps manual and scheduled run
+	// admission aligned with the same current relay-readiness answer.
+	if len(out) != 379 {
+		t.Fatalf("OpenAPI operationIds = %d, want 379", len(out))
 	}
 	return out
 }

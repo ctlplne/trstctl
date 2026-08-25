@@ -5335,6 +5335,30 @@ export const messages = {
     description: "Discovery plan external-effects warning.",
   },
   "discovery.setup.preview.externalEffectsNone": { defaultMessage: "None during preview or save", description: "Discovery plan no-effects summary." },
+  "discovery.setup.preview.blockedTitle": {
+    defaultMessage: "Run blocked",
+    description: "Discovery preview heading when current infrastructure cannot execute the source.",
+  },
+  "discovery.setup.preview.blockedSaveHelp": {
+    defaultMessage: "You can save this source definition now. trstctl will not let it queue a scan until the blocker is fixed.",
+    description: "Discovery preview explanation that saving a blocked source is safe but running it is not allowed.",
+  },
+  "discovery.run.blocked": {
+    defaultMessage: "Run blocked: {reason}",
+    description: "Discovery run admission message with the exact server-owned remedy.",
+  },
+  "discovery.run.blockedFallback": {
+    defaultMessage: "This source is not ready to run. Review its execution prerequisites, then retry.",
+    description: "Discovery run admission fallback when the server provides no blocker detail.",
+  },
+  "discovery.source.readinessBlocked": {
+    defaultMessage: "Run blocked",
+    description: "Discovery source table label for a source whose current prerequisites are not satisfied.",
+  },
+  "discovery.source.readinessReady": {
+    defaultMessage: "Ready to run",
+    description: "Discovery source table label for a source whose current prerequisites are satisfied.",
+  },
   "discovery.shadow.heading": {
     defaultMessage: "Shadow NHI posture",
     description: "Heading for shadow and unmanaged non-human identity posture.",

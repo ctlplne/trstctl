@@ -1891,6 +1891,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/discovery/sources/{id}/preflight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Check whether a saved discovery source can run now */
+        get: operations["preflightDiscoverySource"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/edge/delegations": {
         parameters: {
             query?: never;
@@ -7719,8 +7736,11 @@ export interface components {
             summary: components["schemas"]["DiscoveryMonitoringSummary"];
         };
         DiscoveryMonitoringSource: {
+            blocked_reasons?: string[];
             certificate_inventory_count: number;
             completed_run_count: number;
+            connection_origin?: string;
+            execution_ready?: boolean;
             failed_run_count: number;
             finding_count: number;
             findings_path: string;
@@ -7774,6 +7794,7 @@ export interface components {
             preview_truncated: boolean;
             protocol?: string;
             queue_depth: number;
+            ready?: boolean;
             segment?: string;
             side_effects: boolean;
         };
@@ -17737,6 +17758,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DiscoverySource"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    preflightDiscoverySource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoveryPlanPreview"];
                 };
             };
             /** @description client error */

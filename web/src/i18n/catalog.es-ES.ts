@@ -6558,6 +6558,13 @@ const esESCatalog = {
   "discovery.setup.preview.externalEffects": "Efectos externos",
   "discovery.setup.preview.externalEffectsPresent": "El plan puede cambiar el estado externo",
   "discovery.setup.preview.externalEffectsNone": "Ninguno durante la vista previa o el guardado",
+  "discovery.setup.preview.blockedTitle": "Ejecución bloqueada",
+  "discovery.setup.preview.blockedSaveHelp":
+    "Puede guardar ahora esta definición de origen. trstctl no permitirá poner en cola un análisis hasta que se resuelva el bloqueo.",
+  "discovery.run.blocked": "Ejecución bloqueada: {reason}",
+  "discovery.run.blockedFallback": "Este origen no está listo para ejecutarse. Revise sus requisitos de ejecución y vuelva a intentarlo.",
+  "discovery.source.readinessBlocked": "Ejecución bloqueada",
+  "discovery.source.readinessReady": "Listo para ejecutarse",
 } satisfies Record<MessageKey, string>;
 
 export default esESCatalog;

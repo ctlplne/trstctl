@@ -4,6 +4,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -20,6 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -406,5 +408,95 @@ func TestServedNetworkDiscoveryRequiresDeclaredSegmentAUD28(t *testing.T) {
 	}
 	if _, err := h.store.GetDiscoverySegmentByName(t.Context(), h.tenant, "served-dmz"); err != nil {
 		t.Fatalf("served segment declaration did not survive replay: %v", err)
+	}
+}
+
+func TestServedNetworkDiscoveryPreflightBlocksGhostQueueWithoutRelay(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
+	statusCode, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/discovery/segments", tok,
+		"relay-readiness-segment", map[string]any{
+			"name": "relay-readiness-dmz", "ranges": []string{"192.0.2.0/24"}, "staleness_hours": 12,
+		})
+	if statusCode != http.StatusCreated {
+		t.Fatalf("declare relay-readiness segment: %d %s", statusCode, body)
+	}
+
+	statusCode, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/plans/preview", tok, map[string]any{
+		"name": "relay-readiness-preview", "kind": "network",
+		"config": map[string]any{"targets": []string{"192.0.2.10:443"}, "segment": "relay-readiness-dmz"},
+	})
+	if statusCode != http.StatusOK {
+		t.Fatalf("preview without relay: %d %s", statusCode, body)
+	}
+	var preview struct {
+		Ready            bool     `json:"ready"`
+		ConnectionOrigin string   `json:"connection_origin"`
+		BlockedReasons   []string `json:"blocked_reasons"`
+	}
+	if err := json.Unmarshal(body, &preview); err != nil {
+		t.Fatal(err)
+	}
+	if preview.Ready || !strings.Contains(preview.ConnectionOrigin, "No network relay") ||
+		len(preview.BlockedReasons) != 1 || !strings.Contains(preview.BlockedReasons[0], "Enroll") {
+		t.Fatalf("preview readiness = %+v, want one exact no-relay blocker", preview)
+	}
+
+	statusCode, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
+		"name": "relay-readiness-source", "kind": "network",
+		"config": map[string]any{"targets": []string{"192.0.2.10:443"}, "segment": "relay-readiness-dmz"},
+	})
+	if statusCode != http.StatusCreated {
+		t.Fatalf("save source without relay: %d %s", statusCode, body)
+	}
+	var source struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &source); err != nil {
+		t.Fatal(err)
+	}
+
+	statusCode, body = secretsReq(t, h, http.MethodGet,
+		"/api/v1/discovery/sources/"+source.ID+"/preflight", tok, nil)
+	if statusCode != http.StatusOK {
+		t.Fatalf("saved-source preflight without relay: %d %s", statusCode, body)
+	}
+	preview = struct {
+		Ready            bool     `json:"ready"`
+		ConnectionOrigin string   `json:"connection_origin"`
+		BlockedReasons   []string `json:"blocked_reasons"`
+	}{}
+	if err := json.Unmarshal(body, &preview); err != nil {
+		t.Fatal(err)
+	}
+	if preview.Ready || len(preview.BlockedReasons) != 1 {
+		t.Fatalf("saved-source preflight = %+v, want blocked", preview)
+	}
+	statusCode, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/monitoring", tok, nil)
+	if statusCode != http.StatusOK || !strings.Contains(string(body), `"execution_ready":false`) ||
+		!strings.Contains(string(body), `"blocked_reasons":["Enroll an agent with the network role before starting this source."]`) {
+		t.Fatalf("monitoring hid source execution blocker: %d %s", statusCode, body)
+	}
+
+	statusCode, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/schedules", tok, map[string]any{
+		"source_id": source.ID, "name": "blocked-hourly", "interval_seconds": 3600, "enabled": true,
+	})
+	if statusCode != http.StatusCreated {
+		t.Fatalf("save schedule for blocked source: %d %s", statusCode, body)
+	}
+	queued, scheduleErr := h.srv.RunDiscoverySchedulerOnce(t.Context())
+	if queued != 0 || !errors.Is(scheduleErr, orchestrator.ErrDiscoveryRelayUnavailable) {
+		t.Fatalf("scheduled run without relay = queued %d err %v, want no run and typed relay blocker", queued, scheduleErr)
+	}
+
+	statusCode, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{
+		"source_id": source.ID, "dry_run": true,
+	})
+	if statusCode != http.StatusConflict || !strings.Contains(string(body), "Enroll") {
+		t.Fatalf("run without relay = %d %s, want structured 409 with remedy", statusCode, body)
+	}
+	statusCode, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/runs?limit=10", tok, nil)
+	if statusCode != http.StatusOK || !strings.Contains(string(body), `"items":[]`) {
+		t.Fatalf("blocked run created durable ghost state: %d %s", statusCode, body)
 	}
 }

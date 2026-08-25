@@ -2116,8 +2116,11 @@ export interface DiscoveryMonitoring {
 }
 
 export interface DiscoveryMonitoringSource {
+  blocked_reasons?: string[];
   certificate_inventory_count: number;
   completed_run_count: number;
+  connection_origin?: string;
+  execution_ready?: boolean;
   failed_run_count: number;
   finding_count: number;
   findings_path: string;
@@ -2167,6 +2170,7 @@ export interface DiscoveryPlanPreview {
   preview_truncated: boolean;
   protocol?: string;
   queue_depth: number;
+  ready?: boolean;
   segment?: string;
   side_effects: boolean;
 }

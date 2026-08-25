@@ -1,1 +1,0 @@
-import{it as e}from"./index-Buvvw4A3.js";function t(t,n,...r){let i=e[t];return typeof i==`function`?i(...r):Promise.resolve(n)}export{t};

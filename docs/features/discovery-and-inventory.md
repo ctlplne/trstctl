@@ -11,8 +11,8 @@ Think of it like a building's master key register: someone has to walk every flo
 write down every lock and every key, and keep that register current as locks change.
 trstctl is that walker and that register, for machines.
 
-In the console, open **Trust Operations → Find unmanaged credentials**. The page
-starts with the credentials that need a decision. Choose **Run scan** to use an
+In the console, open **Discover**. The page starts with the credentials that need a
+decision. Choose **Run scan** to use an
 existing discovery source or add your first one.
 
 trstctl discovers credentials five ways, and each suits a different corner of your
@@ -61,9 +61,10 @@ breakdown, and the soonest-expiring certificates. It counts trstctl-issued rows,
 manually imported rows, and discovery-fed rows together, so a certificate issued by a
 different CA but found on a load balancer still shows up in the same health posture.
 
-### Network discovery (F2) — scanning from the outside, no agent needed
+### Network discovery (F2) — scanning from an enrolled network relay
 
-Network discovery connects to IP/port ranges you define, performs a normal
+Network discovery connects from an explicitly enrolled agent with the `network`
+role to IP/port ranges you define, performs a normal
 [TLS](../glossary.md) handshake, captures the certificate each host presents, and
 records its metadata. No software is installed on the targets — it sees exactly what
 any client on the network would see.
@@ -76,10 +77,19 @@ cryptography path, and the scanner applies the shared SSRF guard and a reserved-
 denylist before dialing expanded CIDRs, so a scan cannot be turned into a loopback,
 RFC1918, link-local, or cloud-metadata probe.
 
-Operators create a `network` source, queue a run, and inspect findings through
-REST/CLI/UI. The run executes from the outbox worker — the external probes are
-journaled first and delivered at-least-once, so they're durable and retryable instead
-of being done inline by the request handler.
+Operators can safely save a `network`, `ssh`, or `adcs` source before its relay is
+enrolled. Saving records configuration; it does not scan. Plan preview and
+`GET /api/v1/discovery/sources/{id}/preflight` return `ready`, the exact connection
+origin, and `blocked_reasons` from the same server-owned readiness rule. If no
+non-offboarded network-role relay exists, manual and scheduled run admission both
+refuse the run before a run event or outbox row is created. The console explains the
+shortest fix instead of leaving an impossible run silently queued.
+
+Once at least one eligible relay is enrolled, the run executes from the outbox worker.
+External probes are journaled first and delivered at-least-once, so a temporary relay
+disconnect after admission is durable and retryable instead of being done inline by
+the request handler. Readiness proves that an eligible relay exists; it does not claim
+that a particular relay is connected at every millisecond.
 
 ### Continuous monitoring rollup
 
@@ -88,7 +98,8 @@ read-side rollup over the tenant's discovery sources, enabled schedules, last ru
 findings, and certificate inventory — it creates no new state and joins the same
 `discovery.*` and `certificate.recorded` projections other endpoints already read. Each
 source row shows whether it's scheduled, the monitoring interval, the latest run
-status, finding counts, and pointers to `/api/v1/certificates` and
+status, current execution readiness, the exact blocker and connection origin,
+finding counts, and pointers to `/api/v1/certificates` and
 `/api/v1/discovery/findings`. The console keeps this exact rollup under
 **Monitoring and exact scan evidence**. The credentials needing a decision appear
 first; operators can still expand the underlying CT, drift, coverage, source,
@@ -381,6 +392,7 @@ cat > source.json <<'JSON'
 JSON
 trstctl-cli discovery sources create -f source.json
 trstctl-cli discovery sources list
+trstctl-cli discovery sources preflight <source-id>
 
 cat > run.json <<'JSON'
 {"source_id":"<source-id>"}
@@ -394,6 +406,7 @@ trstctl-cli nhi posture shadow
 The segment command maps to `POST /api/v1/discovery/segments`; declare that
 bounded estate scope before creating any network or SSH source. The remaining
 commands map to `POST|GET /api/v1/discovery/sources`,
+`GET /api/v1/discovery/sources/{id}/preflight`,
 `POST|GET /api/v1/discovery/schedules`, `POST|GET /api/v1/discovery/runs`,
 `GET /api/v1/discovery/runs/{id}`, `GET /api/v1/discovery/findings`,
 `POST /api/v1/discovery/findings/{id}/claim`, and
@@ -436,7 +449,7 @@ code awaiting control-plane wiring (this matters for an honest evaluation — se
 | Capability                                                | Status today                                                                                                                                                                             |
 | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Certificate inventory (F1)                                | **Served** — REST + CLI, event-sourced, with the `/api/v1/certificates/health` expiry/source dashboard                                                                                   |
-| Network discovery (F2)                                    | **Served** — source/schedule/run/finding APIs + CLI/UI; TLS scan executes through the outbox with reserved-IP SSRF filtering                                                             |
+| Network discovery (F2)                                    | **Served** — source/preview/preflight/schedule/run/finding APIs + CLI/UI; relay readiness is checked before admission, and TLS scans execute through the outbox with reserved-IP SSRF filtering |
 | Agent-based discovery (F3)                                | **Served** — enrollment (`/enroll/bootstrap`, `/api/v1/agents`) and the mTLS `ReportInventory` path record source/run/finding rows and graph nodes                                       |
 | SSH discovery (F42)                                       | **Served** — source/schedule/run/finding APIs + CLI/UI; host-key scans execute through the outbox, and on-host SSH/private-key inventory reports through the agent mTLS path             |
 | Agentless cloud discovery (F49)                           | **Served** — AWS ACM, Azure Key Vault, and GCP Certificate Manager provider execution runs from the outbox with credential references                                                    |
@@ -468,7 +481,7 @@ what it is.
   command groups outside discovery; `trstctl-cli <group> --help` lists the current
   subcommands for any of them.
 - **Served routes:** `GET|POST /api/v1/certificates`, `GET /api/v1/certificates/{id}`,
-  `GET|POST /api/v1/discovery/sources`, `GET|POST /api/v1/discovery/schedules`,
+  `GET|POST /api/v1/discovery/sources`, `GET /api/v1/discovery/sources/{id}/preflight`, `GET|POST /api/v1/discovery/schedules`,
   `GET|POST /api/v1/discovery/runs`, `GET /api/v1/discovery/runs/{id}`,
   `GET /api/v1/discovery/findings`, `POST /api/v1/discovery/findings/{id}/claim`,
   `POST /api/v1/discovery/findings/{id}/dismiss`, `GET /api/v1/agents`,

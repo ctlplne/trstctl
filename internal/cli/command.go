@@ -206,6 +206,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"discovery", "plans", "preview"}, Method: "POST", Path: "/api/v1/discovery/plans/preview", Body: bodyFile, Summary: "Validate and normalize a discovery plan without saving or scanning"},
 	{Name: []string{"discovery", "segments", "create"}, Method: "POST", Path: "/api/v1/discovery/segments", Body: bodyFile, Summary: "Declare or update a discovery segment before creating a network or SSH source"},
 	{Name: []string{"discovery", "sources", "list"}, Method: "GET", Path: "/api/v1/discovery/sources", Query: []string{"limit", "cursor"}, Summary: "List discovery sources"},
+	{Name: []string{"discovery", "sources", "preflight"}, Method: "GET", Path: "/api/v1/discovery/sources/{id}/preflight", Summary: "Check whether a saved discovery source can run now and show exact blockers"},
 	{Name: []string{"discovery", "schedules", "create"}, Method: "POST", Path: "/api/v1/discovery/schedules", Body: bodyFile, Summary: "Create a discovery schedule"},
 	{Name: []string{"discovery", "schedules", "list"}, Method: "GET", Path: "/api/v1/discovery/schedules", Query: []string{"limit", "cursor"}, Summary: "List discovery schedules"},
 	{Name: []string{"discovery", "runs", "start"}, Method: "POST", Path: "/api/v1/discovery/runs", Body: bodyFile, Summary: "Start a discovery run"},

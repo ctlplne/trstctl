@@ -1619,6 +1619,7 @@ export interface Api {
   offboardAgent(id: string, input: AgentOffboardRequest): Promise<AgentOffboardResponse>;
   discoveryCapabilities(): Promise<DiscoveryCapabilityCatalog>;
   previewDiscoveryPlan(input: DiscoverySourceRequest): Promise<DiscoveryPlanPreview>;
+  preflightDiscoverySource(id: string): Promise<DiscoveryPlanPreview>;
   createDiscoverySegment(input: DiscoverySegmentRequest): Promise<DiscoverySegment>;
   discoverySources(options?: { limit?: number; cursor?: string }): Promise<DiscoverySourceList>;
   createDiscoverySource(input: DiscoverySourceRequest): Promise<DiscoverySource>;
@@ -2087,6 +2088,7 @@ const liveApi: Api = {
   offboardAgent: (id, input) => mutate<AgentOffboardResponse>("POST", `/api/v1/agents/${encodeURIComponent(id)}/offboard`, input),
   discoveryCapabilities: () => req<DiscoveryCapabilityCatalog>("/api/v1/discovery/capabilities"),
   previewDiscoveryPlan: (input) => mutate<DiscoveryPlanPreview>("POST", "/api/v1/discovery/plans/preview", input),
+  preflightDiscoverySource: (id) => req<DiscoveryPlanPreview>(`/api/v1/discovery/sources/${encodeURIComponent(id)}/preflight`),
   createDiscoverySegment: (input) => mutate<DiscoverySegment>("POST", "/api/v1/discovery/segments", input),
   discoverySources: (options) => req<DiscoverySourceList>(`/api/v1/discovery/sources${pageQueryString(options)}`),
   createDiscoverySource: (input) => mutate<DiscoverySource>("POST", "/api/v1/discovery/sources", input),

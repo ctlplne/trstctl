@@ -6599,6 +6599,13 @@ const deDECatalog = {
   "discovery.setup.preview.externalEffects": "Externe Auswirkungen",
   "discovery.setup.preview.externalEffectsPresent": "Der Plan kann externen Zustand ändern",
   "discovery.setup.preview.externalEffectsNone": "Keine während Vorschau oder Speichern",
+  "discovery.setup.preview.blockedTitle": "Ausführung blockiert",
+  "discovery.setup.preview.blockedSaveHelp":
+    "Sie können diese Quelldefinition jetzt speichern. trstctl stellt keinen Scan in die Warteschlange, bis die Blockade behoben ist.",
+  "discovery.run.blocked": "Ausführung blockiert: {reason}",
+  "discovery.run.blockedFallback": "Diese Quelle ist noch nicht ausführbar. Prüfen Sie die Ausführungsvoraussetzungen und versuchen Sie es erneut.",
+  "discovery.source.readinessBlocked": "Ausführung blockiert",
+  "discovery.source.readinessReady": "Ausführungsbereit",
 } satisfies Record<MessageKey, string>;
 
 export default deDECatalog;

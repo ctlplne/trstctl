@@ -133,6 +133,7 @@ type DiscoveryMonitoringSource struct {
 	TenantID                  string
 	Kind                      string
 	Name                      string
+	Config                    json.RawMessage
 	CreatedAt                 time.Time
 	UpdatedAt                 time.Time
 	ScheduleID                string
@@ -686,6 +687,7 @@ func (s *Store) ListDiscoveryMonitoringSources(ctx context.Context, tenantID str
 			        s.tenant_id::text,
 			        s.kind,
 			        s.name,
+			        s.config,
 			        s.created_at,
 			        s.updated_at,
 			        COALESCE(sched.id, '') AS schedule_id,
@@ -747,7 +749,7 @@ func (s *Store) ListDiscoveryMonitoringSources(ctx context.Context, tenantID str
 		defer rows.Close()
 		for rows.Next() {
 			var row DiscoveryMonitoringSource
-			if err := rows.Scan(&row.SourceID, &row.TenantID, &row.Kind, &row.Name,
+			if err := rows.Scan(&row.SourceID, &row.TenantID, &row.Kind, &row.Name, &row.Config,
 				&row.CreatedAt, &row.UpdatedAt, &row.ScheduleID, &row.ScheduleEnabled,
 				&row.MonitoringIntervalSeconds, &row.ScheduleUpdatedAt, &row.LastRunID,
 				&row.LastRunStatus, &row.LastRunError, &row.LastRunCreatedAt,

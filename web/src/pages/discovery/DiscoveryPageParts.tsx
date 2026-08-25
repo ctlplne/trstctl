@@ -12,6 +12,10 @@ type DiscoveryMonitoringSource = DiscoveryMonitoring["sources"][number];
 // folds that answer back into the row.
 
 export type SourceActivity = {
+  /** Current server-owned execution readiness; undefined means an older server. */
+  executionReady?: boolean;
+  connectionOrigin: string;
+  blockedReasons: string[];
   lastRunStatus: string;
   lastRunAt: string;
   lastRunError: string;
@@ -31,6 +35,9 @@ export function sourceActivityByID(monitoring: DiscoveryMonitoringSource[]): Map
     const lastRunStatus = row.last_run_status ?? "";
     const neverRan = (row.run_count ?? 0) === 0;
     out.set(row.source_id, {
+      executionReady: row.execution_ready,
+      connectionOrigin: row.connection_origin ?? "",
+      blockedReasons: row.blocked_reasons ?? [],
       lastRunStatus,
       lastRunAt: row.last_run_completed_at ?? row.last_discovery_at ?? "",
       lastRunError: row.last_run_error ?? "",

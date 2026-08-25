@@ -48,6 +48,7 @@ type discoverySourceResponse struct {
 
 type discoveryPlanPreviewResponse struct {
 	Kind                  string   `json:"kind"`
+	Ready                 bool     `json:"ready"`
 	Execution             string   `json:"execution"`
 	Protocol              string   `json:"protocol,omitempty"`
 	ConnectionOrigin      string   `json:"connection_origin"`
@@ -92,21 +93,51 @@ func (a *API) previewDiscoveryPlan(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
 		return
 	}
+	preview, err := a.discoveryPlanPreview(r.Context(), tenantID, req)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, preview)
+}
+
+// preflightDiscoverySource recomputes execution readiness from the saved source
+// and current tenant infrastructure. It performs no scan and writes no state.
+func (a *API) preflightDiscoverySource(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	source, err := a.store.GetDiscoverySource(r.Context(), tenantID, r.PathValue("id"))
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	preview, err := a.discoveryPlanPreview(r.Context(), tenantID, discoverySourceRequest{
+		Kind: source.Kind, Name: source.Name, Config: source.Config,
+	})
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, preview)
+}
+
+func (a *API) discoveryPlanPreview(ctx context.Context, tenantID string, req discoverySourceRequest) (discoveryPlanPreviewResponse, error) {
 	if strings.TrimSpace(req.Name) == "" {
 		req.Name = "Discovery plan preview"
 	}
 	cfg, err := validateDiscoverySourceRequest(req)
 	if err != nil {
-		a.writeError(w, err)
-		return
+		return discoveryPlanPreviewResponse{}, err
 	}
 	if err := a.requireDiscoveryCredentialRefsAllowed(cfg); err != nil {
-		a.writeError(w, err)
-		return
+		return discoveryPlanPreviewResponse{}, err
 	}
 	capability, _ := sourcecatalog.Find(strings.TrimSpace(req.Kind))
 	preview := discoveryPlanPreviewResponse{
-		Kind: req.Kind, Execution: capability.Execution, ConnectionOrigin: capability.Execution,
+		Kind: req.Kind, Ready: true, Execution: capability.Execution, ConnectionOrigin: capability.Execution,
 		Permission: capability.Permission, DataHandling: capability.DataHandling,
 		SideEffects: false, BlockedReasons: []string{}, AppliedExclusions: []string{},
 		ChildJobCount: 1,
@@ -114,35 +145,32 @@ func (a *API) previewDiscoveryPlan(w http.ResponseWriter, r *http.Request) {
 	if req.Kind == "network" || req.Kind == "ssh" {
 		intent, resolveErr := segmentscan.Resolve(req.Kind, cfg)
 		if resolveErr != nil {
-			a.writeError(w, errStatus(http.StatusBadRequest, resolveErr.Error()))
-			return
+			return discoveryPlanPreviewResponse{}, errStatus(http.StatusBadRequest, resolveErr.Error())
 		}
-		segment, segmentErr := a.store.GetDiscoverySegmentByName(r.Context(), tenantID, intent.Segment)
+		segment, segmentErr := a.store.GetDiscoverySegmentByName(ctx, tenantID, intent.Segment)
 		if segmentErr != nil {
 			message := "declared segment could not be read"
 			if store.IsNotFound(segmentErr) {
 				message = "segment must be declared before previewing a network or SSH source"
 			}
-			a.writeError(w, errStatus(http.StatusBadRequest, message))
-			return
+			return discoveryPlanPreviewResponse{}, errStatus(http.StatusBadRequest, message)
 		}
 		if segment.Excluded {
-			a.writeError(w, errStatus(http.StatusBadRequest, "an excluded segment cannot back an executable discovery source"))
-			return
+			return discoveryPlanPreviewResponse{}, errStatus(http.StatusBadRequest, "an excluded segment cannot back an executable discovery source")
 		}
 		if scopeErr := segmentscan.ValidateDeclaredSegment(intent, segment.Ranges); scopeErr != nil {
-			a.writeError(w, errStatus(http.StatusBadRequest, scopeErr.Error()))
-			return
+			return discoveryPlanPreviewResponse{}, errStatus(http.StatusBadRequest, scopeErr.Error())
 		}
-		if relayErr := a.validateDiscoveryRelay(r.Context(), tenantID, intent.RequiredAgentID); relayErr != nil {
-			a.writeError(w, relayErr)
-			return
+		readiness, relayErr := a.orch.DiscoveryNetworkRelayReadiness(ctx, tenantID, intent.RequiredAgentID)
+		if relayErr != nil {
+			return discoveryPlanPreviewResponse{}, relayErr
 		}
 		const previewTargetLimit = 100
 		preview.Protocol = intent.Mode
-		preview.ConnectionOrigin = "eligible active network-role relay"
-		if intent.RequiredAgentID != "" {
-			preview.ConnectionOrigin = "network relay " + intent.RequiredAgentID
+		preview.Ready = readiness.Ready
+		preview.ConnectionOrigin = readiness.ConnectionOrigin
+		if !readiness.Ready {
+			preview.BlockedReasons = append(preview.BlockedReasons, readiness.BlockedReason)
 		}
 		preview.Segment = intent.Segment
 		preview.NormalizedTargetCount = len(intent.Targets)
@@ -159,21 +187,24 @@ func (a *API) previewDiscoveryPlan(w http.ResponseWriter, r *http.Request) {
 		// a deliberately conservative upper estimate, not a completion promise.
 		preview.EstimatedUpperSeconds = ((len(intent.Targets) + preview.Concurrency - 1) / preview.Concurrency) * 10
 	}
-	a.writeJSON(w, http.StatusOK, preview)
-}
-
-func (a *API) validateDiscoveryRelay(ctx context.Context, tenantID, relayAgentID string) error {
-	if relayAgentID == "" {
-		return nil
+	if req.Kind == adcsdiscovery.SourceKind {
+		intent, resolveErr := adcsdiscovery.ResolveInventoryIntent(cfg)
+		if resolveErr != nil {
+			return discoveryPlanPreviewResponse{}, errStatus(http.StatusBadRequest, resolveErr.Error())
+		}
+		readiness, relayErr := a.orch.DiscoveryNetworkRelayReadiness(ctx, tenantID, intent.RequiredAgentID)
+		if relayErr != nil {
+			return discoveryPlanPreviewResponse{}, relayErr
+		}
+		preview.Ready = readiness.Ready
+		preview.ConnectionOrigin = readiness.ConnectionOrigin
+		preview.Concurrency = 1
+		preview.QueueDepth = 256
+		if !readiness.Ready {
+			preview.BlockedReasons = append(preview.BlockedReasons, readiness.BlockedReason)
+		}
 	}
-	agent, err := a.store.GetAgent(ctx, tenantID, relayAgentID)
-	if err != nil {
-		return errStatus(http.StatusBadRequest, "relay_agent_id must name an enrolled tenant agent")
-	}
-	if agent.Status == "offboarded" || !sourceKindsContain(agent.Roles, segmentscan.RequiredRoleNetwork) {
-		return errStatus(http.StatusBadRequest, "relay_agent_id must name an active network-role agent")
-	}
-	return nil
+	return preview, nil
 }
 
 type discoverySegmentRequest struct {
@@ -339,6 +370,9 @@ type DiscoveryMonitoringSource struct {
 	SourceID                  string     `json:"source_id"`
 	Kind                      string     `json:"kind"`
 	Name                      string     `json:"name"`
+	ExecutionReady            bool       `json:"execution_ready"`
+	ConnectionOrigin          string     `json:"connection_origin"`
+	BlockedReasons            []string   `json:"blocked_reasons"`
 	Scheduled                 bool       `json:"scheduled"`
 	ScheduleID                string     `json:"schedule_id"`
 	MonitoringIntervalSeconds int        `json:"monitoring_interval_seconds"`
@@ -656,8 +690,14 @@ func (a *API) createDiscoverySource(w http.ResponseWriter, r *http.Request) {
 			if err := segmentscan.ValidateDeclaredSegment(intent, segment.Ranges); err != nil {
 				return 0, nil, errStatus(http.StatusBadRequest, err.Error())
 			}
-			if err := a.validateDiscoveryRelay(ctx, tenantID, intent.RequiredAgentID); err != nil {
-				return 0, nil, err
+			if intent.RequiredAgentID != "" {
+				readiness, err := a.orch.DiscoveryNetworkRelayReadiness(ctx, tenantID, intent.RequiredAgentID)
+				if err != nil {
+					return 0, nil, err
+				}
+				if !readiness.Ready {
+					return 0, nil, errStatus(http.StatusBadRequest, readiness.BlockedReason)
+				}
 			}
 		}
 		if kind == adcsdiscovery.SourceKind {
@@ -801,6 +841,10 @@ func (a *API) startDiscoveryRun(w http.ResponseWriter, r *http.Request) {
 			SourceID: req.SourceID, ScheduleID: scheduleID, DryRun: req.DryRun,
 		})
 		a.observeFeature("discovery", "start_run", start, err)
+		if errors.Is(err, orchestrator.ErrDiscoveryRelayUnavailable) {
+			return 0, nil, errStatus(http.StatusConflict,
+				"No network relay can claim this scan. Enroll an agent with the network role, then retry.")
+		}
 		if err != nil {
 			return 0, nil, err
 		}
@@ -870,6 +914,17 @@ func (a *API) listDiscoveryMonitoring(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, row := range rows {
 		item := toDiscoveryMonitoringSource(row)
+		preview, previewErr := a.discoveryPlanPreview(r.Context(), tenantID, discoverySourceRequest{
+			Kind: row.Kind, Name: row.Name, Config: row.Config,
+		})
+		if previewErr != nil {
+			item.ConnectionOrigin = "Source prerequisites could not be validated"
+			item.BlockedReasons = []string{"Open this source and review its exact configuration before starting a run."}
+		} else {
+			item.ExecutionReady = preview.Ready
+			item.ConnectionOrigin = preview.ConnectionOrigin
+			item.BlockedReasons = append([]string(nil), preview.BlockedReasons...)
+		}
 		out.Sources = append(out.Sources, item)
 		out.Summary.SourceCount++
 		if item.Scheduled {
@@ -1290,8 +1345,9 @@ func toDiscoveryFindingResponse(f store.DiscoveryFinding) discoveryFindingRespon
 func toDiscoveryMonitoringSource(row store.DiscoveryMonitoringSource) DiscoveryMonitoringSource {
 	item := DiscoveryMonitoringSource{
 		SourceID: row.SourceID, Kind: row.Kind, Name: row.Name,
-		Scheduled:  row.ScheduleID != "" && row.ScheduleEnabled,
-		ScheduleID: row.ScheduleID, MonitoringIntervalSeconds: row.MonitoringIntervalSeconds,
+		BlockedReasons: []string{},
+		Scheduled:      row.ScheduleID != "" && row.ScheduleEnabled,
+		ScheduleID:     row.ScheduleID, MonitoringIntervalSeconds: row.MonitoringIntervalSeconds,
 		LastRunID: row.LastRunID, LastRunStatus: row.LastRunStatus, LastRunError: orchestrator.SanitizeDiscoveryRunError(row.LastRunError),
 		LastRunCompletedAt: row.LastRunCompletedAt, LastDiscoveryAt: row.LastDiscoveryAt,
 		RunCount: row.RunCount, CompletedRunCount: row.CompletedRunCount,
@@ -1307,7 +1363,7 @@ func toDiscoveryMonitoringSource(row store.DiscoveryMonitoringSource) DiscoveryM
 }
 
 func discoveryMonitoringActive(item DiscoveryMonitoringSource) bool {
-	if !item.Scheduled {
+	if !item.Scheduled || !item.ExecutionReady {
 		return false
 	}
 	switch item.LastRunStatus {

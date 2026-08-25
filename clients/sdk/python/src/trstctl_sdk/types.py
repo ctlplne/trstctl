@@ -2996,8 +2996,11 @@ DiscoveryMonitoring = TypedDict(
 DiscoveryMonitoringSource = TypedDict(
     'DiscoveryMonitoringSource',
     {
+        'blocked_reasons': list[str],
         'certificate_inventory_count': int,
         'completed_run_count': int,
+        'connection_origin': str,
+        'execution_ready': bool,
         'failed_run_count': int,
         'finding_count': int,
         'findings_path': str,
@@ -3055,6 +3058,7 @@ DiscoveryPlanPreview = TypedDict(
         'preview_truncated': bool,
         'protocol': str,
         'queue_depth': int,
+        'ready': bool,
         'segment': str,
         'side_effects': bool,
     },

@@ -771,6 +771,12 @@ export function Discovery() {
     setBusy(`run:${sourceID}:${dryRun}`);
     setNotice(null);
     try {
+      const preflight = await api.preflightDiscoverySource(sourceID);
+      if (preflight.ready === false || preflight.blocked_reasons.length > 0) {
+        const reason = preflight.blocked_reasons.join(" ") || t("discovery.run.blockedFallback");
+        setNotice({ kind: "error", message: t("discovery.run.blocked", { reason }) });
+        return;
+      }
       await api.startDiscoveryRun({ source_id: sourceID, dry_run: dryRun });
       await load();
     } catch (err) {
@@ -1709,7 +1715,21 @@ function SourceTable({
     {
       id: "relay-binding",
       header: translateNow("discovery.source.executionBinding"),
-      cell: (source) => relayBinding(source),
+      cell: (source) => {
+        const sourceReadiness = activity.get(source.id);
+        return (
+          <div className="grid gap-1">
+            <span>{relayBinding(source)}</span>
+            {sourceReadiness?.executionReady === false ? (
+              <span className="text-caption text-status-critical">
+                {translateNow("discovery.source.readinessBlocked")}: {sourceReadiness.blockedReasons.join(" ")}
+              </span>
+            ) : sourceReadiness?.executionReady === true ? (
+              <span className="text-caption text-status-success">{translateNow("discovery.source.readinessReady")}</span>
+            ) : null}
+          </div>
+        );
+      },
     },
     {
       id: "last-run",
@@ -1736,12 +1756,20 @@ function SourceTable({
             type="button"
             size="sm"
             onClick={() => onStart(source.id, false)}
-            disabled={busy?.startsWith(`run:${source.id}`)}
+            disabled={busy?.startsWith(`run:${source.id}`) || activity.get(source.id)?.executionReady === false}
+            title={activity.get(source.id)?.executionReady === false ? activity.get(source.id)?.blockedReasons.join(" ") : undefined}
           >
             <Play className="h-4 w-4" aria-hidden="true" />
             {translateNow("source.run.00d60e31a4")}
           </Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => onStart(source.id, true)} disabled={busy?.startsWith(`run:${source.id}`)}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => onStart(source.id, true)}
+            disabled={busy?.startsWith(`run:${source.id}`) || activity.get(source.id)?.executionReady === false}
+            title={activity.get(source.id)?.executionReady === false ? activity.get(source.id)?.blockedReasons.join(" ") : undefined}
+          >
             {translateNow("source.dry.run.d5da154d9f")}
           </Button>
         </div>

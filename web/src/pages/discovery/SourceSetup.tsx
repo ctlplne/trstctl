@@ -457,6 +457,17 @@ export function SourceSetup({ onCreated }: { onCreated: (source: DiscoverySource
                   </div>
                 ))}
               </dl>
+              {planPreview && (planPreview.ready === false || planPreview.blocked_reasons.length > 0) ? (
+                <div role="alert" className="rounded-control border border-risk-warning/40 bg-risk-warning/10 p-3 text-sm">
+                  <p className="font-semibold text-foreground">{t("discovery.setup.preview.blockedTitle")}</p>
+                  <ul className="mt-1 list-disc space-y-1 ps-5 text-muted-foreground">
+                    {planPreview.blocked_reasons.map((reason) => (
+                      <li key={reason}>{reason}</li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-muted-foreground">{t("discovery.setup.preview.blockedSaveHelp")}</p>
+                </div>
+              ) : null}
               {planPreview?.normalized_targets?.length ? (
                 <details className="text-sm text-muted-foreground">
                   <summary className="cursor-pointer font-medium text-foreground">

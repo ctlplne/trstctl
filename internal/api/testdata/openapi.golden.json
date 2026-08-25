@@ -8288,11 +8288,23 @@
       },
       "DiscoveryMonitoringSource": {
         "properties": {
+          "blocked_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "certificate_inventory_count": {
             "type": "integer"
           },
           "completed_run_count": {
             "type": "integer"
+          },
+          "connection_origin": {
+            "type": "string"
+          },
+          "execution_ready": {
+            "type": "boolean"
           },
           "failed_run_count": {
             "type": "integer"
@@ -8514,6 +8526,9 @@
           },
           "queue_depth": {
             "type": "integer"
+          },
+          "ready": {
+            "type": "boolean"
           },
           "segment": {
             "type": "string"
@@ -33545,6 +33560,53 @@
         ],
         "summary": "Create a discovery source",
         "x-trstctl-permission": "discovery:write"
+      }
+    },
+    "/api/v1/discovery/sources/{id}/preflight": {
+      "get": {
+        "operationId": "preflightDiscoverySource",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryPlanPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Check whether a saved discovery source can run now",
+        "x-trstctl-permission": "discovery:read"
       }
     },
     "/api/v1/edge/delegations": {

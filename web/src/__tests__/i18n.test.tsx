@@ -1119,8 +1119,12 @@ describe("i18n boundary", () => {
       // and the fact that declaration does not start a scan are now explicit.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
       // release.
-      "es-ES": "886bb817afd8e9f23b450139f2064c03a1a996da4a9f1a06c7a5b1899e49c179",
-      "de-DE": "35cee3481eebe64b89d16c8420e83841245efdeb2026915d5fca04bc699fde59",
+      // Product-overhaul relay-readiness re-pin: preview, saved-source
+      // preflight, and source rows distinguish ready from blocked and explain
+      // that saving does not queue an impossible scan. Machine-authored es/de
+      // — FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "6be1d3d3c139ea5336864894bf3d6af08bb1289ffc170a024f2efee61e02b7e3",
+      "de-DE": "da192eeb38a7fa18e9d2ea90e95e601123d7e0b07030f26c65aee82bc84ce5e7",
     });
   });
 

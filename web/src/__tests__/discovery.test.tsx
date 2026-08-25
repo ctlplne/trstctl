@@ -18,6 +18,7 @@ const { apiMock } = vi.hoisted(() => ({
     discoveryFindings: vi.fn(),
     discoveryCapabilities: vi.fn(),
     previewDiscoveryPlan: vi.fn(),
+    preflightDiscoverySource: vi.fn(),
     claimDiscoveryFinding: vi.fn(),
     dismissDiscoveryFinding: vi.fn(),
     createDiscoverySource: vi.fn(),
@@ -114,6 +115,7 @@ function seedDiscoveryMocks() {
   });
   apiMock.previewDiscoveryPlan.mockResolvedValue({
     kind: "network",
+    ready: true,
     execution: "network-role relay",
     protocol: "tls",
     connection_origin: "selected network-role relay",
@@ -272,6 +274,9 @@ function seedDiscoveryMocks() {
         source_id: "source-1",
         kind: "network",
         name: "edge",
+        execution_ready: true,
+        connection_origin: "Network relay relay-agent-1",
+        blocked_reasons: [],
         scheduled: true,
         schedule_id: "schedule-1",
         monitoring_interval_seconds: 3600,
@@ -294,6 +299,9 @@ function seedDiscoveryMocks() {
         source_id: "source-cloud-secrets",
         kind: "cloud_secret",
         name: "cloud-secret-managers",
+        execution_ready: true,
+        connection_origin: "control plane",
+        blocked_reasons: [],
         scheduled: false,
         schedule_id: "",
         monitoring_interval_seconds: 0,
@@ -433,6 +441,23 @@ function seedDiscoveryMocks() {
     rejected: 0,
     blocked: 0,
     created_at: "2026-06-20T11:05:00Z",
+  });
+  apiMock.preflightDiscoverySource.mockResolvedValue({
+    kind: "network",
+    ready: true,
+    execution: "network-role relay",
+    connection_origin: "Enrolled network-role relay selected when the run is claimed",
+    normalized_target_count: 2,
+    preview_truncated: false,
+    excluded_target_count: 0,
+    child_job_count: 1,
+    concurrency: 16,
+    queue_depth: 256,
+    estimated_upper_seconds: 10,
+    permission: "discovery:write",
+    data_handling: "Public metadata only.",
+    side_effects: false,
+    blocked_reasons: [],
   });
 }
 
@@ -733,7 +758,36 @@ describe("discovery control-plane surface", () => {
     });
 
     await user.click(screen.getAllByRole("button", { name: "Run" })[0]);
+    expect(apiMock.preflightDiscoverySource).toHaveBeenCalledWith("source-1");
     expect(apiMock.startDiscoveryRun).toHaveBeenCalledWith({ source_id: "source-1", dry_run: false });
+  });
+
+  it("explains a missing relay before a discovery run can become a ghost queue", async () => {
+    const user = userEvent.setup();
+    apiMock.preflightDiscoverySource.mockResolvedValue({
+      kind: "network",
+      ready: false,
+      execution: "network-role relay",
+      connection_origin: "No network relay is enrolled",
+      normalized_target_count: 2,
+      preview_truncated: false,
+      excluded_target_count: 0,
+      child_job_count: 1,
+      concurrency: 16,
+      queue_depth: 256,
+      estimated_upper_seconds: 10,
+      permission: "discovery:write",
+      data_handling: "Public metadata only.",
+      side_effects: false,
+      blocked_reasons: ["Enroll an agent with the network role before starting this source."],
+    });
+    renderDiscovery(["/discovery?tab=sources"]);
+
+    await user.click((await screen.findAllByRole("button", { name: "Run" }))[0]);
+
+    expect(apiMock.preflightDiscoverySource).toHaveBeenCalledWith("source-1");
+    expect(apiMock.startDiscoveryRun).not.toHaveBeenCalled();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Enroll an agent with the network role before starting this source.");
   });
 
   it("shows relay segment and executing-agent provenance in run history", async () => {

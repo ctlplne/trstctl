@@ -1580,7 +1580,7 @@ func componentSchemas() map[string]*Schema {
 		"schema_version": {Type: "integer"}, "items": {Type: "array", Items: ref("DiscoveryCapability")},
 	}, "schema_version", "items")
 	discoveryPlanPreview := object(map[string]*Schema{
-		"kind": {Type: "string", Enum: discoverySourceKinds}, "execution": str(), "protocol": str(),
+		"kind": {Type: "string", Enum: discoverySourceKinds}, "ready": {Type: "boolean"}, "execution": str(), "protocol": str(),
 		"connection_origin": str(), "segment": str(),
 		"normalized_targets": {Type: "array", Items: str()}, "normalized_target_count": {Type: "integer"},
 		"preview_truncated": {Type: "boolean"}, "excluded_target_count": {Type: "integer"},
@@ -1647,6 +1647,9 @@ func componentSchemas() map[string]*Schema {
 		"source_id":                   uuid(),
 		"kind":                        {Type: "string", Enum: discoverySourceKinds},
 		"name":                        str(),
+		"execution_ready":             {Type: "boolean"},
+		"connection_origin":           str(),
+		"blocked_reasons":             {Type: "array", Items: str()},
 		"scheduled":                   {Type: "boolean"},
 		"schedule_id":                 str(),
 		"monitoring_interval_seconds": {Type: "integer"},

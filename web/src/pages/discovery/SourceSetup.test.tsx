@@ -108,6 +108,7 @@ describe("typed discovery source setup", () => {
     });
     apiMock.previewDiscoveryPlan.mockResolvedValue({
       kind: "network",
+      ready: true,
       execution: "network-role relay",
       protocol: "tls",
       connection_origin: "eligible active network-role relay",
@@ -178,6 +179,40 @@ describe("typed discovery source setup", () => {
       }),
     );
     expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ id: "source-1" }));
+  });
+
+  it("shows the exact server blocker while still allowing the source definition to be saved", async () => {
+    const user = userEvent.setup();
+    apiMock.previewDiscoveryPlan.mockResolvedValueOnce({
+      kind: "network",
+      ready: false,
+      execution: "network-role relay",
+      protocol: "tls",
+      connection_origin: "No network relay is enrolled",
+      segment: "production-edge",
+      normalized_targets: ["api.example.test:443"],
+      normalized_target_count: 1,
+      preview_truncated: false,
+      excluded_target_count: 0,
+      child_job_count: 1,
+      concurrency: 16,
+      queue_depth: 256,
+      estimated_upper_seconds: 10,
+      permission: "discovery:write",
+      data_handling: "Public metadata only.",
+      side_effects: false,
+      blocked_reasons: ["Enroll an agent with the network role before starting this source."],
+    });
+    renderSetup();
+
+    await user.type(await screen.findByRole("textbox", { name: "Source name" }), "Production TLS");
+    await user.type(screen.getByRole("textbox", { name: "Authorized scope" }), "production-edge");
+    await user.type(screen.getByRole("textbox", { name: /Hosts, IPs/ }), "api.example.test");
+    await user.click(screen.getByRole("button", { name: "Declare scope and review plan" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Run blocked");
+    expect(screen.getByRole("alert")).toHaveTextContent("Enroll an agent with the network role before starting this source.");
+    expect(screen.getByRole("button", { name: "Save source" })).toBeEnabled();
   });
 
   it("round-trips cloud credential references without rendering their full names in review", async () => {

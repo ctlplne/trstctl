@@ -209,9 +209,11 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// notification routing-preview read raises it to 388. The shared typed
 	// discovery capability contract raises it to 389 so terminal and console
 	// operators inspect the same fields, prerequisites, and dispositions. The
-	// state-free plan preview raises it to 390 with the same server oracle.
-	if len(out) != 390 {
-		t.Fatalf("CLI commands = %d, want 390", len(out))
+	// state-free plan preview raises it to 390 with the same server oracle. The
+	// saved-source preflight raises it to 391 so a headless operator gets the
+	// same current execution blocker as the source table.
+	if len(out) != 391 {
+		t.Fatalf("CLI commands = %d, want 391", len(out))
 	}
 	return out
 }

@@ -35,6 +35,21 @@ const (
 // count or log the loser as a failed delivery.
 var ErrDiscoveryScheduleNotDue = errors.New("orchestrator: discovery schedule is no longer due")
 
+// ErrDiscoveryRelayUnavailable means relay-owned work has no enrolled agent that
+// can claim it. Keeping this as a typed admission error lets the API return a
+// truthful conflict instead of recording a queued run that cannot start.
+var ErrDiscoveryRelayUnavailable = errors.New("orchestrator: no eligible network relay is enrolled")
+
+// DiscoveryRelayReadiness is the server-owned answer to "where will this scan
+// run?" Ready means an enrolled, non-offboarded agent has the network role. It
+// does not promise that the agent is connected at this exact millisecond; the
+// durable outbox still handles a temporary disconnect after admission.
+type DiscoveryRelayReadiness struct {
+	Ready            bool
+	ConnectionOrigin string
+	BlockedReason    string
+}
+
 var agentInventorySourceNamespace = uuid.MustParse("d5e0734a-9cc6-53a4-92f3-4f99387f8c3a")
 var secretScanSourceNamespace = uuid.MustParse("f2a0de71-857b-5a96-83be-0e65a0f2f107")
 var discoverySourceNamespace = uuid.MustParse("c47d7a97-a79c-5a36-a5b4-673b5afbe3cf")
@@ -192,7 +207,7 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 		if err := segmentscan.ValidateDeclaredSegment(resolved, segment.Ranges); err != nil {
 			return store.DiscoveryRun{}, fmt.Errorf("orchestrator: discovery segment scope: %w", err)
 		}
-		if err := o.validateDiscoveryNetworkRelay(ctx, tenantID, resolved.RequiredAgentID); err != nil {
+		if err := o.requireDiscoveryNetworkRelay(ctx, tenantID, resolved.RequiredAgentID); err != nil {
 			return store.DiscoveryRun{}, err
 		}
 		resolved.ID, resolved.SourceID, resolved.ScheduleID = id, in.SourceID, in.ScheduleID
@@ -207,7 +222,7 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 		if err != nil {
 			return store.DiscoveryRun{}, err
 		}
-		if err := o.validateDiscoveryNetworkRelay(ctx, tenantID, resolved.RequiredAgentID); err != nil {
+		if err := o.requireDiscoveryNetworkRelay(ctx, tenantID, resolved.RequiredAgentID); err != nil {
 			return store.DiscoveryRun{}, err
 		}
 		resolved.ID, resolved.SourceID, resolved.ScheduleID = id, in.SourceID, in.ScheduleID
@@ -279,18 +294,56 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 	}, nil
 }
 
-func (o *Orchestrator) validateDiscoveryNetworkRelay(ctx context.Context, tenantID, agentID string) error {
-	if strings.TrimSpace(agentID) == "" {
-		return nil
-	}
-	agent, err := o.store.GetAgent(ctx, tenantID, agentID)
+func (o *Orchestrator) requireDiscoveryNetworkRelay(ctx context.Context, tenantID, agentID string) error {
+	readiness, err := o.DiscoveryNetworkRelayReadiness(ctx, tenantID, agentID)
 	if err != nil {
-		return fmt.Errorf("orchestrator: resolve discovery relay: %w", err)
+		return err
 	}
-	if agent.Status == "offboarded" || !containsString(agent.Roles, segmentscan.RequiredRoleNetwork) {
-		return errors.New("orchestrator: selected discovery relay is not an active network-role agent")
+	if !readiness.Ready {
+		return fmt.Errorf("%w: %s", ErrDiscoveryRelayUnavailable, readiness.BlockedReason)
 	}
 	return nil
+}
+
+// DiscoveryNetworkRelayReadiness is shared by preview, saved-source preflight,
+// manual runs, and scheduled runs. That prevents the console from claiming a
+// different execution truth than the queue admission path enforces.
+func (o *Orchestrator) DiscoveryNetworkRelayReadiness(ctx context.Context, tenantID, agentID string) (DiscoveryRelayReadiness, error) {
+	agentID = strings.TrimSpace(agentID)
+	if agentID != "" {
+		agent, err := o.store.GetAgent(ctx, tenantID, agentID)
+		if err != nil {
+			if store.IsNotFound(err) {
+				return DiscoveryRelayReadiness{
+					ConnectionOrigin: "Selected network relay is not enrolled",
+					BlockedReason:    "Select an enrolled agent with the network role, or enroll one before starting this source.",
+				}, nil
+			}
+			return DiscoveryRelayReadiness{}, fmt.Errorf("orchestrator: resolve discovery relay: %w", err)
+		}
+		if agent.Status == "offboarded" || !containsString(agent.Roles, segmentscan.RequiredRoleNetwork) {
+			return DiscoveryRelayReadiness{
+				ConnectionOrigin: "Selected agent cannot run network discovery",
+				BlockedReason:    "Select a non-offboarded agent with the network role before starting this source.",
+			}, nil
+		}
+		return DiscoveryRelayReadiness{
+			Ready: true, ConnectionOrigin: "Network relay " + agent.ID,
+		}, nil
+	}
+	present, err := o.store.TenantHasNetworkRelay(ctx, tenantID)
+	if err != nil {
+		return DiscoveryRelayReadiness{}, err
+	}
+	if !present {
+		return DiscoveryRelayReadiness{
+			ConnectionOrigin: "No network relay is enrolled",
+			BlockedReason:    "Enroll an agent with the network role before starting this source.",
+		}, nil
+	}
+	return DiscoveryRelayReadiness{
+		Ready: true, ConnectionOrigin: "Enrolled network-role relay selected when the run is claimed",
+	}, nil
 }
 
 func containsString(values []string, want string) bool {
