@@ -52,12 +52,6 @@ var RecoveredFromPostgresBackup = []string{
 	// whose receipt history came back empty after a restore. It is restored
 	// from the PostgreSQL dump, honestly, until a projector exists.
 	"agent_job_receipts",
-	// C3 declared segments. Operator declarations, written directly rather than
-	// projected from events, so no replay rebuilds them. Losing them would not
-	// corrupt anything — coverage would report "nothing declared", which is the
-	// honest zero by design — but it would silently discard real operator work
-	// and make an estate look unmeasured rather than unrestored.
-	"discovery_segments",
 	"attestations",
 	// audit_checkpoints is a dual-recovery receiver. The PostgreSQL copy is paired
 	// with the event artifact so full restore can prove hidden tenant prefixes are

@@ -280,6 +280,19 @@ func TestEveryTruncatedReadModelTableIsRestoredBySnapshots(t *testing.T) {
 	}
 }
 
+func TestDiscoverySegmentsAreRebuiltAndSnapshotSafe(t *testing.T) {
+	const table = "discovery_segments"
+	if !containsRecoveryTable(ReadModelTables, table) {
+		t.Fatalf("%s is event-derived but missing from the cold-rebuild truncate set", table)
+	}
+	if !containsRecoveryTable(snapshotTables, table) {
+		t.Fatalf("%s is missing from snapshots, so restore would erase declared network coverage", table)
+	}
+	if SnapshotFormatVersion < 35 {
+		t.Fatalf("SnapshotFormatVersion = %d; a v34 payload cannot restore declared segments or their projection ordering", SnapshotFormatVersion)
+	}
+}
+
 func TestRevocationEndpointHealthIsRebuiltAndSnapshotSafe(t *testing.T) {
 	const table = "revocation_endpoint_health"
 	if !containsRecoveryTable(ReadModelTables, table) {

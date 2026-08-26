@@ -41,7 +41,7 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1328 annotated sites across 26 rules. Each row is
+1335 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -361,7 +361,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:329` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (206 sites)
+### G115 — CWE-190 Integer overflow or wraparound (213 sites)
 
 | Location | Reason |
 |---|---|
@@ -442,6 +442,7 @@ not this file.
 | `internal/projections/application_secret_rebuild_test.go:50` | the binding validator proved this fixture version is positive (CWE-190). |
 | `internal/projections/application_secret_rebuild_test.go:76` | the binding validator proved this fixture version is positive (CWE-190). |
 | `internal/projections/aud64_test.go:42` | every generated fixture sequence is a positive small integer (CWE-190). |
+| `internal/projections/discovery_declaration_convergence_test.go:385` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:447` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:232` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -500,9 +501,15 @@ not this file.
 | `internal/store/connector_lifecycle.go:497` | constrained positive PostgreSQL bigint (CWE-190) |
 | `internal/store/connector_lifecycle.go:500` | constrained positive PostgreSQL bigint (CWE-190) |
 | `internal/store/cryptoasset_migration_test.go:38` | bounded fixture/corpus value packing inside a test (CWE-190) |
+| `internal/store/discovery.go:177` | JetStream event sequences are stored in PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/store/discovery.go:221` | the migration constrains this PostgreSQL bigint to non-negative values (CWE-190) |
 | `internal/store/discovery_coverage.go:37` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/discovery_coverage.go:57` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/discovery_coverage.go:81` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/discovery_segments.go:74` | JetStream event sequences are stored in PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/store/discovery_segments.go:104` | the migration constrains this PostgreSQL bigint to non-negative values (CWE-190) |
+| `internal/store/discovery_segments.go:135` | the migration constrains this PostgreSQL bigint to non-negative values (CWE-190) |
+| `internal/store/discovery_segments.go:193` | the migration constrains this PostgreSQL bigint to non-negative values (CWE-190) |
 | `internal/store/endpoint_verification.go:112` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/endpoint_verification.go:156` | non-negative by construction (CWE-190) |
 | `internal/store/endpoint_verification.go:197` | constrained positive database sequence (CWE-190) |
@@ -533,8 +540,8 @@ not this file.
 | `internal/store/projection_checkpoint.go:213` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/secret_rotation_schedule.go:289` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:313` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
-| `internal/store/snapshot.go:437` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
-| `internal/store/snapshot.go:452` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/snapshot.go:442` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
+| `internal/store/snapshot.go:457` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/tenant.go:58` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/tenant.go:76` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/tenant_key_domain.go:146` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
@@ -661,7 +668,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:2931` | closed test table list above |
+| `internal/store/migration_content_test.go:2988` | closed test table list above |
 
 ### G203 — CWE-? (unmapped rule) (2 sites)
 

@@ -34,7 +34,7 @@ func newDiscoveryRelayHarness(t *testing.T, segmentName string) *roleHarness {
 	}); err != nil {
 		t.Fatalf("relay heartbeat: %v", err)
 	}
-	if _, err := h.store.UpsertDiscoverySegment(t.Context(), h.tenant, store.DiscoverySegment{
+	if _, err := h.srv.orch.UpsertDiscoverySegment(t.Context(), h.tenant, store.DiscoverySegment{
 		Name: segmentName, Ranges: []string{"10.42.0.0/16", "127.0.0.1"}, StalenessHours: 24,
 	}); err != nil {
 		t.Fatalf("declare discovery segment: %v", err)
@@ -98,7 +98,7 @@ func TestServedNetworkDiscoveryUsesTheBoundRelayAUD28(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("relay heartbeat: %v", err)
 	}
-	segment, err := h.store.UpsertDiscoverySegment(t.Context(), h.tenant, store.DiscoverySegment{
+	segment, err := h.srv.orch.UpsertDiscoverySegment(t.Context(), h.tenant, store.DiscoverySegment{
 		Name: "isolated-core", Ranges: []string{"127.0.0.1"}, StalenessHours: 24,
 	})
 	if err != nil {

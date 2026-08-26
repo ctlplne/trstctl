@@ -1143,8 +1143,6 @@ func postgresStateRestoreOrder() ([]string, error) {
 		// beside them because the two together are the fabric's memory of what
 		// agents were handed and what they reported back.
 		"agent_job_receipts",
-		// C3: no foreign keys, so ordering is free.
-		"discovery_segments",
 		"attestations",
 		"audit_checkpoints",
 		"credentials",

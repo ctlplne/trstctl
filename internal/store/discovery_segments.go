@@ -4,6 +4,9 @@ package store
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -19,9 +22,11 @@ import (
 
 // DiscoverySegment is one declared network segment.
 type DiscoverySegment struct {
-	ID     string
-	Name   string
-	Ranges []string
+	ID                      string
+	Name                    string
+	Ranges                  []string
+	ProjectionEventID       string
+	ProjectionEventSequence uint64
 	// StalenessHours is the operator's own SLO for this segment. Past it, a
 	// sweep result stops being evidence. Per segment because a DMZ and a lab do
 	// not deserve the same answer.
@@ -66,9 +71,17 @@ func (s *Store) ApplyDiscoverySegmentUpsertedTx(ctx context.Context, tx pgx.Tx, 
 	if createdAt.IsZero() {
 		createdAt = time.Now().UTC()
 	}
+	eventSequence := int64(seg.ProjectionEventSequence) // #nosec G115 -- JetStream event sequences are stored in PostgreSQL bigint throughout the projection spine (CWE-190)
+	manualWrite := seg.ProjectionEventID == "" || seg.ProjectionEventSequence == 0
 	var out DiscoverySegment
-	err := tx.QueryRow(ctx,
-		`INSERT INTO discovery_segments
+	var appliedSequence int64
+	if manualWrite {
+		// Direct store callers are setup/compatibility code, not the production
+		// command path. Preserve their historical tenant+name upsert contract, but
+		// never let an unversioned write overwrite a row already owned by an
+		// immutable event.
+		err := tx.QueryRow(ctx,
+			`INSERT INTO discovery_segments
 			     (tenant_id, id, name, ranges, staleness_hours, excluded, exclusion_reason, created_at)
 			 VALUES ($1, COALESCE(NULLIF($2,'')::uuid, gen_random_uuid()), $3, $4::text[], $5, $6, $7, $8)
 			 ON CONFLICT (tenant_id, name) DO UPDATE
@@ -76,12 +89,139 @@ func (s *Store) ApplyDiscoverySegmentUpsertedTx(ctx context.Context, tx pgx.Tx, 
 			        staleness_hours = EXCLUDED.staleness_hours,
 			        excluded = EXCLUDED.excluded,
 			        exclusion_reason = EXCLUDED.exclusion_reason
+			  WHERE discovery_segments.projection_event_id IS NULL
+			    AND discovery_segments.projection_event_sequence = 0
 			 RETURNING id::text, name, ranges, staleness_hours, excluded, exclusion_reason,
-			           last_swept_at, last_swept_by, last_found_count, created_at`,
-		tenantID, seg.ID, seg.Name, ranges, seg.StalenessHours, seg.Excluded, seg.ExclusionReason, createdAt).
+			           last_swept_at, last_swept_by, last_found_count, created_at,
+			           COALESCE(projection_event_id, ''), projection_event_sequence`,
+			tenantID, seg.ID, seg.Name, ranges, seg.StalenessHours, seg.Excluded, seg.ExclusionReason, createdAt).
+			Scan(&out.ID, &out.Name, &out.Ranges, &out.StalenessHours, &out.Excluded,
+				&out.ExclusionReason, &out.LastSweptAt, &out.LastSweptBy, &out.LastFoundCount, &out.CreatedAt,
+				&out.ProjectionEventID, &appliedSequence)
+		if err != nil {
+			return DiscoverySegment{}, discoveryDeclarationWriteError("segment", err)
+		}
+		out.ProjectionEventSequence = uint64(appliedSequence) // #nosec G115 -- the migration constrains this PostgreSQL bigint to non-negative values (CWE-190)
+		return out, nil
+	}
+
+	// Migration 0199 adds ordering metadata to rows created before discovery
+	// declarations were fully event-backed. Bind such a row to its first event
+	// exactly once, including the event's deterministic ID and creation time.
+	// After this adoption every replay goes through the strict ordered path.
+	err := tx.QueryRow(ctx,
+		`UPDATE discovery_segments
+		    SET id = $2::uuid,
+		        ranges = $4::text[],
+		        staleness_hours = $5,
+		        excluded = $6,
+		        exclusion_reason = $7,
+		        created_at = $8,
+		        projection_event_id = $9,
+		        projection_event_sequence = $10
+		  WHERE tenant_id = $1
+		    AND name = $3
+		    AND projection_event_id IS NULL
+		    AND projection_event_sequence = 0
+		 RETURNING id::text, name, ranges, staleness_hours, excluded, exclusion_reason,
+		           last_swept_at, last_swept_by, last_found_count, created_at,
+		           COALESCE(projection_event_id, ''), projection_event_sequence`,
+		tenantID, seg.ID, seg.Name, ranges, seg.StalenessHours, seg.Excluded, seg.ExclusionReason, createdAt,
+		seg.ProjectionEventID, eventSequence).
 		Scan(&out.ID, &out.Name, &out.Ranges, &out.StalenessHours, &out.Excluded,
-			&out.ExclusionReason, &out.LastSweptAt, &out.LastSweptBy, &out.LastFoundCount, &out.CreatedAt)
-	return out, err
+			&out.ExclusionReason, &out.LastSweptAt, &out.LastSweptBy, &out.LastFoundCount, &out.CreatedAt,
+			&out.ProjectionEventID, &appliedSequence)
+	if err == nil {
+		out.ProjectionEventSequence = uint64(appliedSequence) // #nosec G115 -- the migration constrains this PostgreSQL bigint to non-negative values (CWE-190)
+		if err := validateDiscoverySegmentProjectionResult(seg, out); err != nil {
+			return DiscoverySegment{}, err
+		}
+		return out, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return DiscoverySegment{}, discoveryDeclarationWriteError("segment", err)
+	}
+
+	err = tx.QueryRow(ctx,
+		`INSERT INTO discovery_segments
+			     (tenant_id, id, name, ranges, staleness_hours, excluded, exclusion_reason, created_at,
+			      projection_event_id, projection_event_sequence)
+			 VALUES ($1, COALESCE(NULLIF($2,'')::uuid, gen_random_uuid()), $3, $4::text[], $5, $6, $7, $8,
+			         NULLIF($9, ''), $10)
+			 ON CONFLICT ON CONSTRAINT discovery_segments_pkey DO UPDATE
+			    SET ranges = CASE WHEN (
+			            EXCLUDED.projection_event_sequence > discovery_segments.projection_event_sequence
+			            AND discovery_segments.projection_event_id IS DISTINCT FROM EXCLUDED.projection_event_id
+			            AND discovery_segments.name = EXCLUDED.name
+			        ) THEN EXCLUDED.ranges ELSE discovery_segments.ranges END,
+			        staleness_hours = CASE WHEN (
+			            EXCLUDED.projection_event_sequence > discovery_segments.projection_event_sequence
+			            AND discovery_segments.projection_event_id IS DISTINCT FROM EXCLUDED.projection_event_id
+			            AND discovery_segments.name = EXCLUDED.name
+			        ) THEN EXCLUDED.staleness_hours ELSE discovery_segments.staleness_hours END,
+			        excluded = CASE WHEN (
+			            EXCLUDED.projection_event_sequence > discovery_segments.projection_event_sequence
+			            AND discovery_segments.projection_event_id IS DISTINCT FROM EXCLUDED.projection_event_id
+			            AND discovery_segments.name = EXCLUDED.name
+			        ) THEN EXCLUDED.excluded ELSE discovery_segments.excluded END,
+			        exclusion_reason = CASE WHEN (
+			            EXCLUDED.projection_event_sequence > discovery_segments.projection_event_sequence
+			            AND discovery_segments.projection_event_id IS DISTINCT FROM EXCLUDED.projection_event_id
+			            AND discovery_segments.name = EXCLUDED.name
+			        ) THEN EXCLUDED.exclusion_reason ELSE discovery_segments.exclusion_reason END,
+			        projection_event_id = CASE WHEN (
+			            EXCLUDED.projection_event_sequence > discovery_segments.projection_event_sequence
+			            AND discovery_segments.projection_event_id IS DISTINCT FROM EXCLUDED.projection_event_id
+			            AND discovery_segments.name = EXCLUDED.name
+			        ) THEN EXCLUDED.projection_event_id ELSE discovery_segments.projection_event_id END,
+			        projection_event_sequence = CASE WHEN (
+			            EXCLUDED.projection_event_sequence > discovery_segments.projection_event_sequence
+			            AND discovery_segments.projection_event_id IS DISTINCT FROM EXCLUDED.projection_event_id
+			            AND discovery_segments.name = EXCLUDED.name
+			        ) THEN EXCLUDED.projection_event_sequence ELSE discovery_segments.projection_event_sequence END
+			 RETURNING id::text, name, ranges, staleness_hours, excluded, exclusion_reason,
+			           last_swept_at, last_swept_by, last_found_count, created_at,
+			           COALESCE(projection_event_id, ''), projection_event_sequence`,
+		tenantID, seg.ID, seg.Name, ranges, seg.StalenessHours, seg.Excluded, seg.ExclusionReason, createdAt,
+		seg.ProjectionEventID, eventSequence).
+		Scan(&out.ID, &out.Name, &out.Ranges, &out.StalenessHours, &out.Excluded,
+			&out.ExclusionReason, &out.LastSweptAt, &out.LastSweptBy, &out.LastFoundCount, &out.CreatedAt,
+			&out.ProjectionEventID, &appliedSequence)
+	if err != nil {
+		return DiscoverySegment{}, discoveryDeclarationWriteError("segment", err)
+	}
+	out.ProjectionEventSequence = uint64(appliedSequence) // #nosec G115 -- the migration constrains this PostgreSQL bigint to non-negative values (CWE-190)
+	if err := validateDiscoverySegmentProjectionResult(seg, out); err != nil {
+		return DiscoverySegment{}, err
+	}
+	return out, nil
+}
+
+func validateDiscoverySegmentProjectionResult(expected, applied DiscoverySegment) error {
+	switch {
+	case applied.ProjectionEventSequence < expected.ProjectionEventSequence:
+		return fmt.Errorf("%w: segment %s did not advance to event %s sequence %d",
+			ErrDiscoveryDeclarationEventConflict, expected.ID, expected.ProjectionEventID, expected.ProjectionEventSequence)
+	case applied.ProjectionEventSequence > expected.ProjectionEventSequence:
+		if applied.ProjectionEventID == expected.ProjectionEventID {
+			return fmt.Errorf("%w: segment %s reuses event %s at sequences %d and %d",
+				ErrDiscoveryDeclarationEventConflict, expected.ID, expected.ProjectionEventID,
+				expected.ProjectionEventSequence, applied.ProjectionEventSequence)
+		}
+		return nil
+	default:
+		if applied.ProjectionEventID != expected.ProjectionEventID ||
+			applied.ID != expected.ID || applied.Name != expected.Name ||
+			!slices.Equal(applied.Ranges, expected.Ranges) ||
+			applied.StalenessHours != expected.StalenessHours ||
+			applied.Excluded != expected.Excluded ||
+			applied.ExclusionReason != expected.ExclusionReason {
+			return fmt.Errorf("%w: segment %s event %s sequence %d differs from the accepted declaration",
+				ErrDiscoveryDeclarationEventConflict, expected.ID, expected.ProjectionEventID,
+				expected.ProjectionEventSequence)
+		}
+		return nil
+	}
 }
 
 // GetDiscoverySegmentByName resolves the immutable queue-time segment binding

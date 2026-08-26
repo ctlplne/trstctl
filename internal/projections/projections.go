@@ -4382,6 +4382,7 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		_, err := p.store.ApplyDiscoverySegmentUpsertedTx(ctx, tx, e.TenantID, store.DiscoverySegment{
 			ID: pl.ID, Name: pl.Name, Ranges: pl.Ranges, StalenessHours: pl.StalenessHours,
 			Excluded: pl.Excluded, ExclusionReason: pl.ExclusionReason, CreatedAt: e.Time,
+			ProjectionEventID: e.ID, ProjectionEventSequence: e.Sequence,
 		})
 		return err
 	case EventDiscoverySourceUpserted:
@@ -4392,6 +4393,7 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		if err := p.store.ApplyDiscoverySourceUpsertedTx(ctx, tx, store.DiscoverySource{
 			ID: pl.ID, TenantID: e.TenantID, Kind: pl.Kind, Name: pl.Name,
 			Config: pl.Config, CreatedAt: e.Time, UpdatedAt: e.Time,
+			ProjectionEventID: e.ID, ProjectionEventSequence: e.Sequence,
 		}); err != nil {
 			return err
 		}

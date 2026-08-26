@@ -120,7 +120,11 @@ import (
 // Bumped to 34 when automatic notification-routing scopes joined recovery.
 // A v33 payload carries no routing-policy table, so accepting it could skip the
 // policy events and silently turn a configured alert path into no route.
-const SnapshotFormatVersion = 34
+// Bumped to 35 when declared discovery segments moved from independent backup
+// state into the event-derived read model and gained their last-event ordering
+// fields. A v34 payload has no segment rows, so restoring it above sequence zero
+// would turn a declared blind-spot denominator into a reassuring empty page.
+const SnapshotFormatVersion = 35
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -153,7 +157,7 @@ type snapshotSetQuerier interface {
 // identity_transitions (which references identities) comes last. The revocation
 // responder tables have no foreign keys, but they are pure projections too, so
 // snapshots carry them with the rest of the tenant read model.
-var snapshotTables = []string{"owners", "ownership_assignments", "issuers", "certificate_profiles", "acme_dns01_provider_configs", "acme_upstream_authorizations", "endpoint_verifications", "revocation_endpoint_health", "migration_runs", "mdm_scep_policies", "workload_attester_trust_sources", "secret_sync_workload_identity_sources", "tenant_key_domains", "identities", "ownership_readiness_exceptions", "certificates", "crypto_assets", "pqc_migration_campaigns", "pqc_migration_campaign_findings", "agents", "kubernetes_controller_posture", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "discovery_coverage", "notification_channels", "notification_routing_policies", "notification_reads", "notification_threshold_deliveries", "notification_test_operations", "notification_delivery_receipts", "connector_delivery_receipts", "lifecycle_rotation_runs", "outbox_reconciliation_conflicts", "incident_executions", "incident_fleet_reissuance_runs", "remediation_playbook_runs", "pam_sessions", "compliance_report_schedules", "secret_rotation_schedules", "dynamic_secret_operations", "dynamic_secret_leases", "secret_sync_jobs", "managed_key_operations", "managed_keys", "code_signing_operations", "privacy_subject_erasures", "privacy_retention_runs", "privacy_archive_erasure_attestations", "nhi_access_review_campaigns", "nhi_access_review_items", "access_change_requests", "access_change_request_decisions", "machine_sessions", "machine_auth_method_overrides", "identity_transitions",
+var snapshotTables = []string{"owners", "ownership_assignments", "issuers", "certificate_profiles", "acme_dns01_provider_configs", "acme_upstream_authorizations", "endpoint_verifications", "revocation_endpoint_health", "migration_runs", "mdm_scep_policies", "workload_attester_trust_sources", "secret_sync_workload_identity_sources", "tenant_key_domains", "identities", "ownership_readiness_exceptions", "certificates", "crypto_assets", "pqc_migration_campaigns", "pqc_migration_campaign_findings", "agents", "kubernetes_controller_posture", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_segments", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "discovery_coverage", "notification_channels", "notification_routing_policies", "notification_reads", "notification_threshold_deliveries", "notification_test_operations", "notification_delivery_receipts", "connector_delivery_receipts", "lifecycle_rotation_runs", "outbox_reconciliation_conflicts", "incident_executions", "incident_fleet_reissuance_runs", "remediation_playbook_runs", "pam_sessions", "compliance_report_schedules", "secret_rotation_schedules", "dynamic_secret_operations", "dynamic_secret_leases", "secret_sync_jobs", "managed_key_operations", "managed_keys", "code_signing_operations", "privacy_subject_erasures", "privacy_retention_runs", "privacy_archive_erasure_attestations", "nhi_access_review_campaigns", "nhi_access_review_items", "access_change_requests", "access_change_request_decisions", "machine_sessions", "machine_auth_method_overrides", "identity_transitions",
 	// Format 13. EIGHT tables sat in ReadModelTables without entering this
 	// list or the capture payload — and the restore truncates the WHOLE read
 	// model, then reloads only what snapshots carry, so any restore erased
@@ -391,6 +395,7 @@ SELECT jsonb_build_object(
   -- hard ceiling of 100 function arguments (50 tables), and a 51st entry
   -- there fails capture outright with SQLSTATE 54023 rather than
   -- degrading. Add new tables here.
+  'discovery_segments', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM discovery_segments t),
   'acme_upstream_authorizations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM acme_upstream_authorizations t),
   'endpoint_verifications', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM endpoint_verifications t),
   'revocation_endpoint_health', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM revocation_endpoint_health t),

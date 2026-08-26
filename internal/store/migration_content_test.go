@@ -19,6 +19,62 @@ import (
 	corestore "trstctl.com/trstctl/internal/store"
 )
 
+func TestMigration0199PreservesDiscoveryDeclarationsAndAddsEventOrder(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 199)
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect fresh content database: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO tenants (tenant_id, name) VALUES ($1, 'discovery-order')`, tenantA); err != nil {
+		t.Fatalf("seed tenant: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO discovery_segments
+		 (tenant_id, id, name, ranges, staleness_hours, excluded, exclusion_reason, created_at)
+		 VALUES ($1, '10000000-0000-4000-8000-000000000199', 'legacy-dmz', ARRAY['10.19.9.0/24'], 24, false, '', now())`,
+		tenantA); err != nil {
+		t.Fatalf("seed pre-0199 segment: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO discovery_sources (id, tenant_id, kind, name, config, created_at, updated_at)
+		 VALUES ('20000000-0000-4000-8000-000000000199', $1, 'network', 'legacy-dmz-source',
+		         '{"segment":"legacy-dmz"}'::jsonb, now(), now())`, tenantA); err != nil {
+		t.Fatalf("seed pre-0199 source: %v", err)
+	}
+
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	for _, table := range []string{"discovery_segments", "discovery_sources"} {
+		var count int
+		var eventID *string
+		var sequence int64
+		if err := pool.QueryRow(ctx, fmt.Sprintf(
+			`SELECT count(*), max(projection_event_id), max(projection_event_sequence) FROM %s WHERE tenant_id = $1`, table),
+			tenantA).Scan(&count, &eventID, &sequence); err != nil {
+			t.Fatalf("inspect migrated %s: %v", table, err)
+		}
+		if count != 1 || eventID != nil || sequence != 0 {
+			t.Fatalf("migrated %s = rows:%d event:%v seq:%d, want preserved legacy row with null/0 binding",
+				table, count, eventID, sequence)
+		}
+		if _, err := pool.Exec(ctx, fmt.Sprintf(
+			`UPDATE %s SET projection_event_sequence = -1 WHERE tenant_id = $1`, table), tenantA); err == nil {
+			t.Fatalf("0199 accepted negative event sequence for %s", table)
+		}
+	}
+	if _, err := pool.Exec(ctx,
+		`UPDATE discovery_sources
+		    SET projection_event_id = 'B9lfHQKCESZ8LmpgH87px7', projection_event_sequence = 7
+		  WHERE tenant_id = $1 AND id = '20000000-0000-4000-8000-000000000199'`, tenantA); err != nil {
+		t.Fatalf("0199 rejected the event log's NUID identity format: %v", err)
+	}
+}
+
 func TestMigration0198PreservesRunsAndFencesRetryLineageByTenant(t *testing.T) {
 	ctx := context.Background()
 	prefix, target := splitMigrationsAtVersion(t, 198)
@@ -137,6 +193,7 @@ func TestMigration0197KeepsExistingRoutesManualAndConstrainsAutomaticScopes(t *t
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	199: true,
 	197: true,
 	194: true,
 	184: true,

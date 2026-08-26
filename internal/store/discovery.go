@@ -8,24 +8,28 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // DiscoverySource is a tenant-owned scan source. Config is deliberately opaque
 // JSON so source-specific connectors can carry references without the store
 // learning secret shapes; API validation forbids inline secret values.
 type DiscoverySource struct {
-	ID        string
-	TenantID  string
-	Kind      string
-	Name      string
-	Config    json.RawMessage
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID                      string
+	TenantID                string
+	Kind                    string
+	Name                    string
+	Config                  json.RawMessage
+	CreatedAt               time.Time
+	UpdatedAt               time.Time
+	ProjectionEventID       string
+	ProjectionEventSequence uint64
 }
 
 // DiscoverySchedule is a tenant-owned schedule for a discovery source.
@@ -113,6 +117,12 @@ type DiscoveryFinding struct {
 // Callers must stop replay: choosing either payload would silently rewrite history.
 var ErrDiscoveryFindingConflict = errors.New("store: discovery finding identity conflict")
 
+// ErrDiscoveryDeclarationEventConflict means one immutable source/segment event
+// identity was replayed with different fields, or a declaration identity collided
+// with another tenant/name. The projection must stop: silently choosing either
+// value would make the read model depend on writer timing instead of event order.
+var ErrDiscoveryDeclarationEventConflict = errors.New("store: discovery declaration event conflict")
+
 // DiscoveryFindingTriageChange is the projected result of a
 // discovery.finding.triage_changed event.
 type DiscoveryFindingTriageChange struct {
@@ -164,19 +174,104 @@ func normalizeJSON(raw json.RawMessage) []byte {
 
 // ApplyDiscoverySourceUpsertedTx projects a discovery.source.upserted event.
 func (s *Store) ApplyDiscoverySourceUpsertedTx(ctx context.Context, tx pgx.Tx, src DiscoverySource) error {
-	_, err := tx.Exec(ctx,
-		`INSERT INTO discovery_sources (id, tenant_id, kind, name, config, created_at, updated_at)
-		      VALUES ($1, $2, $3, $4, $5, $6, $7)
-		 ON CONFLICT (tenant_id, id) DO UPDATE
-		      SET kind = EXCLUDED.kind,
-		          name = EXCLUDED.name,
-		          config = EXCLUDED.config,
-		          updated_at = EXCLUDED.updated_at`,
-		src.ID, src.TenantID, src.Kind, src.Name, normalizeJSON(src.Config), src.CreatedAt, src.UpdatedAt)
+	eventSequence := int64(src.ProjectionEventSequence) // #nosec G115 -- JetStream event sequences are stored in PostgreSQL bigint throughout the projection spine (CWE-190)
+	manualWrite := src.ProjectionEventID == "" || src.ProjectionEventSequence == 0
+	var applied DiscoverySource
+	var appliedSequence int64
+	err := tx.QueryRow(ctx,
+		`INSERT INTO discovery_sources
+		      (id, tenant_id, kind, name, config, created_at, updated_at,
+		       projection_event_id, projection_event_sequence)
+		      VALUES ($1, $2, $3, $4, $5, $6, $7, NULLIF($8, ''), $9)
+		 ON CONFLICT ON CONSTRAINT discovery_sources_pkey DO UPDATE
+		      SET kind = CASE WHEN $10 OR (
+		              EXCLUDED.projection_event_sequence > discovery_sources.projection_event_sequence
+		              AND discovery_sources.projection_event_id IS DISTINCT FROM EXCLUDED.projection_event_id
+		          ) THEN EXCLUDED.kind ELSE discovery_sources.kind END,
+		          name = CASE WHEN $10 OR (
+		              EXCLUDED.projection_event_sequence > discovery_sources.projection_event_sequence
+		              AND discovery_sources.projection_event_id IS DISTINCT FROM EXCLUDED.projection_event_id
+		          ) THEN EXCLUDED.name ELSE discovery_sources.name END,
+		          config = CASE WHEN $10 OR (
+		              EXCLUDED.projection_event_sequence > discovery_sources.projection_event_sequence
+		              AND discovery_sources.projection_event_id IS DISTINCT FROM EXCLUDED.projection_event_id
+		          ) THEN EXCLUDED.config ELSE discovery_sources.config END,
+		          updated_at = CASE WHEN $10 OR (
+		              EXCLUDED.projection_event_sequence > discovery_sources.projection_event_sequence
+		              AND discovery_sources.projection_event_id IS DISTINCT FROM EXCLUDED.projection_event_id
+		          ) THEN EXCLUDED.updated_at ELSE discovery_sources.updated_at END,
+		          projection_event_id = CASE WHEN $10 THEN discovery_sources.projection_event_id WHEN (
+		              EXCLUDED.projection_event_sequence > discovery_sources.projection_event_sequence
+		              AND discovery_sources.projection_event_id IS DISTINCT FROM EXCLUDED.projection_event_id
+		          ) THEN EXCLUDED.projection_event_id ELSE discovery_sources.projection_event_id END,
+		          projection_event_sequence = CASE WHEN $10 THEN discovery_sources.projection_event_sequence WHEN (
+		              EXCLUDED.projection_event_sequence > discovery_sources.projection_event_sequence
+		              AND discovery_sources.projection_event_id IS DISTINCT FROM EXCLUDED.projection_event_id
+		          ) THEN EXCLUDED.projection_event_sequence ELSE discovery_sources.projection_event_sequence END
+		    WHERE discovery_sources.tenant_id = EXCLUDED.tenant_id
+		 RETURNING id::text, tenant_id::text, kind, name, config, created_at, updated_at,
+		           COALESCE(projection_event_id, ''), projection_event_sequence`,
+		src.ID, src.TenantID, src.Kind, src.Name, normalizeJSON(src.Config), src.CreatedAt, src.UpdatedAt,
+		src.ProjectionEventID, eventSequence, manualWrite).
+		Scan(&applied.ID, &applied.TenantID, &applied.Kind, &applied.Name, &applied.Config,
+			&applied.CreatedAt, &applied.UpdatedAt, &applied.ProjectionEventID, &appliedSequence)
 	if err != nil {
-		return err
+		return discoveryDeclarationWriteError("source", err)
+	}
+	applied.ProjectionEventSequence = uint64(appliedSequence) // #nosec G115 -- the migration constrains this PostgreSQL bigint to non-negative values (CWE-190)
+	if !manualWrite {
+		if err := validateDiscoverySourceProjectionResult(src, applied); err != nil {
+			return err
+		}
 	}
 	return s.reconcileCTMonitoringFromSourcesTx(ctx, tx, src.TenantID, src.UpdatedAt)
+}
+
+func validateDiscoverySourceProjectionResult(expected, applied DiscoverySource) error {
+	switch {
+	case applied.ProjectionEventSequence < expected.ProjectionEventSequence:
+		return fmt.Errorf("%w: source %s did not advance to event %s sequence %d",
+			ErrDiscoveryDeclarationEventConflict, expected.ID, expected.ProjectionEventID, expected.ProjectionEventSequence)
+	case applied.ProjectionEventSequence > expected.ProjectionEventSequence:
+		if applied.ProjectionEventID == expected.ProjectionEventID {
+			return fmt.Errorf("%w: source %s reuses event %s at sequences %d and %d",
+				ErrDiscoveryDeclarationEventConflict, expected.ID, expected.ProjectionEventID,
+				expected.ProjectionEventSequence, applied.ProjectionEventSequence)
+		}
+		// A later immutable event already won an inline/tail interleaving. The
+		// ordered replay of this older event is a safe no-op, not a conflict.
+		return nil
+	default:
+		if applied.ProjectionEventID != expected.ProjectionEventID ||
+			applied.ID != expected.ID || applied.TenantID != expected.TenantID ||
+			applied.Kind != expected.Kind || applied.Name != expected.Name ||
+			!jsonValuesEqual(applied.Config, normalizeJSON(expected.Config)) ||
+			!applied.UpdatedAt.Equal(expected.UpdatedAt) {
+			return fmt.Errorf("%w: source %s event %s sequence %d differs from the accepted declaration",
+				ErrDiscoveryDeclarationEventConflict, expected.ID, expected.ProjectionEventID,
+				expected.ProjectionEventSequence)
+		}
+		return nil
+	}
+}
+
+func jsonValuesEqual(left, right []byte) bool {
+	var l, r any
+	if json.Unmarshal(left, &l) != nil || json.Unmarshal(right, &r) != nil {
+		return bytes.Equal(left, right)
+	}
+	return reflect.DeepEqual(l, r)
+}
+
+func discoveryDeclarationWriteError(kind string, err error) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("%w: %s identity belongs to another tenant", ErrDiscoveryDeclarationEventConflict, kind)
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && (pgErr.Code == "23505" || pgErr.Code == "42501") {
+		return fmt.Errorf("%w: %s identity or tenant-local name is already bound", ErrDiscoveryDeclarationEventConflict, kind)
+	}
+	return err
 }
 
 // ApplyDiscoveryScheduleUpsertedTx projects a discovery.schedule.upserted event.
