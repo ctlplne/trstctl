@@ -48,6 +48,10 @@ func TestTailWorkerDiscoveryDeclarationsConvergePastInlineProjection(t *testing.
 			name: "source primary key",
 			event: events.Event{
 				Type: projections.EventDiscoverySourceUpserted, TenantID: tenantA,
+				// PostgreSQL stores timestamptz at microsecond precision. A production
+				// event may carry nanoseconds, so convergence must compare the exact
+				// database-normalized instant rather than reject a correct fresh row.
+				Time: time.Date(2026, time.August, 26, 19, 58, 50, 123456789, time.UTC),
 				Data: mustDiscoveryConvergenceJSON(t, projections.DiscoverySourceUpserted{
 					ID: discoveryConvergenceSourceID, Kind: "manual", Name: "qa-manual-source",
 					Config: json.RawMessage(`{}`),

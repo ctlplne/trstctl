@@ -246,7 +246,7 @@ func validateDiscoverySourceProjectionResult(expected, applied DiscoverySource) 
 			applied.ID != expected.ID || applied.TenantID != expected.TenantID ||
 			applied.Kind != expected.Kind || applied.Name != expected.Name ||
 			!jsonValuesEqual(applied.Config, normalizeJSON(expected.Config)) ||
-			!applied.UpdatedAt.Equal(expected.UpdatedAt) {
+			!applied.UpdatedAt.Equal(expected.UpdatedAt.UTC().Truncate(time.Microsecond)) {
 			return fmt.Errorf("%w: source %s event %s sequence %d differs from the accepted declaration",
 				ErrDiscoveryDeclarationEventConflict, expected.ID, expected.ProjectionEventID,
 				expected.ProjectionEventSequence)
