@@ -500,3 +500,70 @@ func TestServedNetworkDiscoveryPreflightBlocksGhostQueueWithoutRelay(t *testing.
 		t.Fatalf("blocked run created durable ghost state: %d %s", statusCode, body)
 	}
 }
+
+func TestServedNetworkDiscoveryBlocksWhenDispatchAllowlistIsEmpty(t *testing.T) {
+	h := newRoleHarness(t, []string{mtls.AgentRoleNetwork})
+	if _, err := h.client.Heartbeat(t.Context(), &transport.HeartbeatRequest{
+		AgentID: h.agent, Version: "allowlist-test", Status: "active",
+	}); err != nil {
+		t.Fatalf("relay heartbeat: %v", err)
+	}
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
+	statusCode, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/segments", tok,
+		"allowlist-readiness-segment", map[string]any{
+			"name": "allowlist-readiness-dmz", "ranges": []string{"192.0.2.0/24"}, "staleness_hours": 12,
+		})
+	if statusCode != http.StatusCreated {
+		t.Fatalf("declare allowlist-readiness segment: %d %s", statusCode, body)
+	}
+
+	plan := map[string]any{
+		"name": "allowlist-readiness-preview", "kind": "network",
+		"config": map[string]any{"targets": []string{"192.0.2.10:443"}, "segment": "allowlist-readiness-dmz"},
+	}
+	statusCode, body = secretsReq(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/plans/preview", tok, plan)
+	if statusCode != http.StatusOK {
+		t.Fatalf("preview with empty dispatch allowlist: %d %s", statusCode, body)
+	}
+	var preview struct {
+		Ready            bool     `json:"ready"`
+		ConnectionOrigin string   `json:"connection_origin"`
+		BlockedReasons   []string `json:"blocked_reasons"`
+	}
+	if err := json.Unmarshal(body, &preview); err != nil {
+		t.Fatal(err)
+	}
+	const guidance = "Enable discovery.run in agent_channel.claimable_job_kinds before starting this source."
+	if preview.Ready || preview.ConnectionOrigin != "Agent dispatch is not enabled for discovery.run" ||
+		len(preview.BlockedReasons) != 1 || preview.BlockedReasons[0] != guidance {
+		t.Fatalf("preview readiness = %+v, want exact dispatch-allowlist blocker", preview)
+	}
+
+	statusCode, body = secretsReq(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
+		"name": "allowlist-readiness-source", "kind": "network",
+		"config": map[string]any{"targets": []string{"192.0.2.10:443"}, "segment": "allowlist-readiness-dmz"},
+	})
+	if statusCode != http.StatusCreated {
+		t.Fatalf("save source while dispatch is disabled: %d %s", statusCode, body)
+	}
+	var source struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &source); err != nil || source.ID == "" {
+		t.Fatalf("decode source: id=%q err=%v", source.ID, err)
+	}
+
+	statusCode, body = secretsReq(t, h.servedHarness, http.MethodGet,
+		"/api/v1/discovery/sources/"+source.ID+"/preflight", tok, nil)
+	if statusCode != http.StatusOK || !strings.Contains(string(body), guidance) || !strings.Contains(string(body), `"ready":false`) {
+		t.Fatalf("saved-source preflight hid dispatch blocker: %d %s", statusCode, body)
+	}
+	statusCode, body = secretsReq(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{"source_id": source.ID})
+	if statusCode != http.StatusConflict || !strings.Contains(string(body), guidance) {
+		t.Fatalf("run admission with empty dispatch allowlist = %d %s, want structured 409", statusCode, body)
+	}
+	runs, err := h.store.ListDiscoveryRunsPage(t.Context(), h.tenant, store.ZeroUUID, 10)
+	if err != nil || len(runs) != 0 {
+		t.Fatalf("blocked run still created durable work: runs=%d err=%v", len(runs), err)
+	}
+}

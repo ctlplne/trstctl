@@ -52,6 +52,7 @@ func runKubernetes(ctx context.Context, o agentOptions, k k8sOptions) error {
 	if err != nil {
 		return fmt.Errorf("build enrollment TLS trust: %w", err)
 	}
+	enroller := enrollmentEnroller(o, enrollClient)
 	serverName := o.serverName
 	if serverName == "" {
 		serverName = o.commonName
@@ -61,7 +62,7 @@ func runKubernetes(ctx context.Context, o agentOptions, k k8sOptions) error {
 		KeyPath: o.keyPath, CertPath: o.certPath,
 		ServerName: serverName, ServerCAPEM: caPEM, RefreshBefore: o.rotateEvery,
 		Version: buildinfo.Version(),
-	}, agent.NewHTTPEnroller(o.enrollURL, enrollClient))
+	}, enroller)
 	if err := a.Bootstrap(ctx); err != nil {
 		return fmt.Errorf("bootstrap: %w", err)
 	}

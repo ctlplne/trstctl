@@ -777,7 +777,8 @@ trstctl-cli --idempotency-key release-keyless-1 code-signing keyless -f code-sig
 # On an enrolled host, report local public certificate files over the agent channel.
 trstctl-agent --enroll-url https://localhost:8443 \
   --bootstrap-token-file ./trstctl-bootstrap-token \
-  --server localhost:9443 \
+  --server localhost:19443 \
+  --server-name localhost \
   --name edge-agent-1 \
   --ca-bundle ./trstctl-ca.pem \
   --inventory-cert-roots /etc/ssl,/etc/pki/tls/certs \
@@ -785,6 +786,9 @@ trstctl-agent --enroll-url https://localhost:8443 \
   --inventory-java-trust-stores "$JAVA_HOME/lib/security/cacerts" \
   --inventory-private-key-roots /etc/ssl/private,/etc/ssh
 trstctl-cli discovery findings list
+
+# --enroll-url is the control-plane base URL, not /enroll/bootstrap. Plain HTTP
+# remains blocked except with --allow-insecure-loopback-enrollment on loopback.
 
 # Correlate one managed issuer to observed trust stores. Authoritative counts use
 # exact certificate/SPKI identity; name-only candidates are returned separately.

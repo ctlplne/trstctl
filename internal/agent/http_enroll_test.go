@@ -67,8 +67,10 @@ func TestEnrollmentURLNormalization(t *testing.T) {
 		{name: "origin trailing slash", suffix: "/", wantPath: "/enroll/bootstrap"},
 		{name: "legacy enroll base", suffix: "/enroll", wantPath: "/enroll/bootstrap"},
 		{name: "legacy enroll base trailing slash", suffix: "/enroll/", wantPath: "/enroll/bootstrap"},
+		{name: "complete bootstrap endpoint", suffix: "/enroll/bootstrap", wantPath: "/enroll/bootstrap"},
 		{name: "path prefix", suffix: "/edge", wantPath: "/edge/enroll/bootstrap"},
 		{name: "path prefix with legacy enroll base", suffix: "/edge/enroll", wantPath: "/edge/enroll/bootstrap"},
+		{name: "path prefix with complete bootstrap endpoint", suffix: "/edge/enroll/bootstrap", wantPath: "/edge/enroll/bootstrap"},
 	}
 
 	for _, tc := range cases {

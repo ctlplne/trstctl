@@ -516,6 +516,7 @@ func configSummary(cfg *config.Config) string {
 	fmt.Fprintf(&b, "agent_channel.server_name: %s\n", cfg.AgentChannel.ServerName)
 	fmt.Fprintf(&b, "agent_channel.ca_cert_file: %s\n", cfg.AgentChannel.CACertFile)
 	fmt.Fprintf(&b, "agent_channel.heartbeat_interval: %s\n", cfg.AgentChannel.HeartbeatInterval)
+	fmt.Fprintf(&b, "agent_channel.claimable_job_kinds: %v\n", cfg.AgentChannel.ClaimableJobKinds)
 	// Served OIDC browser login + session + per-user tenant mapping (EXC-WIRE-01):
 	// show whether the binary mounts the /auth/* login and, when on, the IdP it trusts
 	// and the per-user tenant-mapping mode. Never the client secret or session secret

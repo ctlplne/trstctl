@@ -37,6 +37,7 @@ describe("agent fleet surface", () => {
     apiMock.createEnrollmentToken.mockReset().mockResolvedValue({
       token: "BOOT-TOKEN-XYZ",
       enroll_path: "/enroll/bootstrap",
+      roles: ["host"],
     });
     apiMock.agentUpgradeCampaign.mockReset().mockResolvedValue({
       active: false,
@@ -228,11 +229,29 @@ describe("agent fleet surface", () => {
     expect(apiMock.createEnrollmentToken).toHaveBeenCalledWith({ allowed_identity: "edge-01", roles: ["host"] });
     expect(await screen.findByText("BOOT-TOKEN-XYZ")).toBeInTheDocument();
     expect(screen.getByText(/shown once/i)).toBeInTheDocument();
-    expect(screen.getByText(/trstctl-agent --enroll-url/i)).toHaveTextContent("/enroll/bootstrap");
-    expect(screen.getByText(/trstctl-agent --enroll-url/i)).toHaveTextContent("--name edge-01");
+    const command = screen.getByText(/trstctl-agent --enroll-url/i).textContent ?? "";
+    expect(command).toContain("--enroll-url http://localhost");
+    expect(command).toContain("--allow-insecure-loopback-enrollment");
+    expect(command).toContain("--server localhost:19443");
+    expect(command).toContain("--server-name localhost");
+    expect(command).toContain("--name edge-01");
+    expect(command).not.toContain("/enroll/bootstrap");
+    expect(command).not.toContain("<control-plane");
     expect(storageSpy).not.toHaveBeenCalled();
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
+  });
+
+  it("turns a network-role token into a relay-capable command", async () => {
+    apiMock.createEnrollmentToken.mockResolvedValueOnce({ token: "BOOT-TOKEN-XYZ", enroll_path: "/enroll/bootstrap", roles: ["network"] });
+    renderAgents();
+    await screen.findByRole("heading", { name: /1 of 3 active agents/i });
+    fireEvent.click(screen.getByRole("button", { name: "Add agent" }));
+    fireEvent.click(screen.getByLabelText(/network relay/i));
+    fireEvent.click(screen.getByRole("button", { name: /mint enrollment token/i }));
+
+    await waitFor(() => expect(apiMock.createEnrollmentToken).toHaveBeenCalledWith({ roles: ["host", "network"] }));
+    expect(screen.getByText(/trstctl-agent --enroll-url/i)).toHaveTextContent("--relay-claim");
   });
 
   it("opens an agent detail panel with served endpoint discovery coverage", async () => {

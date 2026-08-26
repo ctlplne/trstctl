@@ -393,11 +393,12 @@ func TestRun_CheckConfigExternalTargets(t *testing.T) {
 
 func TestRun_CheckConfigAgentChannel(t *testing.T) {
 	env := envFunc(map[string]string{
-		"TRSTCTL_AGENT_CHANNEL_ENABLED":            "true",
-		"TRSTCTL_AGENT_CHANNEL_ADDR":               ":9443",
-		"TRSTCTL_AGENT_CHANNEL_SERVER_NAME":        "agents.example.com",
-		"TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE":       "/var/lib/trstctl/agent-ca.crt",
-		"TRSTCTL_AGENT_CHANNEL_HEARTBEAT_INTERVAL": "45s",
+		"TRSTCTL_AGENT_CHANNEL_ENABLED":             "true",
+		"TRSTCTL_AGENT_CHANNEL_ADDR":                ":9443",
+		"TRSTCTL_AGENT_CHANNEL_SERVER_NAME":         "agents.example.com",
+		"TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE":        "/var/lib/trstctl/agent-ca.crt",
+		"TRSTCTL_AGENT_CHANNEL_HEARTBEAT_INTERVAL":  "45s",
+		"TRSTCTL_AGENT_CHANNEL_CLAIMABLE_JOB_KINDS": "discovery.run,endpoint.verify,connector.test",
 	})
 	var stdout, stderr bytes.Buffer
 	if err := run(context.Background(), []string{"--check-config"}, env, &stdout, &stderr); err != nil {
@@ -410,6 +411,7 @@ func TestRun_CheckConfigAgentChannel(t *testing.T) {
 		"agent_channel.server_name: agents.example.com",
 		"agent_channel.ca_cert_file: /var/lib/trstctl/agent-ca.crt",
 		"agent_channel.heartbeat_interval: 45s",
+		"agent_channel.claimable_job_kinds: [discovery.run endpoint.verify connector.test]",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("check-config output %q missing %q", out, want)

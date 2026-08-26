@@ -71,6 +71,12 @@ type Orchestrator struct {
 	// Zero keeps source-compatible embedded/test orchestrators disabled; the
 	// shipped composition always supplies its validated production setting.
 	ownershipAttestationCadence time.Duration
+	// claimableAgentJobKinds is the server-owned dispatch allowlist. The
+	// configured bit distinguishes legacy embedded orchestrators (which did not
+	// supply this production concern) from a served agent channel whose explicit
+	// empty set must fail closed instead of admitting work nobody can claim.
+	claimableAgentJobKinds           map[string]struct{}
+	claimableAgentJobKindsConfigured bool
 }
 
 // OrchestratorOption configures served command-side behavior while keeping the
@@ -126,6 +132,22 @@ func WithOwnershipAttestationCadence(cadence time.Duration) OrchestratorOption {
 	return func(orchestrator *Orchestrator) {
 		if cadence > 0 {
 			orchestrator.ownershipAttestationCadence = cadence
+		}
+	}
+}
+
+// WithClaimableAgentJobKinds gives queue admission the same allowlist the agent
+// channel enforces at claim time. Supplying an empty slice is meaningful: the
+// channel is served but no estate-touching job kind has been enabled.
+func WithClaimableAgentJobKinds(kinds []string) OrchestratorOption {
+	return func(orchestrator *Orchestrator) {
+		orchestrator.claimableAgentJobKindsConfigured = true
+		orchestrator.claimableAgentJobKinds = make(map[string]struct{}, len(kinds))
+		for _, kind := range kinds {
+			kind = strings.TrimSpace(kind)
+			if kind != "" {
+				orchestrator.claimableAgentJobKinds[kind] = struct{}{}
+			}
 		}
 	}
 }

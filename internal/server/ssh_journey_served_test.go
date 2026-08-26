@@ -31,6 +31,7 @@ func TestServedSSHAtScaleJourneyJOURNEY002EndToEnd(t *testing.T) {
 			d.AttestedIssuance = AttestedIssuanceConfig{
 				Enabled: true, TrustDomain: "served.test", DefaultTTL: 10 * time.Minute, MaxTTL: time.Hour,
 			}
+			d.AgentClaimableJobKinds = []string{"discovery.run"}
 		},
 		withAgentChannel,
 	)

@@ -182,6 +182,16 @@ func normalizeEnrollmentBaseURL(base *url.URL) *url.URL {
 	if normalized.Path == "" {
 		return &normalized
 	}
+	// Older API consumers copied enroll_path (the complete bootstrap endpoint)
+	// into --enroll-url. Accept that safe mistake without appending the route a
+	// second time, while keeping the documented contract a base URL.
+	if leaf := pathpkg.Base(normalized.Path); (leaf == "bootstrap" || leaf == "renewal") && pathpkg.Base(pathpkg.Dir(normalized.Path)) == "enroll" {
+		normalized.Path = pathpkg.Dir(pathpkg.Dir(normalized.Path))
+		if normalized.Path == "." || normalized.Path == "/" {
+			normalized.Path = ""
+		}
+		return &normalized
+	}
 	if pathpkg.Base(normalized.Path) != "enroll" {
 		return &normalized
 	}

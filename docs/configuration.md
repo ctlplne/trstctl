@@ -1534,12 +1534,13 @@ custodied there) is a startup error.
 | `TRSTCTL_AGENT_CHANNEL_SERVER_NAME` | empty (loopback SANs only) | DNS SAN the channel's server certificate carries — the name agents pin/verify as their `--server-name`. Loopback SANs are always added so a co-located agent can verify a `localhost` connection. |
 | `TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE` | `data/ca/agent-ca.crt` | Where the agent CA certificate is persisted, so an agent's pinned signer key does not change on restart. The shipped container sets `WORKDIR /`, so this default resolves to the persistent `/data/ca/agent-ca.crt`; Compose and Helm also set that absolute path explicitly. |
 | `TRSTCTL_AGENT_CHANNEL_HEARTBEAT_INTERVAL` | `30s` | Next-beat hint returned to agents. |
+| `TRSTCTL_AGENT_CHANNEL_CLAIMABLE_JOB_KINDS` | empty | Comma-separated, explicit allowlist of estate-touching jobs agents may claim. Empty fails closed. |
 
-**Which work agents may claim.** `agent_channel.claimable_job_kinds` (structured
-config only — no env shortcut, because it is a per-kind decision about what an
-agent may do to your infrastructure) lists the estate-touching job kinds enrolled
-agents may lease and execute: `connector.deploy`, `connector.rollback`,
-`endpoint.verify`, `discovery.run`, `revocation.probe`, `trust.distribute`.
+**Which work agents may claim.** `agent_channel.claimable_job_kinds`, or its
+comma-separated `TRSTCTL_AGENT_CHANNEL_CLAIMABLE_JOB_KINDS` environment form,
+lists the estate-touching job kinds enrolled agents may lease and execute:
+`connector.deploy`, `connector.rollback`, `endpoint.verify`, `discovery.run`,
+`revocation.probe`, `trust.distribute`.
 
 Empty is the default and means the job ledger is served but hands nothing out.
 Enable a kind when its agent-side executor ships; enabling one earlier fills the
@@ -1549,6 +1550,12 @@ doing it. Anything outside that list is dropped even if you write it here, so
 control plane's own effects. `GET /api/v1/operations/jobs` and the Operations
 console show what is waiting, what an agent holds, and how long the oldest job has
 waited.
+
+The evaluation Compose stack enables only `discovery.run`, `endpoint.verify`, and
+`connector.test`, matching the safe actions its blank-stack console offers. It does
+not enable `connector.deploy`; an evaluation install must not gain appliance-write
+authority merely because it started successfully. Production remains empty and
+fail-closed until an operator chooses each kind.
 
 See [Getting started](getting-started.md) for the blank Compose stack's published
 agent-channel port and the local CA-pinning steps to reach it from an agent CLI.

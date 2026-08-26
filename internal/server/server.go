@@ -1086,6 +1086,9 @@ func (s *Server) configureMutationSpine(
 	)
 	orchOptions := historyRewriteOrchestratorOptions(d.Store, d.AuditSigningKey)
 	orchOptions = append(orchOptions, orchestrator.WithProjector(proj))
+	if d.EnableAgentChannel {
+		orchOptions = append(orchOptions, orchestrator.WithClaimableAgentJobKinds(d.AgentClaimableJobKinds))
+	}
 	if d.OwnershipAttestationCadence > 0 {
 		orchOptions = append(orchOptions, orchestrator.WithOwnershipAttestationCadence(d.OwnershipAttestationCadence))
 	}

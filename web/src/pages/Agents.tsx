@@ -12,6 +12,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { api, type Agent, type AgentJobPosture, type AgentUpgradeCampaign, type EnrollmentToken } from "@/lib/api";
 import { optionalApiCall } from "@/lib/optionalApi";
+import { buildAgentInstallPlan } from "@/lib/agentInstall";
 import { formatDate as formatDatePolicy, formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
@@ -165,7 +166,14 @@ export function Agents() {
   }
 
   const selected = useMemo(() => agents.find((agent) => agent.id === selectedID) ?? agents[0] ?? null, [agents, selectedID]);
-  const command = token ? enrollmentCommand(token, tokenIdentity) : "";
+  const installPlan = token
+    ? buildAgentInstallPlan({
+        origin: typeof window !== "undefined" ? window.location.origin : "https://trstctl.example.test",
+        agentName: tokenIdentity.trim() || "edge-agent-1",
+        roles: token.roles,
+      })
+    : { command: "" };
+  const command = installPlan.command;
   const activeAgents = useMemo(() => agents.filter((agent) => !isOffboarded(agent)), [agents]);
   const onlineAgents = useMemo(
     () => activeAgents.filter((agent) => agent.status.toLowerCase() === "online" && !heartbeatFreshness(agent.last_seen_at).stale),
@@ -511,11 +519,17 @@ export function Agents() {
                 <div>
                   <dt className="font-medium text-muted-foreground">{translateNow("source.install.command.1ae9754205")}</dt>
                   <dd className="mt-1">
-                    <code className="block overflow-x-auto rounded bg-muted px-3 py-2 text-xs">{command}</code>
+                    {installPlan.blockedReason ? (
+                      <p className="rounded-control border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-xs" role="alert">
+                        {installPlan.blockedReason}
+                      </p>
+                    ) : (
+                      <code className="block overflow-x-auto rounded bg-muted px-3 py-2 text-xs">{command}</code>
+                    )}
                   </dd>
                 </div>
               </dl>
-              <Button type="button" size="sm" variant="outline" className="w-fit" onClick={() => void copyCommand()}>
+              <Button type="button" size="sm" variant="outline" className="w-fit" onClick={() => void copyCommand()} disabled={!command}>
                 <Copy className="h-4 w-4" aria-hidden="true" />
                 {translateNow("source.copy.command.9a01feecae")}
               </Button>
@@ -985,23 +999,4 @@ function formatOffboarded(value?: string): string {
 
 function isOffboarded(agent: Agent): boolean {
   return agent.status.toLowerCase() === "offboarded";
-}
-
-function enrollmentCommand(token: EnrollmentToken, agentName?: string): string {
-  const origin = typeof window !== "undefined" ? window.location.origin : "https://trstctl.example.test";
-  const enrollPath = token.enroll_path || "/enroll/bootstrap";
-  const nameArg = agentName?.trim() ? shellArg(agentName.trim()) : "<agent-name>";
-  return [
-    "trstctl-agent",
-    `--enroll-url ${origin}${enrollPath}`,
-    "--bootstrap-token-file ./trstctl-bootstrap-token",
-    "--server <control-plane-grpc:9443>",
-    `--name ${nameArg}`,
-    "--ca-bundle ./trstctl-ca.pem",
-  ].join(" ");
-}
-
-function shellArg(value: string): string {
-  if (/^[A-Za-z0-9._:/@-]+$/.test(value)) return value;
-  return `'${value.replace(/'/g, "'\\''")}'`;
 }

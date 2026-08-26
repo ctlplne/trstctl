@@ -8,6 +8,7 @@ import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
 import { markOnboardingComplete, resetOnboarding } from "@/lib/onboardingState";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { useCapabilityExecution } from "@/lib/capabilities";
+import { buildAgentInstallPlan } from "@/lib/agentInstall";
 
 type WizardStepID = "issuer" | "protocols" | "certificate" | "integrations" | "agent" | "complete";
 
@@ -862,20 +863,8 @@ function AgentStep({
   }
 
   const origin = typeof window !== "undefined" ? window.location.origin : "https://trstctl.example";
-  const connection = agentConnection(origin);
   const nameArg = (token ? tokenIdentity : agentIdentity).trim() || "edge-agent-1";
-  const command = [
-    "trstctl-agent",
-    `--enroll-url ${shellArg(origin)}`,
-    "--bootstrap-token-file ./trstctl-bootstrap-token",
-    `--server ${shellArg(connection.server)}`,
-    `--server-name ${shellArg(connection.serverName)}`,
-    `--name ${shellArg(nameArg)}`,
-    "--ca-bundle ./trstctl-ca.pem",
-    "--inventory-cert-roots /etc/ssl,/etc/pki/tls/certs",
-    "--inventory-os-trust-roots /etc/ssl/certs",
-    "--inventory-private-key-roots /etc/ssl/private,/etc/ssh",
-  ].join(" \\\n  ");
+  const installPlan = buildAgentInstallPlan({ origin, agentName: nameArg, roles: token?.roles, multiline: true });
 
   return (
     <section aria-labelledby="step-agent-heading" className="grid gap-4">
@@ -913,9 +902,15 @@ function AgentStep({
         </div>
       )}
       <p className="text-caption text-muted-foreground">{t("wizard.agent.commandIntro")}</p>
-      <pre className="overflow-x-auto rounded-control border border-border bg-muted p-3 text-caption" aria-label={t("wizard.agent.commandLabel")}>
-        <code>{command}</code>
-      </pre>
+      {installPlan.blockedReason ? (
+        <p className="rounded-control border border-status-warning/40 bg-status-warning/10 p-3 text-caption" role="alert">
+          {installPlan.blockedReason}
+        </p>
+      ) : (
+        <pre className="overflow-x-auto rounded-control border border-border bg-muted p-3 text-caption" aria-label={t("wizard.agent.commandLabel")}>
+          <code>{installPlan.command}</code>
+        </pre>
+      )}
       {agent ? (
         <p className="flex items-center gap-2 text-sm font-medium text-status-success">
           <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
@@ -949,17 +944,6 @@ function AgentStep({
       )}
     </section>
   );
-}
-
-function shellArg(value: string): string {
-  if (/^[A-Za-z0-9._:/@-]+$/.test(value)) return value;
-  return `'${value.replace(/'/g, "'\\''")}'`;
-}
-
-function agentConnection(origin: string): { server: string; serverName: string } {
-  const url = new URL(origin);
-  const loopback = url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]";
-  return loopback ? { server: "localhost:19443", serverName: "localhost" } : { server: `${url.hostname}:9443`, serverName: url.hostname };
 }
 
 function CompleteStep({

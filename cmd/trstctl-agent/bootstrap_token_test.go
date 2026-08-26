@@ -94,15 +94,16 @@ func TestBootstrapTokenRejectsAmbiguousSources(t *testing.T) {
 
 func TestServiceArgumentsNeverPersistInlineBootstrapToken(t *testing.T) {
 	args := serviceArguments(agentOptions{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
-		enrollURL:   "https://cp.example/enroll",
-		caBundle:    "/etc/trstctl/ca.pem",
-		serverAddr:  "cp.example:9443",
-		commonName:  "win-agent-1",
-		keyPath:     "C:\\ProgramData\\trstctl\\agent.key",
-		certPath:    "C:\\ProgramData\\trstctl\\agent.crt",
-		rotateEvery: time.Hour,
-		inlineToken: "inline-secret",
-		tokenFile:   "C:\\ProgramData\\trstctl\\bootstrap-token.txt",
+		enrollURL:                       "https://cp.example/enroll",
+		caBundle:                        "/etc/trstctl/ca.pem",
+		serverAddr:                      "cp.example:9443",
+		commonName:                      "win-agent-1",
+		keyPath:                         "C:\\ProgramData\\trstctl\\agent.key",
+		certPath:                        "C:\\ProgramData\\trstctl\\agent.crt",
+		rotateEvery:                     time.Hour,
+		inlineToken:                     "inline-secret",
+		tokenFile:                       "C:\\ProgramData\\trstctl\\bootstrap-token.txt",
+		allowInsecureLoopbackEnrollment: true,
 	})
 	joined := strings.Join(args, "\x00")
 	if strings.Contains(joined, "inline-secret") || strings.Contains(joined, "--bootstrap-token\x00") {
@@ -110,6 +111,9 @@ func TestServiceArgumentsNeverPersistInlineBootstrapToken(t *testing.T) {
 	}
 	if !strings.Contains(joined, "--bootstrap-token-file\x00C:\\ProgramData\\trstctl\\bootstrap-token.txt") {
 		t.Fatalf("service arguments did not preserve the bootstrap token file path: %q", args)
+	}
+	if !strings.Contains(joined, "--allow-insecure-loopback-enrollment") {
+		t.Fatalf("service arguments did not preserve explicit loopback enrollment mode: %q", args)
 	}
 }
 
@@ -150,6 +154,7 @@ func TestAgentK8sIdentityFlagsAreExposed(t *testing.T) {
 		"-k8s",
 		"-enroll-proxy-segment string",
 		"-enroll-proxy-public-url string",
+		"-allow-insecure-loopback-enrollment",
 	} {
 		if !strings.Contains(help, want) {
 			t.Fatalf("trstctl-agent --help missing %q; output:\n%s", want, help)

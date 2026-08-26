@@ -192,7 +192,7 @@ func (a *API) discoveryPlanPreview(ctx context.Context, tenantID string, req dis
 		if resolveErr != nil {
 			return discoveryPlanPreviewResponse{}, errStatus(http.StatusBadRequest, resolveErr.Error())
 		}
-		readiness, relayErr := a.orch.DiscoveryNetworkRelayReadiness(ctx, tenantID, intent.RequiredAgentID)
+		readiness, relayErr := a.orch.DiscoveryNetworkRelayReadinessForJob(ctx, tenantID, intent.RequiredAgentID, adcsdiscovery.JobKind)
 		if relayErr != nil {
 			return discoveryPlanPreviewResponse{}, relayErr
 		}
@@ -843,8 +843,7 @@ func (a *API) startDiscoveryRun(w http.ResponseWriter, r *http.Request) {
 		})
 		a.observeFeature("discovery", "start_run", start, err)
 		if errors.Is(err, orchestrator.ErrDiscoveryRelayUnavailable) {
-			return 0, nil, errStatus(http.StatusConflict,
-				"No network relay can claim this scan. Enroll an agent with the network role, then retry.")
+			return 0, nil, errStatus(http.StatusConflict, discoveryRelayUnavailableDetail(err, false))
 		}
 		if err != nil {
 			return 0, nil, err
@@ -877,14 +876,27 @@ func (a *API) retryDiscoveryRun(w http.ResponseWriter, r *http.Request) {
 			DryRun: original.DryRun,
 		})
 		if errors.Is(err, orchestrator.ErrDiscoveryRelayUnavailable) {
-			return 0, nil, errStatus(http.StatusConflict,
-				"Recovery is blocked because no network relay can claim this scan. Enroll or restore a network-role agent, then retry again with a new Idempotency-Key.")
+			return 0, nil, errStatus(http.StatusConflict, discoveryRelayUnavailableDetail(err, true))
 		}
 		if err != nil {
 			return 0, nil, err
 		}
 		return http.StatusCreated, toDiscoveryRunResponse(run), nil
 	})
+}
+
+func discoveryRelayUnavailableDetail(err error, recovery bool) string {
+	detail := strings.TrimSpace(strings.TrimPrefix(err.Error(), orchestrator.ErrDiscoveryRelayUnavailable.Error()+":"))
+	if detail != "" && detail != err.Error() {
+		if recovery {
+			return "Recovery is blocked. " + detail + " Then retry again with a new Idempotency-Key."
+		}
+		return detail
+	}
+	if recovery {
+		return "Recovery is blocked because no network relay can claim this scan. Enroll or restore a network-role agent, then retry again with a new Idempotency-Key."
+	}
+	return "No network relay can claim this scan. Enroll an agent with the network role, then retry."
 }
 
 func (a *API) getDiscoveryRun(w http.ResponseWriter, r *http.Request) {

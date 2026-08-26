@@ -208,7 +208,7 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 		if err := segmentscan.ValidateDeclaredSegment(resolved, segment.Ranges); err != nil {
 			return store.DiscoveryRun{}, fmt.Errorf("orchestrator: discovery segment scope: %w", err)
 		}
-		if err := o.requireDiscoveryNetworkRelay(ctx, tenantID, resolved.RequiredAgentID); err != nil {
+		if err := o.requireDiscoveryNetworkRelayForJob(ctx, tenantID, resolved.RequiredAgentID, discoveryRunDestination); err != nil {
 			return store.DiscoveryRun{}, err
 		}
 		resolved.ID, resolved.SourceID, resolved.ScheduleID = id, in.SourceID, in.ScheduleID
@@ -224,7 +224,7 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 		if err != nil {
 			return store.DiscoveryRun{}, err
 		}
-		if err := o.requireDiscoveryNetworkRelay(ctx, tenantID, resolved.RequiredAgentID); err != nil {
+		if err := o.requireDiscoveryNetworkRelayForJob(ctx, tenantID, resolved.RequiredAgentID, adcsdiscovery.JobKind); err != nil {
 			return store.DiscoveryRun{}, err
 		}
 		resolved.ID, resolved.SourceID, resolved.ScheduleID = id, in.SourceID, in.ScheduleID
@@ -297,8 +297,8 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 	}, nil
 }
 
-func (o *Orchestrator) requireDiscoveryNetworkRelay(ctx context.Context, tenantID, agentID string) error {
-	readiness, err := o.DiscoveryNetworkRelayReadiness(ctx, tenantID, agentID)
+func (o *Orchestrator) requireDiscoveryNetworkRelayForJob(ctx context.Context, tenantID, agentID, jobKind string) error {
+	readiness, err := o.DiscoveryNetworkRelayReadinessForJob(ctx, tenantID, agentID, jobKind)
 	if err != nil {
 		return err
 	}
@@ -312,6 +312,22 @@ func (o *Orchestrator) requireDiscoveryNetworkRelay(ctx context.Context, tenantI
 // manual runs, and scheduled runs. That prevents the console from claiming a
 // different execution truth than the queue admission path enforces.
 func (o *Orchestrator) DiscoveryNetworkRelayReadiness(ctx context.Context, tenantID, agentID string) (DiscoveryRelayReadiness, error) {
+	return o.DiscoveryNetworkRelayReadinessForJob(ctx, tenantID, agentID, discoveryRunDestination)
+}
+
+// DiscoveryNetworkRelayReadinessForJob proves both halves of executable relay
+// readiness: an eligible tenant relay exists AND the served agent channel is
+// configured to hand out this exact job kind.
+func (o *Orchestrator) DiscoveryNetworkRelayReadinessForJob(ctx context.Context, tenantID, agentID, jobKind string) (DiscoveryRelayReadiness, error) {
+	jobKind = strings.TrimSpace(jobKind)
+	if o.claimableAgentJobKindsConfigured {
+		if _, enabled := o.claimableAgentJobKinds[jobKind]; !enabled {
+			return DiscoveryRelayReadiness{
+				ConnectionOrigin: "Agent dispatch is not enabled for " + jobKind,
+				BlockedReason:    "Enable " + jobKind + " in agent_channel.claimable_job_kinds before starting this source.",
+			}, nil
+		}
+	}
 	agentID = strings.TrimSpace(agentID)
 	if agentID != "" {
 		agent, err := o.store.GetAgent(ctx, tenantID, agentID)

@@ -55,7 +55,7 @@ not this file.
 | `deploy/deploycheck_test.go:1483` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/deploycheck_test.go:1485` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/deploycheck_test.go:1505` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/docker/dist_test.go:378` | names are non-secret evaluation OIDC configuration keys (CWE-798) |
+| `deploy/docker/dist_test.go:385` | names are non-secret evaluation OIDC configuration keys (CWE-798) |
 | `deploy/helm/helm_test.go:164` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/helm/helm_test.go:600` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/helm/helm_test.go:802` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -339,7 +339,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `cmd/trstctl-agent/bootstrap_token_test.go:579` | loopback-only assembled test listener (CWE-918) |
+| `cmd/trstctl-agent/bootstrap_token_test.go:584` | loopback-only assembled test listener (CWE-918) |
 | `internal/protocols/scep/profile_routes_test.go:106` | test drives its own local server URL (CWE-88) |
 | `internal/server/license_entitlement_test.go:70` | fixed localhost-only assembled-test server (CWE-918) |
 
@@ -347,8 +347,8 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `cmd/trstctl-agent/bootstrap_token_test.go:454` | local test listener owned and torn down by the test (CWE-400) |
-| `internal/agent/http_enroll_test.go:148` | local test listener owned and torn down by the test (CWE-400) |
+| `cmd/trstctl-agent/bootstrap_token_test.go:459` | local test listener owned and torn down by the test (CWE-400) |
+| `internal/agent/http_enroll_test.go:150` | local test listener owned and torn down by the test (CWE-400) |
 | `internal/crypto/mtls/reload_test.go:95` | loopback test listener torn down by the test (CWE-400) |
 | `internal/crypto/mtls/server_test.go:166` | local test listener owned and torn down by the test (CWE-400) |
 | `internal/crypto/mtls/server_test.go:229` | local test listener owned and torn down by the test (CWE-400) |
@@ -365,7 +365,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `cmd/trstctl-agent/main.go:363` | the MaxUint32 check above proves the narrowing is exact (CWE-190). |
+| `cmd/trstctl-agent/main.go:365` | the MaxUint32 check above proves the narrowing is exact (CWE-190). |
 | `deploy/helm/helm_test.go:1705` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `ee/silo/lanedrill_test.go:96` | bounds-checked to [1, MaxUint16] above (CWE-190) |
 | `internal/agent/relay/adcsscan_wire_test.go:217` | this fixed fixture is 40 bytes, below MaxUint16 (CWE-190). |
@@ -689,10 +689,10 @@ not this file.
 | `deploy/deploycheck_test.go:119` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/deploycheck_test.go:442` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/deploycheck_test.go:452` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `deploy/docker/dist_test.go:684` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `deploy/docker/dist_test.go:787` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `deploy/docker/dist_test.go:1083` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `deploy/docker/dist_test.go:1148` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `deploy/docker/dist_test.go:691` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `deploy/docker/dist_test.go:794` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `deploy/docker/dist_test.go:1090` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `deploy/docker/dist_test.go:1155` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/docker/reproducible_test.go:64` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/helm/airgap_bundle_test.go:34` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/helm/airgap_bundle_test.go:49` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -836,7 +836,7 @@ not this file.
 | `clients/embedded/est_client_test.go:73` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `clients/embedded/est_client_test.go:138` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `clients/embedded/est_client_test.go:199` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `deploy/docker/dist_test.go:1027` | npm fixture tree in t.TempDir; mirrors a real package layout, nothing secret (CWE-276) |
+| `deploy/docker/dist_test.go:1034` | npm fixture tree in t.TempDir; mirrors a real package layout, nothing secret (CWE-276) |
 | `internal/agent/destination/fs_unix_test.go:79` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/discovery/discovery_test.go:270` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/discovery/privatekey_test.go:27` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -867,7 +867,7 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:103` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/secret_third_party_scan_served_test.go:154` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_rotation_served_test.go:2447` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:2168` | served CA certificate directory; the PEM is public material (CWE-276) |
+| `internal/server/server.go:2171` | served CA certificate directory; the PEM is public material (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:24` | the loose mode IS the attack fixture this test defends against (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:56` | the wide mode IS the precondition this test proves gets narrowed (CWE-276) |
 | `internal/tsa/http_test.go:103` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
@@ -885,7 +885,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `cmd/trstctl-agent/main.go:459` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
+| `cmd/trstctl-agent/main.go:462` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
 | `internal/agent/destination/fs_unix_test.go:82` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/drift/drift_unix_test.go:28` | deliberately loosens the fixture key's mode; detecting exactly this is what the test proves (CWE-276) |
 | `internal/agent/drift/drift_unix_test.go:53` | deliberately loosens the fixture key's mode; detecting exactly this is what the test proves (CWE-276) |
@@ -929,7 +929,7 @@ not this file.
 | `cmd/trstctl-agent/edgeca_test.go:122` | t.TempDir path (CWE-22) |
 | `cmd/trstctl-agent/edgeca_test.go:242` | t.TempDir path (CWE-22) |
 | `cmd/trstctl-agent/edgeca_test.go:253` | t.TempDir path (CWE-22) |
-| `cmd/trstctl-agent/main.go:830` | operator-supplied PIN file path, read at their instruction (CWE-22) |
+| `cmd/trstctl-agent/main.go:834` | operator-supplied PIN file path, read at their instruction (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:90` | operator-supplied trust key path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:343` | operator-supplied runtime configuration path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:370` | operator-supplied public issuer certificate (CWE-22) |
@@ -960,7 +960,7 @@ not this file.
 | `deploy/deploycheck_test.go:1325` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/deploycheck_test.go:1569` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/docker/dist_test.go:25` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/docker/dist_test.go:1099` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/docker/dist_test.go:1106` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/docker/reproducible_test.go:35` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/helm/airgap_bundle_test.go:62` | bundle is created inside this test's TempDir (CWE-22). |
 | `deploy/helm/airgap_bundle_test.go:69` | bundle is created inside this test's TempDir (CWE-22). |
@@ -1179,8 +1179,8 @@ not this file.
 | `internal/server/serve_test.go:80` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:81` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:125` | test-owned path under t.TempDir (CWE-22) |
-| `internal/server/server.go:2095` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/server.go:2172` | same operator-configured directory as the target certificate (CWE-22) |
+| `internal/server/server.go:2098` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/server.go:2175` | same operator-configured directory as the target certificate (CWE-22) |
 | `internal/signing/design_test.go:30` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/design_test.go:136` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/gated_destruction_journal.go:226` | exact signer-owned journal path. |
@@ -1285,7 +1285,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `cmd/trstctl-agent/bootstrap_token_test.go:226` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `cmd/trstctl-agent/bootstrap_token_test.go:231` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `cmd/trstctl-agent/sshtrust_test.go:82` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `cmd/trstctl-agent/sshtrust_test.go:131` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `cmd/trstctl-agent/sshtrust_test.go:158` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -1294,9 +1294,9 @@ not this file.
 | `cmd/trstctl-license/main.go:67` | writes the license PUBLIC key/inspection output; public material (CWE-276) |
 | `cmd/trstctl-license/main.go:148` | writes the license PUBLIC key/inspection output; public material (CWE-22, CWE-276) |
 | `cmd/trstctl/backup_cmd_test.go:31` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `deploy/docker/dist_test.go:1030` | non-secret npm fixture manifest in t.TempDir (CWE-276) |
-| `deploy/docker/dist_test.go:1033` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `deploy/docker/dist_test.go:1039` | fake npm shim in a test tempdir must be executable (CWE-276) |
+| `deploy/docker/dist_test.go:1037` | non-secret npm fixture manifest in t.TempDir (CWE-276) |
+| `deploy/docker/dist_test.go:1040` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `deploy/docker/dist_test.go:1046` | fake npm shim in a test tempdir must be executable (CWE-276) |
 | `docs/lint_gate_test.go:88` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/destination/fs_unix_test.go:57` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/discovery/discovery_test.go:273` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -1347,10 +1347,10 @@ not this file.
 | `internal/server/protocols_served_spiffe_ssh_test.go:537` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/protocols_served_stock_clients_test.go:574` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_scan_served_test.go:36` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:2178` | served CA certificate PEM is public material (CWE-276) |
+| `internal/server/server.go:2181` | served CA certificate PEM is public material (CWE-276) |
 | `internal/server/signer_authorization_test.go:132` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
-| `internal/server/ssh_journey_served_test.go:203` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/ssh_journey_served_test.go:204` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/signing/keystore_test.go:242` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/signing/signauth_secret_test.go:47` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/testutil/openssltest/openssltest_test.go:14` | fake openssl shim must be executable; 0700 is the minimum that runs (CWE-276) |
@@ -1407,10 +1407,10 @@ not this file.
 | `cmd/trstctl-agent/backoff_test.go:86` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/backoff_test.go:95` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/backoff_test.go:113` | test jitter/shuffle, not a security decision (CWE-338) |
-| `cmd/trstctl-agent/bootstrap_token_test.go:401` | test jitter/shuffle, not a security decision (CWE-338) |
-| `cmd/trstctl-agent/bootstrap_token_test.go:407` | test jitter/shuffle, not a security decision (CWE-338) |
-| `cmd/trstctl-agent/bootstrap_token_test.go:415` | test jitter/shuffle, not a security decision (CWE-338) |
-| `cmd/trstctl-agent/main.go:576` | reconnect jitter, not a security decision (CWE-338) |
+| `cmd/trstctl-agent/bootstrap_token_test.go:406` | test jitter/shuffle, not a security decision (CWE-338) |
+| `cmd/trstctl-agent/bootstrap_token_test.go:412` | test jitter/shuffle, not a security decision (CWE-338) |
+| `cmd/trstctl-agent/bootstrap_token_test.go:420` | test jitter/shuffle, not a security decision (CWE-338) |
+| `cmd/trstctl-agent/main.go:580` | reconnect jitter, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:28` | jitter spread, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:61` | jitter spread (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:77` | jitter spread (CWE-338) |

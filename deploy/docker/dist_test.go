@@ -309,6 +309,13 @@ func TestProductionImageEntrypointsSelectCleanReleaseTarget(t *testing.T) {
 	mustContainAll(t, "security image scan production target", securityWorkflow, "--target release")
 }
 
+func TestEvaluationComposeEnablesTheAgentJobsItsConsoleOffers(t *testing.T) {
+	compose := readArtifact(t, "docker-compose.yml")
+	mustContainAll(t, "evaluation agent execution contract", compose,
+		`TRSTCTL_AGENT_CHANNEL_ENABLED: "true"`,
+		`TRSTCTL_AGENT_CHANNEL_CLAIMABLE_JOB_KINDS: "discovery.run,endpoint.verify,connector.test"`)
+}
+
 // dockerfileCmdTargets extracts the distinct `<bin>` names from every `./cmd/<bin>`
 // reference in a Dockerfile (the build targets).
 func dockerfileCmdTargets(df string) []string {

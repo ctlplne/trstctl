@@ -182,6 +182,10 @@ services:
       TRSTCTL_AGENT_CHANNEL_ADDR: ":9443"
       TRSTCTL_AGENT_CHANNEL_HTTP_RENEWAL_ADDR: ":9444"
       TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE: /data/ca/agent-ca.crt
+      # EVALUATION ONLY — match the actions exposed by the blank-stack console.
+      # Production keeps the allowlist empty until an operator explicitly enables
+      # each estate-touching executor.
+      TRSTCTL_AGENT_CHANNEL_CLAIMABLE_JOB_KINDS: "discovery.run,endpoint.verify,connector.test"
       # EVAL ONLY — one explicit preset enables every shipped enrollment/timestamp
       # protocol against the deterministic eval tenant. Production defaults remain
       # off. Operators can choose another eval tenant before `docker compose up`

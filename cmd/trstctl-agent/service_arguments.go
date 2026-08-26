@@ -20,6 +20,9 @@ func serviceArguments(o agentOptions) []string {
 	if o.tokenFile != "" {
 		args = append(args, "--bootstrap-token-file", o.tokenFile)
 	}
+	if o.allowInsecureLoopbackEnrollment {
+		args = append(args, "--allow-insecure-loopback-enrollment")
+	}
 	if o.serverName != "" {
 		args = append(args, "--server-name", o.serverName)
 	}

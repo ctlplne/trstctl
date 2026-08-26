@@ -40,7 +40,7 @@ describe("first-run wizard", () => {
       signer_mode: "external",
       dependencies: [{ name: "signer", ready: true }],
     });
-    apiMock.createEnrollmentToken.mockReset().mockResolvedValue({ token: "BOOT-TOKEN-XYZ" });
+    apiMock.createEnrollmentToken.mockReset().mockResolvedValue({ token: "BOOT-TOKEN-XYZ", roles: ["host"] });
     apiMock.agents.mockReset().mockResolvedValue([{ id: "ag-1", name: "edge-01", status: "online" }]);
     apiMock.issueCertificate.mockReset().mockResolvedValue({ id: "id-1", name: "payments", status: "issued" });
     apiMock.protocolProfileStatus.mockReset().mockResolvedValue({
@@ -104,6 +104,7 @@ describe("first-run wizard", () => {
     expect(await screen.findByText(/BOOT-TOKEN-XYZ/)).toBeInTheDocument();
     const command = screen.getByLabelText("Runnable Linux agent command").textContent ?? "";
     expect(command).toContain("--enroll-url http://localhost");
+    expect(command).toContain("--allow-insecure-loopback-enrollment");
     expect(command).toContain("--server localhost:19443");
     expect(command).toContain("--server-name localhost");
     expect(command).toContain("--name edge-01");

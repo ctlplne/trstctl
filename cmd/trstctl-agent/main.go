@@ -51,6 +51,7 @@ func main() {
 	token := flag.String("bootstrap-token", "", "development-only inline bootstrap token; use --bootstrap-token-file")
 	tokenFile := flag.String("bootstrap-token-file", "", "file containing the one-time bootstrap token")
 	allowInlineToken := flag.Bool("allow-insecure-dev-bootstrap-token-arg", false, "allow inline bootstrap tokens in process arguments for local development only")
+	allowLoopbackEnrollment := flag.Bool("allow-insecure-loopback-enrollment", false, "allow bootstrap over plain HTTP only when --enroll-url is a loopback address; the resolved address is rechecked before every dial")
 	caBundle := flag.String("ca-bundle", "", "path to the control-plane CA certificate (PEM)")
 	serverAddr := flag.String("server", "", "control-plane gRPC address")
 	serverName := flag.String("server-name", "", "expected control-plane server name (defaults to --name)")
@@ -275,6 +276,7 @@ func main() {
 		tokenFile: *tokenFile, serverAddr: *serverAddr, serverName: *serverName, commonName: *commonName,
 		keyPath: *keyPath, certPath: *certPath, rotateEvery: *rotateEvery,
 		allowInsecureDevBootstrapTokenArg: *allowInlineToken,
+		allowInsecureLoopbackEnrollment:   *allowLoopbackEnrollment,
 		inventoryCertRoots:                splitList(*inventoryCertRoots),
 		inventoryOSTrustRoots:             splitList(*inventoryOSTrustRoots),
 		inventoryJavaTrustStores:          splitList(*inventoryJavaTrustStores),
@@ -367,6 +369,7 @@ type agentOptions struct {
 	enrollURL, inlineToken, tokenFile, caBundle, serverAddr, serverName, commonName, keyPath, certPath string
 	rotateEvery                                                                                        time.Duration
 	allowInsecureDevBootstrapTokenArg                                                                  bool
+	allowInsecureLoopbackEnrollment                                                                    bool
 	inventoryCertRoots                                                                                 []string
 	inventoryOSTrustRoots                                                                              []string
 	inventoryJavaTrustStores                                                                           []string
@@ -497,6 +500,7 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 	if err != nil {
 		return fmt.Errorf("build enrollment TLS trust: %w", err)
 	}
+	enroller := enrollmentEnroller(o, enrollClient)
 	serverName := o.serverName
 	if serverName == "" {
 		serverName = o.commonName
@@ -511,7 +515,7 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 		ServerCAPEM:    caPEM,
 		RefreshBefore:  o.rotateEvery,
 		Version:        buildinfo.Version(),
-	}, agent.NewHTTPEnroller(o.enrollURL, enrollClient))
+	}, enroller)
 
 	if err := a.Bootstrap(ctx); err != nil {
 		return fmt.Errorf("bootstrap: %w", err)
@@ -1064,6 +1068,17 @@ func enrollmentHTTPClient(caPEM []byte) (*http.Client, error) {
 		return nil, err
 	}
 	return &http.Client{Transport: enrollTransport, Timeout: 30 * time.Second}, nil
+}
+
+// enrollmentEnroller keeps the development exception narrow. HTTPS always uses
+// the operator-provided CA bundle. Only an explicit HTTP loopback command gets a
+// nil client, which makes NewHTTPEnroller install its DNS-rechecking loopback-only
+// transport; the flag can never turn a general HTTP client into plaintext egress.
+func enrollmentEnroller(o agentOptions, pinnedClient *http.Client) *agent.HTTPEnroller {
+	if o.allowInsecureLoopbackEnrollment && strings.HasPrefix(strings.ToLower(strings.TrimSpace(o.enrollURL)), "http://") {
+		return agent.NewHTTPEnroller(o.enrollURL, nil, agent.WithLoopbackDevHTTP())
+	}
+	return agent.NewHTTPEnroller(o.enrollURL, pinnedClient)
 }
 
 func agentIdentityFilesExist(o agentOptions) bool {

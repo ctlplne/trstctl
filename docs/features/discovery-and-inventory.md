@@ -85,6 +85,13 @@ non-offboarded network-role relay exists, manual and scheduled run admission bot
 refuse the run before a run event or outbox row is created. The console explains the
 shortest fix instead of leaving an impossible run silently queued.
 
+Readiness also checks the server's agent dispatch allowlist. A healthy relay is not
+enough when `discovery.run` (or `adcs.inventory` for AD CS) is absent from
+`agent_channel.claimable_job_kinds`: preview and saved-source preflight name that
+exact configuration gap, and run admission returns a conflict before creating an
+event or outbox row. The console therefore cannot report “ready” for work the
+server is configured never to hand out.
+
 Once at least one eligible relay is enrolled, the run executes from the outbox worker.
 External probes are journaled first and delivered at-least-once, so a temporary relay
 disconnect after admission is durable and retryable instead of being done inline by
@@ -440,7 +447,8 @@ trstctl-cli agents list
 # On an enrolled host, report public certificate files the agent can see.
 trstctl-agent --enroll-url https://localhost:8443 \
   --bootstrap-token-file ./trstctl-bootstrap-token \
-  --server localhost:9443 \
+  --server localhost:19443 \
+  --server-name localhost \
   --name edge-agent-1 \
   --ca-bundle ./trstctl-ca.pem \
   --inventory-cert-roots /etc/ssl,/etc/pki/tls/certs \
@@ -454,6 +462,13 @@ trstctl-agent --enroll-url https://localhost:8443 \
 trstctl-cli discovery findings list
 trstctl-cli graph nodes
 ```
+
+`--enroll-url` is the control-plane base URL, not `/enroll/bootstrap`; the agent
+adds the endpoint. The console uses this same contract on Agents and in the setup
+wizard. When the console itself is intentionally served from loopback HTTP for
+local evaluation, its generated command adds
+`--allow-insecure-loopback-enrollment`. The binary rechecks that the resolved
+destination is loopback before every dial. Non-loopback HTTP remains refused.
 
 When you find a credential you didn't expect, follow it into the
 [credential graph](graph-query-ai.md) to see what it can reach, or into
