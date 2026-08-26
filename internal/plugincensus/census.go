@@ -98,7 +98,9 @@ func Normalize(entries []Entry) ([]Entry, error) {
 			if len(grant.Constraints) > maxConstraintsPerGrant {
 				return nil, fmt.Errorf("plugin %q capability %q has too many constraints", in.Name, grant.Capability)
 			}
-			constraints := append([]string(nil), grant.Constraints...)
+			// The public contract is an array. Preserve that shape for an
+			// unrestricted grant instead of letting encoding/json emit null.
+			constraints := append([]string{}, grant.Constraints...)
 			for _, constraint := range constraints {
 				if constraint == "" || len(constraint) > maxMetadataBytes || strings.ContainsAny(constraint, "\r\n\x00") {
 					return nil, fmt.Errorf("plugin %q capability %q has invalid constraint", in.Name, grant.Capability)

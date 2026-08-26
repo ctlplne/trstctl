@@ -253,6 +253,53 @@ describe("connector deployment disclosure surface", () => {
     expect(screen.queryByText(/BEGIN .* PRIVATE KEY/)).not.toBeInTheDocument();
   });
 
+  it("keeps the connector route usable when an older API returns null plugin arrays", async () => {
+    apiMock.connectorCatalog.mockResolvedValueOnce({
+      items: [],
+      relay_plugins: [
+        {
+          agent_id: "22222222-2222-2222-2222-222222222222",
+          agent_name: "relay-with-empty-census",
+          agent_status: "active",
+          reported_at: "2026-08-12T18:30:00Z",
+          signer_fingerprint: `sha256:${"d".repeat(64)}`,
+          signature_verified: true,
+          metadata_only: true,
+          plugins: null,
+        },
+        {
+          agent_id: "33333333-3333-3333-3333-333333333333",
+          agent_name: "relay-with-unrestricted-plugin",
+          agent_status: "active",
+          reported_at: "2026-08-12T18:31:00Z",
+          signer_fingerprint: `sha256:${"e".repeat(64)}`,
+          signature_verified: true,
+          metadata_only: true,
+          plugins: [
+            {
+              name: "partner-nginx",
+              digest: `sha256:${"f".repeat(64)}`,
+              publisher: `sha256:${"a".repeat(64)}`,
+              execution_context: "network_relay_wasm",
+              grants: [{ capability: "fs.write", constraints: null }],
+            },
+          ],
+        },
+      ],
+    });
+
+    const user = userEvent.setup();
+    renderConnectors();
+
+    await screen.findByRole("heading", { name: "Where credentials are installed" });
+    await user.click(screen.getByText("Connector capabilities and plugin evidence", { exact: true }));
+    expect(await screen.findByText("relay-with-empty-census")).toBeInTheDocument();
+    expect(screen.getByText("No loaded plugins")).toBeInTheDocument();
+    expect(screen.getByText("relay-with-unrestricted-plugin")).toBeInTheDocument();
+    expect(screen.getByText("partner-nginx")).toBeInTheDocument();
+    expect(screen.getByText("Unrestricted")).toBeInTheDocument();
+  });
+
   it("renders all three E1 dispositions instead of hiding the unimplemented denominator", async () => {
     apiMock.connectorCatalog.mockResolvedValueOnce({
       items: [

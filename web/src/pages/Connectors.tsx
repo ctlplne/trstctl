@@ -738,7 +738,11 @@ export function Connectors() {
                     </thead>
                     <tbody>
                       {relayPlugins.flatMap((runtime) => {
-                        const plugins = runtime.plugins.length > 0 ? runtime.plugins : [null];
+                        // Older servers can serialize an empty Go slice as null even
+                        // though the OpenAPI contract says this field is an array.
+                        // Keep the evidence page usable while mixed versions upgrade.
+                        const reportedPlugins = runtime.plugins ?? [];
+                        const plugins = reportedPlugins.length > 0 ? reportedPlugins : [null];
                         return plugins.map((plugin) => (
                           <tr key={`${runtime.agent_id}:${plugin?.name ?? "empty"}`} className="align-top">
                             <td className="max-w-[18rem]">
@@ -769,7 +773,9 @@ export function Connectors() {
                                 <span key={grant.capability} className="block text-xs">
                                   <span className="font-mono font-semibold">{grant.capability}</span>{" "}
                                   <span className="text-muted-foreground">
-                                    {grant.constraints.length > 0 ? grant.constraints.join(", ") : translateNow("connectors.relayPlugins.unrestricted")}
+                                    {(grant.constraints ?? []).length > 0
+                                      ? (grant.constraints ?? []).join(", ")
+                                      : translateNow("connectors.relayPlugins.unrestricted")}
                                   </span>
                                 </span>
                               ))}

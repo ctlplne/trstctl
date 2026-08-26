@@ -146,6 +146,22 @@ type relayPluginRuntime struct {
 	Plugins           []plugincensus.Entry `json:"plugins"`
 }
 
+// relayPluginResponseEntries preserves the array shapes promised by OpenAPI.
+// A stored signed census may contain nil slices because nil and empty have the
+// same signing meaning. JSON clients must still receive [] rather than null.
+func relayPluginResponseEntries(entries []plugincensus.Entry) []plugincensus.Entry {
+	out := make([]plugincensus.Entry, len(entries))
+	for i, entry := range entries {
+		out[i] = entry
+		out[i].Grants = make([]plugincensus.Grant, len(entry.Grants))
+		for j, grant := range entry.Grants {
+			out[i].Grants[j] = grant
+			out[i].Grants[j].Constraints = append([]string{}, grant.Constraints...)
+		}
+	}
+	return out
+}
+
 type deploymentTargetRequest struct {
 	Name      string          `json:"name"`
 	Connector string          `json:"connector"`
@@ -346,7 +362,7 @@ func (a *API) listConnectorCatalog(w http.ResponseWriter, r *http.Request) {
 			ReportedAt:        agent.RelayPluginsReportedAt.UTC().Format(time.RFC3339),
 			SignerFingerprint: agent.RelayPluginsSignerFingerprint,
 			SignatureVerified: len(agent.RelayPluginsSignature) > 0 && agent.RelayPluginsStatement != "",
-			MetadataOnly:      true, Plugins: append([]plugincensus.Entry(nil), agent.RelayPlugins...),
+			MetadataOnly:      true, Plugins: relayPluginResponseEntries(agent.RelayPlugins),
 		})
 	}
 	next := ""
