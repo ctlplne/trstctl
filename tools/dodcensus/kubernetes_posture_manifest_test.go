@@ -3,11 +3,63 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 )
+
+func TestKubernetesPostureBuildsControlPlaneBeforeStartingKind(t *testing.T) {
+	repo, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(filepath.Join(repo, "internal", "server", "dod_kubernetes_posture_runtime_test.go")) // #nosec G304 -- test reads the exact committed runtime-proof source (CWE-22)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(raw)
+	cases := []struct {
+		name      string
+		condition string
+		next      string
+		entryID   string
+	}{
+		{
+			name:      "certificate signing requests",
+			condition: `if only == "" || only == "k8s_posture_routes.certificate_signing_requests" {`,
+			next:      `if only == "" || only == "k8s_posture_routes.trust_bundles" {`,
+			entryID:   "k8s_posture_routes.certificate_signing_requests",
+		},
+		{
+			name:      "trust bundles",
+			condition: `if only == "" || only == "k8s_posture_routes.trust_bundles" {`,
+			entryID:   "k8s_posture_routes.trust_bundles",
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			start := strings.Index(source, testCase.condition)
+			if start < 0 {
+				t.Fatalf("missing runtime branch %q", testCase.condition)
+			}
+			branch := source[start:]
+			if testCase.next != "" {
+				end := strings.Index(branch[len(testCase.condition):], testCase.next)
+				if end < 0 {
+					t.Fatalf("missing next runtime branch %q", testCase.next)
+				}
+				branch = branch[:len(testCase.condition)+end]
+			}
+			build := strings.Index(branch, "dodBuildKubernetesPostureServer")
+			kind := strings.Index(branch, `proof.StartCommand(t, "`+testCase.entryID+`")`)
+			if build < 0 || kind < 0 || build > kind {
+				t.Fatalf("runtime branch must initialize the bounded PostgreSQL control plane before starting kind; build=%d kind=%d", build, kind)
+			}
+		})
+	}
+}
 
 func TestKubernetesPostureRuntimeSourceBindsBothFocusedAndFullGroupModes(t *testing.T) {
 	repo, err := filepath.Abs(filepath.Join("..", ".."))

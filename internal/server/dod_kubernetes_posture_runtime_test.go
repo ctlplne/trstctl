@@ -45,6 +45,7 @@ const (
 	dodKubernetesNodeImage       = "kindest/node:v1.31.14@sha256:6f86cf509dbb42767b6e79debc3f2c32e4ee01386f0489b3b2be24b0a55aac2b"
 	dodKindConfigReadyTimeout    = 6 * time.Minute
 	dodKindConfigAttemptTimeout  = 30 * time.Second
+	dodKindVerifierTimeout       = 90 * time.Second
 	dodKindConfigRetryDelay      = 500 * time.Millisecond
 )
 
@@ -58,20 +59,24 @@ func TestDODKubernetesPostureRoutesProductionAssembly(t *testing.T) {
 		"k8s_posture_routes.certificate_signing_requests",
 		"k8s_posture_routes.trust_bundles",
 	)
+	// Bring up the bounded PostgreSQL control plane before allocating kind. A
+	// late full-census run has already exercised many Docker-backed substrates;
+	// starting kind first can make initdb lose that temporary resource race. It
+	// also leaves no external cluster to clean up when control-plane boot fails.
 	if only == "" || only == "k8s_posture_routes.certificate_signing_requests" {
+		srv := dodBuildKubernetesPostureServer(t, t.TempDir())
 		external := proof.StartCommand(t, "k8s_posture_routes.certificate_signing_requests")
-		dodRunKubernetesCSRPosture(t, external)
+		dodRunKubernetesCSRPosture(t, srv, external)
 	}
 	if only == "" || only == "k8s_posture_routes.trust_bundles" {
+		srv := dodBuildKubernetesPostureServer(t, t.TempDir())
 		external := proof.StartCommand(t, "k8s_posture_routes.trust_bundles")
-		dodRunKubernetesTrustBundlePosture(t, external)
+		dodRunKubernetesTrustBundlePosture(t, srv, external)
 	}
 }
 
-func dodRunKubernetesCSRPosture(t *testing.T, external *proof.ExternalSubstrate) {
+func dodRunKubernetesCSRPosture(t *testing.T, srv *Server, external *proof.ExternalSubstrate) {
 	t.Helper()
-	dir := t.TempDir()
-	srv := dodBuildKubernetesPostureServer(t, dir)
 	runtime := dodServeKubernetesPostureRuntime(t, srv)
 	report, reportReceipt, caPEM := dodReconcileAndReportKubernetesPosture(t, srv, runtime.agentAddress, external)
 
@@ -102,10 +107,8 @@ func dodRunKubernetesCSRPosture(t *testing.T, external *proof.ExternalSubstrate)
 	}))
 }
 
-func dodRunKubernetesTrustBundlePosture(t *testing.T, external *proof.ExternalSubstrate) {
+func dodRunKubernetesTrustBundlePosture(t *testing.T, srv *Server, external *proof.ExternalSubstrate) {
 	t.Helper()
-	dir := t.TempDir()
-	srv := dodBuildKubernetesPostureServer(t, dir)
 	runtime := dodServeKubernetesPostureRuntime(t, srv)
 	report, reportReceipt, caPEM := dodReconcileAndReportKubernetesPosture(t, srv, runtime.agentAddress, external)
 
@@ -628,7 +631,7 @@ func dodKubernetesSubstrateRequest(t *testing.T, method, endpoint string, body [
 	}
 	clientTransport := http.DefaultTransport.(*http.Transport).Clone()
 	clientTransport.Proxy = nil
-	client := &http.Client{Transport: clientTransport, Timeout: 30 * time.Second}
+	client := &http.Client{Transport: clientTransport, Timeout: dodKindVerifierTimeout}
 	response, err := client.Do(request)
 	if err != nil {
 		t.Fatalf("Kubernetes substrate %s %s: %v", method, endpoint, err)
@@ -642,6 +645,15 @@ func dodKubernetesSubstrateRequest(t *testing.T, method, endpoint string, body [
 		t.Fatalf("Kubernetes substrate %s status=%d bytes=%d err=%v body=%s", method, response.StatusCode, len(result), err, result)
 	}
 	return result
+}
+
+func TestDODKubernetesVerifierTimeoutRemainsBoundedAboveOneReadinessAttempt(t *testing.T) {
+	if dodKindVerifierTimeout <= dodKindConfigAttemptTimeout {
+		t.Fatalf("verifier timeout %s must exceed one readiness attempt %s", dodKindVerifierTimeout, dodKindConfigAttemptTimeout)
+	}
+	if dodKindVerifierTimeout >= dodKindConfigReadyTimeout {
+		t.Fatalf("verifier timeout %s must remain below the overall real-kind readiness bound %s", dodKindVerifierTimeout, dodKindConfigReadyTimeout)
+	}
 }
 
 func dodKubernetesPostureContract(t *testing.T) []byte {

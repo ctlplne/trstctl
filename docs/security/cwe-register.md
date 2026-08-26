@@ -41,7 +41,7 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1335 annotated sites across 26 rules. Each row is
+1336 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -921,7 +921,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (362 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (363 sites)
 
 | Location | Reason |
 |---|---|
@@ -1230,6 +1230,7 @@ not this file.
 | `tools/dodcensus/claims.go:61` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/claims.go:72` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/claims.go:76` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/kubernetes_posture_manifest_test.go:18` | test reads the exact committed runtime-proof source (CWE-22) |
 | `tools/dodcensus/main.go:500` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/main_test.go:519` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/main_test.go:538` | test reads its own fixture/tempdir path (CWE-22) |
