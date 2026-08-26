@@ -44,6 +44,7 @@ type Intent struct {
 	// the same destination instead of guessing from mutable source state.
 	JobKind       string   `json:"job_kind,omitempty"`
 	ScheduleID    *string  `json:"schedule_id,omitempty"`
+	RetryOfRunID  string   `json:"retry_of_run_id,omitempty"`
 	DryRun        bool     `json:"dry_run"`
 	RequestedBy   string   `json:"requested_by,omitempty"`
 	Execution     string   `json:"execution,omitempty"`

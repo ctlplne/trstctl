@@ -142,7 +142,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use network discovery while tenant, policy, and security authority remain on the server.",
       "tool": "discover",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/discovery",
       "navigationEntrypoints": [
         "tool navigation",
@@ -154,7 +154,7 @@ export const canonicalCapabilities = [
       "dependencies": [],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -195,8 +195,14 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: retryDiscoveryRun",
+            "CLI command: discovery runs retry",
+            "internal/server/discovery_recovery_served_test.go",
+            "web/src/pages/Discovery.tsx",
+            "web/src/__tests__/discovery.test.tsx"
+          ]
         },
         "verify": {
           "status": "complete",
@@ -227,6 +233,7 @@ export const canonicalCapabilities = [
             "OpenAPI operationId: listDiscoveryRuns",
             "OpenAPI operationId: listDiscoverySchedules",
             "OpenAPI operationId: listDiscoverySources",
+            "OpenAPI operationId: retryDiscoveryRun",
             "OpenAPI operationId: startDiscoveryRun",
             "CLI command: discovery segments create",
             "CLI command: discovery capabilities",
@@ -239,6 +246,7 @@ export const canonicalCapabilities = [
             "CLI command: discovery runs start",
             "CLI command: discovery runs list",
             "CLI command: discovery runs get",
+            "CLI command: discovery runs retry",
             "CLI command: discovery monitoring",
             "CLI command: discovery coverage",
             "CLI command: discovery findings list",

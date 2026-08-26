@@ -19,6 +19,74 @@ import (
 	corestore "trstctl.com/trstctl/internal/store"
 )
 
+func TestMigration0198PreservesRunsAndFencesRetryLineageByTenant(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 198)
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect fresh content database: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+
+	for index, tenantID := range []string{tenantA, tenantB} {
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO tenants (tenant_id, name) VALUES ($1, $2)`, tenantID, fmt.Sprintf("discovery-retry-%d", index)); err != nil {
+			t.Fatalf("seed tenant %s: %v", tenantID, err)
+		}
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO discovery_sources (id, tenant_id, kind, name, config, created_at, updated_at)
+			 VALUES ($1, $2, 'network', $3, '{}'::jsonb, now(), now())`,
+			fmt.Sprintf("20000000-0000-4000-8000-00000000019%d", 8+index), tenantID, fmt.Sprintf("source-%d", index)); err != nil {
+			t.Fatalf("seed source %s: %v", tenantID, err)
+		}
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO discovery_runs (id, tenant_id, source_id, status, dry_run, requested_by, created_at)
+			 VALUES ($1, $2, $3, 'failed', false, 'migration-test', now())`,
+			fmt.Sprintf("30000000-0000-4000-8000-00000000019%d", 8+index), tenantID,
+			fmt.Sprintf("20000000-0000-4000-8000-00000000019%d", 8+index)); err != nil {
+			t.Fatalf("seed failed run %s: %v", tenantID, err)
+		}
+	}
+
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	var retryOf *string
+	if err := pool.QueryRow(ctx,
+		`SELECT retry_of_run_id::text FROM discovery_runs WHERE tenant_id = $1 AND id = '30000000-0000-4000-8000-000000000198'`,
+		tenantA).Scan(&retryOf); err != nil {
+		t.Fatalf("read migrated original: %v", err)
+	}
+	if retryOf != nil {
+		t.Fatalf("historical run gained retry lineage %q", *retryOf)
+	}
+
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO discovery_runs
+		 (id, tenant_id, source_id, retry_of_run_id, status, dry_run, requested_by, created_at)
+		 VALUES ('30000000-0000-4000-8000-000000000200', $1,
+		         '20000000-0000-4000-8000-000000000198',
+		         '30000000-0000-4000-8000-000000000198', 'queued', false, 'migration-test', now())`, tenantA); err != nil {
+		t.Fatalf("insert same-tenant retry lineage: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO discovery_runs
+		 (id, tenant_id, source_id, retry_of_run_id, status, dry_run, requested_by, created_at)
+		 VALUES ('30000000-0000-4000-8000-000000000201', $1,
+		         '20000000-0000-4000-8000-000000000199',
+		         '30000000-0000-4000-8000-000000000198', 'queued', false, 'migration-test', now())`, tenantB); err == nil {
+		t.Fatal("0198 accepted cross-tenant discovery retry lineage")
+	}
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO discovery_runs
+		 (id, tenant_id, source_id, retry_of_run_id, status, dry_run, requested_by, created_at)
+		 VALUES ('30000000-0000-4000-8000-000000000202', $1,
+		         '20000000-0000-4000-8000-000000000198',
+		         '30000000-0000-4000-8000-000000000202', 'queued', false, 'migration-test', now())`, tenantA); err == nil {
+		t.Fatal("0198 accepted self-referential discovery retry lineage")
+	}
+}
+
 func TestMigration0197KeepsExistingRoutesManualAndConstrainsAutomaticScopes(t *testing.T) {
 	ctx := context.Background()
 	prefix, target := splitMigrationsAtVersion(t, 197)

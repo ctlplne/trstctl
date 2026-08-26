@@ -51,6 +51,7 @@ type InventoryIntent struct {
 	SourceID        string  `json:"source_id"`
 	JobKind         string  `json:"job_kind"`
 	ScheduleID      *string `json:"schedule_id,omitempty"`
+	RetryOfRunID    string  `json:"retry_of_run_id,omitempty"`
 	DryRun          bool    `json:"dry_run"`
 	RequestedBy     string  `json:"requested_by,omitempty"`
 	Execution       string  `json:"execution"`

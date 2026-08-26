@@ -2256,6 +2256,7 @@ export interface DiscoveryRun {
   requested_by?: string;
   required_agent_id?: string;
   required_agent_role?: string;
+  retry_of_run_id?: string;
   schedule_id?: string;
   segment?: string;
   source_id: string;

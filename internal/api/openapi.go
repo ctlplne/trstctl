@@ -1662,8 +1662,9 @@ func componentSchemas() map[string]*Schema {
 	}, "source_id", "name", "interval_seconds")
 	discoveryRun := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "source_id": uuid(), "schedule_id": uuid(),
-		"status":  {Type: "string", Enum: []string{"queued", "running", "succeeded", "partial", "failed"}},
-		"dry_run": {Type: "boolean"}, "requested_by": str(),
+		"retry_of_run_id": uuid(),
+		"status":          {Type: "string", Enum: []string{"queued", "running", "succeeded", "partial", "failed"}},
+		"dry_run":         {Type: "boolean"}, "requested_by": str(),
 		"execution": {Type: "string", Enum: []string{"control_plane", "relay"}},
 		"segment":   str(), "required_agent_role": str(), "required_agent_id": uuid(), "executed_by_agent_id": uuid(),
 		"targets": {Type: "integer"}, "discovered": {Type: "integer"}, "failed": {Type: "integer"},

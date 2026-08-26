@@ -186,7 +186,8 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 		id = uuid.NewString()
 	}
 	queued := projections.DiscoveryRunQueued{
-		ID: id, SourceID: in.SourceID, ScheduleID: in.ScheduleID, DryRun: in.DryRun, RequestedBy: requestedBy,
+		ID: id, SourceID: in.SourceID, ScheduleID: in.ScheduleID, RetryOfRunID: in.RetryOfRunID,
+		DryRun: in.DryRun, RequestedBy: requestedBy,
 		Execution: segmentscan.ExecutionControlPlane,
 	}
 	destination := discoveryRunDestination
@@ -211,6 +212,7 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 			return store.DiscoveryRun{}, err
 		}
 		resolved.ID, resolved.SourceID, resolved.ScheduleID = id, in.SourceID, in.ScheduleID
+		resolved.RetryOfRunID = in.RetryOfRunID
 		resolved.DryRun, resolved.RequestedBy = in.DryRun, requestedBy
 		queued = resolved
 		command = resolved
@@ -226,9 +228,10 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 			return store.DiscoveryRun{}, err
 		}
 		resolved.ID, resolved.SourceID, resolved.ScheduleID = id, in.SourceID, in.ScheduleID
+		resolved.RetryOfRunID = in.RetryOfRunID
 		resolved.RequestedBy = requestedBy
 		queued = projections.DiscoveryRunQueued{
-			ID: id, SourceID: in.SourceID, JobKind: resolved.JobKind,
+			ID: id, SourceID: in.SourceID, JobKind: resolved.JobKind, RetryOfRunID: in.RetryOfRunID,
 			ScheduleID: in.ScheduleID, RequestedBy: requestedBy,
 			Execution: resolved.Execution, RequiredAgentRole: resolved.RequiredAgentRole,
 			RequiredAgentID: resolved.RequiredAgentID,
@@ -287,7 +290,7 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 		return store.DiscoveryRun{}, err
 	}
 	return store.DiscoveryRun{
-		ID: id, TenantID: tenantID, SourceID: in.SourceID, ScheduleID: in.ScheduleID,
+		ID: id, TenantID: tenantID, SourceID: in.SourceID, ScheduleID: in.ScheduleID, RetryOfRunID: in.RetryOfRunID,
 		Status: "queued", DryRun: in.DryRun, RequestedBy: requestedBy,
 		Execution: queued.Execution, Segment: queued.Segment, RequiredAgentRole: queued.RequiredAgentRole,
 		RequiredAgentID: queued.RequiredAgentID, CreatedAt: ev.Time,

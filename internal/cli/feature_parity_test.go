@@ -215,9 +215,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// `transit keys list` command raises it to 392 and exposes the same safe key
 	// metadata the API and console use for purpose-compatible selection. The
 	// authenticated `capabilities list` read raises it to 393 and maps to F8 so
-	// headless clients see the same route/RBAC preflight as the console.
-	if len(out) != 393 {
-		t.Fatalf("CLI commands = %d, want 393", len(out))
+	// headless clients see the same route/RBAC preflight as the console. The
+	// first-class Discovery recovery command raises it to 394 and maps to F2.
+	if len(out) != 394 {
+		t.Fatalf("CLI commands = %d, want 394", len(out))
 	}
 	return out
 }

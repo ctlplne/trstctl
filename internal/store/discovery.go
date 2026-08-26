@@ -46,6 +46,7 @@ type DiscoveryRun struct {
 	TenantID          string
 	SourceID          string
 	ScheduleID        *string
+	RetryOfRunID      string
 	Status            string
 	DryRun            bool
 	RequestedBy       string
@@ -201,18 +202,19 @@ func (s *Store) ApplyDiscoveryRunQueuedTx(ctx context.Context, tx pgx.Tx, run Di
 	}
 	_, err := tx.Exec(ctx,
 		`INSERT INTO discovery_runs
-		        (id, tenant_id, source_id, schedule_id, status, dry_run, requested_by,
+		        (id, tenant_id, source_id, schedule_id, retry_of_run_id, status, dry_run, requested_by,
 		         execution, segment, required_agent_role, required_agent_id, created_at)
-		      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NULLIF($11, '')::uuid, $12)
+		      VALUES ($1, $2, $3, $4, NULLIF($5, '')::uuid, $6, $7, $8, $9, $10, $11, NULLIF($12, '')::uuid, $13)
 		 ON CONFLICT (tenant_id, id) DO UPDATE
 		      SET status = EXCLUDED.status,
+		          retry_of_run_id = EXCLUDED.retry_of_run_id,
 		          dry_run = EXCLUDED.dry_run,
 		          requested_by = EXCLUDED.requested_by,
 		          execution = EXCLUDED.execution,
 		          segment = EXCLUDED.segment,
 		          required_agent_role = EXCLUDED.required_agent_role,
 		          required_agent_id = EXCLUDED.required_agent_id`,
-		run.ID, run.TenantID, run.SourceID, run.ScheduleID, run.Status, run.DryRun, run.RequestedBy,
+		run.ID, run.TenantID, run.SourceID, run.ScheduleID, run.RetryOfRunID, run.Status, run.DryRun, run.RequestedBy,
 		execution, run.Segment, run.RequiredAgentRole, run.RequiredAgentID, run.CreatedAt)
 	return err
 }
@@ -593,7 +595,8 @@ func (s *Store) GetDiscoverySchedule(ctx context.Context, tenantID, id string) (
 func (s *Store) GetDiscoveryRun(ctx context.Context, tenantID, id string) (DiscoveryRun, error) {
 	var out DiscoveryRun
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		return scanDiscoveryRun(tx.QueryRow(ctx, `SELECT id::text, tenant_id::text, source_id::text, schedule_id::text, status, dry_run,
+		return scanDiscoveryRun(tx.QueryRow(ctx, `SELECT id::text, tenant_id::text, source_id::text, schedule_id::text,
+		              COALESCE(retry_of_run_id::text, ''), status, dry_run,
 		              requested_by, execution, segment, required_agent_role,
 		              COALESCE(required_agent_id::text, ''), COALESCE(executed_by_agent_id::text, ''),
 		              targets, discovered, failed, rejected, blocked, error, started_at, completed_at, created_at
@@ -607,7 +610,8 @@ func (s *Store) GetDiscoveryRun(ctx context.Context, tenantID, id string) (Disco
 func (s *Store) ListDiscoveryRunsPage(ctx context.Context, tenantID, afterID string, limit int) ([]DiscoveryRun, error) {
 	var out []DiscoveryRun
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT id::text, tenant_id::text, source_id::text, schedule_id::text, status, dry_run,
+		rows, err := tx.Query(ctx, `SELECT id::text, tenant_id::text, source_id::text, schedule_id::text,
+		              COALESCE(retry_of_run_id::text, ''), status, dry_run,
 		              requested_by, execution, segment, required_agent_role,
 		              COALESCE(required_agent_id::text, ''), COALESCE(executed_by_agent_id::text, ''),
 		              targets, discovered, failed, rejected, blocked, error, started_at, completed_at, created_at
@@ -775,7 +779,7 @@ func scanDiscoverySource(row rowScanner, src *DiscoverySource) error {
 }
 
 func scanDiscoveryRun(row rowScanner, run *DiscoveryRun) error {
-	return row.Scan(&run.ID, &run.TenantID, &run.SourceID, &run.ScheduleID, &run.Status, &run.DryRun,
+	return row.Scan(&run.ID, &run.TenantID, &run.SourceID, &run.ScheduleID, &run.RetryOfRunID, &run.Status, &run.DryRun,
 		&run.RequestedBy, &run.Execution, &run.Segment, &run.RequiredAgentRole, &run.RequiredAgentID,
 		&run.ExecutedByAgentID, &run.Targets, &run.Discovered, &run.Failed, &run.Rejected, &run.Blocked, &run.Error,
 		&run.StartedAt, &run.CompletedAt, &run.CreatedAt)

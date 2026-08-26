@@ -4418,7 +4418,8 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		}
 		return p.store.ApplyDiscoveryRunQueuedTx(ctx, tx, store.DiscoveryRun{
 			ID: pl.ID, TenantID: e.TenantID, SourceID: pl.SourceID, ScheduleID: pl.ScheduleID,
-			Status: "queued", DryRun: pl.DryRun, RequestedBy: pl.RequestedBy,
+			RetryOfRunID: pl.RetryOfRunID,
+			Status:       "queued", DryRun: pl.DryRun, RequestedBy: pl.RequestedBy,
 			Execution: pl.Execution, Segment: pl.Segment, RequiredAgentRole: pl.RequiredAgentRole,
 			RequiredAgentID: pl.RequiredAgentID, CreatedAt: e.Time,
 		})

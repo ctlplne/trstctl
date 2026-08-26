@@ -1645,6 +1645,7 @@ export interface Api {
   discoveryRuns(options?: { limit?: number; cursor?: string }): Promise<DiscoveryRunList>;
   getDiscoveryRun(id: string): Promise<DiscoveryRun>;
   startDiscoveryRun(input: DiscoveryRunRequest): Promise<DiscoveryRun>;
+  retryDiscoveryRun(id: string): Promise<DiscoveryRun>;
   discoveryMonitoring(): Promise<DiscoveryMonitoring>;
   /** F1: AD CS certificate template posture observed by an in-domain relay. */
   adcsPosture(): Promise<ADCSPosture>;
@@ -2116,6 +2117,7 @@ const liveApi: Api = {
   discoveryRuns: (options) => req<DiscoveryRunList>(`/api/v1/discovery/runs${pageQueryString(options)}`),
   getDiscoveryRun: (id) => req<DiscoveryRun>(`/api/v1/discovery/runs/${encodeURIComponent(id)}`),
   startDiscoveryRun: (input) => mutate<DiscoveryRun>("POST", "/api/v1/discovery/runs", input),
+  retryDiscoveryRun: (id) => mutate<DiscoveryRun>("POST", `/api/v1/discovery/runs/${encodeURIComponent(id)}/retry`),
   discoveryMonitoring: () => req<DiscoveryMonitoring>("/api/v1/discovery/monitoring"),
   adcsPosture: () => req<ADCSPosture>("/api/v1/posture/adcs"),
   adcsDrift: () => req<ADCSDriftHistory>("/api/v1/posture/adcs/drift"),

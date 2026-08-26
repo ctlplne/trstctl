@@ -704,6 +704,16 @@ const deDECatalog = {
   "discovery.run.relay": "Relay",
   "discovery.run.controlPlane": "Steuerungsebene",
   "discovery.run.unbound": "Nicht gebunden",
+  // F2 recovery: AI-assisted translation; native-speaker review requested.
+  "discovery.run.recoveryColumn": "Wiederherstellung",
+  "discovery.run.retries": "Wiederholt {id}",
+  "discovery.run.retryAction": "Wiederholen",
+  "discovery.run.retrying": "Wiederholung läuft…",
+  "discovery.run.retryAria": "Lauf {id} wiederholen",
+  "discovery.run.recoveryBlocked": "Wiederherstellung blockiert: {reason}",
+  "discovery.run.recoveryQueued":
+    "Wiederherstellungslauf {replacement} wurde eingereiht. Der ursprüngliche Fehler {original} bleibt unverändert als Nachweis erhalten.",
+  "discovery.run.retryFailed": "Discovery-Lauf konnte nicht wiederholt werden",
   // DESIGN-ROUTE-040 machine-authored translations; human linguistic review required before release.
   "platform.tabs.access": "Personen und Rollen",
   "platform.tabs.posture": "Systemzustand",

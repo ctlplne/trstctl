@@ -1855,6 +1855,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/discovery/runs/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry a terminal unsuccessful discovery run as a separate replacement */
+        post: operations["retryDiscoveryRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/discovery/schedules": {
         parameters: {
             query?: never;
@@ -7909,6 +7926,8 @@ export interface components {
             /** Format: uuid */
             required_agent_id?: string;
             required_agent_role?: string;
+            /** Format: uuid */
+            retry_of_run_id?: string;
             /** Format: uuid */
             schedule_id?: string;
             segment?: string;
@@ -17656,6 +17675,49 @@ export interface operations {
         responses: {
             /** @description success */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoveryRun"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    retryDiscoveryRun: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

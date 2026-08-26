@@ -321,7 +321,7 @@
             "priority": 44,
             "served_state": "served",
             "backend_status": "served network and AD CS source/run control plane with outbox-executed relay scans, AD CS DACL enrollment-trustee projection, certificate recording, continuous monitoring rollup, and CAP-NHI-03 service-account findings",
-            "current_frontend_mapping": "basic: Discovery at /discovery creates network, adcs, and service_account sources, schedules runs, starts supported runs, lists findings, and renders continuous monitoring posture; Posture shows AD CS source lifecycle and template enrollment trustees; certificates discovered by served network scans also appear in inventory.",
+            "current_frontend_mapping": "complete vertical slice: Discovery at /discovery creates network, adcs, and service_account sources, schedules runs, starts supported runs, lists findings, renders continuous monitoring posture, and retries terminal unsuccessful runs as separate server-backed replacements with durable lineage; Posture shows AD CS source lifecycle and template enrollment trustees; certificates discovered by served network scans also appear in inventory.",
             "target_gui_mapping": "Discovery source page for network ranges, scan scheduling, dry-run preview, continuous monitoring summary, findings import, scan history, and library-only/disabled disclosure for unsupported source execution.",
             "acceptance_test": "UI and API tests must prove a tenant can create a network source, schedule it, queue a run, execute the served outbox worker, record a finding, surface the discovered certificate, and render CAP-DISC-06 continuous monitoring posture without claiming unsupported source kinds as fully executed; the AD CS journey must prove exact network-role relay routing, reference-only credentials, bounded read-only LDAP DACL collection, signed lifecycle projection, and enrollment-trustee console readback; CAP-NHI-03 served tests prove AD/cloud service-account discovery records metadata-only findings.",
             "source_docs": [
@@ -337,6 +337,7 @@
                 "/api/v1/discovery/sources/{id}/preflight",
                 "/api/v1/discovery/schedules",
                 "/api/v1/discovery/runs",
+                "/api/v1/discovery/runs/{id}/retry",
                 "/api/v1/discovery/monitoring",
                 "/api/v1/discovery/findings"
             ],
@@ -367,6 +368,7 @@
                 "listDiscoveryRuns",
                 "listDiscoverySchedules",
                 "listDiscoverySources",
+                "retryDiscoveryRun",
                 "startDiscoveryRun"
             ],
             "api_na": "",
@@ -382,6 +384,7 @@
                 "discovery runs start",
                 "discovery runs list",
                 "discovery runs get",
+                "discovery runs retry",
                 "discovery monitoring",
                 "discovery coverage",
                 "discovery findings list",
@@ -416,7 +419,7 @@
                 },
                 "ui": {
                     "evidence": [
-                        "basic: Discovery at /discovery creates network and service_account sources, schedules runs, starts dry/live runs, lists findings, and renders continuous monitoring posture; certificates discovered by served network scans also appear in inventory."
+                        "Discovery at /discovery creates network and service_account sources, schedules runs, starts dry/live runs, lists findings, renders continuous monitoring posture, and recovers failed/partial runs through a preflighted server-backed retry whose lineage survives reload; certificates discovered by served network scans also appear in inventory."
                     ],
                     "refs": [
                         "web/src/pages/Discovery.tsx",
@@ -434,6 +437,7 @@
                         "CLI command: discovery runs start",
                         "CLI command: discovery runs list",
                         "CLI command: discovery runs get",
+                        "CLI command: discovery runs retry",
                         "CLI command: discovery monitoring",
                         "CLI command: discovery findings list",
                         "CLI command: certificates list",
@@ -455,6 +459,7 @@
                         "OpenAPI operationId: startDiscoveryRun",
                         "OpenAPI operationId: listDiscoveryRuns",
                         "OpenAPI operationId: getDiscoveryRun",
+                        "OpenAPI operationId: retryDiscoveryRun",
                         "OpenAPI operationId: getDiscoveryMonitoring",
                         "OpenAPI operationId: listDiscoveryFindings",
                         "OpenAPI operationId: listCertificates",
@@ -473,6 +478,7 @@
                         "TestServedDiscoveryNetworkScanEndToEnd covers source creation, run queueing, outbox execution, discovery findings, and certificate inventory projection.",
                         "TestServedContinuousMonitoringCentralizedInventoryCAPDISC06 covers source scheduling, outbox execution, discovery findings, certificate inventory projection, and the served continuous monitoring rollup.",
                         "TestServedServiceAccountDiscoveryCAPNHI03EndToEnd covers source creation, run queueing, outbox execution, AD/cloud service-account findings, capability metadata, and metadata-only evidence.",
+                        "TestServedDiscoveryRunRetryPreservesFailureAndLineage proves retry eligibility, immutable original failures, tenant-scoped lineage, byte-identical idempotent replay, and rejection of active/inaccessible runs; the Discovery page test proves preflight, retry, durable lineage readback, and operator guidance.",
                         "Discovery page test covers source creation, run queueing, served findings, continuous monitoring rendering, and no browser storage leakage.",
                         "FeatureFacetCoverage keeps discovery served/UI/CLI/API/RBAC metadata non-empty."
                     ],
@@ -551,7 +557,7 @@
                 "purpose": "Lets an operator understand and safely use network discovery while tenant, policy, and security authority remain on the server.",
                 "tool": "discover",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/discovery",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -563,7 +569,7 @@
                 "dependencies": [],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -604,8 +610,14 @@
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: retryDiscoveryRun",
+                            "CLI command: discovery runs retry",
+                            "internal/server/discovery_recovery_served_test.go",
+                            "web/src/pages/Discovery.tsx",
+                            "web/src/__tests__/discovery.test.tsx"
+                        ]
                     },
                     "verify": {
                         "status": "complete",
@@ -636,6 +648,7 @@
                             "OpenAPI operationId: listDiscoveryRuns",
                             "OpenAPI operationId: listDiscoverySchedules",
                             "OpenAPI operationId: listDiscoverySources",
+                            "OpenAPI operationId: retryDiscoveryRun",
                             "OpenAPI operationId: startDiscoveryRun",
                             "CLI command: discovery segments create",
                             "CLI command: discovery capabilities",
@@ -648,6 +661,7 @@
                             "CLI command: discovery runs start",
                             "CLI command: discovery runs list",
                             "CLI command: discovery runs get",
+                            "CLI command: discovery runs retry",
                             "CLI command: discovery monitoring",
                             "CLI command: discovery coverage",
                             "CLI command: discovery findings list",

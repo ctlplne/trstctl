@@ -91,6 +91,24 @@ disconnect after admission is durable and retryable instead of being done inline
 the request handler. Readiness proves that an eligible relay exists; it does not claim
 that a particular relay is connected at every millisecond.
 
+#### Recover a failed or partial run without erasing the failure
+
+Open **Discover → Runs** and choose **Retry** on a `failed` or `partial` run. The
+console first rechecks the source's current relay and scope prerequisites. If the
+source is ready, `POST /api/v1/discovery/runs/{id}/retry` creates a new queued run
+with the same source, schedule binding, and dry-run mode. The original terminal run
+is never changed or deleted. The replacement stores `retry_of_run_id`, so the table,
+API, event replay, and a page reload still answer “which failure did this replace?”
+
+This is intentionally not available for `queued`, `running`, or `succeeded` runs. An
+active run must finish; a successful run can be repeated from its source as a fresh
+scan. Every retry requires an `Idempotency-Key`, so a browser, proxy, or human sending
+the same request again receives the first replacement instead of queueing duplicates.
+Headless operators use `trstctl-cli discovery runs retry <failed-run-id>` and get the
+same server rule. If recovery is blocked, restore or enroll the required network-role
+relay, then retry with a new idempotency key; never rewrite the old run or its outbox
+row.
+
 ### Continuous monitoring rollup
 
 `GET /api/v1/discovery/monitoring` (CLI: `trstctl discovery monitoring`) is a single
@@ -408,7 +426,8 @@ bounded estate scope before creating any network or SSH source. The remaining
 commands map to `POST|GET /api/v1/discovery/sources`,
 `GET /api/v1/discovery/sources/{id}/preflight`,
 `POST|GET /api/v1/discovery/schedules`, `POST|GET /api/v1/discovery/runs`,
-`GET /api/v1/discovery/runs/{id}`, `GET /api/v1/discovery/findings`,
+`GET /api/v1/discovery/runs/{id}`, `POST /api/v1/discovery/runs/{id}/retry`,
+`GET /api/v1/discovery/findings`,
 `POST /api/v1/discovery/findings/{id}/claim`, and
 `POST /api/v1/discovery/findings/{id}/dismiss`. The shadow posture command maps to
 `GET /api/v1/nhi/posture/shadow`.
@@ -483,6 +502,7 @@ what it is.
 - **Served routes:** `GET|POST /api/v1/certificates`, `GET /api/v1/certificates/{id}`,
   `GET|POST /api/v1/discovery/sources`, `GET /api/v1/discovery/sources/{id}/preflight`, `GET|POST /api/v1/discovery/schedules`,
   `GET|POST /api/v1/discovery/runs`, `GET /api/v1/discovery/runs/{id}`,
+  `POST /api/v1/discovery/runs/{id}/retry`,
   `GET /api/v1/discovery/findings`, `POST /api/v1/discovery/findings/{id}/claim`,
   `POST /api/v1/discovery/findings/{id}/dismiss`, `GET /api/v1/agents`,
   `GET /api/v1/nhi/posture/shadow`, `GET /api/v1/ownership/attribution`,

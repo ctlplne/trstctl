@@ -26,8 +26,10 @@ func TestRateLimitRefillUsesTheDatabaseClock(t *testing.T) {
 	ctx := context.Background()
 	const tenant = "33333333-3333-3333-3333-333333333333"
 
-	// Drain a capacity-2 bucket that refills fast enough to observe.
-	const capacity, refillPerSec = 2.0, 20.0
+	// Drain a capacity-2 bucket. The deliberately tiny refill makes the third
+	// take deterministic even when a heavily loaded CI worker pauses this test:
+	// it would take 1,000 seconds to grow one replacement token.
+	const capacity, refillPerSec = 2.0, 0.001
 	for i := 0; i < 2; i++ {
 		ok, _, err := st.RateLimitTake(ctx, tenant, "clock", capacity, refillPerSec)
 		if err != nil {
@@ -44,20 +46,43 @@ func TestRateLimitRefillUsesTheDatabaseClock(t *testing.T) {
 	if ok {
 		t.Fatal("a third immediate take on a capacity-2 bucket was admitted")
 	}
-	if retry <= 0 || retry > time.Second {
-		t.Errorf("retry-after = %v, want a small positive duration at %g tokens/sec", retry, refillPerSec)
+	if retry <= 0 || retry > 20*time.Minute {
+		t.Errorf("retry-after = %v, want a positive duration no larger than one token at %g tokens/sec", retry, refillPerSec)
 	}
 
-	// After real elapsed time the bucket must refill. At 20 tokens/sec, 150ms is
-	// ~3 tokens — comfortably more than the 1 needed, so this does not race.
-	time.Sleep(150 * time.Millisecond)
-	ok, _, err = st.RateLimitTake(ctx, tenant, "clock", capacity, refillPerSec)
+	// Move the DATABASE timestamp into the future. A correct bucket clamps the
+	// elapsed interval to zero. The old mixed-clock implementation treated this
+	// as negative elapsed time and subtracted about 60 tokens, which made the
+	// bucket stay broken even after its timestamp returned to the past.
+	if _, err := st.SystemPool().Exec(ctx,
+		`UPDATE rate_limits
+		    SET updated_at = now() + interval '60 seconds'
+		  WHERE tenant_id = $1 AND bucket = $2`, tenant, "clock"); err != nil {
+		t.Fatalf("move database timestamp forward: %v", err)
+	}
+	ok, _, err = st.RateLimitTake(ctx, tenant, "clock", capacity, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
+		t.Fatal("a future database timestamp created tokens; negative elapsed time must clamp to zero")
+	}
+
+	// Now make the database say two seconds elapsed and refill at one token per
+	// second. The take must succeed. If the future timestamp above had drained
+	// the bucket below zero, two seconds would not repair the artificial debt.
+	if _, err := st.SystemPool().Exec(ctx,
+		`UPDATE rate_limits
+		    SET updated_at = now() - interval '2 seconds'
+		  WHERE tenant_id = $1 AND bucket = $2`, tenant, "clock"); err != nil {
+		t.Fatalf("move database timestamp backward: %v", err)
+	}
+	ok, _, err = st.RateLimitTake(ctx, tenant, "clock", capacity, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !ok {
-		t.Fatal("the bucket did not refill after real elapsed time; the refill interval is " +
-			"being measured against a clock that disagrees with the one writing updated_at")
+		t.Fatal("the bucket did not recover from database-measured elapsed time; a future timestamp likely created negative token debt")
 	}
 }
 

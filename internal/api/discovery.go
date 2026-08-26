@@ -257,6 +257,7 @@ type discoveryRunResponse struct {
 	TenantID          string     `json:"tenant_id"`
 	SourceID          string     `json:"source_id"`
 	ScheduleID        *string    `json:"schedule_id"`
+	RetryOfRunID      string     `json:"retry_of_run_id,omitempty"`
 	Status            string     `json:"status"`
 	DryRun            bool       `json:"dry_run"`
 	RequestedBy       string     `json:"requested_by"`
@@ -852,6 +853,40 @@ func (a *API) startDiscoveryRun(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+//trstctl:mutation
+func (a *API) retryDiscoveryRun(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		original, err := a.store.GetDiscoveryRun(ctx, tenantID, r.PathValue("id"))
+		if err != nil {
+			return 0, nil, err
+		}
+		switch original.Status {
+		case "failed", "partial":
+			// Recoverable terminal outcomes intentionally create a new run. The old
+			// row and its immutable completion event remain the failure evidence.
+		case "queued", "running":
+			return 0, nil, errStatus(http.StatusConflict, "This discovery run is still active. Wait for its terminal result before retrying.")
+		case "succeeded":
+			return 0, nil, errStatus(http.StatusConflict, "This discovery run succeeded. Start a new run from the source if you want a fresh scan.")
+		default:
+			return 0, nil, errStatus(http.StatusConflict, "This discovery run does not have a recoverable terminal result.")
+		}
+		run, err := a.orch.QueueDiscoveryRun(ctx, tenantID, store.DiscoveryRun{
+			SourceID: original.SourceID, ScheduleID: original.ScheduleID, RetryOfRunID: original.ID,
+			DryRun: original.DryRun,
+		})
+		if errors.Is(err, orchestrator.ErrDiscoveryRelayUnavailable) {
+			return 0, nil, errStatus(http.StatusConflict,
+				"Recovery is blocked because no network relay can claim this scan. Enroll or restore a network-role agent, then retry again with a new Idempotency-Key.")
+		}
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusCreated, toDiscoveryRunResponse(run), nil
+	})
+}
+
 func (a *API) getDiscoveryRun(w http.ResponseWriter, r *http.Request) {
 	tenantID, ok := a.tenant(r)
 	if !ok {
@@ -1320,7 +1355,8 @@ func toDiscoveryScheduleResponse(s store.DiscoverySchedule) discoveryScheduleRes
 func toDiscoveryRunResponse(run store.DiscoveryRun) discoveryRunResponse {
 	return discoveryRunResponse{
 		ID: run.ID, TenantID: run.TenantID, SourceID: run.SourceID, ScheduleID: run.ScheduleID,
-		Status: run.Status, DryRun: run.DryRun, RequestedBy: run.RequestedBy,
+		RetryOfRunID: run.RetryOfRunID,
+		Status:       run.Status, DryRun: run.DryRun, RequestedBy: run.RequestedBy,
 		Execution: run.Execution, Segment: run.Segment, RequiredAgentRole: run.RequiredAgentRole,
 		RequiredAgentID: run.RequiredAgentID, ExecutedByAgentID: run.ExecutedByAgentID,
 		Targets: run.Targets, Discovered: run.Discovered, Failed: run.Failed, Rejected: run.Rejected,

@@ -3180,6 +3180,7 @@ DiscoveryRun = TypedDict(
         'requested_by': str,
         'required_agent_id': str,
         'required_agent_role': str,
+        'retry_of_run_id': str,
         'schedule_id': str,
         'segment': str,
         'source_id': str,

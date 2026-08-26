@@ -687,6 +687,16 @@ const esESCatalog = {
   "discovery.run.relay": "Retransmisor",
   "discovery.run.controlPlane": "Plano de control",
   "discovery.run.unbound": "Sin vincular",
+  // F2 recovery: AI-assisted translation; native-speaker review requested.
+  "discovery.run.recoveryColumn": "Recuperación",
+  "discovery.run.retries": "Reintenta {id}",
+  "discovery.run.retryAction": "Reintentar",
+  "discovery.run.retrying": "Reintentando…",
+  "discovery.run.retryAria": "Reintentar la ejecución {id}",
+  "discovery.run.recoveryBlocked": "La recuperación está bloqueada: {reason}",
+  "discovery.run.recoveryQueued":
+    "La ejecución de recuperación {replacement} está en cola. El fallo original {original} permanece sin cambios como evidencia.",
+  "discovery.run.retryFailed": "No se pudo reintentar la ejecución de descubrimiento",
   // DESIGN-ROUTE-040 machine-authored translations; human linguistic review required before release.
   "platform.tabs.access": "Personas y roles",
   "platform.tabs.posture": "Estado del sistema",

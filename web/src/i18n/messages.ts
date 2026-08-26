@@ -1997,6 +1997,38 @@ export const messages = {
     defaultMessage: "Unbound",
     description: "C2: defensive console state for legacy data missing an execution segment.",
   },
+  "discovery.run.recoveryColumn": {
+    defaultMessage: "Recovery",
+    description: "F2: run-table column containing retry lineage or the safe retry action.",
+  },
+  "discovery.run.retries": {
+    defaultMessage: "Retries {id}",
+    description: "F2: durable lineage from a replacement discovery run to the terminal unsuccessful run it retries.",
+  },
+  "discovery.run.retryAction": {
+    defaultMessage: "Retry",
+    description: "F2: queue a separate replacement for a terminal failed or partial discovery run.",
+  },
+  "discovery.run.retrying": {
+    defaultMessage: "Retrying…",
+    description: "F2: pending state while the server creates a replacement discovery run.",
+  },
+  "discovery.run.retryAria": {
+    defaultMessage: "Retry run {id}",
+    description: "F2: accessible name for the exact failed discovery run recovery action.",
+  },
+  "discovery.run.recoveryBlocked": {
+    defaultMessage: "Recovery is blocked: {reason}",
+    description: "F2: server-owned source prerequisite preventing a failed run from being retried.",
+  },
+  "discovery.run.recoveryQueued": {
+    defaultMessage: "Recovery run {replacement} queued. The original {original} failure remains unchanged as evidence.",
+    description: "F2: confirms a distinct replacement while explaining that terminal failure evidence is immutable.",
+  },
+  "discovery.run.retryFailed": {
+    defaultMessage: "Could not retry discovery run",
+    description: "F2: fallback when the server cannot create a replacement run.",
+  },
   "discovery.coverage.caption": {
     defaultMessage: "Discovery coverage by asset class",
     description: "Screen-reader caption for the discovery coverage table.",

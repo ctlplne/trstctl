@@ -177,8 +177,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// never has to guess whether an operation-compatible key already exists. The
 	// sanitized current-caller capability projection raises it to 381 and maps to
 	// F8 because it turns the same route RBAC registry into honest UI action state.
-	if len(out) != 381 {
-		t.Fatalf("OpenAPI operationIds = %d, want 381", len(out))
+	// The server-authoritative Discovery retry raises it to 382 and maps to F2.
+	if len(out) != 382 {
+		t.Fatalf("OpenAPI operationIds = %d, want 382", len(out))
 	}
 	return out
 }

@@ -661,7 +661,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:2863` | closed test table list above |
+| `internal/store/migration_content_test.go:2931` | closed test table list above |
 
 ### G203 — CWE-? (unmapped rule) (2 sites)
 

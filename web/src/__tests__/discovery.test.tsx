@@ -24,6 +24,7 @@ const { apiMock } = vi.hoisted(() => ({
     createDiscoverySource: vi.fn(),
     createDiscoverySchedule: vi.fn(),
     startDiscoveryRun: vi.fn(),
+    retryDiscoveryRun: vi.fn(),
     ctMonitoring: vi.fn(),
     updateCTMonitoring: vi.fn(),
     getDiscoveryRun: vi.fn(),
@@ -441,6 +442,21 @@ function seedDiscoveryMocks() {
     rejected: 0,
     blocked: 0,
     created_at: "2026-06-20T11:05:00Z",
+  });
+  apiMock.retryDiscoveryRun.mockResolvedValue({
+    id: "run-retry",
+    tenant_id: "tenant-1",
+    source_id: "source-1",
+    status: "queued",
+    dry_run: false,
+    execution: "relay",
+    retry_of_run_id: "run-failed",
+    targets: 0,
+    discovered: 0,
+    failed: 0,
+    rejected: 0,
+    blocked: 0,
+    created_at: "2026-06-20T11:06:00Z",
   });
   apiMock.preflightDiscoverySource.mockResolvedValue({
     kind: "network",
@@ -1221,5 +1237,54 @@ describe("discovery control-plane surface", () => {
     await waitFor(() => expect(apiMock.ctMonitoring).toHaveBeenCalledTimes(1));
     await user.click(screen.getByRole("button", { name: "Refresh" }));
     await waitFor(() => expect(apiMock.ctMonitoring).toHaveBeenCalledTimes(2));
+  });
+
+  it("recovers a failed run as a separate server-backed run and renders lineage after reload", async () => {
+    apiMock.discoveryRuns.mockResolvedValue({
+      items: [
+        {
+          id: "run-retry",
+          tenant_id: "tenant-1",
+          source_id: "source-1",
+          status: "queued",
+          dry_run: false,
+          execution: "relay",
+          retry_of_run_id: "run-failed",
+          targets: 0,
+          discovered: 0,
+          failed: 0,
+          rejected: 0,
+          blocked: 0,
+          created_at: "2026-06-20T11:06:00Z",
+        },
+        {
+          id: "run-failed",
+          tenant_id: "tenant-1",
+          source_id: "source-1",
+          status: "failed",
+          dry_run: false,
+          execution: "relay",
+          targets: 1,
+          discovered: 0,
+          failed: 1,
+          rejected: 0,
+          blocked: 0,
+          error: "relay temporarily unavailable",
+          created_at: "2026-06-20T10:02:00Z",
+          completed_at: "2026-06-20T10:02:05Z",
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    renderDiscovery(["/discovery?tab=runs"]);
+
+    expect(await screen.findByText("relay temporarily unavailable")).toBeInTheDocument();
+    expect(screen.getByText("Retries run-failed")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Retry run run-retry/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Retry run run-faile/ }));
+
+    expect(apiMock.preflightDiscoverySource).toHaveBeenCalledWith("source-1");
+    expect(apiMock.retryDiscoveryRun).toHaveBeenCalledWith("run-failed");
+    expect(await screen.findByRole("status")).toHaveTextContent(/Recovery run run-retry queued/);
   });
 });

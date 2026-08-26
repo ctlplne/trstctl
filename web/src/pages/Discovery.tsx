@@ -786,6 +786,29 @@ export function Discovery() {
     }
   }
 
+  async function retryRun(run: DiscoveryRun) {
+    setBusy(`retry:${run.id}`);
+    setNotice(null);
+    try {
+      const preflight = await api.preflightDiscoverySource(run.source_id);
+      if (preflight.ready === false || preflight.blocked_reasons.length > 0) {
+        const reason = preflight.blocked_reasons.join(" ") || t("discovery.run.blockedFallback");
+        setNotice({ kind: "error", message: t("discovery.run.recoveryBlocked", { reason }) });
+        return;
+      }
+      const replacement = await api.retryDiscoveryRun(run.id);
+      await load();
+      setNotice({
+        kind: "success",
+        message: t("discovery.run.recoveryQueued", { replacement: shortID(replacement.id), original: shortID(run.id) }),
+      });
+    } catch (err) {
+      setNotice(noticeForError(err, t("discovery.run.retryFailed")));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   function selectTab(next: string) {
     const value = discoveryTabFromSearchParam(next);
     setTab(value);
@@ -1252,7 +1275,7 @@ export function Discovery() {
               {translateNow("source.runs.appear.here.after.a.source.is.created.da81c4a3c9")}
             </EmptyState>
           ) : (
-            <RunTable runs={runs} sourceByID={sourceByID} />
+            <RunTable runs={runs} sourceByID={sourceByID} busy={busy} onRetry={retryRun} />
           )}
         </section>
       )}
@@ -1835,7 +1858,17 @@ function ScheduleTable({ schedules, sourceByID }: { schedules: DiscoverySchedule
   );
 }
 
-function RunTable({ runs, sourceByID }: { runs: DiscoveryRun[]; sourceByID: Map<string, DiscoverySource> }) {
+function RunTable({
+  runs,
+  sourceByID,
+  busy,
+  onRetry,
+}: {
+  runs: DiscoveryRun[];
+  sourceByID: Map<string, DiscoverySource>;
+  busy: string | null;
+  onRetry: (run: DiscoveryRun) => void;
+}) {
   const columns: Array<DataGridColumn<DiscoveryRun>> = [
     {
       id: "run",
@@ -1884,6 +1917,35 @@ function RunTable({ runs, sourceByID }: { runs: DiscoveryRun[]; sourceByID: Map<
       id: "executor",
       header: translateNow("discovery.run.executor"),
       cell: (run) => runExecution(run),
+    },
+    {
+      id: "recovery",
+      header: translateNow("discovery.run.recoveryColumn"),
+      cell: (run) => {
+        if (run.retry_of_run_id) {
+          return (
+            <span className="text-xs text-muted-foreground">
+              {translateNow("discovery.run.retries", { id: shortID(run.retry_of_run_id) })}
+            </span>
+          );
+        }
+        if (run.status !== "failed" && run.status !== "partial") {
+          return <span className="text-muted-foreground">—</span>;
+        }
+        return (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={busy === `retry:${run.id}`}
+            aria-label={translateNow("discovery.run.retryAria", { id: shortID(run.id) })}
+            onClick={() => onRetry(run)}
+          >
+            <RefreshCw className="h-4 w-4" aria-hidden="true" />
+            {busy === `retry:${run.id}` ? translateNow("discovery.run.retrying") : translateNow("discovery.run.retryAction")}
+          </Button>
+        );
+      },
     },
     {
       id: "completed",

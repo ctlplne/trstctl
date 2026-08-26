@@ -1164,8 +1164,13 @@ describe("i18n boundary", () => {
       // fail-closed meaning and never imply that a missing Provider plane is a
       // tenant-console failure. Machine-authored es/de — FLAGGED FOR HUMAN
       // TRANSLATION REVIEW before release.
-      "es-ES": "5e1fcb75e0b0b15f4ae136f09a08ae3e853f244084c0a69c52edbfc6acbd1867",
-      "de-DE": "46b6f77ca422c134340ab0c1ab043bffafea3496b47b6bf7fe5b614d08268df3",
+      // QA g28 Discovery recovery re-pin: eight keys label retry eligibility,
+      // durable replacement lineage, blocked prerequisites, pending state, and
+      // the explicit promise that the original failure remains unchanged as
+      // evidence. Run IDs stay byte-identical. Machine-authored es/de — FLAGGED
+      // FOR HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "54d9c0743ea79b0d9e5934a577254f01019f6aef13adc3dc7003d73978cb7f4b",
+      "de-DE": "1af69a10395c137bec910557f5693756b1337e1abb38b857627f29bca023f084",
     });
   });
 

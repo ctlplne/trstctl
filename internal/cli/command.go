@@ -213,6 +213,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"discovery", "runs", "start"}, Method: "POST", Path: "/api/v1/discovery/runs", Body: bodyFile, Summary: "Start a discovery run"},
 	{Name: []string{"discovery", "runs", "list"}, Method: "GET", Path: "/api/v1/discovery/runs", Query: []string{"limit", "cursor"}, Summary: "List discovery runs"},
 	{Name: []string{"discovery", "runs", "get"}, Method: "GET", Path: "/api/v1/discovery/runs/{id}", Summary: "Get a discovery run"},
+	{Name: []string{"discovery", "runs", "retry"}, Method: "POST", Path: "/api/v1/discovery/runs/{id}/retry", Body: bodyNone, Summary: "Retry one terminal unsuccessful discovery run as a separate replacement"},
 	{Name: []string{"discovery", "ct-monitoring", "get"}, Method: "GET", Path: "/api/v1/discovery/ct-monitoring", Summary: "Get Certificate Transparency monitoring watchlist and finding status"},
 	{Name: []string{"discovery", "ct-monitoring", "update"}, Method: "PUT", Path: "/api/v1/discovery/ct-monitoring", Body: bodyFile, Summary: "Create or replace Certificate Transparency monitoring watchlist"},
 	{Name: []string{"discovery", "drift-remediation"}, Method: "GET", Path: "/api/v1/discovery/drift-remediation", Summary: "Get drift remediation dashboard and operator decision evidence"},
