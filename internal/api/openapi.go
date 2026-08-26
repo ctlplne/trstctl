@@ -4265,12 +4265,12 @@ func componentSchemas() map[string]*Schema {
 		"next_cursor": str(),
 	}, "agents")
 	enrollmentToken := object(map[string]*Schema{
-		"token": str(), "enroll_path": str(),
+		"token": str(), "enroll_path": str(), "agent_server": str(), "agent_server_name": str(),
 		// The effective grant this token carries into the enrolled certificate,
 		// after normalization — so an operator sees what they authorized rather
 		// than what they typed (epic A2).
 		"roles": {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network"}}},
-	}, "token", "roles")
+	}, "token", "roles", "agent_server", "agent_server_name")
 	enrollmentTokenReq := object(map[string]*Schema{
 		"allowed_identity": str(),
 		// Capability grant for the enrolled agent. Empty means host-only.

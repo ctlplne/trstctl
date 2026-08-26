@@ -42,6 +42,28 @@ func TestServedEnrollmentTokenPersistsAllowedIdentityRED003(t *testing.T) {
 	}
 }
 
+func TestServedEnrollmentTokenPublishesExactAgentConnection(t *testing.T) {
+	t.Parallel()
+	h := newServedHarness(t, config.Protocols{}, withAgentChannel)
+	token := seedScopedToken(t, h.store, h.tenant, "agents:write")
+
+	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/agents/enrollment-tokens", token,
+		"agent-public-connection", map[string]any{"allowed_identity": "relay-a", "roles": []string{"host"}})
+	if status != http.StatusCreated {
+		t.Fatalf("create enrollment token = %d body %s, want 201", status, body)
+	}
+	var out struct {
+		AgentServer     string `json:"agent_server"`
+		AgentServerName string `json:"agent_server_name"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		t.Fatalf("decode enrollment token response: %v", err)
+	}
+	if out.AgentServer != "agent.trstctl.local:19443" || out.AgentServerName != "agent.trstctl.local" {
+		t.Fatalf("published agent connection = %q / %q, want exact configured address and TLS name", out.AgentServer, out.AgentServerName)
+	}
+}
+
 func TestServedBootstrapHonorsAllowedIdentityWIRE001(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{}, withAgentChannel)
 	bearer := seedScopedToken(t, h.store, h.tenant, "agents:write")

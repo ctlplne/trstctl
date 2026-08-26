@@ -1563,7 +1563,7 @@ func agentChannelEnabledValues() map[string]any {
 	v["agentChannel"] = map[string]any{
 		"enabled": true, "addr": ":9443", "servicePort": 9443,
 		"httpRenewalAddr": ":9444", "httpRenewalServicePort": 9444,
-		"serverName": "agents.example.com", "heartbeatInterval": "30s",
+		"publicAddress": "agents.example.com:9443", "serverName": "agents.example.com", "heartbeatInterval": "30s",
 		"allowedCIDRs": []any{"10.0.0.0/8"},
 	}
 	// The NetworkPolicy ingress rule reuses the same source blocks as the API port; the

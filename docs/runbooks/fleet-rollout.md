@@ -20,6 +20,7 @@ Use [fleet rollback](fleet-rollback.md) if any abort criterion trips.
 helm upgrade --install trstctl deploy/helm/trstctl \
   --namespace trstctl --create-namespace \
   --set agentChannel.enabled=true \
+  --set agentChannel.publicAddress=trstctl:9443 \
   --set agentChannel.serverName=trstctl
 ```
 

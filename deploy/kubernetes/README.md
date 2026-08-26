@@ -36,6 +36,7 @@ must enable that port and mint the channel certificate with `trstctl` as a DNS S
 helm upgrade --install trstctl deploy/helm/trstctl \
   --namespace trstctl --create-namespace \
   --set agentChannel.enabled=true \
+  --set agentChannel.publicAddress=trstctl:9443 \
   --set agentChannel.serverName=trstctl
 ```
 

@@ -37,6 +37,8 @@ describe("agent fleet surface", () => {
     apiMock.createEnrollmentToken.mockReset().mockResolvedValue({
       token: "BOOT-TOKEN-XYZ",
       enroll_path: "/enroll/bootstrap",
+      agent_server: "localhost:19443",
+      agent_server_name: "localhost",
       roles: ["host"],
     });
     apiMock.agentUpgradeCampaign.mockReset().mockResolvedValue({
@@ -243,7 +245,13 @@ describe("agent fleet surface", () => {
   });
 
   it("turns a network-role token into a relay-capable command", async () => {
-    apiMock.createEnrollmentToken.mockResolvedValueOnce({ token: "BOOT-TOKEN-XYZ", enroll_path: "/enroll/bootstrap", roles: ["network"] });
+    apiMock.createEnrollmentToken.mockResolvedValueOnce({
+      token: "BOOT-TOKEN-XYZ",
+      enroll_path: "/enroll/bootstrap",
+      agent_server: "localhost:61943",
+      agent_server_name: "localhost",
+      roles: ["network"],
+    });
     renderAgents();
     await screen.findByRole("heading", { name: /1 of 3 active agents/i });
     fireEvent.click(screen.getByRole("button", { name: "Add agent" }));
@@ -251,6 +259,7 @@ describe("agent fleet surface", () => {
     fireEvent.click(screen.getByRole("button", { name: /mint enrollment token/i }));
 
     await waitFor(() => expect(apiMock.createEnrollmentToken).toHaveBeenCalledWith({ roles: ["host", "network"] }));
+    expect(screen.getByText(/trstctl-agent --enroll-url/i)).toHaveTextContent("--server localhost:61943");
     expect(screen.getByText(/trstctl-agent --enroll-url/i)).toHaveTextContent("--relay-claim");
   });
 

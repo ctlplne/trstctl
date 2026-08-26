@@ -65,6 +65,7 @@ func TestAgentChannelEnvOverrides(t *testing.T) {
 	env := map[string]string{
 		"TRSTCTL_AGENT_CHANNEL_ENABLED":            "true",
 		"TRSTCTL_AGENT_CHANNEL_ADDR":               ":19443",
+		"TRSTCTL_AGENT_CHANNEL_PUBLIC_ADDRESS":     "agents.example.com:443",
 		"TRSTCTL_AGENT_CHANNEL_HTTP_RENEWAL_ADDR":  ":19444",
 		"TRSTCTL_AGENT_CHANNEL_SERVER_NAME":        "agents.example.com",
 		"TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE":       "/data/ca/agent-ca.crt",
@@ -78,6 +79,9 @@ func TestAgentChannelEnvOverrides(t *testing.T) {
 	if c.AgentChannel.Addr != ":19443" {
 		t.Errorf("addr = %q, want :19443", c.AgentChannel.Addr)
 	}
+	if c.AgentChannel.PublicAddress != "agents.example.com:443" {
+		t.Errorf("publicAddress = %q, want agents.example.com:443", c.AgentChannel.PublicAddress)
+	}
 	if c.AgentChannel.HTTPRenewalAddr != ":19444" {
 		t.Errorf("httpRenewalAddr = %q, want :19444", c.AgentChannel.HTTPRenewalAddr)
 	}
@@ -89,5 +93,26 @@ func TestAgentChannelEnvOverrides(t *testing.T) {
 	}
 	if c.AgentChannel.HeartbeatInterval != "45s" {
 		t.Errorf("heartbeatInterval = %q", c.AgentChannel.HeartbeatInterval)
+	}
+}
+
+func TestAgentChannelPublicAddressMustBeAnExplicitHostPort(t *testing.T) {
+	t.Parallel()
+	for _, value := range []string{"https://agents.example.com:9443", "agents.example.com", " agents.example.com:9443"} {
+		c := Default()
+		c.AgentChannel.Enabled = true
+		c.AgentChannel.PublicAddress = value
+		c.AgentChannel.ServerName = "agents.example.com"
+		if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "agent_channel.public_address") {
+			t.Errorf("public address %q validation error = %v, want an agent_channel.public_address error", value, err)
+		}
+	}
+
+	c := Default()
+	c.AgentChannel.Enabled = true
+	c.AgentChannel.PublicAddress = "agents.example.com:9443"
+	c.AgentChannel.ServerName = "agents.example.com"
+	if err := c.Validate(); err != nil {
+		t.Fatalf("valid public address rejected: %v", err)
 	}
 }

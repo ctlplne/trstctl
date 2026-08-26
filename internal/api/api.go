@@ -79,6 +79,7 @@ type API struct {
 	scim                    *SCIMConfig
 	scimTokens              map[string]scimToken
 	agentTokens             BootstrapTokenIssuer
+	agentConnection         agentEnrollmentConnection
 	agentEnroller           BootstrapEnroller
 	agentEnrollmentObserver func(result string)
 	rateLimiter             RateLimiter
@@ -186,6 +187,7 @@ type config struct {
 	providerPlaneAvailable      bool
 	scim                        *SCIMConfig
 	agentTokens                 BootstrapTokenIssuer
+	agentConnection             agentEnrollmentConnection
 	agentEnroller               BootstrapEnroller
 	agentEnrollmentObserver     func(result string)
 	rateLimiter                 RateLimiter
@@ -467,6 +469,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		scim:                        cfg.scim,
 		scimTokens:                  normalizeSCIM(cfg.scim),
 		agentTokens:                 cfg.agentTokens,
+		agentConnection:             cfg.agentConnection,
 		agentEnroller:               cfg.agentEnroller,
 		agentEnrollmentObserver:     cfg.agentEnrollmentObserver,
 		rateLimiter:                 cfg.rateLimiter,

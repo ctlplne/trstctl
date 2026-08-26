@@ -864,7 +864,14 @@ function AgentStep({
 
   const origin = typeof window !== "undefined" ? window.location.origin : "https://trstctl.example";
   const nameArg = (token ? tokenIdentity : agentIdentity).trim() || "edge-agent-1";
-  const installPlan = buildAgentInstallPlan({ origin, agentName: nameArg, roles: token?.roles, multiline: true });
+  const installPlan = buildAgentInstallPlan({
+    origin,
+    agentName: nameArg,
+    roles: token?.roles,
+    agentServer: token?.agent_server,
+    agentServerName: token?.agent_server_name,
+    multiline: true,
+  });
 
   return (
     <section aria-labelledby="step-agent-heading" className="grid gap-4">

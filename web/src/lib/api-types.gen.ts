@@ -2723,6 +2723,8 @@ export interface EnrollmentDiagnosticsSupportAddendum {
 }
 
 export interface EnrollmentToken {
+  agent_server: string;
+  agent_server_name: string;
   enroll_path?: string;
   roles: ("host" | "network")[];
   token: string;

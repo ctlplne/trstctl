@@ -163,6 +163,7 @@ live under `deploy/kubernetes` (namespace, RBAC, and the DaemonSet):
 helm upgrade --install trstctl deploy/helm/trstctl \
   --namespace trstctl --create-namespace \
   --set agentChannel.enabled=true \
+  --set agentChannel.publicAddress=trstctl:9443 \
   --set agentChannel.serverName=trstctl
 
 export TRSTCTL_AGENT_IMAGE='ghcr.io/ctlplne/trstctl@sha256:<release-image-digest>'

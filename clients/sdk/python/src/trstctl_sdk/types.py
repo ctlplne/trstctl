@@ -3843,6 +3843,8 @@ EnrollmentDiagnosticsSupportAddendum = TypedDict(
 EnrollmentToken = TypedDict(
     'EnrollmentToken',
     {
+        'agent_server': str,
+        'agent_server_name': str,
         'enroll_path': str,
         'roles': list[str],
         'token': str,

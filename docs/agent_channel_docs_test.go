@@ -22,6 +22,7 @@ func TestGettingStartedAgentChannelMatchesBlankCompose(t *testing.T) {
 	composeServesAgentChannel := containsAll(compose, []string{
 		`TRSTCTL_AGENT_CHANNEL_ENABLED: "true"`,
 		`TRSTCTL_AGENT_CHANNEL_ADDR: ":9443"`,
+		`TRSTCTL_AGENT_CHANNEL_PUBLIC_ADDRESS: "localhost:19443"`,
 		`TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE: /data/ca/agent-ca.crt`,
 		`"127.0.0.1:19443:9443"`,
 	})
@@ -66,7 +67,7 @@ func TestGettingStartedAgentChannelMatchesBlankCompose(t *testing.T) {
 		{"install.md", install},
 		{"runbooks/fleet-rollout.md", rollout},
 	} {
-		if !containsAll(doc.body, []string{"--set agentChannel.enabled=true", "--set agentChannel.serverName=trstctl"}) {
+		if !containsAll(doc.body, []string{"--set agentChannel.enabled=true", "--set agentChannel.publicAddress=trstctl:9443", "--set agentChannel.serverName=trstctl"}) {
 			t.Errorf("%s must show the explicit Helm opt-in for live agent-channel rollout", doc.name)
 		}
 	}

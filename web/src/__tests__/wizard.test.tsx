@@ -40,7 +40,13 @@ describe("first-run wizard", () => {
       signer_mode: "external",
       dependencies: [{ name: "signer", ready: true }],
     });
-    apiMock.createEnrollmentToken.mockReset().mockResolvedValue({ token: "BOOT-TOKEN-XYZ", roles: ["host"] });
+    apiMock.createEnrollmentToken.mockReset().mockResolvedValue({
+      token: "BOOT-TOKEN-XYZ",
+      enroll_path: "/enroll/bootstrap",
+      agent_server: "localhost:19443",
+      agent_server_name: "localhost",
+      roles: ["host"],
+    });
     apiMock.agents.mockReset().mockResolvedValue([{ id: "ag-1", name: "edge-01", status: "online" }]);
     apiMock.issueCertificate.mockReset().mockResolvedValue({ id: "id-1", name: "payments", status: "issued" });
     apiMock.protocolProfileStatus.mockReset().mockResolvedValue({

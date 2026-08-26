@@ -34,6 +34,9 @@ describe("JOURNEY-003 agent offboarding", () => {
     apiMock.createEnrollmentToken.mockReset().mockResolvedValue({
       token: "BOOT-TOKEN-JOURNEY-003",
       enroll_path: "/enroll/bootstrap",
+      agent_server: "localhost:19443",
+      agent_server_name: "localhost",
+      roles: ["host"],
     });
     apiMock.agents.mockReset().mockResolvedValue([
       {

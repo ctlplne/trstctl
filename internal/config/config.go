@@ -2043,6 +2043,11 @@ type AgentChannel struct {
 	// Addr is the agent channel's mTLS gRPC listen address. Empty defaults to ":9443"
 	// (the port the shipped fleet manifests point agents at).
 	Addr string `json:"addr,omitempty"`
+	// PublicAddress is the exact host:port an operator should give an agent. Addr is
+	// only where this process listens; a container port, Service, load balancer, or
+	// reverse tunnel can publish it somewhere else. Empty is allowed, but the web
+	// console then refuses to guess an install command.
+	PublicAddress string `json:"public_address,omitempty"`
 	// HTTPRenewalAddr is the dedicated embedded-client HTTPS renewal listener. It is
 	// served only when Enabled is true, uses the same signer-custodied agent CA as the
 	// gRPC channel, and requires verified agent client certificates. Empty defaults to
@@ -2478,6 +2483,7 @@ func applyProviderEnv(getenv func(string) string, provider *Provider) {
 func applyAgentChannelEnv(getenv func(string) string, a *AgentChannel) {
 	setBool(getenv, "TRSTCTL_AGENT_CHANNEL_ENABLED", &a.Enabled)
 	setString(getenv, "TRSTCTL_AGENT_CHANNEL_ADDR", &a.Addr)
+	setString(getenv, "TRSTCTL_AGENT_CHANNEL_PUBLIC_ADDRESS", &a.PublicAddress)
 	setString(getenv, "TRSTCTL_AGENT_CHANNEL_HTTP_RENEWAL_ADDR", &a.HTTPRenewalAddr)
 	setString(getenv, "TRSTCTL_AGENT_CHANNEL_SERVER_NAME", &a.ServerName)
 	setString(getenv, "TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE", &a.CACertFile)
@@ -3586,8 +3592,25 @@ func validateServedSurfaces(c *Config) []error {
 		if _, err := c.AgentChannel.HeartbeatIntervalDuration(); err != nil {
 			errs = append(errs, fmt.Errorf("agent_channel.heartbeat_interval: %w", err))
 		}
+		if public := c.AgentChannel.PublicAddress; public != "" {
+			host, port, err := net.SplitHostPort(public)
+			parsedPort, portErr := strconv.ParseUint(port, 10, 16)
+			if strings.TrimSpace(public) != public || err != nil || strings.TrimSpace(host) == "" || portErr != nil || parsedPort == 0 {
+				errs = append(errs, errors.New("agent_channel.public_address must be a trimmed host:port such as agents.example.com:9443 or localhost:19443"))
+			} else if !agentPublicHostIsLoopback(host) && strings.TrimSpace(c.AgentChannel.ServerName) == "" {
+				errs = append(errs, errors.New("agent_channel.public_address for a non-loopback host requires agent_channel.server_name so agents can verify the channel certificate"))
+			}
+		}
 	}
 	return errs
+}
+
+func agentPublicHostIsLoopback(host string) bool {
+	if strings.EqualFold(strings.TrimSpace(host), "localhost") {
+		return true
+	}
+	ip := net.ParseIP(strings.Trim(host, "[]"))
+	return ip != nil && ip.IsLoopback()
 }
 
 func validateTenantSealLocalWrappers(wrappers []TenantSealLocalWrapper) []error {

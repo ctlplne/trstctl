@@ -45,6 +45,7 @@ import (
 // serveAgentChannel in the test, so AgentChannelAddr is not bound here.
 func withAgentChannel(d *Deps) {
 	d.EnableAgentChannel = true
+	d.AgentChannelPublicAddress = "agent.trstctl.local:19443"
 	d.AgentChannelServerName = "agent.trstctl.local"
 	d.AgentHeartbeatInterval = 15 * time.Second
 }

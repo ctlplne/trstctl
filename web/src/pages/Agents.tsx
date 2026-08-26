@@ -171,6 +171,8 @@ export function Agents() {
         origin: typeof window !== "undefined" ? window.location.origin : "https://trstctl.example.test",
         agentName: tokenIdentity.trim() || "edge-agent-1",
         roles: token.roles,
+        agentServer: token.agent_server,
+        agentServerName: token.agent_server_name,
       })
     : { command: "" };
   const command = installPlan.command;

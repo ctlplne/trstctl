@@ -513,6 +513,7 @@ func configSummary(cfg *config.Config) string {
 	// not tokens or private key material.
 	fmt.Fprintf(&b, "agent_channel.enabled: %t\n", cfg.AgentChannel.Enabled)
 	fmt.Fprintf(&b, "agent_channel.addr: %s\n", cfg.AgentChannel.Addr)
+	fmt.Fprintf(&b, "agent_channel.public_address: %s\n", cfg.AgentChannel.PublicAddress)
 	fmt.Fprintf(&b, "agent_channel.server_name: %s\n", cfg.AgentChannel.ServerName)
 	fmt.Fprintf(&b, "agent_channel.ca_cert_file: %s\n", cfg.AgentChannel.CACertFile)
 	fmt.Fprintf(&b, "agent_channel.heartbeat_interval: %s\n", cfg.AgentChannel.HeartbeatInterval)

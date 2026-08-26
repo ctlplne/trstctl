@@ -83,7 +83,13 @@ describe("first-run served capability journey", () => {
       expires_at: "2026-07-12T00:15:00Z",
       credential: "must-not-be-rendered",
     });
-    apiMock.createEnrollmentToken.mockResolvedValue({ token: "BOOT-TOKEN-XYZ" });
+    apiMock.createEnrollmentToken.mockResolvedValue({
+      token: "BOOT-TOKEN-XYZ",
+      enroll_path: "/enroll/bootstrap",
+      agent_server: "localhost:19443",
+      agent_server_name: "localhost",
+      roles: ["host"],
+    });
     apiMock.agents.mockResolvedValue([{ id: "agent-1", name: "edge-01", status: "online" }]);
   });
 

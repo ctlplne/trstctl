@@ -5,7 +5,9 @@ package api
 import (
 	"context"
 
+	"net"
 	"net/http"
+	"strings"
 	"time"
 	"trstctl.com/trstctl/internal/store"
 
@@ -78,6 +80,24 @@ func WithPQCCampaignClosureSigner(signer PQCCampaignClosureSigner) Option {
 // step). When unset, that endpoint reports the capability is unavailable.
 func WithAgentEnrollment(issuer BootstrapTokenIssuer) Option {
 	return func(c *config) { c.agentTokens = issuer }
+}
+
+// WithAgentEnrollmentConnection publishes the exact endpoint a newly enrolled
+// agent should dial. The listen address is deliberately not used: container
+// ports, Services, load balancers, and tunnels routinely publish another port.
+// An empty public address remains empty so the console can block instead of
+// inventing a command that might send a one-time token to another deployment.
+func WithAgentEnrollmentConnection(server, serverName string) Option {
+	return func(c *config) {
+		server = strings.TrimSpace(server)
+		serverName = strings.TrimSpace(serverName)
+		if serverName == "" {
+			if host, _, err := net.SplitHostPort(server); err == nil {
+				serverName = strings.Trim(host, "[]")
+			}
+		}
+		c.agentConnection = agentEnrollmentConnection{Server: server, ServerName: serverName}
+	}
 }
 
 // WithAgentEnrollmentObserver records aggregate bootstrap-enrollment outcomes for

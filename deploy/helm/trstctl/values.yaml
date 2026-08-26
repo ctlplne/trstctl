@@ -161,6 +161,10 @@ agentChannel:
   enabled: false
   # The control plane's agent gRPC listen address (host:port). Default :9443.
   addr: ":9443"
+  # The exact externally reachable host:port agents should dial. This is not the
+  # listen address: a Service, load balancer, or ingress may publish another port.
+  # Keep empty until that endpoint exists; the console then refuses to guess.
+  publicAddress: ""
   # The Service port published for the agent channel (maps to the container :9443).
   servicePort: 9443
   # The embedded HTTP renewal listener address and Service port. The listener accepts

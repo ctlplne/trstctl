@@ -9,11 +9,20 @@ interface AgentInstallPlanInput {
   origin: string;
   agentName: string;
   roles?: EnrollmentToken["roles"];
+  agentServer?: string;
+  agentServerName?: string;
   multiline?: boolean;
 }
 
 /** Build the single agent command used by every console enrollment journey. */
-export function buildAgentInstallPlan({ origin, agentName, roles = [], multiline = false }: AgentInstallPlanInput): AgentInstallPlan {
+export function buildAgentInstallPlan({
+  origin,
+  agentName,
+  roles = [],
+  agentServer,
+  agentServerName,
+  multiline = false,
+}: AgentInstallPlanInput): AgentInstallPlan {
   let url: URL;
   try {
     url = new URL(origin);
@@ -31,14 +40,23 @@ export function buildAgentInstallPlan({ origin, agentName, roles = [], multiline
     };
   }
 
-  const connection = loopback ? { server: "localhost:19443", serverName: "localhost" } : { server: `${url.hostname}:9443`, serverName: url.hostname };
+  const server = agentServer?.trim() ?? "";
+  const serverName = agentServerName?.trim() ?? "";
+  if (!server || !serverName) {
+    return {
+      command: "",
+      blockedReason:
+        "Agent enrollment is not ready because this control plane did not publish its agent endpoint. Set agent_channel.public_address (TRSTCTL_AGENT_CHANNEL_PUBLIC_ADDRESS) and reload the console.",
+    };
+  }
+
   const args = [
     "trstctl-agent",
     `--enroll-url ${shellArg(url.origin)}`,
     ...(loopbackHTTP ? ["--allow-insecure-loopback-enrollment"] : []),
     "--bootstrap-token-file ./trstctl-bootstrap-token",
-    `--server ${shellArg(connection.server)}`,
-    `--server-name ${shellArg(connection.serverName)}`,
+    `--server ${shellArg(server)}`,
+    `--server-name ${shellArg(serverName)}`,
     `--name ${shellArg(agentName.trim() || "edge-agent-1")}`,
     "--ca-bundle ./trstctl-ca.pem",
     "--inventory-cert-roots /etc/ssl,/etc/pki/tls/certs",

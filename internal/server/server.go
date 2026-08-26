@@ -576,6 +576,10 @@ type Deps struct {
 	// AgentChannelAddr is the listen address for the agent gRPC channel (default
 	// :9443). Only honored when EnableAgentChannel is true.
 	AgentChannelAddr string
+	// AgentChannelPublicAddress is the operator-declared host:port agents dial.
+	// It is intentionally distinct from the listen address because container and
+	// load-balancer publication commonly rewrite the port.
+	AgentChannelPublicAddress string
 	// AgentHTTPRenewalAddr is the listen address for the embedded-agent HTTP renewal
 	// mTLS listener (default :9444). Only honored when EnableAgentChannel is true,
 	// because it uses the same signer-custodied agent CA and client certificates.
@@ -1301,7 +1305,8 @@ func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 		// distinguishes the two; a zero attestation would read as a perfect one.
 		api.WithRestoreDrill(s.LastRestoreDrill),
 		api.WithRestoreDrillSigningKey(d.AuditSigningKey),
-		api.WithAgentEnrollment(ea), api.WithAgentEnroller(ea), api.WithAgentEnrollmentObserver(s.observeAgentEnrollment),
+		api.WithAgentEnrollment(ea), api.WithAgentEnrollmentConnection(d.AgentChannelPublicAddress, d.AgentChannelServerName),
+		api.WithAgentEnroller(ea), api.WithAgentEnrollmentObserver(s.observeAgentEnrollment),
 		api.WithAttestedIssuer(s),
 		api.WithSSHWorkflow(s),
 		api.WithBroker(s),

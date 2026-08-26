@@ -113,11 +113,17 @@ func TestAgentChannelServiceExposes9443WhenEnabled(t *testing.T) {
 	if asString(data["TRSTCTL_AGENT_CHANNEL_HTTP_RENEWAL_ADDR"]) != ":9444" {
 		t.Errorf("configmap does not set TRSTCTL_AGENT_CHANNEL_HTTP_RENEWAL_ADDR=:9444 when the channel is enabled; got %q", asString(data["TRSTCTL_AGENT_CHANNEL_HTTP_RENEWAL_ADDR"]))
 	}
+	if asString(data["TRSTCTL_AGENT_CHANNEL_PUBLIC_ADDRESS"]) != "agents.example.com:9443" {
+		t.Errorf("configmap does not publish the exact agent endpoint; got %q", asString(data["TRSTCTL_AGENT_CHANNEL_PUBLIC_ADDRESS"]))
+	}
 	if !loaderEnvKeysSet(t)["TRSTCTL_AGENT_CHANNEL_ENABLED"] {
 		t.Errorf("configmap sets TRSTCTL_AGENT_CHANNEL_ENABLED but the config loader does not read it (phantom env, OPS-008)")
 	}
 	if !loaderEnvKeysSet(t)["TRSTCTL_AGENT_CHANNEL_HTTP_RENEWAL_ADDR"] {
 		t.Errorf("configmap sets TRSTCTL_AGENT_CHANNEL_HTTP_RENEWAL_ADDR but the config loader does not read it (phantom env, OPS-008)")
+	}
+	if !loaderEnvKeysSet(t)["TRSTCTL_AGENT_CHANNEL_PUBLIC_ADDRESS"] {
+		t.Errorf("configmap sets TRSTCTL_AGENT_CHANNEL_PUBLIC_ADDRESS but the config loader does not read it (phantom env, OPS-008)")
 	}
 }
 

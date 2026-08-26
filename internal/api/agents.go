@@ -376,13 +376,20 @@ func decodeAgentCursor(c string) (*time.Time, string, error) {
 // enrollmentTokenResponse carries a one-time agent bootstrap token and the path
 // an agent presents it to when enrolling.
 type enrollmentTokenResponse struct {
-	Token     secretJSONBytes `json:"token"`
-	EnrollURL string          `json:"enroll_path"`
+	Token           secretJSONBytes `json:"token"`
+	EnrollURL       string          `json:"enroll_path"`
+	AgentServer     string          `json:"agent_server"`
+	AgentServerName string          `json:"agent_server_name"`
 	// Roles echoes the grant recorded with the token, so the operator can see what
 	// they just authorized rather than inferring it from what they typed. It is
 	// the effective grant after normalization — an empty request comes back as
 	// ["host"], because that is what the certificate will actually say.
 	Roles []string `json:"roles"`
+}
+
+type agentEnrollmentConnection struct {
+	Server     string
+	ServerName string
 }
 
 func (r enrollmentTokenResponse) wipeSecrets() { r.Token.wipe() }
@@ -467,9 +474,11 @@ func (a *API) createEnrollmentToken(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		return http.StatusCreated, enrollmentTokenResponse{
-			Token:     secretJSONBytes(token),
-			EnrollURL: "/enroll/bootstrap",
-			Roles:     effectiveAgentRoles(roles),
+			Token:           secretJSONBytes(token),
+			EnrollURL:       "/enroll/bootstrap",
+			AgentServer:     a.agentConnection.Server,
+			AgentServerName: a.agentConnection.ServerName,
+			Roles:           effectiveAgentRoles(roles),
 		}, nil
 	})
 }

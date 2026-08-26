@@ -395,6 +395,7 @@ func TestRun_CheckConfigAgentChannel(t *testing.T) {
 	env := envFunc(map[string]string{
 		"TRSTCTL_AGENT_CHANNEL_ENABLED":             "true",
 		"TRSTCTL_AGENT_CHANNEL_ADDR":                ":9443",
+		"TRSTCTL_AGENT_CHANNEL_PUBLIC_ADDRESS":      "agents.example.com:9443",
 		"TRSTCTL_AGENT_CHANNEL_SERVER_NAME":         "agents.example.com",
 		"TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE":        "/var/lib/trstctl/agent-ca.crt",
 		"TRSTCTL_AGENT_CHANNEL_HEARTBEAT_INTERVAL":  "45s",
@@ -408,6 +409,7 @@ func TestRun_CheckConfigAgentChannel(t *testing.T) {
 	for _, want := range []string{
 		"agent_channel.enabled: true",
 		"agent_channel.addr: :9443",
+		"agent_channel.public_address: agents.example.com:9443",
 		"agent_channel.server_name: agents.example.com",
 		"agent_channel.ca_cert_file: /var/lib/trstctl/agent-ca.crt",
 		"agent_channel.heartbeat_interval: 45s",

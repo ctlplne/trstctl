@@ -676,7 +676,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		SecretScanRoots:             append([]string(nil), cfg.Secrets.ScanRoots...),
 		EnableAISurface:             cfg.AI.EnableAPI, AIModel: aiModel, AIModelStatus: aiModelStatus,
 		AIMCPIdentity: cfg.AI.MCPIdentity, EnableMCPWriteTools: cfg.AI.MCPWriteTools, AIRateMax: cfg.AI.RateMax, AIRateWindow: cfg.AI.RateWindow(),
-		EnableAgentChannel: cfg.AgentChannel.Enabled, AgentChannelAddr: cfg.AgentChannel.Addr, AgentHTTPRenewalAddr: cfg.AgentChannel.HTTPRenewalAddr,
+		EnableAgentChannel: cfg.AgentChannel.Enabled, AgentChannelAddr: cfg.AgentChannel.Addr, AgentChannelPublicAddress: cfg.AgentChannel.PublicAddress, AgentHTTPRenewalAddr: cfg.AgentChannel.HTTPRenewalAddr,
 		AgentClaimableJobKinds: cfg.AgentChannel.ClaimableJobKinds,
 		AgentCACertFile:        agentCACertFile(cfg), AgentHeartbeatInterval: agentHeartbeatInterval(cfg),
 		AgentChannelServerName: cfg.AgentChannel.ServerName,

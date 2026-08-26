@@ -180,6 +180,10 @@ services:
       # container 9444 so they do not collide with the demo stack's 127.0.0.1:9443 UI.
       TRSTCTL_AGENT_CHANNEL_ENABLED: "true"
       TRSTCTL_AGENT_CHANNEL_ADDR: ":9443"
+      # The browser must publish the HOST-side address, not guess from the
+      # container listener. This keeps its install command correct when ports are
+      # remapped by Compose, a Service, a load balancer, or a tunnel.
+      TRSTCTL_AGENT_CHANNEL_PUBLIC_ADDRESS: "localhost:19443"
       TRSTCTL_AGENT_CHANNEL_HTTP_RENEWAL_ADDR: ":9444"
       TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE: /data/ca/agent-ca.crt
       # EVALUATION ONLY — match the actions exposed by the blank-stack console.

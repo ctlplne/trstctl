@@ -3,12 +3,18 @@ import { buildAgentInstallPlan } from "@/lib/agentInstall";
 
 describe("agent install command contract", () => {
   it("builds an explicit, runnable loopback evaluation command from the base origin", () => {
-    const plan = buildAgentInstallPlan({ origin: "http://127.0.0.1:60280", agentName: "qa relay", roles: ["network"] });
+    const plan = buildAgentInstallPlan({
+      origin: "http://127.0.0.1:60280",
+      agentName: "qa relay",
+      roles: ["network"],
+      agentServer: "localhost:61943",
+      agentServerName: "localhost",
+    });
 
     expect(plan.blockedReason).toBeUndefined();
     expect(plan.command).toContain("--enroll-url http://127.0.0.1:60280");
     expect(plan.command).toContain("--allow-insecure-loopback-enrollment");
-    expect(plan.command).toContain("--server localhost:19443");
+    expect(plan.command).toContain("--server localhost:61943");
     expect(plan.command).toContain("--server-name localhost");
     expect(plan.command).toContain("--name 'qa relay'");
     expect(plan.command).toContain("--relay-claim");
@@ -17,12 +23,18 @@ describe("agent install command contract", () => {
   });
 
   it("uses pinned HTTPS semantics without the loopback escape hatch", () => {
-    const plan = buildAgentInstallPlan({ origin: "https://trstctl.example:8443", agentName: "host-1", roles: ["host"] });
+    const plan = buildAgentInstallPlan({
+      origin: "https://trstctl.example:8443",
+      agentName: "host-1",
+      roles: ["host"],
+      agentServer: "agents.trstctl.example:443",
+      agentServerName: "agents.trstctl.example",
+    });
 
     expect(plan.blockedReason).toBeUndefined();
     expect(plan.command).toContain("--enroll-url https://trstctl.example:8443");
-    expect(plan.command).toContain("--server trstctl.example:9443");
-    expect(plan.command).toContain("--server-name trstctl.example");
+    expect(plan.command).toContain("--server agents.trstctl.example:443");
+    expect(plan.command).toContain("--server-name agents.trstctl.example");
     expect(plan.command).not.toContain("--allow-insecure-loopback-enrollment");
     expect(plan.command).not.toContain("--relay-claim");
   });
@@ -32,5 +44,12 @@ describe("agent install command contract", () => {
 
     expect(plan.command).toBe("");
     expect(plan.blockedReason).toMatch(/need HTTPS/i);
+  });
+
+  it("refuses to guess an agent endpoint when the server did not publish one", () => {
+    const plan = buildAgentInstallPlan({ origin: "https://trstctl.example:8443", agentName: "host-1" });
+
+    expect(plan.command).toBe("");
+    expect(plan.blockedReason).toMatch(/agent_channel\.public_address/i);
   });
 });

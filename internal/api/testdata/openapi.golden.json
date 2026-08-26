@@ -10819,6 +10819,12 @@
       },
       "EnrollmentToken": {
         "properties": {
+          "agent_server": {
+            "type": "string"
+          },
+          "agent_server_name": {
+            "type": "string"
+          },
           "enroll_path": {
             "type": "string"
           },
@@ -10838,7 +10844,9 @@
         },
         "required": [
           "token",
-          "roles"
+          "roles",
+          "agent_server",
+          "agent_server_name"
         ],
         "type": "object"
       },
