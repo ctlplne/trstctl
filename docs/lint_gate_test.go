@@ -61,7 +61,7 @@ func installLintGateStubs(t *testing.T, dir string) {
 	}
 	writeExecutable(t, filepath.Join(dir, "bash"), `#!/bin/sh
 case "$1" in
-scripts/ci/check-actions-pinned_selftest.sh|scripts/ci/check-actions-pinned.sh)
+scripts/ci/check-actions-pinned_selftest.sh|scripts/ci/check-actions-pinned.sh|scripts/ci/install-web-deps_selftest.sh)
 	exit 0
 	;;
 esac

@@ -423,6 +423,8 @@ lint: ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint
 	@echo ">> third-party GitHub Actions are SHA-pinned (SUPPLY-002)"
 	@bash scripts/ci/check-actions-pinned_selftest.sh >/dev/null
 	@bash scripts/ci/check-actions-pinned.sh .
+	@echo ">> web dependency reuse guard self-test"
+	@bash scripts/ci/install-web-deps_selftest.sh >/dev/null
 	@# AGID-INT-CALL production-caller FLOOR: every ee/agentid mechanism has a non-test
 	@# caller (the DEFERRED ee/agentid/verify RP SDK excepted). This is the lexical,
 	@# always-runnable tier; the whole-program RTA strong check is CI-only (-tags agidrta).

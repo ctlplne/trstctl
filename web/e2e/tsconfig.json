@@ -2,7 +2,7 @@
   "// purpose": "Type-checks the Playwright suite and its config in isolation (the app tsconfig deliberately covers src+scripts only, with vitest globals that would clash with @playwright/test). CI/local: npx tsc -p e2e/tsconfig.json --noEmit.",
   "extends": "../tsconfig.json",
   "compilerOptions": {
-    "types": ["node"],
+    "types": ["node", "vite/client"],
     "noEmit": true
   },
   "include": ["./**/*.ts", "../playwright.config.ts"]

@@ -10,6 +10,7 @@ web_dir="${1:-web}"
 lock_file="${web_dir}/package-lock.json"
 modules_dir="${web_dir}/node_modules"
 marker="${modules_dir}/.trstctl-package-lock.sha256"
+required_web_tools=(eslint playwright prettier size-limit storybook tsc vite vitest)
 
 [[ -f "$lock_file" ]] || { echo "missing npm lockfile: $lock_file" >&2; exit 2; }
 
@@ -21,15 +22,26 @@ lock_digest() {
 	fi
 }
 
+dependency_tree_usable() {
+	local tool
+	for tool in "${required_web_tools[@]}"; do
+		[[ -x "${modules_dir}/.bin/${tool}" ]] || return 1
+	done
+}
+
 digest="$(lock_digest)"
 force_clean=false
 if [[ "${TRSTCTL_WEB_CLEAN_INSTALL:-}" == "1" || "${CI:-}" == "true" || "${CI:-}" == "1" ]]; then
 	force_clean=true
 fi
 
-if [[ "$force_clean" == false && -d "$modules_dir" && -f "$marker" && "$(<"$marker")" == "$digest" ]]; then
+if [[ "$force_clean" == false && -d "$modules_dir" && -f "$marker" && "$(<"$marker")" == "$digest" ]] && dependency_tree_usable; then
 	echo ">> npm dependencies current for package-lock.json; reuse node_modules"
 	exit
+fi
+
+if [[ "$force_clean" == false && -f "$marker" && "$(<"$marker")" == "$digest" ]] && ! dependency_tree_usable; then
+	echo ">> npm dependency tree is incomplete despite a current lock marker; reinstall"
 fi
 
 echo ">> npm ci (clean dependency tree from package-lock.json)"
