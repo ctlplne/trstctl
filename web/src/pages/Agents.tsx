@@ -17,7 +17,6 @@ import { formatDate as formatDatePolicy, formatDateTime as formatDateTimePolicy 
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
 
-const staleAfterMs = 24 * 60 * 60 * 1000;
 const certRevocationReasons = [
   "unspecified",
   "keyCompromise",
@@ -177,15 +176,9 @@ export function Agents() {
     : { command: "" };
   const command = installPlan.command;
   const activeAgents = useMemo(() => agents.filter((agent) => !isOffboarded(agent)), [agents]);
-  const onlineAgents = useMemo(
-    () => activeAgents.filter((agent) => agent.status.toLowerCase() === "online" && !heartbeatFreshness(agent.last_seen_at).stale),
-    [activeAgents],
-  );
+  const onlineAgents = useMemo(() => activeAgents.filter((agent) => agentPresence(agent).online), [activeAgents]);
   const trustedAgents = useMemo(() => activeAgents.filter((agent) => agent.role_source === "certificate" && (agent.roles ?? []).length > 0), [activeAgents]);
-  const currentEvidenceAgents = useMemo(
-    () => activeAgents.filter((agent) => Boolean(agent.version?.trim()) && !heartbeatFreshness(agent.last_seen_at).stale),
-    [activeAgents],
-  );
+  const currentEvidenceAgents = useMemo(() => activeAgents.filter((agent) => Boolean(agent.version?.trim()) && agentPresence(agent).online), [activeAgents]);
 
   function closeEnrollment() {
     if (tokenBusy) return;
@@ -283,11 +276,11 @@ export function Agents() {
             </>
           );
         }
-        const freshness = heartbeatFreshness(agent.last_seen_at);
+        const presence = agentPresence(agent);
         return (
           <>
             <p>{formatDate(agent.last_seen_at)}</p>
-            <p className={freshness.stale ? "text-xs font-medium text-status-warning" : "text-xs text-muted-foreground"}>{freshness.label}</p>
+            <p className={presence.online ? "text-xs text-muted-foreground" : "text-xs font-medium text-status-warning"}>{presence.detail}</p>
           </>
         );
       },
@@ -978,13 +971,14 @@ function AgentDetail({ agent }: { agent: Agent }) {
   );
 }
 
-function heartbeatFreshness(lastSeen?: string): { label: string; stale: boolean } {
-  if (!lastSeen) return { label: translateNow("source.no.heartbeat.timestamp.7c01a4e0ea"), stale: true };
-  const ts = Date.parse(lastSeen);
-  if (Number.isNaN(ts)) return { label: translateNow("source.unparseable.heartbeat.timestamp.bb97c8934b"), stale: true };
-  const ageMs = Date.now() - ts;
-  if (ageMs > staleAfterMs) return { label: translateNow("source.stale.heartbeat.d8742526e2"), stale: true };
-  return { label: translateNow("source.fresh.heartbeat.39d75ce503"), stale: false };
+function agentPresence(agent: Agent): Agent["presence"] {
+  if (agent.presence) return agent.presence;
+  return {
+    state: "unreported",
+    online: false,
+    evaluated_at: "",
+    detail: translateNow("source.no.heartbeat.timestamp.7c01a4e0ea"),
+  };
 }
 
 function formatDate(value?: string): string {

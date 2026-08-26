@@ -2255,6 +2255,9 @@
           "offboarded_by": {
             "type": "string"
           },
+          "presence": {
+            "$ref": "#/components/schemas/AgentPresence"
+          },
           "relay_capabilities": {
             "items": {
               "$ref": "#/components/schemas/AgentRelayCapability"
@@ -2292,6 +2295,7 @@
           "id",
           "name",
           "status",
+          "presence",
           "inventory_report_path",
           "discovery_capabilities",
           "roles",
@@ -2587,6 +2591,41 @@
         "required": [
           "agent",
           "revocation_evidence"
+        ],
+        "type": "object"
+      },
+      "AgentPresence": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "evaluated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "fresh_until": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "online": {
+            "type": "boolean"
+          },
+          "state": {
+            "enum": [
+              "online",
+              "stale",
+              "unreported",
+              "offboarded",
+              "clock_skew"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "online",
+          "evaluated_at",
+          "detail"
         ],
         "type": "object"
       },

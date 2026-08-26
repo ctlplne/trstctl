@@ -4217,8 +4217,16 @@ func componentSchemas() map[string]*Schema {
 		"metadata_only":     {Type: "boolean"},
 		"private_key_bytes": {Type: "boolean"},
 	}, "source_kind", "label", "reported_over", "metadata_only", "private_key_bytes")
+	agentPresence := object(map[string]*Schema{
+		"state":        {Type: "string", Enum: []string{"online", "stale", "unreported", "offboarded", "clock_skew"}},
+		"online":       {Type: "boolean"},
+		"evaluated_at": timestamp(),
+		"fresh_until":  timestamp(),
+		"detail":       str(),
+	}, "state", "online", "evaluated_at", "detail")
 	agent := object(map[string]*Schema{
 		"id": uuid(), "name": str(), "status": str(), "version": str(), "last_seen_at": timestamp(),
+		"presence":      ref("AgentPresence"),
 		"offboarded_at": timestamp(), "offboarded_by": str(), "offboard_reason": str(),
 		"inventory_report_path":  str(),
 		"discovery_capabilities": {Type: "array", Items: ref("AgentDiscoveryCapability")},
@@ -4232,7 +4240,7 @@ func componentSchemas() map[string]*Schema {
 		"relay_capabilities": {Type: "array", Items: ref("AgentRelayCapability")},
 		"workload_api":       ref("AgentWorkloadAPIStatus"),
 		"enrollment_proxy":   ref("AgentEnrollmentProxyStatus"),
-	}, "id", "name", "status", "inventory_report_path", "discovery_capabilities", "roles", "role_source", "relay_capabilities", "workload_api", "enrollment_proxy")
+	}, "id", "name", "status", "presence", "inventory_report_path", "discovery_capabilities", "roles", "role_source", "relay_capabilities", "workload_api", "enrollment_proxy")
 	// B3: whether this host serves the SPIFFE Workload API for its own workloads.
 	agentWorkloadAPIStatus := object(map[string]*Schema{
 		"state":        {Type: "string", Enum: []string{"serving", "not_serving", "unreported"}},
@@ -5096,6 +5104,7 @@ func componentSchemas() map[string]*Schema {
 		"AccessChangeRequestList":                  list("AccessChangeRequest"),
 		"AgentDiscoveryCapability":                 agentDiscoveryCapability,
 		"Agent":                                    agent,
+		"AgentPresence":                            agentPresence,
 		"AgentWorkloadAPIStatus":                   agentWorkloadAPIStatus,
 		"AgentEnrollmentProxyStatus":               agentEnrollmentProxyStatus,
 		"AgentRelayCapability":                     agentRelayCapability,

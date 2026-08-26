@@ -1169,8 +1169,13 @@ describe("i18n boundary", () => {
       // the explicit promise that the original failure remains unchanged as
       // evidence. Run IDs stay byte-identical. Machine-authored es/de — FLAGGED
       // FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "54d9c0743ea79b0d9e5934a577254f01019f6aef13adc3dc7003d73978cb7f4b",
-      "de-DE": "1af69a10395c137bec910557f5693756b1337e1abb38b857627f29bca023f084",
+      // QA g31 Agent presence cleanup: three obsolete browser-derived
+      // heartbeat phrases were removed after the server became the sole owner
+      // of online/stale/clock-skew meaning. The unused-message oracle proves no
+      // rendered surface still references them; no remaining translation was
+      // changed or replaced by an English fallback.
+      "es-ES": "9a0499a0272357f330833afdc5fd3a535324b079ba4744d8c56fb65a0115790f",
+      "de-DE": "b8dc05eb8bda4a47db8fe3124f51fb4a3acb86c8b46e3847c7f5c1cfc3ca5c89",
     });
   });
 

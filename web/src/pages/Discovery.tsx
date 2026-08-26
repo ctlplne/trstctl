@@ -1923,11 +1923,7 @@ function RunTable({
       header: translateNow("discovery.run.recoveryColumn"),
       cell: (run) => {
         if (run.retry_of_run_id) {
-          return (
-            <span className="text-xs text-muted-foreground">
-              {translateNow("discovery.run.retries", { id: shortID(run.retry_of_run_id) })}
-            </span>
-          );
+          return <span className="text-xs text-muted-foreground">{translateNow("discovery.run.retries", { id: shortID(run.retry_of_run_id) })}</span>;
         }
         if (run.status !== "failed" && run.status !== "partial") {
           return <span className="text-muted-foreground">—</span>;

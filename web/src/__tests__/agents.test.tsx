@@ -59,9 +59,16 @@ describe("agent fleet surface", () => {
       {
         id: "ag-1",
         name: "edge-01",
-        status: "online",
+        status: "active",
         version: "0.4.0",
         last_seen_at: "2999-01-01T00:00:00Z",
+        presence: {
+          state: "online",
+          online: true,
+          evaluated_at: "2026-08-26T06:30:00Z",
+          fresh_until: "2999-01-01T00:01:00Z",
+          detail: "A heartbeat arrived within two expected heartbeat intervals, so this agent is online.",
+        },
         roles: ["host"],
         role_source: "certificate",
         workload_api: {
@@ -106,11 +113,24 @@ describe("agent fleet surface", () => {
         status: "degraded",
         version: "0.3.8",
         last_seen_at: "2000-01-01T00:00:00Z",
+        presence: {
+          state: "stale",
+          online: false,
+          evaluated_at: "2026-08-26T06:30:00Z",
+          fresh_until: "2000-01-01T00:01:00Z",
+          detail: "This agent has a stale heartbeat: the last report is older than two expected heartbeat intervals, so it is offline until it reports again.",
+        },
       },
       {
         id: "ag-3",
         name: "lab-03",
         status: "offline",
+        presence: {
+          state: "unreported",
+          online: false,
+          evaluated_at: "2026-08-26T06:30:00Z",
+          detail: "No heartbeat has been recorded, so trstctl cannot call this agent online.",
+        },
       },
     ]);
   });
@@ -148,6 +168,51 @@ describe("agent fleet surface", () => {
     fireEvent.click(screen.getByText("Fleet status and safe actions"));
     expect(await screen.findByRole("table", { name: "Registered in-network agents" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Refresh fleet" })).toBeInTheDocument();
+  });
+
+  it("derives online presence from the served active lifecycle and a fresh heartbeat", async () => {
+    apiMock.agents.mockResolvedValueOnce([
+      {
+        id: "ag-active-fresh",
+        name: "network-relay-01",
+        status: "active",
+        version: "dev",
+        last_seen_at: "2999-01-01T00:00:00Z",
+        presence: {
+          state: "online",
+          online: true,
+          evaluated_at: "2026-08-26T06:30:00Z",
+          fresh_until: "2999-01-01T00:01:00Z",
+          detail: "A heartbeat arrived within two expected heartbeat intervals, so this agent is online.",
+        },
+        roles: ["network"],
+        role_source: "certificate",
+      },
+    ]);
+
+    renderAgents();
+
+    expect(await screen.findByRole("heading", { name: "1 of 1 active agents is online with a fresh heartbeat" })).toBeInTheDocument();
+    expect(screen.getByText("1 of 1 active agents reports both a fresh heartbeat and version.")).toBeInTheDocument();
+  });
+
+  it("fails missing server presence evidence closed instead of rebuilding it in the browser", async () => {
+    apiMock.agents.mockResolvedValueOnce([
+      {
+        id: "ag-missing-presence",
+        name: "legacy-looking-agent",
+        status: "active",
+        version: "dev",
+        last_seen_at: "2999-01-01T00:00:00Z",
+        roles: ["network"],
+        role_source: "certificate",
+      },
+    ]);
+
+    renderAgents();
+
+    expect(await screen.findByRole("heading", { name: "0 of 1 active agents are online with a fresh heartbeat" })).toBeInTheDocument();
+    expect(screen.getByText("0 of 1 active agents reports both a fresh heartbeat and version.")).toBeInTheDocument();
   });
 
   it("loads version and queue evidence only when its disclosure opens", async () => {
@@ -200,7 +265,7 @@ describe("agent fleet surface", () => {
     expect((await screen.findAllByText("edge-01")).length).toBeGreaterThan(0);
     expect(await screen.findByText("branch-02")).toBeInTheDocument();
     expect(await screen.findByText("lab-03")).toBeInTheDocument();
-    expect(screen.getAllByText("online").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("active").length).toBeGreaterThan(0);
     expect(screen.getByText("degraded")).toBeInTheDocument();
     expect(screen.getByText("offline")).toBeInTheDocument();
     expect(screen.getByText(/stale heartbeat/i)).toBeInTheDocument();

@@ -100,6 +100,14 @@ func WithAgentEnrollmentConnection(server, serverName string) Option {
 	}
 }
 
+// WithAgentHeartbeatInterval gives the REST read model the same next-beat
+// interval used by the served agent channel and fleet-health alert. Agent
+// presence is derived on the server from two missed intervals; the browser must
+// not maintain a competing stale threshold.
+func WithAgentHeartbeatInterval(interval time.Duration) Option {
+	return func(c *config) { c.agentHeartbeatInterval = interval }
+}
+
 // WithAgentEnrollmentObserver records aggregate bootstrap-enrollment outcomes for
 // fleet rollout observability. The observer receives a low-cardinality result
 // label ("success" or "failed") and must not depend on per-agent identifiers.

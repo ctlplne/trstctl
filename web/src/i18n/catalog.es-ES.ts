@@ -694,8 +694,7 @@ const esESCatalog = {
   "discovery.run.retrying": "Reintentando…",
   "discovery.run.retryAria": "Reintentar la ejecución {id}",
   "discovery.run.recoveryBlocked": "La recuperación está bloqueada: {reason}",
-  "discovery.run.recoveryQueued":
-    "La ejecución de recuperación {replacement} está en cola. El fallo original {original} permanece sin cambios como evidencia.",
+  "discovery.run.recoveryQueued": "La ejecución de recuperación {replacement} está en cola. El fallo original {original} permanece sin cambios como evidencia.",
   "discovery.run.retryFailed": "No se pudo reintentar la ejecución de descubrimiento",
   // DESIGN-ROUTE-040 machine-authored translations; human linguistic review required before release.
   "platform.tabs.access": "Personas y roles",
@@ -4800,7 +4799,6 @@ const esESCatalog = {
   "source.for.10c22bcf4c": "for",
   "source.format.2f343666aa": "Format",
   "source.fresh.ca.material.d1a53a627a": "Nuevo material de CA",
-  "source.fresh.heartbeat.39d75ce503": "Señal de actividad reciente",
   "source.from.2181976934": "From",
   "source.fulcio.issuer.6baae4cd90": "Emisor Fulcio",
   "source.full.delivery.subject.ownership.and.routin.32d5733727": "· estado de entrega completa, sujeto, propiedad y enrutamiento.",
@@ -5450,7 +5448,6 @@ const esESCatalog = {
   "source.ssh.key.identity.b8252e7aa8": "Identidad de clave SSH",
   "source.ssh.public.key.c9be6a369e": "Clave pública SSH",
   "source.ssh.workflow.failed.e76cbdb07c": "El flujo de trabajo de SSH ha fallado",
-  "source.stale.heartbeat.d8742526e2": "Señal de actividad desactualizada",
   "source.start.a.ceremony.to.see.its.purpose.approv.9f9d9ee9fd": "Inicie una ceremonia para ver su propósito, umbral de aprobación y estado.",
   "source.start.a.root.ca.ceremony.then.record.a.sec.da658d7848":
     "Inicie una ceremonia de CA raíz y, a continuación, registre una segunda aprobación del custodio antes de utilizar la ceremonia para una acción de autoridad respaldada por el servicio de firma.",
@@ -5622,7 +5619,6 @@ const esESCatalog = {
   "source.type.the.exact.secret.name.8106c6efde": "Escriba el nombre exacto del Secret",
   "source.typescript.sdk.40e0532135": "TypeScript SDK",
   "source.unknown.b764cdc0ea": "Desconocido",
-  "source.unparseable.heartbeat.timestamp.bb97c8934b": "Marca de tiempo de la señal de actividad no interpretable",
   "source.updated.3a5ecca188": "Updated",
   "source.updates.22e2bada8f": "Updates",
   "source.urgency.03d37e9a53": "Urgency",

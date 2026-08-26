@@ -6167,6 +6167,7 @@ export interface components {
             /** Format: date-time */
             offboarded_at?: string;
             offboarded_by?: string;
+            presence: components["schemas"]["AgentPresence"];
             relay_capabilities: components["schemas"]["AgentRelayCapability"][];
             /** @enum {string} */
             role_source: "certificate" | "unreported";
@@ -6256,6 +6257,16 @@ export interface components {
         AgentOffboardResponse: {
             agent: components["schemas"]["Agent"];
             revocation_evidence: string;
+        };
+        AgentPresence: {
+            detail: string;
+            /** Format: date-time */
+            evaluated_at: string;
+            /** Format: date-time */
+            fresh_until?: string;
+            online: boolean;
+            /** @enum {string} */
+            state: "online" | "stale" | "unreported" | "offboarded" | "clock_skew";
         };
         AgentRelayCapability: {
             connectors: string[];

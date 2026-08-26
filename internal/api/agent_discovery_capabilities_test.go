@@ -24,7 +24,7 @@ func TestAgentResponseAdvertisesOnlyShippedDiscoveryCapabilities(t *testing.T) {
 	got := toAgentResponse(store.Agent{
 		ID:     "11111111-1111-1111-1111-111111111111",
 		Name:   "edge-01",
-		Status: "online",
+		Status: "active",
 	})
 	if got.InventoryReportPath != "agent.mtls.ReportInventory" {
 		t.Fatalf("inventory report path = %q, want served mTLS ReportInventory", got.InventoryReportPath)
@@ -66,7 +66,7 @@ func TestAgentResponseAdvertisesOnlyShippedDiscoveryCapabilities(t *testing.T) {
 // gap analysis found. Each returns to the advertised set only when its enumerator
 // is genuinely wired into the agent binary.
 func TestAgentResponseDoesNotAdvertiseUnbuiltEnumerators(t *testing.T) {
-	got := toAgentResponse(store.Agent{ID: "22222222-2222-2222-2222-222222222222", Name: "edge-02", Status: "online"})
+	got := toAgentResponse(store.Agent{ID: "22222222-2222-2222-2222-222222222222", Name: "edge-02", Status: "active"})
 	advertised := map[string]struct{}{}
 	for _, capability := range got.DiscoveryCapabilities {
 		advertised[capability.SourceKind] = struct{}{}
@@ -92,7 +92,7 @@ func TestAgentResponseDoesNotAdvertiseUnbuiltEnumerators(t *testing.T) {
 // nothing until an operator points it at roots, so the flags travel with the
 // capability.
 func TestAdvertisedCapabilitiesNameTheirEnableFlags(t *testing.T) {
-	got := toAgentResponse(store.Agent{ID: "33333333-3333-3333-3333-333333333333", Name: "edge-03", Status: "online"})
+	got := toAgentResponse(store.Agent{ID: "33333333-3333-3333-3333-333333333333", Name: "edge-03", Status: "active"})
 	for _, capability := range got.DiscoveryCapabilities {
 		if len(capability.EnableFlags) == 0 {
 			t.Errorf("capability %q lists no enable flags; if it is always-on, say so explicitly in ShippedSourceKinds rather than leaving the field empty",

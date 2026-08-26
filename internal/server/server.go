@@ -1306,6 +1306,7 @@ func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 		api.WithRestoreDrill(s.LastRestoreDrill),
 		api.WithRestoreDrillSigningKey(d.AuditSigningKey),
 		api.WithAgentEnrollment(ea), api.WithAgentEnrollmentConnection(d.AgentChannelPublicAddress, d.AgentChannelServerName),
+		api.WithAgentHeartbeatInterval(d.AgentHeartbeatInterval),
 		api.WithAgentEnroller(ea), api.WithAgentEnrollmentObserver(s.observeAgentEnrollment),
 		api.WithAttestedIssuer(s),
 		api.WithSSHWorkflow(s),

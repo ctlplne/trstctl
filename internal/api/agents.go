@@ -93,6 +93,7 @@ type agentResponse struct {
 	Status                string                             `json:"status"`
 	Version               string                             `json:"version,omitempty"`
 	LastSeenAt            *string                            `json:"last_seen_at,omitempty"`
+	Presence              agentPresenceResponse              `json:"presence"`
 	OffboardedAt          *string                            `json:"offboarded_at,omitempty"`
 	OffboardedBy          string                             `json:"offboarded_by,omitempty"`
 	OffboardReason        string                             `json:"offboard_reason,omitempty"`
@@ -121,6 +122,64 @@ type agentResponse struct {
 	// EnrollmentProxy is this certificate-bound relay's measured A4 topology
 	// and health. It is evidence only; no capability is granted from the report.
 	EnrollmentProxy agentEnrollmentProxyStatus `json:"enrollment_proxy"`
+}
+
+// agentPresenceResponse separates durable lifecycle (Agent.Status) from the
+// transient question "can this agent be considered connected right now?". The
+// server owns the answer because it also owns the heartbeat interval and the
+// fleet-health alert threshold. A browser-side duration would inevitably drift.
+type agentPresenceResponse struct {
+	State       string  `json:"state"`
+	Online      bool    `json:"online"`
+	EvaluatedAt string  `json:"evaluated_at"`
+	FreshUntil  *string `json:"fresh_until,omitempty"`
+	Detail      string  `json:"detail"`
+}
+
+const (
+	agentPresenceOnline     = "online"
+	agentPresenceStale      = "stale"
+	agentPresenceUnreported = "unreported"
+	agentPresenceOffboarded = "offboarded"
+	agentPresenceClockSkew  = "clock_skew"
+
+	defaultAgentPresenceHeartbeatInterval = 30 * time.Second
+)
+
+func agentPresenceFor(a store.Agent, now time.Time, heartbeatInterval time.Duration) agentPresenceResponse {
+	now = now.UTC()
+	if heartbeatInterval <= 0 {
+		heartbeatInterval = defaultAgentPresenceHeartbeatInterval
+	}
+	out := agentPresenceResponse{EvaluatedAt: now.Format(time.RFC3339Nano)}
+	if a.OffboardedAt != nil || strings.EqualFold(a.Status, "offboarded") {
+		out.State = agentPresenceOffboarded
+		out.Detail = "This agent is offboarded. A heartbeat cannot make it online until it is deliberately re-enrolled."
+		return out
+	}
+	if a.LastSeenAt == nil {
+		out.State = agentPresenceUnreported
+		out.Detail = "No heartbeat has been recorded, so trstctl cannot call this agent online."
+		return out
+	}
+	lastSeen := a.LastSeenAt.UTC()
+	if lastSeen.After(now.Add(heartbeatInterval)) {
+		out.State = agentPresenceClockSkew
+		out.Detail = "The last heartbeat is later than the control-plane clock allows. Treat this agent as offline until the clocks agree and a new heartbeat arrives."
+		return out
+	}
+	freshUntil := lastSeen.Add(2 * heartbeatInterval)
+	freshUntilText := freshUntil.Format(time.RFC3339Nano)
+	out.FreshUntil = &freshUntilText
+	if now.After(freshUntil) {
+		out.State = agentPresenceStale
+		out.Detail = "This agent has a stale heartbeat: the last report is older than two expected heartbeat intervals, so it is offline until it reports again."
+		return out
+	}
+	out.State = agentPresenceOnline
+	out.Online = true
+	out.Detail = "A heartbeat arrived within two expected heartbeat intervals, so this agent is online."
+	return out
 }
 
 type agentEnrollmentProxyStatus struct {
@@ -284,8 +343,13 @@ func agentRelayCapabilities() []agentRelayCapabilityResponse {
 }
 
 func toAgentResponse(a store.Agent) agentResponse {
+	return toAgentResponseAt(a, time.Now().UTC(), defaultAgentPresenceHeartbeatInterval)
+}
+
+func toAgentResponseAt(a store.Agent, now time.Time, heartbeatInterval time.Duration) agentResponse {
 	out := agentResponse{
 		ID: a.ID, Name: a.Name, Status: a.Status, Version: a.Version,
+		Presence:              agentPresenceFor(a, now, heartbeatInterval),
 		InventoryReportPath:   agentInventoryReportPath,
 		DiscoveryCapabilities: agentDiscoveryCapabilities(),
 		Roles:                 a.Roles,
@@ -299,16 +363,24 @@ func toAgentResponse(a store.Agent) agentResponse {
 		out.RoleSource = agentRoleSourceUnreported
 	}
 	if a.LastSeenAt != nil {
-		s := a.LastSeenAt.UTC().Format(time.RFC3339)
+		s := a.LastSeenAt.UTC().Format(time.RFC3339Nano)
 		out.LastSeenAt = &s
 	}
 	if a.OffboardedAt != nil {
-		s := a.OffboardedAt.UTC().Format(time.RFC3339)
+		s := a.OffboardedAt.UTC().Format(time.RFC3339Nano)
 		out.OffboardedAt = &s
 	}
 	out.OffboardedBy = a.OffboardedBy
 	out.OffboardReason = a.OffboardReason
 	return out
+}
+
+func (a *API) agentResponse(ag store.Agent) agentResponse {
+	return a.agentResponseAt(ag, time.Now().UTC())
+}
+
+func (a *API) agentResponseAt(ag store.Agent, evaluatedAt time.Time) agentResponse {
+	return toAgentResponseAt(ag, evaluatedAt, a.agentHeartbeatInterval)
 }
 
 // listAgents returns the tenant's in-network agents (F3). The web first-run
@@ -341,8 +413,9 @@ func (a *API) listAgents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	items := make([]agentResponse, 0, len(agents))
+	evaluatedAt := time.Now().UTC()
 	for _, ag := range agents {
-		items = append(items, toAgentResponse(ag))
+		items = append(items, a.agentResponseAt(ag, evaluatedAt))
 	}
 	next := ""
 	if len(agents) == limit {
@@ -546,7 +619,7 @@ func (a *API) offboardAgent(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		return http.StatusOK, agentOffboardResponse{
-			Agent:              toAgentResponse(agent),
+			Agent:              a.agentResponse(agent),
 			RevocationEvidence: "offboarded agent certificates are rejected by the served mTLS channel before heartbeat, renewal, or inventory RPCs",
 		}, nil
 	})

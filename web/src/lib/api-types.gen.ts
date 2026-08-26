@@ -567,6 +567,7 @@ export interface Agent {
   offboard_reason?: string;
   offboarded_at?: string;
   offboarded_by?: string;
+  presence: AgentPresence;
   relay_capabilities: AgentRelayCapability[];
   role_source: "certificate" | "unreported";
   roles: ("host" | "network")[];
@@ -658,6 +659,14 @@ export interface AgentOffboardRequest {
 export interface AgentOffboardResponse {
   agent: Agent;
   revocation_evidence: string;
+}
+
+export interface AgentPresence {
+  detail: string;
+  evaluated_at: string;
+  fresh_until?: string;
+  online: boolean;
+  state: "online" | "stale" | "unreported" | "offboarded" | "clock_skew";
 }
 
 export interface AgentRelayCapability {

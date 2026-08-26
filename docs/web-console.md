@@ -158,6 +158,15 @@ reported both a fresh heartbeat and a version. These are separate claims. An
 enrolled row is not automatically called trusted, and a reported version is not
 automatically called approved.
 
+The API also keeps **lifecycle** and **presence** separate. `status` is the durable
+agent-reported lifecycle/operational state. `presence.state` is a server-evaluated
+connection receipt: `online`, `stale`, `unreported`, `offboarded`, or
+`clock_skew`. Online means the non-offboarded agent reported within two configured
+heartbeat intervals—the same rule used by the fleet alert—not “the status string
+happened to say online.” The receipt includes `evaluated_at`, `fresh_until` when a
+valid heartbeat exists, and an ELI5 technical reason so API, console, and alerting explain
+the same result. An impossible future heartbeat fails closed as clock skew.
+
 The only default action is **Add agent**. It opens a viewport-bounded dialog that
 chooses host and/or network-relay capability, mints one bootstrap token, and shows
 the install command. The role is signed into the enrolled client certificate; it

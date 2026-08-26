@@ -17416,10 +17416,6 @@ export const messages = {
     defaultMessage: "Fresh CA material",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
   },
-  "source.fresh.heartbeat.39d75ce503": {
-    defaultMessage: "Fresh heartbeat",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Agents.tsx.",
-  },
   "source.from.2181976934": {
     defaultMessage: "From",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
@@ -20145,10 +20141,6 @@ export const messages = {
     defaultMessage: "SSH workflow failed",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/SSHTrust.tsx.",
   },
-  "source.stale.heartbeat.d8742526e2": {
-    defaultMessage: "Stale heartbeat",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Agents.tsx.",
-  },
   "source.start.a.ceremony.to.see.its.purpose.approv.9f9d9ee9fd": {
     defaultMessage: "Start a ceremony to see its purpose, approval threshold, and status.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
@@ -20821,10 +20813,6 @@ export const messages = {
   "source.unknown.b764cdc0ea": {
     defaultMessage: "Unknown",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
-  },
-  "source.unparseable.heartbeat.timestamp.bb97c8934b": {
-    defaultMessage: "Unparseable heartbeat timestamp",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Agents.tsx.",
   },
   "source.updated.3a5ecca188": {
     defaultMessage: "Updated",

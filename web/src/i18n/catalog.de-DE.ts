@@ -4825,7 +4825,6 @@ const deDECatalog = {
   "source.for.10c22bcf4c": "for",
   "source.format.2f343666aa": "Format",
   "source.fresh.ca.material.d1a53a627a": "Neues CA-Material",
-  "source.fresh.heartbeat.39d75ce503": "Aktuelles Heartbeat",
   "source.from.2181976934": "From",
   "source.fulcio.issuer.6baae4cd90": "Fulcio-Aussteller",
   "source.full.delivery.subject.ownership.and.routin.32d5733727": "· vollständiger Status zu Auslieferung, Subjekt, Zuständigkeit und Routing.",
@@ -5482,7 +5481,6 @@ const deDECatalog = {
   "source.ssh.key.identity.b8252e7aa8": "SSH-Schlüsselidentität",
   "source.ssh.public.key.c9be6a369e": "Öffentlicher SSH-Schlüssel",
   "source.ssh.workflow.failed.e76cbdb07c": "SSH-Workflow fehlgeschlagen",
-  "source.stale.heartbeat.d8742526e2": "Veralteter Heartbeat",
   "source.start.a.ceremony.to.see.its.purpose.approv.9f9d9ee9fd": "Starten Sie eine Zeremonie, um deren Zweck, Genehmigungsschwelle und Status anzuzeigen.",
   "source.start.a.root.ca.ceremony.then.record.a.sec.da658d7848":
     "Starten Sie eine Root-CA-Zeremonie und protokollieren Sie dann eine zweite Genehmigung des Verwahrers, bevor Sie die Zeremonie für eine durch den Signierdienst gestützte Autoritätsaktion verwenden.",
@@ -5654,7 +5652,6 @@ const deDECatalog = {
   "source.type.the.exact.secret.name.8106c6efde": "Den exakten Secret-Namen eingeben",
   "source.typescript.sdk.40e0532135": "TypeScript SDK",
   "source.unknown.b764cdc0ea": "Unbekannt",
-  "source.unparseable.heartbeat.timestamp.bb97c8934b": "Nicht interpretierbarer Heartbeat-Zeitstempel",
   "source.updated.3a5ecca188": "Updated",
   "source.updates.22e2bada8f": "Updates",
   "source.urgency.03d37e9a53": "Urgency",
