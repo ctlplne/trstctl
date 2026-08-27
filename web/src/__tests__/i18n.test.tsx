@@ -1190,8 +1190,15 @@ describe("i18n boundary", () => {
       // UUID. The now-unreachable raw-ID placeholder was retired from every
       // catalog. Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW
       // before release.
-      "es-ES": "b41dae1185bbafa19e43bb349a66747a294bad31b823ffd73717b681817ec1aa",
-      "de-DE": "647de00e4b962955f1bbe5dbdc9f3ad51bb0cdcd99effea18f8ea50c934b5a05",
+      // Product Help availability-first re-pin: twenty-two keys disclose a
+      // disabled, unreadable, or role-blocked help backend before input; route
+      // ordinary defects and suspected vulnerabilities separately; warn that
+      // operators own the final evidence handoff; and show licensed support
+      // only from served entitlement data. Negations, credentials/private-key
+      // exclusions, and contract ownership were reviewed for meaning. Machine-
+      // authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "e42b07ad56a8be0a33c3b97810ffa38a9b24ac945aa82284b0db5161f591ef43",
+      "de-DE": "4f92b8a0e6a6ac3200751e4008df59659dfa392608cdbab9ba4f1bdb9ffbac84",
     });
   });
 

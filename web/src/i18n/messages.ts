@@ -6945,6 +6945,100 @@ export const messages = {
     defaultMessage: "Treat personal-data egress as unconfirmed until runtime status refreshes.",
     description: "Assistant runtime diagnostics detail for an unrecognized personal-data egress mode.",
   },
+  "assistant.availability.checking": {
+    defaultMessage: "Checking availability…",
+    description: "Disabled Product help action while the server readiness check is in flight.",
+  },
+  "assistant.availability.disabledTitle": {
+    defaultMessage: "Product help is not available on this server",
+    description: "Fail-closed heading shown before input when the optional Product help backend is disabled.",
+  },
+  "assistant.availability.unknownTitle": {
+    defaultMessage: "Product help readiness is unknown",
+    description: "Fail-closed heading shown before input when runtime readiness cannot be read.",
+  },
+  "assistant.availability.permissionTitle": {
+    defaultMessage: "Product help is not available to your role",
+    description: "Fail-closed heading shown before input when the current role cannot run Product help.",
+  },
+  "assistant.availability.nothingSent": {
+    defaultMessage: "No question was sent.",
+    description: "Explicit privacy reassurance when Product help fails closed before input.",
+  },
+  "assistant.availability.disabledBody": {
+    defaultMessage:
+      "This deployment did not attach the optional read-only help backend. Your credential data stays in trstctl, and the support paths below remain available.",
+    description: "Plain explanation of the disabled Product help backend and its data boundary.",
+  },
+  "assistant.availability.unknownBody": {
+    defaultMessage:
+      "trstctl could not prove that the read-only help backend is ready, so it did not expose a question box. Check again or use a support path below.",
+    description: "Plain fail-closed explanation when Product help runtime status cannot be read.",
+  },
+  "assistant.availability.permissionBody": {
+    defaultMessage:
+      "Your current role cannot run this read-only help operation. Ask a trstctl administrator for graph read access, or use a support path below.",
+    description: "Plain Product help permission-boundary explanation.",
+  },
+  "assistant.availability.checkAgain": {
+    defaultMessage: "Check again",
+    description: "Retry action for the Product help availability check.",
+  },
+  "assistant.availability.nextTitle": {
+    defaultMessage: "Choose the safest next step",
+    description: "Heading above Product help fallback paths.",
+  },
+  "assistant.availability.troubleshootLink": {
+    defaultMessage: "Troubleshoot the deployment",
+    description: "Direct link to the public troubleshooting guide.",
+  },
+  "assistant.availability.troubleshootBody": {
+    defaultMessage: "Start with configuration and version checks, then follow the symptom-specific recovery steps.",
+    description: "Short description of the troubleshooting handoff.",
+  },
+  "assistant.availability.defectLink": {
+    defaultMessage: "Report an ordinary product defect",
+    description: "Direct link to the normal product issue intake.",
+  },
+  "assistant.availability.defectBody": {
+    defaultMessage: "Use the issue form for a reproducible bug. Include the exact build, safe steps, timestamps, and reviewed evidence.",
+    description: "Short description of ordinary defect reporting.",
+  },
+  "assistant.availability.securityLink": {
+    defaultMessage: "Report a possible security vulnerability privately",
+    description: "Direct link to private security advisory intake.",
+  },
+  "assistant.availability.securityBody": {
+    defaultMessage: "Do not put suspected vulnerabilities, credentials, private keys, or sensitive tenant evidence in an ordinary issue.",
+    description: "Short explanation of the private security reporting boundary.",
+  },
+  "assistant.availability.bundleTitle": {
+    defaultMessage: "Before you share evidence",
+    description: "Heading for the support-bundle privacy warning.",
+  },
+  "assistant.availability.bundleWarning": {
+    defaultMessage:
+      "Review a support bundle before sharing it. It is redacted and fails closed by default, but never add credentials or private keys, and you own the final handoff.",
+    description: "Support-bundle retention and privacy warning at the point of support handoff.",
+  },
+  "assistant.availability.designPartner": {
+    defaultMessage:
+      "If you cannot access the issue tracker, use the named design-partner channel in your agreement. Do not weaken trstctl authentication to work around access.",
+    description: "Fallback path for a design partner who cannot reach issue intake.",
+  },
+  "assistant.availability.licensedTitle": {
+    defaultMessage: "Licensed support",
+    description: "Heading for the conditional Enterprise or Provider support handoff.",
+  },
+  "assistant.availability.licensedBody": {
+    defaultMessage: "Use the named email or portal in your support order. The support team can route credential-impacting incidents to security engineering.",
+    description: "Commercial support handoff shown only when the served tier is licensed.",
+  },
+  "assistant.availability.licensedBoundary": {
+    defaultMessage:
+      "The signed license proves entitlement, not the contact address. Named contacts and legal response targets stay in the commercial agreement.",
+    description: "Exact contract boundary for licensed support contacts.",
+  },
   "nav.item.incidents": {
     defaultMessage: "Security incidents",
     description: "Primary navigation item.",

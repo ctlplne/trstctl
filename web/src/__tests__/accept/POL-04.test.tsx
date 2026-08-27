@@ -11,6 +11,7 @@ const { apiMock } = vi.hoisted(() => ({
     me: vi.fn(),
     authMethods: vi.fn().mockResolvedValue({ oidc: true, saml: false, ldap: false }),
     aiStatus: vi.fn(),
+    enterpriseSupportStatus: vi.fn(),
     aiQuery: vi.fn(),
     aiRCA: vi.fn(),
     mcpTools: vi.fn(),
@@ -52,6 +53,19 @@ describe("POL-04 login and assistant polish", () => {
       residual_refusal_gate: true,
       rate_max: 60,
       rate_window_seconds: 60,
+    });
+    apiMock.enterpriseSupportStatus.mockResolvedValue({
+      served: true,
+      capability: "enterprise-support",
+      tier: "community",
+      license_state: "community",
+      support_mode: "off",
+      license_feature: "ha_support",
+      contract_boundary: "Named contacts live in the commercial agreement.",
+      support_tiers: [],
+      sla_targets: [],
+      professional_services: [],
+      evidence_refs: [],
     });
     apiMock.mcpTools.mockResolvedValue({ read_only: true, tools: ["credential.lookup"] });
   });

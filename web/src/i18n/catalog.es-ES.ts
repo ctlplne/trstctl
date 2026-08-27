@@ -1987,6 +1987,38 @@ const esESCatalog = {
   "assistant.design.retryTools": "Reintentar comprobación de herramientas",
   "assistant.design.references": "Fuentes y referencias exactas",
   "assistant.design.noReferences": "No se devolvieron referencias exactas.",
+  "assistant.availability.checking": "Comprobando disponibilidad…",
+  "assistant.availability.disabledTitle": "La ayuda del producto no está disponible en este servidor",
+  "assistant.availability.unknownTitle": "No se conoce el estado de la ayuda del producto",
+  "assistant.availability.permissionTitle": "La ayuda del producto no está disponible para su rol",
+  "assistant.availability.nothingSent": "No se envió ninguna pregunta.",
+  "assistant.availability.disabledBody":
+    "Este despliegue no conectó el backend opcional de ayuda de solo lectura. Sus datos de credenciales permanecen en trstctl y las rutas de soporte siguientes siguen disponibles.",
+  "assistant.availability.unknownBody":
+    "trstctl no pudo comprobar que el backend de ayuda de solo lectura esté listo, por lo que no mostró un campo para preguntas. Vuelva a comprobarlo o use una de las rutas de soporte siguientes.",
+  "assistant.availability.permissionBody":
+    "Su rol actual no puede ejecutar esta operación de ayuda de solo lectura. Pida acceso de lectura del grafo a un administrador de trstctl o use una de las rutas de soporte siguientes.",
+  "assistant.availability.checkAgain": "Comprobar de nuevo",
+  "assistant.availability.nextTitle": "Elija el siguiente paso más seguro",
+  "assistant.availability.troubleshootLink": "Solucionar problemas del despliegue",
+  "assistant.availability.troubleshootBody":
+    "Empiece por las comprobaciones de configuración y versión y siga después los pasos de recuperación para el síntoma concreto.",
+  "assistant.availability.defectLink": "Informar de un defecto normal del producto",
+  "assistant.availability.defectBody":
+    "Use el formulario de incidencias para un error reproducible. Incluya la compilación exacta, pasos seguros, marcas de tiempo y evidencia revisada.",
+  "assistant.availability.securityLink": "Informar en privado de una posible vulnerabilidad de seguridad",
+  "assistant.availability.securityBody":
+    "No incluya posibles vulnerabilidades, credenciales, claves privadas ni evidencia confidencial del inquilino en una incidencia normal.",
+  "assistant.availability.bundleTitle": "Antes de compartir evidencia",
+  "assistant.availability.bundleWarning":
+    "Revise el paquete de soporte antes de compartirlo. Se redacta y falla de forma segura de manera predeterminada, pero no añada credenciales ni claves privadas; usted controla la entrega final.",
+  "assistant.availability.designPartner":
+    "Si no puede acceder al registro de incidencias, use el canal de socio de diseño nombrado en su acuerdo. No debilite la autenticación de trstctl para evitar ese control de acceso.",
+  "assistant.availability.licensedTitle": "Soporte con licencia",
+  "assistant.availability.licensedBody":
+    "Use el correo o portal indicado en su pedido de soporte. El equipo de soporte puede derivar a ingeniería de seguridad los incidentes que afecten a credenciales.",
+  "assistant.availability.licensedBoundary":
+    "La licencia firmada demuestra el derecho al soporte, no la dirección de contacto. Los contactos nombrados y los objetivos legales de respuesta permanecen en el acuerdo comercial.",
   "posture.design.answer": "Qué credenciales usan criptografía antigua o incompatible.",
   "posture.design.technicalDetails": "Inventario de algoritmos, compatibilidad, política PQC y evidencia.",
   "posture.design.planUpgrade": "Planificar actualización",

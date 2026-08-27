@@ -2002,6 +2002,38 @@ const deDECatalog = {
   "assistant.design.retryTools": "Tool-Prüfung wiederholen",
   "assistant.design.references": "Quellen und genaue Referenzen",
   "assistant.design.noReferences": "Es wurden keine genauen Referenzen geliefert.",
+  "assistant.availability.checking": "Verfügbarkeit wird geprüft…",
+  "assistant.availability.disabledTitle": "Die Produkthilfe ist auf diesem Server nicht verfügbar",
+  "assistant.availability.unknownTitle": "Die Bereitschaft der Produkthilfe ist unbekannt",
+  "assistant.availability.permissionTitle": "Die Produkthilfe ist für Ihre Rolle nicht verfügbar",
+  "assistant.availability.nothingSent": "Es wurde keine Frage gesendet.",
+  "assistant.availability.disabledBody":
+    "Diese Bereitstellung hat das optionale schreibgeschützte Hilfe-Backend nicht angebunden. Ihre Zugangsdaten bleiben in trstctl, und die folgenden Supportwege bleiben verfügbar.",
+  "assistant.availability.unknownBody":
+    "trstctl konnte die Bereitschaft des schreibgeschützten Hilfe-Backends nicht bestätigen und zeigt deshalb kein Fragefeld. Prüfen Sie erneut oder nutzen Sie einen der folgenden Supportwege.",
+  "assistant.availability.permissionBody":
+    "Ihre aktuelle Rolle darf diesen schreibgeschützten Hilfevorgang nicht ausführen. Bitten Sie einen trstctl-Administrator um Lesezugriff auf den Graphen oder nutzen Sie einen der folgenden Supportwege.",
+  "assistant.availability.checkAgain": "Erneut prüfen",
+  "assistant.availability.nextTitle": "Wählen Sie den sichersten nächsten Schritt",
+  "assistant.availability.troubleshootLink": "Fehler der Bereitstellung beheben",
+  "assistant.availability.troubleshootBody":
+    "Beginnen Sie mit Konfigurations- und Versionsprüfungen und folgen Sie dann den Wiederherstellungsschritten für das konkrete Symptom.",
+  "assistant.availability.defectLink": "Einen gewöhnlichen Produktfehler melden",
+  "assistant.availability.defectBody":
+    "Nutzen Sie das Fehlerformular für einen reproduzierbaren Fehler. Geben Sie den genauen Build, sichere Schritte, Zeitstempel und geprüfte Nachweise an.",
+  "assistant.availability.securityLink": "Eine mögliche Sicherheitslücke privat melden",
+  "assistant.availability.securityBody":
+    "Nehmen Sie vermutete Sicherheitslücken, Zugangsdaten, private Schlüssel oder vertrauliche Mandantennachweise nicht in einen gewöhnlichen Fehlerbericht auf.",
+  "assistant.availability.bundleTitle": "Bevor Sie Nachweise teilen",
+  "assistant.availability.bundleWarning":
+    "Prüfen Sie ein Supportpaket vor dem Teilen. Es wird standardmäßig geschwärzt und bricht im Zweifel sicher ab. Fügen Sie niemals Zugangsdaten oder private Schlüssel hinzu; die endgültige Übergabe liegt bei Ihnen.",
+  "assistant.availability.designPartner":
+    "Wenn Sie keinen Zugriff auf die Fehlerverwaltung haben, nutzen Sie den in Ihrer Vereinbarung benannten Design-Partner-Kanal. Schwächen Sie nicht die trstctl-Authentifizierung, um den Zugriff zu umgehen.",
+  "assistant.availability.licensedTitle": "Lizenzierter Support",
+  "assistant.availability.licensedBody":
+    "Nutzen Sie die in Ihrem Supportauftrag benannte E-Mail-Adresse oder das Portal. Das Supportteam kann Vorfälle mit Zugangsdaten-Auswirkung an die Sicherheitstechnik eskalieren.",
+  "assistant.availability.licensedBoundary":
+    "Die signierte Lizenz belegt den Anspruch, nicht die Kontaktadresse. Benannte Kontakte und rechtlich bindende Reaktionsziele verbleiben in der kommerziellen Vereinbarung.",
   "posture.design.answer": "Welche Zugangsdaten alte oder inkompatible Kryptografie nutzen.",
   "posture.design.technicalDetails": "Algorithmeninventar, Kompatibilität, PQC-Richtlinie und Nachweise.",
   "posture.design.planUpgrade": "Upgrade planen",

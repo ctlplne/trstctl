@@ -1,17 +1,22 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Bot, Search, ShieldAlert, Wrench } from "lucide-react";
-import { api, ApiError, type AIAnswer, type AIStatus } from "@/lib/api";
+import { api, ApiError, type AIAnswer, type AIStatus, type EnterpriseSupportStatus } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/PageHeader";
 import { UnavailableState } from "@/components/StatePrimitives";
 import { cn } from "@/lib/utils";
 import { apiProblemMessage } from "@/lib/apiProblem";
+import { useCapabilityExecution } from "@/lib/capabilities";
 import { useTranslation, type I18nContextValue, translateNow } from "@/i18n/I18nProvider";
 
 type Tab = "query" | "rca" | "mcp";
 
 type MCPTools = Awaited<ReturnType<typeof api.mcpTools>>;
+
+const troubleshootingURL = "https://github.com/ctlplne/trstctl/blob/main/docs/troubleshooting.md";
+const defectReportURL = "https://github.com/ctlplne/trstctl/issues/new/choose";
+const securityReportURL = "https://github.com/ctlplne/trstctl/security/advisories/new";
 
 interface LazyResource<T> {
   data: T | null;
@@ -45,13 +50,26 @@ function formatError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-function ToggleTab({ active, children, icon, onClick }: { active: boolean; children: ReactNode; icon: ReactNode; onClick: () => void }) {
+function ToggleTab({
+  active,
+  children,
+  disabled = false,
+  icon,
+  onClick,
+}: {
+  active: boolean;
+  children: ReactNode;
+  disabled?: boolean;
+  icon: ReactNode;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       className={cn(
-        "inline-flex h-9 items-center gap-2 rounded-control border px-3 text-body font-medium transition-colors",
+        "inline-flex h-9 items-center gap-2 rounded-control border px-3 text-body font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
         active ? "border-foreground/25 bg-muted text-foreground shadow-elevation1" : "border-border hover:border-brand-accent/40 hover:bg-muted/60",
       )}
       aria-pressed={active}
@@ -59,6 +77,90 @@ function ToggleTab({ active, children, icon, onClick }: { active: boolean; child
       {icon}
       {children}
     </button>
+  );
+}
+
+type AvailabilityReason = "disabled" | "permission" | "unknown";
+
+function ProductHelpHandoff({ reason, support, onRetry }: { reason: AvailabilityReason; support: EnterpriseSupportStatus | null; onRetry: () => void }) {
+  const { t } = useTranslation();
+  const licensedSupport = support != null && support.tier !== "community" && support.support_mode !== "off";
+  const title =
+    reason === "unknown"
+      ? t("assistant.availability.unknownTitle")
+      : reason === "permission"
+        ? t("assistant.availability.permissionTitle")
+        : t("assistant.availability.disabledTitle");
+  const body =
+    reason === "unknown"
+      ? t("assistant.availability.unknownBody")
+      : reason === "permission"
+        ? t("assistant.availability.permissionBody")
+        : t("assistant.availability.disabledBody");
+
+  return (
+    <section aria-labelledby="product-help-availability-heading" className="mt-6 ui-panel p-comfortable">
+      <h2 id="product-help-availability-heading" className="text-title font-semibold">
+        {title}
+      </h2>
+      <div className="mt-3">
+        <p className="text-body">{t("assistant.availability.nothingSent")}</p>
+        <p className="mt-2 max-w-3xl text-body text-muted-foreground">{body}</p>
+        {reason === "unknown" && (
+          <Button className="mt-4" type="button" variant="secondary" onClick={onRetry}>
+            {t("assistant.availability.checkAgain")}
+          </Button>
+        )}
+
+        <h3 className="mt-6 text-body font-semibold">{t("assistant.availability.nextTitle")}</h3>
+        <div className="mt-3 grid gap-3 lg:grid-cols-3">
+          <a
+            aria-label={t("assistant.availability.troubleshootLink")}
+            className="rounded-control border border-border bg-background p-4 text-body transition-colors hover:border-brand-accent/40 hover:bg-muted/60"
+            href={troubleshootingURL}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <span className="block font-semibold text-foreground underline underline-offset-4">{t("assistant.availability.troubleshootLink")}</span>
+            <span className="mt-2 block text-muted-foreground">{t("assistant.availability.troubleshootBody")}</span>
+          </a>
+          <a
+            aria-label={t("assistant.availability.defectLink")}
+            className="rounded-control border border-border bg-background p-4 text-body transition-colors hover:border-brand-accent/40 hover:bg-muted/60"
+            href={defectReportURL}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <span className="block font-semibold text-foreground underline underline-offset-4">{t("assistant.availability.defectLink")}</span>
+            <span className="mt-2 block text-muted-foreground">{t("assistant.availability.defectBody")}</span>
+          </a>
+          <a
+            aria-label={t("assistant.availability.securityLink")}
+            className="rounded-control border border-border bg-background p-4 text-body transition-colors hover:border-brand-accent/40 hover:bg-muted/60"
+            href={securityReportURL}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <span className="block font-semibold text-foreground underline underline-offset-4">{t("assistant.availability.securityLink")}</span>
+            <span className="mt-2 block text-muted-foreground">{t("assistant.availability.securityBody")}</span>
+          </a>
+        </div>
+
+        <div className="mt-4 rounded-control border border-border bg-background p-4 text-body">
+          <p className="font-semibold">{t("assistant.availability.bundleTitle")}</p>
+          <p className="mt-1 text-muted-foreground">{t("assistant.availability.bundleWarning")}</p>
+          <p className="mt-2 text-muted-foreground">{t("assistant.availability.designPartner")}</p>
+        </div>
+
+        {licensedSupport && (
+          <div className="mt-4 rounded-control border border-brand-accent/30 bg-brand-accent/5 p-4 text-body">
+            <h3 className="font-semibold">{t("assistant.availability.licensedTitle")}</h3>
+            <p className="mt-1 text-muted-foreground">{t("assistant.availability.licensedBody")}</p>
+            <p className="mt-2 text-caption text-muted-foreground">{t("assistant.availability.licensedBoundary")}</p>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -278,6 +380,10 @@ function MCPBoundary({ readOnly }: { readOnly?: boolean }) {
 
 export function Assistant() {
   const { t } = useTranslation();
+  const queryExecution = useCapabilityExecution("F75", "aiQuery");
+  const rcaExecution = useCapabilityExecution("F77", "aiRCA");
+  const mcpListExecution = useCapabilityExecution("F78", "listMCPTools");
+  const mcpCallExecution = useCapabilityExecution("F78", "callMCPTool");
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("query");
   const [question, setQuestion] = useState("");
@@ -292,13 +398,62 @@ export function Assistant() {
   const [toolAnswer, setToolAnswer] = useState<(AIAnswer & { tool?: string }) | null>(null);
   const [loading, setLoading] = useState<Tab | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [submissionDisabled, setSubmissionDisabled] = useState(false);
   const [runtime, setRuntime] = useState<LazyResource<AIStatus>>(idleResource);
+  const [support, setSupport] = useState<LazyResource<EnterpriseSupportStatus>>(idleResource);
   const [tools, setTools] = useState<LazyResource<MCPTools>>(idleResource);
   const workspaceHeadingRef = useRef<HTMLHeadingElement>(null);
   const runtimeRequestActive = useRef(false);
+  const supportRequestActive = useRef(false);
   const toolsRequestActive = useRef(false);
   const mcpToolCount = tools.data?.tools.length ?? 0;
   const mcpToolsAreReadOnly = tools.data?.read_only === true;
+
+  let availabilityReason: AvailabilityReason | null = null;
+  if (submissionDisabled || (runtime.loaded && !runtime.loading && runtime.data?.enabled === false)) availabilityReason = "disabled";
+  else if (runtime.loaded && !runtime.loading && runtime.errorCause != null) availabilityReason = "unknown";
+  else if (runtime.data?.enabled === true && queryExecution.enforced && !queryExecution.checking && !queryExecution.runnable) {
+    availabilityReason = queryExecution.state === "denied" ? "permission" : queryExecution.state === "unavailable" ? "disabled" : "unknown";
+  }
+  const checkingAvailability = !runtime.loaded || runtime.loading || queryExecution.checking;
+  const productHelpReady = runtime.data?.enabled === true && availabilityReason == null && queryExecution.runnable;
+
+  useEffect(() => {
+    let cancelled = false;
+    runtimeRequestActive.current = true;
+    supportRequestActive.current = true;
+    setRuntime({ data: null, loading: true, loaded: true, errorCause: null });
+    setSupport({ data: null, loading: true, loaded: true, errorCause: null });
+    void api
+      .aiStatus()
+      .then(
+        (data) => {
+          if (!cancelled) setRuntime({ data, loading: false, loaded: true, errorCause: null });
+        },
+        (errorCause) => {
+          if (!cancelled) setRuntime({ data: null, loading: false, loaded: true, errorCause });
+        },
+      )
+      .finally(() => {
+        runtimeRequestActive.current = false;
+      });
+    void api
+      .enterpriseSupportStatus()
+      .then(
+        (data) => {
+          if (!cancelled) setSupport({ data, loading: false, loaded: true, errorCause: null });
+        },
+        (errorCause) => {
+          if (!cancelled) setSupport({ data: null, loading: false, loaded: true, errorCause });
+        },
+      )
+      .finally(() => {
+        supportRequestActive.current = false;
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (workspaceOpen) workspaceHeadingRef.current?.focus();
@@ -331,6 +486,25 @@ export function Assistant() {
     }
   }
 
+  async function loadSupport(force = false) {
+    if (supportRequestActive.current || (!force && support.loaded && support.errorCause == null)) return;
+    supportRequestActive.current = true;
+    setSupport((current) => ({ ...current, loading: true, loaded: true, errorCause: null }));
+    try {
+      const data = await api.enterpriseSupportStatus();
+      setSupport({ data, loading: false, loaded: true, errorCause: null });
+    } catch (errorCause) {
+      setSupport({ data: null, loading: false, loaded: true, errorCause });
+    } finally {
+      supportRequestActive.current = false;
+    }
+  }
+
+  async function retryAvailability() {
+    setSubmissionDisabled(false);
+    await Promise.all([loadRuntime(true), loadSupport(true)]);
+  }
+
   async function loadTools(force = false) {
     if (toolsRequestActive.current || (!force && tools.loaded && tools.errorCause == null)) return;
     toolsRequestActive.current = true;
@@ -357,6 +531,7 @@ export function Assistant() {
     setLoading("query");
     setQueryAnswer(null);
     try {
+      if (!queryExecution.runnable) throw new Error(queryExecution.unavailable?.detail ?? t("assistant.availability.permissionBody"));
       if (surfaces.length === 0) throw new Error("Choose at least one evidence surface.");
       const answer = await api.aiQuery({
         question: question.trim(),
@@ -366,6 +541,7 @@ export function Assistant() {
       });
       setQueryAnswer(answer);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 503) setSubmissionDisabled(true);
       setError(formatError(err));
     } finally {
       setLoading(null);
@@ -378,12 +554,14 @@ export function Assistant() {
     setLoading("rca");
     setRCAAnswer(null);
     try {
+      if (!rcaExecution.runnable) throw new Error(rcaExecution.unavailable?.detail ?? t("assistant.availability.permissionBody"));
       const answer = await api.aiRCA({
         question: rcaQuestion.trim(),
         subject: rcaSubject.trim() || undefined,
       });
       setRCAAnswer(answer);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 503) setSubmissionDisabled(true);
       setError(formatError(err));
     } finally {
       setLoading(null);
@@ -396,6 +574,7 @@ export function Assistant() {
     setLoading("mcp");
     setToolAnswer(null);
     try {
+      if (!mcpCallExecution.runnable) throw new Error(mcpCallExecution.unavailable?.detail ?? t("assistant.availability.permissionBody"));
       if (!tools.data?.read_only) {
         throw new Error(t("assistant.mcp.writeToolsNeedControls"));
       }
@@ -408,6 +587,7 @@ export function Assistant() {
         tool: result.tool,
       });
     } catch (err) {
+      if (err instanceof ApiError && err.status === 503) setSubmissionDisabled(true);
       setError(formatError(err));
     } finally {
       setLoading(null);
@@ -422,10 +602,14 @@ export function Assistant() {
         description={t("assistant.design.answer")}
         technicalDetails={t("assistant.design.technicalDetails")}
         actions={
-          !workspaceOpen ? (
+          !workspaceOpen && productHelpReady ? (
             <Button type="button" onClick={() => setWorkspaceOpen(true)}>
               <Bot aria-hidden="true" className="h-4 w-4" />
               {t("assistant.design.askQuestion")}
+            </Button>
+          ) : !workspaceOpen && checkingAvailability ? (
+            <Button type="button" disabled>
+              {t("assistant.availability.checking")}
             </Button>
           ) : undefined
         }
@@ -451,7 +635,9 @@ export function Assistant() {
         </dl>
       </section>
 
-      {workspaceOpen && (
+      {availabilityReason && <ProductHelpHandoff reason={availabilityReason} support={support.data} onRetry={() => void retryAvailability()} />}
+
+      {workspaceOpen && productHelpReady && (
         <section aria-labelledby="product-help-workspace-heading" className="mt-6">
           <div className="mb-4">
             <h2 ref={workspaceHeadingRef} id="product-help-workspace-heading" tabIndex={-1} className="text-title font-semibold outline-none">
@@ -461,13 +647,28 @@ export function Assistant() {
           </div>
 
           <div className="mb-5 flex flex-wrap gap-2" role="group" aria-label={t("assistant.design.workflowLabel")}>
-            <ToggleTab active={tab === "query"} onClick={() => selectTab("query")} icon={<Search aria-hidden="true" className="h-4 w-4" />}>
+            <ToggleTab
+              active={tab === "query"}
+              disabled={!queryExecution.runnable}
+              onClick={() => selectTab("query")}
+              icon={<Search aria-hidden="true" className="h-4 w-4" />}
+            >
               {t("assistant.design.askQuestion")}
             </ToggleTab>
-            <ToggleTab active={tab === "rca"} onClick={() => selectTab("rca")} icon={<ShieldAlert aria-hidden="true" className="h-4 w-4" />}>
+            <ToggleTab
+              active={tab === "rca"}
+              disabled={!rcaExecution.runnable}
+              onClick={() => selectTab("rca")}
+              icon={<ShieldAlert aria-hidden="true" className="h-4 w-4" />}
+            >
               {t("assistant.design.investigateCause")}
             </ToggleTab>
-            <ToggleTab active={tab === "mcp"} onClick={() => selectTab("mcp")} icon={<Wrench aria-hidden="true" className="h-4 w-4" />}>
+            <ToggleTab
+              active={tab === "mcp"}
+              disabled={!mcpListExecution.runnable}
+              onClick={() => selectTab("mcp")}
+              icon={<Wrench aria-hidden="true" className="h-4 w-4" />}
+            >
               {t("assistant.design.useReadOnlyTools")}
             </ToggleTab>
           </div>

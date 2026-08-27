@@ -11,6 +11,7 @@ const { apiMock } = vi.hoisted(() => ({
     me: vi.fn(),
     authMethods: vi.fn().mockResolvedValue({ oidc: true, saml: false, ldap: false }),
     aiStatus: vi.fn(),
+    enterpriseSupportStatus: vi.fn(),
     aiQuery: vi.fn(),
     aiRCA: vi.fn(),
     mcpTools: vi.fn(),
@@ -55,6 +56,19 @@ describe("assistant console workflow", () => {
       rate_max: 60,
       rate_window_seconds: 60,
     });
+    apiMock.enterpriseSupportStatus.mockResolvedValue({
+      served: true,
+      capability: "enterprise-support",
+      tier: "community",
+      license_state: "community",
+      support_mode: "off",
+      license_feature: "ha_support",
+      contract_boundary: "Named contacts live in the commercial agreement.",
+      support_tiers: [],
+      sla_targets: [],
+      professional_services: [],
+      evidence_refs: [],
+    });
     apiMock.mcpTools.mockResolvedValue({
       identity: "spiffe://example.org/mcp-server",
       read_only: true,
@@ -62,7 +76,7 @@ describe("assistant console workflow", () => {
     });
   });
 
-  it("opens as calm Product help with one primary action and no eager expert probes", async () => {
+  it("checks availability before showing the calm Product help action", async () => {
     const user = userEvent.setup();
     renderAssistant();
 
@@ -73,7 +87,8 @@ describe("assistant console workflow", () => {
     expect(screen.getByRole("button", { name: "Ask a question" })).toBeInTheDocument();
     expect(screen.queryByLabelText("Question")).not.toBeInTheDocument();
     expect(screen.queryByText("Read-only tools are unavailable")).not.toBeInTheDocument();
-    expect(apiMock.aiStatus).not.toHaveBeenCalled();
+    expect(apiMock.aiStatus).toHaveBeenCalledTimes(1);
+    expect(apiMock.enterpriseSupportStatus).toHaveBeenCalledTimes(1);
     expect(apiMock.mcpTools).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole("button", { name: "Ask a question" }));
@@ -81,16 +96,16 @@ describe("assistant console workflow", () => {
     expect(await screen.findByRole("heading", { name: "Ask Product help" })).toHaveFocus();
     expect(screen.getByLabelText("Question")).toBeInTheDocument();
     expect(screen.getByText(/reads only evidence your role can access/i)).toBeInTheDocument();
-    expect(apiMock.aiStatus).not.toHaveBeenCalled();
+    expect(apiMock.aiStatus).toHaveBeenCalledTimes(1);
     expect(apiMock.mcpTools).not.toHaveBeenCalled();
   });
 
-  it("loads runtime and read-only tool boundaries only when their expert controls open", async () => {
+  it("reuses the availability check when runtime details open and loads tools only on demand", async () => {
     const user = userEvent.setup();
     renderAssistant();
 
     await user.click(await screen.findByRole("button", { name: "Ask a question" }));
-    expect(apiMock.aiStatus).not.toHaveBeenCalled();
+    expect(apiMock.aiStatus).toHaveBeenCalledTimes(1);
     expect(apiMock.mcpTools).not.toHaveBeenCalled();
 
     await user.click(screen.getByText("Runtime and privacy details"));
@@ -101,6 +116,69 @@ describe("assistant console workflow", () => {
     await user.click(screen.getByRole("button", { name: "Use read-only tools" }));
     expect(await screen.findByRole("heading", { name: /Read-only tool boundary/ })).toBeInTheDocument();
     expect(apiMock.mcpTools).toHaveBeenCalledTimes(1);
+  });
+
+  it("discloses a disabled backend before input and provides safe support handoffs", async () => {
+    apiMock.aiStatus.mockResolvedValue({
+      enabled: false,
+      model_configured: false,
+      model_mode: "off",
+      egress: "none",
+      pii_egress: "redact",
+      redaction: "default-redactor",
+      residual_refusal_gate: true,
+    });
+    renderAssistant();
+
+    expect(await screen.findByRole("heading", { name: "Product help is not available on this server" })).toBeInTheDocument();
+    expect(screen.getByText("No question was sent.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Ask a question" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Question")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Troubleshoot the deployment" })).toHaveAttribute(
+      "href",
+      "https://github.com/ctlplne/trstctl/blob/main/docs/troubleshooting.md",
+    );
+    expect(screen.getByRole("link", { name: "Report an ordinary product defect" })).toHaveAttribute(
+      "href",
+      "https://github.com/ctlplne/trstctl/issues/new/choose",
+    );
+    expect(screen.getByRole("link", { name: "Report a possible security vulnerability privately" })).toHaveAttribute(
+      "href",
+      "https://github.com/ctlplne/trstctl/security/advisories/new",
+    );
+    expect(screen.getByText(/Review a support bundle before sharing it/i)).toBeInTheDocument();
+    expect(screen.getByText(/use the named design-partner channel/i)).toBeInTheDocument();
+    expect(apiMock.aiQuery).not.toHaveBeenCalled();
+  });
+
+  it("shows the contract-owned support handoff for a licensed deployment", async () => {
+    apiMock.aiStatus.mockResolvedValue({
+      enabled: false,
+      model_configured: false,
+      model_mode: "off",
+      egress: "none",
+      pii_egress: "redact",
+      redaction: "default-redactor",
+      residual_refusal_gate: true,
+    });
+    apiMock.enterpriseSupportStatus.mockResolvedValue({
+      served: true,
+      capability: "enterprise-support",
+      tier: "enterprise",
+      license_state: "active",
+      support_mode: "enabled",
+      license_feature: "ha_support",
+      contract_boundary: "Named contacts live in the commercial agreement.",
+      support_tiers: [],
+      sla_targets: [],
+      professional_services: [],
+      evidence_refs: [],
+    });
+    renderAssistant();
+
+    expect(await screen.findByRole("heading", { name: "Licensed support" })).toBeInTheDocument();
+    expect(screen.getByText(/Use the named email or portal in your support order/i)).toBeInTheDocument();
+    expect(screen.getByText(/The signed license proves entitlement, not the contact address/i)).toBeInTheDocument();
   });
 
   it("routes operators to a grounded query workflow with cited evidence", async () => {
@@ -165,22 +243,21 @@ describe("assistant console workflow", () => {
     expect(apiMock.aiStatus).toHaveBeenCalledTimes(1);
   });
 
-  it("treats an unreadable runtime boundary as unknown and recovers only after a successful retry", async () => {
+  it("fails closed before input when runtime readiness is unknown and recovers only after a successful retry", async () => {
     apiMock.aiStatus.mockRejectedValueOnce(new Error("model endpoint included a private token"));
     const user = userEvent.setup();
     renderAssistant();
 
-    await openProductHelp(user);
-    await user.click(screen.getByText("Runtime and privacy details"));
-
-    expect(await screen.findByText("AI runtime status unavailable")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Product help readiness is unknown" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Ask a question" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Question")).not.toBeInTheDocument();
     expect(screen.queryByText("not configured")).not.toBeInTheDocument();
     expect(screen.queryByText(/Redaction boundary:/)).not.toBeInTheDocument();
     expect(screen.queryByText(/private token/)).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Retry runtime check" }));
+    await user.click(screen.getByRole("button", { name: "Check again" }));
 
-    expect(await screen.findByText("not configured")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Ask a question" })).toBeInTheDocument();
     expect(apiMock.aiStatus).toHaveBeenCalledTimes(2);
   });
 
@@ -251,7 +328,7 @@ describe("assistant console workflow", () => {
     expect(screen.queryByText(/tenant t2 exists/)).not.toBeInTheDocument();
   });
 
-  it("shows the fail-closed disabled state when the AI surface is off", async () => {
+  it("falls back to the same support handoff if readiness changes after the initial check", async () => {
     const { ApiError } = await import("@/lib/api");
     apiMock.aiQuery.mockRejectedValue(new ApiError(503, JSON.stringify({ detail: "ai.enable_api disabled" })));
     const user = userEvent.setup();
@@ -262,8 +339,9 @@ describe("assistant console workflow", () => {
     await user.type(screen.getByLabelText("Question"), "Can you answer?");
     await user.click(screen.getByRole("button", { name: /^Ask$/i }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Product help is not enabled.");
-    expect(screen.getByText(/fail closed when disabled/i)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Product help is not available on this server" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Question")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Troubleshoot the deployment" })).toBeInTheDocument();
   });
 
   it("shows an empty state when no MCP tools are exposed", async () => {

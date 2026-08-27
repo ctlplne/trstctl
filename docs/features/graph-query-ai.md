@@ -129,14 +129,25 @@ entry.
 
 ## Use it
 
-In the web console, open **Product help** at `/assistant`. The calm overview performs
-no AI-runtime or MCP-tool request. Select **Ask a question** to open the read-only
+In the web console, open **Product help** at `/assistant`. Before it exposes a question
+box, the page reads the authenticated `GET /api/v1/ai/status` boundary and the exact
+capability operation posture. This is a readiness check, not a question: it sends no
+prompt or tenant evidence to a model. The page also reads the served support entitlement
+only to decide whether to show the contract-owned licensed-support handoff.
+
+When the help backend is ready, select **Ask a question** to open the read-only
 workspace, then ask in plain language. Open **Evidence and request details** only when
 you need an exact subject or source scope. **Investigate a cause** uses the same
-tenant-scoped evidence path for root-cause analysis. **Use read-only tools** and
-**Runtime and privacy details** load their server-owned boundaries only when selected.
-If `ai.enable_api` is off, these expert controls fail closed; the overview does not
-pretend the feature is available.
+tenant-scoped evidence path for root-cause analysis. **Use read-only tools** still loads
+its MCP catalog only when selected, and **Runtime and privacy details** reuses the status
+already read at entry.
+
+If `ai.enable_api` is off, the status cannot be read, the role cannot run the exact
+operation, or a later call returns 503, Product help fails closed before accepting more
+input. It says that no question was sent and links separately to troubleshooting,
+ordinary defect intake, and private vulnerability reporting. It also warns the operator
+to review a redacted support bundle before sharing it and to use the named design-partner
+or licensed-support channel rather than weakening authentication.
 
 The graph is served — explore relationships and blast radius:
 
