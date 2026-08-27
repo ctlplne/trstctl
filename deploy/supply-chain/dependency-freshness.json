@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "observed_at": "2026-07-27",
+  "observed_at": "2026-08-27",
   "max_report_age_days": 30,
   "source_commands": [
     "go list -m -u all",
@@ -60,7 +60,7 @@
       "ecosystem": "gomod",
       "name": "github.com/nats-io/nats-server/v2",
       "current_version": "v2.12.15",
-      "latest_observed_version": "v2.14.3",
+      "latest_observed_version": "v2.14.5",
       "update_type": "minor",
       "freshness_slo_class": "critical-go-runtime",
       "owner": "Spine/Events",
@@ -74,7 +74,7 @@
       "ecosystem": "gomod",
       "name": "github.com/open-policy-agent/opa",
       "current_version": "v1.4.0",
-      "latest_observed_version": "v1.18.2",
+      "latest_observed_version": "v1.19.1",
       "update_type": "minor",
       "freshness_slo_class": "critical-go-runtime",
       "owner": "Policy/Security",
@@ -108,7 +108,7 @@
       "owner": "Store/Tenant-isolation",
       "status": "current",
       "behind_since": "",
-      "next_review_by": "2026-08-26",
+      "next_review_by": "2026-09-26",
       "deferral_until": "",
       "rationale": "AUD-15: upgraded v5.9.2 -> v5.10.0, one minor and the cheapest row in the critical-go-runtime queue. pgx sits under every RLS-enforced PostgreSQL path, so the acceptance gate was the full internal/store suite including the RLS force inventory and the doctor ISO-1..ISO-7 isolation probes."
     },
@@ -116,15 +116,15 @@
       "ecosystem": "gomod",
       "name": "google.golang.org/grpc",
       "current_version": "v1.82.1",
-      "latest_observed_version": "v1.82.1",
-      "update_type": "security",
+      "latest_observed_version": "v1.83.2",
+      "update_type": "minor",
       "freshness_slo_class": "critical-go-runtime",
       "owner": "Transport/Signer",
-      "status": "current",
-      "behind_since": "",
-      "next_review_by": "2026-08-26",
+      "status": "planned",
+      "behind_since": "2026-08-27",
+      "next_review_by": "2026-09-26",
       "deferral_until": "",
-      "rationale": "SEC-de4eb072 upgrades the agent, SPIFFE, and signer RPC transport to the fixed GO-2026-6061 release; UDS, mTLS, workload, process-boundary, editions, and whole-module vulnerability gates pass."
+      "rationale": "SEC-de4eb072 upgraded the agent, SPIFFE, and signer RPC transport to the fixed v1.82.1 release. The 2026-08-27 observation found v1.83.2; it is scheduled as ordinary minor-version hygiene because govulncheck reports zero called vulnerabilities on the current pin. Its acceptance gate remains UDS, mTLS, workload, process-boundary, editions, and whole-module vulnerability testing."
     },
     {
       "ecosystem": "npm",
@@ -136,7 +136,7 @@
       "owner": "Web/Console",
       "status": "accepted_deferral",
       "behind_since": "2026-06-21",
-      "next_review_by": "2026-08-26",
+      "next_review_by": "2026-09-12",
       "deferral_until": "2026-09-19",
       "rationale": "React 19 needs a console compatibility pass across routing, auth context, accessibility tests, and the embedded Vite bundle; it is tracked as planned work rather than Dependabot churn."
     },
@@ -150,7 +150,7 @@
       "owner": "Web/Console",
       "status": "accepted_deferral",
       "behind_since": "2026-06-21",
-      "next_review_by": "2026-08-26",
+      "next_review_by": "2026-09-12",
       "deferral_until": "2026-09-19",
       "rationale": "React DOM moves with React; the acceptance gate is the full console test, coverage, build, and embedded-bundle drift check."
     },
@@ -164,7 +164,7 @@
       "owner": "Web/Console",
       "status": "current",
       "behind_since": "",
-      "next_review_by": "2026-08-26",
+      "next_review_by": "2026-09-26",
       "deferral_until": "",
       "rationale": "SEC-5b43d4b3: GitHub's GHSA-qwww-vcr4-c8h2 now names 7.18.2 as the patched 7.x release. The package floor and lockfile install react-router-dom and react-router 7.18.2, and the complete route, typecheck, lint, build, embedded-console, and live-browser gates verify the compatible repair."
     },
@@ -172,43 +172,43 @@
       "ecosystem": "npm",
       "name": "vite",
       "current_version": "8.1.5",
-      "latest_observed_version": "8.1.5",
-      "update_type": "security",
+      "latest_observed_version": "8.2.2",
+      "update_type": "minor",
       "freshness_slo_class": "web-runtime",
       "owner": "Web/Build",
-      "status": "current",
-      "behind_since": "",
-      "next_review_by": "2026-08-26",
+      "status": "planned",
+      "behind_since": "2026-08-27",
+      "next_review_by": "2026-09-26",
       "deferral_until": "",
-      "rationale": "S-7268c77e: upgraded the release build tool to the current patched Vite release; generated API checks, bundle hashing, Docker build, and Go embed tests pass."
+      "rationale": "S-7268c77e upgraded the release build tool to the patched v8.1.5 release. The 2026-08-27 observation found v8.2.2; it is scheduled as ordinary minor-version hygiene because the production npm audit is clean. The upgrade must pass generated API checks, bundle hashing, Docker build, and Go embed tests together."
     },
     {
       "ecosystem": "npm",
       "name": "vitest",
       "current_version": "4.1.10",
-      "latest_observed_version": "4.1.10",
-      "update_type": "security",
+      "latest_observed_version": "4.1.11",
+      "update_type": "patch",
       "freshness_slo_class": "web-runtime",
       "owner": "Web/Quality",
-      "status": "current",
-      "behind_since": "",
-      "next_review_by": "2026-08-26",
+      "status": "planned",
+      "behind_since": "2026-08-27",
+      "next_review_by": "2026-09-26",
       "deferral_until": "",
-      "rationale": "S-7268c77e: upgraded Vitest with coverage-v8 to the current patched release; the full 696-test run and unchanged coverage floors pass under the supported worker model."
+      "rationale": "S-7268c77e upgraded Vitest to the patched v4.1.10 release. The 2026-08-27 observation found v4.1.11; this patch is scheduled with coverage-v8, and must preserve the complete test run and configured coverage floors under the supported worker model."
     },
     {
       "ecosystem": "npm",
       "name": "@vitest/coverage-v8",
       "current_version": "4.1.10",
-      "latest_observed_version": "4.1.10",
-      "update_type": "security",
+      "latest_observed_version": "4.1.11",
+      "update_type": "patch",
       "freshness_slo_class": "web-runtime",
       "owner": "Web/Quality",
-      "status": "current",
-      "behind_since": "",
-      "next_review_by": "2026-08-26",
+      "status": "planned",
+      "behind_since": "2026-08-27",
+      "next_review_by": "2026-09-26",
       "deferral_until": "",
-      "rationale": "S-7268c77e: moved coverage-v8 with Vitest and proved the formerly vacuous exclusion pattern now measures production code while preserving all configured floors."
+      "rationale": "S-7268c77e moved coverage-v8 with Vitest to v4.1.10 and proved the formerly vacuous exclusion pattern measures production code. The 2026-08-27 observation found v4.1.11; it is scheduled with Vitest and must preserve every configured floor."
     },
     {
       "ecosystem": "npm",
@@ -220,7 +220,7 @@
       "owner": "Web/Design-system",
       "status": "accepted_deferral",
       "behind_since": "2026-06-21",
-      "next_review_by": "2026-08-26",
+      "next_review_by": "2026-09-12",
       "deferral_until": "2026-09-19",
       "rationale": "Tailwind v4 changes CSS generation and plugin behavior; upgrade must preserve the shadcn-style console shell and visual regression gates."
     },
@@ -234,7 +234,7 @@
       "owner": "Web/Build",
       "status": "accepted_deferral",
       "behind_since": "2026-06-21",
-      "next_review_by": "2026-08-26",
+      "next_review_by": "2026-09-12",
       "deferral_until": "2026-09-19",
       "rationale": "TypeScript 5.9.3 is two majors behind the published 7.0.2, with 6.0.3 as the intermediate stable release; this dated deferral is the only thing holding the row inside the 1-major gap cap. The pin is deliberate, not drift: web/ runs `npm run gen:api -- --check` and `tsc -p tsconfig.build.json` before Vite builds, so a 5 -> 6 -> 7 walk has to regenerate the OpenAPI types and keep the strict build, typecheck and lint gates green in one reviewed change rather than an isolated manifest bump. This row measures web/package-lock.json only; clients/sdk/typescript pins its own typescript 5.5.4 under a separate lockfile and is not covered here."
     }
