@@ -922,7 +922,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use drift detection while tenant, policy, and security authority remain on the server.",
       "tool": "discover",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/posture",
       "navigationEntrypoints": [
         "tool navigation",
@@ -934,7 +934,7 @@ export const canonicalCapabilities = [
       "dependencies": [],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -956,8 +956,14 @@ export const canonicalCapabilities = [
           ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: previewDiscoveryPlan",
+            "OpenAPI operationId: preflightDiscoverySource",
+            "internal/discovery/driftplan/plan.go",
+            "internal/server/ct_drift_served_test.go",
+            "web/src/pages/posture/DriftRecoveryWorkflow.tsx"
+          ]
         },
         "execute": {
           "status": "complete",
@@ -973,8 +979,14 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: retryDiscoveryRun",
+            "CLI command: discovery runs retry",
+            "internal/server/discovery_recovery_served_test.go",
+            "web/src/pages/posture/DriftRecoveryWorkflow.tsx",
+            "web/src/__tests__/posture.test.tsx"
+          ]
         },
         "verify": {
           "status": "complete",
@@ -993,6 +1005,9 @@ export const canonicalCapabilities = [
             "OpenAPI operationId: listDiscoveryRuns",
             "OpenAPI operationId: getDiscoveryRun",
             "OpenAPI operationId: listDiscoveryFindings",
+            "OpenAPI operationId: previewDiscoveryPlan",
+            "OpenAPI operationId: preflightDiscoverySource",
+            "OpenAPI operationId: retryDiscoveryRun",
             "OpenAPI operationId: getDriftRemediation",
             "OpenAPI operationId: decideDriftRemediation",
             "CLI command: discovery sources create",
@@ -1003,6 +1018,9 @@ export const canonicalCapabilities = [
             "CLI command: discovery runs list",
             "CLI command: discovery runs get",
             "CLI command: discovery findings list",
+            "CLI command: discovery plans preview",
+            "CLI command: discovery sources preflight",
+            "CLI command: discovery runs retry",
             "CLI command: discovery drift-remediation",
             "CLI command: discovery drift-remediation decide"
           ]
@@ -1010,8 +1028,8 @@ export const canonicalCapabilities = [
       },
       "owner": "discovery",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "4c710ece1ab63de9ac6ce3c2ab72ee993ff6c2db",
+      "freshness": "2026-08-27"
     }
   },
   {

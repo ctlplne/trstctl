@@ -247,10 +247,10 @@ not this file.
 | `internal/server/cmdb_served_test.go:32` | credential reference (env: pointer), no credential value present (CWE-798) |
 | `internal/server/cmdb_served_test.go:36` | credential reference (secret store pointer), no credential value present (CWE-798) |
 | `internal/server/cmdb_served_test.go:44` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/discovery_recovery_served_test.go:190` | reference names only; fixture values are synthetic and never shipped |
-| `internal/server/discovery_recovery_served_test.go:199` | reference names only; fixture values are synthetic and never shipped |
-| `internal/server/discovery_recovery_served_test.go:208` | reference names only; fixture values are synthetic and never shipped |
-| `internal/server/discovery_recovery_served_test.go:216` | metadata-only fabricated token reference; no credential value is present |
+| `internal/server/discovery_recovery_served_test.go:202` | reference names only; fixture values are synthetic and never shipped |
+| `internal/server/discovery_recovery_served_test.go:211` | reference names only; fixture values are synthetic and never shipped |
+| `internal/server/discovery_recovery_served_test.go:220` | reference names only; fixture values are synthetic and never shipped |
+| `internal/server/discovery_recovery_served_test.go:228` | metadata-only fabricated token reference; no credential value is present |
 | `internal/server/discovery_served_test.go:646` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/discovery_served_test.go:648` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/discovery_served_test.go:767` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |

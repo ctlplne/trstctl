@@ -1208,8 +1208,13 @@ describe("i18n boundary", () => {
       // Security negations and technical meaning were reviewed in both catalogs.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
       // release.
-      "es-ES": "c839b5c65d69e417e3ce8b5800de23053e4e83b8f38bfc26bbcee7c0adba8588",
-      "de-DE": "d8b633e991465c9ed90217aad28c405b96fc9b14b4370dbffb56161182282098",
+      // F18 drift-recovery re-pin: thirty-three keys explain effect-free exact
+      // plan review, non-secret watched paths, execution/permission boundaries,
+      // blocked recovery, and the distinct replacement/original run receipt.
+      // Negations and lineage meaning were reviewed in both catalogs. Machine-
+      // authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "2c2026cd77b556cc750f6d882a7491e5f9ac8334abb518ff0af96cf8db31baed",
+      "de-DE": "93655e670473b9c29198fb7ebadccda77dcb5a05799420083c02331bf20ba00a",
     });
   });
 

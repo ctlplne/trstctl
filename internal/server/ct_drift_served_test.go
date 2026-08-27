@@ -98,6 +98,96 @@ func TestServedCTMonitoringAndDriftWorkers(t *testing.T) {
 	}
 }
 
+// TestServedDriftPlanPreviewIsExactAndEffectFree is the F18 preview oracle.
+// The saved-source preflight and the executor must accept the same watched-file
+// contract. Previewing it must not create a source, run, event, or external
+// effect, and an incomplete watched record must fail before work can be queued.
+func TestServedDriftPlanPreviewIsExactAndEffectFree(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, func(*Deps) {})
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
+	watchedPath := filepath.Join(t.TempDir(), "edge-cert.pem")
+
+	beforeEvents := servedDiscoveryEventCount(t, h)
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/plans/preview", tok, map[string]any{
+		"name": "edge certificate drift",
+		"kind": "drift",
+		"config": map[string]any{
+			"watched": []map[string]any{{
+				"path": watchedPath, "class": "certificate",
+				"fingerprint": drift.Fingerprint([]byte("declared public certificate bytes")),
+				"mode":        "0644",
+			}},
+		},
+	})
+	if status != http.StatusOK {
+		t.Fatalf("preview drift plan: status %d body %s", status, body)
+	}
+	var preview struct {
+		Kind                  string   `json:"kind"`
+		Ready                 bool     `json:"ready"`
+		Execution             string   `json:"execution"`
+		ConnectionOrigin      string   `json:"connection_origin"`
+		NormalizedTargets     []string `json:"normalized_targets"`
+		NormalizedTargetCount int      `json:"normalized_target_count"`
+		Concurrency           int      `json:"concurrency"`
+		QueueDepth            int      `json:"queue_depth"`
+		Permission            string   `json:"permission"`
+		DataHandling          string   `json:"data_handling"`
+		SideEffects           bool     `json:"side_effects"`
+		BlockedReasons        []string `json:"blocked_reasons"`
+	}
+	if err := json.Unmarshal(body, &preview); err != nil {
+		t.Fatalf("decode drift preview: %v (%s)", err, body)
+	}
+	if preview.Kind != "drift" || !preview.Ready || preview.Execution != "control plane" ||
+		preview.ConnectionOrigin != "control plane" || preview.NormalizedTargetCount != 1 ||
+		len(preview.NormalizedTargets) != 1 || preview.NormalizedTargets[0] != watchedPath ||
+		preview.Concurrency != 1 || preview.QueueDepth <= 0 || preview.Permission != "discovery:write" ||
+		preview.DataHandling == "" || preview.SideEffects || len(preview.BlockedReasons) != 0 {
+		t.Fatalf("drift preview = %+v, want one exact ready state-free watched path", preview)
+	}
+	if got := servedDiscoveryEventCount(t, h); got != beforeEvents {
+		t.Fatalf("discovery events after preview = %d, want unchanged %d", got, beforeEvents)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/sources?limit=10", tok, nil)
+	if status != http.StatusOK || !strings.Contains(string(body), `"items":[]`) {
+		t.Fatalf("sources after preview: status %d body %s, want none", status, body)
+	}
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/runs?limit=10", tok, nil)
+	if status != http.StatusOK || !strings.Contains(string(body), `"items":[]`) {
+		t.Fatalf("runs after preview: status %d body %s, want none", status, body)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/plans/preview", tok, map[string]any{
+		"name": "incomplete drift watch",
+		"kind": "drift",
+		"config": map[string]any{
+			"watched": []map[string]any{{"path": watchedPath, "class": "certificate"}},
+		},
+	})
+	if status != http.StatusBadRequest || !strings.Contains(string(body), "requires path, class, and fingerprint") {
+		t.Fatalf("incomplete drift preview: status %d body %s, want bounded 400 before queueing", status, body)
+	}
+	if got := servedDiscoveryEventCount(t, h); got != beforeEvents {
+		t.Fatalf("discovery events after rejected preview = %d, want unchanged %d", got, beforeEvents)
+	}
+}
+
+func servedDiscoveryEventCount(t *testing.T, h *servedHarness) int {
+	t.Helper()
+	count := 0
+	if err := h.log.Replay(t.Context(), 0, func(event events.Event) error {
+		if event.TenantID == h.tenant && strings.HasPrefix(event.Type, "discovery.") {
+			count++
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("replay discovery events: %v", err)
+	}
+	return count
+}
+
 func TestServedCTMonitoringDashboardConfiguresWatchlistAndFindings(t *testing.T) {
 	secret := []byte("served-ct-monitoring-dashboard-secret")
 	sink := newServedWebhookSink(t, secret)

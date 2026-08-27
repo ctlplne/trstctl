@@ -2519,24 +2519,27 @@
             "phase": "P2",
             "priority": 50,
             "served_state": "served",
-            "backend_status": "served drift discovery source/run/finding execution with outbox-backed drift alerts plus dedicated drift remediation API/CLI/UI dashboard and operator decision workflow",
-            "current_frontend_mapping": "served: Posture at /posture shows drift findings, remediation recommendations, triage status, and operator decision buttons backed by /api/v1/discovery/drift-remediation",
-            "target_gui_mapping": "Production drift dashboard showing deleted/replaced/relocated/permission-changed credentials, source agent, target, severity, remediation action, and audit-backed operator decision state.",
-            "acceptance_test": "Served test proves a watched credential whose fingerprint drifts creates a credential_drift finding, the dedicated drift remediation dashboard lists the finding with action guidance, and an operator decision records discovery.finding.triage_changed audit evidence through the served API and UI.",
+            "backend_status": "served drift discovery source/run/finding execution with one shared exact-plan parser, effect-free plan preview and saved-source preflight, immutable retry lineage, outbox-backed drift alerts, plus dedicated remediation API/CLI/UI and operator decisions",
+            "current_frontend_mapping": "served: Posture at /posture shows drift findings and remediation decisions, then requires an exact effect-free server preflight before it exposes the separate failed-run recovery action and immutable-lineage receipt",
+            "target_gui_mapping": "Production drift dashboard showing deleted/replaced/relocated/permission-changed credentials, exact non-secret execution plan, source agent or control-plane origin, target, severity, remediation action, immutable retry lineage, and audit-backed operator decision state.",
+            "acceptance_test": "Served tests prove drift preview and execution share one validated plan, preview creates no source/run/event, incomplete or auto-remediating plans fail closed, drift creates credential_drift findings, and retry creates a distinct idempotent run while preserving the original failure; Posture tests prove review-before-retry, redaction, fail-closed behavior, and the lineage receipt.",
             "source_docs": [
                 "docs/features/observability-and-risk.md"
             ],
             "source_backend": [
                 "internal/api/drift_remediation.go",
+                "internal/api/discovery.go",
                 "internal/agent/drift",
+                "internal/discovery/driftplan",
                 "internal/server/discovery.go"
             ],
             "source_frontend": [
                 "web/src/pages/Discovery.tsx",
-                "web/src/pages/Posture.tsx"
+                "web/src/pages/Posture.tsx",
+                "web/src/pages/posture/DriftRecoveryWorkflow.tsx"
             ],
             "status": "closed",
-            "notes": "TRACE-005 closes the residual drift remediation gap with GET /api/v1/discovery/drift-remediation, POST /api/v1/discovery/drift-remediation/{id}/decision, CLI commands, a Posture remediation workflow, served drift finding-to-decision acceptance, and discovery.finding.triage_changed audit evidence.",
+            "notes": "TRACE-005 closes drift remediation and operator decisions. The g46 F18 convergence repair adds a shared driftplan resolver used by preview and execution, exact effect-free preview/preflight, a Posture review-before-retry workflow, and immutable idempotent retry lineage that preserves the original terminal failure.",
             "api_surface": [
                 "createDiscoverySource",
                 "listDiscoverySources",
@@ -2546,6 +2549,9 @@
                 "listDiscoveryRuns",
                 "getDiscoveryRun",
                 "listDiscoveryFindings",
+                "previewDiscoveryPlan",
+                "preflightDiscoverySource",
+                "retryDiscoveryRun",
                 "getDriftRemediation",
                 "decideDriftRemediation"
             ],
@@ -2559,6 +2565,9 @@
                 "discovery runs list",
                 "discovery runs get",
                 "discovery findings list",
+                "discovery plans preview",
+                "discovery sources preflight",
+                "discovery runs retry",
                 "discovery drift-remediation",
                 "discovery drift-remediation decide"
             ],
@@ -2569,12 +2578,17 @@
                         "Served discovery worker accepts source kind drift, compares watched credential paths against expected fingerprints and permissions, records credential_drift findings, and enqueues notification.drift alerts.",
                         "Dedicated drift remediation endpoint lists credential_drift findings with deleted/replaced/relocated/permission-changed classification, recommended actions, and operator decision affordances.",
                         "Dedicated drift decision endpoint records investigate, mark_managed, and dismiss decisions through discovery.finding.triage_changed rather than mutating read-model state directly.",
+                        "The shared driftplan resolver is the single validation and normalization oracle for both effect-free preview and queued execution.",
+                        "Discovery retry creates a separate event/outbox-backed run with retry_of_run_id and never rewrites the original failed run.",
                         "served_state=served",
                         "backend_status=served drift discovery source/run/finding execution with outbox-backed drift alerts plus dedicated drift remediation API/CLI/UI dashboard and operator decision workflow"
                     ],
                     "refs": [
                         "internal/api/drift_remediation.go",
+                        "internal/api/discovery.go",
+                        "internal/discovery/driftplan/plan.go",
                         "internal/server/discovery.go",
+                        "internal/server/discovery_recovery_served_test.go",
                         "internal/server/ct_drift_served_test.go",
                         "internal/agent/drift"
                     ],
@@ -2586,12 +2600,14 @@
                     "evidence": [
                         "current_frontend_mapping: served: Posture at /posture shows drift findings, remediation recommendations, triage status, and operator decision buttons backed by /api/v1/discovery/drift-remediation",
                         "target_gui_mapping: Production drift dashboard showing deleted/replaced/relocated/permission-changed credentials, source agent, target, severity, remediation action, and audit-backed operator decision state.",
-                        "Posture tests render the drift remediation workflow and record an investigate decision through the served API client."
+                        "Posture tests render the drift remediation workflow and record an investigate decision through the served API client.",
+                        "Posture requires the saved-source preflight before exposing Retry, renders only normalized non-secret watched paths, and shows the replacement/original lineage receipt."
                     ],
                     "refs": [
                         "web/src/lib/navigation.ts",
                         "web/src/pages/Discovery.tsx",
                         "web/src/pages/Posture.tsx",
+                        "web/src/pages/posture/DriftRecoveryWorkflow.tsx",
                         "web/src/App.tsx"
                     ]
                 },
@@ -2599,6 +2615,7 @@
                     "evidence": [
                         "CLI commands create/list discovery sources and schedules, start/list/get discovery runs, and list findings for drift sources through the generic discovery surface.",
                         "Dedicated CLI commands discovery drift-remediation and discovery drift-remediation decide expose the drift dashboard and operator decision workflow.",
+                        "CLI discovery plans preview, discovery sources preflight, and discovery runs retry expose the same guarded plan and recovery contract without a browser.",
                         "internal/cli parity tests require every discovery API operation to have a CLI command and every catalog CLI command to exist."
                     ],
                     "refs": [
@@ -2610,7 +2627,8 @@
                 "api": {
                     "evidence": [
                         "OpenAPI operationIds cover the generic Discovery source, schedule, run, and finding surface used by drift sources: createDiscoverySource, listDiscoverySources, createDiscoverySchedule, listDiscoverySchedules, startDiscoveryRun, listDiscoveryRuns, getDiscoveryRun, listDiscoveryFindings.",
-                        "Dedicated drift remediation operationIds getDriftRemediation and decideDriftRemediation serve the remediation dashboard and decision workflow."
+                        "Dedicated drift remediation operationIds getDriftRemediation and decideDriftRemediation serve the remediation dashboard and decision workflow.",
+                        "previewDiscoveryPlan and preflightDiscoverySource return the effect-free drift plan; retryDiscoveryRun creates the distinct recovery run."
                     ],
                     "refs": [
                         "internal/api/drift_remediation.go",
@@ -2623,11 +2641,13 @@
                         "acceptance_test: Served test proves a watched credential whose fingerprint drifts creates a credential_drift finding, the dedicated drift remediation dashboard lists the finding with action guidance, and an operator decision records discovery.finding.triage_changed audit evidence through the served API and UI.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
                         "Route parity and feature coverage tests keep feature evidence tied to registered customer routes.",
-                        "TestServedDriftRemediationDashboardRecordsOperatorDecision is a named acceptance test executed by the CI make test package set."
+                        "TestServedDriftRemediationDashboardRecordsOperatorDecision is a named acceptance test executed by the CI make test package set.",
+                        "TestServedDriftPlanPreviewIsExactAndEffectFree and the drift subtest of TestServedDiscoveryRunRetryCoversPrimaryCredentialSources prove preview and recovery boundaries."
                     ],
                     "refs": [
                         "internal/featureparity/feature_facet_coverage_test.go",
                         "internal/server/ct_drift_served_test.go",
+                        "internal/server/discovery_recovery_served_test.go",
                         "web/src/__tests__/feature_coverage.test.tsx",
                         "web/src/__tests__/posture.test.tsx",
                         "web/src/__tests__/route_parity.test.ts"
@@ -2655,11 +2675,13 @@
                 "audit": {
                     "evidence": [
                         "Discovery source creation, run queue/start/complete, and finding recording emit immutable discovery.* events; drift alerts are enqueued through the outbox with idempotency keys.",
+                        "A drift retry emits one new discovery.run.queued event and preserves the original terminal event/read-model evidence with retry_of_run_id lineage.",
                         "Drift remediation decisions emit discovery.finding.triage_changed and project triage status, actor, reason, metadata patch, and decision evidence without direct read-model mutation."
                     ],
                     "refs": [
                         "internal/api/drift_remediation.go",
                         "internal/server/discovery.go",
+                        "internal/server/discovery_recovery_served_test.go",
                         "internal/store/discovery.go",
                         "internal/server/ct_drift_served_test.go"
                     ]
@@ -2671,7 +2693,8 @@
                     "refs": [
                         "internal/server/discovery.go",
                         "internal/store/discovery.go",
-                        "web/src/pages/Discovery.tsx"
+                        "web/src/pages/Discovery.tsx",
+                        "web/src/pages/posture/DriftRecoveryWorkflow.tsx"
                     ]
                 },
                 "a11y": {
@@ -2683,6 +2706,7 @@
                         "web/src/lib/navigation.ts",
                         "web/src/pages/Discovery.tsx",
                         "web/src/pages/Posture.tsx",
+                        "web/src/pages/posture/DriftRecoveryWorkflow.tsx",
                         "web/src/App.tsx"
                     ]
                 },
@@ -2703,7 +2727,7 @@
                 "purpose": "Lets an operator understand and safely use drift detection while tenant, policy, and security authority remain on the server.",
                 "tool": "discover",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/posture",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -2715,7 +2739,7 @@
                 "dependencies": [],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -2737,8 +2761,14 @@
                         ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: previewDiscoveryPlan",
+                            "OpenAPI operationId: preflightDiscoverySource",
+                            "internal/discovery/driftplan/plan.go",
+                            "internal/server/ct_drift_served_test.go",
+                            "web/src/pages/posture/DriftRecoveryWorkflow.tsx"
+                        ]
                     },
                     "execute": {
                         "status": "complete",
@@ -2754,8 +2784,14 @@
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: retryDiscoveryRun",
+                            "CLI command: discovery runs retry",
+                            "internal/server/discovery_recovery_served_test.go",
+                            "web/src/pages/posture/DriftRecoveryWorkflow.tsx",
+                            "web/src/__tests__/posture.test.tsx"
+                        ]
                     },
                     "verify": {
                         "status": "complete",
@@ -2774,6 +2810,9 @@
                             "OpenAPI operationId: listDiscoveryRuns",
                             "OpenAPI operationId: getDiscoveryRun",
                             "OpenAPI operationId: listDiscoveryFindings",
+                            "OpenAPI operationId: previewDiscoveryPlan",
+                            "OpenAPI operationId: preflightDiscoverySource",
+                            "OpenAPI operationId: retryDiscoveryRun",
                             "OpenAPI operationId: getDriftRemediation",
                             "OpenAPI operationId: decideDriftRemediation",
                             "CLI command: discovery sources create",
@@ -2784,6 +2823,9 @@
                             "CLI command: discovery runs list",
                             "CLI command: discovery runs get",
                             "CLI command: discovery findings list",
+                            "CLI command: discovery plans preview",
+                            "CLI command: discovery sources preflight",
+                            "CLI command: discovery runs retry",
                             "CLI command: discovery drift-remediation",
                             "CLI command: discovery drift-remediation decide"
                         ]
@@ -2791,8 +2833,8 @@
                 },
                 "owner": "discovery",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "4c710ece1ab63de9ac6ce3c2ab72ee993ff6c2db",
+                "freshness": "2026-08-27"
             }
         },
         {

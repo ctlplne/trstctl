@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"os"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -32,6 +31,7 @@ import (
 	vaultkvdisc "trstctl.com/trstctl/internal/discovery/cloudsecret/vaultkv"
 	"trstctl.com/trstctl/internal/discovery/compromise"
 	"trstctl.com/trstctl/internal/discovery/ctmonitor"
+	"trstctl.com/trstctl/internal/discovery/driftplan"
 	"trstctl.com/trstctl/internal/discovery/k8stls"
 	"trstctl.com/trstctl/internal/discovery/netscan"
 	"trstctl.com/trstctl/internal/discovery/nhi"
@@ -104,20 +104,6 @@ type ctLogDiscoveryConfig struct {
 	MaxBatch             int      `json:"max_batch"`
 	AllowPrivateEndpoint bool     `json:"allow_private_endpoint"`
 	PrivateEgressCIDRs   []string `json:"private_egress_cidrs"`
-}
-
-type driftDiscoveryConfig struct {
-	Watched []driftWatchedConfig `json:"watched"`
-	Scope   []string             `json:"scope"`
-	Policy  map[string]string    `json:"policy"`
-}
-
-type driftWatchedConfig struct {
-	Path        string `json:"path"`
-	Class       string `json:"class"`
-	Fingerprint string `json:"fingerprint"`
-	Mode        string `json:"mode"`
-	Restricted  bool   `json:"restricted"`
 }
 
 type manualDiscoveryFinding struct {
@@ -414,16 +400,16 @@ func discoveryTargetResults(in []netscan.TargetResult) []store.DiscoveryTargetRe
 }
 
 func (d *issuanceDispatcher) executeDriftDiscoveryRun(ctx context.Context, tenantID string, src store.DiscoverySource, run projections.DiscoveryRunQueued) (netscan.Report, string, string, error) {
-	cfg, watched, policy, err := driftDiscoverySettings(src.Config)
+	plan, err := driftplan.Resolve(src.Config)
 	if err != nil {
 		return netscan.Report{}, "failed", err.Error(), nil
 	}
 	if run.DryRun {
-		return netscan.Report{Targets: len(watched)}, "succeeded", "", nil
+		return netscan.Report{Targets: len(plan.Watched)}, "succeeded", "", nil
 	}
 	audit := &discoveryDriftAuditor{}
-	rec := &drift.Reconciler{Policy: policy, Auditor: audit}
-	rep, err := rec.Reconcile(ctx, watched, cfg.Scope...)
+	rec := &drift.Reconciler{Policy: plan.Policy, Auditor: audit}
+	rep, err := rec.Reconcile(ctx, plan.Watched, plan.Scope...)
 	if err != nil {
 		return netscan.Report{}, "failed", err.Error(), nil
 	}
@@ -441,7 +427,7 @@ func (d *issuanceDispatcher) executeDriftDiscoveryRun(ctx context.Context, tenan
 			}
 		}
 	}
-	return netscan.Report{Targets: len(watched), Discovered: len(rep.Findings)}, "succeeded", "", nil
+	return netscan.Report{Targets: len(plan.Watched), Discovered: len(rep.Findings)}, "succeeded", "", nil
 }
 
 func (d *issuanceDispatcher) executeNHICrossSurfaceDiscoveryRun(ctx context.Context, tenantID string, src store.DiscoverySource, run projections.DiscoveryRunQueued) (netscan.Report, string, string, error) {
@@ -711,61 +697,6 @@ func ctLogDiscoverySettings(raw json.RawMessage) ([]string, []string, int, *http
 		}
 	}
 	return logs, domains, cfg.MaxBatch, client, nil
-}
-
-func driftDiscoverySettings(raw json.RawMessage) (driftDiscoveryConfig, []drift.Watched, drift.ClassPolicy, error) {
-	var cfg driftDiscoveryConfig
-	if err := json.Unmarshal(raw, &cfg); err != nil {
-		return cfg, nil, nil, fmt.Errorf("decode drift discovery config: %w", err)
-	}
-	if len(cfg.Watched) == 0 {
-		return cfg, nil, nil, errors.New("drift discovery requires at least one watched credential")
-	}
-	watched := make([]drift.Watched, 0, len(cfg.Watched))
-	for i, w := range cfg.Watched {
-		path := strings.TrimSpace(w.Path)
-		class := strings.TrimSpace(w.Class)
-		fp := strings.TrimSpace(w.Fingerprint)
-		if path == "" || class == "" || fp == "" {
-			return cfg, nil, nil, fmt.Errorf("drift watched[%d] requires path, class, and fingerprint", i)
-		}
-		mode, err := parseOptionalFileMode(w.Mode)
-		if err != nil {
-			return cfg, nil, nil, fmt.Errorf("drift watched[%d] mode: %w", i, err)
-		}
-		watched = append(watched, drift.Watched{
-			Path: path, Class: class, Fingerprint: fp, Mode: mode, Restricted: w.Restricted,
-		})
-	}
-	policy := drift.ClassPolicy{}
-	for class, mode := range cfg.Policy {
-		class = strings.TrimSpace(class)
-		mode = strings.TrimSpace(mode)
-		if class == "" || mode == "" {
-			continue
-		}
-		switch drift.Mode(mode) {
-		case drift.AlertOnly, drift.AlertAndBlock:
-			policy[class] = drift.Mode(mode)
-		case drift.AutoRemediate:
-			return cfg, nil, nil, errors.New("served drift discovery does not auto-remediate; use alert_only or alert_and_block")
-		default:
-			return cfg, nil, nil, fmt.Errorf("unsupported drift policy mode %q", mode)
-		}
-	}
-	return cfg, watched, policy, nil
-}
-
-func parseOptionalFileMode(raw string) (os.FileMode, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return 0, nil
-	}
-	v, err := strconv.ParseUint(raw, 8, 32)
-	if err != nil {
-		return 0, err
-	}
-	return os.FileMode(v), nil
 }
 
 func cleanedUnique(values []string) []string {

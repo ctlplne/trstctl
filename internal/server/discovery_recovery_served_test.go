@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/agent/drift"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -151,8 +152,8 @@ func TestServedDiscoveryRunRetryPreservesFailureAndLineage(t *testing.T) {
 
 // TestServedDiscoveryRunRetryCoversPrimaryCredentialSources proves that the
 // recovery contract is not accidentally limited to TLS network scans. SSH,
-// cloud-certificate, cloud-secret, secret-store, and metadata-only API-key
-// runs all preserve the failed run and queue a separate retry with lineage.
+// drift, cloud-certificate, cloud-secret, secret-store, and metadata-only
+// API-key runs all preserve the failed run and queue a separate retry with lineage.
 // That is the server oracle behind the shared console Retry action for
 // F42/F49/F35/F36.
 func TestServedDiscoveryRunRetryCoversPrimaryCredentialSources(t *testing.T) {
@@ -182,6 +183,17 @@ func TestServedDiscoveryRunRetryCoversPrimaryCredentialSources(t *testing.T) {
 				"targets":        []string{"127.0.0.1:22"},
 				"allow_loopback": true,
 				"segment":        "recovery-primary-sources",
+			},
+		},
+		{
+			name: "drift",
+			kind: "drift",
+			config: map[string]any{
+				"watched": []map[string]any{{
+					"path": t.TempDir() + "/public-leaf.pem", "class": "certificate",
+					"fingerprint": drift.Fingerprint([]byte("declared public certificate bytes")),
+					"mode":        "0644",
+				}},
 			},
 		},
 		{

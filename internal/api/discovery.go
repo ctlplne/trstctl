@@ -18,6 +18,7 @@ import (
 	adcsdiscovery "trstctl.com/trstctl/internal/discovery/adcs"
 	"trstctl.com/trstctl/internal/discovery/apikey"
 	"trstctl.com/trstctl/internal/discovery/compromise"
+	"trstctl.com/trstctl/internal/discovery/driftplan"
 	"trstctl.com/trstctl/internal/discovery/k8stls"
 	"trstctl.com/trstctl/internal/discovery/nhi"
 	"trstctl.com/trstctl/internal/discovery/nhibehavior"
@@ -125,6 +126,8 @@ func (a *API) preflightDiscoverySource(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) discoveryPlanPreview(ctx context.Context, tenantID string, req discoverySourceRequest) (discoveryPlanPreviewResponse, error) {
+	const previewTargetLimit = 100
+
 	if strings.TrimSpace(req.Name) == "" {
 		req.Name = "Discovery plan preview"
 	}
@@ -165,7 +168,6 @@ func (a *API) discoveryPlanPreview(ctx context.Context, tenantID string, req dis
 		if relayErr != nil {
 			return discoveryPlanPreviewResponse{}, relayErr
 		}
-		const previewTargetLimit = 100
 		preview.Protocol = intent.Mode
 		preview.Ready = readiness.Ready
 		preview.ConnectionOrigin = readiness.ConnectionOrigin
@@ -186,6 +188,20 @@ func (a *API) discoveryPlanPreview(ctx context.Context, tenantID string, req dis
 		// One bounded handshake attempt can consume roughly ten seconds. This is
 		// a deliberately conservative upper estimate, not a completion promise.
 		preview.EstimatedUpperSeconds = ((len(intent.Targets) + preview.Concurrency - 1) / preview.Concurrency) * 10
+	}
+	if req.Kind == "drift" {
+		plan, resolveErr := driftplan.Resolve(cfg)
+		if resolveErr != nil {
+			return discoveryPlanPreviewResponse{}, errStatus(http.StatusBadRequest, resolveErr.Error())
+		}
+		preview.NormalizedTargetCount = len(plan.NormalizedTargets)
+		preview.NormalizedTargets = append([]string(nil), plan.NormalizedTargets...)
+		if len(preview.NormalizedTargets) > previewTargetLimit {
+			preview.NormalizedTargets = preview.NormalizedTargets[:previewTargetLimit]
+			preview.PreviewTruncated = true
+		}
+		preview.Concurrency = 1
+		preview.QueueDepth = 256
 	}
 	if req.Kind == adcsdiscovery.SourceKind {
 		intent, resolveErr := adcsdiscovery.ResolveInventoryIntent(cfg)

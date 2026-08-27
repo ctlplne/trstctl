@@ -151,6 +151,22 @@ CLI, or the Posture page. Decisions are event-sourced as
 `discovery.finding.triage_changed` audit evidence; the API never stores or returns
 credential bytes.
 
+Before a run or recovery, `POST /api/v1/discovery/plans/preview` and `GET
+/api/v1/discovery/sources/{id}/preflight` resolve the same drift plan the worker will
+execute. This check does not read a watched file, queue a run, create an event, or make
+an external call. It returns normalized watched paths, execution and connection origin,
+the minimum permission, bounded worker/queue limits, and the non-secret evidence
+boundary. It rejects incomplete watches and `auto_remediate`; the served drift worker
+does not have declared-content custody or a rollback seam, so pretending otherwise
+would be unsafe.
+
+On **Posture → Certificate, AD CS, authority, and drift evidence**, a failed or partial
+drift run first exposes **Review exact recovery plan**. **Create recovery run** appears
+only after the saved-source preflight is ready and effect-free. The retry endpoint and
+`discovery runs retry` CLI create a new idempotent run with `retry_of_run_id`; the
+original terminal failure remains unchanged as audit evidence. The console names both
+run IDs in its receipt and never renders the stored expected fingerprint.
+
 ### The CBOM — cryptographic bill of materials (F52)
 
 You can't plan a crypto migration without knowing what crypto you run. The CBOM scanner
@@ -283,6 +299,10 @@ Drift reuses the source/run/finding path, plus a remediation decision view:
 ```
 
 ```sh
+# review the saved source without running it, then create a separate retry
+trstctl-cli discovery sources preflight "$SOURCE_ID"
+trstctl-cli discovery runs retry "$FAILED_RUN_ID"
+
 # list drift remediation rows and record an operator decision
 trstctl-cli discovery drift-remediation
 trstctl-cli discovery drift-remediation decide "$FINDING_ID" --body drift-decision.json
@@ -328,7 +348,7 @@ The response contains `items` and `migration_progress`; a non-empty
 |---|---|
 | Credential risk scoring (F19) | **Served** — `/api/v1/risk/credentials`, `/api/v1/risk/contextual-priorities`, and the four `/api/v1/nhi/posture/*` routes above, plus `risk`/`nhi posture` CLI |
 | CT monitoring (F17) | **Served** — CT watchlist/checkpoint API, CLI, and a headline Discovery surface (watchlist, per-log checkpoints, unexpected-issuance findings, remediation hand-off), plus Discovery `ct_log` execution and outbox-backed alerts |
-| Drift detection (F18) | **Served** — Discovery `drift` execution, outbox-backed alerts, remediation API/CLI/Posture dashboard, and event-sourced decisions |
+| Drift detection (F18) | **Served** — shared effect-free plan preview/preflight, Discovery `drift` execution, immutable retry lineage, outbox-backed alerts, remediation API/CLI/Posture dashboard, and event-sourced decisions |
 | CBOM (F52) | **Served** — `/api/v1/cbom/scans`, `/api/v1/cbom/assets`, core `/api/v1/pqc/campaigns`, event-backed inventory + signed campaign closure |
 
 Other notes: CT monitoring depends on the logs/domains you list. Drift permission
@@ -349,7 +369,10 @@ point it at (TLS endpoints + config files). See
 - **Drift:** Discovery source kind `drift`; finding kind `credential_drift`; drift types
   `Deleted`, `Replaced`, `Relocated`, `PermissionChanged`; remediation routes
   `GET /api/v1/discovery/drift-remediation` and `POST
-  /api/v1/discovery/drift-remediation/{id}/decision`.
+  /api/v1/discovery/drift-remediation/{id}/decision`; effect-free preview/preflight
+  routes `POST /api/v1/discovery/plans/preview` and `GET
+  /api/v1/discovery/sources/{id}/preflight`; immutable recovery route `POST
+  /api/v1/discovery/runs/{id}/retry`.
 - **CBOM API:** `POST /api/v1/cbom/scans` (`discovery:write`, `Idempotency-Key`
   required); `GET /api/v1/cbom/assets` (`risk:read`).
 - **CBOM policy floor:** RSA-2048, EC-256, TLS 1.2; bans 3DES/DES/RC4/NULL/EXPORT/MD5.

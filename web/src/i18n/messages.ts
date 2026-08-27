@@ -19269,6 +19269,81 @@ export const messages = {
     defaultMessage: "Not ready for future quantum threats",
     description: "Future-risk reason.",
   },
+  "posture.driftRecovery.title": {
+    defaultMessage: "Review and recover drift monitoring",
+    description: "Heading for the effect-free drift preflight and immutable-run recovery workflow.",
+  },
+  "posture.driftRecovery.description": {
+    defaultMessage: "Ask the server what it will watch, where it will run, and what it may store. Only then can you create a separate retry run.",
+    description: "ELI5 explanation of drift review-before-retry.",
+  },
+  "posture.driftRecovery.loading": { defaultMessage: "Loading drift recovery state...", description: "Drift recovery loading status." },
+  "posture.driftRecovery.loadFailed": { defaultMessage: "Drift recovery state could not be loaded", description: "Drift recovery load error heading." },
+  "posture.driftRecovery.emptyTitle": { defaultMessage: "No drift monitor is configured", description: "Empty-state heading for drift recovery." },
+  "posture.driftRecovery.emptyBody": {
+    defaultMessage: "Create a drift discovery source before reviewing or recovering a monitor run.",
+    description: "Empty-state guidance for drift recovery.",
+  },
+  "posture.driftRecovery.failedRun": {
+    defaultMessage: "Latest run {run} ended {status}.",
+    description: "Identifies the exact terminal run that can be recovered.",
+  },
+  "posture.driftRecovery.noFailedRun": {
+    defaultMessage: "The latest run does not need recovery.",
+    description: "State shown when a drift source has no latest failed or partial run.",
+  },
+  "posture.driftRecovery.review": { defaultMessage: "Review exact recovery plan", description: "Action that runs an effect-free saved-source preflight." },
+  "posture.driftRecovery.reviewAria": {
+    defaultMessage: "Review exact recovery plan for {source}",
+    description: "Accessible name for a drift source preflight action.",
+  },
+  "posture.driftRecovery.reviewing": { defaultMessage: "Reviewing plan...", description: "Busy label while drift preflight runs." },
+  "posture.driftRecovery.blocked": { defaultMessage: "Recovery is blocked", description: "Fail-closed drift recovery error heading." },
+  "posture.driftRecovery.notReady": {
+    defaultMessage: "The saved source is not ready, or the plan reported an external effect. No retry was queued.",
+    description: "Fail-closed explanation when drift preflight is not safe and ready.",
+  },
+  "posture.driftRecovery.previewFailed": {
+    defaultMessage: "The exact drift plan could not be verified. No retry was queued.",
+    description: "Fallback error for a failed drift preflight request.",
+  },
+  "posture.driftRecovery.planAria": { defaultMessage: "Drift recovery plan", description: "Accessible name for the exact reviewed drift plan." },
+  "posture.driftRecovery.source": { defaultMessage: "Monitor", description: "Label for the drift source name." },
+  "posture.driftRecovery.originalRun": { defaultMessage: "Original run", description: "Label for the immutable failed drift run." },
+  "posture.driftRecovery.runState": { defaultMessage: "Original state", description: "Label for the failed run status." },
+  "posture.driftRecovery.execution": { defaultMessage: "Runs on", description: "Label for drift execution location." },
+  "posture.driftRecovery.origin": { defaultMessage: "Connection starts from", description: "Label for drift connection origin." },
+  "posture.driftRecovery.permission": { defaultMessage: "Required permission", description: "Label for minimum drift retry permission." },
+  "posture.driftRecovery.boundedWork": { defaultMessage: "Bounded work", description: "Label for drift worker and queue limits." },
+  "posture.driftRecovery.boundedWorkValue": {
+    defaultMessage: "{workers} worker(s) · queue {queue}",
+    description: "Drift worker and queue limit values.",
+  },
+  "posture.driftRecovery.externalEffects": { defaultMessage: "External effects during review", description: "Label for drift preflight side effects." },
+  "posture.driftRecovery.noEffects": { defaultMessage: "None", description: "Value when drift preflight causes no external effect." },
+  "posture.driftRecovery.dataHandling": { defaultMessage: "Evidence boundary", description: "Label for drift data-handling disclosure." },
+  "posture.driftRecovery.watched": {
+    defaultMessage: "Watched paths ({count})",
+    description: "Heading for normalized non-secret watched paths in a drift plan.",
+  },
+  "posture.driftRecovery.noRetryQueued": {
+    defaultMessage: "No scan or retry has been queued.",
+    description: "Explicit effect-free boundary before drift retry authorization.",
+  },
+  "posture.driftRecovery.retry": { defaultMessage: "Create recovery run", description: "Action that creates a separate drift retry run." },
+  "posture.driftRecovery.retryAria": {
+    defaultMessage: "Retry failed drift run {run}",
+    description: "Accessible name for the exact failed drift run retry action.",
+  },
+  "posture.driftRecovery.retrying": { defaultMessage: "Creating recovery run...", description: "Busy label while a drift retry is queued." },
+  "posture.driftRecovery.retryFailed": {
+    defaultMessage: "A separate recovery run could not be created. The original failure is unchanged.",
+    description: "Fallback drift retry error preserving original-run semantics.",
+  },
+  "posture.driftRecovery.queued": {
+    defaultMessage: "Recovery run {replacement} is queued. The original {original} failure remains unchanged as evidence.",
+    description: "Success receipt showing new retry lineage and preservation of the original failure.",
+  },
   "posture.algorithmRollup.title": {
     defaultMessage: "Exposure by algorithm",
     description: "S-C14: caption of the CBOM per-algorithm rollup table on Posture.",

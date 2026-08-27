@@ -14,6 +14,8 @@ const { apiMock } = vi.hoisted(() => ({
     updateCTMonitoring: vi.fn(),
     driftRemediation: vi.fn(),
     decideDriftRemediation: vi.fn(),
+    preflightDiscoverySource: vi.fn(),
+    retryDiscoveryRun: vi.fn(),
     listCBOMAssets: vi.fn(),
     cryptoReadiness: vi.fn(),
     startCBOMScan: vi.fn(),
@@ -273,6 +275,40 @@ describe("posture collector disclosures", () => {
         evidence_refs: ["discovery.finding:finding-drift", "event:discovery.finding.triage_changed"],
       },
     });
+    apiMock.preflightDiscoverySource.mockReset().mockResolvedValue({
+      kind: "drift",
+      ready: true,
+      execution: "control plane",
+      connection_origin: "control plane",
+      normalized_targets: ["/etc/tls/current.pem"],
+      normalized_target_count: 1,
+      preview_truncated: false,
+      excluded_target_count: 0,
+      child_job_count: 1,
+      concurrency: 1,
+      queue_depth: 256,
+      estimated_upper_seconds: 0,
+      permission: "discovery:write",
+      data_handling: "Stores stable non-secret fingerprints and changed metadata; credential values are never stored.",
+      side_effects: false,
+      blocked_reasons: [],
+    });
+    apiMock.retryDiscoveryRun.mockReset().mockResolvedValue({
+      id: "run-drift-retry",
+      tenant_id: "tenant-1",
+      source_id: "source-drift",
+      retry_of_run_id: "run-drift",
+      status: "queued",
+      dry_run: false,
+      requested_by: "operator",
+      execution: "control_plane",
+      targets: 0,
+      discovered: 0,
+      failed: 0,
+      rejected: 0,
+      blocked: 0,
+      created_at: "2026-06-20T10:06:00Z",
+    });
     apiMock.listCBOMAssets.mockReset().mockResolvedValue({
       migration_progress: {
         total_assets: 2,
@@ -523,6 +559,41 @@ describe("posture collector disclosures", () => {
     expect(await screen.findByText("Investigation decision recorded for agent-7:/etc/tls/current.pem")).toBeInTheDocument();
     expect(within(workflow).getByText("Investigating")).toBeInTheDocument();
     expect(screen.queryByText("RAW-DRIFT-LEAK")).not.toBeInTheDocument();
+  });
+
+  it("requires an exact effect-free drift plan before retrying a failed run", async () => {
+    const user = userEvent.setup();
+    await renderPosture();
+    await user.click(screen.getByText("Certificate, AD CS, authority, and drift evidence", { exact: true }));
+
+    expect(screen.queryByRole("button", { name: "Retry failed drift run run-drift" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Review exact recovery plan for Agent drift watch" }));
+
+    await waitFor(() => expect(apiMock.preflightDiscoverySource).toHaveBeenCalledWith("source-drift"));
+    const plan = await screen.findByRole("region", { name: "Drift recovery plan" });
+    expect(plan).toHaveTextContent("Agent drift watch");
+    expect(plan).toHaveTextContent("/etc/tls/current.pem");
+    expect(plan).toHaveTextContent("discovery:write");
+    expect(plan).toHaveTextContent("No scan or retry has been queued.");
+    expect(plan).not.toHaveTextContent("fedcba0987654321fedcba0987654321");
+
+    await user.click(within(plan).getByRole("button", { name: "Retry failed drift run run-drift" }));
+    await waitFor(() => expect(apiMock.retryDiscoveryRun).toHaveBeenCalledWith("run-drift"));
+    expect(
+      await screen.findByText("Recovery run run-drift-retry is queued. The original run-drift failure remains unchanged as evidence."),
+    ).toBeInTheDocument();
+  });
+
+  it("fails drift recovery closed when the saved plan cannot be validated", async () => {
+    apiMock.preflightDiscoverySource.mockRejectedValueOnce(new Error("Watched credential 1 no longer has an expected fingerprint."));
+    const user = userEvent.setup();
+    await renderPosture();
+    await user.click(screen.getByText("Certificate, AD CS, authority, and drift evidence", { exact: true }));
+    await user.click(screen.getByRole("button", { name: "Review exact recovery plan for Agent drift watch" }));
+
+    expect(await screen.findByText("Watched credential 1 no longer has an expected fingerprint.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry failed drift run run-drift" })).not.toBeInTheDocument();
+    expect(apiMock.retryDiscoveryRun).not.toHaveBeenCalled();
   });
 
   it("renders CBOM crypto posture with a served scan trigger and inventory rows", async () => {

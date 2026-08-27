@@ -527,7 +527,6 @@ export function Agents() {
           {tokenError && <ErrorState title={translateNow("source.could.not.mint.enrollment.token.7b0b6374e9")}>{tokenError}</ErrorState>}
           {currentEnrollmentPlan && (
             <section
-              role="region"
               aria-label={t("agents.enrollment.planLabel")}
               className="grid gap-3 rounded-control border border-brand-accent/35 bg-brand-accent/5 p-4 text-sm"
             >

@@ -31,6 +31,7 @@ import {
 import { useApiQuery } from "@/lib/query";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import { PQCCampaigns } from "@/pages/posture/PQCCampaigns";
+import { DriftRecoveryWorkflow } from "@/pages/posture/DriftRecoveryWorkflow";
 
 const emptyCBOMProgress: CBOMMigrationProgress = {
   total_assets: 0,
@@ -396,6 +397,7 @@ export function Posture() {
               error={discoveryError}
               emptyTitle="No drift findings returned yet"
             />
+            <DriftRecoveryWorkflow sources={discoverySources} runs={discoveryRuns} loading={discoveryLoading} error={discoveryError} />
             <DriftRemediationWorkflow
               state={driftRemediation}
               loading={driftLoading}
