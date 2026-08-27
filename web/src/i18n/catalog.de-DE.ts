@@ -372,12 +372,18 @@ const deDECatalog = {
   "dashboard.workspaceHealth.unavailable": "Aktuelle Nachweise nicht verfügbar",
   "dashboard.workspaceHealth.discovery": "{sources} Quellen · {findings} offene Funde",
   "dashboard.workspaceHealth.certificates": "{count} laufen innerhalb von 7 Tagen ab",
-  "dashboard.workspaceHealth.machines": "{count} Maschinenidentitäten erfasst",
+  "dashboard.workspaceHealth.machinesOne": "1 verwaltete Identität erfasst",
+  "dashboard.workspaceHealth.machines": "{count} verwaltete Identitäten erfasst",
   "dashboard.workspaceHealth.secrets": "{count} gespeicherte Secrets erfasst",
   "dashboard.workspaceHealth.signing": "{failures} Fehler in {total} neuen Vorgängen",
   "dashboard.workspaceHealth.incidents": "{count} offene Vorfälle",
   "dashboard.moreActions": "Weitere Aktionen",
-  "dashboard.estateSummary": "{credentials} Zugangsdaten erfasst · {agents} Agenten online · {expiring} Zertifikate laufen diese Woche ab",
+  "dashboard.estateSummary":
+    "{records} indizierte Datensätze — Datensätze verwalteter Identitäten: {identities} · Zertifikatsdatensätze: {certificates} · Erkennungsbefunde: {findings} · API-Zugriffstoken: {tokens} · Agentendatensätze: {agents}",
+  "dashboard.estateSummary.countingRule":
+    "Zählregel: eine Zeile pro dauerhaftem Quelldatensatz. Zusammengehörige Zeilen können denselben realen Berechtigungsnachweis beschreiben; dies ist daher keine Summe eindeutiger Berechtigungsnachweise.",
+  "dashboard.estateSummary.unavailable": "Der Bestandsnenner ist nicht verfügbar. Domänenfakten bleiben sichtbar, aber Home erfindet keine Gesamtsumme.",
+  "dashboard.kpi.agentRecords": "Agentendatensätze",
   "dashboard.exploreMetrics": "Alle Kennzahlen untersuchen",
   "dashboard.exploreMetricsHelp": "Inventar, Trends, Algorithmen, Ablauf und Aktivität",
   // Maschinell erstellte Übersetzungen für AUD-67 — VOR RELEASE IST EINE MENSCHLICHE PRÜFUNG ERFORDERLICH.

@@ -3926,6 +3926,7 @@ export interface NHIInventory {
   coverage: string[];
   generated_at: string;
   items: NHIInventoryItem[];
+  record_summary: NHIInventoryRecordSummary;
   summary: Record<string, unknown>;
 }
 
@@ -3946,6 +3947,16 @@ export interface NHIInventoryItem {
   source: string;
   status: string;
   tenant_id: string;
+}
+
+export interface NHIInventoryRecordSummary {
+  agent_records: number;
+  api_token_records: number;
+  certificate_records: number;
+  counting_mode: "durable_source_records_not_unique_credentials";
+  discovery_finding_records: number;
+  managed_identity_records: number;
+  total_records: number;
 }
 
 export interface NHIOverPrivilegeFinding {

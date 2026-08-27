@@ -417,6 +417,7 @@ public final class OpenApiSchemas {
       "NHIExposureSummary",
       "NHIInventory",
       "NHIInventoryItem",
+      "NHIInventoryRecordSummary",
       "NHIOverPrivilegeFinding",
       "NHIOverPrivilegePosture",
       "NHIOverPrivilegeSummary",

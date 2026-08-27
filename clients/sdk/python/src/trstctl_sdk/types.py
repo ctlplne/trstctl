@@ -5538,6 +5538,7 @@ NHIInventory = TypedDict(
         'coverage': list[str],
         'generated_at': str,
         'items': list[dict[str, Any]],
+        'record_summary': dict[str, Any],
         'summary': dict[str, Any],
     },
     total=False,
@@ -5562,6 +5563,20 @@ NHIInventoryItem = TypedDict(
         'source': str,
         'status': str,
         'tenant_id': str,
+    },
+    total=False,
+)
+
+NHIInventoryRecordSummary = TypedDict(
+    'NHIInventoryRecordSummary',
+    {
+        'agent_records': int,
+        'api_token_records': int,
+        'certificate_records': int,
+        'counting_mode': str,
+        'discovery_finding_records': int,
+        'managed_identity_records': int,
+        'total_records': int,
     },
     total=False,
 )

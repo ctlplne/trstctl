@@ -1174,8 +1174,14 @@ describe("i18n boundary", () => {
       // of online/stale/clock-skew meaning. The unused-message oracle proves no
       // rendered surface still references them; no remaining translation was
       // changed or replaced by an English fallback.
-      "es-ES": "9a0499a0272357f330833afdc5fd3a535324b079ba4744d8c56fb65a0115790f",
-      "de-DE": "b8dc05eb8bda4a47db8fe3124f51fb4a3acb86c8b46e3847c7f5c1cfc3ca5c89",
+      // Home truth re-pin: the cockpit now distinguishes durable source
+      // records from unique credentials, names every source-count denominator,
+      // counts X.509 identities as managed identities, and stops calling every
+      // tracked agent online. Placeholders and the non-unique warning were
+      // reviewed in both catalogs. Machine-authored es/de — FLAGGED FOR HUMAN
+      // TRANSLATION REVIEW before release.
+      "es-ES": "de3fbbbbf83409f0aa2e9117b49ae7349552e3dfc6ef04043037f53b1f9ad87e",
+      "de-DE": "31eae22b01f921e6154273a43356ebc5db1f8a068c795559fff11fd2c13e231c",
     });
   });
 

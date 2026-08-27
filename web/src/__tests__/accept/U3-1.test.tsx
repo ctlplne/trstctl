@@ -35,6 +35,15 @@ const servedInventory = {
     webhook: 1,
     workload_identity: 1,
   },
+  record_summary: {
+    counting_mode: "durable_source_records_not_unique_credentials",
+    total_records: 10,
+    managed_identity_records: 0,
+    certificate_records: 1,
+    api_token_records: 1,
+    agent_records: 0,
+    discovery_finding_records: 8,
+  },
   items: [
     {
       id: "cert/1",

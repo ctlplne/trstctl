@@ -1021,8 +1021,17 @@ func TestServedUnifiedNHIInventoryCAPNHI02EndToEnd(t *testing.T) {
 			DisplayName string         `json:"display_name"`
 			Metadata    map[string]any `json:"metadata"`
 		} `json:"items"`
-		Summary  map[string]int `json:"summary"`
-		Coverage []string       `json:"coverage"`
+		Summary       map[string]int `json:"summary"`
+		Coverage      []string       `json:"coverage"`
+		RecordSummary struct {
+			CountingMode            string `json:"counting_mode"`
+			TotalRecords            int    `json:"total_records"`
+			ManagedIdentityRecords  int    `json:"managed_identity_records"`
+			CertificateRecords      int    `json:"certificate_records"`
+			APITokenRecords         int    `json:"api_token_records"`
+			AgentRecords            int    `json:"agent_records"`
+			DiscoveryFindingRecords int    `json:"discovery_finding_records"`
+		} `json:"record_summary"`
 	}
 	if err := json.Unmarshal(body, &inventory); err != nil {
 		t.Fatalf("decode unified NHI inventory: %v (%s)", err, body)
@@ -1047,6 +1056,18 @@ func TestServedUnifiedNHIInventoryCAPNHI02EndToEnd(t *testing.T) {
 	}
 	if !containsString(inventory.Coverage, "personal_access_token") {
 		t.Fatalf("coverage denominator does not enumerate personal_access_token: %+v", inventory.Coverage)
+	}
+	if inventory.RecordSummary.CountingMode != "durable_source_records_not_unique_credentials" {
+		t.Fatalf("record summary counting mode = %q, want an explicit non-unique source-record denominator", inventory.RecordSummary.CountingMode)
+	}
+	if inventory.RecordSummary.TotalRecords != len(inventory.Items) {
+		t.Fatalf("record summary total = %d, inventory rows = %d", inventory.RecordSummary.TotalRecords, len(inventory.Items))
+	}
+	if inventory.RecordSummary.ManagedIdentityRecords != 1 || inventory.RecordSummary.CertificateRecords != 1 {
+		t.Fatalf("managed identity/certificate source counts do not match the issued cross-projection state: %+v", inventory.RecordSummary)
+	}
+	if inventory.RecordSummary.APITokenRecords < 2 || inventory.RecordSummary.DiscoveryFindingRecords != 9 || inventory.RecordSummary.AgentRecords != 0 {
+		t.Fatalf("record summary does not explain its source-record denominator: %+v", inventory.RecordSummary)
 	}
 	if strings.Contains(string(body), createdToken.Token) {
 		t.Fatalf("unified NHI inventory leaked one-time API token material: %s", body)

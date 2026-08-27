@@ -9669,6 +9669,7 @@ export interface components {
             /** Format: date-time */
             generated_at: string;
             items: components["schemas"]["NHIInventoryItem"][];
+            record_summary: components["schemas"]["NHIInventoryRecordSummary"];
             summary: Record<string, never>;
         };
         NHIInventoryItem: {
@@ -9694,6 +9695,16 @@ export interface components {
             status: string;
             /** Format: uuid */
             tenant_id: string;
+        };
+        NHIInventoryRecordSummary: {
+            agent_records: number;
+            api_token_records: number;
+            certificate_records: number;
+            /** @enum {string} */
+            counting_mode: "durable_source_records_not_unique_credentials";
+            discovery_finding_records: number;
+            managed_identity_records: number;
+            total_records: number;
         };
         NHIOverPrivilegeFinding: {
             display_name: string;

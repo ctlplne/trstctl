@@ -15611,6 +15611,9 @@
             },
             "type": "array"
           },
+          "record_summary": {
+            "$ref": "#/components/schemas/NHIInventoryRecordSummary"
+          },
           "summary": {
             "type": "object"
           }
@@ -15619,6 +15622,7 @@
           "generated_at",
           "items",
           "summary",
+          "record_summary",
           "coverage"
         ],
         "type": "object"
@@ -15689,6 +15693,44 @@
           "status",
           "metadata",
           "created_at"
+        ],
+        "type": "object"
+      },
+      "NHIInventoryRecordSummary": {
+        "properties": {
+          "agent_records": {
+            "type": "integer"
+          },
+          "api_token_records": {
+            "type": "integer"
+          },
+          "certificate_records": {
+            "type": "integer"
+          },
+          "counting_mode": {
+            "enum": [
+              "durable_source_records_not_unique_credentials"
+            ],
+            "type": "string"
+          },
+          "discovery_finding_records": {
+            "type": "integer"
+          },
+          "managed_identity_records": {
+            "type": "integer"
+          },
+          "total_records": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "counting_mode",
+          "total_records",
+          "managed_identity_records",
+          "certificate_records",
+          "api_token_records",
+          "agent_records",
+          "discovery_finding_records"
         ],
         "type": "object"
       },

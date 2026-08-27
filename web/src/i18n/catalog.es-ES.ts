@@ -365,12 +365,19 @@ const esESCatalog = {
   "dashboard.workspaceHealth.unavailable": "Evidencia actual no disponible",
   "dashboard.workspaceHealth.discovery": "{sources} fuentes · {findings} hallazgos abiertos",
   "dashboard.workspaceHealth.certificates": "{count} vencen en 7 días",
-  "dashboard.workspaceHealth.machines": "{count} identidades de máquina registradas",
+  "dashboard.workspaceHealth.machinesOne": "1 identidad administrada registrada",
+  "dashboard.workspaceHealth.machines": "{count} identidades administradas registradas",
   "dashboard.workspaceHealth.secrets": "{count} secretos almacenados registrados",
   "dashboard.workspaceHealth.signing": "{failures} fallos en {total} operaciones recientes",
   "dashboard.workspaceHealth.incidents": "{count} incidentes abiertos",
   "dashboard.moreActions": "Más acciones",
-  "dashboard.estateSummary": "{credentials} credenciales registradas · {agents} agentes en línea · {expiring} certificados vencen esta semana",
+  "dashboard.estateSummary":
+    "{records} registros indexados — registros de identidades administradas: {identities} · registros de certificados: {certificates} · hallazgos de descubrimiento: {findings} · tokens de acceso API: {tokens} · registros de agentes: {agents}",
+  "dashboard.estateSummary.countingRule":
+    "Regla de conteo: una fila por registro de origen duradero. Las filas relacionadas pueden describir la misma credencial real, por lo que este no es un total de credenciales únicas.",
+  "dashboard.estateSummary.unavailable":
+    "El denominador del inventario no está disponible. Los hechos de cada dominio siguen visibles, pero Inicio no inventará un total.",
+  "dashboard.kpi.agentRecords": "Registros de agentes",
   "dashboard.exploreMetrics": "Explorar todas las métricas",
   "dashboard.exploreMetricsHelp": "Inventario, tendencias, algoritmos, vencimientos y actividad",
   // Traducciones creadas por máquina para AUD-67 — REQUIEREN REVISIÓN HUMANA ANTES DEL LANZAMIENTO.

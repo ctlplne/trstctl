@@ -2045,12 +2045,22 @@ func componentSchemas() map[string]*Schema {
 		"discovered_at": timestamp(),
 		"created_at":    timestamp(),
 	}, "id", "tenant_id", "kind", "source", "display_name", "status", "metadata", "created_at")
+	nhiInventoryRecordSummary := object(map[string]*Schema{
+		"counting_mode":             {Type: "string", Enum: []string{"durable_source_records_not_unique_credentials"}},
+		"total_records":             {Type: "integer"},
+		"managed_identity_records":  {Type: "integer"},
+		"certificate_records":       {Type: "integer"},
+		"api_token_records":         {Type: "integer"},
+		"agent_records":             {Type: "integer"},
+		"discovery_finding_records": {Type: "integer"},
+	}, "counting_mode", "total_records", "managed_identity_records", "certificate_records", "api_token_records", "agent_records", "discovery_finding_records")
 	nhiInventory := object(map[string]*Schema{
-		"generated_at": timestamp(),
-		"items":        {Type: "array", Items: ref("NHIInventoryItem")},
-		"summary":      {Type: "object"},
-		"coverage":     {Type: "array", Items: str()},
-	}, "generated_at", "items", "summary", "coverage")
+		"generated_at":   timestamp(),
+		"items":          {Type: "array", Items: ref("NHIInventoryItem")},
+		"summary":        {Type: "object"},
+		"record_summary": ref("NHIInventoryRecordSummary"),
+		"coverage":       {Type: "array", Items: str()},
+	}, "generated_at", "items", "summary", "record_summary", "coverage")
 	nhiShadowSummary := object(map[string]*Schema{
 		"total_analyzed": {Type: "integer"},
 		"findings":       {Type: "integer"},
@@ -5202,6 +5212,7 @@ func componentSchemas() map[string]*Schema {
 		"DriftRemediation":                         driftRemediation,
 		"DriftRemediationDecision":                 driftRemediationDecision,
 		"NHIInventoryItem":                         nhiInventoryItem,
+		"NHIInventoryRecordSummary":                nhiInventoryRecordSummary,
 		"NHIInventory":                             nhiInventory,
 		"NHIShadowSummary":                         nhiShadowSummary,
 		"NHIShadowFinding":                         nhiShadowFinding,

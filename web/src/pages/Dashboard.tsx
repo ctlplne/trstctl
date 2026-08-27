@@ -27,15 +27,27 @@ import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { formatDateTime, formatShortDate, type FormatPolicy } from "@/i18n/format";
 
 function emptyNhiInventory(): NHIInventoryResponse {
-  return { generated_at: new Date(0).toISOString(), items: [], summary: {}, coverage: [] };
+  return {
+    generated_at: new Date(0).toISOString(),
+    items: [],
+    summary: {},
+    record_summary: {
+      counting_mode: "durable_source_records_not_unique_credentials",
+      total_records: 0,
+      managed_identity_records: 0,
+      certificate_records: 0,
+      api_token_records: 0,
+      agent_records: 0,
+      discovery_finding_records: 0,
+    },
+    coverage: [],
+  };
 }
 
 function readNhiInventory(): Promise<NHIInventoryResponse> {
   const client = api as typeof api & { nhiInventory?: () => Promise<NHIInventoryResponse> };
   if (!client.nhiInventory) return Promise.resolve(emptyNhiInventory());
-  return Promise.resolve(client.nhiInventory())
-    .then((response) => response ?? emptyNhiInventory())
-    .catch(() => emptyNhiInventory());
+  return Promise.resolve(client.nhiInventory()).then((response) => response ?? emptyNhiInventory());
 }
 
 function inventoryCount(inventory: NHIInventoryResponse | null | undefined, kind: string): number {
@@ -294,10 +306,13 @@ export function Dashboard() {
 
   const riskRows = risk.data ?? [];
   const urgentSummary = urgentRisk.data?.urgent_summary;
-  const inventoryTotal = nhiInventory.data?.items?.length ?? identities.data?.length ?? 0;
+  const recordSummary =
+    nhiInventory.data?.record_summary?.counting_mode === "durable_source_records_not_unique_credentials" ? nhiInventory.data.record_summary : null;
+  const inventoryTotal = recordSummary?.total_records ?? 0;
   const resourcesLoading = certs.loading || risk.loading || urgentRisk.loading || identities.loading || nhiInventory.loading;
   const realEmpty =
     !resourcesLoading &&
+    nhiInventory.error === null &&
     (certs.data?.length ?? 0) === 0 &&
     riskRows.length === 0 &&
     inventoryTotal === 0 &&
@@ -320,10 +335,9 @@ export function Dashboard() {
 
   const kpis = {
     certificates: certs.data?.length ?? 0,
-    identities: inventoryTotal,
+    identities: recordSummary?.managed_identity_records ?? 0,
     secrets: secretsCount.data ?? inventoryCount(nhiInventory.data, "secret"),
-    agentsOnline: inventoryCount(nhiInventory.data, "agent"),
-    agentsTotal: inventoryCount(nhiInventory.data, "agent"),
+    agentRecords: recordSummary?.agent_records ?? 0,
     expiring7d: servedCertificates.filter((c) => expiresWithinDays(c, 7)).length,
     urgentRisk: urgentValue,
     openIncidents: incidentList.runnable ? (openIncidents.data ?? 0) : "—",
@@ -362,7 +376,7 @@ export function Dashboard() {
   const highAttention = contextualPriorities.filter((row) => row.severity === "high").length;
   const attentionCount = urgentSummary?.status === "complete" ? urgentSummary.urgent : null;
   const attentionRows = attentionCount && attentionCount > 0 ? rotateFirst.slice(0, 3) : [];
-  const machineIdentityCount = (identities.data ?? []).filter((identity) => /spiffe|workload|ssh|machine|host/i.test(identity.kind)).length;
+  const machineIdentityCount = recordSummary?.managed_identity_records ?? 0;
 
   if (showOnboarding) {
     return (
@@ -494,13 +508,25 @@ export function Dashboard() {
           </ul>
         ) : null}
 
-        <p className="mt-4 text-caption text-muted-foreground">
-          {t("dashboard.estateSummary", {
-            credentials: formatNumber(kpis.certificates + kpis.identities + kpis.secrets),
-            agents: formatNumber(kpis.agentsOnline),
-            expiring: formatNumber(kpis.expiring7d),
-          })}
-        </p>
+        {recordSummary ? (
+          <div className="mt-4 text-caption text-muted-foreground">
+            <p>
+              {t("dashboard.estateSummary", {
+                records: formatNumber(recordSummary.total_records),
+                identities: formatNumber(recordSummary.managed_identity_records),
+                certificates: formatNumber(recordSummary.certificate_records),
+                findings: formatNumber(recordSummary.discovery_finding_records),
+                tokens: formatNumber(recordSummary.api_token_records),
+                agents: formatNumber(recordSummary.agent_records),
+              })}
+            </p>
+            <p className="mt-1">{t("dashboard.estateSummary.countingRule")}</p>
+          </div>
+        ) : (
+          <p className="mt-4 text-caption font-medium text-status-warning">
+            {nhiInventory.loading ? t("dashboard.workspaceHealth.loading") : t("dashboard.estateSummary.unavailable")}
+          </p>
+        )}
       </section>
 
       <section aria-labelledby="dashboard-workspace-health-heading" className="space-y-3">
@@ -539,9 +565,15 @@ export function Dashboard() {
             icon={<Bot className="h-4 w-4" aria-hidden="true" />}
             workspace={t("nav.space.workload")}
             state={
-              identities.error ? t("dashboard.workspaceHealth.unavailable") : t("dashboard.workspaceHealth.machines", { count: String(machineIdentityCount) })
+              identities.loading || nhiInventory.loading
+                ? t("dashboard.workspaceHealth.loading")
+                : identities.error || nhiInventory.error || !recordSummary
+                  ? t("dashboard.workspaceHealth.unavailable")
+                  : machineIdentityCount === 1
+                    ? t("dashboard.workspaceHealth.machinesOne")
+                    : t("dashboard.workspaceHealth.machines", { count: String(machineIdentityCount) })
             }
-            urgent={identities.error !== null}
+            urgent={identities.error !== null || nhiInventory.error !== null || (!nhiInventory.loading && !recordSummary)}
           />
           <WorkspaceHealthLink
             to="/secrets"
@@ -610,13 +642,7 @@ export function Dashboard() {
             <Kpi icon={<ScrollText className="h-4 w-4" />} label="Certificates" value={kpis.certificates} to="/certificates" />
             <Kpi icon={<KeyRound className="h-4 w-4" />} label="Identities (NHI)" value={kpis.identities} to="/identities" />
             <Kpi icon={<Boxes className="h-4 w-4" />} label="Secrets" value={kpis.secrets} to="/secrets" />
-            <Kpi
-              icon={<Activity className="h-4 w-4" />}
-              label="Agents online"
-              value={kpis.agentsOnline}
-              to="/agents"
-              sub={kpis.agentsTotal ? `${kpis.agentsOnline}/${kpis.agentsTotal}` : undefined}
-            />
+            <Kpi icon={<Activity className="h-4 w-4" />} label={t("dashboard.kpi.agentRecords")} value={kpis.agentRecords} to="/agents" />
             <Kpi
               icon={<AlertTriangle className="h-4 w-4" />}
               label="Expiring ≤7d"

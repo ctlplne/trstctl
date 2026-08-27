@@ -15,6 +15,8 @@ import (
 
 const maxNHIInventoryRowsPerSource = 10000
 
+const nhiInventoryCountingMode = "durable_source_records_not_unique_credentials"
+
 var nhiInventoryCoverage = []string{
 	"certificate",
 	"ssh_key",
@@ -31,10 +33,25 @@ var nhiInventoryCoverage = []string{
 }
 
 type nhiInventoryResponse struct {
-	GeneratedAt time.Time          `json:"generated_at"`
-	Items       []nhiInventoryItem `json:"items"`
-	Summary     map[string]int     `json:"summary"`
-	Coverage    []string           `json:"coverage"`
+	GeneratedAt   time.Time                 `json:"generated_at"`
+	Items         []nhiInventoryItem        `json:"items"`
+	Summary       map[string]int            `json:"summary"`
+	RecordSummary nhiInventoryRecordSummary `json:"record_summary"`
+	Coverage      []string                  `json:"coverage"`
+}
+
+// nhiInventoryRecordSummary names the denominator behind the Home cockpit.
+// One durable identity, its issued certificate, and a discovery finding may all
+// describe the same real-world credential, so these counts deliberately explain
+// source records rather than pretending they are deduplicated credentials.
+type nhiInventoryRecordSummary struct {
+	CountingMode            string `json:"counting_mode"`
+	TotalRecords            int    `json:"total_records"`
+	ManagedIdentityRecords  int    `json:"managed_identity_records"`
+	CertificateRecords      int    `json:"certificate_records"`
+	APITokenRecords         int    `json:"api_token_records"`
+	AgentRecords            int    `json:"agent_records"`
+	DiscoveryFindingRecords int    `json:"discovery_finding_records"`
 }
 
 type nhiInventoryItem struct {
@@ -74,7 +91,10 @@ func (a *API) nhiInventory(ctx context.Context, tenantID string) (nhiInventoryRe
 	out := nhiInventoryResponse{
 		GeneratedAt: time.Now().UTC(),
 		Summary:     map[string]int{},
-		Coverage:    append([]string(nil), nhiInventoryCoverage...),
+		RecordSummary: nhiInventoryRecordSummary{
+			CountingMode: nhiInventoryCountingMode,
+		},
+		Coverage: append([]string(nil), nhiInventoryCoverage...),
 	}
 	add := func(item nhiInventoryItem) {
 		item.Kind = normalizeNHIInventoryKind(item.Kind)
@@ -90,6 +110,19 @@ func (a *API) nhiInventory(ctx context.Context, tenantID string) (nhiInventoryRe
 		}
 		out.Items = append(out.Items, item)
 		out.Summary[item.Kind]++
+		out.RecordSummary.TotalRecords++
+		switch item.Source {
+		case "identity":
+			out.RecordSummary.ManagedIdentityRecords++
+		case "certificate_inventory":
+			out.RecordSummary.CertificateRecords++
+		case "access_api_token":
+			out.RecordSummary.APITokenRecords++
+		case "agent_fleet":
+			out.RecordSummary.AgentRecords++
+		case "discovery_finding":
+			out.RecordSummary.DiscoveryFindingRecords++
+		}
 	}
 
 	identities, err := a.store.ListIdentities(ctx, tenantID)

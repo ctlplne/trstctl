@@ -1035,7 +1035,14 @@ export const messages = {
     description: "Home Discover health summary.",
   },
   "dashboard.workspaceHealth.certificates": { defaultMessage: "{count} expire within 7 days", description: "Home Certificate Lifecycle health summary." },
-  "dashboard.workspaceHealth.machines": { defaultMessage: "{count} machine identities tracked", description: "Home Machine and Workload Trust summary." },
+  "dashboard.workspaceHealth.machinesOne": {
+    defaultMessage: "1 managed identity tracked",
+    description: "Home Workloads & Machines summary when exactly one managed identity exists.",
+  },
+  "dashboard.workspaceHealth.machines": {
+    defaultMessage: "{count} managed identities tracked",
+    description: "Home Workloads & Machines summary when zero or multiple managed identities exist.",
+  },
   "dashboard.workspaceHealth.secrets": { defaultMessage: "{count} stored secrets tracked", description: "Home Secrets and Access summary." },
   "dashboard.workspaceHealth.signing": { defaultMessage: "{failures} failures across {total} recent operations", description: "Home Software Trust summary." },
   "dashboard.workspaceHealth.incidents": { defaultMessage: "{count} open incidents", description: "Home Operations summary." },
@@ -1044,8 +1051,22 @@ export const messages = {
     description: "Dashboard disclosure containing secondary discovery and rotation actions.",
   },
   "dashboard.estateSummary": {
-    defaultMessage: "{credentials} credentials recorded · {agents} agents online · {expiring} certificates expire this week",
-    description: "Quiet inline estate summary replacing a wall of equal-weight KPI cards.",
+    defaultMessage:
+      "{records} indexed records — managed identity records: {identities} · certificate records: {certificates} · discovery findings: {findings} · API access tokens: {tokens} · agent records: {agents}",
+    description: "Home's explicit server-owned durable-record denominator and source breakdown.",
+  },
+  "dashboard.estateSummary.countingRule": {
+    defaultMessage:
+      "Counting rule: one row per durable source record. Related rows can describe the same real-world credential, so this is not a unique-credential total.",
+    description: "Technical ELI5 explanation preventing Home's record denominator from being mistaken for unique credentials.",
+  },
+  "dashboard.estateSummary.unavailable": {
+    defaultMessage: "The inventory denominator is unavailable. Domain facts remain visible, but Home will not invent a total.",
+    description: "Fail-visible Home state when the server-owned inventory record summary cannot be read.",
+  },
+  "dashboard.kpi.agentRecords": {
+    defaultMessage: "Agent records",
+    description: "Home technical-depth KPI label; it intentionally does not claim that every recorded agent is online.",
   },
   "dashboard.exploreMetrics": {
     defaultMessage: "Explore all metrics",

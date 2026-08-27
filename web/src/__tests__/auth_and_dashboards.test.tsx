@@ -23,6 +23,7 @@ const { apiMock } = vi.hoisted(() => ({
     ingestCertificate: vi.fn(),
     owners: vi.fn(),
     identities: vi.fn(),
+    nhiInventory: vi.fn(),
     auditEvents: vi.fn(),
     risk: vi.fn(),
     contextualRiskPriorities: vi.fn(),
@@ -222,6 +223,7 @@ describe("auth + dashboards", () => {
     apiMock.getCertificate.mockReset();
     apiMock.ingestCertificate.mockReset();
     apiMock.identities.mockReset();
+    apiMock.nhiInventory.mockReset();
     apiMock.auditEvents.mockReset();
     apiMock.risk.mockReset();
     apiMock.contextualRiskPriorities.mockReset();
@@ -229,6 +231,21 @@ describe("auth + dashboards", () => {
     apiMock.logout.mockResolvedValue(undefined);
     apiMock.certificatePage.mockResolvedValue({ items: [] });
     apiMock.identities.mockResolvedValue([]);
+    apiMock.nhiInventory.mockResolvedValue({
+      generated_at: dayFromNow(0),
+      items: [],
+      summary: {},
+      coverage: [],
+      record_summary: {
+        counting_mode: "durable_source_records_not_unique_credentials",
+        total_records: 0,
+        managed_identity_records: 0,
+        certificate_records: 0,
+        api_token_records: 0,
+        agent_records: 0,
+        discovery_finding_records: 0,
+      },
+    });
     apiMock.auditEvents.mockResolvedValue([]);
     apiMock.risk.mockResolvedValue([]);
     apiMock.contextualRiskPriorities.mockResolvedValue(contextualRiskFixture(0, 0));
@@ -597,6 +614,51 @@ describe("auth + dashboards", () => {
       expect(apiMock.secretPage).toHaveBeenCalledWith({ limit: 100 });
       expect(apiMock.incidentExecutions).toHaveBeenCalledWith({ limit: 100 });
     });
+  });
+
+  it("uses the server-owned record denominator and includes X.509 identities in Home machine identity health", async () => {
+    seededTenant();
+    apiMock.identities.mockResolvedValue([{ id: "i1", name: "payments.example.test", kind: "x509_certificate", status: "issued" }]);
+    apiMock.nhiInventory.mockResolvedValue({
+      generated_at: dayFromNow(0),
+      items: Array.from({ length: 13 }, (_, index) => ({
+        id: `record-${index + 1}`,
+        tenant_id: "t1",
+        kind: "certificate",
+        source: "fixture",
+        display_name: `record-${index + 1}`,
+        status: "active",
+        metadata: {},
+        created_at: dayFromNow(0),
+      })),
+      summary: { certificate: 2, token: 2, service_account: 9 },
+      coverage: ["certificate", "token", "service_account"],
+      record_summary: {
+        counting_mode: "durable_source_records_not_unique_credentials",
+        total_records: 13,
+        managed_identity_records: 1,
+        certificate_records: 1,
+        api_token_records: 2,
+        agent_records: 0,
+        discovery_finding_records: 9,
+      },
+    });
+
+    renderAt("/");
+    const dash = await screen.findByRole("region", { name: "Home" });
+
+    expect(await within(dash).findByText("1 managed identity tracked")).toBeInTheDocument();
+    expect(
+      within(dash).getByText(
+        "13 indexed records — managed identity records: 1 · certificate records: 1 · discovery findings: 9 · API access tokens: 2 · agent records: 0",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(dash).getByText(
+        "Counting rule: one row per durable source record. Related rows can describe the same real-world credential, so this is not a unique-credential total.",
+      ),
+    ).toBeInTheDocument();
+    expect(within(dash).getByText("Agent records")).toBeInTheDocument();
   });
 
   function kpiTile(dash: HTMLElement, label: RegExp): HTMLElement {
