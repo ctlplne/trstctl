@@ -188,6 +188,7 @@ import type {
   DynamicLeaseRequest,
   EndpointBinding,
   EndpointBindingRequest,
+  EnrollmentPlanPreview as GenEnrollmentPlanPreview,
   EnrollmentToken as GenEnrollmentToken,
   EnrollmentTokenRequest as GenEnrollmentTokenRequest,
   EnterpriseSupportStatus,
@@ -534,6 +535,7 @@ export type ADCSDatabaseList = GenADCSDatabaseList;
 export type ADCSTemplate = GenADCSTemplate;
 export type Agent = GenAgent;
 export type AgentList = GenAgentList;
+export type EnrollmentPlanPreview = GenEnrollmentPlanPreview;
 export type EnrollmentToken = GenEnrollmentToken;
 export type EnrollmentTokenRequest = GenEnrollmentTokenRequest;
 export type Attestation = GenAttestation;
@@ -1632,6 +1634,7 @@ export interface Api {
   issueCertificate(input: IssueCertificateInput): Promise<Identity>;
   agents(): Promise<Agent[]>;
   agentPage(options?: { limit?: number; cursor?: string }): Promise<AgentList>;
+  previewEnrollmentPlan(input?: EnrollmentTokenRequest): Promise<EnrollmentPlanPreview>;
   createEnrollmentToken(input?: EnrollmentTokenRequest): Promise<EnrollmentToken>;
   offboardAgent(id: string, input: AgentOffboardRequest): Promise<AgentOffboardResponse>;
   discoveryCapabilities(): Promise<DiscoveryCapabilityCatalog>;
@@ -2104,6 +2107,12 @@ const liveApi: Api = {
   },
   agents: () => req<{ agents: Agent[] }>("/api/v1/agents").then((r) => r.agents ?? []),
   agentPage: (options) => req<AgentList>(`/api/v1/agents${pageQueryString(options)}`),
+  previewEnrollmentPlan: (input) =>
+    req<EnrollmentPlanPreview>("/api/v1/agents/enrollment-tokens/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(enrollmentTokenRequest(input) ?? {}),
+    }),
   createEnrollmentToken: (input) => mutate<EnrollmentToken>("POST", "/api/v1/agents/enrollment-tokens", enrollmentTokenRequest(input)),
   offboardAgent: (id, input) => mutate<AgentOffboardResponse>("POST", `/api/v1/agents/${encodeURIComponent(id)}/offboard`, input),
   discoveryCapabilities: () => req<DiscoveryCapabilityCatalog>("/api/v1/discovery/capabilities"),

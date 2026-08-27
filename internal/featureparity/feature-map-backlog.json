@@ -688,15 +688,18 @@
             "priority": 20,
             "served_state": "conditional",
             "backend_status": "conditional: served agent enrollment, mTLS heartbeat/renewal, and metadata-only filesystem, PKCS#11, Windows-store, Kubernetes Secret, trust-store, and private-key-material inventory reports into discovery findings plus credential graph",
-            "current_frontend_mapping": "served: Agents page lists enrolled agents, mints enrollment tokens, and shows endpoint-discovery source capabilities plus the agent.mtls.ReportInventory path; served inventory report evidence is also visible through discovery findings and graph",
-            "target_gui_mapping": "Agent fleet page with enrollment, heartbeat, capabilities, discovery sources, last scan, drift summary, renewal state, and per-tenant health.",
-            "acceptance_test": "Served Go tests cover CAP-DISC-02 agent ReportInventory over mTLS producing discovery findings, graph nodes, discovery events, API capability metadata, trust-store collector findings, and private-key-material findings without key bytes; Vitest covers agent list, enrollment-token creation, endpoint-discovery capability rendering, empty fleet, and stale-agent warning states.",
+            "current_frontend_mapping": "served: Agents page lists enrolled agents, reviews an exact effect-free identity/role/mTLS connection plan before minting a one-time token, shows heartbeat and endpoint-discovery capabilities, links directly to discovery runs/findings, and explains revoke/offboard/re-enroll recovery; ReportInventory evidence remains visible through discovery findings and graph",
+            "target_gui_mapping": "Delivered vertical slice: review and enroll an agent, observe heartbeat/certificate roles/collector capability, follow its discovery evidence, and recover a stale or wrongly trusted endpoint without hiding the old record.",
+            "acceptance_test": "Served Go tests prove the enrollment preview creates no token, fails closed without a published mTLS connection, and enforces network-relay authority; CAP-DISC-02 tests prove ReportInventory over mTLS produces discovery findings, graph nodes, and discovery events without key bytes; Vitest proves review-before-mint, changed-draft invalidation, direct evidence links, stale-agent recovery guidance, token creation, capability rendering, and no browser persistence.",
             "source_docs": [
                 "docs/features/discovery-and-inventory.md"
             ],
             "source_backend": [
                 "/api/v1/agents",
+                "/api/v1/agents/enrollment-tokens/preview",
                 "/api/v1/agents/enrollment-tokens",
+                "/api/v1/agents/{id}/cert-revocations",
+                "/api/v1/agents/{id}/offboard",
                 "/api/v1/discovery/findings",
                 "/api/v1/graph",
                 "internal/server/agentchannel.go",
@@ -712,10 +715,13 @@
                 "web/src/pages/Agents.tsx"
             ],
             "status": "closed",
-            "notes": "Closed by route-level feature-map evidence and advanced by DISC-01/DISC-03; COMPETE-017 makes CAP-DISC-02 explicit on the served API/UI. Backend evidence: served agent mTLS ReportInventory batches are bulkheaded, tenant-derived from the verified client certificate, projected into discovery source/run/finding rows, and exposed in the credential graph. The listAgents API now advertises agent.mtls.ReportInventory plus filesystem, pkcs11, windows-store, k8s-secret, trust-store, and private-key endpoint source kinds as metadata-only/no-key-byte capabilities. DISC-02 adds OS, Java JKS/cacerts, NSS, browser, and Windows trust-store collectors that report public trust anchors with private_key_present=false. DISC-03 adds private-key-material discovery that classifies key files locally, wipes file buffers, and reports private_key findings with key_bytes_present=false. The Agents console renders the endpoint-discovery capability list for each enrolled endpoint. A1 adds the agent job ledger: GET /api/v1/operations/jobs serves per-kind queue depth, claim counts and oldest-unclaimed age for the estate-touching work agents claim over the mTLS channel, with counts only and no tenant identifier, payload or credential. Proven by TestServedAgentClaimsExecutesAndReportsAJob and its siblings.",
+            "notes": "The agent-discovery vertical slice is complete. POST /api/v1/agents/enrollment-tokens/preview shares server-owned identity, role, and relay-authority validation with token minting but never calls the issuer; it reports the exact public mTLS destination, required permissions, data boundary, and blockers. The console binds that plan to the byte-equivalent normalized draft, hides it after any identity or role change, and exposes minting only for a current ready plan. Served agent mTLS ReportInventory batches remain bulkheaded, tenant-derived from the verified client certificate, projected into discovery source/run/finding rows, and exposed in the graph. The Agents page shows heartbeat, signed roles, metadata-only collector capabilities, direct run/finding links, and a stale-agent recovery path through connectivity repair or revoke/offboard/re-enroll. Offboarded records remain tombstone evidence.",
             "api_surface": [
                 "listAgents",
+                "previewEnrollmentToken",
                 "createEnrollmentToken",
+                "revokeAgentCertificate",
+                "offboardAgent",
                 "listDiscoveryFindings",
                 "getGraph",
                 "getAgentJobPosture"
@@ -723,7 +729,10 @@
             "api_na": "",
             "cli_surface": [
                 "agents list",
+                "agents enroll-token-preview",
                 "agents enroll-token",
+                "agents revoke-cert",
+                "agents offboard",
                 "discovery findings list",
                 "graph nodes"
             ],
@@ -735,6 +744,7 @@
                         "GET /api/v1/agents advertises agent.mtls.ReportInventory and the metadata-only endpoint source kinds accepted by that channel.",
                         "Trust-store collectors enumerate OS, Java JKS/cacerts, NSS, browser, and Windows fixture anchors as public certificate metadata only.",
                         "Private-key-material collector reports private_key findings with format, algorithm, restricted-file metadata, and public-key-derived fingerprint only.",
+                        "POST /api/v1/agents/enrollment-tokens/preview is effect-free and shares the exact identity, role, and relay-authority rule with token minting.",
                         "served_state=conditional",
                         "backend_status=conditional: served agent enrollment, mTLS heartbeat/renewal, and metadata-only filesystem, PKCS#11, Windows-store, Kubernetes Secret, trust-store, and private-key-material inventory reports into discovery findings plus credential graph"
                     ],
@@ -744,8 +754,8 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: served: Agents page lists enrolled agents, mints enrollment tokens, and shows endpoint-discovery source capabilities plus the agent.mtls.ReportInventory path; served inventory report evidence is also visible through discovery findings and graph",
-                        "target_gui_mapping: Agent fleet page with enrollment, heartbeat, capabilities, discovery sources, last scan, drift summary, renewal state, and per-tenant health."
+                        "current_frontend_mapping: served review-before-mint enrollment, heartbeat and certificate-role evidence, metadata-only collector capabilities, direct discovery run/finding links, and stale-agent recovery guidance",
+                        "target_gui_mapping: delivered review, enroll, observe, verify, and recover vertical slice for agent-based discovery"
                     ],
                     "refs": [
                         "web/src/lib/navigation.ts",
@@ -757,7 +767,10 @@
                 "cli": {
                     "evidence": [
                         "CLI command: agents list",
+                        "CLI command: agents enroll-token-preview",
                         "CLI command: agents enroll-token",
+                        "CLI command: agents revoke-cert",
+                        "CLI command: agents offboard",
                         "CLI command: discovery findings list",
                         "CLI command: graph nodes"
                     ],
@@ -769,7 +782,10 @@
                 "api": {
                     "evidence": [
                         "OpenAPI operationId: listAgents",
+                        "OpenAPI operationId: previewEnrollmentToken",
                         "OpenAPI operationId: createEnrollmentToken",
+                        "OpenAPI operationId: revokeAgentCertificate",
+                        "OpenAPI operationId: offboardAgent",
                         "OpenAPI operationId: listDiscoveryFindings",
                         "OpenAPI operationId: getGraph",
                         "OpenAPI operationId getAgentJobPosture serves GET /api/v1/operations/jobs with access:read and the AgentJobPosture schema: per-kind pending/claimed counts, whether an operator has enabled the kind, and the oldest-unclaimed age that distinguishes a drained queue from a stalled one. It carries no tenant id, payload or credential."
@@ -784,7 +800,8 @@
                 },
                 "test": {
                     "evidence": [
-                        "acceptance_test: Served Go tests cover CAP-DISC-02 agent ReportInventory over mTLS producing discovery findings, graph nodes, discovery events, API capability metadata, trust-store collector findings, and private-key-material findings without key bytes; Vitest covers agent list, enrollment-token creation, endpoint-discovery capability rendering, empty fleet, and stale-agent warning states.",
+                        "acceptance_test: Go proves the preview is effect-free, fail-closed, and relay-authorized; served channel tests prove metadata-only ReportInventory to findings/graph/events; Vitest proves review-before-mint, draft invalidation, evidence links, recovery guidance, and no browser token persistence.",
+                        "TestPreviewEnrollmentPlanIsEffectFree, TestPreviewEnrollmentPlanFailsClosedWithoutPublishedConnection, and TestPreviewEnrollmentPlanEnforcesRelayGrant pin the server preview oracle.",
                         "TestServedAgentEndpointDiscoveryCAPDISC02EndToEnd covers enrolled endpoint heartbeat, served mTLS inventory report, listAgents capability metadata, discovery readback, graph readback, and event-sourced discovery events.",
                         "TestAgentResponseAdvertisesEndpointDiscoveryCapabilitiesCAPDISC02 covers the listAgents JSON shape for agent.mtls.ReportInventory and metadata-only endpoint source kinds.",
                         "TestServedAgentInventoryOverChannelPopulatesDiscoveryAndGraph covers agent inventory over the served channel into discovery readback and graph readback.",
@@ -797,17 +814,20 @@
                     ],
                     "refs": [
                         "internal/server/agentchannel_served_test.go",
+                        "internal/projections/agents_api_test.go",
                         "internal/agent/discovery/discovery_test.go",
                         "internal/agent/discovery/privatekey_test.go",
                         "internal/featureparity/feature_facet_coverage_test.go",
                         "web/src/__tests__/route_parity.test.ts",
-                        "web/src/__tests__/feature_coverage.test.tsx"
+                        "web/src/__tests__/feature_coverage.test.tsx",
+                        "web/src/__tests__/agents.test.tsx",
+                        "web/src/lib/api.test.ts"
                     ]
                 },
                 "docs": {
                     "evidence": [
                         "documented in docs/features/discovery-and-inventory.md",
-                        "Agent trust-store and private-key inventory flags plus metadata-only behavior are documented for operators."
+                        "Review-before-mint enrollment, exact mTLS connection facts, evidence links, stale-agent recovery, and metadata-only collector boundaries are documented for operators."
                     ],
                     "refs": [
                         "docs/features/discovery-and-inventory.md"
@@ -815,7 +835,7 @@
                 },
                 "rbac": {
                     "evidence": [
-                        "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listAgents, createEnrollmentToken, listDiscoveryFindings, getGraph",
+                        "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listAgents, previewEnrollmentToken, createEnrollmentToken, revokeAgentCertificate, offboardAgent, listDiscoveryFindings, getGraph",
                         "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
                     ],
                     "refs": [
@@ -828,7 +848,7 @@
                 },
                 "audit": {
                     "evidence": [
-                        "mutating served surface requires audit/event evidence: listAgents, createEnrollmentToken, listDiscoveryFindings, getGraph",
+                        "The preview route is explicitly effect-free; token mint, certificate revocation, offboard, and ReportInventory mutations retain their idempotency and event/audit evidence.",
                         "Agent inventory reports emit discovery.source.upserted, discovery.run.queued, discovery.run.started, discovery.finding.recorded, and discovery.run.completed events before read models and graph nodes are inspected."
                     ],
                     "refs": [
@@ -877,7 +897,7 @@
                 "purpose": "Lets an operator understand and safely use agent-based discovery while tenant, policy, and security authority remain on the server.",
                 "tool": "discover",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/agents",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -891,7 +911,7 @@
                 ],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -913,12 +933,22 @@
                         ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: previewEnrollmentToken",
+                            "internal/projections/agents_api_test.go",
+                            "web/src/pages/Agents.tsx",
+                            "web/src/__tests__/agents.test.tsx"
+                        ]
                     },
                     "execute": {
-                        "status": "missing",
-                        "reason": "No complete console execution path is proved for this capability."
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: createEnrollmentToken",
+                            "web/src/pages/Agents.tsx",
+                            "web/src/__tests__/agents.test.tsx",
+                            "internal/server/agentchannel_served_test.go"
+                        ]
                     },
                     "observe": {
                         "status": "complete",
@@ -927,8 +957,13 @@
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: revokeAgentCertificate",
+                            "OpenAPI operationId: offboardAgent",
+                            "web/src/pages/Agents.tsx",
+                            "web/src/__tests__/agents.test.tsx"
+                        ]
                     },
                     "verify": {
                         "status": "complete",
@@ -940,12 +975,18 @@
                         "status": "complete",
                         "evidence": [
                             "OpenAPI operationId: listAgents",
+                            "OpenAPI operationId: previewEnrollmentToken",
                             "OpenAPI operationId: createEnrollmentToken",
+                            "OpenAPI operationId: revokeAgentCertificate",
+                            "OpenAPI operationId: offboardAgent",
                             "OpenAPI operationId: listDiscoveryFindings",
                             "OpenAPI operationId: getGraph",
                             "OpenAPI operationId: getAgentJobPosture",
                             "CLI command: agents list",
+                            "CLI command: agents enroll-token-preview",
                             "CLI command: agents enroll-token",
+                            "CLI command: agents revoke-cert",
+                            "CLI command: agents offboard",
                             "CLI command: discovery findings list",
                             "CLI command: graph nodes"
                         ]
@@ -953,8 +994,8 @@
                 },
                 "owner": "discovery",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "e3fc8229ecfcf4ba2fe7e0e0727d5f17682669b8",
+                "freshness": "2026-08-27"
             }
         },
         {

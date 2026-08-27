@@ -216,9 +216,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// metadata the API and console use for purpose-compatible selection. The
 	// authenticated `capabilities list` read raises it to 393 and maps to F8 so
 	// headless clients see the same route/RBAC preflight as the console. The
-	// first-class Discovery recovery command raises it to 394 and maps to F2.
-	if len(out) != 394 {
-		t.Fatalf("CLI commands = %d, want 394", len(out))
+	// first-class Discovery recovery command raises it to 394 and maps to F2. The
+	// effect-free agent enrollment preview raises it to 395 and maps to F3.
+	if len(out) != 395 {
+		t.Fatalf("CLI commands = %d, want 395", len(out))
 	}
 	return out
 }

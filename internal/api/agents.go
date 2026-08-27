@@ -14,7 +14,6 @@ import (
 
 	"trstctl.com/trstctl/internal/agent/discovery"
 	"trstctl.com/trstctl/internal/agent/relay"
-	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/store"
@@ -478,6 +477,22 @@ type enrollmentTokenRequest struct {
 	Roles []string `json:"roles,omitempty"`
 }
 
+// enrollmentPlanPreview is the exact, effect-free contract shown before a
+// one-time token exists. It deliberately contains connection and capability
+// metadata only: the secret token is created by the separate confirmed route.
+type enrollmentPlanPreview struct {
+	Ready               bool     `json:"ready"`
+	SideEffects         bool     `json:"side_effects"`
+	AllowedIdentity     string   `json:"allowed_identity,omitempty"`
+	Roles               []string `json:"roles"`
+	RequiredPermissions []string `json:"required_permissions"`
+	EnrollPath          string   `json:"enroll_path"`
+	AgentServer         string   `json:"agent_server"`
+	AgentServerName     string   `json:"agent_server_name"`
+	DataHandling        string   `json:"data_handling"`
+	BlockedReasons      []string `json:"blocked_reasons"`
+}
+
 // agentCertRevocationRequest identifies one public certificate selector to deny
 // for an agent. Serial and fingerprint are public certificate identifiers; no key
 // material or certificate bytes are accepted on this API.
@@ -506,6 +521,46 @@ type agentOffboardResponse struct {
 	RevocationEvidence string        `json:"revocation_evidence"`
 }
 
+// previewEnrollmentToken validates the same identity, role, relay authority, and
+// public connection facts as the mint route without calling the token issuer.
+// POST carries a typed request body, but this is a read-only calculation: no event,
+// projection, idempotency record, token, or agent job is created.
+func (a *API) previewEnrollmentToken(w http.ResponseWriter, r *http.Request) {
+	if a.agentTokens == nil {
+		a.writeError(w, errStatus(http.StatusServiceUnavailable, "agent enrollment is not configured"))
+		return
+	}
+	req, roles, err := a.parseEnrollmentTokenGrant(r)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+
+	blocked := make([]string, 0, 2)
+	if strings.TrimSpace(a.agentConnection.Server) == "" {
+		blocked = append(blocked, "Configure the public agent address before minting a token; the console will not invent a destination for a one-time credential.")
+	}
+	if strings.TrimSpace(a.agentConnection.ServerName) == "" {
+		blocked = append(blocked, "Configure the agent TLS server name before minting a token so the new agent can verify the control plane it reaches.")
+	}
+	permissions := []string{string(authz.AgentsWrite)}
+	if slices.Contains(roles, mtls.AgentRoleNetwork) {
+		permissions = append(permissions, string(authz.AgentsGrantRelay))
+	}
+	a.writeJSON(w, http.StatusOK, enrollmentPlanPreview{
+		Ready:               len(blocked) == 0,
+		SideEffects:         false,
+		AllowedIdentity:     req.AllowedIdentity,
+		Roles:               effectiveAgentRoles(roles),
+		RequiredPermissions: permissions,
+		EnrollPath:          "/enroll/bootstrap",
+		AgentServer:         a.agentConnection.Server,
+		AgentServerName:     a.agentConnection.ServerName,
+		DataHandling:        "This preview contains the selected agent identity, certificate roles, and public connection metadata only. A one-time token is not minted or returned.",
+		BlockedReasons:      blocked,
+	})
+}
+
 // createEnrollmentToken mints a one-time agent bootstrap token (S5.1/F15) bound to
 // the caller's tenant (WIRE-003/AN-1) so the web wizard can build the agent
 // install command. The mint runs under an idempotency key (AN-5): a retried
@@ -520,25 +575,9 @@ func (a *API) createEnrollmentToken(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusServiceUnavailable, "agent enrollment is not configured"))
 		return
 	}
-	var req enrollmentTokenRequest
-	if r.Body != nil && r.Body != http.NoBody && r.ContentLength != 0 {
-		if err := decodeJSON(r, &req); err != nil {
-			a.writeError(w, errWithStatus(http.StatusBadRequest, err))
-			return
-		}
-		req.AllowedIdentity = strings.TrimSpace(req.AllowedIdentity)
-	}
-	roles, err := normalizeEnrollmentRoles(req.Roles)
+	req, roles, err := a.parseEnrollmentTokenGrant(r)
 	if err != nil {
-		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
-		return
-	}
-	// Granting the network role is a separate authority from enrolling agents: a
-	// relay holds the credentials for the appliances it fronts, so placing one is
-	// a different decision from adding a host agent (epic A2).
-	if slices.Contains(roles, mtls.AgentRoleNetwork) && !a.canGrantRelayRole(r) {
-		a.writeProblem(w, problem.New(http.StatusForbidden,
-			"granting an agent the network relay role requires the agents:relay.grant permission"))
+		a.writeError(w, err)
 		return
 	}
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
@@ -554,6 +593,31 @@ func (a *API) createEnrollmentToken(w http.ResponseWriter, r *http.Request) {
 			Roles:           effectiveAgentRoles(roles),
 		}, nil
 	})
+}
+
+// parseEnrollmentTokenGrant is the one server-owned decision used by preview
+// and execution. Keeping it shared prevents a reviewed host plan from becoming a
+// relay grant, or a valid preview from disagreeing with queue admission.
+func (a *API) parseEnrollmentTokenGrant(r *http.Request) (enrollmentTokenRequest, []string, error) {
+	var req enrollmentTokenRequest
+	if r.Body != nil && r.Body != http.NoBody && r.ContentLength != 0 {
+		if err := decodeJSON(r, &req); err != nil {
+			return enrollmentTokenRequest{}, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+	}
+	req.AllowedIdentity = strings.TrimSpace(req.AllowedIdentity)
+	roles, err := normalizeEnrollmentRoles(req.Roles)
+	if err != nil {
+		return enrollmentTokenRequest{}, nil, errWithStatus(http.StatusBadRequest, err)
+	}
+	// Granting the network role is a separate authority from enrolling agents: a
+	// relay holds the credentials for the appliances it fronts, so placing one is
+	// a different decision from adding a host agent (epic A2).
+	if slices.Contains(roles, mtls.AgentRoleNetwork) && !a.canGrantRelayRole(r) {
+		return enrollmentTokenRequest{}, nil, errStatus(http.StatusForbidden,
+			"granting an agent the network relay role requires the agents:relay.grant permission")
+	}
+	return req, roles, nil
 }
 
 // revokeAgentCertificate records an event-sourced revocation for one agent mTLS

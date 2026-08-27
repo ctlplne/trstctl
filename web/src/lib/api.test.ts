@@ -471,6 +471,7 @@ describe("exported API surface census", () => {
       // It is a POST only because the plan travels as a body; requiring an
       // idempotency key would imply a side effect it does not have.
       "/api/v1/migrations/assess",
+      "/api/v1/agents/enrollment-tokens/preview",
       "/api/v1/ai/query",
       "/api/v1/ai/rca",
       "/api/v1/graph/query",
@@ -893,6 +894,37 @@ describe("api CSRF contract (SEC-001)", () => {
     expect(sentHeaders()["X-CSRF-Token"]).toBe("csrf-token-agent");
     expect(sentHeaders()["Idempotency-Key"]).toMatch(/^(?:idem-.+|[0-9a-f-]{36})$/);
     expect(vi.mocked(fetch).mock.calls[0][1]?.body).toBeUndefined();
+  });
+
+  it("previews the trimmed agent grant without creating an idempotent mutation", async () => {
+    document.cookie = "trstctl_csrf=csrf-token-agent-preview; path=/";
+    mockFetch(
+      200,
+      JSON.stringify({
+        ready: true,
+        side_effects: false,
+        allowed_identity: "edge-01",
+        roles: ["host", "network"],
+        required_permissions: ["agents:write", "agents:relay.grant"],
+        enroll_path: "/enroll/bootstrap",
+        agent_server: "agents.example.test:9443",
+        agent_server_name: "agents.example.test",
+        data_handling: "A one-time token is not minted or returned.",
+        blocked_reasons: [],
+      }),
+    );
+
+    const plan = await api.previewEnrollmentPlan({ allowed_identity: " edge-01 ", roles: ["host", "network"] });
+
+    expect(plan.side_effects).toBe(false);
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/agents/enrollment-tokens/preview");
+    expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe("POST");
+    expect(sentHeaders()["X-CSRF-Token"]).toBe("csrf-token-agent-preview");
+    expect(sentHeaders()["Idempotency-Key"]).toBeUndefined();
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toEqual({
+      allowed_identity: "edge-01",
+      roles: ["host", "network"],
+    });
   });
 
   it("pins an enrollment token to the requested agent identity", async () => {

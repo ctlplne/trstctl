@@ -58,6 +58,7 @@ func newAgentsAPI(t *testing.T, issuer api.BootstrapTokenIssuer) (*httptest.Serv
 		orchestrator.NewIdempotency(s),
 		orchestrator.NewOrchestrator(log, s, orchestrator.NewOutbox(s)),
 		api.WithAgentEnrollment(issuer),
+		api.WithAgentEnrollmentConnection("agents.example.test:9443", "agents.example.test"),
 	)
 	srv := httptest.NewServer(a)
 	t.Cleanup(srv.Close)
@@ -189,6 +190,89 @@ func TestEnrollmentTokenUnconfigured(t *testing.T) {
 	}
 	if d, _ := body["detail"].(string); !strings.Contains(d, "enroll") {
 		t.Errorf("detail = %q, want it to mention enrollment", d)
+	}
+}
+
+// TestPreviewEnrollmentPlanIsEffectFree proves the console can show the exact
+// identity, certificate roles, connection endpoint, permissions, and secret
+// boundary before the one-time bootstrap token exists. Preview and execution
+// share the role/relay authority, but only execution calls the issuer.
+func TestPreviewEnrollmentPlanIsEffectFree(t *testing.T) {
+	issuer := &stubTokenIssuer{}
+	srv, s := newAgentsAPI(t, issuer)
+	token := mintToken(t, s, "agents:write", "agents:relay.grant")
+
+	code, body := doJSONBody(t, srv, http.MethodPost, "/api/v1/agents/enrollment-tokens/preview", token, "",
+		map[string]any{"allowed_identity": " edge-01 ", "roles": []string{"network", "host"}})
+	if code != http.StatusOK {
+		t.Fatalf("POST enrollment preview = %d, want 200 (body %v)", code, body)
+	}
+	if issuer.calls != 0 {
+		t.Fatalf("effect-free preview minted %d tokens, want 0", issuer.calls)
+	}
+	if body["ready"] != true || body["side_effects"] != false {
+		t.Fatalf("preview readiness/effects = %v/%v, want true/false", body["ready"], body["side_effects"])
+	}
+	if body["allowed_identity"] != "edge-01" || body["agent_server"] != "agents.example.test:9443" || body["agent_server_name"] != "agents.example.test" {
+		t.Fatalf("preview exact identity/connection = %v", body)
+	}
+	roles, _ := body["roles"].([]any)
+	if len(roles) != 2 || roles[0] != "host" || roles[1] != "network" {
+		t.Fatalf("preview roles = %v, want [host network]", body["roles"])
+	}
+	permissions, _ := body["required_permissions"].([]any)
+	if len(permissions) != 2 || permissions[0] != "agents:write" || permissions[1] != "agents:relay.grant" {
+		t.Fatalf("preview permissions = %v, want agents:write + agents:relay.grant", body["required_permissions"])
+	}
+	blocked, _ := body["blocked_reasons"].([]any)
+	if len(blocked) != 0 {
+		t.Fatalf("ready preview blockers = %v, want none", blocked)
+	}
+	if handling, _ := body["data_handling"].(string); !strings.Contains(handling, "one-time token") || !strings.Contains(handling, "not") {
+		t.Fatalf("preview data boundary = %q, want explicit no-token boundary", handling)
+	}
+}
+
+func TestPreviewEnrollmentPlanFailsClosedWithoutPublishedConnection(t *testing.T) {
+	issuer := &stubTokenIssuer{}
+	s := newStore(t)
+	log := openLog(t)
+	a := api.New(
+		s,
+		orchestrator.NewIdempotency(s),
+		orchestrator.NewOrchestrator(log, s, orchestrator.NewOutbox(s)),
+		api.WithAgentEnrollment(issuer),
+	)
+	srv := httptest.NewServer(a)
+	t.Cleanup(srv.Close)
+	token := mintToken(t, s, "agents:write")
+
+	code, body := doJSONBody(t, srv, http.MethodPost, "/api/v1/agents/enrollment-tokens/preview", token, "",
+		map[string]any{"allowed_identity": "edge-01", "roles": []string{"host"}})
+	if code != http.StatusOK || body["ready"] != false || body["side_effects"] != false {
+		t.Fatalf("missing-connection preview = %d / %v, want 200 blocked and effect-free", code, body)
+	}
+	if issuer.calls != 0 {
+		t.Fatalf("blocked preview minted %d tokens, want 0", issuer.calls)
+	}
+	blocked, _ := body["blocked_reasons"].([]any)
+	if len(blocked) == 0 || !strings.Contains(blocked[0].(string), "public agent address") {
+		t.Fatalf("blocked reasons = %v, want exact public-address remedy", blocked)
+	}
+}
+
+func TestPreviewEnrollmentPlanEnforcesRelayGrant(t *testing.T) {
+	issuer := &stubTokenIssuer{}
+	srv, s := newAgentsAPI(t, issuer)
+	token := mintToken(t, s, "agents:write")
+
+	code, _ := doJSONBody(t, srv, http.MethodPost, "/api/v1/agents/enrollment-tokens/preview", token, "",
+		map[string]any{"allowed_identity": "edge-relay-01", "roles": []string{"host", "network"}})
+	if code != http.StatusForbidden {
+		t.Fatalf("relay preview without agents:relay.grant = %d, want 403", code)
+	}
+	if issuer.calls != 0 {
+		t.Fatalf("refused relay preview minted %d tokens, want 0", issuer.calls)
 	}
 }
 

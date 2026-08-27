@@ -274,7 +274,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use agent-based discovery while tenant, policy, and security authority remain on the server.",
       "tool": "discover",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/agents",
       "navigationEntrypoints": [
         "tool navigation",
@@ -288,7 +288,7 @@ export const canonicalCapabilities = [
       ],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -310,12 +310,22 @@ export const canonicalCapabilities = [
           ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: previewEnrollmentToken",
+            "internal/projections/agents_api_test.go",
+            "web/src/pages/Agents.tsx",
+            "web/src/__tests__/agents.test.tsx"
+          ]
         },
         "execute": {
-          "status": "missing",
-          "reason": "No complete console execution path is proved for this capability."
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: createEnrollmentToken",
+            "web/src/pages/Agents.tsx",
+            "web/src/__tests__/agents.test.tsx",
+            "internal/server/agentchannel_served_test.go"
+          ]
         },
         "observe": {
           "status": "complete",
@@ -324,8 +334,13 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: revokeAgentCertificate",
+            "OpenAPI operationId: offboardAgent",
+            "web/src/pages/Agents.tsx",
+            "web/src/__tests__/agents.test.tsx"
+          ]
         },
         "verify": {
           "status": "complete",
@@ -337,12 +352,18 @@ export const canonicalCapabilities = [
           "status": "complete",
           "evidence": [
             "OpenAPI operationId: listAgents",
+            "OpenAPI operationId: previewEnrollmentToken",
             "OpenAPI operationId: createEnrollmentToken",
+            "OpenAPI operationId: revokeAgentCertificate",
+            "OpenAPI operationId: offboardAgent",
             "OpenAPI operationId: listDiscoveryFindings",
             "OpenAPI operationId: getGraph",
             "OpenAPI operationId: getAgentJobPosture",
             "CLI command: agents list",
+            "CLI command: agents enroll-token-preview",
             "CLI command: agents enroll-token",
+            "CLI command: agents revoke-cert",
+            "CLI command: agents offboard",
             "CLI command: discovery findings list",
             "CLI command: graph nodes"
           ]
@@ -350,8 +371,8 @@ export const canonicalCapabilities = [
       },
       "owner": "discovery",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "e3fc8229ecfcf4ba2fe7e0e0727d5f17682669b8",
+      "freshness": "2026-08-27"
     }
   },
   {

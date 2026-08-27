@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Copy, Loader2, RefreshCw, ShieldOff, UserX, X } from "lucide-react";
+import { Link } from "react-router-dom";
 import { CredentialChip } from "@/components/CredentialChip";
 import { Dialog } from "@/components/Dialog";
 import { useToast } from "@/components/ToastProvider";
@@ -10,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PageHeader } from "@/components/PageHeader";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
-import { api, type Agent, type AgentJobPosture, type AgentUpgradeCampaign, type EnrollmentToken } from "@/lib/api";
+import { api, type Agent, type AgentJobPosture, type AgentUpgradeCampaign, type EnrollmentPlanPreview, type EnrollmentToken } from "@/lib/api";
 import { optionalApiCall } from "@/lib/optionalApi";
 import { buildAgentInstallPlan } from "@/lib/agentInstall";
 import { formatDate as formatDatePolicy, formatDateTime as formatDateTimePolicy } from "@/i18n/format";
@@ -74,6 +75,7 @@ export function Agents() {
   // (epic A2). Host is the default because it is what an agent with no grant
   // already is — offering "none" would offer something that does not exist.
   const [tokenRoles, setTokenRoles] = useState<AgentRole[]>(["host"]);
+  const [enrollmentPlan, setEnrollmentPlan] = useState<{ requestKey: string; preview: EnrollmentPlanPreview } | null>(null);
   const [tokenIdentity, setTokenIdentity] = useState("");
   const [tokenBusy, setTokenBusy] = useState(false);
   const [tokenError, setTokenError] = useState<string | null>(null);
@@ -118,6 +120,18 @@ export function Agents() {
     void load();
   }, []);
 
+  const enrollmentRequest = useMemo(() => {
+    const allowedIdentity = tokenAllowedIdentity.trim();
+    return {
+      ...(allowedIdentity ? { allowed_identity: allowedIdentity } : {}),
+      roles: tokenRoles,
+    };
+  }, [tokenAllowedIdentity, tokenRoles]);
+  const enrollmentRequestKey = JSON.stringify(enrollmentRequest);
+  const currentEnrollmentPlan = enrollmentPlan?.requestKey === enrollmentRequestKey ? enrollmentPlan.preview : null;
+  const enrollmentPlanAllowsMint =
+    currentEnrollmentPlan?.ready === true && currentEnrollmentPlan.side_effects === false && currentEnrollmentPlan.blocked_reasons.length === 0;
+
   async function loadOperationsEvidence() {
     if (operationsLoaded || operationsLoading) return;
     setOperationsLoading(true);
@@ -144,19 +158,33 @@ export function Agents() {
     }
   }
 
+  async function previewEnrollment() {
+    setTokenError(null);
+    setCopied(false);
+    setToken(null);
+    setEnrollmentPlan(null);
+    setTokenBusy(true);
+    try {
+      const preview = await api.previewEnrollmentPlan(enrollmentRequest);
+      setEnrollmentPlan({ requestKey: enrollmentRequestKey, preview });
+    } catch (err) {
+      setTokenError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setTokenBusy(false);
+    }
+  }
+
   async function mintToken() {
+    if (!enrollmentPlanAllowsMint) {
+      setTokenError(t("agents.enrollment.planNotReady"));
+      return;
+    }
     setTokenError(null);
     setCopied(false);
     setTokenBusy(true);
     try {
-      const allowedIdentity = tokenAllowedIdentity.trim();
-      setToken(
-        await api.createEnrollmentToken({
-          ...(allowedIdentity ? { allowed_identity: allowedIdentity } : {}),
-          roles: tokenRoles,
-        }),
-      );
-      setTokenIdentity(allowedIdentity);
+      setToken(await api.createEnrollmentToken(enrollmentRequest));
+      setTokenIdentity(enrollmentRequest.allowed_identity ?? "");
     } catch (err) {
       setTokenError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -184,6 +212,7 @@ export function Agents() {
     if (tokenBusy) return;
     setEnrollmentOpen(false);
     setToken(null);
+    setEnrollmentPlan(null);
     setCopied(false);
     setTokenError(null);
   }
@@ -456,7 +485,10 @@ export function Agents() {
               className="rounded-control border border-border bg-background px-3 py-2 text-sm font-normal"
               placeholder={translateNow("source.node.a.66570ff05a")}
               value={tokenAllowedIdentity}
-              onChange={(event) => setTokenAllowedIdentity(event.target.value)}
+              onChange={(event) => {
+                setTokenAllowedIdentity(event.target.value);
+                setEnrollmentPlan(null);
+              }}
               disabled={tokenBusy}
               autoComplete="off"
               spellCheck={false}
@@ -472,13 +504,14 @@ export function Agents() {
                     id={`agent-role-${choice.value}`}
                     className="mt-1"
                     checked={tokenRoles.includes(choice.value)}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      setEnrollmentPlan(null);
                       setTokenRoles((current) =>
                         event.target.checked
                           ? [...current.filter((role) => role !== choice.value), choice.value]
                           : current.filter((role) => role !== choice.value),
-                      )
-                    }
+                      );
+                    }}
                     disabled={tokenBusy}
                   />
                   <span>
@@ -492,6 +525,52 @@ export function Agents() {
             {tokenRoles.length === 0 && <p className="text-sm text-muted-foreground">{translateNow("source.agent.role.empty.a2r0le0008")}</p>}
           </fieldset>
           {tokenError && <ErrorState title={translateNow("source.could.not.mint.enrollment.token.7b0b6374e9")}>{tokenError}</ErrorState>}
+          {currentEnrollmentPlan && (
+            <section
+              role="region"
+              aria-label={t("agents.enrollment.planLabel")}
+              className="grid gap-3 rounded-control border border-brand-accent/35 bg-brand-accent/5 p-4 text-sm"
+            >
+              <div>
+                <h3 className="font-semibold">{t("agents.enrollment.planHeading")}</h3>
+                <p className="mt-1 text-muted-foreground">{t("agents.enrollment.noToken")}</p>
+              </div>
+              <dl className="grid gap-2 sm:grid-cols-2">
+                <div>
+                  <dt className="font-medium text-muted-foreground">{t("agents.enrollment.identity")}</dt>
+                  <dd className="break-words font-mono text-xs">{currentEnrollmentPlan.allowed_identity || t("agents.enrollment.tenantWide")}</dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-muted-foreground">{t("agents.enrollment.roles")}</dt>
+                  <dd>{currentEnrollmentPlan.roles.join(", ")}</dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-muted-foreground">{t("agents.enrollment.connection")}</dt>
+                  <dd className="break-words font-mono text-xs">{currentEnrollmentPlan.agent_server || t("agents.enrollment.notConfigured")}</dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-muted-foreground">{t("agents.enrollment.tlsName")}</dt>
+                  <dd className="break-words font-mono text-xs">{currentEnrollmentPlan.agent_server_name || t("agents.enrollment.notConfigured")}</dd>
+                </div>
+                <div className="sm:col-span-2">
+                  <dt className="font-medium text-muted-foreground">{t("agents.enrollment.permissions")}</dt>
+                  <dd className="break-words font-mono text-xs">{currentEnrollmentPlan.required_permissions.join(", ")}</dd>
+                </div>
+              </dl>
+              <p className="text-muted-foreground">{currentEnrollmentPlan.data_handling}</p>
+              <p className="font-medium text-status-success">{t("agents.enrollment.noEffects")}</p>
+              {currentEnrollmentPlan.blocked_reasons.length > 0 && (
+                <div className="rounded-control border border-status-warning/40 bg-status-warning/10 p-3" role="alert">
+                  <p className="font-medium">{t("agents.enrollment.blocked")}</p>
+                  <ul className="mt-1 list-disc space-y-1 pl-5 text-muted-foreground">
+                    {currentEnrollmentPlan.blocked_reasons.map((reason) => (
+                      <li key={reason}>{reason}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </section>
+          )}
           {token && (
             <div className="grid gap-3 rounded-md border border-border p-3 text-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -535,10 +614,12 @@ export function Agents() {
             <Button type="button" variant="ghost" onClick={closeEnrollment} disabled={tokenBusy}>
               {translateNow("source.cancel.19766ed6cc")}
             </Button>
-            <Button type="button" onClick={() => void mintToken()} disabled={tokenBusy}>
-              {tokenBusy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-              {translateNow("source.mint.enrollment.token.b50d28fa1d")}
-            </Button>
+            {!token && (
+              <Button type="button" onClick={() => void (enrollmentPlanAllowsMint ? mintToken() : previewEnrollment())} disabled={tokenBusy}>
+                {tokenBusy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                {enrollmentPlanAllowsMint ? t("agents.enrollment.mint") : t("agents.enrollment.review")}
+              </Button>
+            )}
           </div>
         </div>
       </Dialog>
@@ -807,6 +888,7 @@ function AgentDetail({ agent }: { agent: Agent }) {
   // (truth-integrity 1).
   const capabilities = agent.discovery_capabilities ?? [];
   const reportPath = agent.inventory_report_path || "agent.mtls.ReportInventory";
+  const presence = agentPresence(agent);
 
   return (
     <div aria-labelledby="agent-detail-heading" className="grid content-start gap-3 border-y border-border py-4">
@@ -915,6 +997,19 @@ function AgentDetail({ agent }: { agent: Agent }) {
             </li>
           ))}
         </ul>
+        <div className="flex flex-wrap gap-2">
+          <Link className="text-sm font-medium text-brand-accent underline-offset-4 hover:underline" to="/discovery?tab=runs">
+            {t("agents.endpointDiscovery.viewRuns")}
+          </Link>
+          <Link className="text-sm font-medium text-brand-accent underline-offset-4 hover:underline" to="/discovery">
+            {t("agents.endpointDiscovery.viewFindings")}
+          </Link>
+        </div>
+        {!presence.online && !isOffboarded(agent) && (
+          <p className="rounded-control border border-status-warning/35 bg-status-warning/5 p-3 text-sm text-muted-foreground">
+            {t("agents.endpointDiscovery.staleRecovery")}
+          </p>
+        )}
       </section>
       <section aria-labelledby="agent-service-posture-heading" className="grid gap-3 border-t border-border pt-3 text-sm">
         <div>

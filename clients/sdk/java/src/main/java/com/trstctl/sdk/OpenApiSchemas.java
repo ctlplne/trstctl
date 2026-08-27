@@ -293,6 +293,7 @@ public final class OpenApiSchemas {
       "EnrollmentDiagnosticSupportAggregate",
       "EnrollmentDiagnosticVerification",
       "EnrollmentDiagnosticsSupportAddendum",
+      "EnrollmentPlanPreview",
       "EnrollmentToken",
       "EnrollmentTokenRequest",
       "EnterpriseProfessionalService",

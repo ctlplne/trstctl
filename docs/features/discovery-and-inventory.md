@@ -146,6 +146,25 @@ The agent enrolls into the control plane with a one-time bootstrap token
 visible as a tombstone with actor/reason evidence, and causes the agent's mTLS
 certificate to be rejected on future heartbeat, renewal, and inventory RPCs.
 
+Enrollment is deliberately two steps in **Agents → Add agent**:
+
+1. **Review exact enrollment plan** asks
+   `POST /api/v1/agents/enrollment-tokens/preview` what the token _would_ allow. The
+   server returns the trimmed agent identity, signed certificate roles, public agent
+   address, TLS name the new agent must verify, required permissions, and any blockers.
+   This call creates no token, event, job, or agent connection.
+2. **Mint one-time token** appears only while that exact plan is ready and unchanged.
+   Editing the identity or either role hides the plan and requires a new review. Minting
+   then calls the separate idempotent token route, and the token is shown once; the
+   browser does not save it to local or session storage.
+
+Leaving the identity blank means any agent identity in the caller's tenant may use the
+token. Selecting **Network relay** also requires `agents:relay.grant`; ordinary
+`agents:write` authority cannot silently turn a host agent into a relay. If the public
+agent address or TLS name is missing, preview says exactly what must be configured and
+minting stays unavailable. Headless operators use `trstctl agents enroll-token-preview`
+with the same JSON body before `trstctl agents enroll-token`.
+
 The agent's own discovery sources are `filesystem`, `pkcs11`, `windows-store`,
 `k8s-secret`, `trust-store`, and `private-key` — the read has to happen on the host,
 since only it can see its own files, tokens, Windows store, trust stores, browser
@@ -155,6 +174,14 @@ inline secret-looking metadata keys, caps batch size, and ingests in the bounded
 lane so a noisy fleet cannot starve the API. `GET /api/v1/agents` advertises the
 accepted source kinds for each enrolled endpoint, and the Agents console shows the same
 capability list.
+
+The selected-agent panel links to **View discovery runs** and **View discovery
+findings**, so collector claims can be checked against the server's actual evidence.
+An offline or stale agent cannot provide current evidence. First check its service and
+network path. If the endpoint has the wrong certificate or capability role, revoke that
+certificate or offboard the agent, then enroll it again with a newly reviewed one-time
+token. Offboarding never deletes the old row: the actor, reason, and time remain as a
+tombstone, so recovery cannot erase the failure that caused it.
 
 For Linux certificate files, the shipped agent can inventory public certificate roots at
 startup with `--inventory-cert-roots`, reporting references, fingerprints, and

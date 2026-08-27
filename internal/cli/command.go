@@ -439,6 +439,7 @@ var coreCommandTable = []Command{
 	// command_licensed.go; they are appended to this table by buildCommandTable.
 
 	{Name: []string{"agents", "list"}, Method: "GET", Path: "/api/v1/agents", Summary: "List in-network agents"},
+	{Name: []string{"agents", "enroll-token-preview"}, Method: "POST", Path: "/api/v1/agents/enrollment-tokens/preview", Body: bodyOptionalFile, Summary: "Review the exact agent identity, roles, connection, permissions, and no-token boundary before minting"},
 	{Name: []string{"agents", "enroll-token"}, Method: "POST", Path: "/api/v1/agents/enrollment-tokens", Body: bodyOptionalFile, Summary: "Mint a one-time agent bootstrap token"},
 	{Name: []string{"agents", "revoke-cert"}, Method: "POST", Path: "/api/v1/agents/{id}/cert-revocations", Body: bodyFile, Summary: "Revoke an agent mTLS certificate"},
 	{Name: []string{"agents", "offboard"}, Method: "POST", Path: "/api/v1/agents/{id}/offboard", Body: bodyFile, Summary: "Offboard an agent and leave tombstone evidence"},

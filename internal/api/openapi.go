@@ -4297,6 +4297,18 @@ func componentSchemas() map[string]*Schema {
 		// fronts.
 		"roles": {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network"}}},
 	})
+	enrollmentPlanPreview := object(map[string]*Schema{
+		"ready":                {Type: "boolean"},
+		"side_effects":         {Type: "boolean"},
+		"allowed_identity":     str(),
+		"roles":                {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network"}}},
+		"required_permissions": {Type: "array", Items: str()},
+		"enroll_path":          str(),
+		"agent_server":         str(),
+		"agent_server_name":    str(),
+		"data_handling":        str(),
+		"blocked_reasons":      {Type: "array", Items: str()},
+	}, "ready", "side_effects", "roles", "required_permissions", "enroll_path", "agent_server", "agent_server_name", "data_handling", "blocked_reasons")
 	agentCertRevocationReq := object(map[string]*Schema{
 		"agent": str(), "serial": str(), "fingerprint": str(), "reason": str(),
 	})
@@ -5121,6 +5133,7 @@ func componentSchemas() map[string]*Schema {
 		"AgentList":                                agentList,
 		"EnrollmentTokenRequest":                   enrollmentTokenReq,
 		"EnrollmentToken":                          enrollmentToken,
+		"EnrollmentPlanPreview":                    enrollmentPlanPreview,
 		"AgentCertRevocationRequest":               agentCertRevocationReq,
 		"AgentCertRevocation":                      agentCertRevocation,
 		"AgentOffboardRequest":                     agentOffboardReq,

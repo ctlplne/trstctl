@@ -1202,8 +1202,14 @@ describe("i18n boundary", () => {
       // scan runs, and that token values are rejected. Negations and the
       // no-write/no-scan boundary were reviewed for meaning. Machine-authored
       // es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "179d7e0780a752b293e3af8a5b25cd6f623e23fb120e16e9f24ce772d4d268e6",
-      "de-DE": "a330564ad3bb2999362b51ffe82dc20dce8e5f295328e8ac478a1a7d4fec5935",
+      // Agent-enrollment plan re-pin: eighteen keys name the review-before-mint
+      // boundary, exact identity/role/mTLS destination, no-token/no-contact
+      // guarantee, direct discovery evidence links, and stale-agent recovery.
+      // Security negations and technical meaning were reviewed in both catalogs.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
+      // release.
+      "es-ES": "c839b5c65d69e417e3ce8b5800de23053e4e83b8f38bfc26bbcee7c0adba8588",
+      "de-DE": "d8b633e991465c9ed90217aad28c405b96fc9b14b4370dbffb56161182282098",
     });
   });
 

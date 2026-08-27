@@ -2731,6 +2731,19 @@ export interface EnrollmentDiagnosticsSupportAddendum {
   unknown_count: number;
 }
 
+export interface EnrollmentPlanPreview {
+  agent_server: string;
+  agent_server_name: string;
+  allowed_identity?: string;
+  blocked_reasons: string[];
+  data_handling: string;
+  enroll_path: string;
+  ready: boolean;
+  required_permissions: string[];
+  roles: ("host" | "network")[];
+  side_effects: boolean;
+}
+
 export interface EnrollmentToken {
   agent_server: string;
   agent_server_name: string;

@@ -178,8 +178,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// sanitized current-caller capability projection raises it to 381 and maps to
 	// F8 because it turns the same route RBAC registry into honest UI action state.
 	// The server-authoritative Discovery retry raises it to 382 and maps to F2.
-	if len(out) != 382 {
-		t.Fatalf("OpenAPI operationIds = %d, want 382", len(out))
+	// The effect-free agent enrollment preview raises it to 383 and maps to F3;
+	// unlike the mint route, it creates no token, event, job, or idempotency row.
+	if len(out) != 383 {
+		t.Fatalf("OpenAPI operationIds = %d, want 383", len(out))
 	}
 	return out
 }

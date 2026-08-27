@@ -8,6 +8,7 @@ import { ToastProvider } from "@/components/ToastProvider";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     agents: vi.fn(),
+    previewEnrollmentPlan: vi.fn(),
     createEnrollmentToken: vi.fn(),
     agentUpgradeCampaign: vi.fn(),
     agentJobPosture: vi.fn(),
@@ -34,6 +35,18 @@ describe("agent fleet surface", () => {
     localStorage.clear();
     sessionStorage.clear();
     vi.restoreAllMocks();
+    apiMock.previewEnrollmentPlan.mockReset().mockResolvedValue({
+      ready: true,
+      side_effects: false,
+      allowed_identity: "edge-01",
+      roles: ["host"],
+      required_permissions: ["agents:write"],
+      enroll_path: "/enroll/bootstrap",
+      agent_server: "localhost:19443",
+      agent_server_name: "localhost",
+      data_handling: "The preview contains configuration only. No one-time token exists yet.",
+      blocked_reasons: [],
+    });
     apiMock.createEnrollmentToken.mockReset().mockResolvedValue({
       token: "BOOT-TOKEN-XYZ",
       enroll_path: "/enroll/bootstrap",
@@ -287,7 +300,12 @@ describe("agent fleet surface", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add agent" }));
 
     fireEvent.change(screen.getByLabelText(/agent identity/i), { target: { value: "edge-01" } });
-    fireEvent.click(screen.getByRole("button", { name: /mint enrollment token/i }));
+    fireEvent.click(screen.getByRole("button", { name: /review exact enrollment plan/i }));
+
+    await waitFor(() => expect(apiMock.previewEnrollmentPlan).toHaveBeenCalledWith({ allowed_identity: "edge-01", roles: ["host"] }));
+    expect(apiMock.createEnrollmentToken).not.toHaveBeenCalled();
+    expect(await screen.findByRole("region", { name: "Agent enrollment plan" })).toHaveTextContent("No one-time token exists yet");
+    fireEvent.click(screen.getByRole("button", { name: /mint one-time token/i }));
 
     await waitFor(() => expect(apiMock.createEnrollmentToken).toHaveBeenCalledTimes(1));
     // A2: the mint carries the capability grant the operator selected. Host is
@@ -321,7 +339,20 @@ describe("agent fleet surface", () => {
     await screen.findByRole("heading", { name: /1 of 3 active agents/i });
     fireEvent.click(screen.getByRole("button", { name: "Add agent" }));
     fireEvent.click(screen.getByLabelText(/network relay/i));
-    fireEvent.click(screen.getByRole("button", { name: /mint enrollment token/i }));
+    apiMock.previewEnrollmentPlan.mockResolvedValueOnce({
+      ready: true,
+      side_effects: false,
+      roles: ["host", "network"],
+      required_permissions: ["agents:write", "agents:relay.grant"],
+      enroll_path: "/enroll/bootstrap",
+      agent_server: "localhost:61943",
+      agent_server_name: "localhost",
+      data_handling: "The preview contains configuration only. No one-time token exists yet.",
+      blocked_reasons: [],
+    });
+    fireEvent.click(screen.getByRole("button", { name: /review exact enrollment plan/i }));
+    await screen.findByRole("region", { name: "Agent enrollment plan" });
+    fireEvent.click(screen.getByRole("button", { name: /mint one-time token/i }));
 
     await waitFor(() => expect(apiMock.createEnrollmentToken).toHaveBeenCalledWith({ roles: ["host", "network"] }));
     expect(screen.getByText(/trstctl-agent --enroll-url/i)).toHaveTextContent("--server localhost:61943");
@@ -351,5 +382,36 @@ describe("agent fleet surface", () => {
     expect(screen.getByText("Serving the local Workload API socket.")).toBeInTheDocument();
     expect(screen.getByText("Forwarding enrollment requests to healthy upstreams.")).toBeInTheDocument();
     expect(screen.getByText(/2 healthy, 0 unhealthy, 0 unknown/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /view discovery runs/i })).toHaveAttribute("href", "/discovery?tab=runs");
+    expect(screen.getByRole("link", { name: /view discovery findings/i })).toHaveAttribute("href", "/discovery");
+  });
+
+  it("fails closed when the exact enrollment plan is unavailable or blocked", async () => {
+    apiMock.previewEnrollmentPlan.mockRejectedValueOnce(new Error("enrollment planner unavailable"));
+    renderAgents();
+    await screen.findByRole("heading", { name: /1 of 3 active agents/i });
+    fireEvent.click(screen.getByRole("button", { name: "Add agent" }));
+    fireEvent.change(screen.getByLabelText(/agent identity/i), { target: { value: "edge-blocked" } });
+    fireEvent.click(screen.getByRole("button", { name: /review exact enrollment plan/i }));
+
+    expect(await screen.findByText("enrollment planner unavailable")).toBeInTheDocument();
+    expect(apiMock.createEnrollmentToken).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: /mint one-time token/i })).not.toBeInTheDocument();
+  });
+
+  it("invalidates the enrollment plan when identity or role changes", async () => {
+    renderAgents();
+    await screen.findByRole("heading", { name: /1 of 3 active agents/i });
+    fireEvent.click(screen.getByRole("button", { name: "Add agent" }));
+    const identity = screen.getByLabelText(/agent identity/i);
+    fireEvent.change(identity, { target: { value: "edge-before" } });
+    fireEvent.click(screen.getByRole("button", { name: /review exact enrollment plan/i }));
+    expect(await screen.findByRole("button", { name: /mint one-time token/i })).toBeInTheDocument();
+
+    fireEvent.change(identity, { target: { value: "edge-after" } });
+    expect(screen.queryByRole("region", { name: "Agent enrollment plan" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /mint one-time token/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /review exact enrollment plan/i })).toBeInTheDocument();
+    expect(apiMock.createEnrollmentToken).not.toHaveBeenCalled();
   });
 });

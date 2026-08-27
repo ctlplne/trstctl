@@ -3853,6 +3853,23 @@ EnrollmentDiagnosticsSupportAddendum = TypedDict(
     total=False,
 )
 
+EnrollmentPlanPreview = TypedDict(
+    'EnrollmentPlanPreview',
+    {
+        'agent_server': str,
+        'agent_server_name': str,
+        'allowed_identity': str,
+        'blocked_reasons': list[str],
+        'data_handling': str,
+        'enroll_path': str,
+        'ready': bool,
+        'required_permissions': list[str],
+        'roles': list[str],
+        'side_effects': bool,
+    },
+    total=False,
+)
+
 EnrollmentToken = TypedDict(
     'EnrollmentToken',
     {

@@ -10856,6 +10856,65 @@
         ],
         "type": "object"
       },
+      "EnrollmentPlanPreview": {
+        "properties": {
+          "agent_server": {
+            "type": "string"
+          },
+          "agent_server_name": {
+            "type": "string"
+          },
+          "allowed_identity": {
+            "type": "string"
+          },
+          "blocked_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "data_handling": {
+            "type": "string"
+          },
+          "enroll_path": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "required_permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "roles": {
+            "items": {
+              "enum": [
+                "host",
+                "network"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "side_effects": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ready",
+          "side_effects",
+          "roles",
+          "required_permissions",
+          "enroll_path",
+          "agent_server",
+          "agent_server_name",
+          "data_handling",
+          "blocked_reasons"
+        ],
+        "type": "object"
+      },
       "EnrollmentToken": {
         "properties": {
           "agent_server": {
@@ -27970,6 +28029,62 @@
         "summary": "Mint a one-time agent bootstrap token",
         "x-trstctl-permission": "agents:write",
         "x-trstctl-sensitive-response": true
+      }
+    },
+    "/api/v1/agents/enrollment-tokens/preview": {
+      "post": {
+        "operationId": "previewEnrollmentToken",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnrollmentTokenRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollmentPlanPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Preview the exact agent identity, certificate roles, connection, permissions, and no-token boundary",
+        "x-trstctl-permission": "agents:write"
       }
     },
     "/api/v1/agents/upgrade-campaign": {

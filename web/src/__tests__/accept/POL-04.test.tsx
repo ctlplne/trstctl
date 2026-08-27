@@ -94,7 +94,7 @@ describe("POL-04 login and assistant polish", () => {
 
     expect(await screen.findByRole("heading", { name: "Product help" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "AI runtime boundary" })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Ask a question" }));
+    await user.click(await screen.findByRole("button", { name: "Ask a question" }));
     expect(screen.getByText("Runtime and privacy details").closest("details")).not.toHaveAttribute("open");
 
     expect(screen.getByTitle(/Cryptographic Bill of Materials/i)).toHaveTextContent("CBOM");

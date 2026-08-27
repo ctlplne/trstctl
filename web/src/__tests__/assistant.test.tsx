@@ -84,14 +84,15 @@ describe("assistant console workflow", () => {
     expect(screen.getByRole("link", { name: "Product help" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByText("How to complete a task or understand a term without leaving context.")).toBeInTheDocument();
     expect(screen.getByText("Sources, permissions, privacy boundary, exact references.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Ask a question" })).toBeInTheDocument();
+    const askButton = await screen.findByRole("button", { name: "Ask a question" });
+    expect(askButton).toBeInTheDocument();
     expect(screen.queryByLabelText("Question")).not.toBeInTheDocument();
     expect(screen.queryByText("Read-only tools are unavailable")).not.toBeInTheDocument();
     expect(apiMock.aiStatus).toHaveBeenCalledTimes(1);
     expect(apiMock.enterpriseSupportStatus).toHaveBeenCalledTimes(1);
     expect(apiMock.mcpTools).not.toHaveBeenCalled();
 
-    await user.click(screen.getByRole("button", { name: "Ask a question" }));
+    await user.click(askButton);
 
     expect(await screen.findByRole("heading", { name: "Ask Product help" })).toHaveFocus();
     expect(screen.getByLabelText("Question")).toBeInTheDocument();

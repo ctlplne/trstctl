@@ -487,6 +487,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agents/enrollment-tokens/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview the exact agent identity, certificate roles, connection, permissions, and no-token boundary */
+        post: operations["previewEnrollmentToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agents/upgrade-campaign": {
         parameters: {
             query?: never;
@@ -8431,6 +8448,18 @@ export interface components {
             schema_version: number;
             unknown_count: number;
         };
+        EnrollmentPlanPreview: {
+            agent_server: string;
+            agent_server_name: string;
+            allowed_identity?: string;
+            blocked_reasons: string[];
+            data_handling: string;
+            enroll_path: string;
+            ready: boolean;
+            required_permissions: string[];
+            roles: ("host" | "network")[];
+            side_effects: boolean;
+        };
         EnrollmentToken: {
             agent_server: string;
             agent_server_name: string;
@@ -13881,6 +13910,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnrollmentToken"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewEnrollmentToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["EnrollmentTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnrollmentPlanPreview"];
                 };
             };
             /** @description client error */
