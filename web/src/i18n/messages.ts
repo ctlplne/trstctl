@@ -5872,6 +5872,74 @@ export const messages = {
     defaultMessage: "Managed identity",
     description: "Label for the managed identity associated with a discovery finding.",
   },
+  "discovery.findings.identityStepHeading": {
+    defaultMessage: "Connect this finding to one managed identity",
+    description: "Heading for the human-readable identity selection step in discovery triage.",
+  },
+  "discovery.findings.identityStepDescription": {
+    defaultMessage: "Search by a name a person recognizes. Exact IDs stay under finding evidence.",
+    description: "ELI5 explanation that identity correlation uses names while technical IDs remain available as evidence.",
+  },
+  "discovery.findings.identitySearch": {
+    defaultMessage: "Find a managed identity",
+    description: "Label for the discovery identity search field.",
+  },
+  "discovery.findings.identitySearchPlaceholder": {
+    defaultMessage: "Search name, type, status, or owner",
+    description: "Placeholder for discovery identity search.",
+  },
+  "discovery.findings.identityChoose": {
+    defaultMessage: "Choose an identity",
+    description: "Empty option for the discovery identity selector.",
+  },
+  "discovery.findings.identityUnavailable": {
+    defaultMessage: "Previously linked identity — details unavailable",
+    description: "Human-safe fallback when a finding references an identity absent from the current roster.",
+  },
+  "discovery.findings.identityRosterError": {
+    defaultMessage: "Managed identities or owners could not be loaded. Refresh before claiming so you do not link the wrong record.",
+    description: "Fail-visible error for the discovery identity roster.",
+  },
+  "discovery.findings.identityCreateAction": {
+    defaultMessage: "Create identity from this finding",
+    description: "Button that opens inline managed-identity creation from a discovery finding.",
+  },
+  "discovery.findings.identityCreateHeading": {
+    defaultMessage: "Create a managed identity here",
+    description: "Heading for inline managed-identity creation in discovery.",
+  },
+  "discovery.findings.identityCreateDescription": {
+    defaultMessage: "This records the machine or app and selects it for the claim. Issuing or deploying a credential remains a separate, reviewable action.",
+    description: "Technical ELI5 effect boundary for inline identity creation.",
+  },
+  "discovery.findings.identityName": { defaultMessage: "Identity name", description: "Human-readable name for an inline-created identity." },
+  "discovery.findings.identityKind": { defaultMessage: "Credential type", description: "Identity kind selector label for inline discovery creation." },
+  "discovery.findings.identityOwner": { defaultMessage: "Identity owner", description: "Owner selector label for inline discovery identity creation." },
+  "discovery.findings.identityOwnerChoose": { defaultMessage: "Choose an owner", description: "Empty owner option for inline identity creation." },
+  "discovery.findings.identityCreateSubmit": {
+    defaultMessage: "Create and select identity",
+    description: "Submit button for inline discovery identity creation.",
+  },
+  "discovery.findings.identityCreating": { defaultMessage: "Creating identity…", description: "Busy label for inline identity creation." },
+  "discovery.findings.identityCreated": {
+    defaultMessage: "{name} was created and selected. Review the claim reason, then connect the finding.",
+    description: "Success message after inline identity creation.",
+  },
+  "discovery.findings.identityCreateError": {
+    defaultMessage: "Could not create the managed identity",
+    description: "Fallback error for inline discovery identity creation.",
+  },
+  "discovery.findings.identitySelectionSummary": {
+    defaultMessage: "{name} is {status}. Type: {kind}. Owner: {owner}.",
+    description: "Human confirmation of the identity selected for a discovery claim.",
+  },
+  "discovery.findings.identityOwnerUnknown": { defaultMessage: "an unknown owner", description: "Fallback when an identity owner is unavailable." },
+  "discovery.findings.identityKindX509": { defaultMessage: "X.509 certificate", description: "Human identity-kind label." },
+  "discovery.findings.identityKindSSHCertificate": { defaultMessage: "SSH certificate", description: "Human identity-kind label." },
+  "discovery.findings.identityKindSSHKey": { defaultMessage: "SSH key", description: "Human identity-kind label." },
+  "discovery.findings.identityKindSecret": { defaultMessage: "secret", description: "Human identity-kind label." },
+  "discovery.findings.identityKindAPIKey": { defaultMessage: "API key", description: "Human identity-kind label." },
+  "discovery.findings.identityKindWorkload": { defaultMessage: "workload identity", description: "Human identity-kind label." },
   "discovery.findings.claimSubmit": {
     defaultMessage: "Claim as managed",
     description: "Submit button label for claiming a discovery finding.",
@@ -17624,10 +17692,6 @@ export const messages = {
   "source.identity.id.2f8124d39c": {
     defaultMessage: "Identity ID",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Identities.tsx.",
-  },
-  "source.identity.id.ff02cbf157": {
-    defaultMessage: "identity-id",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Discovery.tsx.",
   },
   "source.identity.issued.08c478fa05": {
     defaultMessage: "identity.issued",

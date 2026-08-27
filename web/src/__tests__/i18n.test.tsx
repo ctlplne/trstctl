@@ -1184,8 +1184,14 @@ describe("i18n boundary", () => {
       // tracked agent online. Placeholders and the non-unique warning were
       // reviewed in both catalogs. Machine-authored es/de — FLAGGED FOR HUMAN
       // TRANSLATION REVIEW before release.
-      "es-ES": "6fa00115605ab51d3638f7b83ec513c4568d9e68c8f5ea4039987f1d94cb6227",
-      "de-DE": "6344cd9ed948ea07aeaefc49c7f7fd8908480aca9ed3207facda9e2f7907b5d2",
+      // Discovery identity-picker re-pin: the claim journey now searches and
+      // selects human identity and owner labels, explains the selected record,
+      // and creates a managed identity inline without exposing an editable raw
+      // UUID. The now-unreachable raw-ID placeholder was retired from every
+      // catalog. Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW
+      // before release.
+      "es-ES": "b41dae1185bbafa19e43bb349a66747a294bad31b823ffd73717b681817ec1aa",
+      "de-DE": "647de00e4b962955f1bbe5dbdc9f3ad51bb0cdcd99effea18f8ea50c934b5a05",
     });
   });
 

@@ -27,8 +27,10 @@ import {
   type DiscoverySchedule,
   type DiscoverySource,
   type DiscoverySourceRequest,
+  type Identity,
   type NHIDecommissionRequest,
   type NHIShadowPosture,
+  type Owner,
   type RemediationPlaybookRunRequest,
 } from "@/lib/api";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
@@ -46,6 +48,7 @@ type FindingLifecycleAction = "rotate" | "revoke" | "decommission" | "remediate"
 
 const remediationPlaybookRevokeIdentity = "identity-revoke";
 const remediationPlaybookRotateIdentity = "credential-rotate";
+const identityKinds: Identity["kind"][] = ["x509_certificate", "ssh_certificate", "ssh_key", "secret", "api_key", "workload_identity"];
 
 const sourceKinds: SourceKind[] = [
   "api_key",
@@ -2061,11 +2064,59 @@ function FindingTable({
   const [action, setAction] = useState<"claim" | "dismiss" | null>(null);
   const [reason, setReason] = useState("");
   const [managedIdentityID, setManagedIdentityID] = useState("");
+  const [identitySearch, setIdentitySearch] = useState("");
+  const [identityRoster, setIdentityRoster] = useState<Identity[]>([]);
+  const [ownerRoster, setOwnerRoster] = useState<Owner[]>([]);
+  const [identityRosterError, setIdentityRosterError] = useState(false);
+  const [showIdentityCreate, setShowIdentityCreate] = useState(false);
+  const [createIdentityName, setCreateIdentityName] = useState("");
+  const [createIdentityKind, setCreateIdentityKind] = useState<Identity["kind"]>("x509_certificate");
+  const [createIdentityOwnerID, setCreateIdentityOwnerID] = useState("");
+  const [createIdentityBusy, setCreateIdentityBusy] = useState(false);
   const [owner, setOwner] = useState("");
   const [team, setTeam] = useState("");
   const [tagText, setTagText] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
   const selected = selectedID ? (allFindings.find((finding) => finding.id === selectedID) ?? null) : null;
+  const ownerByID = useMemo(() => new Map(ownerRoster.map((item) => [item.id, item])), [ownerRoster]);
+  const selectedIdentity = identityRoster.find((identity) => identity.id === managedIdentityID) ?? null;
+  const normalizedIdentitySearch = identitySearch.trim().toLowerCase();
+  const filteredIdentities = identityRoster.filter((identity) => {
+    if (identity.id === managedIdentityID || !normalizedIdentitySearch) return true;
+    const identityOwner = ownerByID.get(identity.owner_id)?.name ?? "";
+    return [identity.name, identity.kind, identity.status, identityOwner].some((value) => value.toLowerCase().includes(normalizedIdentitySearch));
+  });
+
+  useEffect(() => {
+    let active = true;
+    setIdentityRosterError(false);
+    void api
+      .identities()
+      .then((items) => {
+        if (active) setIdentityRoster(items);
+      })
+      .catch(() => {
+        if (active) setIdentityRosterError(true);
+      });
+    void api
+      .owners()
+      .then((items) => {
+        if (active) setOwnerRoster(items);
+      })
+      .catch(() => {
+        if (active) setIdentityRosterError(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (action !== "claim" || !selected || createIdentityOwnerID || ownerRoster.length === 0) return;
+    const findingOwnerName = findingOwner(selected).trim().toLowerCase();
+    const matchedOwner = ownerRoster.find((item) => item.name.trim().toLowerCase() === findingOwnerName);
+    setCreateIdentityOwnerID(matchedOwner?.id ?? ownerRoster[0]?.id ?? "");
+  }, [action, createIdentityOwnerID, ownerRoster, selected]);
 
   function populateFacetInputs(finding: DiscoveryFinding) {
     setOwner(findingOwner(finding));
@@ -2078,6 +2129,8 @@ function FindingTable({
     setAction(null);
     setReason("");
     setManagedIdentityID(finding.managed_identity_id ?? "");
+    setIdentitySearch("");
+    setShowIdentityCreate(false);
     populateFacetInputs(finding);
   }
 
@@ -2086,7 +2139,40 @@ function FindingTable({
     setAction(nextAction);
     setReason(finding.triage_reason ?? "");
     setManagedIdentityID(finding.managed_identity_id ?? "");
+    setIdentitySearch("");
+    setShowIdentityCreate(false);
+    setCreateIdentityName(suggestedIdentityName(finding));
+    setCreateIdentityKind(identityKindForFinding(finding.kind));
+    const findingOwnerName = findingOwner(finding).trim().toLowerCase();
+    setCreateIdentityOwnerID(ownerRoster.find((item) => item.name.trim().toLowerCase() === findingOwnerName)?.id ?? ownerRoster[0]?.id ?? "");
     populateFacetInputs(finding);
+  }
+
+  async function createIdentityFromFinding() {
+    if (!selected || !createIdentityName.trim() || !createIdentityOwnerID) return;
+    setCreateIdentityBusy(true);
+    onNotice(null);
+    try {
+      const created = await api.createIdentity({
+        name: createIdentityName.trim(),
+        kind: createIdentityKind,
+        owner_id: createIdentityOwnerID,
+        attributes: {
+          discovery_finding_id: selected.id,
+          discovery_ref: selected.ref,
+          discovery_source_id: selected.source_id,
+        },
+      });
+      setIdentityRoster((current) => [created, ...current.filter((item) => item.id !== created.id)]);
+      setManagedIdentityID(created.id);
+      setIdentitySearch("");
+      setShowIdentityCreate(false);
+      onNotice({ kind: "success", message: t("discovery.findings.identityCreated", { name: created.name }) });
+    } catch (err) {
+      onNotice(noticeForError(err, t("discovery.findings.identityCreateError")));
+    } finally {
+      setCreateIdentityBusy(false);
+    }
   }
 
   async function submitAction(event: FormEvent<HTMLFormElement>) {
@@ -2413,20 +2499,108 @@ function FindingTable({
           </details>
 
           {action && (
-            <form
-              className="grid gap-3 border-t border-border pt-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.5fr)_auto]"
-              onSubmit={submitAction}
-            >
+            <form className="grid gap-3 border-t border-border pt-4 md:grid-cols-2" onSubmit={submitAction}>
               {action === "claim" ? (
-                <label className="grid gap-1 text-sm font-medium">
-                  {t("discovery.findings.managedIdentity")}
-                  <input
-                    className="ui-input"
-                    value={managedIdentityID}
-                    onChange={(event) => setManagedIdentityID(event.target.value)}
-                    placeholder={translateNow("source.identity.id.ff02cbf157")}
-                  />
-                </label>
+                <section className="grid gap-3 rounded-control border border-border bg-muted/20 p-3 md:col-span-2" aria-labelledby="finding-identity-heading">
+                  <div>
+                    <h3 id="finding-identity-heading" className="text-sm font-semibold">
+                      {t("discovery.findings.identityStepHeading")}
+                    </h3>
+                    <p className="mt-1 text-xs text-muted-foreground">{t("discovery.findings.identityStepDescription")}</p>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <label className="grid gap-1 text-sm font-medium">
+                      {t("discovery.findings.identitySearch")}
+                      <input
+                        type="search"
+                        className="ui-input"
+                        value={identitySearch}
+                        onChange={(event) => setIdentitySearch(event.target.value)}
+                        placeholder={t("discovery.findings.identitySearchPlaceholder")}
+                      />
+                    </label>
+                    <label className="grid gap-1 text-sm font-medium">
+                      {t("discovery.findings.managedIdentity")}
+                      <select className="ui-input" value={managedIdentityID} onChange={(event) => setManagedIdentityID(event.target.value)} required>
+                        <option value="">{t("discovery.findings.identityChoose")}</option>
+                        {managedIdentityID && !selectedIdentity && <option value={managedIdentityID}>{t("discovery.findings.identityUnavailable")}</option>}
+                        {filteredIdentities.map((identity) => (
+                          <option key={identity.id} value={identity.id}>
+                            {identityOptionLabel(t, identity, ownerByID.get(identity.owner_id))}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  {selectedIdentity && (
+                    <p className="text-sm text-muted-foreground" aria-live="polite">
+                      {identitySelectionSummary(t, selectedIdentity, ownerByID.get(selectedIdentity.owner_id))}
+                    </p>
+                  )}
+                  {identityRosterError && <p className="text-sm text-risk-critical">{t("discovery.findings.identityRosterError")}</p>}
+                  <div>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setShowIdentityCreate((current) => !current)}>
+                      <Plus className="h-4 w-4" aria-hidden="true" />
+                      {t("discovery.findings.identityCreateAction")}
+                    </Button>
+                  </div>
+                  {showIdentityCreate && (
+                    <section className="grid gap-3 border-s-2 border-brand-accent/40 ps-3" aria-labelledby="finding-create-identity-heading">
+                      <div>
+                        <h3 id="finding-create-identity-heading" className="text-sm font-semibold">
+                          {t("discovery.findings.identityCreateHeading")}
+                        </h3>
+                        <p className="mt-1 text-xs text-muted-foreground">{t("discovery.findings.identityCreateDescription")}</p>
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <label className="grid gap-1 text-sm font-medium">
+                          {t("discovery.findings.identityName")}
+                          <input className="ui-input" value={createIdentityName} onChange={(event) => setCreateIdentityName(event.target.value)} required />
+                        </label>
+                        <label className="grid gap-1 text-sm font-medium">
+                          {t("discovery.findings.identityKind")}
+                          <select
+                            className="ui-input"
+                            value={createIdentityKind}
+                            onChange={(event) => setCreateIdentityKind(event.target.value as Identity["kind"])}
+                          >
+                            {identityKinds.map((kind) => (
+                              <option key={kind} value={kind}>
+                                {identityKindLabel(t, kind)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="grid gap-1 text-sm font-medium">
+                          {t("discovery.findings.identityOwner")}
+                          <select
+                            className="ui-input"
+                            value={createIdentityOwnerID}
+                            onChange={(event) => setCreateIdentityOwnerID(event.target.value)}
+                            required
+                          >
+                            <option value="">{t("discovery.findings.identityOwnerChoose")}</option>
+                            {ownerRoster.map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.name} — {item.kind}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                      <div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => void createIdentityFromFinding()}
+                          disabled={createIdentityBusy || !createIdentityName.trim() || !createIdentityOwnerID}
+                        >
+                          {createIdentityBusy ? t("discovery.findings.identityCreating") : t("discovery.findings.identityCreateSubmit")}
+                        </Button>
+                      </div>
+                    </section>
+                  )}
+                </section>
               ) : (
                 <div className="hidden md:block" aria-hidden="true" />
               )}
@@ -2451,7 +2625,7 @@ function FindingTable({
                   placeholder={translateNow("source.internet.tls.f6752ebc7d")}
                 />
               </label>
-              <Button type="submit" className="self-end" disabled={actionBusy}>
+              <Button type="submit" className="self-end md:justify-self-start" disabled={actionBusy || (action === "claim" && !managedIdentityID)}>
                 {action === "claim" ? <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> : <XCircle className="h-4 w-4" aria-hidden="true" />}
                 {action === "claim" ? t("discovery.findings.claimSubmit") : t("discovery.findings.dismissSubmit")}
               </Button>
@@ -2521,6 +2695,61 @@ function discoveryFindingKindLabel(t: (key: MessageKey) => string, kind: string)
     default:
       return t("discovery.kind.unknown");
   }
+}
+
+function identityKindForFinding(kind: string): Identity["kind"] {
+  switch (kind.toLowerCase().replaceAll("-", "_")) {
+    case "certificate":
+    case "tls_certificate":
+    case "x509_certificate":
+      return "x509_certificate";
+    case "ssh_certificate":
+      return "ssh_certificate";
+    case "ssh_key":
+      return "ssh_key";
+    case "secret":
+      return "secret";
+    case "api_key":
+    case "api_token":
+    case "personal_access_token":
+      return "api_key";
+    default:
+      return "workload_identity";
+  }
+}
+
+function suggestedIdentityName(finding: DiscoveryFinding): string {
+  return metadataString(finding.metadata, ["principal", "subject", "service", "name"]) || finding.ref;
+}
+
+function identityKindLabel(t: (key: MessageKey) => string, kind: Identity["kind"]): string {
+  switch (kind) {
+    case "x509_certificate":
+      return t("discovery.findings.identityKindX509");
+    case "ssh_certificate":
+      return t("discovery.findings.identityKindSSHCertificate");
+    case "ssh_key":
+      return t("discovery.findings.identityKindSSHKey");
+    case "secret":
+      return t("discovery.findings.identityKindSecret");
+    case "api_key":
+      return t("discovery.findings.identityKindAPIKey");
+    case "workload_identity":
+      return t("discovery.findings.identityKindWorkload");
+  }
+}
+
+function identityOptionLabel(t: (key: MessageKey) => string, identity: Identity, owner?: Owner): string {
+  return `${identity.name} — ${identityKindLabel(t, identity.kind)} — ${identity.status} — ${owner?.name ?? t("discovery.findings.identityOwnerUnknown")}`;
+}
+
+function identitySelectionSummary(t: (key: MessageKey, values?: Record<string, string>) => string, identity: Identity, owner?: Owner): string {
+  return t("discovery.findings.identitySelectionSummary", {
+    name: identity.name,
+    status: identity.status,
+    kind: identityKindLabel(t, identity.kind),
+    owner: owner?.name ?? t("discovery.findings.identityOwnerUnknown"),
+  });
 }
 
 function triageFilterFromSearchParam(value: string | null): FindingTriageFilter {

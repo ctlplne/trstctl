@@ -19,6 +19,9 @@ const { apiMock } = vi.hoisted(() => ({
     discoveryCapabilities: vi.fn(),
     previewDiscoveryPlan: vi.fn(),
     preflightDiscoverySource: vi.fn(),
+    identities: vi.fn(),
+    owners: vi.fn(),
+    createIdentity: vi.fn(),
     claimDiscoveryFinding: vi.fn(),
     dismissDiscoveryFinding: vi.fn(),
     createDiscoverySource: vi.fn(),
@@ -79,6 +82,36 @@ function wizardCapability(kind: PrimaryKind, providers?: DiscoveryCapability["pr
 }
 
 function seedDiscoveryMocks() {
+  apiMock.identities.mockResolvedValue([
+    {
+      id: "identity-1",
+      tenant_id: "tenant-1",
+      kind: "x509_certificate",
+      name: "payments-api certificate",
+      owner_id: "owner-platform",
+      status: "issued",
+    },
+  ]);
+  apiMock.owners.mockResolvedValue([
+    {
+      id: "owner-platform",
+      tenant_id: "tenant-1",
+      kind: "team",
+      name: "platform",
+      escalation_chain: [],
+      ownership_attested: true,
+      ownership_complete: true,
+      ownership_current: true,
+    },
+  ]);
+  apiMock.createIdentity.mockResolvedValue({
+    id: "identity-created",
+    tenant_id: "tenant-1",
+    kind: "x509_certificate",
+    name: "10.0.0.10:443",
+    owner_id: "owner-platform",
+    status: "draft",
+  });
   apiMock.discoveryCapabilities.mockResolvedValue({
     schema_version: 1,
     items: [
@@ -674,7 +707,11 @@ describe("discovery control-plane surface", () => {
     expect(within(claimPanel as HTMLElement).getByText("certops")).toBeInTheDocument();
     expect(within(claimPanel as HTMLElement).getByText("internet")).toBeInTheDocument();
     await user.click(within(claimPanel as HTMLElement).getByRole("button", { name: "Claim" }));
-    await user.type(screen.getByLabelText("Managed identity"), "identity-1");
+    expect(await screen.findByRole("option", { name: /payments-api certificate.*X.509 certificate.*issued/i })).toBeInTheDocument();
+    expect(screen.queryByDisplayValue("identity-1")).not.toBeInTheDocument();
+    await user.type(screen.getByRole("searchbox", { name: "Find a managed identity" }), "payments-api");
+    await user.selectOptions(screen.getByLabelText("Managed identity"), "identity-1");
+    expect(screen.getByText("payments-api certificate is issued. Type: X.509 certificate. Owner: platform.")).toBeInTheDocument();
     await user.type(screen.getByLabelText("Reason"), "matched managed certificate");
     await user.clear(within(claimPanel as HTMLElement).getByLabelText("Tags"));
     await user.type(within(claimPanel as HTMLElement).getByLabelText("Tags"), "internet, tls, follow-up");
@@ -746,6 +783,38 @@ describe("discovery control-plane surface", () => {
     expect(params.get("triage")).toBe("managed");
     expect(screen.getByText("10.0.0.10:443")).toBeInTheDocument();
     expect(within(findingsSection as HTMLElement).queryByText("github:user/payments-ci/pat")).not.toBeInTheDocument();
+  });
+
+  it("creates and selects a managed identity from a finding without exposing a UUID field", async () => {
+    const user = userEvent.setup();
+    renderDiscovery();
+
+    const certRow = (await screen.findByText("10.0.0.10:443")).closest("tr") as HTMLTableRowElement;
+    await user.click(within(certRow).getByRole("button", { name: "Review finding" }));
+    const claimPanel = screen.getByRole("heading", { name: "Finding detail" }).closest("aside") as HTMLElement;
+    await user.click(within(claimPanel).getByRole("button", { name: "Claim" }));
+    await user.click(screen.getByRole("button", { name: "Create identity from this finding" }));
+
+    expect(screen.getByRole("heading", { name: "Create a managed identity here" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Identity name")).toHaveValue("10.0.0.10:443");
+    expect(screen.getByLabelText("Credential type")).toHaveValue("x509_certificate");
+    expect(screen.getByLabelText("Identity owner")).toHaveValue("owner-platform");
+    expect(screen.queryByRole("textbox", { name: /identity id/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Create and select identity" }));
+
+    expect(apiMock.createIdentity).toHaveBeenCalledWith({
+      name: "10.0.0.10:443",
+      kind: "x509_certificate",
+      owner_id: "owner-platform",
+      attributes: {
+        discovery_finding_id: "finding-1",
+        discovery_ref: "10.0.0.10:443",
+        discovery_source_id: "source-1",
+      },
+    });
+    expect(await screen.findByText("10.0.0.10:443 is draft. Type: X.509 certificate. Owner: platform.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Managed identity")).toHaveValue("identity-created");
   });
 
   it("creates a network source with host:port targets and can queue a run", async () => {
