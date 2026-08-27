@@ -5327,6 +5327,26 @@ export const messages = {
     defaultMessage: "Could not read CSV upload.",
     description: "Fallback error shown when a discovery source CSV file cannot be read.",
   },
+  "discovery.sourceForm.loadCompleteSample": {
+    defaultMessage: "Load complete sample",
+    description: "Button that loads a valid six-surface cross-system NHI example.",
+  },
+  "discovery.sourceForm.nhiRequirementLabel": {
+    defaultMessage: "Required NHI evidence surfaces",
+    description: "Accessible label for the cross-system discovery evidence checklist.",
+  },
+  "discovery.sourceForm.nhiRequirement": {
+    defaultMessage: "Required evidence: one metadata-only observation from each surface — IdP, Cloud, SaaS, On-prem, Code, and CI.",
+    description: "Technical ELI5 rule shown before a cross-system NHI source is submitted.",
+  },
+  "discovery.sourceForm.nhiSurfaceProgress": {
+    defaultMessage: "{included} of {total} required surfaces included",
+    description: "Progress summary for the cross-system discovery surface checklist.",
+  },
+  "discovery.sourceForm.nhiMissingSurfaces": {
+    defaultMessage: "NHI surfaces require one metadata-only observation from every surface. Missing: {surfaces}.",
+    description: "Client-side validation that reports every missing cross-system evidence surface together.",
+  },
   "discovery.sourceForm.importTitle": { defaultMessage: "Import sanitized observations", description: "Heading for advanced metadata observation imports." },
   "discovery.setup.validation.name": { defaultMessage: "Give this source a clear name.", description: "Discovery setup source-name validation." },
   "discovery.setup.validation.scope": { defaultMessage: "Choose the authorized network scope.", description: "Discovery setup scope validation." },

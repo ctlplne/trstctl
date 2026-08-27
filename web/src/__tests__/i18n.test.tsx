@@ -363,6 +363,10 @@ describe("i18n boundary", () => {
       // review action, and separate exact/supporting evidence disclosures.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
       // release.
+      // QA product g40 re-pin: cross-system discovery now explains the complete
+      // six-surface evidence rule, progress, valid sample, and all missing
+      // surfaces in one response. Machine-authored es/de — FLAGGED FOR HUMAN
+      // TRANSLATION REVIEW before release.
       // QA design g17 live-polish re-pin: operator-facing impact language now
       // uses a simple known-item count, moves the exact component breakdown
       // behind the evidence disclosure, and removes blast-radius jargon from
@@ -1180,8 +1184,8 @@ describe("i18n boundary", () => {
       // tracked agent online. Placeholders and the non-unique warning were
       // reviewed in both catalogs. Machine-authored es/de — FLAGGED FOR HUMAN
       // TRANSLATION REVIEW before release.
-      "es-ES": "de3fbbbbf83409f0aa2e9117b49ae7349552e3dfc6ef04043037f53b1f9ad87e",
-      "de-DE": "31eae22b01f921e6154273a43356ebc5db1f8a068c795559fff11fd2c13e231c",
+      "es-ES": "6fa00115605ab51d3638f7b83ec513c4568d9e68c8f5ea4039987f1d94cb6227",
+      "de-DE": "6344cd9ed948ea07aeaefc49c7f7fd8908480aca9ed3207facda9e2f7907b5d2",
     });
   });
 

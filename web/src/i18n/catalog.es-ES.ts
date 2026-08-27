@@ -1681,6 +1681,13 @@ const esESCatalog = {
   "discovery.monitoring.columnRepository": "Repositorio",
   "discovery.monitoring.unscheduled": "sin programación",
   "discovery.sourceForm.csvReadFailed": "No se pudo leer la carga CSV.",
+  "discovery.sourceForm.loadCompleteSample": "Cargar muestra completa",
+  "discovery.sourceForm.nhiRequirementLabel": "Superficies de evidencia NHI requeridas",
+  "discovery.sourceForm.nhiRequirement":
+    "Evidencia requerida: una observación que contenga solo metadatos de cada superficie — IdP, nube, SaaS, local, código y CI.",
+  "discovery.sourceForm.nhiSurfaceProgress": "Se incluyeron {included} de {total} superficies requeridas",
+  "discovery.sourceForm.nhiMissingSurfaces":
+    "Las superficies NHI requieren una observación que contenga solo metadatos de cada superficie. Faltan: {surfaces}.",
   "discovery.shadow.heading": "Postura NHI sombra",
   "discovery.shadow.metricFindings": "Hallazgos",
   "discovery.shadow.metricUnmanaged": "No administrados",

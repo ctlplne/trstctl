@@ -117,6 +117,8 @@ const surfaceChoices = [
   { value: "code", displayName: "Code" },
   { value: "ci", displayName: "CI" },
 ];
+const requiredNHISurfaces = surfaceChoices.map((surface) => surface.value);
+const nhiSurfaceDisplayNames = Object.fromEntries(surfaceChoices.map((surface) => [surface.value, surface.displayName])) as Record<string, string>;
 const structuredSourceConfigs: Record<StructuredSourceKind, StructuredSourceConfig> = {
   nhi_cross_surface: {
     payloadKey: "observations",
@@ -133,8 +135,8 @@ const structuredSourceConfigs: Record<StructuredSourceKind, StructuredSourceConf
     ],
     templates: [
       {
-        id: "idp-app",
-        templateName: "IdP app credential",
+        id: "complete-six-surface",
+        templateName: "Complete six-surface sample",
         rows: [
           {
             surface: "idp",
@@ -145,19 +147,50 @@ const structuredSourceConfigs: Record<StructuredSourceKind, StructuredSourceConf
             credential_kind: "oauth_client",
             evidence_refs: ["okta:audit/app-42"],
           },
-        ],
-      },
-      {
-        id: "ci-token",
-        templateName: "CI token",
-        rows: [
+          {
+            surface: "cloud",
+            system: "aws-iam",
+            external_id: "role/payments-prod",
+            principal: "payments-api",
+            owner: "platform",
+            credential_kind: "iam_role",
+            evidence_refs: ["aws-iam:credential-report"],
+          },
+          {
+            surface: "saas",
+            system: "github",
+            external_id: "app/installations/42",
+            principal: "payments-api",
+            owner: "platform",
+            credential_kind: "github_app",
+            evidence_refs: ["github:audit/app-42"],
+          },
+          {
+            surface: "on_prem",
+            system: "ldap",
+            external_id: "svc-payments",
+            principal: "payments-api",
+            owner: "platform",
+            credential_kind: "service_account",
+            evidence_refs: ["ldap:audit/svc-payments"],
+          },
+          {
+            surface: "code",
+            system: "github-code-search",
+            external_id: "repo/payments/path/deploy.yaml",
+            principal: "payments-api",
+            owner: "platform",
+            credential_kind: "deploy_key",
+            evidence_refs: ["github:code-search/deploy-key"],
+          },
           {
             surface: "ci",
             system: "github-actions",
             external_id: "repo/payments/env/prod",
-            principal: "payments-ci-token",
+            principal: "payments-api",
             owner: "platform",
             credential_kind: "workflow_token",
+            evidence_refs: ["github-actions:audit/workflow-token"],
           },
         ],
       },
@@ -1033,6 +1066,9 @@ export function Discovery() {
                 jsonImportOpen={openJSONImportKind === sourceKind}
                 onRowsChange={(rows) => setStructuredRows((current) => ({ ...current, [sourceKind]: rows }))}
                 onTemplateChange={(template) => setStructuredTemplates((current) => ({ ...current, [sourceKind]: template }))}
+                onSampleLoaded={() => {
+                  if (!sourceName.trim()) setSourceName(`${sourceKindLabels[sourceKind]} sample`);
+                }}
                 onJSONImportChange={(value) => setStructuredJSONImports((current) => ({ ...current, [sourceKind]: value }))}
                 onToggleJSONImport={() => setOpenJSONImportKind((current) => (current === sourceKind ? null : sourceKind))}
               />
@@ -1291,6 +1327,7 @@ function StructuredSourceForm({
   jsonImportOpen,
   onRowsChange,
   onTemplateChange,
+  onSampleLoaded,
   onJSONImportChange,
   onToggleJSONImport,
 }: {
@@ -1301,6 +1338,7 @@ function StructuredSourceForm({
   jsonImportOpen: boolean;
   onRowsChange: (rows: StructuredRow[]) => void;
   onTemplateChange: (template: string) => void;
+  onSampleLoaded: () => void;
   onJSONImportChange: (value: string) => void;
   onToggleJSONImport: () => void;
 }) {
@@ -1308,6 +1346,15 @@ function StructuredSourceForm({
   const { t } = useTranslation();
   const [csvError, setCSVError] = useState<string | null>(null);
   const activeTemplate = config.templates.find((template) => template.id === selectedTemplate) ?? config.templates[0];
+  const includedNHISurfaces = useMemo(() => {
+    if (kind !== "nhi_cross_surface") return new Set<string>();
+    try {
+      const records = jsonImport.trim() ? parseStructuredJSONImport(kind, jsonImport) : structuredRowsToRecords(config, rows);
+      return observedNHISurfaces(records);
+    } catch {
+      return new Set<string>();
+    }
+  }, [config, jsonImport, kind, rows]);
 
   function updateRow(index: number, key: string, value: string | boolean) {
     onRowsChange(rows.map((row, rowIndex) => (rowIndex === index ? { ...row, [key]: value } : row)));
@@ -1317,6 +1364,7 @@ function StructuredSourceForm({
     if (!activeTemplate) return;
     setCSVError(null);
     onRowsChange(activeTemplate.rows.map((row) => rowFromTemplate(config, row)));
+    onSampleLoaded();
   }
 
   async function handleCSVUpload(event: ChangeEvent<HTMLInputElement>) {
@@ -1336,6 +1384,31 @@ function StructuredSourceForm({
 
   return (
     <div className="grid gap-3">
+      {kind === "nhi_cross_surface" ? (
+        <section aria-label={t("discovery.sourceForm.nhiRequirementLabel")} className="rounded-control border border-border bg-muted/30 p-3">
+          <p className="text-sm font-medium text-foreground">{t("discovery.sourceForm.nhiRequirement")}</p>
+          <div
+            className="mt-2 flex flex-wrap gap-2"
+            aria-label={t("discovery.sourceForm.nhiSurfaceProgress", { included: includedNHISurfaces.size, total: 6 })}
+          >
+            {surfaceChoices.map((surface) => {
+              const included = includedNHISurfaces.has(surface.value);
+              return (
+                <span
+                  key={surface.value}
+                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs ${
+                    included ? "border-status-success/30 text-status-success" : "border-border text-muted-foreground"
+                  }`}
+                >
+                  {included ? <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /> : <span aria-hidden="true">○</span>}
+                  {surface.displayName}
+                </span>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">{t("discovery.sourceForm.nhiSurfaceProgress", { included: includedNHISurfaces.size, total: 6 })}</p>
+        </section>
+      ) : null}
       <div className="grid gap-3 md:grid-cols-[1fr_auto] xl:grid-cols-[1fr_auto_12rem]">
         <label className="grid gap-1 text-sm font-medium">
           {translateNow("source.source.template.f2c4cfbcec")}
@@ -1349,7 +1422,7 @@ function StructuredSourceForm({
         </label>
         <Button type="button" variant="outline" className="self-end" onClick={loadSampleRows}>
           <Sparkles className="h-4 w-4" aria-hidden="true" />
-          {translateNow("source.load.sample.ac404ab475")}
+          {kind === "nhi_cross_surface" ? t("discovery.sourceForm.loadCompleteSample") : translateNow("source.load.sample.ac404ab475")}
         </Button>
         <label className="grid gap-1 text-sm font-medium">
           {translateNow("source.csv.upload.1a9c1686fd")}
@@ -2572,7 +2645,30 @@ function parseTargets(value: string): string[] {
 function buildStructuredSourceConfig(kind: StructuredSourceKind, rows: StructuredRow[], jsonImport: string): Record<string, unknown> {
   const config = structuredSourceConfigs[kind];
   const records = jsonImport.trim() ? parseStructuredJSONImport(kind, jsonImport) : structuredRowsToRecords(config, rows);
+  if (kind === "nhi_cross_surface") {
+    const observed = observedNHISurfaces(records);
+    const missing = requiredNHISurfaces.filter((surface) => !observed.has(surface));
+    if (missing.length > 0) {
+      throw new Error(
+        translateNow("discovery.sourceForm.nhiMissingSurfaces", {
+          surfaces: missing.map((surface) => nhiSurfaceDisplayNames[surface] ?? surface).join(", "),
+        }),
+      );
+    }
+  }
   return { ...(config.fixedConfig ?? {}), [config.payloadKey]: records };
+}
+
+function observedNHISurfaces(records: unknown[]): Set<string> {
+  const observed = new Set<string>();
+  for (const record of records) {
+    if (!record || typeof record !== "object" || Array.isArray(record)) continue;
+    const raw = (record as Record<string, unknown>).surface;
+    if (typeof raw !== "string") continue;
+    const normalized = raw.trim().toLowerCase().replaceAll("-", "_");
+    if (requiredNHISurfaces.includes(normalized)) observed.add(normalized);
+  }
+  return observed;
 }
 
 function parseStructuredJSONImport(kind: StructuredSourceKind, value: string): unknown[] {

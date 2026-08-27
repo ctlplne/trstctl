@@ -836,10 +836,63 @@ describe("discovery control-plane surface", () => {
 
       expect(within(sourceForm as HTMLFormElement).queryByLabelText(source.oldJsonLabel)).not.toBeInTheDocument();
       expect(within(sourceForm as HTMLFormElement).getByLabelText("Source template")).toBeInTheDocument();
-      expect(within(sourceForm as HTMLFormElement).getByRole("button", { name: "Load sample" })).toBeInTheDocument();
+      expect(
+        within(sourceForm as HTMLFormElement).getByRole("button", {
+          name: source.kind === "nhi_cross_surface" ? "Load complete sample" : "Load sample",
+        }),
+      ).toBeInTheDocument();
       expect(within(sourceForm as HTMLFormElement).getByLabelText("CSV upload")).toBeInTheDocument();
       expect(within(sourceForm as HTMLFormElement).getByRole("button", { name: "Advanced JSON import" })).toBeInTheDocument();
     }
+  });
+
+  it("loads a complete six-surface NHI sample and explains the full evidence rule before submission", async () => {
+    const user = userEvent.setup();
+    renderDiscovery(["/discovery?tab=sources"]);
+
+    await screen.findByRole("heading", { name: "Import sanitized observations" });
+    const sourceForm = screen.getByRole("heading", { name: "Import sanitized observations" }).closest("form");
+    expect(sourceForm).toBeTruthy();
+    const form = within(sourceForm as HTMLFormElement);
+
+    await user.selectOptions(form.getByLabelText("Kind"), "nhi_cross_surface");
+    expect(form.getByText("Required evidence: one metadata-only observation from each surface — IdP, Cloud, SaaS, On-prem, Code, and CI.")).toBeInTheDocument();
+    await user.click(form.getByRole("button", { name: "Load complete sample" }));
+
+    expect(form.getByLabelText("Name")).toHaveValue("NHI surfaces sample");
+    const surfaceFields = form.getAllByLabelText("Surface") as HTMLSelectElement[];
+    expect(surfaceFields).toHaveLength(6);
+    expect(surfaceFields.map((field) => field.value)).toEqual(["idp", "cloud", "saas", "on_prem", "code", "ci"]);
+    expect(form.getByText("6 of 6 required surfaces included")).toBeInTheDocument();
+
+    await user.click(form.getByRole("button", { name: "Create source" }));
+
+    const request = apiMock.createDiscoverySource.mock.calls.at(-1)?.[0];
+    expect(request).toMatchObject({ name: "NHI surfaces sample", kind: "nhi_cross_surface" });
+    expect(request?.config.observations).toHaveLength(6);
+  });
+
+  it("reports every missing NHI surface together before calling the API", async () => {
+    const user = userEvent.setup();
+    renderDiscovery(["/discovery?tab=sources"]);
+
+    await screen.findByRole("heading", { name: "Import sanitized observations" });
+    const sourceForm = screen.getByRole("heading", { name: "Import sanitized observations" }).closest("form");
+    expect(sourceForm).toBeTruthy();
+    const form = within(sourceForm as HTMLFormElement);
+    await user.type(form.getByLabelText("Name"), "incomplete-cross-surface");
+    await user.selectOptions(form.getByLabelText("Kind"), "nhi_cross_surface");
+    await user.click(form.getByRole("button", { name: "Advanced JSON import" }));
+    fireEvent.change(form.getByLabelText("NHI surfaces JSON import"), {
+      target: { value: JSON.stringify([{ surface: "idp", system: "okta", external_id: "app/payments" }]) },
+    });
+
+    await user.click(form.getByRole("button", { name: "Create source" }));
+
+    expect(apiMock.createDiscoverySource).not.toHaveBeenCalled();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "NHI surfaces require one metadata-only observation from every surface. Missing: Cloud, SaaS, On-prem, Code, CI.",
+    );
   });
 
   it("creates a cross-surface NHI source from metadata-only observations", async () => {

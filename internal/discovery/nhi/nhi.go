@@ -87,10 +87,17 @@ func Findings(raw json.RawMessage) ([]Finding, error) {
 		seenSurfaces[surface] = true
 		out = append(out, finding)
 	}
+	missingSurfaces := make([]string, 0, len(requiredSurfaces))
 	for _, surface := range requiredSurfaces {
 		if !seenSurfaces[surface] {
-			return nil, fmt.Errorf("NHI cross-surface discovery requires at least one %s observation", surface)
+			missingSurfaces = append(missingSurfaces, surface)
 		}
+	}
+	if len(missingSurfaces) > 0 {
+		return nil, fmt.Errorf(
+			"NHI cross-surface discovery requires one metadata-only observation from every surface; missing: %s",
+			strings.Join(missingSurfaces, ", "),
+		)
 	}
 	return out, nil
 }
