@@ -5,7 +5,9 @@ import { expect, type Page } from "@playwright/test";
  * pre-authenticated deployment passes straight through. */
 export async function signIn(page: Page): Promise<void> {
   await page.goto("/");
-  const sso = page.getByRole("button", { name: /sign in with sso/i });
+  const sso = page.getByRole("button", {
+    name: /(?:continue|sign in) with sso/i,
+  });
   // The spaces rail is intentionally hidden behind a drawer on narrow
   // viewports, so it cannot be the sign-in oracle. Home's H1 is the
   // viewport-independent proof that the authenticated shell and its first

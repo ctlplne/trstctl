@@ -28,7 +28,9 @@ async function assertLoginPage(page: Page, methods: AuthMethods, testInfo: TestI
   await page.setViewportSize(viewport);
   await page.goto("/");
 
-  const sso = page.getByRole("button", { name: /sign in with sso/i });
+  const sso = page.getByRole("button", {
+    name: /(?:continue|sign in) with sso/i,
+  });
   if (methods.oidc) {
     await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
     await expect(sso).toBeVisible();

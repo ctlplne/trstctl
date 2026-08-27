@@ -30,7 +30,11 @@ type RouteReceipt = {
   }>;
 };
 
-const tenantRoutes = appRoutePaths.filter((path) => path !== "/login");
+// The signed production image deliberately omits /styleguide; it remains a
+// Vite-development and component-test instrument. Live qualification must
+// grade the customer routes that the candidate actually serves, rather than
+// treating the intentional production redirect as a broken product route.
+const tenantRoutes = appRoutePaths.filter((path) => path !== "/login" && path !== "/styleguide");
 const viewports = [
   { name: "desktop-1440x900", width: 1440, height: 900 },
   { name: "mobile-390x844", width: 390, height: 844 },
