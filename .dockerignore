@@ -29,6 +29,7 @@ tmp/
 # compiling Go, so no worktree-generated web bundle is accepted.
 bin/
 dist/
+tools/bin/
 internal/webui/dist/
 web/coverage/
 web/test-results/

@@ -3,6 +3,8 @@
 /dist/
 /.site/
 /site/
+# Repository-local helper binaries installed by QA/development tooling.
+/tools/bin/
 
 # Bare `go build ./cmd/...` binaries dropped at the repo root. The Makefile
 # builds into dist/; these are stray local builds and must never be committed.
