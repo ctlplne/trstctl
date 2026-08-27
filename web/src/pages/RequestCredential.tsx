@@ -3,6 +3,7 @@ import { Send } from "lucide-react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { Link } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { DataGrid, type DataGridColumn, type DataGridState } from "@/components/DataGrid";
 import { EmptyState } from "@/components/EmptyState";
@@ -16,7 +17,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
-import { api, ApiError, type IssuanceRequest, type Owner, type Profile } from "@/lib/api";
+import { api, ApiError, type IssuanceRequest, type IssuanceRequestInput, type IssuanceRequestPreview, type Owner, type Profile } from "@/lib/api";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 
@@ -34,6 +35,17 @@ function problemMessage(err: unknown, fallback: string): string {
 
 function profileKey(profile: Profile): string {
   return `${profile.name}:${profile.version}`;
+}
+
+function requestInput(values: RequestFormValues, profile: Profile): IssuanceRequestInput {
+  return {
+    subject: values.name,
+    profile: `${profile.name}:${profile.version}`,
+    owner_id: values.ownerId,
+    justification: values.purpose,
+    origin: "console",
+    ...(values.subjectCSRPEM ? { csr_pem: values.subjectCSRPEM } : {}),
+  };
 }
 
 /** S-C5b pilot: the request form is schema-first — zod owns the field
@@ -118,9 +130,14 @@ export function RequestCredential() {
   const name = useWatch({ control, name: "name" });
   const ownerId = useWatch({ control, name: "ownerId" });
   const purpose = useWatch({ control, name: "purpose" });
+  const subjectCSRPEM = useWatch({ control, name: "subjectCSRPEM" });
   const [busy, setBusy] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [preview, setPreview] = useState<IssuanceRequestPreview | null>(null);
+  const [previewFor, setPreviewFor] = useState("");
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const requester = requesterFor(user);
   const requesterLabel = user?.email || requester;
 
@@ -179,6 +196,54 @@ export function RequestCredential() {
     [requester, requests],
   );
 
+  const exactPreviewInput = useMemo<IssuanceRequestInput | null>(() => {
+    if (!selectedProfile || !selectedOwner || !name.trim()) return null;
+    return requestInput(
+      {
+        profileKey: profileKey(selectedProfile),
+        name,
+        ownerId: selectedOwner.id,
+        purpose,
+        subjectCSRPEM,
+      },
+      selectedProfile,
+    );
+  }, [name, purpose, selectedOwner, selectedProfile, subjectCSRPEM]);
+  const exactPreviewKey = exactPreviewInput ? JSON.stringify(exactPreviewInput) : "";
+
+  useEffect(() => {
+    if (step !== 2 || !exactPreviewInput) {
+      setPreview(null);
+      setPreviewFor("");
+      setPreviewError(null);
+      setPreviewLoading(false);
+      return;
+    }
+    let current = true;
+    const key = exactPreviewKey;
+    setPreview(null);
+    setPreviewFor("");
+    setPreviewError(null);
+    setPreviewLoading(true);
+    void api
+      .previewIssuanceRequest(exactPreviewInput)
+      .then((result) => {
+        if (!current) return;
+        setPreview(result);
+        setPreviewFor(key);
+      })
+      .catch((err: unknown) => {
+        if (!current) return;
+        setPreviewError(problemMessage(err, "Could not validate this exact request"));
+      })
+      .finally(() => {
+        if (current) setPreviewLoading(false);
+      });
+    return () => {
+      current = false;
+    };
+  }, [exactPreviewInput, exactPreviewKey, step]);
+
   const requestColumns = useMemo<Array<DataGridColumn<IssuanceRequest>>>(
     () => [
       {
@@ -218,18 +283,18 @@ export function RequestCredential() {
       return;
     }
 
+    const exactInput = requestInput(values, selectedProfile);
+    const exactKey = JSON.stringify(exactInput);
+    if (!preview?.ready || previewFor !== exactKey) {
+      setSubmitError(t("request.preview.stale"));
+      return;
+    }
+
     setBusy(true);
     try {
-      const created = await api.createIssuanceRequest({
-        subject: values.name,
-        profile: `${selectedProfile.name}:${selectedProfile.version}`,
-        owner_id: values.ownerId,
-        justification: values.purpose,
-        origin: "console",
-        // The CSR belongs to the request, not to whoever approves it: an
-        // approver should not have to re-supply key material they never had.
-        ...(values.subjectCSRPEM ? { csr_pem: values.subjectCSRPEM } : {}),
-      });
+      // The CSR belongs to the request, not to whoever approves it: an
+      // approver should not have to re-supply key material they never had.
+      const created = await api.createIssuanceRequest(exactInput);
       setRequests((current) => {
         const rows = current ?? [];
         return [created, ...rows.filter((request) => request.id !== created.id)];
@@ -438,9 +503,59 @@ export function RequestCredential() {
                       <dd>{requesterLabel || translateNow("source.no.session.principal.ffe06f6da5")}</dd>
                     </div>
                   </dl>
+                  {previewLoading ? <LoadingState>{t("request.preview.checking")}</LoadingState> : null}
+                  {previewError ? <ErrorState title={t("request.preview.unavailableTitle")}>{previewError}</ErrorState> : null}
+                  {preview && previewFor === exactPreviewKey && !preview.ready ? (
+                    <ErrorState title={t("request.preview.blockedTitle")}>
+                      <ul className="list-disc space-y-1 ps-5">
+                        {preview.blockers.map((blocker) => (
+                          <li key={blocker}>{blocker}</li>
+                        ))}
+                      </ul>
+                    </ErrorState>
+                  ) : null}
+                  {preview && previewFor === exactPreviewKey && preview.ready ? (
+                    <div
+                      role="status"
+                      aria-label={t("request.preview.readyLabel")}
+                      className="grid gap-3 rounded-panel border border-status-success/30 bg-status-success/10 p-3 text-body"
+                    >
+                      <h3 className="font-semibold text-status-success">{t("request.preview.readyTitle")}</h3>
+                      <p>{preview.guidance}</p>
+                      <dl className="grid gap-2 border-t border-border pt-3">
+                        <div>
+                          <dt className="text-caption text-muted-foreground">{t("request.preview.keyCustody")}</dt>
+                          <dd>{t(preview.key_origin === "requester_csr" ? "request.preview.requesterCSR" : "request.preview.legacyKey")}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-caption text-muted-foreground">{t("request.preview.approval")}</dt>
+                          <dd>{t("request.preview.approvalValue", { permission: preview.approval_permission })}</dd>
+                        </div>
+                      </dl>
+                      <div>
+                        <h4 className="font-medium">{t("request.preview.nextSteps")}</h4>
+                        <ol className="mt-1 list-decimal space-y-1 ps-5">
+                          {preview.submission_effects.map((effect) => (
+                            <li key={effect}>{effect}</li>
+                          ))}
+                        </ol>
+                      </div>
+                      {preview.warnings.length ? (
+                        <ul className="list-disc space-y-1 ps-5 text-risk-warning">
+                          {preview.warnings.map((warning) => (
+                            <li key={warning}>{warning}</li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </div>
+                  ) : null}
                   {submitError && <ErrorState title={translateNow("source.request.failed.cfce761bef")}>{submitError}</ErrorState>}
                   <div>
-                    <Button type="submit" loading={busy} disabled={activeProfiles.length === 0 || !selectedOwner}>
+                    <Button
+                      type="submit"
+                      loading={busy}
+                      disabled={activeProfiles.length === 0 || !selectedOwner || previewLoading || !preview?.ready || previewFor !== exactPreviewKey}
+                    >
                       <Send className="h-4 w-4" aria-hidden="true" />
                       {translateNow("source.submit.request.917e144e4b")}
                     </Button>
@@ -466,6 +581,21 @@ export function RequestCredential() {
                 <dd>accepted request; approval and issuance remain separate states</dd>
               </div>
             </dl>
+            <div className="border-t border-border pt-3">
+              <h3 className="font-semibold">{t("request.configure.heading")}</h3>
+              <p className="mt-1 text-caption text-muted-foreground">{t("request.configure.description")}</p>
+              <nav aria-label={t("request.configure.heading")} className="mt-2 grid gap-2">
+                <Link className="font-medium text-primary underline-offset-4 hover:underline" to="/profiles">
+                  {t("request.configure.profiles")}
+                </Link>
+                <Link className="font-medium text-primary underline-offset-4 hover:underline" to="/owners">
+                  {t("request.configure.owners")}
+                </Link>
+                <Link className="font-medium text-primary underline-offset-4 hover:underline" to="/ca-hierarchy">
+                  {t("request.configure.authorities")}
+                </Link>
+              </nav>
+            </div>
           </Card>
         </div>
       </section>

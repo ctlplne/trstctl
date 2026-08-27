@@ -53,6 +53,7 @@ export function IssuanceRequestsPanel({ currentPrincipal }: IssuanceRequestsPane
   const [denyReason, setDenyReason] = useState("");
   const [decisionNotice, setDecisionNotice] = useState<string | null>(null);
   const [decisionError, setDecisionError] = useState<string | null>(null);
+  const [recoverableRequestID, setRecoverableRequestID] = useState<string | null>(null);
   const canDecideRequests = hasPermission(currentPrincipal, "certs:issue");
   const canRequestCertificates = hasPermission(currentPrincipal, "certs:request");
   const canFulfillRequests = canDecideRequests && hasPermission(currentPrincipal, "identities:write");
@@ -142,8 +143,10 @@ export function IssuanceRequestsPanel({ currentPrincipal }: IssuanceRequestsPane
       }
       if (!completed) throw lastError ?? new Error("certificate evidence did not arrive");
       retainDecision(completed);
+      setRecoverableRequestID(null);
       setDecisionNotice(translateNow("source.issuance.requests.issued.i3req00023", { value1: item.subject }));
     } catch (err) {
+      setRecoverableRequestID(item.id);
       setDecisionError(apiProblemMessage(err, translateNow("source.issuance.requests.issuefailed.i3req00024")));
     } finally {
       setBusyRequestID(null);
@@ -276,9 +279,12 @@ export function IssuanceRequestsPanel({ currentPrincipal }: IssuanceRequestsPane
                     <p className="mt-2 text-caption text-muted-foreground">{translateNow("source.issuance.requests.readonly.i3req00021")}</p>
                   ) : null}
                   {item.status === "approved" && canFulfillRequests ? (
-                    <div className="mt-2">
+                    <div className="mt-2 space-y-2">
+                      {recoverableRequestID === item.id ? <p className="text-caption text-muted-foreground">{translateNow("request.recovery.safe")}</p> : null}
                       <Button type="button" size="sm" disabled={busyRequestID === item.id} onClick={() => void fulfill(item)}>
-                        {translateNow("source.issuance.requests.issue.i3req00022", { value1: item.subject })}
+                        {recoverableRequestID === item.id
+                          ? translateNow("request.recovery.retry", { subject: item.subject })
+                          : translateNow("source.issuance.requests.issue.i3req00022", { value1: item.subject })}
                       </Button>
                     </div>
                   ) : null}

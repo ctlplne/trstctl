@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -62,6 +63,34 @@ type issuanceRequestPreparationResponse struct {
 	IssueIdempotencyKey string                  `json:"issue_idempotency_key"`
 }
 
+// issuanceRequestPreviewResponse is the effect-free answer to "can this exact
+// request be opened safely?" It deliberately exposes only public/operational
+// metadata. A CSR is public, but echoing it would add no decision value and would
+// expand browser/evidence exposure, so only its presence and custody mode appear.
+type issuanceRequestPreviewResponse struct {
+	Ready                  bool     `json:"ready"`
+	Subject                string   `json:"subject"`
+	OwnerID                string   `json:"owner_id"`
+	OwnerName              string   `json:"owner_name,omitempty"`
+	OwnerKind              string   `json:"owner_kind,omitempty"`
+	Profile                string   `json:"profile,omitempty"`
+	ProfileName            string   `json:"profile_name,omitempty"`
+	ProfileVersion         int      `json:"profile_version,omitempty"`
+	Requester              string   `json:"requester"`
+	CSRSupplied            bool     `json:"csr_supplied"`
+	KeyOrigin              string   `json:"key_origin"`
+	ApprovalRequired       bool     `json:"approval_required"`
+	ApprovalPermission     string   `json:"approval_permission"`
+	IssuancePermissions    []string `json:"issuance_permissions"`
+	PreviewWrites          []string `json:"preview_writes"`
+	PreviewExternalEffects []string `json:"preview_external_effects"`
+	SubmissionEffects      []string `json:"submission_effects"`
+	Steps                  []string `json:"steps"`
+	Warnings               []string `json:"warnings"`
+	Blockers               []string `json:"blockers"`
+	Guidance               string   `json:"guidance"`
+}
+
 type issuanceRequestList struct {
 	Items []issuanceRequestResponse `json:"items"`
 	// Open is counted separately from the total. A single number cannot tell an
@@ -111,6 +140,113 @@ func principalSubject(ctx context.Context) string {
 	return principal.Subject
 }
 
+func (a *API) issuanceRequestPreview(ctx context.Context, tenantID string, body issuanceRequestBody) (issuanceRequestPreviewResponse, error) {
+	subject := strings.TrimSpace(body.Subject)
+	if subject == "" {
+		return issuanceRequestPreviewResponse{}, errStatus(http.StatusBadRequest, "subject is required")
+	}
+	ownerID, err := validateOwnerID(body.OwnerID)
+	if err != nil {
+		return issuanceRequestPreviewResponse{}, err
+	}
+	requester := principalSubject(ctx)
+	if requester == "" {
+		return issuanceRequestPreviewResponse{}, errStatus(http.StatusUnauthorized,
+			"an issuance request must name its requester; without one the self-approval check has nothing to compare")
+	}
+	csrPEM := strings.TrimSpace(body.CSRPEM)
+	if csrPEM != "" {
+		if err := validateSubjectCSRPEM(csrPEM); err != nil {
+			return issuanceRequestPreviewResponse{}, errStatus(http.StatusBadRequest, err.Error())
+		}
+	}
+
+	preview := issuanceRequestPreviewResponse{
+		Subject: subject, OwnerID: ownerID, Requester: requester, CSRSupplied: csrPEM != "",
+		KeyOrigin: "requester_csr", ApprovalRequired: true,
+		ApprovalPermission:  string(authz.CertsIssue),
+		IssuancePermissions: []string{string(authz.IdentitiesWrite), string(authz.CertsIssue)},
+		PreviewWrites:       []string{}, PreviewExternalEffects: []string{},
+		SubmissionEffects: []string{
+			"Append one tenant-scoped issuance.request.opened event.",
+			"Project one request in requested state for an independent approver.",
+			"Mint no certificate; approval and signer-backed issuance remain later, separate steps.",
+		},
+		Steps: []string{
+			"Submit this exact request.",
+			"A different principal with certs:issue approves or denies it.",
+			"An issuer prepares one deterministic identity and reuses one stable issuance key.",
+			"The request becomes issued only after matching signer-backed certificate evidence exists.",
+		},
+		Warnings: []string{}, Blockers: []string{},
+		Guidance: "This preview performed no write and contacted no certificate authority. Submitting opens a request only; it does not approve or mint a certificate.",
+	}
+	if csrPEM == "" {
+		preview.KeyOrigin = "deprecated_control_plane_generation"
+		preview.Warnings = append(preview.Warnings,
+			"No CSR was supplied. A later compatibility path may generate a private key inside the control plane; use a requester-generated CSR to keep the private key on the machine.")
+	}
+
+	owner, err := a.store.GetOwner(ctx, tenantID, ownerID)
+	if err != nil {
+		if store.IsNotFound(err) {
+			preview.Blockers = append(preview.Blockers,
+				"owner_id does not reference an existing owner")
+		} else {
+			return issuanceRequestPreviewResponse{}, err
+		}
+	} else {
+		preview.OwnerName = owner.Name
+		preview.OwnerKind = string(owner.Kind)
+	}
+
+	binding := strings.TrimSpace(body.Profile)
+	if binding != "" {
+		profileName, profileVersion, resolveErr := a.orch.ResolveIssuanceRequestProfileBinding(ctx, tenantID, binding)
+		if resolveErr != nil {
+			if errors.Is(resolveErr, orchestrator.ErrIssuanceRequestNotReady) || store.IsNotFound(resolveErr) {
+				preview.Blockers = append(preview.Blockers, issuanceRequestBlocker(resolveErr))
+			} else {
+				return issuanceRequestPreviewResponse{}, resolveErr
+			}
+		} else {
+			preview.ProfileName, preview.ProfileVersion = profileName, profileVersion
+			preview.Profile = profileName + ":" + strconv.Itoa(profileVersion)
+		}
+	} else {
+		preview.Warnings = append(preview.Warnings,
+			"No certificate profile was pinned. This compatibility request has no versioned certificate rule; normal console requests should select one.")
+	}
+	preview.Ready = len(preview.Blockers) == 0
+	return preview, nil
+}
+
+func issuanceRequestBlocker(err error) string {
+	const prefix = "orchestrator: issuance request is not ready: "
+	message := strings.TrimSpace(err.Error())
+	message = strings.TrimPrefix(message, prefix)
+	return message
+}
+
+func (a *API) previewIssuanceRequest(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	var body issuanceRequestBody
+	if err := decodeJSON(r, &body); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	preview, err := a.issuanceRequestPreview(r.Context(), tenantID, body)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, preview)
+}
+
 func (a *API) createIssuanceRequest(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
@@ -118,29 +254,16 @@ func (a *API) createIssuanceRequest(w http.ResponseWriter, r *http.Request) {
 		if err := decodeJSON(r, &body); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
-		if strings.TrimSpace(body.Subject) == "" {
-			return 0, nil, errStatus(http.StatusBadRequest, "subject is required")
-		}
-		ownerID, err := validateOwnerID(body.OwnerID)
+		preview, err := a.issuanceRequestPreview(ctx, tenantID, body)
 		if err != nil {
 			return 0, nil, err
 		}
-		// GetOwner executes under the caller's tenant RLS context. A UUID in a
-		// different tenant is deliberately indistinguishable from an absent row.
-		if _, err := a.store.GetOwner(ctx, tenantID, ownerID); err != nil {
-			if store.IsNotFound(err) {
-				return 0, nil, errStatus(http.StatusUnprocessableEntity, "owner_id does not reference an existing owner")
-			}
-			return 0, nil, err
-		}
-		requester := principalSubject(ctx)
-		if requester == "" {
-			return 0, nil, errStatus(http.StatusUnauthorized,
-				"an issuance request must name its requester; without one the self-approval check has nothing to compare")
+		if !preview.Ready {
+			return 0, nil, errStatus(http.StatusUnprocessableEntity, strings.Join(preview.Blockers, "; "))
 		}
 		out, err := a.orch.OpenIssuanceRequest(ctx, tenantID, projections.IssuanceRequestOpened{
-			Subject: strings.TrimSpace(body.Subject), OwnerID: ownerID, Profile: strings.TrimSpace(body.Profile),
-			CSRPEM: strings.TrimSpace(body.CSRPEM), Requester: requester,
+			Subject: preview.Subject, OwnerID: preview.OwnerID, Profile: preview.Profile,
+			CSRPEM: strings.TrimSpace(body.CSRPEM), Requester: preview.Requester,
 			Justification: strings.TrimSpace(body.Justification),
 			Origin:        strings.TrimSpace(body.Origin), TicketRef: strings.TrimSpace(body.TicketRef),
 		})

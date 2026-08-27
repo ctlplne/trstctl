@@ -3393,7 +3393,7 @@
             "priority": 4,
             "served_state": "partial",
             "backend_status": "partial: built-in issuance and all 14 operator-configured external-CA drivers are production-assembled and runtime-proven; the Kubernetes CSR/TrustBundle posture routes remain descriptor-only",
-            "current_frontend_mapping": "partial: Request, Approvals, Wizard, Identities, and CA Hierarchy use served built-in/external issuance; Kubernetes controller posture remains disclosure until its separate DoD entries are served",
+            "current_frontend_mapping": "served primary journey: Request uses selectable served profiles and owners, an effect-free server preview, fail-closed submission, and prerequisite links; Approvals preserves the approved request and retries issuance with the same deterministic identity/key after failure; Wizard, Identities, and CA Hierarchy use served built-in/external issuance. Kubernetes controller posture remains a separately tracked out-of-GA supporting disclosure.",
             "target_gui_mapping": "Issuance UI that distinguishes request, approve, issue, protocol-issued, external CA-issued, failed, replayed, and outbox-pending states.",
             "acceptance_test": "Built-in acceptance proves signer-backed issuance; the external-CA DoD proof drives all 14 configured drivers through production buildRunDeps and the served issue route to independently verified chains; Kubernetes controller DoD entries remain the only residual.",
             "source_docs": [
@@ -3426,6 +3426,7 @@
                 "getIssuer",
                 "createIdentity",
                 "transitionIdentity",
+                "previewIssuanceRequest",
                 "approveIdentityAction",
                 "listExternalCAs",
                 "issueExternalCA",
@@ -3440,6 +3441,7 @@
                 "issuers get",
                 "identities create",
                 "identities transition",
+                "issuance-requests preview",
                 "identities approve",
                 "external-cas list",
                 "external-cas issue",
@@ -3473,6 +3475,8 @@
                 },
                 "ui": {
                     "evidence": [
+                        "Request a certificate selects served profiles and owners, calls the effect-free previewIssuanceRequest route, refuses stale/unavailable previews, links exact prerequisite configuration, and submits only the reviewed normalized request.",
+                        "Approvals keeps failed approved work visible and labels the retry as safe because prepare, transition, and completion reuse the deterministic request identity and issuance key.",
                         "current_frontend_mapping: served: Request a credential and Approvals serve requester intake plus distinct approval for certificate issuance, Wizard and Identities can issue through the served path, CA Hierarchy issues through configured external CAs and renders outbox-pending/external-ca-issued states, and Workloads discloses native Kubernetes CSR plus TrustBundle controller posture",
                         "CA Hierarchy renders configured external CA registry entries, submits CSR/DNS/profile/TTL input to api.issueExternalCA, shows outbox-pending while the request is in flight, and shows external-ca-issued evidence without rendering the issued certificate PEM.",
                         "Workloads fetches kubernetesCSRSupport and renders CAP-K8S-04, signer names, status-only RBAC, architecture controls, and residuals without storing CSR or private-key material.",
@@ -3484,6 +3488,9 @@
                         "web/src/App.tsx",
                         "web/src/pages/CAHierarchy.tsx",
                         "web/src/pages/RequestCredential.tsx",
+                        "web/src/components/IssuanceRequestsPanel.tsx",
+                        "web/src/__tests__/self_service.test.tsx",
+                        "web/src/__tests__/issuance_requests_panel.test.tsx",
                         "web/src/pages/Approvals.tsx",
                         "web/src/pages/Identities.tsx",
                         "web/src/pages/Wizard.tsx",
@@ -3501,6 +3508,7 @@
                         "CLI command: identities approve",
                         "CLI command: external-cas list",
                         "CLI command: external-cas issue",
+                        "CLI command: issuance-requests preview",
                         "CLI command: kubernetes csr",
                         "CLI command: kubernetes trust-bundles"
                     ],
@@ -3519,6 +3527,7 @@
                         "OpenAPI operationId: approveIdentityAction",
                         "OpenAPI operationId: listExternalCAs",
                         "OpenAPI operationId: issueExternalCA",
+                        "OpenAPI operationId: previewIssuanceRequest",
                         "OpenAPI operationId: getKubernetesCSRSupport",
                         "OpenAPI operationId: getKubernetesTrustBundleDistribution"
                     ],
@@ -3640,7 +3649,7 @@
                 "purpose": "Lets an operator understand and safely use ca-agnostic outbound issuance while tenant, policy, and security authority remain on the server.",
                 "tool": "certificates",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/request",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -3649,12 +3658,10 @@
                 ],
                 "permission_authority": "internal/api route registry and feature authorization manifest",
                 "edition": "core",
-                "dependencies": [
-                    "One or more lifecycle or console stages remain incomplete and are shown in the stage ledger."
-                ],
+                "dependencies": [],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -3669,12 +3676,21 @@
                         ]
                     },
                     "configure": {
-                        "status": "missing",
-                        "reason": "No structured evidence proves an operator can configure every required prerequisite from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/RequestCredential.tsx",
+                            "web/src/__tests__/self_service.test.tsx"
+                        ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: previewIssuanceRequest",
+                            "CLI command: issuance-requests preview",
+                            "internal/server/issuance_request_served_test.go",
+                            "web/src/pages/RequestCredential.tsx",
+                            "web/src/__tests__/self_service.test.tsx"
+                        ]
                     },
                     "execute": {
                         "status": "complete",
@@ -3690,8 +3706,12 @@
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/components/IssuanceRequestsPanel.tsx",
+                            "web/src/__tests__/issuance_requests_panel.test.tsx",
+                            "internal/server/issuance_request_served_test.go"
+                        ]
                     },
                     "verify": {
                         "status": "complete",
@@ -3711,6 +3731,7 @@
                             "OpenAPI operationId: approveIdentityAction",
                             "OpenAPI operationId: listExternalCAs",
                             "OpenAPI operationId: issueExternalCA",
+                            "OpenAPI operationId: previewIssuanceRequest",
                             "OpenAPI operationId: getKubernetesCSRSupport",
                             "OpenAPI operationId: getKubernetesTrustBundleDistribution",
                             "CLI command: issuers create",
@@ -3722,6 +3743,7 @@
                             "CLI command: identities approve",
                             "CLI command: external-cas list",
                             "CLI command: external-cas issue",
+                            "CLI command: issuance-requests preview",
                             "CLI command: kubernetes csr",
                             "CLI command: kubernetes trust-bundles"
                         ]

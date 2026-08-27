@@ -4553,6 +4553,34 @@ IssuanceRequestPreparation = TypedDict(
     total=False,
 )
 
+IssuanceRequestPreview = TypedDict(
+    'IssuanceRequestPreview',
+    {
+        'approval_permission': str,
+        'approval_required': bool,
+        'blockers': list[str],
+        'csr_supplied': bool,
+        'guidance': str,
+        'issuance_permissions': list[str],
+        'key_origin': str,
+        'owner_id': str,
+        'owner_kind': str,
+        'owner_name': str,
+        'preview_external_effects': list[str],
+        'preview_writes': list[str],
+        'profile': str,
+        'profile_name': str,
+        'profile_version': int,
+        'ready': bool,
+        'requester': str,
+        'steps': list[str],
+        'subject': str,
+        'submission_effects': list[str],
+        'warnings': list[str],
+    },
+    total=False,
+)
+
 Issuer = TypedDict(
     'Issuer',
     {

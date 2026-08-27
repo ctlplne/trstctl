@@ -2748,6 +2748,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/issuance-requests/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate and normalize an exact issuance request without writing state or contacting a certificate authority */
+        post: operations["previewIssuanceRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/issuance-requests/{id}/approve": {
         parameters: {
             query?: never;
@@ -8956,6 +8973,31 @@ export interface components {
             identity: components["schemas"]["Identity"];
             issue_idempotency_key: string;
             request: components["schemas"]["IssuanceRequest"];
+        };
+        IssuanceRequestPreview: {
+            approval_permission: string;
+            approval_required: boolean;
+            blockers: string[];
+            csr_supplied: boolean;
+            guidance: string;
+            issuance_permissions: string[];
+            /** @enum {string} */
+            key_origin: "requester_csr" | "deprecated_control_plane_generation";
+            /** Format: uuid */
+            owner_id: string;
+            owner_kind?: string;
+            owner_name?: string;
+            preview_external_effects: string[];
+            preview_writes: string[];
+            profile?: string;
+            profile_name?: string;
+            profile_version?: number;
+            ready: boolean;
+            requester: string;
+            steps: string[];
+            subject: string;
+            submission_effects: string[];
+            warnings: string[];
         };
         Issuer: {
             chain?: string[];
@@ -20338,6 +20380,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TicketIntakeSchedule"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewIssuanceRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssuanceRequestInput"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssuanceRequestPreview"];
                 };
             };
             /** @description client error */

@@ -4036,6 +4036,83 @@ export const messages = {
     defaultMessage: "Ask an operator to create an accountable owner before requesting a credential.",
     description: "Recovery guidance when the request wizard has no selectable owners.",
   },
+  "request.preview.checking": {
+    defaultMessage: "Checking the exact owner, certificate rule, key custody, and approval boundary…",
+    description: "Loading copy while the server performs an effect-free issuance-request preview.",
+  },
+  "request.preview.unavailableTitle": {
+    defaultMessage: "Request preview unavailable",
+    description: "Title when the effect-free server preview cannot be completed.",
+  },
+  "request.preview.stale": {
+    defaultMessage: "The exact server preview is missing or stale. Return to the previous step, review the values, and try again.",
+    description: "Fail-closed submission error when form values do not match the last successful server preview.",
+  },
+  "request.preview.readyLabel": {
+    defaultMessage: "Request preview ready",
+    description: "Accessible name for the successful effect-free request preview status.",
+  },
+  "request.preview.readyTitle": {
+    defaultMessage: "Ready to open this request",
+    description: "Heading for a successful effect-free issuance-request preview.",
+  },
+  "request.preview.blockedTitle": {
+    defaultMessage: "Fix these prerequisites before submitting",
+    description: "Heading for server-reported request preview blockers.",
+  },
+  "request.preview.nextSteps": {
+    defaultMessage: "What submission will do",
+    description: "Heading above server-owned issuance-request submission effects.",
+  },
+  "request.preview.keyCustody": {
+    defaultMessage: "Key custody",
+    description: "Label for the previewed issuance-request private-key origin.",
+  },
+  "request.preview.requesterCSR": {
+    defaultMessage: "Requester-held key: trstctl receives only the public CSR.",
+    description: "Plain-language label for requester-held issuance key custody.",
+  },
+  "request.preview.legacyKey": {
+    defaultMessage: "Deprecated control-plane key generation: supply a CSR to keep the private key on the machine.",
+    description: "Warning label for the legacy server-generated issuance key path.",
+  },
+  "request.preview.approval": {
+    defaultMessage: "Independent approval",
+    description: "Label for the issuance request separation-of-duties boundary.",
+  },
+  "request.preview.approvalValue": {
+    defaultMessage: "Required from a different principal with {permission}.",
+    description: "Value explaining the exact permission and independent-principal requirement.",
+  },
+  "request.configure.heading": {
+    defaultMessage: "Configure prerequisites",
+    description: "Heading for certificate-request prerequisite recovery links.",
+  },
+  "request.configure.description": {
+    defaultMessage: "This request uses served tenant configuration. Change the exact source instead of typing around a missing prerequisite.",
+    description: "Explanation above certificate-request prerequisite links.",
+  },
+  "request.configure.profiles": {
+    defaultMessage: "Configure certificate rules",
+    description: "Link from request review to issuance profile configuration.",
+  },
+  "request.configure.owners": {
+    defaultMessage: "Configure ownership",
+    description: "Link from request review to owner configuration.",
+  },
+  "request.configure.authorities": {
+    defaultMessage: "Configure certificate authorities",
+    description: "Link from request review to certificate authority configuration.",
+  },
+  "request.recovery.retry": {
+    defaultMessage: "Retry safely for {subject}",
+    description: "Action for retrying an approved issuance request with its stable request and mint identity.",
+  },
+  "request.recovery.safe": {
+    defaultMessage:
+      "The request and approval are still saved. Retry reuses the same request identity and issuance key, so it cannot mint a second certificate.",
+    description: "Recovery explanation after an approved request fails during issuance.",
+  },
   "identities.decommission.description": {
     defaultMessage: "Retire or revoke identities in response to HR departures, vendor terminations, or inactivity windows.",
     description: "Description under the decommission-by-signal heading.",

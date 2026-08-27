@@ -4099,6 +4099,21 @@ func componentSchemas() map[string]*Schema {
 		"subject": str(), "owner_id": uuid(), "profile": str(), "csr_pem": str(), "justification": str(),
 		"origin": str(), "ticket_ref": str(),
 	}, "subject", "owner_id")
+	issuanceRequestPreview := object(map[string]*Schema{
+		"ready": {Type: "boolean"}, "subject": str(), "owner_id": uuid(),
+		"owner_name": str(), "owner_kind": str(), "profile": str(), "profile_name": str(),
+		"profile_version": {Type: "integer"}, "requester": str(), "csr_supplied": {Type: "boolean"},
+		"key_origin":        {Type: "string", Enum: []string{"requester_csr", "deprecated_control_plane_generation"}},
+		"approval_required": {Type: "boolean"}, "approval_permission": str(),
+		"issuance_permissions":     {Type: "array", Items: str()},
+		"preview_writes":           {Type: "array", Items: str()},
+		"preview_external_effects": {Type: "array", Items: str()},
+		"submission_effects":       {Type: "array", Items: str()},
+		"steps":                    {Type: "array", Items: str()}, "warnings": {Type: "array", Items: str()},
+		"blockers": {Type: "array", Items: str()}, "guidance": str(),
+	}, "ready", "subject", "owner_id", "requester", "csr_supplied", "key_origin",
+		"approval_required", "approval_permission", "issuance_permissions", "preview_writes",
+		"preview_external_effects", "submission_effects", "steps", "warnings", "blockers", "guidance")
 	issuanceDecisionInput := object(map[string]*Schema{
 		"reason": str(), "identity_id": uuid(),
 	})
@@ -5489,6 +5504,7 @@ func componentSchemas() map[string]*Schema {
 		"MDMTraceStep":                             mdmTraceStepSchema,
 		"MDMDeviceTrace":                           mdmDeviceTraceSchema,
 		"IssuanceRequestInput":                     issuanceRequestInput,
+		"IssuanceRequestPreview":                   issuanceRequestPreview,
 		"IssuanceDecisionInput":                    issuanceDecisionInput,
 		"IssuanceRequestList":                      issuanceRequestListSchema,
 		"IssuanceRequestPreparation":               issuanceRequestPreparation,

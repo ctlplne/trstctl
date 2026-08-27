@@ -218,8 +218,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// headless clients see the same route/RBAC preflight as the console. The
 	// first-class Discovery recovery command raises it to 394 and maps to F2. The
 	// effect-free agent enrollment preview raises it to 395 and maps to F3.
-	if len(out) != 395 {
-		t.Fatalf("CLI commands = %d, want 395", len(out))
+	// The issuance-request preview raises it to 396 and gives headless operators
+	// the same effect-free owner/profile/CSR admission answer as the console.
+	if len(out) != 396 {
+		t.Fatalf("CLI commands = %d, want 396", len(out))
 	}
 	return out
 }

@@ -21,6 +21,7 @@ import type {
   IssuanceRequestInput,
   IssuanceRequestList,
   IssuanceRequestPreparation,
+  IssuanceRequestPreview,
   MDMDeviceList,
   MDMDeviceTrace,
   MDMPollScheduleList,
@@ -508,7 +509,13 @@ export type { DRPosture, DRDrill } from "./api-types.gen";
 export type { CryptoReadiness, CryptoReadinessAction, CryptoReadinessExport, CryptoReadinessRow, CryptoDependent } from "./api-types.gen";
 export type { OwnershipConflictList, OwnershipConflict, OwnershipImportResult } from "./api-types.gen";
 export type { CMDBReconcileSchedule } from "./api-types.gen";
-export type { IssuanceRequestList, IssuanceRequest, IssuanceRequestPreparation } from "./api-types.gen";
+export type {
+  IssuanceRequestList,
+  IssuanceRequest,
+  IssuanceRequestInput,
+  IssuanceRequestPreparation,
+  IssuanceRequestPreview,
+} from "./api-types.gen";
 export type { TicketIntakeSchedule } from "./api-types.gen";
 export type { MDMDeviceList, MDMDevice, MDMDeviceTrace, MDMPollScheduleList } from "./api-types.gen";
 export type { AgentUpgradeCampaign } from "./api-types.gen";
@@ -1556,6 +1563,8 @@ export interface Api {
   issuanceRequests(): Promise<IssuanceRequestList>;
   /** I3/AUD-78: open a request without pretending it is already an identity. */
   createIssuanceRequest(input: IssuanceRequestInput): Promise<IssuanceRequest>;
+  /** F4: validate and normalize the exact request without writing state or contacting a CA. */
+  previewIssuanceRequest(input: IssuanceRequestInput): Promise<IssuanceRequestPreview>;
   /** I3: record an independent approval. Approval is a decision, not issuance. */
   approveIssuanceRequest(id: string): Promise<IssuanceRequest>;
   /** I3: deny one exact request with a reason the requester can act on. */
@@ -1979,6 +1988,7 @@ const liveApi: Api = {
     }),
   cmdbSchedule: () => req<CMDBReconcileSchedule>("/api/v1/owners/cmdb-schedule"),
   issuanceRequests: () => req<IssuanceRequestList>("/api/v1/issuance-requests"),
+  previewIssuanceRequest: (input) => postRead<IssuanceRequestPreview>("/api/v1/issuance-requests/preview", input),
   createIssuanceRequest: (input) => mutate<IssuanceRequest>("POST", "/api/v1/issuance-requests", input),
   approveIssuanceRequest: (id) => mutate<IssuanceRequest>("POST", `/api/v1/issuance-requests/${encodeURIComponent(id)}/approve`),
   denyIssuanceRequest: (id, reason) => mutate<IssuanceRequest>("POST", `/api/v1/issuance-requests/${encodeURIComponent(id)}/deny`, { reason }),

@@ -280,10 +280,22 @@ profiles is covered in the
 
 The self-service requester path is served end to end for X.509 requests. `/request`
 lists active profiles and tenant-visible owners, makes the requester choose the
-accountable owner by name, and submits that owner's UUID to
-`POST /api/v1/issuance-requests`. The server checks UUID shape and tenant-scoped
-owner existence before appending `issuance.request.opened`; missing/malformed values
-return 400, while absent and other-tenant UUIDs return the same 422 answer. This is
+accountable owner by name, and sends the exact proposed body to the effect-free
+`POST /api/v1/issuance-requests/preview` route. The same server admission rule used
+by submission checks the owner, validates an optional public CSR, and resolves an
+active profile name to its exact immutable version. The answer names blockers,
+key-custody posture, independent approval authority, and the writes that a later
+submission would perform. Preview itself appends no event, writes no projection,
+creates no idempotency record, and contacts no CA. The console fails closed: it
+enables submission only while a green preview still matches every reviewed field.
+Operators and automation can ask the same question with
+`trstctl issuance-requests preview --body request.json`.
+
+Submission sends the normalized body to `POST /api/v1/issuance-requests`. The
+server re-runs that shared admission rule before appending
+`issuance.request.opened`; missing or malformed values return 400, while absent and
+other-tenant owner UUIDs return the same 422 answer. The console links directly to
+Profiles, Owners, and CA hierarchy when a prerequisite needs configuration. This is
 important: `oidc|dev-1` names an authenticated caller, while an owner UUID names a
 tenant database row. They are different identifiers and are never substituted for
 one another.
@@ -293,6 +305,11 @@ first-class issuance-request projection. A submission therefore remains
 `requested`; it does not create an identity or mint a certificate. A distinct
 principal can approve or deny the exact request, and approval is still not issuance:
 the request becomes `issued` only after the authorized issuance outcome is linked.
+If issuance is interrupted after approval, the approved row remains visible and the
+console offers **Retry safely**. Preparation reuses the request's deterministic
+identity and stable issuance key, so retry continues the same operation instead of
+minting a second certificate.
+
 The built-in `ra-officer` can read owners, author/read profiles, and request
 certificates, but still cannot write identities or hold `certs:issue`.
 

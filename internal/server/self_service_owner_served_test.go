@@ -53,6 +53,14 @@ func TestSelfServiceIssuanceRequestOwnerContractAUD78(t *testing.T) {
 	const otherTenant = "22222222-2222-2222-2222-222222222222"
 	ownerID := createAUD78Owner(t, h, h.tenant, "Payments platform")
 	otherOwnerID := createAUD78Owner(t, h, otherTenant, "Other tenant")
+	profileAdmin := seedScopedTokenSubject(t, h.store, h.tenant, "profile-admin",
+		string(authz.ProfilesWrite))
+	if status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/profiles", profileAdmin,
+		"aud-78-profile", map[string]any{
+			"name": "web-server", "spec": map[string]any{"max_ttl_seconds": 2_592_000},
+		}); status != http.StatusCreated {
+		t.Fatalf("create request profile: status %d body %s", status, body)
+	}
 	requester := seedScopedTokenSubject(t, h.store, h.tenant, "oidc|dev-1",
 		string(authz.CertsRequest), string(authz.CertsRead), string(authz.OwnersRead))
 	identityWriter := seedScopedTokenSubject(t, h.store, h.tenant, "oidc|dev-1",
@@ -88,7 +96,7 @@ func TestSelfServiceIssuanceRequestOwnerContractAUD78(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/issuance-requests", requester,
 				"aud-78-refuse-"+tc.name, map[string]any{
-					"subject": "payments-api", "profile": "web-server:2", "owner_id": tc.ownerID,
+					"subject": "payments-api", "profile": "web-server:1", "owner_id": tc.ownerID,
 				})
 			if status != tc.wantStatus {
 				t.Fatalf("status = %d, want %d; body=%s", status, tc.wantStatus, body)
@@ -105,7 +113,7 @@ func TestSelfServiceIssuanceRequestOwnerContractAUD78(t *testing.T) {
 	}
 
 	input := map[string]any{
-		"subject": "payments-api", "profile": "web-server:2", "owner_id": ownerID,
+		"subject": "payments-api", "profile": "web-server:1", "owner_id": ownerID,
 		"justification": "staging TLS", "origin": "console",
 	}
 	status, createdBody := secretsReqKey(t, h, http.MethodPost, "/api/v1/issuance-requests", requester,

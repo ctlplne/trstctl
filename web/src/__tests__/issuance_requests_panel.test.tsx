@@ -176,6 +176,67 @@ describe("ticket-intake relay visibility", () => {
     expect(screen.getByText(/Issued by se-demo-operator/)).toBeInTheDocument();
   });
 
+  it("keeps a failed approved request recoverable and retries with the same issuance identity", async () => {
+    const request = {
+      id: "request-retry",
+      tenant_id: "tenant-1",
+      subject: "retry-safe-mtls",
+      owner_id: "owner-1",
+      profile: "service-mtls-30d:1",
+      requester: "demo-admin",
+      decided_by: "security-reviewer",
+      status: "approved" as const,
+      expires_at: "2026-08-21T00:00:00Z",
+      created_at: "2026-08-20T00:00:00Z",
+    };
+    const preparation = {
+      request: { ...request, identity_id: "identity-retry" },
+      identity: {
+        id: "identity-retry",
+        tenant_id: "tenant-1",
+        kind: "x509_certificate",
+        name: request.subject,
+        owner_id: request.owner_id,
+        status: "requested",
+        attributes: {},
+      },
+      csr_pem: "-----BEGIN CERTIFICATE REQUEST-----\npublic-csr\n-----END CERTIFICATE REQUEST-----",
+      issue_idempotency_key: "issuance-request-issue:request-retry",
+    };
+    apiMock.issuanceRequests.mockResolvedValue({ items: [request], open: 0, guidance: "Approval is not issuance." });
+    apiMock.prepareIssuanceRequest.mockResolvedValue(preparation);
+    apiMock.transitionIdentity
+      .mockRejectedValueOnce(new Error("signer temporarily unavailable"))
+      .mockResolvedValueOnce({ id: "identity-retry", status: "issued" });
+    apiMock.completeIssuanceRequest.mockResolvedValue({
+      ...request,
+      identity_id: "identity-retry",
+      status: "issued",
+      issued_by: "se-demo-operator",
+      issued_at: "2026-08-20T01:00:00Z",
+    });
+    const user = userEvent.setup();
+
+    render(
+      <AppQueryProvider>
+        <IssuanceRequestsPanel currentPrincipal={{ subject: "se-demo-operator", permissions: ["certs:issue", "identities:write"] }} />
+      </AppQueryProvider>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Issue certificate for retry-safe-mtls" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("signer temporarily unavailable");
+    expect(screen.getByText(/request and approval are still saved/i)).toBeInTheDocument();
+    expect(screen.getByText(/same request identity and issuance key/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Retry safely for retry-safe-mtls" }));
+
+    expect(apiMock.prepareIssuanceRequest).toHaveBeenCalledTimes(2);
+    expect(apiMock.transitionIdentity).toHaveBeenCalledTimes(2);
+    expect(apiMock.transitionIdentity.mock.calls[0]).toEqual(apiMock.transitionIdentity.mock.calls[1]);
+    expect(apiMock.transitionIdentity.mock.calls[1]?.[4]).toBe("issuance-request-issue:request-retry");
+    expect(await screen.findByRole("status")).toHaveTextContent("Certificate issued for retry-safe-mtls");
+  });
+
   it("does not offer certificate decisions to a read-only requester role", async () => {
     apiMock.issuanceRequests.mockResolvedValue({
       open: 1,

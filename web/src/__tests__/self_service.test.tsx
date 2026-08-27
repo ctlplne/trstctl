@@ -15,6 +15,7 @@ const { apiMock } = vi.hoisted(() => ({
     profiles: vi.fn(),
     owners: vi.fn(),
     issuanceRequests: vi.fn(),
+    previewIssuanceRequest: vi.fn(),
     createIssuanceRequest: vi.fn(),
     // Kept until the failing-first assertion proves the page still uses the
     // identity mutation instead of the first-class request API.
@@ -76,6 +77,33 @@ describe("self-service credential requests", () => {
     apiMock.profiles.mockResolvedValue([activeProfile]);
     apiMock.owners.mockResolvedValue([otherOwner, selectedOwner]);
     apiMock.issuanceRequests.mockResolvedValue({ items: [], open: 0, guidance: "" });
+    apiMock.previewIssuanceRequest.mockImplementation(async (input: { subject: string; owner_id: string; profile?: string; csr_pem?: string }) => ({
+      ready: true,
+      subject: input.subject,
+      owner_id: input.owner_id,
+      owner_name: selectedOwner.name,
+      owner_kind: selectedOwner.kind,
+      profile: input.profile,
+      profile_name: "web-server",
+      profile_version: 2,
+      requester: "dev-1",
+      csr_supplied: Boolean(input.csr_pem),
+      key_origin: input.csr_pem ? "requester_csr" : "deprecated_control_plane_generation",
+      approval_required: true,
+      approval_permission: "certs:issue",
+      issuance_permissions: ["identities:write", "certs:issue"],
+      preview_writes: [],
+      preview_external_effects: [],
+      submission_effects: [
+        "Append one tenant-scoped issuance request event.",
+        "Create one requested work item for an independent approver.",
+        "Mint no certificate until a later approved issuance step.",
+      ],
+      steps: ["Submit request", "Independent approval", "Signer-backed issuance", "Durable certificate evidence"],
+      warnings: input.csr_pem ? [] : ["No CSR was supplied; requester-held keys are safer."],
+      blockers: [],
+      guidance: "This preview performed no write and contacted no certificate authority.",
+    }));
     apiMock.identities.mockResolvedValue([]);
   });
 
@@ -113,8 +141,23 @@ describe("self-service credential requests", () => {
     await user.type(screen.getByLabelText("Business purpose"), "staging TLS");
     await user.click(screen.getByRole("button", { name: "Next: review" }));
 
-    // Step 3 — review shows exactly what the approver will see, then submit.
+    // Step 3 — the server validates and normalizes the exact request without
+    // writing anything. Submission stays fail-closed until that effect-free
+    // preview is green.
     expect(screen.getByText("staging TLS")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(apiMock.previewIssuanceRequest).toHaveBeenCalledWith({
+        subject: "payments-api",
+        profile: "web-server:2",
+        owner_id: selectedOwner.id,
+        justification: "staging TLS",
+        origin: "console",
+      }),
+    );
+    expect(await screen.findByRole("status", { name: "Request preview ready" })).toHaveTextContent(
+      "This preview performed no write and contacted no certificate authority.",
+    );
+    expect(screen.getByText(/Mint no certificate until a later approved issuance step/i)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Submit request" }));
 
     await waitFor(() =>
@@ -132,6 +175,25 @@ describe("self-service credential requests", () => {
     );
     expect(screen.getByRole("row", { name: /payments-api.*web-server:2.*Awaiting approval.*requested/i })).toBeInTheDocument();
     expect(screen.queryByText(/has been issued/i)).not.toBeInTheDocument();
+  });
+
+  it("fails closed when the exact preview is unavailable and links every prerequisite", async () => {
+    apiMock.previewIssuanceRequest.mockRejectedValueOnce(new ApiError(503, JSON.stringify({ detail: "profile admission is unavailable" })));
+    const user = userEvent.setup();
+    renderAt("/request");
+
+    await waitFor(() => expect(screen.getByLabelText("Profile")).toHaveDisplayValue("web-server v2 active"));
+    await user.click(screen.getByRole("button", { name: "Next: name it" }));
+    await user.selectOptions(screen.getByLabelText("Owner"), selectedOwner.id);
+    await user.type(screen.getByLabelText("Credential name"), "payments-api");
+    await user.click(screen.getByRole("button", { name: "Next: review" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("profile admission is unavailable");
+    expect(screen.getByRole("button", { name: "Submit request" })).toBeDisabled();
+    expect(apiMock.createIssuanceRequest).not.toHaveBeenCalled();
+    expect(screen.getByRole("link", { name: "Configure certificate rules" })).toHaveAttribute("href", "/profiles");
+    expect(screen.getByRole("link", { name: "Configure ownership" })).toHaveAttribute("href", "/owners");
+    expect(screen.getByRole("link", { name: "Configure certificate authorities" })).toHaveAttribute("href", "/ca-hierarchy");
   });
 
   it("lists only the current requester's items with honest request status", async () => {

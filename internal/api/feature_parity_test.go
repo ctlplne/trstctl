@@ -180,8 +180,11 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// The server-authoritative Discovery retry raises it to 382 and maps to F2.
 	// The effect-free agent enrollment preview raises it to 383 and maps to F3;
 	// unlike the mint route, it creates no token, event, job, or idempotency row.
-	if len(out) != 383 {
-		t.Fatalf("OpenAPI operationIds = %d, want 383", len(out))
+	// The effect-free issuance-request preview raises it to 384 and maps to F4;
+	// request admission calls the same tenant/profile/CSR rule, so review cannot
+	// promise a request the mutation would reject or normalize differently.
+	if len(out) != 384 {
+		t.Fatalf("OpenAPI operationIds = %d, want 384", len(out))
 	}
 	return out
 }

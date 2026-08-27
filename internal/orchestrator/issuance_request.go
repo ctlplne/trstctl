@@ -172,7 +172,7 @@ func (o *Orchestrator) PrepareIssuanceRequest(ctx context.Context, tenantID, id,
 				ErrIssuanceRequestNotReady, id)
 		}
 
-		profileName, profileVersion, err := o.issuanceRequestProfileBinding(lockCtx, tenantID, current.Profile)
+		profileName, profileVersion, err := o.ResolveIssuanceRequestProfileBinding(lockCtx, tenantID, current.Profile)
 		if err != nil {
 			return err
 		}
@@ -220,7 +220,11 @@ func (o *Orchestrator) PrepareIssuanceRequest(ctx context.Context, tenantID, id,
 	return request, identity, err
 }
 
-func (o *Orchestrator) issuanceRequestProfileBinding(ctx context.Context, tenantID, binding string) (string, int, error) {
+// ResolveIssuanceRequestProfileBinding resolves the exact active profile revision
+// used by both effect-free request preview/admission and later preparation. One
+// shared rule prevents the review screen from saying a request is ready while the
+// orchestrator would resolve a different or retired rule at mint time.
+func (o *Orchestrator) ResolveIssuanceRequestProfileBinding(ctx context.Context, tenantID, binding string) (string, int, error) {
 	name, version, err := parseIssuanceRequestProfileBinding(binding)
 	if err != nil || name == "" {
 		return name, version, err
@@ -232,6 +236,10 @@ func (o *Orchestrator) issuanceRequestProfileBinding(ctx context.Context, tenant
 		rec, err = o.store.GetActiveProfile(ctx, tenantID, name)
 	}
 	if err != nil {
+		if store.IsNotFound(err) {
+			return "", 0, fmt.Errorf("%w: profile %s is not available in this tenant; choose an active certificate rule",
+				ErrIssuanceRequestNotReady, name)
+		}
 		return "", 0, err
 	}
 	if !rec.Active {

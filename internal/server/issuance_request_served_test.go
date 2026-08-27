@@ -209,6 +209,174 @@ func TestServedListIncludesClosedRequestsAndCountsOpenSeparately(t *testing.T) {
 	}
 }
 
+// A request preview is a question, not a mutation. It must run the same
+// tenant-scoped owner/profile/CSR admission rule as the later POST while
+// proving that asking the question created no event, projection, idempotency
+// receipt, outbox intent, identity, or certificate.
+func TestServedIssuanceRequestPreviewIsEffectFreeAndMatchesAdmission(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	admin := seedScopedTokenSubject(t, h.store, h.tenant, "preview-admin@example.test",
+		string(authz.OwnersWrite), string(authz.ProfilesWrite))
+	requester := seedScopedTokenSubject(t, h.store, h.tenant, "preview-requester@example.test",
+		string(authz.CertsRequest), string(authz.CertsRead))
+	ownerID := servedCreateID(t, h, admin, "preview-owner", "/api/v1/owners", map[string]any{
+		"kind": "team", "name": "Payments platform",
+	})
+	if status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/profiles", admin,
+		"preview-profile", map[string]any{
+			"name": "service-mtls-30d",
+			"spec": map[string]any{
+				"subject":         map[string]any{"common_name": "preview.example.test"},
+				"max_ttl_seconds": 2_592_000,
+			},
+		}); status != http.StatusCreated {
+		t.Fatalf("create preview profile: status %d body %s", status, body)
+	}
+
+	input := map[string]any{
+		"subject": "payments-api", "owner_id": ownerID,
+		"profile": "service-mtls-30d", "justification": "staging mTLS", "origin": "console",
+	}
+	eventHeadBefore, err := h.log.LastSequence(t.Context())
+	if err != nil {
+		t.Fatalf("event head before preview: %v", err)
+	}
+	var requestsBefore, identitiesBefore, certificatesBefore, outboxBefore, idempotencyBefore int
+	if err := h.store.SystemPool().QueryRow(t.Context(), `
+		SELECT
+		  (SELECT count(*) FROM issuance_requests WHERE tenant_id = $1),
+		  (SELECT count(*) FROM identities WHERE tenant_id = $1),
+		  (SELECT count(*) FROM certificates WHERE tenant_id = $1),
+		  (SELECT count(*) FROM outbox WHERE tenant_id = $1),
+		  (SELECT count(*) FROM idempotency_keys WHERE tenant_id = $1)`, h.tenant).
+		Scan(&requestsBefore, &identitiesBefore, &certificatesBefore, &outboxBefore, &idempotencyBefore); err != nil {
+		t.Fatalf("count state before preview: %v", err)
+	}
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/issuance-requests/preview", requester, input)
+	if status != http.StatusOK {
+		t.Fatalf("preview request: status %d body %s", status, body)
+	}
+	var preview struct {
+		Ready                  bool     `json:"ready"`
+		Subject                string   `json:"subject"`
+		OwnerID                string   `json:"owner_id"`
+		OwnerName              string   `json:"owner_name"`
+		Profile                string   `json:"profile"`
+		ProfileName            string   `json:"profile_name"`
+		ProfileVersion         int      `json:"profile_version"`
+		Requester              string   `json:"requester"`
+		KeyOrigin              string   `json:"key_origin"`
+		ApprovalPermission     string   `json:"approval_permission"`
+		PreviewWrites          []string `json:"preview_writes"`
+		PreviewExternalEffects []string `json:"preview_external_effects"`
+		SubmissionEffects      []string `json:"submission_effects"`
+		Blockers               []string `json:"blockers"`
+	}
+	if err := json.Unmarshal(body, &preview); err != nil {
+		t.Fatalf("decode preview: %v body=%s", err, body)
+	}
+	if !preview.Ready || preview.Subject != "payments-api" || preview.OwnerID != ownerID ||
+		preview.OwnerName != "Payments platform" || preview.Profile != "service-mtls-30d:1" ||
+		preview.ProfileName != "service-mtls-30d" || preview.ProfileVersion != 1 ||
+		preview.Requester != "preview-requester@example.test" ||
+		preview.KeyOrigin != "deprecated_control_plane_generation" ||
+		preview.ApprovalPermission != string(authz.CertsIssue) || len(preview.Blockers) != 0 ||
+		len(preview.PreviewWrites) != 0 || len(preview.PreviewExternalEffects) != 0 ||
+		len(preview.SubmissionEffects) < 3 {
+		t.Fatalf("preview = %+v", preview)
+	}
+
+	eventHeadAfter, err := h.log.LastSequence(t.Context())
+	if err != nil {
+		t.Fatalf("event head after preview: %v", err)
+	}
+	var requestsAfter, identitiesAfter, certificatesAfter, outboxAfter, idempotencyAfter int
+	if err := h.store.SystemPool().QueryRow(t.Context(), `
+		SELECT
+		  (SELECT count(*) FROM issuance_requests WHERE tenant_id = $1),
+		  (SELECT count(*) FROM identities WHERE tenant_id = $1),
+		  (SELECT count(*) FROM certificates WHERE tenant_id = $1),
+		  (SELECT count(*) FROM outbox WHERE tenant_id = $1),
+		  (SELECT count(*) FROM idempotency_keys WHERE tenant_id = $1)`, h.tenant).
+		Scan(&requestsAfter, &identitiesAfter, &certificatesAfter, &outboxAfter, &idempotencyAfter); err != nil {
+		t.Fatalf("count state after preview: %v", err)
+	}
+	if eventHeadAfter != eventHeadBefore || requestsAfter != requestsBefore || identitiesAfter != identitiesBefore ||
+		certificatesAfter != certificatesBefore || outboxAfter != outboxBefore || idempotencyAfter != idempotencyBefore {
+		t.Fatalf("preview mutated state: event=%d->%d requests=%d->%d identities=%d->%d certificates=%d->%d outbox=%d->%d idempotency=%d->%d",
+			eventHeadBefore, eventHeadAfter, requestsBefore, requestsAfter, identitiesBefore, identitiesAfter,
+			certificatesBefore, certificatesAfter, outboxBefore, outboxAfter, idempotencyBefore, idempotencyAfter)
+	}
+
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/issuance-requests", requester,
+		"preview-admission", input)
+	if status != http.StatusCreated {
+		t.Fatalf("create after green preview: status %d body %s", status, body)
+	}
+	var created struct {
+		Subject   string `json:"subject"`
+		OwnerID   string `json:"owner_id"`
+		Profile   string `json:"profile"`
+		Requester string `json:"requester"`
+	}
+	if err := json.Unmarshal(body, &created); err != nil {
+		t.Fatalf("decode created request: %v body=%s", err, body)
+	}
+	if created.Subject != preview.Subject || created.OwnerID != preview.OwnerID ||
+		created.Profile != preview.Profile || created.Requester != preview.Requester {
+		t.Fatalf("admitted request = %+v, preview = %+v", created, preview)
+	}
+}
+
+func TestServedIssuanceRequestPreviewNamesConfigurationBlockersWithoutTenantLeakage(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	const otherTenant = "22222222-2222-2222-2222-222222222222"
+	otherOwnerID := createAUD78Owner(t, h, otherTenant, "Other tenant")
+	requester := seedScopedTokenSubject(t, h.store, h.tenant, "preview-requester@example.test",
+		string(authz.CertsRequest))
+
+	preview := func(ownerID, profile string) (int, []byte) {
+		t.Helper()
+		return secretsReq(t, h, http.MethodPost, "/api/v1/issuance-requests/preview", requester, map[string]any{
+			"subject": "payments-api", "owner_id": ownerID, "profile": profile,
+		})
+	}
+	missingOwner := "33333333-3333-4333-8333-333333333333"
+	otherStatus, otherBody := preview(otherOwnerID, "missing-profile:1")
+	missingStatus, missingBody := preview(missingOwner, "missing-profile:1")
+	if otherStatus != http.StatusOK || missingStatus != http.StatusOK {
+		t.Fatalf("blocked previews = other %d %s; missing %d %s", otherStatus, otherBody, missingStatus, missingBody)
+	}
+	var other, missing struct {
+		Ready    bool     `json:"ready"`
+		Blockers []string `json:"blockers"`
+	}
+	if err := json.Unmarshal(otherBody, &other); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(missingBody, &missing); err != nil {
+		t.Fatal(err)
+	}
+	if other.Ready || missing.Ready || len(other.Blockers) != 2 || len(missing.Blockers) != 2 ||
+		other.Blockers[0] != missing.Blockers[0] || other.Blockers[1] != missing.Blockers[1] {
+		t.Fatalf("tenant-safe blockers differ: other=%+v missing=%+v", other, missing)
+	}
+
+	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/issuance-requests", requester,
+		"blocked-preview-admission", map[string]any{
+			"subject": "payments-api", "owner_id": otherOwnerID, "profile": "missing-profile:1",
+		})
+	if status != http.StatusUnprocessableEntity {
+		t.Fatalf("blocked admission: status %d body %s", status, body)
+	}
+	if head, err := h.log.LastSequence(t.Context()); err != nil || head != 1 {
+		// createAUD78Owner appended exactly one event for the other tenant. A
+		// refused request must not append a second one in either tenant.
+		t.Fatalf("blocked admission changed event head: head=%d err=%v", head, err)
+	}
+}
+
 // An approved first-class request must be able to reach a real certificate.
 // Approval is deliberately not issuance, but a lifecycle with no served bridge
 // from approved to signer-backed identity leaves honest requests wedged forever.

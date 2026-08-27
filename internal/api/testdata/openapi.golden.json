@@ -12800,6 +12800,118 @@
         ],
         "type": "object"
       },
+      "IssuanceRequestPreview": {
+        "properties": {
+          "approval_permission": {
+            "type": "string"
+          },
+          "approval_required": {
+            "type": "boolean"
+          },
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "csr_supplied": {
+            "type": "boolean"
+          },
+          "guidance": {
+            "type": "string"
+          },
+          "issuance_permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "key_origin": {
+            "enum": [
+              "requester_csr",
+              "deprecated_control_plane_generation"
+            ],
+            "type": "string"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "owner_kind": {
+            "type": "string"
+          },
+          "owner_name": {
+            "type": "string"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "profile": {
+            "type": "string"
+          },
+          "profile_name": {
+            "type": "string"
+          },
+          "profile_version": {
+            "type": "integer"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "requester": {
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "submission_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ready",
+          "subject",
+          "owner_id",
+          "requester",
+          "csr_supplied",
+          "key_origin",
+          "approval_required",
+          "approval_permission",
+          "issuance_permissions",
+          "preview_writes",
+          "preview_external_effects",
+          "submission_effects",
+          "steps",
+          "warnings",
+          "blockers",
+          "guidance"
+        ],
+        "type": "object"
+      },
       "Issuer": {
         "properties": {
           "chain": {
@@ -37558,6 +37670,63 @@
         ],
         "summary": "Configure bounded ServiceNow or Jira ticket intake with durable relay paging",
         "x-trstctl-permission": "certs:write"
+      }
+    },
+    "/api/v1/issuance-requests/preview": {
+      "post": {
+        "operationId": "previewIssuanceRequest",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssuanceRequestInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssuanceRequestPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Validate and normalize an exact issuance request without writing state or contacting a certificate authority",
+        "x-trstctl-permission": "certs:request"
       }
     },
     "/api/v1/issuance-requests/{id}/approve": {

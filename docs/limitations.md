@@ -2374,9 +2374,11 @@ than sending an operator looking for a credential that was never there.
   disagreements but has no resolve control yet;
   and the CI-to-CERTIFICATE mapping is by owner NAME, so a CMDB whose owner
   labels do not match this estate's owner names reconciles nothing and says so.
-- Issuance requests as first-class objects (I3): `POST/GET /api/v1/issuance-requests`
-  plus `/{id}/approve|deny|cancel` (`trstctl issuance-requests
-  open|list|approve|deny|cancel`) give a request a real lifecycle —
+- Issuance requests as first-class objects (I3): the effect-free
+  `POST /api/v1/issuance-requests/preview`, the mutating
+  `POST/GET /api/v1/issuance-requests`, and `/{id}/approve|deny|cancel`
+  (`trstctl issuance-requests preview|open|list|approve|deny|cancel`) give a request
+  a real lifecycle —
   `requested` then `approved`, `denied`, `expired`, or `cancelled`, and
   `approved` is NOT terminal because issuance can still fail. Collapsing
   approved and issued would make a request whose mint failed read as fulfilled.
@@ -2393,9 +2395,15 @@ than sending an operator looking for a credential that was never there.
   agreement with the gate guarding direct issuance. Requests default to a 7-day
   expiry; the list surface serves closed rows too and counts open separately,
   because one total cannot say whether a queue needs attention or is merely long
-  with history. Direct API/console requests require `owner_id`: the mutation accepts
-  only a syntactically valid UUID that resolves through the caller's tenant RLS
-  context. Missing/malformed identifiers return 400 before event append; missing and
+  with history. Direct API/console requests require `owner_id`. Preview and submit
+  share one admission path: they validate an optional public CSR, resolve a profile
+  name to the exact active version, and accept only a syntactically valid owner UUID
+  that resolves through the caller's tenant RLS context. Preview returns blockers,
+  key custody, approval authority, and later submission effects but writes no event,
+  projection, identity, certificate, outbox job, or idempotency row and contacts no
+  CA. The console refuses to submit a stale, missing, blocked, or unavailable
+  preview and links to Profiles, Owners, and CA hierarchy for configuration.
+  Missing/malformed identifiers return 400 before event append; missing and
   cross-tenant owners share one 422 response so the endpoint does not reveal another
   tenant's roster. Historical and ticket-intake events predate this binding and can
   still project with no owner; that absence remains explicit instead of being
@@ -2466,7 +2474,10 @@ than sending an operator looking for a credential that was never there.
   certificate recorded under the exact canonical issue key. Reviewer
   (`decided_by`) and issuance actor (`issued_by`) remain separate facts. A
   signer or outbox failure therefore leaves an honest, retryable `approved`
-  request instead of producing a false green status.
+  request instead of producing a false green status. The console keeps that
+  approved row visible, explains the interruption, and labels the recovery action
+  **Retry safely**; prepare and issue repeat with the same deterministic identity
+  and stable request-derived issuance key rather than creating a parallel operation.
 - Attested issuance is reachable (AUD-10, I3 prerequisite): `attested_issuance`
   in the config file turns on `POST /api/v1/workloads/attested-issuance` and
   `POST /api/v1/ssh/attested-user-certs`. Before this there was NO config key at

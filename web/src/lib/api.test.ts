@@ -99,6 +99,53 @@ describe("api error handling (SURFACE-007)", () => {
 });
 
 describe("first-class issuance requests (AUD-78)", () => {
+  it("posts an effect-free preview without an Idempotency-Key", async () => {
+    mockFetch(
+      200,
+      JSON.stringify({
+        ready: true,
+        subject: "payments-api",
+        owner_id: "11111111-1111-4111-8111-111111111119",
+        owner_name: "Payments platform",
+        profile: "web-server:2",
+        profile_name: "web-server",
+        profile_version: 2,
+        requester: "oidc|dev-1",
+        csr_supplied: true,
+        key_origin: "requester_csr",
+        approval_required: true,
+        approval_permission: "certs:issue",
+        issuance_permissions: ["identities:write", "certs:issue"],
+        preview_writes: [],
+        preview_external_effects: [],
+        submission_effects: ["Append one request event."],
+        steps: ["Submit request", "Independent approval"],
+        warnings: [],
+        blockers: [],
+        guidance: "This preview performed no write and contacted no certificate authority.",
+      }),
+    );
+
+    await api.previewIssuanceRequest({
+      subject: "payments-api",
+      owner_id: "11111111-1111-4111-8111-111111111119",
+      profile: "web-server:2",
+      csr_pem: "public-csr",
+      origin: "console",
+    });
+
+    const call = vi.mocked(fetch).mock.calls[0];
+    expect(call[0]).toBe("/api/v1/issuance-requests/preview");
+    expect(call[1]?.method).toBe("POST");
+    expect(lastSentHeaders()["Idempotency-Key"]).toBeUndefined();
+    expect(JSON.parse(String(call[1]?.body))).toMatchObject({
+      subject: "payments-api",
+      owner_id: "11111111-1111-4111-8111-111111111119",
+      profile: "web-server:2",
+      csr_pem: "public-csr",
+    });
+  });
+
   it("posts the selected owner UUID through the idempotent request mutation", async () => {
     document.cookie = "trstctl_csrf=csrf-request; path=/";
     mockFetch(
@@ -472,6 +519,7 @@ describe("exported API surface census", () => {
       // idempotency key would imply a side effect it does not have.
       "/api/v1/migrations/assess",
       "/api/v1/agents/enrollment-tokens/preview",
+      "/api/v1/issuance-requests/preview",
       "/api/v1/ai/query",
       "/api/v1/ai/rca",
       "/api/v1/graph/query",

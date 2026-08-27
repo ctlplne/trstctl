@@ -3227,6 +3227,30 @@ export interface IssuanceRequestPreparation {
   request: IssuanceRequest;
 }
 
+export interface IssuanceRequestPreview {
+  approval_permission: string;
+  approval_required: boolean;
+  blockers: string[];
+  csr_supplied: boolean;
+  guidance: string;
+  issuance_permissions: string[];
+  key_origin: "requester_csr" | "deprecated_control_plane_generation";
+  owner_id: string;
+  owner_kind?: string;
+  owner_name?: string;
+  preview_external_effects: string[];
+  preview_writes: string[];
+  profile?: string;
+  profile_name?: string;
+  profile_version?: number;
+  ready: boolean;
+  requester: string;
+  steps: string[];
+  subject: string;
+  submission_effects: string[];
+  warnings: string[];
+}
+
 export interface Issuer {
   chain?: string[];
   chainless?: boolean;

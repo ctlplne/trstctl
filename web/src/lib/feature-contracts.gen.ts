@@ -1228,7 +1228,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use ca-agnostic outbound issuance while tenant, policy, and security authority remain on the server.",
       "tool": "certificates",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/request",
       "navigationEntrypoints": [
         "tool navigation",
@@ -1237,12 +1237,10 @@ export const canonicalCapabilities = [
       ],
       "permissionAuthority": "internal/api route registry and feature authorization manifest",
       "edition": "core",
-      "dependencies": [
-        "One or more lifecycle or console stages remain incomplete and are shown in the stage ledger."
-      ],
+      "dependencies": [],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -1257,12 +1255,21 @@ export const canonicalCapabilities = [
           ]
         },
         "configure": {
-          "status": "missing",
-          "reason": "No structured evidence proves an operator can configure every required prerequisite from this console journey."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/RequestCredential.tsx",
+            "web/src/__tests__/self_service.test.tsx"
+          ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: previewIssuanceRequest",
+            "CLI command: issuance-requests preview",
+            "internal/server/issuance_request_served_test.go",
+            "web/src/pages/RequestCredential.tsx",
+            "web/src/__tests__/self_service.test.tsx"
+          ]
         },
         "execute": {
           "status": "complete",
@@ -1278,8 +1285,12 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "web/src/components/IssuanceRequestsPanel.tsx",
+            "web/src/__tests__/issuance_requests_panel.test.tsx",
+            "internal/server/issuance_request_served_test.go"
+          ]
         },
         "verify": {
           "status": "complete",
@@ -1299,6 +1310,7 @@ export const canonicalCapabilities = [
             "OpenAPI operationId: approveIdentityAction",
             "OpenAPI operationId: listExternalCAs",
             "OpenAPI operationId: issueExternalCA",
+            "OpenAPI operationId: previewIssuanceRequest",
             "OpenAPI operationId: getKubernetesCSRSupport",
             "OpenAPI operationId: getKubernetesTrustBundleDistribution",
             "CLI command: issuers create",
@@ -1310,6 +1322,7 @@ export const canonicalCapabilities = [
             "CLI command: identities approve",
             "CLI command: external-cas list",
             "CLI command: external-cas issue",
+            "CLI command: issuance-requests preview",
             "CLI command: kubernetes csr",
             "CLI command: kubernetes trust-bundles"
           ]
