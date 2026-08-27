@@ -27,8 +27,12 @@ import (
 )
 
 func newDiscoveryRelayHarness(t *testing.T, segmentName string) *roleHarness {
+	return newDiscoveryRelayHarnessWithDeps(t, segmentName)
+}
+
+func newDiscoveryRelayHarnessWithDeps(t *testing.T, segmentName string, options ...func(*Deps)) *roleHarness {
 	t.Helper()
-	h := newRoleHarness(t, []string{mtls.AgentRoleNetwork}, relay.KindDiscoveryRun)
+	h := newRoleHarnessWithDeps(t, []string{mtls.AgentRoleNetwork}, []string{relay.KindDiscoveryRun}, options...)
 	if _, err := h.client.Heartbeat(t.Context(), &transport.HeartbeatRequest{
 		AgentID: h.agent, Version: "discovery-test", Status: "active",
 	}); err != nil {

@@ -847,6 +847,85 @@ describe("discovery control-plane surface", () => {
     expect(apiMock.startDiscoveryRun).toHaveBeenCalledWith({ source_id: "source-1", dry_run: false });
   });
 
+  it.each([
+    {
+      kind: "cloud_certificate",
+      name: "prod-acm",
+      provider: "aws-acm",
+      fill: async (user: ReturnType<typeof userEvent.setup>, form: HTMLElement) => {
+        await user.type(within(form).getByLabelText("Region"), "us-east-1");
+        await user.type(within(form).getByLabelText("Access key ID reference"), "env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID");
+        await user.type(within(form).getByLabelText("Secret access key reference"), "env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY");
+      },
+      config: {
+        providers: [
+          {
+            provider: "aws-acm",
+            region: "us-east-1",
+            access_key_id_ref: "env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID",
+            secret_access_key_ref: "env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY",
+          },
+        ],
+      },
+    },
+    {
+      kind: "cloud_secret",
+      name: "prod-secret-metadata",
+      provider: "aws-secrets-manager",
+      fill: async (user: ReturnType<typeof userEvent.setup>, form: HTMLElement) => {
+        await user.type(within(form).getByLabelText("Region"), "us-east-1");
+        await user.type(within(form).getByLabelText("Access key ID reference"), "env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID");
+        await user.type(within(form).getByLabelText("Secret access key reference"), "env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY");
+      },
+      config: {
+        providers: [
+          {
+            provider: "aws-secrets-manager",
+            region: "us-east-1",
+            access_key_id_ref: "env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID",
+            secret_access_key_ref: "env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY",
+          },
+        ],
+      },
+    },
+    {
+      kind: "secret_store",
+      name: "prod-vault-metadata",
+      provider: "hashicorp-vault",
+      fill: async (user: ReturnType<typeof userEvent.setup>, form: HTMLElement) => {
+        await user.type(within(form).getByLabelText("Vault URL"), "https://vault.example");
+        await user.type(within(form).getByLabelText("Token reference"), "env:TRSTCTL_DISCOVERY_TOKEN");
+        await user.clear(within(form).getByLabelText("KV mount"));
+        await user.type(within(form).getByLabelText("KV mount"), "secret");
+      },
+      config: {
+        providers: [
+          {
+            provider: "hashicorp-vault",
+            vault_url: "https://vault.example",
+            token_ref: "env:TRSTCTL_DISCOVERY_TOKEN",
+            mount: "secret",
+            api_version: "v1",
+          },
+        ],
+      },
+    },
+  ])("previews a reference-only $kind plan before saving", async ({ kind, name, provider, fill, config }) => {
+    const user = userEvent.setup();
+    renderDiscovery([`/discovery?tab=sources&kind=${kind}`]);
+
+    const sourceForm = await screen.findByRole("form", { name: "Set up a discovery source" });
+    await user.type(within(sourceForm).getByLabelText("Source name"), name);
+    await user.selectOptions(within(sourceForm).getByLabelText("What should trstctl inspect?"), kind);
+    await waitFor(() => expect(within(sourceForm).getByLabelText("Provider")).toHaveValue(provider));
+    await fill(user, sourceForm);
+    await user.click(within(sourceForm).getByRole("button", { name: "Review exact plan" }));
+
+    expect(apiMock.previewDiscoveryPlan).toHaveBeenLastCalledWith({ name, kind, config });
+    expect(apiMock.createDiscoverySource).not.toHaveBeenCalled();
+    expect(await within(sourceForm).findByRole("region", { name: "Normalized discovery plan" })).toBeInTheDocument();
+  });
+
   it("explains a missing relay before a discovery run can become a ghost queue", async () => {
     const user = userEvent.setup();
     apiMock.preflightDiscoverySource.mockResolvedValue({
@@ -1362,12 +1441,25 @@ describe("discovery control-plane surface", () => {
   });
 
   it("recovers a failed run as a separate server-backed run and renders lineage after reload", async () => {
+    apiMock.discoverySources.mockResolvedValue({
+      items: [
+        {
+          id: "source-cloud-certificate",
+          tenant_id: "tenant-1",
+          kind: "cloud_certificate",
+          name: "production ACM",
+          config: { providers: [{ provider: "aws-acm", region: "us-east-1" }] },
+          created_at: "2026-06-20T10:00:00Z",
+          updated_at: "2026-06-20T10:00:00Z",
+        },
+      ],
+    });
     apiMock.discoveryRuns.mockResolvedValue({
       items: [
         {
           id: "run-retry",
           tenant_id: "tenant-1",
-          source_id: "source-1",
+          source_id: "source-cloud-certificate",
           status: "queued",
           dry_run: false,
           execution: "relay",
@@ -1382,7 +1474,7 @@ describe("discovery control-plane surface", () => {
         {
           id: "run-failed",
           tenant_id: "tenant-1",
-          source_id: "source-1",
+          source_id: "source-cloud-certificate",
           status: "failed",
           dry_run: false,
           execution: "relay",
@@ -1405,7 +1497,8 @@ describe("discovery control-plane surface", () => {
     expect(screen.queryByRole("button", { name: /Retry run run-retry/ })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Retry run run-faile/ }));
 
-    expect(apiMock.preflightDiscoverySource).toHaveBeenCalledWith("source-1");
+    expect(screen.getAllByText("production ACM").length).toBeGreaterThanOrEqual(1);
+    expect(apiMock.preflightDiscoverySource).toHaveBeenCalledWith("source-cloud-certificate");
     expect(apiMock.retryDiscoveryRun).toHaveBeenCalledWith("run-failed");
     expect(await screen.findByRole("status")).toHaveTextContent(/Recovery run run-retry queued/);
   });

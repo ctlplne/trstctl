@@ -148,3 +148,155 @@ func TestServedDiscoveryRunRetryPreservesFailureAndLineage(t *testing.T) {
 		t.Fatalf("retry inaccessible run: status %d body %s, want tenant-safe 404", status, body)
 	}
 }
+
+// TestServedDiscoveryRunRetryCoversPrimaryCredentialSources proves that the
+// recovery contract is not accidentally limited to TLS network scans. SSH,
+// cloud-certificate, cloud-secret, secret-store, and metadata-only API-key
+// runs all preserve the failed run and queue a separate retry with lineage.
+// That is the server oracle behind the shared console Retry action for
+// F42/F49/F35/F36.
+func TestServedDiscoveryRunRetryCoversPrimaryCredentialSources(t *testing.T) {
+	t.Setenv("TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID", "test-access-key-id")
+	t.Setenv("TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY", "test-secret-access-key")
+	t.Setenv("TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID", "test-sm-access-key-id")
+	t.Setenv("TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY", "test-sm-secret-access-key")
+	t.Setenv("TRSTCTL_DISCOVERY_VAULT_TOKEN", "test-vault-token")
+	h := newDiscoveryRelayHarnessWithDeps(t, "recovery-primary-sources", allowOutboundEnvCredentialRefs(
+		"env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID",
+		"env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY",
+		"env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID",
+		"env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY",
+		"env:TRSTCTL_DISCOVERY_VAULT_TOKEN",
+	))
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
+
+	cases := []struct {
+		name   string
+		kind   string
+		config map[string]any
+	}{
+		{
+			name: "ssh",
+			kind: "ssh",
+			config: map[string]any{
+				"targets":        []string{"127.0.0.1:22"},
+				"allow_loopback": true,
+				"segment":        "recovery-primary-sources",
+			},
+		},
+		{
+			name: "cloud-certificate",
+			kind: "cloud_certificate",
+			config: map[string]any{"providers": []map[string]any{{ // #nosec G101 -- reference names only; fixture values are synthetic and never shipped
+				"provider": "aws-acm", "region": "us-east-1",
+				"access_key_id_ref":     "env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID",
+				"secret_access_key_ref": "env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY",
+			}}},
+		},
+		{
+			name: "cloud-secret",
+			kind: "cloud_secret",
+			config: map[string]any{"providers": []map[string]any{{ // #nosec G101 -- reference names only; fixture values are synthetic and never shipped
+				"provider": "aws-secrets-manager", "region": "us-east-1",
+				"access_key_id_ref":     "env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID",
+				"secret_access_key_ref": "env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY",
+			}}},
+		},
+		{
+			name: "secret-store",
+			kind: "secret_store",
+			config: map[string]any{"providers": []map[string]any{{ // #nosec G101 -- reference names only; fixture values are synthetic and never shipped
+				"provider": "hashicorp-vault", "vault_url": "https://vault.example",
+				"mount": "secret", "token_ref": "env:TRSTCTL_DISCOVERY_VAULT_TOKEN",
+			}}},
+		},
+		{
+			name: "api-key",
+			kind: "api_key",
+			config: map[string]any{"observations": []map[string]any{{ // #nosec G101 -- metadata-only fabricated token reference; no credential value is present
+				"surface": "saas", "system": "github", "external_id": "user/payments-ci/pat",
+				"principal": "payments-ci", "credential_kind": "personal_access_token",
+				"credential_ref": "github:user/payments-ci/pat", "evidence_refs": []string{"github:audit/pat-1"},
+			}}},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			status, body := secretsReq(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/plans/preview", tok,
+				map[string]any{"name": "preview-" + tc.name, "kind": tc.kind, "config": tc.config})
+			if status != http.StatusOK {
+				t.Fatalf("preview %s source: status %d body %s", tc.kind, status, body)
+			}
+			var preview struct {
+				Kind        string `json:"kind"`
+				SideEffects bool   `json:"side_effects"`
+			}
+			if err := json.Unmarshal(body, &preview); err != nil {
+				t.Fatal(err)
+			}
+			if preview.Kind != tc.kind || preview.SideEffects {
+				t.Fatalf("%s preview = %+v, want exact kind and no external effect", tc.kind, preview)
+			}
+
+			status, body = secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/sources", tok,
+				"discovery-recovery-source-"+tc.name, map[string]any{
+					"name":   "recovery-" + tc.name,
+					"kind":   tc.kind,
+					"config": tc.config,
+				})
+			if status != http.StatusCreated {
+				t.Fatalf("create %s source: status %d body %s", tc.kind, status, body)
+			}
+			var source struct {
+				ID string `json:"id"`
+			}
+			if err := json.Unmarshal(body, &source); err != nil {
+				t.Fatal(err)
+			}
+
+			status, body = secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/runs", tok,
+				"discovery-recovery-run-"+tc.name, map[string]any{"source_id": source.ID, "dry_run": true})
+			if status != http.StatusCreated {
+				t.Fatalf("queue %s run: status %d body %s", tc.kind, status, body)
+			}
+			var original struct {
+				ID string `json:"id"`
+			}
+			if err := json.Unmarshal(body, &original); err != nil {
+				t.Fatal(err)
+			}
+			if err := h.srv.orch.CompleteDiscoveryRun(t.Context(), h.tenant, store.DiscoveryRun{
+				ID: original.ID, Status: "failed", Targets: 1, Failed: 1, Error: "bounded " + tc.kind + " failure",
+			}); err != nil {
+				t.Fatalf("complete %s run as failed: %v", tc.kind, err)
+			}
+
+			status, body = secretsReqKey(t, h.servedHarness, http.MethodPost,
+				"/api/v1/discovery/runs/"+original.ID+"/retry", tok, "discovery-recovery-retry-"+tc.name, nil)
+			if status != http.StatusCreated {
+				t.Fatalf("retry %s run: status %d body %s", tc.kind, status, body)
+			}
+			var replacement struct {
+				ID           string `json:"id"`
+				SourceID     string `json:"source_id"`
+				RetryOfRunID string `json:"retry_of_run_id"`
+				DryRun       bool   `json:"dry_run"`
+			}
+			if err := json.Unmarshal(body, &replacement); err != nil {
+				t.Fatal(err)
+			}
+			if replacement.ID == "" || replacement.ID == original.ID || replacement.SourceID != source.ID ||
+				replacement.RetryOfRunID != original.ID || !replacement.DryRun {
+				t.Fatalf("%s replacement = %+v, want distinct dry-run retry with source and lineage", tc.kind, replacement)
+			}
+			storedOriginal, err := h.store.GetDiscoveryRun(t.Context(), h.tenant, original.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if storedOriginal.Status != "failed" || storedOriginal.RetryOfRunID != "" {
+				t.Fatalf("%s original failure was rewritten: %+v", tc.kind, storedOriginal)
+			}
+		})
+	}
+}
