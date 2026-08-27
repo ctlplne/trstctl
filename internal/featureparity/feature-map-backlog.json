@@ -2089,7 +2089,7 @@
                 "purpose": "Lets an operator understand and safely use api key / token inventory while tenant, policy, and security authority remain on the server.",
                 "tool": "discover",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/discovery",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -2101,7 +2101,7 @@
                 "dependencies": [],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -2122,8 +2122,12 @@
                         ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/Discovery.tsx",
+                            "web/src/__tests__/discovery.test.tsx",
+                            "internal/server/discovery_recovery_served_test.go"
+                        ]
                     },
                     "execute": {
                         "status": "complete",
@@ -2139,12 +2143,20 @@
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: retryDiscoveryRun",
+                            "CLI command: discovery runs retry",
+                            "internal/server/discovery_recovery_served_test.go",
+                            "web/src/pages/Discovery.tsx",
+                            "web/src/__tests__/discovery.test.tsx"
+                        ]
                     },
                     "verify": {
-                        "status": "missing",
-                        "reason": "Durable or external-effect verification is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/server/discovery_served_test.go"
+                        ]
                     },
                     "automate": {
                         "status": "complete",

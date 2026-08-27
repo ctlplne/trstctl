@@ -1158,18 +1158,97 @@ describe("discovery control-plane surface", () => {
         ]),
       },
     });
+    await user.click(within(sourceForm as HTMLFormElement).getByRole("button", { name: "Review exact plan" }));
+
+    const expectedConfig = {
+      observations: expect.arrayContaining([
+        expect.objectContaining({ system: "github", credential_kind: "personal_access_token" }),
+        expect.objectContaining({ system: "aws-iam", credential_kind: "access_key" }),
+      ]),
+    };
+    expect(apiMock.previewDiscoveryPlan).toHaveBeenCalledWith({
+      name: "tokens-quarterly",
+      kind: "api_key",
+      config: expectedConfig,
+    });
+    expect(apiMock.createDiscoverySource).not.toHaveBeenCalled();
+    expect(await within(sourceForm as HTMLFormElement).findByRole("region", { name: "API key discovery plan" })).toBeInTheDocument();
+
     await user.click(within(sourceForm as HTMLFormElement).getByRole("button", { name: "Create source" }));
 
     expect(apiMock.createDiscoverySource).toHaveBeenCalledWith({
       name: "tokens-quarterly",
       kind: "api_key",
-      config: {
-        observations: expect.arrayContaining([
-          expect.objectContaining({ system: "github", credential_kind: "personal_access_token" }),
-          expect.objectContaining({ system: "aws-iam", credential_kind: "access_key" }),
-        ]),
-      },
+      config: expectedConfig,
     });
+  });
+
+  it("fails closed before saving when the API-key discovery plan is unavailable", async () => {
+    apiMock.previewDiscoveryPlan.mockRejectedValueOnce(new ApiError(503, JSON.stringify({ detail: "plan oracle unavailable" })));
+    const user = userEvent.setup();
+    renderDiscovery(["/discovery?tab=sources"]);
+
+    const importForm = (await screen.findByRole("heading", { name: "Import sanitized observations" })).closest("form");
+    expect(importForm).toBeTruthy();
+    const form = within(importForm as HTMLFormElement);
+    await user.type(form.getByLabelText("Name"), "tokens-blocked");
+    await user.selectOptions(form.getByLabelText("Kind"), "api_key");
+    await user.click(form.getByRole("button", { name: "Load sample" }));
+    await user.click(form.getByRole("button", { name: "Review exact plan" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("plan oracle unavailable");
+    expect(apiMock.createDiscoverySource).not.toHaveBeenCalled();
+    expect(form.queryByRole("button", { name: "Create source" })).not.toBeInTheDocument();
+  });
+
+  it("keeps API-key source creation locked when the server blocks the exact plan", async () => {
+    apiMock.previewDiscoveryPlan.mockResolvedValueOnce({
+      ready: false,
+      side_effects: false,
+      permission: "discovery:write",
+      data_handling: "Metadata only; token values are rejected.",
+      blocked_reasons: ["The metadata boundary could not be proved."],
+    });
+    const user = userEvent.setup();
+    renderDiscovery(["/discovery?tab=sources"]);
+
+    const importForm = (await screen.findByRole("heading", { name: "Import sanitized observations" })).closest("form");
+    expect(importForm).toBeTruthy();
+    const form = within(importForm as HTMLFormElement);
+    await user.type(form.getByLabelText("Name"), "tokens-server-blocked");
+    await user.selectOptions(form.getByLabelText("Kind"), "api_key");
+    await user.click(form.getByRole("button", { name: "Load sample" }));
+    await user.click(form.getByRole("button", { name: "Review exact plan" }));
+
+    expect(await form.findByText("The metadata boundary could not be proved.")).toBeInTheDocument();
+    expect(apiMock.createDiscoverySource).not.toHaveBeenCalled();
+    expect(form.queryByRole("button", { name: "Create source" })).not.toBeInTheDocument();
+    expect(form.getByRole("button", { name: "Review exact plan" })).toBeInTheDocument();
+  });
+
+  it("invalidates an approved API-key plan when the exact draft changes", async () => {
+    const user = userEvent.setup();
+    renderDiscovery(["/discovery?tab=sources"]);
+
+    const importForm = (await screen.findByRole("heading", { name: "Import sanitized observations" })).closest("form");
+    expect(importForm).toBeTruthy();
+    const form = within(importForm as HTMLFormElement);
+    const name = form.getByLabelText("Name");
+    await user.type(name, "tokens-before-change");
+    await user.selectOptions(form.getByLabelText("Kind"), "api_key");
+    await user.click(form.getByRole("button", { name: "Load sample" }));
+    await user.click(form.getByRole("button", { name: "Review exact plan" }));
+    expect(await form.findByRole("button", { name: "Create source" })).toBeInTheDocument();
+
+    await user.clear(name);
+    await user.type(name, "tokens-after-change");
+
+    expect(form.queryByRole("region", { name: "API key discovery plan" })).not.toBeInTheDocument();
+    expect(form.queryByRole("button", { name: "Create source" })).not.toBeInTheDocument();
+    await user.click(form.getByRole("button", { name: "Review exact plan" }));
+    expect(apiMock.previewDiscoveryPlan).toHaveBeenCalledTimes(2);
+    expect(apiMock.previewDiscoveryPlan).toHaveBeenLastCalledWith(expect.objectContaining({ name: "tokens-after-change", kind: "api_key" }));
+    expect(apiMock.createDiscoverySource).not.toHaveBeenCalled();
   });
 
   it("creates an OAuth grant source from metadata-only app consent records", async () => {

@@ -364,7 +364,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use ssh credential discovery and inventory while tenant, policy, and security authority remain on the server.",
       "tool": "discover",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/discovery",
       "navigationEntrypoints": [
         "tool navigation",
@@ -376,7 +376,7 @@ export const canonicalCapabilities = [
       "dependencies": [],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -397,12 +397,18 @@ export const canonicalCapabilities = [
           ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/discovery/SourceSetup.tsx",
+            "internal/server/discovery_recovery_served_test.go"
+          ]
         },
         "execute": {
-          "status": "missing",
-          "reason": "No complete console execution path is proved for this capability."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/Discovery.tsx",
+            "internal/server/discovery_served_test.go"
+          ]
         },
         "observe": {
           "status": "complete",
@@ -411,8 +417,14 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: retryDiscoveryRun",
+            "CLI command: discovery runs retry",
+            "internal/server/discovery_recovery_served_test.go",
+            "web/src/pages/Discovery.tsx",
+            "web/src/__tests__/discovery.test.tsx"
+          ]
         },
         "verify": {
           "status": "complete",
@@ -460,7 +472,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use agentless cloud certificate discovery while tenant, policy, and security authority remain on the server.",
       "tool": "discover",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/discovery",
       "navigationEntrypoints": [
         "tool navigation",
@@ -472,7 +484,7 @@ export const canonicalCapabilities = [
       "dependencies": [],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -513,8 +525,14 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: retryDiscoveryRun",
+            "CLI command: discovery runs retry",
+            "internal/server/discovery_recovery_served_test.go",
+            "web/src/pages/Discovery.tsx",
+            "web/src/__tests__/discovery.test.tsx"
+          ]
         },
         "verify": {
           "status": "complete",
@@ -560,7 +578,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use secret store discovery while tenant, policy, and security authority remain on the server.",
       "tool": "discover",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/discovery",
       "navigationEntrypoints": [
         "tool navigation",
@@ -572,7 +590,7 @@ export const canonicalCapabilities = [
       "dependencies": [],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -593,8 +611,12 @@ export const canonicalCapabilities = [
           ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/discovery/SourceSetup.tsx",
+            "web/src/__tests__/discovery.test.tsx",
+            "internal/server/discovery_recovery_served_test.go"
+          ]
         },
         "execute": {
           "status": "complete",
@@ -610,12 +632,21 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: retryDiscoveryRun",
+            "CLI command: discovery runs retry",
+            "internal/server/discovery_recovery_served_test.go",
+            "web/src/pages/Discovery.tsx",
+            "web/src/__tests__/discovery.test.tsx"
+          ]
         },
         "verify": {
-          "status": "missing",
-          "reason": "Durable or external-effect verification is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "internal/server/discovery_served_test.go",
+            "internal/server/secrets_sync_served_test.go"
+          ]
         },
         "automate": {
           "status": "complete",
@@ -655,7 +686,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use api key / token inventory while tenant, policy, and security authority remain on the server.",
       "tool": "discover",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/discovery",
       "navigationEntrypoints": [
         "tool navigation",
@@ -667,7 +698,7 @@ export const canonicalCapabilities = [
       "dependencies": [],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -688,8 +719,12 @@ export const canonicalCapabilities = [
           ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/Discovery.tsx",
+            "web/src/__tests__/discovery.test.tsx",
+            "internal/server/discovery_recovery_served_test.go"
+          ]
         },
         "execute": {
           "status": "complete",
@@ -705,12 +740,20 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: retryDiscoveryRun",
+            "CLI command: discovery runs retry",
+            "internal/server/discovery_recovery_served_test.go",
+            "web/src/pages/Discovery.tsx",
+            "web/src/__tests__/discovery.test.tsx"
+          ]
         },
         "verify": {
-          "status": "missing",
-          "reason": "Durable or external-effect verification is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "internal/server/discovery_served_test.go"
+          ]
         },
         "automate": {
           "status": "complete",

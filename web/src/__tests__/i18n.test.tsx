@@ -1197,8 +1197,13 @@ describe("i18n boundary", () => {
       // only from served entitlement data. Negations, credentials/private-key
       // exclusions, and contract ownership were reviewed for meaning. Machine-
       // authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "e42b07ad56a8be0a33c3b97810ffa38a9b24ac945aa82284b0db5161f591ef43",
-      "de-DE": "4f92b8a0e6a6ac3200751e4008df59659dfa392608cdbab9ba4f1bdb9ffbac84",
+      // API-key discovery-plan re-pin: twelve keys explain that the server
+      // validates the exact metadata-only draft before any source is saved or
+      // scan runs, and that token values are rejected. Negations and the
+      // no-write/no-scan boundary were reviewed for meaning. Machine-authored
+      // es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "179d7e0780a752b293e3af8a5b25cd6f623e23fb120e16e9f24ce772d4d268e6",
+      "de-DE": "a330564ad3bb2999362b51ffe82dc20dce8e5f295328e8ac478a1a7d4fec5935",
     });
   });
 

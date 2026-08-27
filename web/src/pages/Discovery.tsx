@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent, RefObject } from "react";
-import { CheckCircle2, Activity, ClipboardList, Code2, Play, Plus, RefreshCw, Search, Sparkles, Tag, Trash2, Upload, XCircle } from "lucide-react";
+import { CheckCircle2, Activity, ClipboardList, Code2, Play, Plus, RefreshCw, Search, ShieldCheck, Sparkles, Tag, Trash2, Upload, XCircle } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { EmptyState } from "@/components/EmptyState";
 import { PageTabs, tabPanelProps } from "@/components/PageTabs";
@@ -23,6 +23,7 @@ import {
   type DiscoveryCoverage,
   type DiscoveryFinding,
   type DiscoveryMonitoring,
+  type DiscoveryPlanPreview,
   type DiscoveryRun,
   type DiscoverySchedule,
   type DiscoverySource,
@@ -614,12 +615,35 @@ export function Discovery() {
   const [structuredTemplates, setStructuredTemplates] = useState<Record<StructuredSourceKind, string>>(() => initialStructuredTemplates());
   const [structuredJSONImports, setStructuredJSONImports] = useState<Record<StructuredSourceKind, string>>(() => initialStructuredJSONImports());
   const [openJSONImportKind, setOpenJSONImportKind] = useState<StructuredSourceKind | null>(null);
+  const [apiKeyPlan, setAPIKeyPlan] = useState<{ requestKey: string; preview: DiscoveryPlanPreview } | null>(null);
   const [scheduleName, setScheduleName] = useState("");
   const [scheduleSourceID, setScheduleSourceID] = useState("");
   const [scheduleInterval, setScheduleInterval] = useState(3600);
   const sourceNameRef = useRef<HTMLInputElement>(null);
   const scheduleNameRef = useRef<HTMLInputElement>(null);
   const firstRunButtonRef = useRef<HTMLButtonElement>(null);
+
+  const apiKeyDraft = useMemo(() => {
+    if (sourceKind !== "api_key") return null;
+    try {
+      const request: DiscoverySourceRequest = {
+        name: sourceName.trim(),
+        kind: sourceKind,
+        config: buildStructuredSourceConfig(sourceKind, structuredRows[sourceKind], structuredJSONImports[sourceKind]),
+      };
+      return { request, requestKey: JSON.stringify(request) };
+    } catch {
+      return null;
+    }
+  }, [sourceKind, sourceName, structuredRows, structuredJSONImports]);
+  const apiKeyPlanIsCurrent = apiKeyDraft !== null && apiKeyPlan?.requestKey === apiKeyDraft.requestKey;
+  const apiKeyPlanAllowsSave =
+    apiKeyDraft !== null &&
+    apiKeyPlan !== null &&
+    apiKeyPlan.requestKey === apiKeyDraft.requestKey &&
+    apiKeyPlan.preview.ready !== false &&
+    apiKeyPlan.preview.side_effects === false &&
+    apiKeyPlan.preview.blocked_reasons.length === 0;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -758,7 +782,30 @@ export function Discovery() {
             : isStructuredSourceKind(sourceKind)
               ? buildStructuredSourceConfig(sourceKind, structuredRows[sourceKind], structuredJSONImports[sourceKind])
               : {};
-      const created = await api.createDiscoverySource({ name: sourceName.trim(), kind: sourceKind, config });
+      const request: DiscoverySourceRequest = { name: sourceName.trim(), kind: sourceKind, config };
+      if (sourceKind === "api_key") {
+        const requestKey = JSON.stringify(request);
+        if (
+          apiKeyPlan?.requestKey !== requestKey ||
+          apiKeyPlan.preview.ready === false ||
+          apiKeyPlan.preview.side_effects ||
+          apiKeyPlan.preview.blocked_reasons.length > 0
+        ) {
+          // A failed or blocked re-preview must not leave an older approval
+          // visible, even though the request-key check already keeps save
+          // fail-closed.
+          setAPIKeyPlan(null);
+          const preview = await api.previewDiscoveryPlan(request);
+          setAPIKeyPlan({ requestKey, preview });
+          const blocked = preview.ready === false || preview.side_effects || preview.blocked_reasons.length > 0;
+          setNotice({
+            kind: blocked ? "error" : "success",
+            message: blocked ? t("discovery.importPreview.blocked") : t("discovery.importPreview.reviewed"),
+          });
+          return;
+        }
+      }
+      const created = await api.createDiscoverySource(request);
       setSourceName("");
       setTargets("");
       setSegment("");
@@ -774,6 +821,7 @@ export function Discovery() {
       setStructuredTemplates(initialStructuredTemplates());
       setStructuredJSONImports(initialStructuredJSONImports());
       setOpenJSONImportKind(null);
+      setAPIKeyPlan(null);
       setScheduleSourceID(created.id);
       await load();
     } catch (err) {
@@ -1076,9 +1124,54 @@ export function Discovery() {
                 onToggleJSONImport={() => setOpenJSONImportKind((current) => (current === sourceKind ? null : sourceKind))}
               />
             )}
+            {sourceKind === "api_key" && apiKeyPlanIsCurrent && apiKeyDraft && apiKeyPlan ? (
+              <section aria-label={t("discovery.importPreview.label")} className="grid gap-4 rounded-panel border border-brand-accent/25 bg-brand-accent/5 p-4">
+                <div className="flex items-start gap-3">
+                  <ShieldCheck className="mt-0.5 h-5 w-5 text-brand-accent" aria-hidden="true" />
+                  <div>
+                    <h3 className="font-semibold">{t("discovery.importPreview.title")}</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">{t("discovery.importPreview.body")}</p>
+                  </div>
+                </div>
+                <dl className="grid gap-3 text-sm sm:grid-cols-3">
+                  <div className="border-s-2 border-border ps-3">
+                    <dt className="text-caption text-muted-foreground">{t("discovery.importPreview.permission")}</dt>
+                    <dd className="mt-0.5 font-medium">{apiKeyPlan.preview.permission}</dd>
+                  </div>
+                  <div className="border-s-2 border-border ps-3">
+                    <dt className="text-caption text-muted-foreground">{t("discovery.importPreview.effect")}</dt>
+                    <dd className="mt-0.5 font-medium">
+                      {apiKeyPlan.preview.side_effects ? t("discovery.importPreview.effectBlocked") : t("discovery.importPreview.effectNone")}
+                    </dd>
+                  </div>
+                  <div className="border-s-2 border-border ps-3">
+                    <dt className="text-caption text-muted-foreground">{t("discovery.importPreview.dataHandling")}</dt>
+                    <dd className="mt-0.5 font-medium">{apiKeyPlan.preview.data_handling}</dd>
+                  </div>
+                </dl>
+                {!apiKeyPlanAllowsSave ? (
+                  <div role="alert" className="rounded-control border border-risk-warning/40 bg-risk-warning/10 p-3 text-sm">
+                    <p className="font-semibold">{t("discovery.importPreview.blocked")}</p>
+                    {apiKeyPlan.preview.blocked_reasons.length > 0 ? (
+                      <ul className="mt-1 list-disc space-y-1 ps-5 text-muted-foreground">
+                        {apiKeyPlan.preview.blocked_reasons.map((reason) => (
+                          <li key={reason}>{reason}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                ) : null}
+                <details className="text-sm text-muted-foreground">
+                  <summary className="cursor-pointer font-medium text-foreground">{t("discovery.importPreview.exactConfig")}</summary>
+                  <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-control bg-background p-3 font-mono text-xs">
+                    {JSON.stringify(apiKeyDraft.request.config, null, 2)}
+                  </pre>
+                </details>
+              </section>
+            ) : null}
             <Button type="submit" className="justify-self-start" disabled={busy === "source"}>
               <Plus className="h-4 w-4" aria-hidden="true" />
-              {translateNow("source.create.source.020457fb23")}
+              {sourceKind === "api_key" && !apiKeyPlanAllowsSave ? t("discovery.importPreview.review") : translateNow("source.create.source.020457fb23")}
             </Button>
           </form>
         </div>
