@@ -4089,7 +4089,8 @@ export const messages = {
     description: "Heading for certificate-request prerequisite recovery links.",
   },
   "request.configure.description": {
-    defaultMessage: "This request uses served tenant configuration. Change the exact source instead of typing around a missing prerequisite.",
+    defaultMessage:
+      "This request uses your saved certificate rules, owner, and certificate authority. If something is missing, fix it where it is managed before continuing.",
     description: "Explanation above certificate-request prerequisite links.",
   },
   "request.configure.profiles": {

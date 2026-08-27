@@ -1213,8 +1213,13 @@ describe("i18n boundary", () => {
       // blocked recovery, and the distinct replacement/original run receipt.
       // Negations and lineage meaning were reviewed in both catalogs. Machine-
       // authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "2c2026cd77b556cc750f6d882a7491e5f9ac8334abb518ff0af96cf8db31baed",
-      "de-DE": "93655e670473b9c29198fb7ebadccda77dcb5a05799420083c02331bf20ba00a",
+      // F4 request-preview re-pin: the review explains no-write/no-CA preview,
+      // requester-held key custody, independent approval, exact submission
+      // effects, prerequisite recovery, and deterministic retry. Negations and
+      // security meaning were reviewed in both catalogs. Machine-authored es/de
+      // — FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "1d34931fdaf39ce7f6d2465be891396c089966f246a3c273653115770067677a",
+      "de-DE": "f3054637a9de790c805f6ee8bf6aa38c4797fca09f7e014cdeb31a539a3bb3f8",
     });
   });
 

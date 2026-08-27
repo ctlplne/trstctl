@@ -1295,7 +1295,7 @@ const esESCatalog = {
   "request.preview.approvalValue": "Obligatoria por una identidad diferente con {permission}.",
   "request.configure.heading": "Configurar requisitos previos",
   "request.configure.description":
-    "Esta solicitud usa la configuración servida del tenant. Cambia la fuente exacta en vez de eludir un requisito previo ausente.",
+    "Esta solicitud usa las reglas de certificados, los datos del propietario y la configuración de la autoridad de certificación que guardaste. Si falta algo, corrígelo donde se administra antes de continuar.",
   "request.configure.profiles": "Configurar reglas de certificados",
   "request.configure.owners": "Configurar propiedad",
   "request.configure.authorities": "Configurar autoridades de certificación",

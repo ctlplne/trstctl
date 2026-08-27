@@ -177,6 +177,47 @@ describe("self-service credential requests", () => {
     expect(screen.queryByText(/has been issued/i)).not.toBeInTheDocument();
   });
 
+  it("submits the same canonical request that was previewed when pasted fields contain surrounding whitespace", async () => {
+    const csr = "-----BEGIN CERTIFICATE REQUEST-----\nPUBLIC CSR\n-----END CERTIFICATE REQUEST-----";
+    apiMock.createIssuanceRequest.mockResolvedValue({
+      id: "req-canonical-1",
+      tenant_id: "t1",
+      owner_id: selectedOwner.id,
+      subject: "payments-api",
+      profile: "web-server:2",
+      requester: "dev-1",
+      justification: "staging TLS",
+      status: "requested",
+      expires_at: "2026-06-27T04:00:00Z",
+      created_at: "2026-06-20T04:00:00Z",
+    });
+    const user = userEvent.setup();
+    renderAt("/request");
+
+    await waitFor(() => expect(screen.getByLabelText("Profile")).toHaveDisplayValue("web-server v2 active"));
+    await user.click(screen.getByRole("button", { name: "Next: name it" }));
+    await user.selectOptions(screen.getByLabelText("Owner"), selectedOwner.id);
+    await user.type(screen.getByLabelText("Credential name"), "  payments-api  ");
+    await user.type(screen.getByLabelText("Business purpose"), "  staging TLS  ");
+    await user.type(screen.getByLabelText("Certificate signing request (PKCS#10)"), `${csr}\n`);
+    await user.click(screen.getByRole("button", { name: "Next: review" }));
+
+    expect(await screen.findByRole("status", { name: "Request preview ready" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Submit request" }));
+
+    await waitFor(() =>
+      expect(apiMock.createIssuanceRequest).toHaveBeenCalledWith({
+        subject: "payments-api",
+        profile: "web-server:2",
+        owner_id: selectedOwner.id,
+        justification: "staging TLS",
+        origin: "console",
+        csr_pem: csr,
+      }),
+    );
+    expect(screen.queryByText(/preview is missing or stale/i)).not.toBeInTheDocument();
+  });
+
   it("fails closed when the exact preview is unavailable and links every prerequisite", async () => {
     apiMock.previewIssuanceRequest.mockRejectedValueOnce(new ApiError(503, JSON.stringify({ detail: "profile admission is unavailable" })));
     const user = userEvent.setup();

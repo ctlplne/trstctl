@@ -1314,7 +1314,7 @@ const deDECatalog = {
   "request.preview.approvalValue": "Von einer anderen Identität mit {permission} erforderlich.",
   "request.configure.heading": "Voraussetzungen konfigurieren",
   "request.configure.description":
-    "Diese Anfrage verwendet bereitgestellte Mandantenkonfiguration. Die genaue Quelle ändern, statt eine fehlende Voraussetzung zu umgehen.",
+    "Diese Anfrage verwendet Ihre gespeicherten Zertifikatsregeln, Eigentümerangaben und Einstellungen der Zertifizierungsstelle. Wenn etwas fehlt, beheben Sie es dort, wo es verwaltet wird, bevor Sie fortfahren.",
   "request.configure.profiles": "Zertifikatsregeln konfigurieren",
   "request.configure.owners": "Eigentümerschaft konfigurieren",
   "request.configure.authorities": "Zertifizierungsstellen konfigurieren",

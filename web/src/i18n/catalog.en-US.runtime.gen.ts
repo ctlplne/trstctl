@@ -7666,7 +7666,7 @@ export const defaultMessageValues = [
   "Independent approval",
   "Required from a different principal with {permission}.",
   "Configure prerequisites",
-  "This request uses served tenant configuration. Change the exact source instead of typing around a missing prerequisite.",
+  "This request uses your saved certificate rules, owner, and certificate authority. If something is missing, fix it where it is managed before continuing.",
   "Configure certificate rules",
   "Configure ownership",
   "Configure certificate authorities",

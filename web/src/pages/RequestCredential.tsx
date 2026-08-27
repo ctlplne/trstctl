@@ -38,13 +38,19 @@ function profileKey(profile: Profile): string {
 }
 
 function requestInput(values: RequestFormValues, profile: Profile): IssuanceRequestInput {
+  // Build one canonical payload for both preview and submit. useWatch exposes
+  // the exact textarea value while zod returns trimmed values to handleSubmit;
+  // without normalizing here, an ordinary pasted CSR with a trailing newline
+  // previews as ready and is then rejected locally as "stale" even though the
+  // operator changed nothing. These trims mirror the server admission path.
+  const csrPEM = values.subjectCSRPEM.trim();
   return {
-    subject: values.name,
+    subject: values.name.trim(),
     profile: `${profile.name}:${profile.version}`,
-    owner_id: values.ownerId,
-    justification: values.purpose,
+    owner_id: values.ownerId.trim(),
+    justification: values.purpose.trim(),
     origin: "console",
-    ...(values.subjectCSRPEM ? { csr_pem: values.subjectCSRPEM } : {}),
+    ...(csrPEM ? { csr_pem: csrPEM } : {}),
   };
 }
 
