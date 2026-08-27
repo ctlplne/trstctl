@@ -183,7 +183,7 @@ func (s *Store) ApplyDiscoverySourceUpsertedTx(ctx context.Context, tx pgx.Tx, s
 		      (id, tenant_id, kind, name, config, created_at, updated_at,
 		       projection_event_id, projection_event_sequence)
 		      VALUES ($1, $2, $3, $4, $5, $6, $7, NULLIF($8, ''), $9)
-		 ON CONFLICT ON CONSTRAINT discovery_sources_pkey DO UPDATE
+		 ON CONFLICT ON CONSTRAINT discovery_sources_tenant_id_id_key DO UPDATE
 		      SET kind = CASE WHEN $10 OR (
 		              EXCLUDED.projection_event_sequence > discovery_sources.projection_event_sequence
 		              AND discovery_sources.projection_event_id IS DISTINCT FROM EXCLUDED.projection_event_id

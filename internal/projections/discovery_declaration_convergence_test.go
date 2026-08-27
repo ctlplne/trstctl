@@ -171,6 +171,49 @@ func TestTailWorkerDiscoveryDeclarationsConvergePastInlineProjection(t *testing.
 	}
 }
 
+// TestConcurrentDiscoverySourceFirstProjectionConverges reproduces the other
+// served double-writer order: several projector paths reach a brand-new source
+// before any row is visible. PostgreSQL may discover the tenant-scoped
+// (tenant_id, id) uniqueness collision before the legacy global primary-key
+// collision, so the projection SQL must name the tenant-scoped arbiter. Every
+// contender is applying the same immutable event and must converge to one row.
+func TestConcurrentDiscoverySourceFirstProjectionConverges(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "Acme"}); err != nil {
+		t.Fatal(err)
+	}
+	event := projectorEvent(t, projections.EventDiscoverySourceUpserted,
+		projections.DiscoverySourceUpserted{
+			ID: discoveryConvergenceSourceID, Kind: "drift", Name: "concurrent-first-source",
+			Config: json.RawMessage(`{"watched":[]}`),
+		})
+	event.ID = "10000000-0000-4000-8000-000000000307"
+	event.Sequence = 11
+
+	const writers = 32
+	start := make(chan struct{})
+	errs := make(chan error, writers)
+	for range writers {
+		go func() {
+			<-start
+			errs <- projections.New(s).Apply(ctx, event)
+		}()
+	}
+	close(start)
+	for range writers {
+		if err := <-errs; err != nil {
+			t.Fatalf("concurrent exact-event projection did not converge: %v", err)
+		}
+	}
+
+	_, sources := discoveryDeclarationRows(t, s)
+	if len(sources) != 1 || sources[0].ID != discoveryConvergenceSourceID ||
+		sources[0].Name != "concurrent-first-source" {
+		t.Fatalf("concurrent source projection = %+v, want one exact source", sources)
+	}
+}
+
 // TestDiscoverySegmentLegacyRowIsBoundToItsFirstEvent proves the online
 // migration path: a pre-0199 row keeps its operator-visible name while its
 // first immutable declaration replaces the random legacy ID with the stable
