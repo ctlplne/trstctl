@@ -7233,7 +7233,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use credential graph while tenant, policy, and security authority remain on the server.",
       "tool": "operations",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/graph",
       "navigationEntrypoints": [
         "tool navigation",
@@ -7245,7 +7245,7 @@ export const canonicalCapabilities = [
       "dependencies": [],
       "sideEffects": "read_only",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -7254,8 +7254,14 @@ export const canonicalCapabilities = [
           ]
         },
         "understand": {
-          "status": "missing",
-          "reason": "The basic graph and blast-radius view does not yet prove edge explanations, complete path context, filters, export, or links back to lifecycle, audit, and risk evidence."
+          "status": "complete",
+          "evidence": [
+            "internal/graph/graph.go",
+            "internal/projections/graph_api_test.go",
+            "web/src/pages/Graph.tsx",
+            "web/src/pages/GraphExpert.tsx",
+            "web/src/__tests__/graph-design.test.tsx"
+          ]
         },
         "configure": {
           "status": "not_applicable",
@@ -7304,8 +7310,8 @@ export const canonicalCapabilities = [
       },
       "owner": "operations",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "0c46a615a0b139c7e360548c14df09a496f04b7a",
+      "freshness": "2026-08-28"
     }
   },
   {
