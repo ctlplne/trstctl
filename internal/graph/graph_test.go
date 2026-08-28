@@ -74,6 +74,59 @@ func TestReachable(t *testing.T) {
 	}
 }
 
+func TestEvidencePathsExplainDeterministicShortestRelationships(t *testing.T) {
+	g := fixture()
+	paths := g.EvidencePaths("iss:ca-root")
+	if len(paths) != 5 {
+		t.Fatalf("EvidencePaths(root) count = %d, want 5", len(paths))
+	}
+
+	var database graph.EvidencePath
+	for _, path := range paths {
+		if path.Target.ID == "res:payments-db" {
+			database = path
+			break
+		}
+	}
+	if database.Target.ID == "" {
+		t.Fatal("EvidencePaths(root) has no path to payments-db")
+	}
+	if got, want := ids(database.Nodes), []string{"iss:ca-root", "iss:ca-int", "cred:cert-payments", "res:payments-db"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("payments-db path nodes = %v, want %v", got, want)
+	}
+	var gotEdges []graph.EdgeType
+	for _, edge := range database.Edges {
+		gotEdges = append(gotEdges, edge.Type)
+	}
+	if want := []graph.EdgeType{graph.EdgeIssued, graph.EdgeIssued, graph.EdgeDeployedTo}; !reflect.DeepEqual(gotEdges, want) {
+		t.Errorf("payments-db path edges = %v, want %v", gotEdges, want)
+	}
+
+	for index := 1; index < len(paths); index++ {
+		if paths[index-1].Target.ID > paths[index].Target.ID {
+			t.Fatalf("paths are not target-ID sorted: %q before %q", paths[index-1].Target.ID, paths[index].Target.ID)
+		}
+	}
+}
+
+func TestEvidencePathsExcludeUnverifiedTrustCandidates(t *testing.T) {
+	g := graph.New()
+	g.AddNode(graph.Node{ID: "iss:root", Kind: graph.KindIssuer, Name: "Root"})
+	g.AddNode(graph.Node{ID: "ts:exact", Kind: graph.KindTrustStore, Name: "Exact"})
+	g.AddNode(graph.Node{ID: "ts:candidate", Kind: graph.KindTrustStore, Name: "Subject-only candidate"})
+	g.AddEdge(graph.Edge{From: "iss:root", To: "ts:exact", Type: graph.EdgeTrusts})
+	g.AddEdge(graph.Edge{From: "iss:root", To: "ts:candidate", Type: graph.EdgeTrustCandidate})
+
+	paths := g.EvidencePaths("iss:root")
+	if len(paths) != 1 || paths[0].Target.ID != "ts:exact" {
+		t.Fatalf("authoritative paths = %#v, want exact trust only", paths)
+	}
+	paths = g.EvidencePaths("iss:root", graph.EdgeTrustCandidate)
+	if len(paths) != 1 || paths[0].Target.ID != "ts:candidate" {
+		t.Fatalf("explicit candidate paths = %#v, want subject-only candidate", paths)
+	}
+}
+
 func TestReachableEdgeTypeFilter(t *testing.T) {
 	g := fixture()
 	// Following only ISSUED edges from the root reaches the CA chain and the
@@ -132,6 +185,9 @@ func TestBlastRadius(t *testing.T) {
 	if imp.Node.ID != "iss:ca-root" {
 		t.Errorf("Impact.Node = %q, want iss:ca-root", imp.Node.ID)
 	}
+	if len(imp.Paths) != len(imp.Affected) {
+		t.Errorf("Impact.Paths = %d, want one path for each of %d affected nodes", len(imp.Paths), len(imp.Affected))
+	}
 
 	// A single workload's blast radius is just its own credential and where it
 	// is deployed — not the unrelated web subtree.
@@ -153,7 +209,7 @@ func TestBlastRadiusLeafEncodesAnEmptyAffectedList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal leaf impact: %v", err)
 	}
-	if len(body) == 0 || !bytes.Contains(body, []byte(`"affected":[]`)) {
-		t.Fatalf("leaf impact JSON = %s, want affected:[]", body)
+	if len(body) == 0 || !bytes.Contains(body, []byte(`"affected":[]`)) || !bytes.Contains(body, []byte(`"paths":[]`)) {
+		t.Fatalf("leaf impact JSON = %s, want affected:[] and paths:[]", body)
 	}
 }

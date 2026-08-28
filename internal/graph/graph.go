@@ -82,6 +82,17 @@ type Edge struct {
 	Confidence string   `json:"confidence,omitempty"`
 }
 
+// EvidencePath is one deterministic, shortest, server-owned explanation for
+// how a starting node reaches Target. Nodes includes both endpoints in travel
+// order; Edges contains the relationship between each adjacent node pair.
+// Returning the chain keeps consoles and SDKs from inventing risk paths from a
+// flat affected-node list.
+type EvidencePath struct {
+	Target Node   `json:"target"`
+	Nodes  []Node `json:"nodes"`
+	Edges  []Edge `json:"edges"`
+}
+
 // Graph is an in-memory directed multigraph of the inventory. It is built once
 // per query (cheaply, from the tenant's inventory) and is not safe for
 // concurrent mutation; queries over a built graph are read-only.
@@ -203,29 +214,91 @@ func (g *Graph) IncomingNeighbors(id string, types ...EdgeType) []Node {
 	return out
 }
 
+// EvidencePaths returns one shortest path from from to every reachable node.
+// Outgoing choices are sorted before breadth-first traversal, so equal-length
+// alternatives produce stable evidence across rebuilds. Unverified trust
+// candidates remain excluded unless the caller explicitly requests that type.
+func (g *Graph) EvidencePaths(from string, types ...EdgeType) []EvidencePath {
+	paths := make([]EvidencePath, 0)
+	if _, ok := g.nodes[from]; !ok {
+		return paths
+	}
+
+	visited := map[string]bool{from: true}
+	queue := []string{from}
+	predecessor := map[string]Edge{}
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		outgoing := append([]Edge(nil), g.out[cur]...)
+		sort.Slice(outgoing, func(i, j int) bool {
+			if outgoing[i].To != outgoing[j].To {
+				return outgoing[i].To < outgoing[j].To
+			}
+			if outgoing[i].Type != outgoing[j].Type {
+				return outgoing[i].Type < outgoing[j].Type
+			}
+			if outgoing[i].Source != outgoing[j].Source {
+				return outgoing[i].Source < outgoing[j].Source
+			}
+			return outgoing[i].Confidence < outgoing[j].Confidence
+		})
+		for _, e := range outgoing {
+			if !allows(types, e.Type) || visited[e.To] {
+				continue
+			}
+			if _, ok := g.nodes[e.To]; !ok {
+				continue
+			}
+			visited[e.To] = true
+			predecessor[e.To] = e
+			queue = append(queue, e.To)
+		}
+	}
+
+	targetIDs := make([]string, 0, len(predecessor))
+	for id := range predecessor {
+		targetIDs = append(targetIDs, id)
+	}
+	sort.Strings(targetIDs)
+	for _, targetID := range targetIDs {
+		reverseNodes := []Node{g.nodes[targetID]}
+		var reverseEdges []Edge
+		for cursor := targetID; cursor != from; {
+			edge := predecessor[cursor]
+			reverseEdges = append(reverseEdges, edge)
+			reverseNodes = append(reverseNodes, g.nodes[edge.From])
+			cursor = edge.From
+		}
+		reverseNodesInPlace(reverseNodes)
+		reverseEdgesInPlace(reverseEdges)
+		paths = append(paths, EvidencePath{Target: g.nodes[targetID], Nodes: reverseNodes, Edges: reverseEdges})
+	}
+	return paths
+}
+
 // Reachable returns every node reachable from the start node by following
 // out-edges transitively, excluding the start node itself. With one or more
 // edge types it follows only those types. Results are sorted by ID.
 func (g *Graph) Reachable(from string, types ...EdgeType) []Node {
-	visited := map[string]bool{from: true}
-	queue := []string{from}
-	var out []Node
-	for len(queue) > 0 {
-		cur := queue[0]
-		queue = queue[1:]
-		for _, e := range g.out[cur] {
-			if !allows(types, e.Type) || visited[e.To] {
-				continue
-			}
-			visited[e.To] = true
-			if n, ok := g.nodes[e.To]; ok {
-				out = append(out, n)
-				queue = append(queue, e.To)
-			}
-		}
+	paths := g.EvidencePaths(from, types...)
+	out := make([]Node, 0, len(paths))
+	for _, path := range paths {
+		out = append(out, path.Target)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out
+}
+
+func reverseNodesInPlace(nodes []Node) {
+	for left, right := 0, len(nodes)-1; left < right; left, right = left+1, right-1 {
+		nodes[left], nodes[right] = nodes[right], nodes[left]
+	}
+}
+
+func reverseEdgesInPlace(edges []Edge) {
+	for left, right := 0, len(edges)-1; left < right; left, right = left+1, right-1 {
+		edges[left], edges[right] = edges[right], edges[left]
+	}
 }
 
 // Reaches reports whether to is forward-reachable from from. A node does not
@@ -248,6 +321,7 @@ type Impact struct {
 	Node     Node                `json:"node"`
 	Affected []Node              `json:"affected"`
 	ByKind   map[NodeKind][]Node `json:"by_kind"`
+	Paths    []EvidencePath      `json:"paths"`
 }
 
 // BlastRadius computes the impact of compromising the given node: its full
@@ -259,7 +333,11 @@ func (g *Graph) BlastRadius(id string) Impact {
 	if n, ok := g.nodes[id]; ok {
 		imp.Node = n
 	}
-	imp.Affected = g.Reachable(id)
+	imp.Paths = g.EvidencePaths(id)
+	imp.Affected = make([]Node, 0, len(imp.Paths))
+	for _, path := range imp.Paths {
+		imp.Affected = append(imp.Affected, path.Target)
+	}
 	// A leaf has a real, successful answer: zero known affected nodes. Encode
 	// that as [] instead of JSON null so every API client can iterate the result
 	// without turning an ordinary zero-edge credential into a page crash.

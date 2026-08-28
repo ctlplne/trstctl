@@ -10,7 +10,7 @@ import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { EdgeEvidenceTable, GraphLegend, GraphQuery, NodeDetail, NodeInventory, ReachablePanel } from "@/pages/GraphExpert";
+import { EdgeEvidenceTable, GraphLegend, GraphQuery, NodeDetail, NodeInventory, ReachablePanel, RelationshipPaths } from "@/pages/GraphExpert";
 
 type Notice = { kind: "permission" | "error"; message: string };
 type Disclosure = "map" | "evidence" | "inventory";
@@ -176,7 +176,9 @@ export function Graph() {
         selected_credential: impact.node,
         known_affected_systems: impact.affected,
         affected_by_kind: impact.by_kind,
+        paths: impact.paths,
         reachable_nodes: reachable?.nodes ?? [],
+        reachable_paths: reachable?.paths ?? [],
         relationships: evidenceEdges,
         coverage_note: t("graph.design.coverage"),
       }
@@ -280,6 +282,7 @@ export function Graph() {
                   </a>
                 ) : null}
               </div>
+              {impact ? <RelationshipPaths paths={impact.paths} /> : null}
               <EdgeEvidenceTable edges={evidenceEdges} nodeByID={nodeByID} />
               {reachable ? <ReachablePanel reachable={reachable} /> : null}
             </div>
@@ -376,6 +379,7 @@ function normalizeGraphImpact(impact: GraphImpact): GraphImpact {
     ...impact,
     affected: Array.isArray(impact.affected) ? impact.affected : [],
     by_kind: impact.by_kind && typeof impact.by_kind === "object" ? impact.by_kind : {},
+    paths: Array.isArray(impact.paths) ? impact.paths : [],
   };
 }
 

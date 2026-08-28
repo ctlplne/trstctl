@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sort"
 	"testing"
 	"time"
@@ -116,8 +117,9 @@ func TestGraphRESTReachabilityAndBlastRadius(t *testing.T) {
 	// Reachability: payments-svc reaches only its own certificate and the
 	// resource that certificate is deployed to.
 	var reach struct {
-		From  string       `json:"from"`
-		Nodes []graph.Node `json:"nodes"`
+		From  string               `json:"from"`
+		Nodes []graph.Node         `json:"nodes"`
+		Paths []graph.EvidencePath `json:"paths"`
 	}
 	status, _, body = do(t, srv, http.MethodGet, "/api/v1/graph/reachable/"+paymentsWL, reqOpts{tenant: tenantA})
 	if status != http.StatusOK {
@@ -128,6 +130,23 @@ func TestGraphRESTReachabilityAndBlastRadius(t *testing.T) {
 	}
 	if got := names(reach.Nodes); !equalStrings(got, []string{"payments-db", "payments.example.com"}) {
 		t.Errorf("reachable(payments-svc) = %v, want [payments-db payments.example.com]", got)
+	}
+	if len(reach.Paths) != len(reach.Nodes) {
+		t.Fatalf("reachable paths = %d, want one server-owned path for each of %d nodes", len(reach.Paths), len(reach.Nodes))
+	}
+	for _, path := range reach.Paths {
+		if path.Target.Name == "payments-db" {
+			got := make([]string, 0, len(path.Nodes))
+			for _, node := range path.Nodes {
+				got = append(got, node.Name)
+			}
+			if want := []string{"payments-svc", "payments.example.com", "payments-db"}; !reflect.DeepEqual(got, want) {
+				t.Fatalf("payments-db path nodes = %v, want %v", got, want)
+			}
+			if len(path.Edges) != 2 || path.Edges[0].Type != graph.EdgeOwns || path.Edges[1].Type != graph.EdgeDeployedTo {
+				t.Fatalf("payments-db path edges = %#v, want OWNS then DEPLOYED_TO", path.Edges)
+			}
+		}
 	}
 
 	// Blast radius: compromising the issuer affects both certificates and both
@@ -145,6 +164,9 @@ func TestGraphRESTReachabilityAndBlastRadius(t *testing.T) {
 	}
 	if got := names(imp.ByKind[graph.KindResource]); !equalStrings(got, []string{"lb-edge", "payments-db"}) {
 		t.Errorf("blast-radius resources = %v", got)
+	}
+	if len(imp.Paths) != len(imp.Affected) {
+		t.Fatalf("blast-radius paths = %d, want one server-owned path for each of %d affected nodes", len(imp.Paths), len(imp.Affected))
 	}
 
 	// A certificate's blast radius is just where it is deployed.

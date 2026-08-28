@@ -50,10 +50,38 @@ describe("route 027 impact-first graph design", () => {
       node: { id: "cert:payments", kind: "credential", name: "payments-cert" },
       affected: [{ id: "res:db", kind: "resource", name: "payments-db" }],
       by_kind: { resource: 1 },
+      paths: [
+        {
+          target: { id: "res:db", kind: "resource", name: "payments-db" },
+          nodes: [
+            { id: "cert:payments", kind: "credential", name: "payments-cert" },
+            { id: "res:db", kind: "resource", name: "payments-db" },
+          ],
+          edges: [
+            {
+              from: "cert:payments",
+              to: "res:db",
+              type: "GRANTS_ACCESS",
+              source: "discovery source source-7",
+              confidence: "observed",
+            },
+          ],
+        },
+      ],
     });
     apiMock.graphReachable.mockResolvedValue({
       from: "cert:payments",
       nodes: [{ id: "res:db", kind: "resource", name: "payments-db" }],
+      paths: [
+        {
+          target: { id: "res:db", kind: "resource", name: "payments-db" },
+          nodes: [
+            { id: "cert:payments", kind: "credential", name: "payments-cert" },
+            { id: "res:db", kind: "resource", name: "payments-db" },
+          ],
+          edges: [{ from: "cert:payments", to: "res:db", type: "GRANTS_ACCESS", source: "discovery source source-7", confidence: "observed" }],
+        },
+      ],
     });
     apiMock.graphQuery.mockResolvedValue({ rows: [{ credential: "payments-cert", resource: "payments-db" }] });
     apiMock.graphTrustStores.mockResolvedValue({
@@ -109,7 +137,17 @@ describe("route 027 impact-first graph design", () => {
     await user.click(screen.getByText("Graph edges, sources, confidence, and blast-radius export", { exact: true }));
     expect(screen.getByText("discovery source source-7", { exact: true })).toBeInTheDocument();
     expect(screen.getByText("Observed", { exact: true })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Why these systems are connected" })).toBeInTheDocument();
+    const paths = screen.getByTestId("graph-relationship-paths");
+    expect(within(paths).getByText("payments-cert", { exact: true })).toBeInTheDocument();
+    expect(within(paths).getByText("Grants access", { exact: true })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open payments-db in risk" })).toHaveAttribute("href", "/risk?node=res%3Adb");
+    expect(screen.getByRole("link", { name: "Open payments-db lifecycle" })).toHaveAttribute("href", "/identities?node=res%3Adb");
+    expect(screen.getByRole("link", { name: "Open payments-db audit evidence" })).toHaveAttribute("href", "/audit?node=res%3Adb");
     expect(screen.getByRole("link", { name: "Export blast-radius evidence" })).toHaveAttribute("download", "blast-radius-payments-cert.json");
+    const exported = decodeURIComponent(screen.getByRole("link", { name: "Export blast-radius evidence" }).getAttribute("href") ?? "");
+    expect(exported).toContain('"paths"');
+    expect(exported).toContain('"GRANTS_ACCESS"');
 
     await user.click(screen.getByText("Relationship map and filters", { exact: true }));
     expect(screen.getByTestId("graph-visualization")).toBeInTheDocument();
@@ -130,6 +168,7 @@ describe("route 027 impact-first graph design", () => {
       node: { id: "cert:leaf", kind: "credential", name: "new-leaf" },
       affected: null,
       by_kind: null,
+      paths: null,
     });
     apiMock.graphReachable.mockResolvedValue({ from: "cert:leaf", nodes: [] });
     const user = userEvent.setup();

@@ -1251,8 +1251,13 @@ describe("i18n boundary", () => {
       // durable writes, and fail-closed verification result. Placeholders and
       // security meaning were reviewed in both catalogs. Machine-authored es/de
       // translations — FLAG FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "8bd8d245d4d05158c6605bb1d38bf05105cc7cbb39a0d44aaace7c72f7a45abb",
-      "de-DE": "66901bb9b12c75eaa42ed6d5490488d1591cb88f869b0e7c1add1a3750241a57",
+      // F21 graph-path re-pin: seven keys explain server-confirmed shortest
+      // relationship chains, evidence provenance, and direct risk, lifecycle,
+      // and audit handoffs. Placeholders and fail-honest path meaning were
+      // reviewed. Machine-authored es/de translations — FLAG FOR HUMAN
+      // TRANSLATION REVIEW before release.
+      "es-ES": "241a2a176e9c53c88d38c64419a7832abc0df964e094382edf84b51dac930d93",
+      "de-DE": "cb84287c80a7489cc12ace173ee8e26dbe96c9108be2ebb25c8a896c1fbd4d27",
     });
   });
 

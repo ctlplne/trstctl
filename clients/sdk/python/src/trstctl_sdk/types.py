@@ -4395,12 +4395,23 @@ GraphEdge = TypedDict(
     total=False,
 )
 
+GraphEvidencePath = TypedDict(
+    'GraphEvidencePath',
+    {
+        'edges': list[dict[str, Any]],
+        'nodes': list[dict[str, Any]],
+        'target': dict[str, Any],
+    },
+    total=False,
+)
+
 GraphImpact = TypedDict(
     'GraphImpact',
     {
         'affected': list[dict[str, Any]],
         'by_kind': dict[str, Any],
         'node': dict[str, Any],
+        'paths': list[dict[str, Any]],
     },
     total=False,
 )
@@ -4429,6 +4440,7 @@ GraphReachable = TypedDict(
     {
         'from': str,
         'nodes': list[dict[str, Any]],
+        'paths': list[dict[str, Any]],
     },
     total=False,
 )

@@ -18,6 +18,7 @@ function execution(overrides: Partial<IncidentExecution> = {}): IncidentExecutio
       node: { id: "credential-1", kind: "credential", name: "Payments certificate" },
       affected: [{ id: "workload-1", kind: "workload", name: "Payments API" }],
       by_kind: { workload: 1 },
+      paths: [],
     },
     ...overrides,
   };
@@ -46,6 +47,7 @@ function fleetRun(overrides: Partial<FleetReissuanceRun> = {}): FleetReissuanceR
       node: { id: "issuer-1", kind: "issuer", name: "Issuing CA" },
       affected: [],
       by_kind: {},
+      paths: [],
     },
     health_gates: [],
     rollback_refs: [],

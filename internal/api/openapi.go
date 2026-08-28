@@ -3796,6 +3796,11 @@ func componentSchemas() map[string]*Schema {
 	graphEdge := object(map[string]*Schema{
 		"from": str(), "to": str(), "type": str(), "source": str(), "confidence": str(),
 	}, "from", "to", "type")
+	graphEvidencePath := object(map[string]*Schema{
+		"target": ref("GraphNode"),
+		"nodes":  {Type: "array", Items: ref("GraphNode")},
+		"edges":  {Type: "array", Items: ref("GraphEdge")},
+	}, "target", "nodes", "edges")
 	graphResponse := object(map[string]*Schema{
 		"nodes": {Type: "array", Items: ref("GraphNode")},
 		"edges": {Type: "array", Items: ref("GraphEdge")},
@@ -3803,7 +3808,8 @@ func componentSchemas() map[string]*Schema {
 	graphReachable := object(map[string]*Schema{
 		"from":  str(),
 		"nodes": {Type: "array", Items: ref("GraphNode")},
-	}, "from", "nodes")
+		"paths": {Type: "array", Items: ref("GraphEvidencePath")},
+	}, "from", "nodes", "paths")
 	// I1: managed identities whose ownership cannot answer an incident question.
 	unownedIdentity := object(map[string]*Schema{
 		"identity_id": str(), "name": str(), "status": str(),
@@ -4261,7 +4267,8 @@ func componentSchemas() map[string]*Schema {
 		"node":     ref("GraphNode"),
 		"affected": {Type: "array", Items: ref("GraphNode")},
 		"by_kind":  {Type: "object"},
-	}, "node", "affected", "by_kind")
+		"paths":    {Type: "array", Items: ref("GraphEvidencePath")},
+	}, "node", "affected", "by_kind", "paths")
 	outboxReconciliationConflict := object(map[string]*Schema{
 		"id": str(), "tenant_id": uuid(), "source_event_id": str(),
 		"source_event_sequence": {Type: "integer"}, "source_event_type": str(),
@@ -5599,6 +5606,7 @@ func componentSchemas() map[string]*Schema {
 		"PAMSSHCredential":                         pamSSHCredential,
 		"GraphNode":                                graphNode,
 		"GraphEdge":                                graphEdge,
+		"GraphEvidencePath":                        graphEvidencePath,
 		"GraphResponse":                            graphResponse,
 		"GraphReachable":                           graphReachable,
 		"GraphImpact":                              graphImpact,

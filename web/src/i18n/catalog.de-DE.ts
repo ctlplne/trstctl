@@ -2158,6 +2158,14 @@ const deDECatalog = {
   "graph.design.resultOne": "1 bekanntes System könnte betroffen sein",
   "graph.design.resultMany": "{count} bekannte Systeme könnten betroffen sein",
   "graph.design.confidence": "Konfidenz",
+  "graph.design.pathHeading": "Warum diese Systeme verbunden sind",
+  "graph.design.pathHelp":
+    "Jede Kette ist der kürzeste vom Server bestätigte Beziehungspfad. Sie erklärt, wie das ausgewählte Zugangsmittel dieses System erreicht.",
+  "graph.design.pathTo": "Pfad zu {name}",
+  "graph.design.pathEvidence": "Quelle: {source}. Konfidenz: {confidence}.",
+  "graph.design.openRisk": "{name} in Risiken öffnen",
+  "graph.design.openLifecycle": "Lebenszyklus von {name} öffnen",
+  "graph.design.openAudit": "Audit-Nachweis für {name} öffnen",
   // DESIGN-ROUTE-028 machine-authored translations — FLAGGED FOR HUMAN REVIEW BEFORE RELEASE.
   "migration.design.answer": "Was jetzt umziehen kann, was die Umschaltung blockiert und wie zurückgerollt wird.",
   "migration.design.technicalDetails": "Quellzuordnungen, Parallelbetriebsnachweise sowie Umschalt- und Rollback-Steuerungen.",

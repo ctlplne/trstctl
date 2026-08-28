@@ -7249,6 +7249,34 @@ export const messages = {
     defaultMessage: "Confidence",
     description: "Graph relationship evidence confidence column.",
   },
+  "graph.design.pathHeading": {
+    defaultMessage: "Why these systems are connected",
+    description: "Heading for server-owned graph relationship paths.",
+  },
+  "graph.design.pathHelp": {
+    defaultMessage: "Each chain is the shortest relationship path confirmed by the server. It explains how the selected credential reaches that system.",
+    description: "Safety explanation for graph relationship paths.",
+  },
+  "graph.design.pathTo": {
+    defaultMessage: "Path to {name}",
+    description: "Heading and accessible label for one graph evidence path.",
+  },
+  "graph.design.pathEvidence": {
+    defaultMessage: "Source: {source}. Confidence: {confidence}.",
+    description: "Evidence provenance for one relationship in a graph path.",
+  },
+  "graph.design.openRisk": {
+    defaultMessage: "Open {name} in risk",
+    description: "Graph path handoff to risk evidence.",
+  },
+  "graph.design.openLifecycle": {
+    defaultMessage: "Open {name} lifecycle",
+    description: "Graph path handoff to lifecycle evidence.",
+  },
+  "graph.design.openAudit": {
+    defaultMessage: "Open {name} audit evidence",
+    description: "Graph path handoff to audit evidence.",
+  },
   "migration.design.answer": {
     defaultMessage: "What can move now, what blocks cutover, and how to roll back.",
     description: "Plain-language answer provided by the migration page.",

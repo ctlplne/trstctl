@@ -8991,10 +8991,16 @@ export interface components {
             to: string;
             type: string;
         };
+        GraphEvidencePath: {
+            edges: components["schemas"]["GraphEdge"][];
+            nodes: components["schemas"]["GraphNode"][];
+            target: components["schemas"]["GraphNode"];
+        };
         GraphImpact: {
             affected: components["schemas"]["GraphNode"][];
             by_kind: Record<string, never>;
             node: components["schemas"]["GraphNode"];
+            paths: components["schemas"]["GraphEvidencePath"][];
         };
         GraphNode: {
             attrs?: Record<string, never>;
@@ -9008,6 +9014,7 @@ export interface components {
         GraphReachable: {
             from: string;
             nodes: components["schemas"]["GraphNode"][];
+            paths: components["schemas"]["GraphEvidencePath"][];
         };
         GraphResponse: {
             edges: components["schemas"]["GraphEdge"][];

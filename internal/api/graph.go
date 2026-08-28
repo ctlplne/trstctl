@@ -23,8 +23,9 @@ type graphResponse struct {
 
 // reachableResponse lists the nodes reachable from a starting node.
 type reachableResponse struct {
-	From  string       `json:"from"`
-	Nodes []graph.Node `json:"nodes"`
+	From  string               `json:"from"`
+	Nodes []graph.Node         `json:"nodes"`
+	Paths []graph.EvidencePath `json:"paths"`
 }
 
 // queryRequest carries a Cypher-style query.
@@ -59,7 +60,12 @@ func (a *API) graphReachable(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusNotFound, "graph node not found"))
 		return
 	}
-	a.writeJSON(w, http.StatusOK, reachableResponse{From: id, Nodes: g.Reachable(id)})
+	paths := g.EvidencePaths(id)
+	nodes := make([]graph.Node, 0, len(paths))
+	for _, path := range paths {
+		nodes = append(nodes, path.Target)
+	}
+	a.writeJSON(w, http.StatusOK, reachableResponse{From: id, Nodes: nodes, Paths: paths})
 }
 
 // graphBlastRadius answers a blast-radius query: everything affected if the node

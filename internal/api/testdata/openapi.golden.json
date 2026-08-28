@@ -12549,6 +12549,31 @@
         ],
         "type": "object"
       },
+      "GraphEvidencePath": {
+        "properties": {
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/GraphEdge"
+            },
+            "type": "array"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/GraphNode"
+            },
+            "type": "array"
+          },
+          "target": {
+            "$ref": "#/components/schemas/GraphNode"
+          }
+        },
+        "required": [
+          "target",
+          "nodes",
+          "edges"
+        ],
+        "type": "object"
+      },
       "GraphImpact": {
         "properties": {
           "affected": {
@@ -12562,12 +12587,19 @@
           },
           "node": {
             "$ref": "#/components/schemas/GraphNode"
+          },
+          "paths": {
+            "items": {
+              "$ref": "#/components/schemas/GraphEvidencePath"
+            },
+            "type": "array"
           }
         },
         "required": [
           "node",
           "affected",
-          "by_kind"
+          "by_kind",
+          "paths"
         ],
         "type": "object"
       },
@@ -12617,11 +12649,18 @@
               "$ref": "#/components/schemas/GraphNode"
             },
             "type": "array"
+          },
+          "paths": {
+            "items": {
+              "$ref": "#/components/schemas/GraphEvidencePath"
+            },
+            "type": "array"
           }
         },
         "required": [
           "from",
-          "nodes"
+          "nodes",
+          "paths"
         ],
         "type": "object"
       },

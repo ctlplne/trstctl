@@ -329,6 +329,7 @@ public final class OpenApiSchemas {
       "FleetReissuanceRun",
       "FleetReissuanceRunList",
       "GraphEdge",
+      "GraphEvidencePath",
       "GraphImpact",
       "GraphNode",
       "GraphQueryResult",

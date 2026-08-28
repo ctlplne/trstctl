@@ -2139,6 +2139,14 @@ const esESCatalog = {
   "graph.design.resultOne": "1 sistema conocido podría verse afectado",
   "graph.design.resultMany": "{count} sistemas conocidos podrían verse afectados",
   "graph.design.confidence": "Confianza",
+  "graph.design.pathHeading": "Por qué están conectados estos sistemas",
+  "graph.design.pathHelp":
+    "Cada cadena es la ruta de relación más corta confirmada por el servidor. Explica cómo la credencial seleccionada llega a ese sistema.",
+  "graph.design.pathTo": "Ruta a {name}",
+  "graph.design.pathEvidence": "Fuente: {source}. Confianza: {confidence}.",
+  "graph.design.openRisk": "Abrir {name} en riesgos",
+  "graph.design.openLifecycle": "Abrir el ciclo de vida de {name}",
+  "graph.design.openAudit": "Abrir evidencia de auditoría de {name}",
   // DESIGN-ROUTE-028 machine-authored translations — FLAGGED FOR HUMAN REVIEW BEFORE RELEASE.
   "migration.design.answer": "Qué puede moverse ahora, qué bloquea el cambio y cómo revertirlo.",
   "migration.design.technicalDetails": "Mapeos de origen, evidencia de ejecución dual y controles de cambio y reversión.",

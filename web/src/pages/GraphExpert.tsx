@@ -1,11 +1,89 @@
 import { Link } from "react-router-dom";
-import type { GraphNode, GraphQueryResult, GraphReachable, GraphResponse, GraphTrustStores } from "@/lib/api";
+import type { GraphImpact, GraphNode, GraphQueryResult, GraphReachable, GraphResponse, GraphTrustStores } from "@/lib/api";
 import { CredentialChip } from "@/components/CredentialChip";
 import { ErrorState } from "@/components/StatePrimitives";
 import { graphEdgeTypeLabel, graphNodeKindLabel, graphNodeKindStyle } from "@/components/GraphView";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { translateNow } from "@/i18n/I18nProvider";
+
+export function RelationshipPaths({ paths }: { paths: GraphImpact["paths"] }) {
+  if (!paths?.length) return null;
+  return (
+    <Card role="region" aria-labelledby="graph-paths-heading" data-testid="graph-relationship-paths">
+      <CardHeader>
+        <CardTitle id="graph-paths-heading">{translateNow("graph.design.pathHeading")}</CardTitle>
+        <p className="max-w-3xl text-sm text-muted-foreground">{translateNow("graph.design.pathHelp")}</p>
+      </CardHeader>
+      <CardContent>
+        <ol className="grid gap-4">
+          {paths.map((path) => {
+            const targetName = path.target.name || path.target.id;
+            return (
+              <li key={path.target.id} className="grid min-w-0 gap-3 border-t border-border pt-4 first:border-t-0 first:pt-0">
+                <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold">{translateNow("graph.design.pathTo", { name: targetName })}</p>
+                    <p className="text-caption text-muted-foreground">{graphNodeKindLabel(path.target.kind)}</p>
+                  </div>
+                  <ul className="flex flex-wrap gap-x-3 gap-y-1 text-caption">
+                    <li>
+                      <Link className="text-brand-accent underline" to={`/risk?node=${encodeURIComponent(path.target.id)}`}>
+                        {translateNow("graph.design.openRisk", { name: targetName })}
+                      </Link>
+                    </li>
+                    <li>
+                      <Link className="text-brand-accent underline" to={`/identities?node=${encodeURIComponent(path.target.id)}`}>
+                        {translateNow("graph.design.openLifecycle", { name: targetName })}
+                      </Link>
+                    </li>
+                    <li>
+                      <Link className="text-brand-accent underline" to={`/audit?node=${encodeURIComponent(path.target.id)}`}>
+                        {translateNow("graph.design.openAudit", { name: targetName })}
+                      </Link>
+                    </li>
+                  </ul>
+                </div>
+                <ol className="flex min-w-0 flex-wrap items-center gap-2 text-sm" aria-label={translateNow("graph.design.pathTo", { name: targetName })}>
+                  {path.nodes.map((node, index) => {
+                    const edge = index > 0 ? path.edges[index - 1] : undefined;
+                    return (
+                      <li key={`${path.target.id}-${node.id}`} className="contents">
+                        {edge ? (
+                          <span
+                            className="rounded-control border border-border bg-muted px-2 py-1 text-caption text-muted-foreground"
+                            title={edgeExplanation(edge.type)}
+                          >
+                            {graphEdgeTypeLabel(edge.type)}
+                          </span>
+                        ) : null}
+                        <span className="min-w-0 rounded-control border border-border bg-background px-2 py-1 font-medium">
+                          {node.name || graphNodeKindLabel(node.kind)}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ol>
+                <ol className="grid gap-1 text-caption text-muted-foreground">
+                  {path.edges.map((edge, index) => (
+                    <li key={`${path.target.id}-${edge.from}-${edge.type}-${edge.to}`}>
+                      {index + 1}. {edgeExplanation(edge.type)}{" "}
+                      {translateNow("graph.design.pathEvidence", {
+                        source: edge.source || translateNow("source.workload.api.unreported.b3wla0009"),
+                        confidence: confidenceLabel(edge.confidence),
+                      })}
+                    </li>
+                  ))}
+                </ol>
+              </li>
+            );
+          })}
+        </ol>
+      </CardContent>
+    </Card>
+  );
+}
 
 export function EdgeEvidenceTable({ edges, nodeByID }: { edges: GraphResponse["edges"]; nodeByID: Map<string, GraphNode> }) {
   return (

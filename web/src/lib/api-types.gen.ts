@@ -3129,10 +3129,17 @@ export interface GraphEdge {
   type: string;
 }
 
+export interface GraphEvidencePath {
+  edges: GraphEdge[];
+  nodes: GraphNode[];
+  target: GraphNode;
+}
+
 export interface GraphImpact {
   affected: GraphNode[];
   by_kind: Record<string, unknown>;
   node: GraphNode;
+  paths: GraphEvidencePath[];
 }
 
 export interface GraphNode {
@@ -3149,6 +3156,7 @@ export interface GraphQueryResult {
 export interface GraphReachable {
   from: string;
   nodes: GraphNode[];
+  paths: GraphEvidencePath[];
 }
 
 export interface GraphResponse {

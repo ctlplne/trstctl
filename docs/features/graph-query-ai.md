@@ -35,6 +35,15 @@ database layer, so a traversal can never escape the tenant boundary. On top: `Re
 (breadth-first reach), `BlastRadius` (compromise impact by kind), and a minimal
 Cypher-style `Query`.
 
+`Reachable` and `BlastRadius` return more than a flat list. For every affected node,
+the server returns one deterministic shortest evidence path: the ordered nodes and the
+exact edges, including each relationship's source and confidence when reported. The
+console can therefore say “credential → grants access → database” and link the affected
+object to risk, lifecycle, and audit evidence without reconstructing security-sensitive
+impact in the browser. Subject-only trust candidates stay visible as explicitly
+unverified graph evidence but are excluded from these authoritative paths unless a
+specialized caller asks for that relationship type.
+
 `CONNECTS_TO` is not guessed from a test fixture. A host/network agent reports an exact
 metadata-only `service_dependency` observation over its mTLS inventory channel. The
 event-projected row binds the observing agent, an owner-model workload name, and one
