@@ -4592,6 +4592,146 @@ export const messages = {
     defaultMessage: "base #{base}",
     description: "CRL distribution row label for a delta CRL base number.",
   },
+  "certificates.revocation.heading": {
+    defaultMessage: "Revocation center",
+    description: "Heading for the unified X.509 revocation operator journey.",
+  },
+  "certificates.revocation.description": {
+    defaultMessage:
+      "Safely stop one managed certificate from being trusted. trstctl first explains the exact version-bound event, queued publication, affected systems, and proof. Nothing changes until you confirm.",
+    description: "ELI5 explanation of the revocation center and its effect-free review boundary.",
+  },
+  "certificates.revocation.progress": { defaultMessage: "Revocation progress", description: "Accessible label for revocation-center progress." },
+  "certificates.revocation.configureTitle": {
+    defaultMessage: "Choose credential and reason",
+    description: "First revocation-center step title.",
+  },
+  "certificates.revocation.configureDescription": {
+    defaultMessage: "Choose the managed X.509 identity and the RFC 5280 reason relying parties will receive.",
+    description: "First revocation-center step description.",
+  },
+  "certificates.revocation.reviewTitle": { defaultMessage: "Review exact plan", description: "Second revocation-center step title." },
+  "certificates.revocation.reviewDescription": {
+    defaultMessage: "Read the server-owned writes, asynchronous publication, blast radius, and verification steps before authorizing anything.",
+    description: "Second revocation-center step description.",
+  },
+  "certificates.revocation.confirmTitle": { defaultMessage: "Confirm irreversible revocation", description: "Third revocation-center step title." },
+  "certificates.revocation.confirmDescription": {
+    defaultMessage: "Type the exact credential name, submit once, then follow the immutable audit and propagation evidence.",
+    description: "Third revocation-center step description.",
+  },
+  "certificates.revocation.identityLabel": { defaultMessage: "Managed certificate", description: "Managed X.509 identity selector label." },
+  "certificates.revocation.identityPlaceholder": {
+    defaultMessage: "Choose a revocable certificate…",
+    description: "Placeholder for the managed certificate selector.",
+  },
+  "certificates.revocation.reasonLabel": { defaultMessage: "RFC 5280 reason", description: "Certificate revocation reason selector label." },
+  "certificates.revocation.reasonHelp": {
+    defaultMessage: "Choose the factual reason. It becomes durable revocation and audit evidence.",
+    description: "Explanation under the RFC 5280 revocation reason selector.",
+  },
+  "certificates.revocation.reviewAction": { defaultMessage: "Review exact plan", description: "Action that requests an effect-free revocation preview." },
+  "certificates.revocation.reviewLoading": { defaultMessage: "Reviewing exact plan…", description: "Busy label while loading the revocation preview." },
+  "certificates.revocation.continueAction": {
+    defaultMessage: "Continue to confirmation",
+    description: "Action that advances from revocation review to typed confirmation.",
+  },
+  "certificates.revocation.previewFailed": {
+    defaultMessage: "Exact revocation preview failed",
+    description: "Context prefix when the effect-free preview cannot be loaded.",
+  },
+  "certificates.revocation.empty": {
+    defaultMessage: "No managed X.509 identity is currently in a revocable lifecycle state.",
+    description: "Empty state when the revocation center has no eligible identity.",
+  },
+  "certificates.revocation.noChanges": { defaultMessage: "No changes were made", description: "Assurance at the top of an effect-free revocation preview." },
+  "certificates.revocation.owner": { defaultMessage: "Credential owner", description: "Owner field label in a revocation preview." },
+  "certificates.revocation.version": { defaultMessage: "Lifecycle version", description: "Version-fence field label in a revocation preview." },
+  "certificates.revocation.effect": { defaultMessage: "Queued publication", description: "Outbox effect field label in a revocation preview." },
+  "certificates.revocation.noExternalEffect": { defaultMessage: "No external effect", description: "Fallback when a transition has no queued external work." },
+  "certificates.revocation.impactTitle": { defaultMessage: "Affected deployments", description: "Heading for revocation blast-radius evidence." },
+  "certificates.revocation.impactLoading": {
+    defaultMessage: "Affected systems are still loading from the served credential graph.",
+    description: "Honest blast-radius loading state.",
+  },
+  "certificates.revocation.impactUnknown": {
+    defaultMessage: "Affected systems are unknown: {error}",
+    description: "Honest blast-radius unavailable state.",
+  },
+  "certificates.revocation.impactOne": {
+    defaultMessage: "{count} downstream system is in the served graph impact.",
+    description: "Singular blast-radius summary.",
+  },
+  "certificates.revocation.impactMany": {
+    defaultMessage: "{count} downstream systems are in the served graph impact.",
+    description: "Plural blast-radius summary.",
+  },
+  "certificates.revocation.graphBindingMissing": {
+    defaultMessage: "No certificate graph-node binding was projected for this identity.",
+    description: "Explanation when a revocation target cannot be mapped into the graph.",
+  },
+  "certificates.revocation.graphFailed": {
+    defaultMessage: "Blast-radius read failed",
+    description: "Context prefix when the served graph impact cannot be loaded.",
+  },
+  "certificates.revocation.prerequisites": { defaultMessage: "Before it runs", description: "Revocation preview prerequisite list heading." },
+  "certificates.revocation.writes": { defaultMessage: "What it writes and publishes", description: "Revocation preview execution list heading." },
+  "certificates.revocation.proof": { defaultMessage: "How to prove it", description: "Revocation preview verification list heading." },
+  "certificates.revocation.fingerprint": { defaultMessage: "Exact request fingerprint", description: "Revocation preview fingerprint label." },
+  "certificates.revocation.confirmRegion": {
+    defaultMessage: "Confirm irreversible revocation",
+    description: "Accessible label for the typed revocation confirmation region.",
+  },
+  "certificates.revocation.irreversibleTitle": { defaultMessage: "This cannot be undone", description: "Irreversible revocation warning title." },
+  "certificates.revocation.irreversibleBody": {
+    defaultMessage:
+      "Revoking “{identity}” with reason “{reason}” changes its lifecycle state and queues revocation publication. Clients may stop trusting it as CRL and OCSP evidence propagates.",
+    description: "Exact credential and reason warning before revocation execution.",
+  },
+  "certificates.revocation.confirmName": { defaultMessage: "Type the credential name", description: "Typed-name revocation confirmation field label." },
+  "certificates.revocation.executeAction": {
+    defaultMessage: "Revoke reviewed credential",
+    description: "Destructive action that executes the reviewed revocation.",
+  },
+  "certificates.revocation.executeFailed": { defaultMessage: "Revocation failed", description: "Context prefix for a revocation execution failure." },
+  "certificates.revocation.verifyFailed": {
+    defaultMessage: "The server response did not verify the revoked lifecycle state.",
+    description: "Fail-closed error when the execution response is not revoked.",
+  },
+  "certificates.revocation.accepted": {
+    defaultMessage: "Revocation accepted and the identity now reads revoked.",
+    description: "Success state after the response verifies the revoked identity projection.",
+  },
+  "certificates.revocation.auditLink": { defaultMessage: "Open immutable audit evidence", description: "Link from successful revocation to its audit events." },
+  "certificates.revocation.graphLink": { defaultMessage: "Open affected systems", description: "Link from successful revocation to the credential graph." },
+  "certificates.revocation.propagationUnknown": {
+    defaultMessage: "Propagation health is unknown because no signed observation was loaded.",
+    description: "Honest state before signed CRL or OCSP health evidence exists.",
+  },
+  "certificates.revocation.propagationFreshOne": {
+    defaultMessage: "{count} signed endpoint is fresh.",
+    description: "Singular all-fresh revocation endpoint summary.",
+  },
+  "certificates.revocation.propagationFreshMany": {
+    defaultMessage: "{count} signed endpoints are fresh.",
+    description: "Plural all-fresh revocation endpoint summary.",
+  },
+  "certificates.revocation.propagationAttention": {
+    defaultMessage: "{count} signed endpoints observed: {fresh} fresh; {attention} need attention.",
+    description: "Mixed-state revocation endpoint summary.",
+  },
+  "certificates.revocation.crlUnknown": {
+    defaultMessage: "No published CRL was loaded. Publication is not proven.",
+    description: "Honest state before a CRL distribution artifact exists.",
+  },
+  "certificates.revocation.crlPublishedOne": {
+    defaultMessage: "{count} CA has a published CRL.",
+    description: "Singular CRL publication summary.",
+  },
+  "certificates.revocation.crlPublishedMany": {
+    defaultMessage: "{count} CAs have a published CRL.",
+    description: "Plural CRL publication summary.",
+  },
   "certificates.ct.heading": {
     defaultMessage: "Certificate Transparency",
     description: "Heading for the Certificate Transparency submission panel.",

@@ -28,6 +28,9 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { PageHeader } from "@/components/PageHeader";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
+import { graphNodeIdForIdentity, revocationReasons } from "@/lib/revocation";
+
+export { graphNodeIdForIdentity } from "@/lib/revocation";
 
 /** action is a lifecycle transition offered for a given state. `to` is bound to the
  * OpenAPI-generated transition enum (TransitionTo), so the UI can never offer (or send)
@@ -39,18 +42,6 @@ interface Action {
 
 const lifecycleTargets: TransitionTo[] = ["issued", "deployed", "renewing", "revoked", "retired"];
 const identityKinds = ["x509_certificate", "ssh_certificate", "ssh_key", "secret", "api_key", "workload_identity"] as const satisfies Identity["kind"][];
-const bulkRevokeReasons: BulkRevokeRequest["reason"][] = [
-  "unspecified",
-  "keyCompromise",
-  "caCompromise",
-  "affiliationChanged",
-  "superseded",
-  "cessationOfOperation",
-  "certificateHold",
-  "removeFromCRL",
-  "privilegeWithdrawn",
-  "aaCompromise",
-];
 type KindFilter = "all" | Identity["kind"];
 type DecommissionSignalType = NHIDecommissionRequest["signals"][number]["type"];
 type BlastRadiusState = {
@@ -303,24 +294,6 @@ function displayValue(value: unknown): string {
   }
 }
 
-function stringAttribute(identity: Identity, keys: string[]): string | null {
-  for (const key of keys) {
-    const value = identity.attributes?.[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-  return null;
-}
-
-export function graphNodeIdForIdentity(identity: Identity): string | null {
-  const explicit = stringAttribute(identity, ["graph_node_id", "graph_node", "graph_id"]);
-  if (explicit) return explicit;
-
-  const credentialID = stringAttribute(identity, ["credential_id", "certificate_id"]);
-  if (credentialID) return credentialID.startsWith("cert:") ? credentialID : `cert:${credentialID}`;
-
-  return identity.kind === "x509_certificate" && identity.id ? `cert:${identity.id}` : null;
-}
-
 function attributeRows(identity: Identity): Array<[string, string]> {
   return Object.entries(identity.attributes ?? {})
     .slice(0, 8)
@@ -553,7 +526,7 @@ export function Identities() {
       const requestedReason = reason?.trim() || "";
       const reviewedReason =
         to === "revoked"
-          ? bulkRevokeReasons.includes(requestedReason as BulkRevokeRequest["reason"])
+          ? revocationReasons.includes(requestedReason as BulkRevokeRequest["reason"])
             ? requestedReason
             : "unspecified"
           : requestedReason || (to === "retired" ? "operator requested retirement" : `${to} via UI`);
@@ -762,7 +735,7 @@ export function Identities() {
               onChange={(event) => setBulkReason(event.target.value as BulkRevokeRequest["reason"])}
               className="min-h-9 rounded-control border border-destructive/40 bg-background px-3 py-2 text-sm font-normal text-foreground"
             >
-              {bulkRevokeReasons.map((reason) => (
+              {revocationReasons.map((reason) => (
                 <option key={reason} value={reason}>
                   {reason}
                 </option>
@@ -1117,7 +1090,7 @@ export function Identities() {
                       onChange={(event) => setPendingReason(event.target.value)}
                       className="rounded-control border border-destructive/40 bg-background px-3 py-2 text-sm text-foreground"
                     >
-                      {bulkRevokeReasons.map((reason) => (
+                      {revocationReasons.map((reason) => (
                         <option key={reason} value={reason}>
                           {reason}
                         </option>

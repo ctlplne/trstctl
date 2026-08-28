@@ -85,13 +85,21 @@ cursor-paginated, expiry-filtered table it renders issuer/profile/team/environme
 filters with URL-resident state, a Team column, estate-wide expiry/source health,
 expiry bands, a 47-day renewal-readiness simulator (does each cert renew comfortably
 inside the shrinking CA/Browser-Forum maximum lifetime?), deployment receipts from
-the connectors, a tenant CRL distribution panel (full CRL, shard count, delta base,
-freshness window), a Certificate Transparency queueing form, and a per-certificate
-renewal-history timeline in the detail drawer. See
+the connectors, and one guided revocation center under **CRL & CT**. That center makes
+an operator choose a managed X.509 identity and RFC 5280 reason, then reads an
+effect-free, version-bound server plan before typed confirmation unlocks execution.
+The review keeps affected systems, queued CRL/OCSP publication, signed endpoint health,
+CRL availability, immutable audit evidence, and recovery guidance in one journey.
+Unknown graph or propagation state is labeled unknown; it is never rendered as healthy.
+The same workspace also contains the tenant CRL distribution panel (full CRL, shard
+count, delta base, freshness window), a Certificate Transparency queueing form, and a
+per-certificate renewal-history timeline in the detail drawer. See
 [Lifecycle & PQC](features/lifecycle-and-pqc.md)
 and the [47-day journey](journeys/crypto-agility-pqc.md). Backed by
 `/api/v1/certificates`, `/api/v1/certificates/health`, `/api/v1/revocation/crls`,
-`/api/v1/revocation/ct-submissions`, `/api/v1/lifecycle/rotation-runs`, and
+`/api/v1/revocation/health`, `/api/v1/revocation/ct-submissions`,
+`/api/v1/identities/{id}/transitions/preview`, `/api/v1/identities/{id}/transitions`,
+`/api/v1/graph/nodes/{id}/blast-radius`, `/api/v1/lifecycle/rotation-runs`, and
 `/api/v1/connectors/deliveries`.
 
 ### Identities & NHI governance (`/identities`)

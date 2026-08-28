@@ -42,6 +42,8 @@ import type { MessageKey } from "@/i18n/messages";
 import { ReadinessPanel, ReadinessSimulator, DeploymentReceipts, RenewalHistory, autoRenewingCount } from "@/components/certs";
 import { LifecycleCockpit } from "@/components/certs/LifecycleCockpit";
 import type { GridViewPrimitive } from "@/lib/gridViews";
+import { revocationReasons } from "@/lib/revocation";
+import { RevocationCenter } from "@/pages/certificates/RevocationCenter";
 
 type ExpiryFilter = "all" | "7d" | "30d" | "90d";
 
@@ -79,19 +81,6 @@ function ingestSteps(t: (key: MessageKey) => string): CarouselStep[] {
     { id: "review", label: t("certificates.ingest.review.label"), description: t("certificates.ingest.review.description") },
   ];
 }
-
-const bulkRevokeReasons: BulkRevokeRequest["reason"][] = [
-  "unspecified",
-  "keyCompromise",
-  "caCompromise",
-  "affiliationChanged",
-  "superseded",
-  "cessationOfOperation",
-  "certificateHold",
-  "removeFromCRL",
-  "privilegeWithdrawn",
-  "aaCompromise",
-];
 
 type Notice = { kind: "permission" | "error"; message: string };
 type FacetFilter = "all" | string;
@@ -957,6 +946,29 @@ export function Certificates() {
     }
   }
 
+  function recordReviewedRevocation(updated: Identity) {
+    setIdentities((current) => current.map((identity) => (identity.id === updated.id ? updated : identity)));
+    toast({
+      kind: "success",
+      title: t("certificates.revocation.accepted"),
+      description: t("certificates.revocation.description"),
+    });
+    void Promise.all([
+      settleOptional(() => api.certificatePage({ limit, expiringBefore: expiringBefore(expiry) })),
+      settleOptional(() => api.certificateHealth()),
+      settleOptional(() => api.crlDistributions()),
+      settleOptional(() => api.revocationHealth()),
+    ]).then(([page, nextHealth, nextCRLs, nextRevocationHealth]) => {
+      if (page) {
+        setCertificates(page.items ?? []);
+        setNextCursor(page.next_cursor || undefined);
+      }
+      if (nextHealth) setHealth(nextHealth);
+      if (nextCRLs) setCRLDistributions(nextCRLs.items ?? []);
+      if (nextRevocationHealth) setRevocationHealth(nextRevocationHealth);
+    });
+  }
+
   const ownerByID = useMemo(() => new Map(owners.map((owner) => [owner.id, owner])), [owners]);
   const identityByCN = useMemo(() => {
     const map = new Map<string, Identity>();
@@ -1217,6 +1229,7 @@ export function Certificates() {
           )}
           {tab === "crlct" && (
             <div {...tabPanelProps("certs", "crlct")} className="grid gap-4">
+              <RevocationCenter identities={identities} health={revocationHealth} distributions={crlDistributions} onRevoked={recordReviewedRevocation} />
               {revocationHealth && <RevocationHealthPanel health={revocationHealth} />}
               <CRLDistributionPanel distributions={crlDistributions} />
               <section aria-labelledby="ct-launch-heading" className="border-y border-border py-4">
@@ -1472,7 +1485,7 @@ export function Certificates() {
             onChange={(event) => setBulkReason(event.target.value as BulkRevokeRequest["reason"])}
             className="min-h-9 rounded-control border border-destructive/40 bg-background px-3 py-2 text-sm font-normal text-foreground"
           >
-            {bulkRevokeReasons.map((reason) => (
+            {revocationReasons.map((reason) => (
               <option key={reason} value={reason}>
                 {reason}
               </option>

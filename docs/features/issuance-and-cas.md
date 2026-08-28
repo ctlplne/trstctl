@@ -404,6 +404,19 @@ Modified` so relying parties don't refetch an unchanged CRL. `GET
 /api/v1/revocation/crls` / `trstctl-cli revocation crls` and the Certificates console
 expose the same distribution state (full CRL, shards, delta base, freshness window).
 
+For one managed certificate, **Certificates → CRL & CT → Revocation center** is the
+safe operator path. It is a three-step journey: choose the X.509 identity and factual
+RFC 5280 reason; fetch an effect-free server preview; then type the exact credential
+name to execute. The preview is bound to the identity's current lifecycle version and
+request fingerprint. It explains the event, same-transaction outbox intent,
+asynchronous `revocation.publish` work, graph-derived affected systems, and verification
+steps while writing no event and contacting no external system. Execution echoes that
+reviewed version, so a certificate that changes after review fails with `409` and must
+be reviewed again. After success, the center links directly to the immutable
+`identity.revoked` audit evidence and the affected-systems graph. The lifecycle event
+and outbox remain the only mutation authority; the console does not invent a second
+browser-only revocation path.
+
 External distribution health is monitored separately from trstctl's own
 publication state. An hourly leader derives distinct CDP and AIA OCSP URLs from
 the certificate inventory and queues bounded `revocation.probe` work for a
