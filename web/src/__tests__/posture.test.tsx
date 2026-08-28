@@ -466,7 +466,7 @@ describe("posture collector disclosures", () => {
     expect(screen.getByText("Coordinate this migration with payments-team.")).toBeInTheDocument();
   });
 
-  it("renders CT monitoring through Discovery findings", async () => {
+  it("keeps CT posture read-only and points to the single reviewed Discovery workflow", async () => {
     const user = userEvent.setup();
     await renderPosture();
     await user.click(screen.getByText("Certificate, AD CS, authority, and drift evidence", { exact: true }));
@@ -475,27 +475,9 @@ describe("posture collector disclosures", () => {
     expect(screen.getByRole("heading", { name: "Certificate Transparency monitoring" })).toBeInTheDocument();
     expect(screen.getAllByText("https://ct.googleapis.com/logs/argon2026/").length).toBeGreaterThan(0);
     expect(screen.getByText("42")).toBeInTheDocument();
-    expect(screen.getByLabelText("Watched domains")).toHaveValue("example.com");
-    expect(screen.getByLabelText("CT log URLs")).toHaveValue("https://ct.googleapis.com/logs/argon2026/");
-
-    await user.clear(screen.getByLabelText("Watched domains"));
-    await user.type(screen.getByLabelText("Watched domains"), "example.com\npayments.example.com");
-    await user.clear(screen.getByLabelText("CT log URLs"));
-    await user.type(screen.getByLabelText("CT log URLs"), "https://ct.example/log");
-    await user.clear(screen.getByLabelText("Max entries per poll"));
-    await user.type(screen.getByLabelText("Max entries per poll"), "10");
-    await user.click(screen.getByRole("button", { name: "Save and poll CT" }));
-
-    await waitFor(() =>
-      expect(apiMock.updateCTMonitoring).toHaveBeenCalledWith({
-        name: "Public CT logs",
-        logs: ["https://ct.example/log"],
-        watched_domains: ["example.com", "payments.example.com"],
-        max_batch: 10,
-        run_now: true,
-      }),
-    );
-    expect(await screen.findByText("Run run-ct-next queued")).toBeInTheDocument();
+    expect(screen.getByText("This is the read-only posture view.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open CT monitoring in Discovery" })).toHaveAttribute("href", "/discovery");
+    expect(apiMock.updateCTMonitoring).not.toHaveBeenCalled();
 
     const row = await screen.findByRole("row", { name: /\*\.payments\.example\.com Public CT logs x509_certificate 88 succeeded/i });
     expect(within(row).getByText("unexpected SAN outside approved issuer profile")).toBeInTheDocument();
@@ -533,7 +515,8 @@ describe("posture collector disclosures", () => {
 
     expect(screen.getByRole("heading", { name: "Certificate Transparency monitoring" })).toBeInTheDocument();
     expect(screen.getByRole("table", { name: "CT log checkpoints" })).toBeInTheDocument();
-    expect(screen.getByLabelText("CT log URLs")).toHaveValue("");
+    expect(screen.getByRole("link", { name: "Open CT monitoring in Discovery" })).toHaveAttribute("href", "/discovery");
+    expect(screen.queryByLabelText("CT log URLs")).not.toBeInTheDocument();
   });
 
   it("renders drift remediation workflow and records an operator decision", async () => {

@@ -1912,6 +1912,78 @@ export const messages = {
     defaultMessage: "{count} open",
     description: "C5: open unexpected-issuance findings awaiting triage.",
   },
+  "discovery.ct.postureReadOnly": {
+    defaultMessage: "This is the read-only posture view.",
+    description: "F17: explains why CT watchlist changes are kept out of the supporting Posture disclosure.",
+  },
+  "discovery.ct.postureReadOnlyDetail": {
+    defaultMessage: "Use Discovery for the exact server review, run, checkpoint evidence, and safe retry in one place.",
+    description: "F17: guides an operator to the single authoritative CT workflow.",
+  },
+  "discovery.ct.openInDiscovery": {
+    defaultMessage: "Open CT monitoring in Discovery",
+    description: "F17: moves the operator from supporting posture evidence to the authoritative CT workflow.",
+  },
+  "discovery.ct.review": {
+    defaultMessage: "Review exact CT plan",
+    description: "F17: effect-free action that asks the server to normalize the CT watchlist before saving it.",
+  },
+  "discovery.ct.reviewing": {
+    defaultMessage: "Reviewing exact plan…",
+    description: "F17: in-progress label while the server validates a CT watchlist preview.",
+  },
+  "discovery.ct.reviewTitle": {
+    defaultMessage: "Exact plan the server accepted",
+    description: "F17: heading for the authoritative normalized CT preview.",
+  },
+  "discovery.ct.reviewEffectFree": {
+    defaultMessage: "This review made no changes and contacted no CT log.",
+    description: "F17: plain-language side-effect boundary for a CT preview.",
+  },
+  "discovery.ct.reviewExecution": {
+    defaultMessage: "{protocol}: {jobs} bounded log jobs, concurrency {concurrency}, queue limit {queue}.",
+    description: "F17: exact bounded execution facts returned by the CT preview oracle.",
+  },
+  "discovery.ct.reviewRequired": {
+    defaultMessage: "Review this exact CT plan again before saving. Editing a domain, log, or batch size invalidates the previous review.",
+    description: "F17: guard when submit no longer matches the server-reviewed CT input.",
+  },
+  "discovery.ct.retryTitle": {
+    defaultMessage: "Recover a CT run safely",
+    description: "F17: heading for failure recovery without hiding or overwriting the original run.",
+  },
+  "discovery.ct.failedRun": {
+    defaultMessage: "Run {id} ended {status}. The original evidence stays unchanged.",
+    description: "F17: identifies the failed or partial CT run and its immutable evidence boundary.",
+  },
+  "discovery.ct.reviewRetry": {
+    defaultMessage: "Review safe retry for run {id}",
+    description: "F17: effect-free saved-source preflight before retrying a CT run.",
+  },
+  "discovery.ct.reviewingRetry": {
+    defaultMessage: "Reviewing safe retry…",
+    description: "F17: in-progress label while a saved CT source is preflighted.",
+  },
+  "discovery.ct.noRetryQueued": {
+    defaultMessage: "This preflight made no changes; no replacement run has been queued.",
+    description: "F17: makes the preview-versus-execution boundary explicit before retry.",
+  },
+  "discovery.ct.retryScope": {
+    defaultMessage: "The replacement will reuse {targets} normalized targets as {jobs} bounded CT log jobs.",
+    description: "F17: compact scope receipt for a reviewed CT retry.",
+  },
+  "discovery.ct.retry": {
+    defaultMessage: "Retry run {id} as a new run",
+    description: "F17: queues a distinct replacement linked to the unsuccessful original.",
+  },
+  "discovery.ct.retrying": {
+    defaultMessage: "Queueing replacement…",
+    description: "F17: in-progress label while the distinct CT replacement is queued.",
+  },
+  "discovery.ct.retryReceipt": {
+    defaultMessage: "Run {replacement} replaces run {original}; the original evidence remains unchanged.",
+    description: "F17: durable operator receipt linking replacement and original CT runs.",
+  },
   "discovery.ct.save": {
     defaultMessage: "Save and run now",
     description: "C5: saves the CT watchlist and queues a run in one action.",
@@ -17282,10 +17354,6 @@ export const messages = {
     defaultMessage: "CT log checkpoints",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Posture.tsx.",
   },
-  "source.ct.log.urls.20c5c9807c": {
-    defaultMessage: "CT log URLs",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Posture.tsx.",
-  },
   "source.ct.monitoring.watches.public.logs.for.cert.3163770746": {
     defaultMessage:
       "CT monitoring watches public logs for certificates your tenant did not request. The discovery worker polls configured logs, records tenant-scoped findings, and dispatches unexpected-issuance alerts through the notification outbox.",
@@ -17634,10 +17702,6 @@ export const messages = {
     defaultMessage: "Evidence surfaces",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Assistant.tsx.",
   },
-  "source.example.com.a379a6f6ee": {
-    defaultMessage: "example.com",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Posture.tsx.",
-  },
   "source.example.com.internal.example.501943e23c": {
     defaultMessage: "example.com, internal.example",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Profiles.tsx.",
@@ -17924,10 +17988,6 @@ export const messages = {
   },
   "source.https.api.example.com.443.74d0333a40": {
     defaultMessage: "https://api.example.com:443",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Posture.tsx.",
-  },
-  "source.https.ct.googleapis.com.logs.argon2026.109b891d19": {
-    defaultMessage: "https://ct.googleapis.com/logs/argon2026/",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Posture.tsx.",
   },
   "source.https.example.service.now.com.1d3417de64": {
@@ -18418,10 +18478,6 @@ export const messages = {
   },
   "source.mark.managed.61a3f9305a": {
     defaultMessage: "Mark managed",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Posture.tsx.",
-  },
-  "source.max.entries.per.poll.a77eca9293": {
-    defaultMessage: "Max entries per poll",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Posture.tsx.",
   },
   "source.maximum.validity.e745f2ab18": {
@@ -21335,10 +21391,6 @@ export const messages = {
     defaultMessage: "was reachable, and the value was not rendered.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
-  "source.watched.domains.0a60ff7e19": {
-    defaultMessage: "Watched domains",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Posture.tsx.",
-  },
   "source.web.server.e4d165cf07": {
     defaultMessage: "web-server",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Profiles.tsx.",
@@ -21977,14 +22029,6 @@ export const messages = {
   "source.running.scan.34932df63a": {
     defaultMessage: "Running scan",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Posture.tsx:403.",
-  },
-  "source.save.and.poll.ct.609730cebd": {
-    defaultMessage: "Save and poll CT",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Posture.tsx:314.",
-  },
-  "source.saving.ct.c96661dcd1": {
-    defaultMessage: "Saving CT",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Posture.tsx:314.",
   },
   "source.select.value1.187be5793a": {
     defaultMessage: "Select {value1}",

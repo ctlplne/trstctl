@@ -5,7 +5,15 @@ import { StatTile } from "@/components/charts";
 import { useCan } from "@/components/rbac";
 import { Button } from "@/components/ui/button";
 import { useTranslation, type I18nContextValue } from "@/i18n/I18nProvider";
-import { api, ApiError, type CTMonitoring, type DiscoveryFinding, type DiscoveryRun } from "@/lib/api";
+import {
+  api,
+  ApiError,
+  type CTMonitoring,
+  type DiscoveryFinding,
+  type DiscoveryPlanPreview,
+  type DiscoveryRun,
+  type DiscoverySourceRequest,
+} from "@/lib/api";
 
 // Certificate Transparency monitoring, as a headline discovery capability (C5).
 //
@@ -91,10 +99,16 @@ export function CTMonitoringPanel({ refreshToken = 0, pollIntervalMs = 1000, onR
   const [domains, setDomains] = useState<string | null>(null);
   const [logs, setLogs] = useState<string | null>(null);
   const [batch, setBatch] = useState<string | null>(null);
+  const [planPreview, setPlanPreview] = useState<{ key: string; value: DiscoveryPlanPreview } | null>(null);
+  const [previewing, setPreviewing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
   const [activeRunID, setActiveRunID] = useState<string | null>(null);
+  const [retryPreview, setRetryPreview] = useState<{ runID: string; value: DiscoveryPlanPreview } | null>(null);
+  const [reviewingRetry, setReviewingRetry] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const [retryResult, setRetryResult] = useState<string | null>(null);
   const runToPoll = activeRunID ?? (discoveryRunIsActive(monitoring?.run) ? monitoring?.run?.id : null);
 
   useEffect(() => {
@@ -133,23 +147,59 @@ export function CTMonitoringPanel({ refreshToken = 0, pollIntervalMs = 1000, onR
   const batchValue = batch ?? "25";
   const findings = monitoring?.findings ?? [];
 
+  const parsedBatch = Number.parseInt(batchValue, 10);
+  const planConfig = {
+    watched_domains: linesOf(domainsValue),
+    logs: linesOf(logsValue),
+    max_batch: Number.isFinite(parsedBatch) && parsedBatch > 0 ? parsedBatch : 25,
+  };
+  const planInput: DiscoverySourceRequest = {
+    name: monitoring?.source?.name || "certificate-transparency",
+    kind: "ct_log",
+    config: planConfig,
+  };
+  const planKey = JSON.stringify(planInput);
+  const currentPreview = planPreview?.key === planKey ? planPreview.value : null;
+  const failedRun = monitoring?.run && ["failed", "partial"].includes(monitoring.run.status) ? monitoring.run : null;
+  const currentRetryPreview = retryPreview && retryPreview.runID === failedRun?.id ? retryPreview.value : null;
+
+  const reviewPlan = async () => {
+    setPreviewing(true);
+    setError(null);
+    setResult(null);
+    try {
+      const preview = await api.previewDiscoveryPlan(planInput);
+      setPlanPreview({ key: planKey, value: preview });
+    } catch (err) {
+      setPlanPreview(null);
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPreviewing(false);
+    }
+  };
+
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!currentPreview?.ready || currentPreview.side_effects) {
+      setError(t("discovery.ct.reviewRequired"));
+      return;
+    }
     setSaving(true);
     setError(null);
     setResult(null);
     try {
-      const parsedBatch = Number.parseInt(batchValue, 10);
       const next = await api.updateCTMonitoring({
-        name: monitoring?.source?.name || "certificate-transparency",
-        watched_domains: linesOf(domainsValue),
-        logs: linesOf(logsValue),
-        max_batch: Number.isFinite(parsedBatch) && parsedBatch > 0 ? parsedBatch : 25,
+        name: planInput.name,
+        watched_domains: planConfig.watched_domains,
+        logs: planConfig.logs,
+        max_batch: planConfig.max_batch,
         run_now: true,
       });
       setResult(next.run?.id ? `run ${next.run.id}` : "saved");
       setDomains(null);
       setLogs(null);
+      setBatch(null);
+      setPlanPreview(null);
       setRead({ kind: "ready", monitoring: next });
       if (discoveryRunIsActive(next.run)) {
         setActiveRunID(next.run?.id ?? null);
@@ -160,6 +210,40 @@ export function CTMonitoringPanel({ refreshToken = 0, pollIntervalMs = 1000, onR
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const reviewRetry = async () => {
+    if (!failedRun || !monitoring?.source?.id) return;
+    setReviewingRetry(true);
+    setRetryResult(null);
+    setError(null);
+    try {
+      const preview = await api.preflightDiscoverySource(monitoring.source.id);
+      setRetryPreview({ runID: failedRun.id, value: preview });
+    } catch (err) {
+      setRetryPreview(null);
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setReviewingRetry(false);
+    }
+  };
+
+  const retryRun = async () => {
+    if (!failedRun || !currentRetryPreview?.ready || currentRetryPreview.side_effects) return;
+    setRetrying(true);
+    setRetryResult(null);
+    setError(null);
+    try {
+      const replacement = await api.retryDiscoveryRun(failedRun.id);
+      setRetryResult(t("discovery.ct.retryReceipt", { replacement: replacement.id, original: failedRun.id }));
+      setRetryPreview(null);
+      if (discoveryRunIsActive(replacement)) setActiveRunID(replacement.id);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRetrying(false);
     }
   };
 
@@ -259,6 +343,41 @@ export function CTMonitoringPanel({ refreshToken = 0, pollIntervalMs = 1000, onR
         </div>
       </div>
 
+      {failedRun ? (
+        <div className="mt-4 grid gap-2 rounded-card border border-risk-critical/35 bg-risk-critical/5 p-3">
+          <div>
+            <h3 className="text-sm font-semibold">{t("discovery.ct.retryTitle")}</h3>
+            <p className="mt-1 break-words text-xs text-muted-foreground">
+              {t("discovery.ct.failedRun", { id: failedRun.id, status: failedRun.status })}
+            </p>
+            {failedRun.error ? <p className="mt-1 break-words text-xs text-risk-critical">{failedRun.error}</p> : null}
+          </div>
+          {!currentRetryPreview ? (
+            <Button type="button" size="sm" variant="outline" className="w-fit" disabled={reviewingRetry || !monitoring?.source?.id} onClick={() => void reviewRetry()}>
+              {reviewingRetry
+                ? t("discovery.ct.reviewingRetry")
+                : t("discovery.ct.reviewRetry", { id: failedRun.id })}
+            </Button>
+          ) : (
+            <div className="grid gap-2 rounded-control border border-border bg-background/70 p-3 text-xs">
+              <p>{t("discovery.ct.noRetryQueued")}</p>
+              <p className="text-muted-foreground">
+                {t("discovery.ct.retryScope", {
+                  targets: currentRetryPreview.normalized_target_count,
+                  jobs: currentRetryPreview.child_job_count,
+                })}
+              </p>
+              <Button type="button" size="sm" className="w-fit" disabled={retrying} onClick={() => void retryRun()}>
+                {retrying
+                  ? t("discovery.ct.retrying")
+                  : t("discovery.ct.retry", { id: failedRun.id })}
+              </Button>
+            </div>
+          )}
+          {retryResult ? <p className="text-xs text-muted-foreground">{retryResult}</p> : null}
+        </div>
+      ) : null}
+
       {canWrite ? (
         <form className="mt-4 grid gap-2 border-t border-border pt-4" onSubmit={(event) => void submit(event)}>
           <label className="grid gap-1 text-sm">
@@ -286,10 +405,36 @@ export function CTMonitoringPanel({ refreshToken = 0, pollIntervalMs = 1000, onR
               onChange={(event) => setBatch(event.target.value)}
             />
           </label>
+          {currentPreview ? (
+            <div className="grid gap-2 rounded-control border border-brand-accent/35 bg-brand-accent/5 p-3 text-xs">
+              <div>
+                <h3 className="font-semibold">{t("discovery.ct.reviewTitle")}</h3>
+                <p className="mt-1 text-muted-foreground">{t("discovery.ct.reviewEffectFree")}</p>
+              </div>
+              <p>
+                {t("discovery.ct.reviewExecution", {
+                  protocol: currentPreview.protocol || "RFC 6962",
+                  jobs: currentPreview.child_job_count,
+                  concurrency: currentPreview.concurrency,
+                  queue: currentPreview.queue_depth,
+                })}
+              </p>
+              <ul className="grid gap-1 font-mono text-2xs">
+                {(currentPreview.normalized_targets ?? []).map((target) => (
+                  <li key={target} className="break-all">{target}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="submit" size="sm" disabled={saving}>
-              {t("discovery.ct.save")}
+            <Button type="button" size="sm" variant="outline" disabled={previewing} onClick={() => void reviewPlan()}>
+              {previewing ? t("discovery.ct.reviewing") : t("discovery.ct.review")}
             </Button>
+            {currentPreview?.ready && !currentPreview.side_effects ? (
+              <Button type="submit" size="sm" disabled={saving}>
+                {t("discovery.ct.save")}
+              </Button>
+            ) : null}
             {result ? <span className="text-xs text-muted-foreground">{result}</span> : null}
             {error ? <span className="text-xs text-risk-critical">{error}</span> : null}
           </div>

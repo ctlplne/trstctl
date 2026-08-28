@@ -174,6 +174,85 @@ func TestServedDriftPlanPreviewIsExactAndEffectFree(t *testing.T) {
 	}
 }
 
+// TestServedCTPlanPreviewIsExactAndEffectFree is the F17 preview oracle. The
+// exact watched domains and log endpoints accepted by the CT executor must be
+// normalized by the server before the console can expose Save and run. Preview
+// may read tenant authority, but cannot create a source, run, event, checkpoint,
+// finding, outbox alert, or external CT request.
+func TestServedCTPlanPreviewIsExactAndEffectFree(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, func(*Deps) {})
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
+
+	beforeEvents := servedDiscoveryEventCount(t, h)
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/plans/preview", tok, map[string]any{
+		"name": "public certificate watch",
+		"kind": "ct_log",
+		"config": map[string]any{
+			"watched_domains": []string{"Payments.Example.com.", "example.com", "example.com"},
+			"logs":            []string{"https://ct-b.example.test/log", "https://ct-a.example.test/log", "https://ct-a.example.test/log"},
+			"max_batch":       25,
+		},
+	})
+	if status != http.StatusOK {
+		t.Fatalf("preview CT plan: status %d body %s", status, body)
+	}
+	var preview struct {
+		Kind                  string   `json:"kind"`
+		Ready                 bool     `json:"ready"`
+		Protocol              string   `json:"protocol"`
+		Execution             string   `json:"execution"`
+		ConnectionOrigin      string   `json:"connection_origin"`
+		NormalizedTargets     []string `json:"normalized_targets"`
+		NormalizedTargetCount int      `json:"normalized_target_count"`
+		ChildJobCount         int      `json:"child_job_count"`
+		Concurrency           int      `json:"concurrency"`
+		QueueDepth            int      `json:"queue_depth"`
+		Permission            string   `json:"permission"`
+		DataHandling          string   `json:"data_handling"`
+		SideEffects           bool     `json:"side_effects"`
+		BlockedReasons        []string `json:"blocked_reasons"`
+	}
+	if err := json.Unmarshal(body, &preview); err != nil {
+		t.Fatalf("decode CT preview: %v (%s)", err, body)
+	}
+	wantTargets := []string{
+		"domain:example.com",
+		"domain:payments.example.com",
+		"log:https://ct-a.example.test/log",
+		"log:https://ct-b.example.test/log",
+	}
+	if preview.Kind != "ct_log" || !preview.Ready || preview.Protocol != "RFC 6962" ||
+		preview.Execution != "control plane" || preview.ConnectionOrigin != "control plane" ||
+		preview.NormalizedTargetCount != len(wantTargets) || strings.Join(preview.NormalizedTargets, "|") != strings.Join(wantTargets, "|") ||
+		preview.ChildJobCount != 2 || preview.Concurrency != 1 || preview.QueueDepth <= 0 ||
+		preview.Permission != "discovery:write" || preview.DataHandling == "" || preview.SideEffects || len(preview.BlockedReasons) != 0 {
+		t.Fatalf("CT preview = %+v, want exact ready state-free domains and logs", preview)
+	}
+	if got := servedDiscoveryEventCount(t, h); got != beforeEvents {
+		t.Fatalf("discovery events after CT preview = %d, want unchanged %d", got, beforeEvents)
+	}
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/sources?limit=10", tok, nil)
+	if status != http.StatusOK || !strings.Contains(string(body), `"items":[]`) {
+		t.Fatalf("sources after CT preview: status %d body %s, want none", status, body)
+	}
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/runs?limit=10", tok, nil)
+	if status != http.StatusOK || !strings.Contains(string(body), `"items":[]`) {
+		t.Fatalf("runs after CT preview: status %d body %s, want none", status, body)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/plans/preview", tok, map[string]any{
+		"name":   "incomplete CT watch",
+		"kind":   "ct_log",
+		"config": map[string]any{"watched_domains": []string{"example.com"}},
+	})
+	if status != http.StatusBadRequest || !strings.Contains(string(body), "logs must include at least one CT log URL") {
+		t.Fatalf("incomplete CT preview: status %d body %s, want bounded 400 before queueing", status, body)
+	}
+	if got := servedDiscoveryEventCount(t, h); got != beforeEvents {
+		t.Fatalf("discovery events after rejected CT preview = %d, want unchanged %d", got, beforeEvents)
+	}
+}
+
 func servedDiscoveryEventCount(t *testing.T, h *servedHarness) int {
 	t.Helper()
 	count := 0
@@ -267,7 +346,11 @@ func TestServedCTMonitoringDashboardConfiguresWatchlistAndFindings(t *testing.T)
 			NextIndex int64  `json:"next_index"`
 		} `json:"logs"`
 		OutboxBackedAlerts bool `json:"outbox_backed_alerts"`
-		Summary            struct {
+		Run                struct {
+			ID     string `json:"id"`
+			Status string `json:"status"`
+		} `json:"run"`
+		Summary struct {
 			SourceCount         int `json:"source_count"`
 			WatchedDomainCount  int `json:"watched_domain_count"`
 			LogCount            int `json:"log_count"`
@@ -286,6 +369,9 @@ func TestServedCTMonitoringDashboardConfiguresWatchlistAndFindings(t *testing.T)
 	}
 	if dashboard.Capability != "F17" || !dashboard.OutboxBackedAlerts || !containsString(dashboard.WatchedDomains, "example.com") || len(dashboard.Logs) != 1 || dashboard.Logs[0].URL != logSrv.URL() || dashboard.Logs[0].NextIndex < 1 {
 		t.Fatalf("bad CT monitoring dashboard state: %+v", dashboard)
+	}
+	if dashboard.Run.ID != configured.Run.ID || dashboard.Run.Status != "succeeded" {
+		t.Fatalf("latest durable CT run = %+v, want succeeded run %s after refresh", dashboard.Run, configured.Run.ID)
 	}
 	if dashboard.Summary.SourceCount != 1 || dashboard.Summary.WatchedDomainCount != 1 || dashboard.Summary.LogCount != 1 || dashboard.Summary.FindingCount != 1 || dashboard.Summary.UnexpectedIssuance != 1 || dashboard.Summary.OpenFindingCount != 1 || dashboard.Summary.OutboxAlertChannels != 1 {
 		t.Fatalf("bad CT monitoring dashboard summary: %+v", dashboard.Summary)

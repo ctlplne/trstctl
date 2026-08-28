@@ -77,6 +77,43 @@ describe("C5 certificate transparency monitoring surface", () => {
     vi.spyOn(api, "ctMonitoring").mockResolvedValue(monitoring as never);
     vi.spyOn(api, "updateCTMonitoring").mockResolvedValue({ ...monitoring, run: { id: "run-9", status: "queued" } } as never);
     vi.spyOn(api, "getDiscoveryRun").mockResolvedValue({ id: "run-9", status: "succeeded" } as never);
+    vi.spyOn(api, "previewDiscoveryPlan").mockResolvedValue({
+      kind: "ct_log",
+      ready: true,
+      protocol: "RFC 6962",
+      execution: "control plane",
+      connection_origin: "control plane",
+      normalized_targets: ["domain:example.test", "domain:payments.example.test", "log:https://ct.example.test/log-a", "log:https://ct.example.test/log-b"],
+      normalized_target_count: 4,
+      preview_truncated: false,
+      excluded_target_count: 0,
+      applied_exclusions: [],
+      child_job_count: 2,
+      concurrency: 1,
+      queue_depth: 256,
+      estimated_upper_seconds: 20,
+      permission: "discovery:write",
+      data_handling: "Reads public CT entries and stores public certificate metadata and checkpoints.",
+      side_effects: false,
+      blocked_reasons: [],
+    } as never);
+    vi.spyOn(api, "preflightDiscoverySource").mockResolvedValue({
+      kind: "ct_log",
+      ready: true,
+      protocol: "RFC 6962",
+      execution: "control plane",
+      connection_origin: "control plane",
+      normalized_targets: ["domain:example.test", "log:https://ct.example.test/log-b"],
+      normalized_target_count: 2,
+      child_job_count: 1,
+      concurrency: 1,
+      queue_depth: 256,
+      permission: "discovery:write",
+      data_handling: "Public certificate metadata only.",
+      side_effects: false,
+      blocked_reasons: [],
+    } as never);
+    vi.spyOn(api, "retryDiscoveryRun").mockResolvedValue({ id: "run-replacement", status: "queued", retry_of_run_id: "run-failed" } as never);
   });
 
   it("shows the watchlist, per-log checkpoint state, and unexpected issuance on one surface", async () => {
@@ -112,13 +149,30 @@ describe("C5 certificate transparency monitoring surface", () => {
     expect(honesty.textContent).toMatch(/not automatic estate-wide/i);
   });
 
-  it("configures the watchlist and queues a run from the same surface", async () => {
+  it("previews the exact effect-free watchlist before it can save and queue a run", async () => {
     const user = userEvent.setup();
     renderPanel();
 
     const domains = await screen.findByRole("textbox", { name: "Watched domains" });
     await user.clear(domains);
     await user.type(domains, "example.test\npayments.example.test");
+    await user.click(screen.getByRole("button", { name: "Review exact CT plan" }));
+
+    await waitFor(() =>
+      expect(api.previewDiscoveryPlan).toHaveBeenCalledWith({
+        name: "certificate-transparency",
+        kind: "ct_log",
+        config: {
+          watched_domains: ["example.test", "payments.example.test"],
+          logs: ["https://ct.example.test/log-a", "https://ct.example.test/log-b"],
+          max_batch: 25,
+        },
+      }),
+    );
+    expect(api.updateCTMonitoring).not.toHaveBeenCalled();
+    expect(await screen.findByText(/made no changes and contacted no CT log/i)).toBeInTheDocument();
+    expect(screen.getByText("domain:payments.example.test")).toBeInTheDocument();
+
     await user.click(screen.getByRole("button", { name: "Save and run now" }));
 
     await waitFor(() => expect(api.updateCTMonitoring).toHaveBeenCalled());
@@ -128,6 +182,25 @@ describe("C5 certificate transparency monitoring surface", () => {
     // out whether their watchlist works.
     expect(sent.run_now).toBe(true);
     expect(await screen.findByText("run run-9 succeeded")).toBeInTheDocument();
+  });
+
+  it("preflights a failed run and retries it as a distinct replacement", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.ctMonitoring).mockResolvedValue({
+      ...monitoring,
+      source: { id: "source-ct", name: "certificate-transparency", kind: "ct_log" },
+      run: { id: "run-failed", source_id: "source-ct", status: "failed", error: "one CT log returned 503" },
+    } as never);
+    renderPanel();
+
+    await screen.findByText("one CT log returned 503");
+    await user.click(screen.getByRole("button", { name: "Review safe retry for run run-failed" }));
+    await waitFor(() => expect(api.preflightDiscoverySource).toHaveBeenCalledWith("source-ct"));
+    expect(screen.getByText(/no replacement run has been queued/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Retry run run-failed as a new run" }));
+    await waitFor(() => expect(api.retryDiscoveryRun).toHaveBeenCalledWith("run-failed"));
+    expect(await screen.findByText(/run-replacement.*replaces.*run-failed/i)).toBeInTheDocument();
   });
 
   it("AUD-71 follows parent refresh authority without a remount", async () => {
@@ -175,6 +248,7 @@ describe("C5 certificate transparency monitoring surface", () => {
     renderPanel({ pollIntervalMs: 5, onRunTerminal });
 
     await screen.findByText(/next index 4211/i);
+    await user.click(screen.getByRole("button", { name: "Review exact CT plan" }));
     await user.click(screen.getByRole("button", { name: "Save and run now" }));
 
     expect(await screen.findByText(/next index 4250/i)).toBeInTheDocument();
@@ -190,6 +264,7 @@ describe("C5 certificate transparency monitoring surface", () => {
       .mockResolvedValue({ id: "run-9", status: "running" } as never);
     const view = renderPanel({ pollIntervalMs: 5 });
     await screen.findByText(/next index 4211/i);
+    await user.click(screen.getByRole("button", { name: "Review exact CT plan" }));
     await user.click(screen.getByRole("button", { name: "Save and run now" }));
     await waitFor(() => expect(api.getDiscoveryRun).toHaveBeenCalled());
     view.unmount();

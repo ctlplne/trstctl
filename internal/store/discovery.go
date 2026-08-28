@@ -701,6 +701,25 @@ func (s *Store) GetDiscoveryRun(ctx context.Context, tenantID, id string) (Disco
 	return out, err
 }
 
+// GetLatestDiscoveryRunForSource loads the newest run for one tenant-owned
+// source. The source predicate is part of the query so a caller cannot learn a
+// run from another source or tenant while building an operator status view.
+func (s *Store) GetLatestDiscoveryRunForSource(ctx context.Context, tenantID, sourceID string) (DiscoveryRun, error) {
+	var out DiscoveryRun
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return scanDiscoveryRun(tx.QueryRow(ctx, `SELECT id::text, tenant_id::text, source_id::text, schedule_id::text,
+		              COALESCE(retry_of_run_id::text, ''), status, dry_run,
+		              requested_by, execution, segment, required_agent_role,
+		              COALESCE(required_agent_id::text, ''), COALESCE(executed_by_agent_id::text, ''),
+		              targets, discovered, failed, rejected, blocked, error, started_at, completed_at, created_at
+		         FROM discovery_runs
+		        WHERE tenant_id = $1 AND source_id = $2
+		     ORDER BY created_at DESC, id DESC
+		        LIMIT 1`, tenantID, sourceID), &out)
+	})
+	return out, err
+}
+
 // ListDiscoveryRunsPage lists tenant runs by id keyset.
 func (s *Store) ListDiscoveryRunsPage(ctx context.Context, tenantID, afterID string, limit int) ([]DiscoveryRun, error) {
 	var out []DiscoveryRun

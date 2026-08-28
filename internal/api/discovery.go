@@ -145,6 +145,46 @@ func (a *API) discoveryPlanPreview(ctx context.Context, tenantID string, req dis
 		SideEffects: false, BlockedReasons: []string{}, AppliedExclusions: []string{},
 		ChildJobCount: 1,
 	}
+	if req.Kind == "ct_log" {
+		var raw ctMonitoringSourceConfig
+		if err := json.Unmarshal(cfg, &raw); err != nil {
+			return discoveryPlanPreviewResponse{}, errStatus(http.StatusBadRequest, "CT monitoring config must be valid JSON")
+		}
+		normalized, err := ctMonitoringConfigFromRequest(ctMonitoringRequest{
+			Logs:                 raw.Logs,
+			WatchedDomains:       raw.WatchedDomains,
+			MaxBatch:             raw.MaxBatch,
+			AllowPrivateEndpoint: raw.AllowPrivateEndpoint,
+			PrivateEgressCIDRs:   raw.PrivateEgressCIDRs,
+		})
+		if err != nil {
+			return discoveryPlanPreviewResponse{}, err
+		}
+		privateEgress, err := discoveryPrivateEgressRequested(cfg)
+		if err != nil {
+			return discoveryPlanPreviewResponse{}, err
+		}
+		if privateEgress {
+			if err := a.requirePrivateEgressPermission(ctx, tenantID); err != nil {
+				return discoveryPlanPreviewResponse{}, err
+			}
+		}
+		preview.Protocol = "RFC 6962"
+		preview.NormalizedTargets = make([]string, 0, len(normalized.WatchedDomains)+len(normalized.Logs))
+		for _, domain := range normalized.WatchedDomains {
+			preview.NormalizedTargets = append(preview.NormalizedTargets, "domain:"+domain)
+		}
+		for _, logURL := range normalized.Logs {
+			preview.NormalizedTargets = append(preview.NormalizedTargets, "log:"+logURL)
+		}
+		preview.NormalizedTargetCount = len(preview.NormalizedTargets)
+		preview.ChildJobCount = len(normalized.Logs)
+		preview.Concurrency = 1
+		preview.QueueDepth = 256
+		// Each child job performs one bounded RFC 6962 checkpoint poll. This is
+		// an upper planning estimate, not a promise that a public log responds.
+		preview.EstimatedUpperSeconds = len(normalized.Logs) * 10
+	}
 	if req.Kind == "network" || req.Kind == "ssh" {
 		intent, resolveErr := segmentscan.Resolve(req.Kind, cfg)
 		if resolveErr != nil {

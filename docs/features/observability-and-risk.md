@@ -100,6 +100,21 @@ ct-monitoring get|update`, or the console to configure watched domains/logs, ins
 checkpoints, queue a poll, and review `ct_unexpected_issuance` findings. The worker polls,
 records tenant-scoped findings, and queues notifications via the outbox.
 
+Before the console exposes **Save and run now**, it sends the proposed `ct_log` source to
+`POST /api/v1/discovery/plans/preview`. The server uses the same CT validator as execution
+and returns the normalized `domain:` and `log:` targets, RFC 6962 protocol, child-job count,
+concurrency, queue limit, permission, and public-metadata handling boundary. Preview is
+effect-free: it does not contact a CT log or create a source, run, event, checkpoint,
+finding, or alert. Editing any domain, log, or batch size invalidates the displayed review.
+
+The latest CT run is included in a fresh `GET /api/v1/discovery/ct-monitoring` response, so
+a failed or partial result remains visible after reload. Recovery first calls
+`GET /api/v1/discovery/sources/{id}/preflight`, which revalidates the saved source without
+queueing work. Only then does the console expose a retry. `POST
+/api/v1/discovery/runs/{id}/retry` and `discovery runs retry` create a distinct replacement
+with `retry_of_run_id`; they never rewrite the original failure. The receipt names both run
+IDs, which makes the recovery easy to follow and keeps the original evidence auditable.
+
 `PUT` is exact replacement for the named source, not append. The source event and its
 tenant-local active watchlist reconcile in one PostgreSQL transaction. Logs and domains
 absent from the replacement become retired, cannot be polled by a later run, and remain
@@ -121,7 +136,8 @@ watchlist, per-log checkpoint state (so you can see whether a log is actually be
 polled, succeeded, failed, or has never been reached), retired log history,
 unexpected-issuance findings with the certificate
 detail, and a one-click hand-off to the rogue-certificate remediation path. Posture keeps
-the readiness view. It previously appeared on Discovery only as a single count shared
+the read-only evidence view and links back to this one reviewed workflow; it cannot bypass
+preview with a second direct-save form. It previously appeared on Discovery only as a single count shared
 with drift detection, which is why operators could not find the capability at all.
 
 **What it does not cover.** CT monitoring sees exactly the domains you list and the logs

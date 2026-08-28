@@ -317,15 +317,34 @@ func (a *API) ctMonitoringStatus(ctx context.Context, tenantID string, primary *
 	if primary != nil {
 		resp := toDiscoverySourceResponse(*primary)
 		out.Source = &resp
-		sourceByID[primary.ID] = *primary
 		if _, ok := sourceByID[primary.ID]; !ok {
 			out.Summary.SourceCount++
 		}
+		sourceByID[primary.ID] = *primary
 		addCTConfigToStatus(&out, primary.Config)
 	}
 	if queued != nil {
 		resp := toDiscoveryRunResponse(*queued)
 		out.Run = &resp
+	} else {
+		var latest *store.DiscoveryRun
+		for sourceID := range sourceByID {
+			run, err := a.store.GetLatestDiscoveryRunForSource(ctx, tenantID, sourceID)
+			if err != nil {
+				if store.IsNotFound(err) {
+					continue
+				}
+				return out, err
+			}
+			if latest == nil || run.CreatedAt.After(latest.CreatedAt) || (run.CreatedAt.Equal(latest.CreatedAt) && run.ID > latest.ID) {
+				copy := run
+				latest = &copy
+			}
+		}
+		if latest != nil {
+			resp := toDiscoveryRunResponse(*latest)
+			out.Run = &resp
+		}
 	}
 
 	if domains, err := a.store.ListWatchedDomains(ctx, tenantID); err == nil {

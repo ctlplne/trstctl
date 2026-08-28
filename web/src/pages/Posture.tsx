@@ -1,6 +1,7 @@
 import type { FormEvent, ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Bell, CheckCircle2, FileWarning, Radar, SearchCheck, ShieldAlert, XCircle } from "lucide-react";
+import { Link } from "react-router-dom";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { AuthorityAgreementPanel } from "@/components/AuthorityAgreementPanel";
@@ -50,14 +51,6 @@ export function Posture() {
   const [discoveryLoading, setDiscoveryLoading] = useState(true);
   const [discoveryError, setDiscoveryError] = useState<string | null>(null);
   const [ctMonitoring, setCTMonitoring] = useState<CTMonitoring | null>(null);
-  const [ctForm, setCTForm] = useState({
-    name: "Certificate Transparency monitor",
-    watchedDomains: "",
-    logs: "",
-    maxBatch: "25",
-  });
-  const [ctSaving, setCTSaving] = useState(false);
-  const [ctResult, setCTResult] = useState<string | null>(null);
   const [ctError, setCTError] = useState<string | null>(null);
   const [driftRemediation, setDriftRemediation] = useState<DriftRemediation | null>(null);
   const [driftLoading, setDriftLoading] = useState(true);
@@ -113,7 +106,7 @@ export function Posture() {
       try {
         const state = await api.ctMonitoring();
         if (cancelled) return;
-        applyCTMonitoringState(state);
+        setCTMonitoring(state);
       } catch (error) {
         if (!cancelled) setCTError(error instanceof Error ? error.message : "Unable to load CT monitoring");
       }
@@ -191,41 +184,6 @@ export function Posture() {
       setCBOMError(error instanceof Error ? error.message : "Unable to run CBOM scan");
     } finally {
       setCBOMScanning(false);
-    }
-  }
-
-  function applyCTMonitoringState(state: CTMonitoring) {
-    setCTMonitoring(state);
-    setCTForm({
-      name: state.source?.name ?? defaultCTMonitorName,
-      watchedDomains: (state.watched_domains ?? []).join("\n"),
-      logs: (state.logs ?? []).map((log) => log.url).join("\n"),
-      maxBatch: String(sourceMaxBatch(state) || 25),
-    });
-  }
-
-  async function handleCTMonitoringSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const watchedDomains = linesFromText(ctForm.watchedDomains);
-    const logs = linesFromText(ctForm.logs);
-    const maxBatch = Number.parseInt(ctForm.maxBatch, 10);
-    setCTSaving(true);
-    setCTError(null);
-    setCTResult(null);
-    try {
-      const state = await api.updateCTMonitoring({
-        name: ctForm.name.trim() || defaultCTMonitorName,
-        logs,
-        watched_domains: watchedDomains,
-        max_batch: Number.isFinite(maxBatch) && maxBatch > 0 ? maxBatch : 25,
-        run_now: true,
-      });
-      applyCTMonitoringState(state);
-      setCTResult(state.run?.id ? `Run ${state.run.id} queued` : "CT watchlist saved");
-    } catch (error) {
-      setCTError(error instanceof Error ? error.message : "Unable to update CT monitoring");
-    } finally {
-      setCTSaving(false);
     }
   }
 
@@ -307,49 +265,16 @@ export function Posture() {
               error={discoveryError}
               emptyTitle="No CT findings returned yet"
             />
-            <form className="grid gap-3 rounded-panel border border-border p-comfortable" onSubmit={handleCTMonitoringSubmit}>
-              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_10rem]">
-                <label className="grid gap-1 text-sm font-medium" htmlFor="ct-watched-domains">
-                  {translateNow("source.watched.domains.0a60ff7e19")}
-                  <textarea
-                    id="ct-watched-domains"
-                    className="ui-input min-h-20 font-mono text-xs"
-                    value={ctForm.watchedDomains}
-                    onChange={(event) => setCTForm((current) => ({ ...current, watchedDomains: event.target.value }))}
-                    placeholder={translateNow("source.example.com.a379a6f6ee")}
-                  />
-                </label>
-                <label className="grid gap-1 text-sm font-medium" htmlFor="ct-log-urls">
-                  {translateNow("source.ct.log.urls.20c5c9807c")}
-                  <textarea
-                    id="ct-log-urls"
-                    className="ui-input min-h-20 font-mono text-xs"
-                    value={ctForm.logs}
-                    onChange={(event) => setCTForm((current) => ({ ...current, logs: event.target.value }))}
-                    placeholder={translateNow("source.https.ct.googleapis.com.logs.argon2026.109b891d19")}
-                  />
-                </label>
-                <label className="grid gap-1 text-sm font-medium" htmlFor="ct-max-batch">
-                  {translateNow("source.max.entries.per.poll.a77eca9293")}
-                  <input
-                    id="ct-max-batch"
-                    className="ui-input"
-                    type="number"
-                    min={1}
-                    value={ctForm.maxBatch}
-                    onChange={(event) => setCTForm((current) => ({ ...current, maxBatch: event.target.value }))}
-                  />
-                </label>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-panel border border-border bg-background p-comfortable">
+              <div>
+                <p className="text-sm font-medium">{t("discovery.ct.postureReadOnly")}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{t("discovery.ct.postureReadOnlyDetail")}</p>
               </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <Button type="submit" disabled={ctSaving || linesFromText(ctForm.watchedDomains).length === 0 || linesFromText(ctForm.logs).length === 0}>
-                  <Radar className="h-4 w-4" aria-hidden="true" />
-                  {ctSaving ? translateNow("source.saving.ct.c96661dcd1") : translateNow("source.save.and.poll.ct.609730cebd")}
-                </Button>
-                {ctResult ? <p className="text-sm font-medium text-status-success">{ctResult}</p> : null}
-                {ctError ? <p className="text-sm font-medium text-destructive">{ctError}</p> : null}
-              </div>
-            </form>
+              <Link className="rounded-control border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted" to="/discovery">
+                {t("discovery.ct.openInDiscovery")}
+              </Link>
+              {ctError ? <p className="w-full text-sm font-medium text-destructive">{ctError}</p> : null}
+            </div>
             {ctMonitoring ? (
               <>
                 <dl className="grid gap-3 md:grid-cols-5">
@@ -637,17 +562,7 @@ function linesFromText(value: string): string[] {
     .filter(Boolean);
 }
 
-const defaultCTMonitorName = "Certificate Transparency monitor";
 type DriftDecision = DriftRemediationDecisionRequest["decision"];
-
-function sourceMaxBatch(state: CTMonitoring): number {
-  const raw = state.source?.config;
-  if (raw && typeof raw === "object" && !Array.isArray(raw) && "max_batch" in raw) {
-    const value = raw.max_batch;
-    if (typeof value === "number" && Number.isFinite(value)) return value;
-  }
-  return 0;
-}
 
 function DriftRemediationWorkflow({
   state,
