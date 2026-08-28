@@ -1700,8 +1700,8 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use x.509 revocation infrastructure while tenant, policy, and security authority remain on the server.",
       "tool": "certificates",
       "classification": "primary",
-      "releaseBlocking": true,
-      "consoleRoute": "/identities",
+      "releaseBlocking": false,
+      "consoleRoute": "/certificates",
       "navigationEntrypoints": [
         "tool navigation",
         "task search",
@@ -1712,7 +1712,7 @@ export const canonicalCapabilities = [
       "dependencies": [],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -1727,42 +1727,56 @@ export const canonicalCapabilities = [
           ]
         },
         "configure": {
-          "status": "missing",
-          "reason": "No structured evidence proves an operator can configure every required prerequisite from this console journey."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/certificates/RevocationCenter.tsx",
+            "web/src/__tests__/revocation_center.test.tsx"
+          ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: previewIdentityTransition",
+            "internal/server/nhi_lifecycle_preview_served_test.go",
+            "web/src/pages/certificates/RevocationCenter.tsx",
+            "web/src/__tests__/revocation_center.test.tsx"
+          ]
         },
         "execute": {
           "status": "complete",
           "evidence": [
-            "web/src/lib/navigation.ts",
+            "web/src/pages/certificates/RevocationCenter.tsx",
+            "web/src/__tests__/revocation_center.test.tsx",
             "internal/server/revocation_public_test.go"
           ]
         },
         "observe": {
           "status": "complete",
           "evidence": [
-            "web/src/lib/navigation.ts"
+            "web/src/pages/certificates/RevocationCenter.tsx",
+            "web/src/pages/Certificates.tsx"
           ]
         },
         "recover": {
           "status": "complete",
           "evidence": [
-            "web/src/lib/navigation.ts",
+            "web/src/pages/certificates/RevocationCenter.tsx",
+            "web/src/__tests__/revocation_center.test.tsx",
             "internal/server/revocation_public_test.go"
           ]
         },
         "verify": {
           "status": "complete",
           "evidence": [
-            "internal/server/revocation_public_test.go"
+            "internal/server/revocation_public_test.go",
+            "internal/server/nhi_lifecycle_preview_served_test.go",
+            "web/src/__tests__/revocation_center.test.tsx"
           ]
         },
         "automate": {
           "status": "complete",
           "evidence": [
+            "OpenAPI operationId: previewIdentityTransition",
             "OpenAPI operationId: transitionIdentity",
             "OpenAPI operationId: searchAudit",
             "OpenAPI operationId: bulkRevokeIdentities",
@@ -1786,8 +1800,8 @@ export const canonicalCapabilities = [
       },
       "owner": "pki",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "d5f43bd94681595372c8a40aee0772fffc025b4f",
+      "freshness": "2026-08-28"
     }
   },
   {

@@ -4735,14 +4735,18 @@
             "priority": 21,
             "served_state": "served",
             "backend_status": "served for trstctl hierarchy plus signed network-relay CRL/OCSP endpoint monitoring, validating multi-issuer relay-local CRL/OCSP caches, full/sharded/delta CRL distribution artifacts, outbox-backed CT precert+cert log submission, and CAP-REV-05 rogue/non-compliant certificate posture",
-            "current_frontend_mapping": "Certificates shows signed relay CRL/OCSP endpoint freshness, rogue/non-compliant posture, CRL distribution, and CT queueing; Protocols shows signed per-segment/per-issuer relay-local CRL/OCSP cache freshness; Identities and Audit expose revocation actions/evidence",
+            "current_frontend_mapping": "Certificates → CRL & CT begins with one three-step Revocation center that configures a managed X.509 identity and RFC 5280 reason, loads the effect-free version-bound server plan plus served graph impact, shows signed CRL/OCSP and CRL-publication posture, requires typed confirmation, executes through the existing lifecycle authority, and links to Audit/Graph proof. The same workspace retains endpoint health, rogue/non-compliant posture, CRL distribution, and CT queueing; Protocols retains per-segment/per-issuer relay-local cache evidence.",
             "target_gui_mapping": "Revocation center with revoke request, reason codes, OCSP/CRL status, propagation health, affected deployments, and audit evidence.",
             "acceptance_test": "UI covers revoke confirmation, reason selection, success, failure, signed endpoint and per-segment cache freshness with unknown-before-observation states, audit link, CRL distribution, rogue/non-compliant posture, and CT queueing; served tests prove AUD-38 monitoring, AUD-39 multi-issuer local CRL/OCSP clients and signed projection, CAP-REV-05 detection, and CAP-REV-06 CT delivery.",
             "source_docs": [
-                "docs/features/issuance-and-cas.md"
+                "docs/features/issuance-and-cas.md",
+                "docs/web-console.md"
             ],
             "source_backend": [
+                "/api/v1/identities/{id}/transitions/preview",
                 "/api/v1/identities/{id}/transitions",
+                "internal/api/identity_lifecycle_preview.go",
+                "internal/server/nhi_lifecycle_preview_served_test.go",
                 "internal/server/revocation.go",
                 "/api/v1/revocation/ct-submissions",
                 "internal/server/ct_submission.go",
@@ -4760,14 +4764,18 @@
                 "web/src/pages/Identities.tsx",
                 "web/src/pages/Audit.tsx",
                 "web/src/pages/Certificates.tsx",
+                "web/src/pages/certificates/RevocationCenter.tsx",
                 "web/src/pages/Protocols.tsx",
                 "web/src/pages/protocols/RevocationCachePanel.tsx",
+                "web/src/lib/revocation.ts",
                 "web/src/lib/api.ts",
+                "web/src/__tests__/revocation_center.test.tsx",
                 "web/src/__tests__/search_and_empty.test.tsx"
             ],
             "status": "closed",
-            "notes": "Closed by route-level feature-map evidence. COMPETE-043 serves published full/sharded/delta CRLs. COMPETE-067 serves outbox-backed CT precertificate/final-certificate submission. COMPETE-066 serves rogue and non-compliant certificate posture. AUD-38 serves scheduled network-relay CRL/OCSP endpoint monitoring with signed projection and alert recovery. AUD-39 serves bounded multi-issuer relay-local CRL/OCSP caches, exact issuer/serial/nonce/signature/freshness validation, signed metadata-only heartbeat projection, GET /api/v1/revocation/caches, and Protocols segment visibility. Controlled signed responders prove repository behavior; a domain-joined Windows AD CS CDP/OCSP run remains honestly external lab evidence.",
+            "notes": "Closed as a complete vertical slice by the d5f43bd9 Revocation center and the existing served revocation spine. The center links the effect-free lifecycle preview and exact expected-version fence to one managed X.509 revoke journey, while graph impact, signed endpoint health, CRL publication, typed confirmation, idempotent event/outbox execution, Audit, and Graph remain their canonical authorities. COMPETE-043 serves published full/sharded/delta CRLs. COMPETE-067 serves outbox-backed CT precertificate/final-certificate submission. COMPETE-066 serves rogue and non-compliant certificate posture. AUD-38 serves scheduled network-relay CRL/OCSP endpoint monitoring with signed projection and alert recovery. AUD-39 serves bounded multi-issuer relay-local CRL/OCSP caches, exact issuer/serial/nonce/signature/freshness validation, signed metadata-only heartbeat projection, GET /api/v1/revocation/caches, and Protocols segment visibility. Controlled signed responders prove repository behavior; a domain-joined Windows AD CS CDP/OCSP run remains honestly external lab evidence.",
             "api_surface": [
+                "previewIdentityTransition",
                 "transitionIdentity",
                 "searchAudit",
                 "bulkRevokeIdentities",
@@ -4826,6 +4834,7 @@
                         "Certificates page renders the CT submission form and calls api.submitCertificateTransparency with certificate_pem, precertificate_pem, chain_pem, logs, and allow_private_endpoint.",
                         "Certificates page renders CAP-REV-05 summary counts, rogue/non-compliant finding rows, severity, recommendations, and projection evidence refs from api.rogueCertificates.",
                         "Certificates → CRL & CT renders each signed relay CRL/OCSP observation with freshness status, signature evidence, relay identity, evidence digest, nextUpdate, and explicit unknown-before-observation copy.",
+                        "Certificates → CRL & CT begins with a three-step Revocation center that binds managed identity, RFC 5280 reason, exact effect-free server plan, lifecycle version, graph blast radius, propagation posture, typed confirmation, and Audit/Graph proof into one operator journey.",
                         "Protocols → Revocation cache by segment renders signed relay-local CRL/OCSP metadata per segment/issuer with fresh, stale, empty, error, and unobserved states."
                     ],
                     "refs": [
@@ -4834,9 +4843,12 @@
                         "web/src/pages/Identities.tsx",
                         "web/src/pages/Audit.tsx",
                         "web/src/pages/Certificates.tsx",
+                        "web/src/pages/certificates/RevocationCenter.tsx",
                         "web/src/pages/Protocols.tsx",
                         "web/src/pages/protocols/RevocationCachePanel.tsx",
+                        "web/src/lib/revocation.ts",
                         "web/src/lib/api.ts",
+                        "web/src/__tests__/revocation_center.test.tsx",
                         "web/src/__tests__/search_and_empty.test.tsx"
                     ]
                 },
@@ -4859,6 +4871,7 @@
                 },
                 "api": {
                     "evidence": [
+                        "OpenAPI operationId: previewIdentityTransition",
                         "OpenAPI operationId: transitionIdentity",
                         "OpenAPI operationId: searchAudit",
                         "OpenAPI operationId: bulkRevokeIdentities",
@@ -4891,6 +4904,8 @@
                         "web/src/lib/api.test.ts asserts api.rogueCertificates calls /api/v1/revocation/rogue-certificates as a read-only GET.",
                         "TestServedRevocationHealthSchedulesRelayAndProjectsSignedCRLOCSPAUD38 proves concurrent scheduling, role selection, real signed CRL/OCSP validation, signed receipt ingestion, notification, API, cold replay, and cross-tenant isolation.",
                         "web/src/lib/api.test.ts and web/src/__tests__/search_and_empty.test.tsx prove the revocation health client route and operator evidence view.",
+                        "web/src/__tests__/revocation_center.test.tsx proves the center cannot mutate before preview, sends the exact reviewed RFC 5280 reason and expected lifecycle version, renders served graph impact plus signed propagation/CRL posture, links immutable audit evidence, and stays locked when preview fails or propagation is unknown.",
+                        "TestServedNHILifecyclePlanIsEffectFreeVersionBoundAndVerifiable proves the shared preview emits no event, stale expected_version fails before event/outbox work, exact execution appends one event, idempotent replay returns the original result, and the resulting state is durably readable.",
                         "TestManagerServesMultipleIssuerCRLsAndValidatingOCSPFailClosedAUD39 proves local signature-valid multi-issuer CRL/OCSP responses, nonce policy, bounded reuse, and stale refusal.",
                         "TestRunAgentBootstrapsOverPinnedHTTPSAndConnectsMTLSChannel proves the assembled agent serves a signature-valid local CRL and sends signed cache posture before its steady-state channel.",
                         "TestSignedRevocationCachePostureIsTenantAgentBoundServedAndReplayableAUD39 proves certificate signature, role/tenant/freshness/replay validation, metadata-only API projection, and cold rebuild.",
@@ -4908,10 +4923,12 @@
                         "web/src/__tests__/feature_coverage.test.tsx",
                         "internal/server/ct_drift_served_test.go",
                         "internal/server/revocation_health_served_test.go",
+                        "internal/server/nhi_lifecycle_preview_served_test.go",
                         "internal/agent/revcache/manager_test.go",
                         "cmd/trstctl-agent/bootstrap_token_test.go",
                         "internal/server/agentchannel_revocation_cache_test.go",
                         "internal/cli/cli_test.go",
+                        "web/src/__tests__/revocation_center.test.tsx",
                         "web/src/__tests__/protocols.test.tsx"
                     ]
                 },
@@ -4935,7 +4952,7 @@
                 },
                 "rbac": {
                     "evidence": [
-                        "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: transitionIdentity, searchAudit, bulkRevokeIdentities, bulkRevokeCertificates, listCRLDistributions, submitCertificateTransparency",
+                        "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: previewIdentityTransition, transitionIdentity, searchAudit, bulkRevokeIdentities, bulkRevokeCertificates, listCRLDistributions, submitCertificateTransparency",
                         "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale.",
                         "CT submission is guarded by certs:write and all mutations require Idempotency-Key.",
                         "feature authz manifest maps listRogueCertificates, listRevocationHealth, and listRevocationCaches to certs:read; OpenAPI publishes x-trstctl-permission on the guarded read routes."
@@ -4955,17 +4972,20 @@
                         "ct.submission.queued and ct.submission.delivered events record CT submission queue and delivery evidence without private key material.",
                         "CAP-REV-05 is read-only and returns projection evidence refs for certificates, discovery findings, and CT notification outbox rows; mutating revocation and CT submission paths retain event/audit evidence.",
                         "AUD-38 retains revocation.probe.queued and revocation.health.observed events and binds each projected row to the verified terminal-receipt evidence digest.",
-                        "AUD-39 retains certificate-signed metadata-only cache posture in agent.heartbeat.v3; cached protocol bytes and upstream locations never enter the event."
+                        "AUD-39 retains certificate-signed metadata-only cache posture in agent.heartbeat.v3; cached protocol bytes and upstream locations never enter the event.",
+                        "previewIdentityTransition is an explicitly effect-free tenant-scoped read; TestServedNHILifecyclePlanIsEffectFreeVersionBoundAndVerifiable proves its event sequence is unchanged before the reviewed transition executes."
                     ],
                     "refs": [
                         "internal/api/api.go",
                         "internal/api/audit.go",
+                        "internal/api/identity_lifecycle_preview.go",
                         "internal/server/issuance.go",
                         "internal/server/ct_submission.go",
                         "internal/server/ct_submission_served_test.go",
                         "internal/api/rogue_certificates.go",
                         "internal/server/ct_drift_served_test.go",
-                        "internal/server/revocation_health_served_test.go"
+                        "internal/server/revocation_health_served_test.go",
+                        "internal/server/nhi_lifecycle_preview_served_test.go"
                     ]
                 },
                 "telemetry": {
@@ -4988,15 +5008,17 @@
                         "web/src/pages/Identities.tsx",
                         "web/src/pages/Audit.tsx",
                         "web/src/pages/Certificates.tsx",
+                        "web/src/pages/certificates/RevocationCenter.tsx",
                         "web/src/pages/Protocols.tsx",
                         "web/src/pages/protocols/RevocationCachePanel.tsx",
                         "web/src/lib/api.ts",
+                        "web/src/__tests__/revocation_center.test.tsx",
                         "web/src/__tests__/search_and_empty.test.tsx"
                     ]
                 },
                 "i18n": {
                     "evidence": [
-                        "visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check; AUD-39 cache-state strings ship in English, Spanish, and German with an explicit human-review flag."
+                        "visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check; Revocation center and AUD-39 cache-state strings ship in English, Spanish, and German with an explicit human-review flag."
                     ],
                     "refs": [
                         "web/scripts/extract-i18n-messages.mjs",
@@ -5009,8 +5031,8 @@
                 "purpose": "Lets an operator understand and safely use x.509 revocation infrastructure while tenant, policy, and security authority remain on the server.",
                 "tool": "certificates",
                 "classification": "primary",
-                "release_blocking": true,
-                "console_route": "/identities",
+                "release_blocking": false,
+                "console_route": "/certificates",
                 "navigation_entrypoints": [
                     "tool navigation",
                     "task search",
@@ -5021,7 +5043,7 @@
                 "dependencies": [],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -5036,42 +5058,56 @@
                         ]
                     },
                     "configure": {
-                        "status": "missing",
-                        "reason": "No structured evidence proves an operator can configure every required prerequisite from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/certificates/RevocationCenter.tsx",
+                            "web/src/__tests__/revocation_center.test.tsx"
+                        ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: previewIdentityTransition",
+                            "internal/server/nhi_lifecycle_preview_served_test.go",
+                            "web/src/pages/certificates/RevocationCenter.tsx",
+                            "web/src/__tests__/revocation_center.test.tsx"
+                        ]
                     },
                     "execute": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/lib/navigation.ts",
+                            "web/src/pages/certificates/RevocationCenter.tsx",
+                            "web/src/__tests__/revocation_center.test.tsx",
                             "internal/server/revocation_public_test.go"
                         ]
                     },
                     "observe": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/lib/navigation.ts"
+                            "web/src/pages/certificates/RevocationCenter.tsx",
+                            "web/src/pages/Certificates.tsx"
                         ]
                     },
                     "recover": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/lib/navigation.ts",
+                            "web/src/pages/certificates/RevocationCenter.tsx",
+                            "web/src/__tests__/revocation_center.test.tsx",
                             "internal/server/revocation_public_test.go"
                         ]
                     },
                     "verify": {
                         "status": "complete",
                         "evidence": [
-                            "internal/server/revocation_public_test.go"
+                            "internal/server/revocation_public_test.go",
+                            "internal/server/nhi_lifecycle_preview_served_test.go",
+                            "web/src/__tests__/revocation_center.test.tsx"
                         ]
                     },
                     "automate": {
                         "status": "complete",
                         "evidence": [
+                            "OpenAPI operationId: previewIdentityTransition",
                             "OpenAPI operationId: transitionIdentity",
                             "OpenAPI operationId: searchAudit",
                             "OpenAPI operationId: bulkRevokeIdentities",
@@ -5095,8 +5131,8 @@
                 },
                 "owner": "pki",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "d5f43bd94681595372c8a40aee0772fffc025b4f",
+                "freshness": "2026-08-28"
             }
         },
         {

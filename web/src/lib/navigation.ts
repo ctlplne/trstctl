@@ -129,7 +129,7 @@ export const navSpaces: NavSpace[] = [
     groups: [
       {
         labelKey: "nav.group.inventory",
-        items: [{ to: "/certificates", labelKey: "nav.item.certificates", icon: "certificate", mode: "real", featureIds: ["F1"] }],
+        items: [{ to: "/certificates", labelKey: "nav.item.certificates", icon: "certificate", mode: "real", featureIds: ["F1", "F47"] }],
       },
       {
         labelKey: "nav.group.issueAutomate",
@@ -158,7 +158,7 @@ export const navSpaces: NavSpace[] = [
         labelKey: "nav.group.workloadIdentity",
         items: [
           { to: "/workloads", labelKey: "nav.item.workloads", icon: "spiffe", mode: "real", featureIds: ["F25", "F30", "F61"] },
-          { to: "/identities", labelKey: "nav.item.identities", icon: "identity", mode: "real", featureIds: ["F4", "F6", "F47", "F59"] },
+          { to: "/identities", labelKey: "nav.item.identities", icon: "identity", mode: "real", featureIds: ["F4", "F6", "F59"] },
         ],
       },
       {
@@ -820,7 +820,13 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     kind: "observe",
     evidence: "ARI renewal-window disclosure plus durable-state caveat and protocol-status gate",
   },
-  { featureId: "F47", routes: ["/identities", "/audit"], component: "Identities", kind: "operate", evidence: "revoke transition plus audit trail" },
+  {
+    featureId: "F47",
+    routes: ["/certificates", "/identities", "/audit"],
+    component: "Certificates",
+    kind: "operate",
+    evidence: "version-bound revocation center plus lifecycle and audit proof",
+  },
   {
     featureId: "F48",
     routes: ["/ca-hierarchy", "/certificates"],
