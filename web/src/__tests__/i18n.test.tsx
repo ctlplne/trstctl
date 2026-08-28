@@ -428,6 +428,10 @@ describe("i18n boundary", () => {
       // comparisons that actually ran and a "never verified" that reads as the
       // strong statement it is. Machine-authored es/de - FLAGGED FOR HUMAN
       // TRANSLATION REVIEW.
+      // QA product g50 re-pin: twenty-six ACME operator-plan keys explain
+      // readiness, the effect-free preview, the one safe next action, and
+      // recovery. Machine-authored es/de - FLAGGED FOR HUMAN TRANSLATION
+      // REVIEW before release.
       // B7 second-pass re-pin: three findings the refuters had dismissed turned
       // out to be right — a failed freshness read rendered identically to a
       // healthy deployment, timestamps bypassed the locale/timezone policy every
@@ -1218,8 +1222,8 @@ describe("i18n boundary", () => {
       // effects, prerequisite recovery, and deterministic retry. Negations and
       // security meaning were reviewed in both catalogs. Machine-authored es/de
       // — FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "1d34931fdaf39ce7f6d2465be891396c089966f246a3c273653115770067677a",
-      "de-DE": "f3054637a9de790c805f6ee8bf6aa38c4797fca09f7e014cdeb31a539a3bb3f8",
+      "es-ES": "e6022b272976f526e8c5382aacff5ff2841604be377365afc919d8c09768551f",
+      "de-DE": "218445559b09e9bacbe2d48023bf501e89c82d72b705e2662724d385934a55f2",
     });
   });
 

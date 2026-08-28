@@ -39,6 +39,7 @@ import type {
   ACMEARIPosture,
   ACMEEABCredential,
   ACMEEABPosture,
+  ACMEOperatorPlan,
   AgentJobPosture,
   BulkheadStats,
   IssuerCapabilityMatrix,
@@ -509,13 +510,7 @@ export type { DRPosture, DRDrill } from "./api-types.gen";
 export type { CryptoReadiness, CryptoReadinessAction, CryptoReadinessExport, CryptoReadinessRow, CryptoDependent } from "./api-types.gen";
 export type { OwnershipConflictList, OwnershipConflict, OwnershipImportResult } from "./api-types.gen";
 export type { CMDBReconcileSchedule } from "./api-types.gen";
-export type {
-  IssuanceRequestList,
-  IssuanceRequest,
-  IssuanceRequestInput,
-  IssuanceRequestPreparation,
-  IssuanceRequestPreview,
-} from "./api-types.gen";
+export type { IssuanceRequestList, IssuanceRequest, IssuanceRequestInput, IssuanceRequestPreparation, IssuanceRequestPreview } from "./api-types.gen";
 export type { TicketIntakeSchedule } from "./api-types.gen";
 export type { MDMDeviceList, MDMDevice, MDMDeviceTrace, MDMPollScheduleList } from "./api-types.gen";
 export type { AgentUpgradeCampaign } from "./api-types.gen";
@@ -688,6 +683,7 @@ export type {
   ACMEARIPosture,
   ACMEEABCredential,
   ACMEEABPosture,
+  ACMEOperatorPlan,
   AgentJobPosture,
   BulkheadStats,
   IssuerCapabilityMatrix,
@@ -1587,6 +1583,8 @@ export interface Api {
   agentUpgradeCampaign(): Promise<AgentUpgradeCampaign>;
   updateCTMonitoring(input: CTMonitoringRequest): Promise<CTMonitoring>;
   acmeARIPosture(options?: { limit?: number; cursor?: string }): Promise<ACMEARIPosture>;
+  /** F5: server-owned, effect-free ACME readiness, next action, and recovery plan. */
+  acmeOperatorPlan(): Promise<ACMEOperatorPlan>;
   acmeEABCredentials(): Promise<ACMEEABPosture>;
   setACMEEABCredentialDisabled(kid: string, disabled: boolean): Promise<ACMEEABCredential>;
   acmeDNS01Providers(): Promise<ACMEDNS01ProviderCatalog>;
@@ -2032,6 +2030,7 @@ const liveApi: Api = {
     const suffix = qs.toString();
     return req<ACMEARIPosture>(`/api/v1/acme/ari/posture${suffix ? `?${suffix}` : ""}`);
   },
+  acmeOperatorPlan: () => req<ACMEOperatorPlan>("/api/v1/acme/operator-plan"),
   acmeEABCredentials: () => req<ACMEEABPosture>("/api/v1/acme/eab-credentials"),
   setACMEEABCredentialDisabled: (kid, disabled) =>
     mutate<ACMEEABCredential>("POST", `/api/v1/acme/eab-credentials/${encodeURIComponent(kid)}/${disabled ? "disable" : "enable"}`, {}),

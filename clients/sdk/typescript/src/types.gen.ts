@@ -419,6 +419,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/acme/operator-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Preview tenant-bound ACME readiness, the exact next action, and recovery steps without effects */
+        get: operations["getACMEOperatorPlan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/adcs/ca-database": {
         parameters: {
             query?: never;
@@ -5776,6 +5793,40 @@ export interface components {
             items: components["schemas"]["ACMEEABCredential"][];
             required: boolean;
             served: boolean;
+        };
+        ACMEOperatorAction: {
+            detail: string;
+            /** @enum {string} */
+            kind: "activate_eval_profile" | "connect_acme_client" | "repair_prerequisites" | "repair_startup_configuration";
+            label: string;
+            method?: string;
+            path?: string;
+        };
+        ACMEOperatorPlan: {
+            activation_available: boolean;
+            /** @enum {string} */
+            activation_mode: "startup_configuration" | "eval_profile_event";
+            activation_required: boolean;
+            blockers: string[];
+            challenge_methods: ("http-01" | "dns-01" | "tls-alpn-01")[];
+            /** @enum {string} */
+            directory_path: "/directory";
+            dns01_provider_configs: number;
+            eab_active: number;
+            eab_configured: number;
+            eab_required: boolean;
+            /** Format: date-time */
+            generated_at: string;
+            issuing_profile: string;
+            issuing_profile_ready: boolean;
+            next_action: components["schemas"]["ACMEOperatorAction"];
+            preview_external_effects: string[];
+            preview_writes: string[];
+            ready: boolean;
+            recovery_steps: string[];
+            served: boolean;
+            tenant_bound: boolean;
+            warnings: string[];
         };
         ACMEUpstreamAuthorization: {
             challenge_type?: string;
@@ -13781,6 +13832,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ACMEEABCredential"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getACMEOperatorPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ACMEOperatorPlan"];
                 };
             };
             /** @description client error */

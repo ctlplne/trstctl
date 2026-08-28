@@ -26,6 +26,8 @@ public final class OpenApiSchemas {
       "ACMEDeviceAttestationPolicy",
       "ACMEEABCredential",
       "ACMEEABPosture",
+      "ACMEOperatorAction",
+      "ACMEOperatorPlan",
       "ACMEUpstreamAuthorization",
       "ACMEUpstreamAuthorizationList",
       "ADCSAgentRestrictions",

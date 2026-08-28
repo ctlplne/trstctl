@@ -164,6 +164,38 @@ export interface ACMEEABPosture {
   served: boolean;
 }
 
+export interface ACMEOperatorAction {
+  detail: string;
+  kind: "activate_eval_profile" | "connect_acme_client" | "repair_prerequisites" | "repair_startup_configuration";
+  label: string;
+  method?: string;
+  path?: string;
+}
+
+export interface ACMEOperatorPlan {
+  activation_available: boolean;
+  activation_mode: "startup_configuration" | "eval_profile_event";
+  activation_required: boolean;
+  blockers: string[];
+  challenge_methods: ("http-01" | "dns-01" | "tls-alpn-01")[];
+  directory_path: "/directory";
+  dns01_provider_configs: number;
+  eab_active: number;
+  eab_configured: number;
+  eab_required: boolean;
+  generated_at: string;
+  issuing_profile: string;
+  issuing_profile_ready: boolean;
+  next_action: ACMEOperatorAction;
+  preview_external_effects: string[];
+  preview_writes: string[];
+  ready: boolean;
+  recovery_steps: string[];
+  served: boolean;
+  tenant_bound: boolean;
+  warnings: string[];
+}
+
 export interface ACMEUpstreamAuthorization {
   challenge_type?: string;
   expires_at?: string;

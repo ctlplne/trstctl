@@ -357,6 +357,33 @@ func TestACMEARIPostureCommandSendsAuthAndPrintsJSON(t *testing.T) {
 	}
 }
 
+func TestACMEReadinessCommandIsAnAuthenticatedEffectFreeRead(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, http.StatusOK, `{"ready":true,"directory_path":"/directory","challenge_methods":["http-01"],"next_action":{"kind":"connect_acme_client"},"blockers":[],"warnings":[],"recovery_steps":["Retry without weakening validation."],"preview_writes":[],"preview_external_effects":[]}`, &cap)
+	env := cli.Env{Server: srv.URL, Token: "tok-acme", Tenant: "tenant-acme", HTTPClient: srv.Client()}
+
+	code, stdout, stderr := run(t, []string{"acme", "readiness"}, env, "")
+	if code != 0 || stderr != "" {
+		t.Fatalf("acme readiness = exit %d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if cap.Method != http.MethodGet || cap.Path != "/api/v1/acme/operator-plan" || cap.Query != "" {
+		t.Errorf("request = %s %s?%s, want GET /api/v1/acme/operator-plan", cap.Method, cap.Path, cap.Query)
+	}
+	if cap.Header.Get("Authorization") != "Bearer tok-acme" || cap.Header.Get("X-Tenant-ID") != "tenant-acme" {
+		t.Errorf("auth headers = Authorization %q tenant %q", cap.Header.Get("Authorization"), cap.Header.Get("X-Tenant-ID"))
+	}
+	if len(cap.Body) != 0 || cap.Header.Get("Idempotency-Key") != "" {
+		t.Errorf("readiness command sent mutation material: body=%q idempotency=%q", cap.Body, cap.Header.Get("Idempotency-Key"))
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(stdout), &decoded); err != nil {
+		t.Fatalf("stdout is not valid JSON: %v\n%s", err, stdout)
+	}
+	if decoded["ready"] != true || decoded["directory_path"] != "/directory" {
+		t.Fatalf("stdout did not preserve the server-owned plan: %s", stdout)
+	}
+}
+
 func TestRevocationHealthCommandIsReadOnlyAndPreservesSignedEvidence(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, http.StatusOK, `{"items":[{"endpoint":"https://ca.example/ocsp","status":"fresh","signature_verified":true,"evidence_digest":"sha256:abc"}],"guidance":"Signed relay observations report endpoint health."}`, &cap)

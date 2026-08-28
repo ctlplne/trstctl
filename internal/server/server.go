@@ -1363,6 +1363,10 @@ func (s *Server) appendOperationalReadModels(d Deps, defaults *[]api.Option) {
 	// time because protocol construction follows API construction, and because
 	// the usage counters it exposes are live.
 	*defaults = append(*defaults, api.WithACMEEAB(s.acmeEABPosture, s.setACMEEABDisabled))
+	// F5: one effect-free, tenant-bound readiness/execute/recovery plan over the
+	// late-bound ACME mount. This prevents the browser from inventing readiness
+	// from a same-origin fetch that cannot see profile or EAB authority.
+	*defaults = append(*defaults, api.WithACMEOperatorPlan(s.acmeOperatorPlan))
 	// A1: job-ledger queue depth and claim health, read at request time because
 	// the counters are only useful fresh.
 	*defaults = append(*defaults, api.WithAgentJobPosture(s.agentJobPosture))

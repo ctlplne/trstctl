@@ -51,6 +51,29 @@ signer-issued leaf first and the exact public issuing certificate second. The sa
 ordered bytes survive ACME state replay, so strict clients such as Certbot can build
 their `cert.pem` and `fullchain.pem` artifacts after either issuance or restart.
 
+The **Protocols** page is the operator's starting point. Its **ACME readiness and
+next step** panel asks the running server for one tenant-bound plan instead of trying
+to guess readiness in the browser. That plan joins the mounted `/directory`,
+activation gate, issuing profile, EAB admission state, and DNS-01 configuration. It
+also names the one next step and the safe recovery steps. Loading the plan performs
+no writes and contacts no external system.
+
+Headless operators get the identical JSON plan with `trstctl acme readiness`. It is
+an authenticated `GET`; it sends no body or idempotency key and performs no mutation.
+
+In the evaluation profile, an operator with `issuers:write` can activate the already
+assembled protocol gate from that panel. The mutation is event-sourced and
+idempotent. Production activation remains startup-configuration managed: the console
+will not silently expose a public enrollment endpoint. Once the plan says **Ready for
+ACME clients**, copy its credential-free Certbot command, replace the DNS-name and
+EAB placeholders, and run it from the machine that needs the certificate. Never put
+an EAB HMAC key in screenshots, tickets, or shared QA evidence.
+
+If setup is blocked, repair each named prerequisite and reload the effect-free plan.
+If a client begins an order but fails, open **Enrollment diagnostics** on the same
+page; it shows the refused step and safe retry guidance. Retrying must not mean
+weakening domain validation, tenant binding, EAB scope, or the issuing profile.
+
 Operators can require ACME External Account Binding (EAB, CAP-ISS-04) for account registration.
 When `protocols.acme_eab.required` is on, the directory advertises
 `externalAccountRequired`, bare `newAccount` requests fail closed, and each supplied

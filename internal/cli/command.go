@@ -129,6 +129,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"platform", "dr-posture"}, Method: "GET", Path: "/api/v1/platform/dr-posture", Summary: "Report when this deployment's backup was last verified by re-hashing its artifacts"},
 	{Name: []string{"acme", "dns-01", "upstream-authorizations"}, Method: "GET", Path: "/api/v1/acme/dns-01/upstream-authorizations", Summary: "List upstream authorization freshness: when each identifier last actually validated vs last rode a reuse"},
 	{Name: []string{"acme", "dns-01", "preflight"}, Method: "POST", Path: "/api/v1/acme/dns-01/preflight", Body: bodyFile, Summary: "Run DNS-01 propagation, CNAME, CAA, method, and wildcard policy preflight"},
+	{Name: []string{"acme", "readiness"}, Method: "GET", Path: "/api/v1/acme/operator-plan", Summary: "Show whether this tenant's ACME server is ready, the one safe next step, and recovery guidance"},
 	{Name: []string{"acme", "ari", "posture"}, Method: "GET", Path: "/api/v1/acme/ari/posture", Query: []string{"limit", "cursor"}, Summary: "Show ARI publication and lifecycle scheduler-consumption posture"},
 	{Name: []string{"mdm", "scep", "status"}, Method: "GET", Path: "/api/v1/mdm/scep/status", Summary: "Show MDM SCEP policy and challenge telemetry status"},
 	{Name: []string{"mdm", "scep", "policies", "create"}, Method: "POST", Path: "/api/v1/mdm/scep/policies", Body: bodyFile, Summary: "Create an MDM SCEP enrollment policy"},

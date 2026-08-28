@@ -5335,7 +5335,7 @@
             "priority": 22,
             "served_state": "conditional",
             "backend_status": "conditional: served /directory and /acme/* protocol workflow: server.Build mounts ACME when protocols.acme.enabled and an issuing CA/signer exist; a stock golang.org/x/crypto/acme client drives new-account -> new-order -> http-01 -> finalize, receives a signer-issued certificate, revokeCert updates served OCSP/CRL state, ARI/account/order/cert/device-attested-key state rebuilds after restart, an explicitly configured tenant profile adds TPM device-attest-01 without replacing the three DV methods, and missing issuing CA returns a fail closed no-protocol mount",
-            "current_frontend_mapping": "operate: Protocols at /protocols serves ACME directory/account/order/challenge workflow evidence with tenant-binding requirements, auth/profile gates, DNS-01 provider/config tables, live responder status, and copy-safe client setup snippets.",
+            "current_frontend_mapping": "operate: Protocols at /protocols serves a server-owned, effect-free ACME readiness plan; tenant/profile/EAB/DNS evidence; the one safe next action; idempotent evaluation-profile activation; a credential-free stock-client command; live responder and enrollment diagnostics; and explicit recovery guidance.",
             "target_gui_mapping": "Roadmap residual: dedicated ACME admin console for account/order/challenge drilldown, revocation/ARI operations, and richer client setup controls beyond the served Protocols workflow.",
             "acceptance_test": "Served GA acceptance is TestServedACMEEndToEnd plus TestServedACMEStateRebuildsAfterServerRestart on the assembled control-plane handler; TPM device-attest-01 additionally requires TestDeviceAttestTPMProfileRootsAndIdentifiersAreCrossTenantIsolated plus its protocol and crypto parser suites; roadmap residual is the dedicated ACME admin console beyond the served Protocols workflow.",
             "source_docs": [
@@ -5344,22 +5344,29 @@
             "source_backend": [
                 "/directory",
                 "/acme/*",
+                "internal/server/acme_operator_plan.go",
+                "internal/api/acme_operator_plan.go",
                 "internal/protocols/acme/eab.go",
                 "internal/api/acme_eab.go"
             ],
             "source_frontend": [
-                "web/src/pages/Protocols.tsx"
+                "web/src/pages/Protocols.tsx",
+                "web/src/pages/protocols/ACMEOperatorPanel.tsx"
             ],
             "status": "closed",
-            "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation. B4 adds the external-account-binding operator surface: GET /api/v1/acme/eab-credentials serves each configured credential's scope, quota, validity window and live usage without the HMAC key, and POST .../{kid}/disable|enable stops or resumes new accounts and orders under one credential without touching certificates already issued under it. Proven by TestServedACMEEABScopingAndDisable.",
+            "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation. B4 adds the external-account-binding operator surface: GET /api/v1/acme/eab-credentials serves each configured credential's scope, quota, validity window and live usage without the HMAC key, and POST .../{kid}/disable|enable stops or resumes new accounts and orders under one credential without touching certificates already issued under it. F5 frontend convergence adds GET /api/v1/acme/operator-plan and the Protocols ACME operator panel: the running server joins tenant mount, activation, issuer profile, EAB, and DNS readiness into one effect-free preview; the console performs only the already-authorized idempotent evaluation activation, then hands a credential-free command to a stock client and retains explicit diagnostics/recovery.",
             "api_surface": [
+                "getACMEOperatorPlan",
+                "activateProtocolProfile",
                 "listACMEEABCredentials",
                 "disableACMEEABCredential",
                 "enableACMEEABCredential"
             ],
             "api_na": "",
-            "cli_surface": [],
-            "cli_na": "N/A: served through protocol-specific endpoints/configuration, not the trstctl CLI command table.",
+            "cli_surface": [
+                "acme readiness"
+            ],
+            "cli_na": "",
             "facet_evidence": {
                 "served": {
                     "evidence": [
@@ -5372,25 +5379,35 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: operate: Protocols at /protocols serves ACME directory/account/order/challenge workflow evidence with tenant-binding requirements, auth/profile gates, DNS-01 provider/config tables, live responder status, and copy-safe client setup snippets.",
+                        "current_frontend_mapping: operate: Protocols at /protocols serves a server-owned, effect-free ACME readiness plan; tenant/profile/EAB/DNS evidence; the one safe next action; idempotent evaluation-profile activation; a credential-free stock-client command; live responder and enrollment diagnostics; and explicit recovery guidance.",
                         "target_gui_mapping: Roadmap residual: dedicated ACME admin console for account/order/challenge drilldown, revocation/ARI operations, and richer client setup controls beyond the served Protocols workflow."
                     ],
                     "refs": [
                         "web/src/pages/Protocols.tsx",
+                        "web/src/pages/protocols/ACMEOperatorPanel.tsx",
                         "web/src/lib/navigation.ts",
                         "web/src/App.tsx"
                     ]
                 },
                 "cli": {
-                    "na": "N/A: served through protocol-specific endpoints/configuration, not the trstctl CLI command table."
+                    "evidence": [
+                        "CLI command: acme readiness"
+                    ],
+                    "refs": [
+                        "internal/cli/command.go",
+                        "internal/cli/cli_test.go",
+                        "internal/cli/feature_parity_test.go"
+                    ]
                 },
                 "api": {
                     "evidence": [
+                        "OpenAPI operationId getACMEOperatorPlan serves GET /api/v1/acme/operator-plan with issuers:read and the ACMEOperatorPlan schema; the response joins tenant mount, activation, profile, EAB, DNS, next-action, and recovery evidence while explicitly declaring preview writes and external effects.",
                         "OpenAPI operationId listACMEEABCredentials serves GET /api/v1/acme/eab-credentials with issuers:read and the ACMEEABPosture schema: each configured external account credential's scope, order quota, validity window, operator/config disable state, and live accounts-bound / orders-created / orders-denied counters.",
                         "OpenAPI operationIds disableACMEEABCredential and enableACMEEABCredential serve POST /api/v1/acme/eab-credentials/{kid}/disable and /enable with issuers:write and the ACMEEABCredential schema; disabling stops new accounts and new orders under one credential and leaves certificates already issued under it valid.",
                         "No response field carries the credential's HMAC key in any form; the secret stays byte-backed in locked memory where configuration put it (AN-8), and rotation remains a configuration operation rather than an API that mints shared MAC secrets."
                     ],
                     "refs": [
+                        "internal/api/acme_operator_plan.go",
                         "internal/api/acme_eab.go",
                         "internal/api/api.go",
                         "internal/api/openapi.go",
@@ -5405,11 +5422,14 @@
                         "TestServedACMEEndToEnd drives /directory and /acme/* with a stock ACME client through new-account, new-order, http-01, finalize, signer-issued certificate verification, revokeCert, OCSP revoked state, CRL generation, and event evidence.",
                         "TestServedACMEStateRebuildsAfterServerRestart proves account/order/cert/ARI state rebuilds on the served control-plane path before /directory and /acme/* serve after restart.",
                         "TestServedACMEExternalAccountBindingCAPISS04 proves the served directory advertises External Account Binding and fail-closes bad account bindings.",
+                        "TestServedACMEOperatorPlanIsTenantBoundSecretFreeAndEffectFree proves the preview joins the running tenant's authority, leaks no EAB key, and changes no event, outbox, or idempotency state; TestServedACMEOperatorPlanDoesNotDescribeAnotherTenantsMount proves cross-tenant disclosure fails closed.",
+                        "web/src/__tests__/protocols.test.tsx proves the operator panel renders server-owned readiness and recovery, copies a credential-free client command, and invokes evaluation activation only when the plan offers it.",
                         "TestServedProtocolsFailClosedWithoutSignerINTEROP003 proves protocol mounts, including ACME, fail closed when no issuing CA/signer exists.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
                         "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
                     ],
                     "refs": [
+                        "internal/server/acme_operator_plan_served_test.go",
                         "internal/server/protocols_served_test.go",
                         "internal/server/acme_device_attestation_test.go",
                         "internal/protocols/acme/device_attest_internal_test.go",
@@ -5431,11 +5451,13 @@
                 },
                 "rbac": {
                     "evidence": [
+                        "getACMEOperatorPlan requires issuers:read; activateProtocolProfile requires issuers:write and an Idempotency-Key. The UI independently enforces those permissions and does not manufacture an activation action when the server plan withholds it.",
                         "feature authz manifest maps listACMEEABCredentials to issuers:read and disableACMEEABCredential/enableACMEEABCredential to issuers:write; each route also requires authenticated tenant context, and the provider serves an unserved posture rather than another tenant's credentials when the caller's tenant is not the one bound to the ACME mount.",
                         "protocol authz manifest maps acme route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
                         "The public ACME protocol endpoints and the authenticated external-account-binding operator routes retain separate, explicit authorization rationales."
                     ],
                     "refs": [
+                        "internal/api/acme_operator_plan.go",
                         "internal/api/api.go",
                         "internal/api/feature_authz_test.go",
                         "internal/server/protocol_authz.go",
@@ -5493,7 +5515,7 @@
                 "purpose": "Lets an operator understand and safely use built-in acme server while tenant, policy, and security authority remain on the server.",
                 "tool": "certificates",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/protocols",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -5507,7 +5529,7 @@
                 ],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -5528,12 +5550,18 @@
                         ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/server/acme_operator_plan.go",
+                            "internal/server/acme_operator_plan_served_test.go"
+                        ]
                     },
                     "execute": {
-                        "status": "missing",
-                        "reason": "No complete console execution path is proved for this capability."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/protocols/ACMEOperatorPanel.tsx",
+                            "web/src/__tests__/protocols.test.tsx"
+                        ]
                     },
                     "observe": {
                         "status": "complete",
@@ -5542,8 +5570,12 @@
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/server/acme_operator_plan.go",
+                            "web/src/pages/protocols/ACMEOperatorPanel.tsx",
+                            "docs/features/acme-and-dns.md"
+                        ]
                     },
                     "verify": {
                         "status": "complete",
@@ -5554,9 +5586,12 @@
                     "automate": {
                         "status": "complete",
                         "evidence": [
+                            "OpenAPI operationId: getACMEOperatorPlan",
+                            "OpenAPI operationId: activateProtocolProfile",
                             "OpenAPI operationId: listACMEEABCredentials",
                             "OpenAPI operationId: disableACMEEABCredential",
-                            "OpenAPI operationId: enableACMEEABCredential"
+                            "OpenAPI operationId: enableACMEEABCredential",
+                            "CLI command: acme readiness"
                         ]
                     }
                 },

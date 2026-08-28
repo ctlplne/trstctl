@@ -622,6 +622,159 @@
         ],
         "type": "object"
       },
+      "ACMEOperatorAction": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "activate_eval_profile",
+              "connect_acme_client",
+              "repair_prerequisites",
+              "repair_startup_configuration"
+            ],
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "label",
+          "detail"
+        ],
+        "type": "object"
+      },
+      "ACMEOperatorPlan": {
+        "properties": {
+          "activation_available": {
+            "type": "boolean"
+          },
+          "activation_mode": {
+            "enum": [
+              "startup_configuration",
+              "eval_profile_event"
+            ],
+            "type": "string"
+          },
+          "activation_required": {
+            "type": "boolean"
+          },
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "challenge_methods": {
+            "items": {
+              "enum": [
+                "http-01",
+                "dns-01",
+                "tls-alpn-01"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "directory_path": {
+            "enum": [
+              "/directory"
+            ],
+            "type": "string"
+          },
+          "dns01_provider_configs": {
+            "type": "integer"
+          },
+          "eab_active": {
+            "type": "integer"
+          },
+          "eab_configured": {
+            "type": "integer"
+          },
+          "eab_required": {
+            "type": "boolean"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "issuing_profile": {
+            "type": "string"
+          },
+          "issuing_profile_ready": {
+            "type": "boolean"
+          },
+          "next_action": {
+            "$ref": "#/components/schemas/ACMEOperatorAction"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "recovery_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "served": {
+            "type": "boolean"
+          },
+          "tenant_bound": {
+            "type": "boolean"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ready",
+          "served",
+          "tenant_bound",
+          "directory_path",
+          "challenge_methods",
+          "eab_required",
+          "eab_configured",
+          "eab_active",
+          "dns01_provider_configs",
+          "issuing_profile",
+          "issuing_profile_ready",
+          "activation_mode",
+          "activation_required",
+          "activation_available",
+          "next_action",
+          "blockers",
+          "warnings",
+          "recovery_steps",
+          "preview_writes",
+          "preview_external_effects",
+          "generated_at"
+        ],
+        "type": "object"
+      },
       "ACMEUpstreamAuthorization": {
         "properties": {
           "challenge_type": {
@@ -27893,6 +28046,53 @@
         ],
         "summary": "Re-enable an operator-disabled ACME external account binding credential",
         "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/acme/operator-plan": {
+      "get": {
+        "operationId": "getACMEOperatorPlan",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ACMEOperatorPlan"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Preview tenant-bound ACME readiness, the exact next action, and recovery steps without effects",
+        "x-trstctl-permission": "issuers:read"
       }
     },
     "/api/v1/adcs/ca-database": {

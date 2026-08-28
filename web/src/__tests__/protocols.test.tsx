@@ -11,6 +11,8 @@ import { Protocols } from "@/pages/Protocols";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     protocolStatuses: vi.fn(),
+    acmeOperatorPlan: vi.fn(),
+    activateProtocolProfile: vi.fn(),
     acmeARIPosture: vi.fn(),
     acmeDNS01Providers: vi.fn(),
     acmeDNS01ProviderConfigs: vi.fn(),
@@ -53,6 +55,7 @@ function mountProtocols(permissions: readonly string[] | null = null, openOperat
 async function renderProtocols() {
   const result = mountProtocols();
   await waitFor(() => expect(apiMock.protocolStatuses).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(apiMock.acmeOperatorPlan).toHaveBeenCalledTimes(1));
   await waitFor(() => expect(apiMock.acmeARIPosture).toHaveBeenCalledTimes(1));
   await waitFor(() => expect(apiMock.acmeDNS01Providers).toHaveBeenCalledTimes(1));
   await waitFor(() => expect(apiMock.acmeDNS01ProviderConfigs).toHaveBeenCalledTimes(1));
@@ -75,10 +78,44 @@ function installClipboardSpy() {
   return writeText;
 }
 
+function readyACMEOperatorPlan() {
+  return {
+    ready: true,
+    served: true,
+    tenant_bound: true,
+    directory_path: "/directory",
+    challenge_methods: ["http-01", "dns-01", "tls-alpn-01"],
+    eab_required: true,
+    eab_configured: 2,
+    eab_active: 1,
+    dns01_provider_configs: 1,
+    issuing_profile: "service-mtls-30d",
+    issuing_profile_ready: true,
+    activation_mode: "startup_configuration",
+    activation_required: false,
+    activation_available: false,
+    next_action: {
+      kind: "connect_acme_client",
+      label: "Connect an ACME client",
+      detail: "Point a stock ACME client at this directory.",
+      method: "GET",
+      path: "/directory",
+    },
+    blockers: [],
+    warnings: ["One EAB credential is disabled; one remains active."],
+    recovery_steps: ["Open Enrollment diagnostics after a client refusal, repair the named cause, and retry without weakening validation."],
+    preview_writes: [],
+    preview_external_effects: [],
+    generated_at: "2026-08-27T23:45:00Z",
+  };
+}
+
 describe("protocol surface", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     apiMock.protocolStatuses.mockReset();
+    apiMock.acmeOperatorPlan.mockReset();
+    apiMock.activateProtocolProfile.mockReset();
     apiMock.acmeARIPosture.mockReset();
     apiMock.acmeDNS01Providers.mockReset();
     apiMock.acmeDNS01ProviderConfigs.mockReset();
@@ -94,6 +131,8 @@ describe("protocol surface", () => {
     apiMock.proveEnrollmentDiagnosticFixed.mockReset();
     apiMock.agentPage.mockReset();
     apiMock.revocationCaches.mockReset();
+    apiMock.acmeOperatorPlan.mockResolvedValue(readyACMEOperatorPlan());
+    apiMock.activateProtocolProfile.mockResolvedValue({ profile: "eval", active: true, protocols: ["acme"] });
     apiMock.acmeUpstreamAuthorizations.mockResolvedValue({ items: [], never_validated_count: 0, guidance: "" });
     apiMock.enrollmentDiagnostics.mockResolvedValue({ items: [], unknown_count: 0, guidance: "" });
     apiMock.revocationCaches.mockResolvedValue({
@@ -395,7 +434,7 @@ describe("protocol surface", () => {
     expect(screen.getByRole("heading", { name: "Protocol responder status" })).toBeInTheDocument();
     expect(screen.getByText("Read-only responder probe")).toBeInTheDocument();
     expect(screen.getAllByText("Enabled").length).toBeGreaterThan(0);
-    expect(screen.getByText("/directory")).toBeInTheDocument();
+    expect(screen.getAllByText("/directory").length).toBeGreaterThan(0);
     expect(screen.getAllByText("HTTP 200").length).toBeGreaterThan(0);
     expect(screen.getByText(/issuance refuses requests when no issuing CA\/profile/i)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "DNS-01 providers" })).toBeInTheDocument();
@@ -438,6 +477,69 @@ describe("protocol surface", () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining("--server https://trstctl.example.test/directory")));
     expect(writeText).toHaveBeenCalledWith(expect.not.stringMatching(/Bearer|token|password/i));
     expect(screen.getByText("Copied command without token material.")).toBeInTheDocument();
+  });
+
+  it("uses one server-owned, effect-free ACME plan for readiness, execution, and recovery", async () => {
+    const writeText = installClipboardSpy();
+    await renderProtocols();
+
+    const panel = screen.getByRole("region", { name: "ACME readiness and next step" });
+    expect(within(panel).getByText("Ready for ACME clients")).toBeInTheDocument();
+    expect(within(panel).getByText("Connect an ACME client")).toBeInTheDocument();
+    expect(within(panel).getByText("/directory")).toBeInTheDocument();
+    expect(within(panel).getByText("1 active of 2 configured")).toBeInTheDocument();
+    expect(within(panel).getByText("This check made no changes and contacted no external system.")).toBeInTheDocument();
+    expect(within(panel).getByRole("heading", { name: "If a client fails" })).toBeInTheDocument();
+
+    await userEvent.click(within(panel).getByRole("button", { name: "Copy ACME client command" }));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("--server"));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("/directory"));
+  });
+
+  it("activates only when the server offers the tenant-bound eval action, then reloads the plan", async () => {
+    apiMock.acmeOperatorPlan
+      .mockResolvedValueOnce({
+        ready: false,
+        served: false,
+        tenant_bound: true,
+        directory_path: "/directory",
+        challenge_methods: ["http-01", "dns-01", "tls-alpn-01"],
+        eab_required: false,
+        eab_configured: 0,
+        eab_active: 0,
+        dns01_provider_configs: 0,
+        issuing_profile: "",
+        issuing_profile_ready: true,
+        activation_mode: "eval_profile_event",
+        activation_required: true,
+        activation_available: true,
+        next_action: {
+          kind: "activate_eval_profile",
+          label: "Activate evaluation protocols",
+          detail: "Record one tenant-bound activation event.",
+          method: "POST",
+          path: "/api/v1/setup/protocols/activate",
+        },
+        blockers: ["The evaluation protocol profile is assembled but not active for this tenant."],
+        warnings: [],
+        recovery_steps: ["Retry activation with the same idempotency key."],
+        preview_writes: [],
+        preview_external_effects: [],
+        generated_at: "2026-08-27T23:45:00Z",
+      })
+      .mockResolvedValueOnce({
+        ...readyACMEOperatorPlan(),
+        activation_mode: "eval_profile_event",
+        next_action: { kind: "connect_acme_client", label: "Connect an ACME client", detail: "Use the directory.", method: "GET", path: "/directory" },
+      });
+
+    mountProtocols();
+    const panel = screen.getByRole("region", { name: "ACME readiness and next step" });
+    const activate = await within(panel).findByRole("button", { name: "Activate evaluation protocols" });
+    await userEvent.click(activate);
+    await waitFor(() => expect(apiMock.activateProtocolProfile).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(apiMock.acmeOperatorPlan).toHaveBeenCalledTimes(2));
+    expect(await within(panel).findByText("Ready for ACME clients")).toBeInTheDocument();
   });
 
   it("renders exact per-segment enrollment relay topology and durable failover evidence", async () => {

@@ -183,8 +183,11 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// The effect-free issuance-request preview raises it to 384 and maps to F4;
 	// request admission calls the same tenant/profile/CSR rule, so review cannot
 	// promise a request the mutation would reject or normalize differently.
-	if len(out) != 384 {
-		t.Fatalf("OpenAPI operationIds = %d, want 384", len(out))
+	// F5's effect-free ACME operator plan raises it to 385 and joins the mounted
+	// responder, tenant binding, issuing profile, EAB admission, activation gate,
+	// and recovery guidance before the console offers an execution step.
+	if len(out) != 385 {
+		t.Fatalf("OpenAPI operationIds = %d, want 385", len(out))
 	}
 	return out
 }

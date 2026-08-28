@@ -144,6 +144,7 @@ type API struct {
 	acmeCAAResolver                    acmesrv.CAAResolver
 	acmeARIPosture                     ACMEARIPostureProvider
 	acmeEAB                            ACMEEABProvider
+	acmeOperatorPlan                   ACMEOperatorPlanProvider
 	agentJobPosture                    AgentJobPostureProvider
 	enqueueConnectorTest               ConnectorTestEnqueuer
 	adcsPosture                        ADCSPostureProvider
@@ -244,6 +245,7 @@ type config struct {
 	acmeCAAResolver             acmesrv.CAAResolver
 	acmeARIPosture              ACMEARIPostureProvider
 	acmeEAB                     ACMEEABProvider
+	acmeOperatorPlan            ACMEOperatorPlanProvider
 	agentJobPosture             AgentJobPostureProvider
 	enqueueConnectorTest        ConnectorTestEnqueuer
 	adcsPosture                 ADCSPostureProvider
@@ -528,6 +530,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		acmeCAAResolver:             cfg.acmeCAAResolver,
 		acmeARIPosture:              cfg.acmeARIPosture,
 		acmeEAB:                     cfg.acmeEAB,
+		acmeOperatorPlan:            cfg.acmeOperatorPlan,
 		agentJobPosture:             cfg.agentJobPosture,
 		enqueueConnectorTest:        cfg.enqueueConnectorTest,
 		adcsPosture:                 cfg.adcsPosture,
@@ -1165,6 +1168,7 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/lifecycle/rotation-runs", opID: "listRotationRuns", summary: "List lifecycle rotation runs", handler: a.listRotationRuns, query: identityScopedPage, resSchema: "RotationRunList", successCode: "200", perm: authz.LifecycleRead},
 		{method: "GET", path: "/api/v1/lifecycle/rotation-runs/{id}", opID: "getRotationRun", summary: "Get a lifecycle rotation run", handler: a.getRotationRun, pathParams: idPath, resSchema: "RotationRun", successCode: "200", perm: authz.LifecycleRead},
 		{method: "GET", path: "/api/v1/acme/eab-credentials", opID: "listACMEEABCredentials", summary: "List served ACME external account binding credentials with their scope and usage", handler: a.listACMEEABCredentials, resSchema: "ACMEEABPosture", successCode: "200", perm: authz.IssuersRead},
+		{method: "GET", path: "/api/v1/acme/operator-plan", opID: "getACMEOperatorPlan", summary: "Preview tenant-bound ACME readiness, the exact next action, and recovery steps without effects", handler: a.getACMEOperatorPlan, resSchema: "ACMEOperatorPlan", successCode: "200", perm: authz.IssuersRead},
 		{method: "POST", path: "/api/v1/acme/eab-credentials/{kid}/disable", opID: "disableACMEEABCredential", summary: "Stop new ACME accounts and orders under an external account binding credential", handler: a.setACMEEABCredentialDisabled, pathParams: acmeEABKeyPath, resSchema: "ACMEEABCredential", successCode: "200", mutation: true, perm: authz.IssuersWrite},
 		{method: "POST", path: "/api/v1/acme/eab-credentials/{kid}/enable", opID: "enableACMEEABCredential", summary: "Re-enable an operator-disabled ACME external account binding credential", handler: a.setACMEEABCredentialDisabled, pathParams: acmeEABKeyPath, resSchema: "ACMEEABCredential", successCode: "200", mutation: true, perm: authz.IssuersWrite},
 		{method: "GET", path: "/api/v1/acme/ari/posture", opID: "getACMEARIPosture", summary: "Get ACME Renewal Information publication and lifecycle-consumption posture", handler: a.getACMEARIPosture, query: page, resSchema: "ACMEARIPosture", successCode: "200", perm: authz.LifecycleRead},

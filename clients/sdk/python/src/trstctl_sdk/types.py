@@ -218,6 +218,46 @@ ACMEEABPosture = TypedDict(
     total=False,
 )
 
+ACMEOperatorAction = TypedDict(
+    'ACMEOperatorAction',
+    {
+        'detail': str,
+        'kind': str,
+        'label': str,
+        'method': str,
+        'path': str,
+    },
+    total=False,
+)
+
+ACMEOperatorPlan = TypedDict(
+    'ACMEOperatorPlan',
+    {
+        'activation_available': bool,
+        'activation_mode': str,
+        'activation_required': bool,
+        'blockers': list[str],
+        'challenge_methods': list[str],
+        'directory_path': str,
+        'dns01_provider_configs': int,
+        'eab_active': int,
+        'eab_configured': int,
+        'eab_required': bool,
+        'generated_at': str,
+        'issuing_profile': str,
+        'issuing_profile_ready': bool,
+        'next_action': dict[str, Any],
+        'preview_external_effects': list[str],
+        'preview_writes': list[str],
+        'ready': bool,
+        'recovery_steps': list[str],
+        'served': bool,
+        'tenant_bound': bool,
+        'warnings': list[str],
+    },
+    total=False,
+)
+
 ACMEUpstreamAuthorization = TypedDict(
     'ACMEUpstreamAuthorization',
     {

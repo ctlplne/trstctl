@@ -1854,7 +1854,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use built-in acme server while tenant, policy, and security authority remain on the server.",
       "tool": "certificates",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/protocols",
       "navigationEntrypoints": [
         "tool navigation",
@@ -1868,7 +1868,7 @@ export const canonicalCapabilities = [
       ],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -1889,12 +1889,18 @@ export const canonicalCapabilities = [
           ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "internal/server/acme_operator_plan.go",
+            "internal/server/acme_operator_plan_served_test.go"
+          ]
         },
         "execute": {
-          "status": "missing",
-          "reason": "No complete console execution path is proved for this capability."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/protocols/ACMEOperatorPanel.tsx",
+            "web/src/__tests__/protocols.test.tsx"
+          ]
         },
         "observe": {
           "status": "complete",
@@ -1903,8 +1909,12 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "internal/server/acme_operator_plan.go",
+            "web/src/pages/protocols/ACMEOperatorPanel.tsx",
+            "docs/features/acme-and-dns.md"
+          ]
         },
         "verify": {
           "status": "complete",
@@ -1915,9 +1925,12 @@ export const canonicalCapabilities = [
         "automate": {
           "status": "complete",
           "evidence": [
+            "OpenAPI operationId: getACMEOperatorPlan",
+            "OpenAPI operationId: activateProtocolProfile",
             "OpenAPI operationId: listACMEEABCredentials",
             "OpenAPI operationId: disableACMEEABCredential",
-            "OpenAPI operationId: enableACMEEABCredential"
+            "OpenAPI operationId: enableACMEEABCredential",
+            "CLI command: acme readiness"
           ]
         }
       },
