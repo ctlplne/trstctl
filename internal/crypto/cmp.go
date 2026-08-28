@@ -122,9 +122,16 @@ type CMPRequest struct {
 	ProtectionCommonName string
 }
 
-// ErrCMPCSRNotBound is returned when the fail-closed binding policy refuses a
-// CSR whose identifiers the protection identity does not authorize.
-var ErrCMPCSRNotBound = errors.New("cmp: CSR identifiers are not authorized by the protection identity")
+var (
+	// ErrCMPCSRNotBound is returned when the fail-closed binding policy refuses a
+	// CSR whose identifiers the protection identity does not authorize.
+	ErrCMPCSRNotBound = errors.New("cmp: CSR identifiers are not authorized by the protection identity")
+	// ErrCMPProtectionRejected is returned when the request did not carry a
+	// usable protection identity, its proof did not verify, or it did not chain
+	// to an operator-configured anchor. The serving layer can therefore produce
+	// a typed credential diagnosis without matching security-sensitive prose.
+	ErrCMPProtectionRejected = errors.New("cmp: PKIMessage protection identity rejected")
+)
 
 // CMPBindPolicy governs whether the carried CSR must be authorized by the
 // authenticated protection identity (AUD-201 follow-up H1/V22).
@@ -267,14 +274,14 @@ func ParseCMPRequestWithTrust(der []byte, verifyCSR func([]byte) error, anchors 
 		return nil, fmt.Errorf("cmp: not a p10cr body (tag %d)", msg.Body.Tag)
 	}
 	if len(msg.ExtraCerts) == 0 {
-		return nil, errors.New("cmp: no extraCerts to verify protection")
+		return nil, fmt.Errorf("%w: no extraCerts to verify protection", ErrCMPProtectionRejected)
 	}
 	signerCert, err := x509.ParseCertificate(msg.ExtraCerts[0].FullBytes)
 	if err != nil {
-		return nil, fmt.Errorf("cmp: parse extraCert: %w", err)
+		return nil, fmt.Errorf("%w: parse extraCert: %v", ErrCMPProtectionRejected, err)
 	}
 	if err := verifyProtection(msg.Header, msg.Body, msg.Protection, signerCert); err != nil {
-		return nil, fmt.Errorf("cmp: verify protection: %w", err)
+		return nil, fmt.Errorf("%w: verify protection: %v", ErrCMPProtectionRejected, err)
 	}
 	identityVerified := false
 	if !anchors.Empty() {
@@ -517,7 +524,7 @@ func verifyCMPProtectionIdentity(signerCert *x509.Certificate, extra []asn1.RawV
 		Intermediates: intermediates,
 		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 	}); err != nil {
-		return fmt.Errorf("cmp: PKIMessage protection identity does not chain to a configured trust anchor: %w", err)
+		return fmt.Errorf("%w: does not chain to a configured trust anchor: %v", ErrCMPProtectionRejected, err)
 	}
 	return nil
 }

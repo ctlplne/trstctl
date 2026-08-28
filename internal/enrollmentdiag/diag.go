@@ -36,6 +36,7 @@ const (
 	ProtocolACME Protocol = "acme"
 	ProtocolEST  Protocol = "est"
 	ProtocolSCEP Protocol = "scep"
+	ProtocolCMP  Protocol = "cmp"
 	ProtocolADCS Protocol = "adcs"
 )
 
@@ -100,6 +101,7 @@ const (
 	CauseChainIncomplete      Cause = "chain_incomplete"
 	CauseNameNotPermitted     Cause = "name_not_permitted"
 	CauseRateLimited          Cause = "rate_limited"
+	CauseCapacityFull         Cause = "capacity_full"
 	// CauseUnknown is a first-class value, not a fallback nobody meant. A
 	// diagnostic that guesses costs an operator an hour in the wrong place
 	// before they think to doubt it, so "we could not place this" is a better
@@ -183,6 +185,11 @@ var catalog = map[Cause]struct{ summary, remediation string }{
 		"The authority rate-limited this request.",
 		"Back off rather than retrying — a retry loop against a rate limit extends the window. " +
 			"Public CAs count failures as well as successes.",
+	},
+	CauseCapacityFull: {
+		"The bounded enrollment worker pool was full, so this attempt was refused before signing.",
+		"Wait for the current enrollment work to drain, then retry the same transaction. If this " +
+			"repeats, inspect protocol queue depth and worker capacity before increasing either limit.",
 	},
 	CauseUnknown: {
 		"This failure could not be placed at a specific step.",

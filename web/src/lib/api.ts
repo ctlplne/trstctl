@@ -1169,6 +1169,30 @@ export interface SCEPQualificationResult {
   checks: SCEPQualificationCheck[];
 }
 
+export interface CMPQualificationCheck {
+  id: string;
+  label: string;
+  passed: boolean;
+  detail: string;
+  recovery?: string;
+}
+
+export interface CMPQualification {
+  checked_at: string;
+  ready: boolean;
+  effect_free: boolean;
+  endpoint: string;
+  profile: string;
+  binding_mode: "subject-bound" | "registration-authority";
+  client_trust_anchor_count: number;
+  checks: CMPQualificationCheck[];
+  preview_writes: string[];
+  preview_external_effects: string[];
+  preview_signer_calls: string[];
+  proof: string[];
+  blockers: string[];
+}
+
 export type EditionTier = "community" | "enterprise" | "provider";
 export type EditionState = "community" | "active" | "grace" | "read_only";
 export type FeatureMode = "enabled" | "read_only" | "off";
@@ -2157,6 +2181,8 @@ export interface Api {
   estQualification(): Promise<ESTQualificationResult>;
   /** F23: effect-free proof of public SCEP capabilities, CA material, and the empty-message refusal wall. */
   scepQualification(): Promise<SCEPQualificationResult>;
+  /** F55: server-owned, tenant-scoped CMP gate qualification with no PKIMessage, signer call, external call, or write. */
+  cmpQualification(): Promise<CMPQualification>;
   mdmSCEPStatus(): Promise<MDMSCEPStatus>;
   mdmSCEPPolicies(): Promise<MDMSCEPPolicyList>;
   secretPage(options?: { limit?: number; cursor?: string }): Promise<SecretMetaList>;
@@ -2682,6 +2708,7 @@ const liveApi: Api = {
   }),
   estQualification,
   scepQualification,
+  cmpQualification: () => postRead<CMPQualification>("/api/v1/protocols/cmp/qualification"),
   secretPage: (options) => {
     const qs = new URLSearchParams();
     if (options?.limit != null) qs.set("limit", String(options.limit));

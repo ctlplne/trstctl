@@ -2183,6 +2183,55 @@ const esESCatalog = {
   "protocols.scepCheck.emptyPassed": "La inscripción rechazó el mensaje PKI vacío antes de leer una CSR o un desafío.",
   "protocols.scepCheck.emptyHTTPFailed": "La comprobación de mensaje vacío devolvió HTTP {status}; se esperaba la respuesta HTTP 400 exacta y segura.",
   "protocols.scepCheck.emptyNetworkFailed": "La comprobación de la barrera de mensaje vacío falló antes de recibir una respuesta HTTP.",
+  "protocols.cmpCheck.region": "Comprobación de preparación de CMP",
+  "protocols.cmpCheck.heading": "Comprobación de preparación de CMP",
+  "protocols.cmpCheck.description":
+    "Comprueba si este servidor en ejecución puede aceptar de forma segura una solicitud CMP protegida antes de dirigirle un cliente PKI real.",
+  "protocols.cmpCheck.previewHeading": "Qué inspeccionará esta comprobación",
+  "protocols.cmpCheck.safePreview":
+    "Límite de seguridad: solo lee la preparación en memoria. No envía PKIMessage, CSR, certificado de cliente, credencial ni clave privada; no escribe ni llama al firmante o a la red.",
+  "protocols.cmpCheck.mountPreview": "Punto de acceso e inquilino",
+  "protocols.cmpCheck.mountPreviewDetail":
+    "Confirma que la puerta de inscripción CMP pertenece a este inquilino con sesión iniciada y no que solo responde en algún lugar del servidor.",
+  "protocols.cmpCheck.trustPreview": "Identidad de protección y confianza",
+  "protocols.cmpCheck.trustPreviewDetail":
+    "Confirma que están cargados la identidad sellada de protección de respuesta y al menos un ancla de confianza de cliente aprobada.",
+  "protocols.cmpCheck.issuePreview": "Perfil y firmante aislado",
+  "protocols.cmpCheck.issuePreviewDetail":
+    "Confirma que están conectados la política de perfil, la emisión basada en eventos, la idempotencia y la ruta de firma aislada.",
+  "protocols.cmpCheck.capacityPreview": "Capacidad limitada",
+  "protocols.cmpCheck.capacityPreviewDetail":
+    "Confirma que la inscripción usa su grupo limitado de trabajadores para que una ráfaga de clientes no bloquee la API del plano de control.",
+  "protocols.cmpCheck.ready": "CMP está listo para un cliente protegido",
+  "protocols.cmpCheck.blocked": "CMP necesita atención",
+  "protocols.cmpCheck.endpoint": "Punto de acceso",
+  "protocols.cmpCheck.profile": "Perfil de emisión",
+  "protocols.cmpCheck.binding": "Autoridad de nombres",
+  "protocols.cmpCheck.anchors": "Confianza del cliente",
+  "protocols.cmpCheck.anchorCount": "{count} ancla(s) de confianza aprobada(s)",
+  "protocols.cmpCheck.bindingSubject": "El cliente solo puede solicitar sus propios nombres",
+  "protocols.cmpCheck.bindingRA": "Una RA aprobada puede solicitar nombres de terceros",
+  "protocols.cmpCheck.resultsLabel": "Resultados de las puertas de preparación de CMP",
+  "protocols.cmpCheck.passed": "Superada",
+  "protocols.cmpCheck.failed": "Bloqueada",
+  "protocols.cmpCheck.effectProof":
+    "0 escrituras · 0 llamadas externas · 0 llamadas al firmante. Una inscripción real del cliente sigue siendo la prueba final del protocolo y es el único paso que puede emitir un certificado.",
+  "protocols.cmpCheck.receiptsHeading": "Rechazos recientes de CMP",
+  "protocols.cmpCheck.receiptsDescription":
+    "Aquí solo aparecen hechos de error limitados y aislados por inquilino. Nunca se muestran PKIMessages sin procesar, CSR, certificados de protección, claves ni secretos.",
+  "protocols.cmpCheck.noReceipts":
+    "No hay un rechazo reciente de CMP registrado para este inquilino. Significa que no hay evidencia de error; no demuestra que un cliente se haya inscrito.",
+  "protocols.cmpCheck.receiptsLabel": "Recibos de rechazo de CMP redactados",
+  "protocols.cmpCheck.unknownRecovery":
+    "El servidor no pudo demostrar una única acción segura de recuperación. Inspecciona la referencia de auditoría limitada sin debilitar las puertas de confianza o política.",
+  "protocols.cmpCheck.run": "Ejecutar comprobación segura de CMP",
+  "protocols.cmpCheck.running": "Comprobando CMP…",
+  "protocols.cmpCheck.runAgain": "Ejecutar de nuevo",
+  "protocols.cmpCheck.clientBoundary":
+    "Un cliente real conserva su clave privada localmente, protege su solicitud CMP con una identidad aprobada y envía solo la solicitud de certificado a la puerta de inscripción CMP.",
+  "protocols.cmpCheck.failedTitle": "No se pudo ejecutar la comprobación de CMP",
+  "protocols.cmpCheck.failedBody": "La comprobación de CMP falló antes de devolver evidencia.",
+  "protocols.cmpCheck.invalidResult": "La comprobación de CMP devolvió evidencia incompleta.",
   "protocols.guide.heading": "Elige cómo solicita cada máquina",
   "protocols.guide.description":
     "Empieza por el sistema que necesita una credencial. La configuración técnica y la evidencia exacta del respondedor quedan un nivel más abajo.",

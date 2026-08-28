@@ -1264,8 +1264,13 @@ describe("i18n boundary", () => {
       // impact, propagation, irreversible confirmation, and proof copy. The
       // unknown-state negations and placeholders remain intact. Machine-authored
       // es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "3004ae000f371a609959a2546f98886f1065cccc5b456f83711e8d03b5211314",
-      "de-DE": "85eacfde10702c3742a83aae5fc36c0587dd5e34450609b88580d5ba92ad5185",
+      // F55 CMP qualification re-pin: translated preview, exact live gates,
+      // zero-effect boundary, bounded refusal receipts, repair-and-rerun, and
+      // real-client handoff. Names such as CMP, PKIMessage, CSR, and RA remain
+      // byte-identical. Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION
+      // REVIEW before release.
+      "es-ES": "e6236bb0a6e121912c7bbbf78811c902afa3cb49b93fab89014ad9c66d8d044e",
+      "de-DE": "d729e57c834549b3810fe9a0e93116631bcaa0d373acfa85339f75ed783bdc4f",
     });
   });
 

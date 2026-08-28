@@ -13,10 +13,12 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/enrollmentdiag"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/protocols/bodylimit"
 )
@@ -36,6 +38,7 @@ type Server struct {
 	pool       *bulkhead.Pool
 	log        *events.Log
 	verifyCSR  func([]byte) error
+	onFailure  func(context.Context, enrollmentdiag.Diagnosis)
 	mux        *http.ServeMux
 
 	// clientAnchors is the PRE-PARSED trust-anchor set a PKIMessage's
@@ -80,6 +83,10 @@ type Config struct {
 	// client may request certificates for third parties — a deployment
 	// decision (protocols.cmp_allow_ra_enrollment), never an accident.
 	AllowRAEnrollment bool
+	// FailureDiagnosis receives typed, secret-free refusal evidence for the
+	// served assembly's tenant-scoped durable projection. It never receives a
+	// request body, CSR, certificate, key, or raw parser error.
+	FailureDiagnosis func(context.Context, enrollmentdiag.Diagnosis)
 }
 
 // New builds the CMP server. The trust anchors are parsed ONCE here rather
@@ -92,6 +99,7 @@ func New(cfg Config) *Server {
 		enroller: cfg.Enroller, caCertDER: cfg.CACertDER, caKeyPKCS8: cfg.CAKeyPKCS8,
 		profile: cfg.ProfileName, pool: cfg.Pool, log: cfg.Log,
 		verifyCSR:     cfg.CSRVerifier,
+		onFailure:     cfg.FailureDiagnosis,
 		clientAnchors: anchors,
 		anchorsErr:    anchorsErr,
 		bindPolicy:    crypto.CMPBindCSRToProtectionIdentity,
@@ -121,11 +129,15 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	body, err := bodylimit.ReadAll(r.Body, maxCMPBody)
 	if errors.Is(err, bodylimit.ErrTooLarge) {
 		s.audit(r.Context(), "deny", "request body too large", "")
+		s.emitFailure(r, enrollmentdiag.ClassifyCMP(enrollmentdiag.StepOrder, enrollmentdiag.CMPReasonUnknown, err),
+			r.Method+" "+r.URL.Path, "")
 		http.Error(w, "cmp: request body too large", http.StatusRequestEntityTooLarge)
 		return
 	}
 	if err != nil || len(body) == 0 {
 		s.audit(r.Context(), "deny", "empty body", "")
+		s.emitFailure(r, enrollmentdiag.ClassifyCMP(enrollmentdiag.StepOrder, enrollmentdiag.CMPReasonUnknown, err),
+			r.Method+" "+r.URL.Path, "")
 		http.Error(w, "cmp: empty PKIMessage", http.StatusBadRequest)
 		return
 	}
@@ -133,12 +145,16 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		// The configured anchors did not parse at construction; guessing per
 		// message would be worse than refusing.
 		s.audit(r.Context(), "deny", "invalid client trust anchors", "")
+		s.emitFailure(r, enrollmentdiag.ClassifyCMP(enrollmentdiag.StepAccount, enrollmentdiag.CMPReasonUnknown, s.anchorsErr),
+			r.Method+" "+r.URL.Path, "")
 		http.Error(w, "cmp: enrollment unavailable", http.StatusServiceUnavailable)
 		return
 	}
 	if s.clientAnchors.Empty() && !s.allowAnonymous {
 		// Fail closed rather than enrol anyone who can compose a PKIMessage.
 		s.audit(r.Context(), "deny", "no client trust anchors configured", "")
+		s.emitFailure(r, enrollmentdiag.ClassifyCMP(enrollmentdiag.StepAccount, enrollmentdiag.CMPReasonUnknown, nil),
+			r.Method+" "+r.URL.Path, "")
 		http.Error(w, "cmp: enrollment unavailable", http.StatusServiceUnavailable)
 		return
 	}
@@ -148,11 +164,21 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		// refusal is distinct in the audit trail so an operator can tell a
 		// cross-identity attempt from a malformed message.
 		s.audit(r.Context(), "deny", "csr not bound to protection identity", "")
+		s.emitFailure(r, enrollmentdiag.ClassifyCMP(enrollmentdiag.StepAuthorize, enrollmentdiag.CMPReasonIdentityMismatch, err),
+			r.Method+" "+r.URL.Path, "")
 		http.Error(w, "cmp: csr not authorized for protection identity", http.StatusForbidden)
 		return
 	}
 	if err != nil {
 		s.audit(r.Context(), "deny", "malformed pkiMessage", "")
+		reason := enrollmentdiag.CMPReasonUnknown
+		step := enrollmentdiag.StepOrder
+		if errors.Is(err, crypto.ErrCMPProtectionRejected) {
+			reason = enrollmentdiag.CMPReasonProtectionRejected
+			step = enrollmentdiag.StepAccount
+		}
+		s.emitFailure(r, enrollmentdiag.ClassifyCMP(step, reason, err),
+			r.Method+" "+r.URL.Path, "")
 		http.Error(w, "cmp: bad request", http.StatusBadRequest)
 		return
 	}
@@ -167,15 +193,46 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case errors.Is(rerr, bulkhead.ErrRejected):
 		s.audit(r.Context(), "shed", "bulkhead full", txid)
+		s.emitFailure(r, enrollmentdiag.ClassifyCMP(enrollmentdiag.StepIssue, enrollmentdiag.CMPReasonCapacityRejected, rerr),
+			"cmp:"+txid, cmpIdentityRef(req))
 		http.Error(w, "busy", http.StatusServiceUnavailable)
 	case rerr != nil:
 		s.audit(r.Context(), "deny", rerr.Error(), txid)
+		// The Enroller contract intentionally does not expose whether an
+		// arbitrary failure came from policy, the signer, persistence, or
+		// response encoding. Keep it unknown instead of guessing from prose.
+		s.emitFailure(r, enrollmentdiag.ClassifyCMP(enrollmentdiag.StepIssue, enrollmentdiag.CMPReasonUnknown, rerr),
+			"cmp:"+txid, cmpIdentityRef(req))
 		http.Error(w, "cmp: enrollment refused", http.StatusForbidden)
 	default:
 		s.audit(r.Context(), "allow", "", txid)
 		w.Header().Set("Content-Type", "application/pkixcmp")
 		_, _ = w.Write(reply)
 	}
+}
+
+func (s *Server) emitFailure(r *http.Request, diagnosis enrollmentdiag.Diagnosis, operationRef, identityRef string) {
+	if s.onFailure == nil || r == nil {
+		return
+	}
+	s.onFailure(r.Context(), diagnosis.WithEvidence(enrollmentdiag.Evidence{
+		OperationRef: operationRef,
+		IdentityRef:  identityRef,
+		EndpointRef:  strings.TrimSpace(r.Host),
+	}))
+}
+
+func cmpIdentityRef(req *crypto.CMPRequest) string {
+	if req == nil {
+		return ""
+	}
+	if commonName := strings.ToLower(strings.TrimSpace(req.ProtectionCommonName)); commonName != "" {
+		return "protection-cn:" + commonName
+	}
+	if len(req.CSRDER) > 0 {
+		return "csr-sha256:" + crypto.SHA256Hex(req.CSRDER)
+	}
+	return ""
 }
 
 func (s *Server) runBounded(ctx context.Context, fn func(context.Context) ([]byte, error)) ([]byte, error) {

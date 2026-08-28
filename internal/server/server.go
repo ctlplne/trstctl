@@ -1269,6 +1269,7 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 		defaults = append(defaults, api.WithExternalCAs(externalCAs))
 	}
 	defaults = append(defaults, api.WithManagedKeyCustody(d.ManagedKeyCustody))
+	s.appendCMPQualificationOption(d, &defaults)
 	if mk, err := buildManagedKeyService(d, idem, s.outbox, orch); err != nil {
 		return nil, nil, fmt.Errorf("server: configure managed-key lifecycle: %w", err)
 	} else if mk != nil {

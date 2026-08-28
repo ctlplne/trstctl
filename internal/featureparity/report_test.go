@@ -41,8 +41,8 @@ func TestRenderControlPanelUsesCanonicalCatalogOnly(t *testing.T) {
 		"trstctl frontend parity control panel",
 		// F26 now joins the previously qualified workflows with a secret-free
 		// six-provider custody plan and an effect-free generation preview.
-		"39 release blockers",
-		"30 complete vertical slices",
+		"38 release blockers",
+		"31 complete vertical slices",
 		"Filter capabilities",
 		"data-tool=\"secrets\"",
 		"F66",
@@ -51,7 +51,7 @@ func TestRenderControlPanelUsesCanonicalCatalogOnly(t *testing.T) {
 		"http://127.0.0.1:58780/secrets/engines",
 		"candidate bbbbbbbb",
 		"Report candidate: <code>bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb</code>",
-		"Contract evidence recorded at: <code>73b871089f46e4cc9e95ca10473b9ae5872a53cd</code>",
+		"Contract evidence recorded at: <code>345ed531692987c0d2f50be730e1f17e7de7c207</code>",
 		"discover",
 		"verify",
 	} {

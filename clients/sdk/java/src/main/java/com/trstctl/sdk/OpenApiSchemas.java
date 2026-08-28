@@ -166,6 +166,8 @@ public final class OpenApiSchemas {
       "CBOMScan",
       "CBOMScanRequest",
       "CMDBReconcileSchedule",
+      "CMPQualification",
+      "CMPQualificationCheck",
       "CRLDistribution",
       "CRLDistributionList",
       "CRLDistributionShard",

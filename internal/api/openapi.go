@@ -386,6 +386,19 @@ func componentSchemas() map[string]*Schema {
 		"active":    {Type: "boolean"},
 		"protocols": {Type: "array", Items: str()},
 	}, "profile", "active", "protocols")
+	cmpQualificationCheck := object(map[string]*Schema{
+		"id": str(), "label": str(), "passed": {Type: "boolean"}, "detail": str(), "recovery": str(),
+	}, "id", "label", "passed", "detail")
+	cmpQualification := object(map[string]*Schema{
+		"checked_at": timestamp(), "ready": {Type: "boolean"}, "effect_free": {Type: "boolean"},
+		"endpoint": str(), "profile": str(), "binding_mode": {Type: "string", Enum: []string{"subject-bound", "registration-authority"}},
+		"client_trust_anchor_count": {Type: "integer"},
+		"checks":                    {Type: "array", Items: ref("CMPQualificationCheck")},
+		"preview_writes":            {Type: "array", Items: str()},
+		"preview_external_effects":  {Type: "array", Items: str()},
+		"preview_signer_calls":      {Type: "array", Items: str()},
+		"proof":                     {Type: "array", Items: str()}, "blockers": {Type: "array", Items: str()},
+	}, "checked_at", "ready", "effect_free", "endpoint", "profile", "binding_mode", "client_trust_anchor_count", "checks", "preview_writes", "preview_external_effects", "preview_signer_calls", "proof", "blockers")
 
 	caSpec := object(map[string]*Schema{
 		"common_name":           str(),
@@ -2564,7 +2577,7 @@ func componentSchemas() map[string]*Schema {
 	// I4: recent enrolment refusals, classified.
 	enrollmentDiagnostic := object(map[string]*Schema{
 		"id":       str(),
-		"protocol": {Type: "string", Enum: []string{"acme", "est", "scep", "adcs"}},
+		"protocol": {Type: "string", Enum: []string{"acme", "est", "scep", "cmp", "adcs"}},
 		"step":     str(), "cause": str(), "summary": str(),
 		"remediation": str(), "actionable": {Type: "boolean"},
 		"observed_at": timestamp(), "count": {Type: "integer"},
@@ -2588,7 +2601,7 @@ func componentSchemas() map[string]*Schema {
 		"queued_at": timestamp(), "result_path": str(),
 	}, "diagnostic_id", "verification_endpoint_id", "status", "queued_at", "result_path")
 	enrollmentDiagnosticSupportAggregate := object(map[string]*Schema{
-		"protocol": {Type: "string", Enum: []string{"acme", "est", "scep", "adcs"}},
+		"protocol": {Type: "string", Enum: []string{"acme", "est", "scep", "cmp", "adcs"}},
 		"cause":    str(), "actionable": {Type: "boolean"}, "count": {Type: "integer"},
 	}, "protocol", "cause", "actionable", "count")
 	enrollmentDiagnosticsSupportAddendum := object(map[string]*Schema{
@@ -5726,6 +5739,8 @@ func componentSchemas() map[string]*Schema {
 		"IssuerRequest":                            issuerReq,
 		"IssuerList":                               list("Issuer"),
 		"ProtocolProfileStatus":                    protocolProfileStatus,
+		"CMPQualificationCheck":                    cmpQualificationCheck,
+		"CMPQualification":                         cmpQualification,
 		"CASpec":                                   caSpec,
 		"CACeremonyStartRequest":                   caCeremonyStartReq,
 		"CAKeyCeremony":                            caCeremony,

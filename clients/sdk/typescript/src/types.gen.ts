@@ -4522,6 +4522,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/protocols/cmp/qualification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Check the tenant-bound CMP endpoint without sending a PKIMessage, calling the signer, or writing state */
+        post: operations["qualifyCMP"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/remediation/owner-actions": {
         parameters: {
             query?: never;
@@ -7266,6 +7283,30 @@ export interface components {
             sweep_started_at?: string;
             token_ref?: string;
         };
+        CMPQualification: {
+            /** @enum {string} */
+            binding_mode: "subject-bound" | "registration-authority";
+            blockers: string[];
+            /** Format: date-time */
+            checked_at: string;
+            checks: components["schemas"]["CMPQualificationCheck"][];
+            client_trust_anchor_count: number;
+            effect_free: boolean;
+            endpoint: string;
+            preview_external_effects: string[];
+            preview_signer_calls: string[];
+            preview_writes: string[];
+            profile: string;
+            proof: string[];
+            ready: boolean;
+        };
+        CMPQualificationCheck: {
+            detail: string;
+            id: string;
+            label: string;
+            passed: boolean;
+            recovery?: string;
+        };
         CRLDistribution: {
             /** Format: uuid */
             ca_id: string;
@@ -8674,7 +8715,7 @@ export interface components {
             observed_at: string;
             operation_ref?: string;
             /** @enum {string} */
-            protocol: "acme" | "est" | "scep" | "adcs";
+            protocol: "acme" | "est" | "scep" | "cmp" | "adcs";
             remediation?: string;
             step: string;
             summary: string;
@@ -8703,7 +8744,7 @@ export interface components {
             cause: string;
             count: number;
             /** @enum {string} */
-            protocol: "acme" | "est" | "scep" | "adcs";
+            protocol: "acme" | "est" | "scep" | "cmp" | "adcs";
         };
         EnrollmentDiagnosticVerification: {
             diagnostic_id: string;
@@ -26103,6 +26144,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProfileRestorePreview"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    qualifyCMP: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CMPQualification"];
                 };
             };
             /** @description client error */

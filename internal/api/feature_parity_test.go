@@ -197,8 +197,11 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// F9's effect-free audit collector-feed preview raises it to 391.
 	// F26's secret-free custody plan and effect-free generation preview raise it
 	// to 393 and map to the existing HSM integration row.
-	if len(out) != 393 {
-		t.Fatalf("OpenAPI operationIds = %d, want 393", len(out))
+	// F55's authenticated, effect-free CMP runtime qualification raises it to
+	// 394 and maps to the existing CMP server row; it never replaces the stock
+	// client p10cr interoperability proof.
+	if len(out) != 394 {
+		t.Fatalf("OpenAPI operationIds = %d, want 394", len(out))
 	}
 	return out
 }

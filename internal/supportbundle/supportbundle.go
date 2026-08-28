@@ -242,13 +242,13 @@ func validatedEnrollmentDiagnostics(in EnrollmentDiagnosticsAddendum) (Enrollmen
 	if in.UnknownCount < 0 || len(in.Rows) > 64 {
 		return EnrollmentDiagnosticsAddendum{}, errors.New("support bundle enrollment diagnostic aggregates are invalid")
 	}
-	protocols := map[string]bool{"acme": true, "est": true, "scep": true, "adcs": true}
+	protocols := map[string]bool{"acme": true, "est": true, "scep": true, "cmp": true, "adcs": true}
 	causes := map[string]bool{
 		"challenge_not_visible": true, "challenge_wrong_value": true,
 		"template_acl_denied": true, "eab_unauthorized": true,
 		"client_cert_rejected": true, "responder_unreachable": true,
 		"chain_incomplete": true, "name_not_permitted": true,
-		"rate_limited": true, "unknown": true,
+		"rate_limited": true, "capacity_full": true, "unknown": true,
 	}
 	out := EnrollmentDiagnosticsAddendum{
 		SchemaVersion: 1, UnknownCount: in.UnknownCount,

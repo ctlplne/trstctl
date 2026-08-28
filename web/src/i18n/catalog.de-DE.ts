@@ -2202,6 +2202,55 @@ const deDECatalog = {
   "protocols.scepCheck.emptyHTTPFailed":
     "Die Prüfung mit leerer Nachricht gab HTTP {status} zurück; erwartet wurde die exakte sicher geschlossene HTTP-400-Antwort.",
   "protocols.scepCheck.emptyNetworkFailed": "Die Prüfung der Leernachrichten-Sperre ist fehlgeschlagen, bevor eine HTTP-Antwort eintraf.",
+  "protocols.cmpCheck.region": "CMP-Bereitschaftsprüfung",
+  "protocols.cmpCheck.heading": "CMP-Bereitschaftsprüfung",
+  "protocols.cmpCheck.description":
+    "Prüfen Sie, ob dieser laufende Server eine geschützte CMP-Anfrage sicher annehmen kann, bevor Sie einen echten PKI-Client darauf verweisen.",
+  "protocols.cmpCheck.previewHeading": "Was diese Prüfung untersucht",
+  "protocols.cmpCheck.safePreview":
+    "Sicherheitsgrenze: Es wird nur die Bereitschaft im Arbeitsspeicher gelesen. Es werden keine PKIMessage, CSR, Client-Zertifikate, Anmeldedaten oder privaten Schlüssel gesendet und keine Schreib-, Signierer- oder Netzwerkaufrufe ausgeführt.",
+  "protocols.cmpCheck.mountPreview": "Endpunkt und Mandant",
+  "protocols.cmpCheck.mountPreviewDetail":
+    "Bestätigt, dass der CMP-Registrierungszugang zu diesem angemeldeten Mandanten gehört und nicht nur irgendwo auf dem Server antwortet.",
+  "protocols.cmpCheck.trustPreview": "Schutzidentität und Vertrauen",
+  "protocols.cmpCheck.trustPreviewDetail":
+    "Bestätigt, dass die versiegelte Identität zum Schutz der Antwort und mindestens ein genehmigter Client-Vertrauensanker geladen sind.",
+  "protocols.cmpCheck.issuePreview": "Profil und isolierter Signierer",
+  "protocols.cmpCheck.issuePreviewDetail":
+    "Bestätigt, dass Profilrichtlinie, ereignisbasierte Ausstellung, Idempotenz und der isolierte Signaturpfad verbunden sind.",
+  "protocols.cmpCheck.capacityPreview": "Begrenzte Kapazität",
+  "protocols.cmpCheck.capacityPreviewDetail":
+    "Bestätigt, dass die Registrierung einen begrenzten Worker-Pool verwendet, damit ein Client-Ansturm die Control-Plane-API nicht blockiert.",
+  "protocols.cmpCheck.ready": "CMP ist für einen geschützten Client bereit",
+  "protocols.cmpCheck.blocked": "CMP benötigt Aufmerksamkeit",
+  "protocols.cmpCheck.endpoint": "Endpunkt",
+  "protocols.cmpCheck.profile": "Ausstellungsprofil",
+  "protocols.cmpCheck.binding": "Namensberechtigung",
+  "protocols.cmpCheck.anchors": "Client-Vertrauen",
+  "protocols.cmpCheck.anchorCount": "{count} genehmigte Vertrauensanker",
+  "protocols.cmpCheck.bindingSubject": "Der Client darf nur seine eigenen Namen anfordern",
+  "protocols.cmpCheck.bindingRA": "Eine genehmigte RA darf Namen Dritter anfordern",
+  "protocols.cmpCheck.resultsLabel": "Ergebnisse der CMP-Bereitschaftsprüfungen",
+  "protocols.cmpCheck.passed": "Bestanden",
+  "protocols.cmpCheck.failed": "Blockiert",
+  "protocols.cmpCheck.effectProof":
+    "0 Schreibvorgänge · 0 externe Aufrufe · 0 Signierer-Aufrufe. Eine echte Client-Registrierung bleibt der abschließende Protokollnachweis und ist der einzige Schritt, der ein Zertifikat ausstellen kann.",
+  "protocols.cmpCheck.receiptsHeading": "Letzte CMP-Ablehnungen",
+  "protocols.cmpCheck.receiptsDescription":
+    "Hier erscheinen nur begrenzte, mandantenspezifische Fehlerfakten. Rohe PKIMessages, CSRs, Schutzzertifikate, Schlüssel und Geheimnisse werden nie angezeigt.",
+  "protocols.cmpCheck.noReceipts":
+    "Für diesen Mandanten ist keine aktuelle CMP-Ablehnung gespeichert. Das bedeutet, dass keine Fehlernachweise vorliegen; es beweist nicht, dass sich ein Client registriert hat.",
+  "protocols.cmpCheck.receiptsLabel": "Redigierte CMP-Ablehnungsbelege",
+  "protocols.cmpCheck.unknownRecovery":
+    "Der Server konnte keine einzelne sichere Wiederherstellungsaktion nachweisen. Prüfen Sie die begrenzte Audit-Referenz, ohne Vertrauens- oder Richtlinienprüfungen abzuschwächen.",
+  "protocols.cmpCheck.run": "Sichere CMP-Prüfung ausführen",
+  "protocols.cmpCheck.running": "CMP wird geprüft…",
+  "protocols.cmpCheck.runAgain": "Erneut ausführen",
+  "protocols.cmpCheck.clientBoundary":
+    "Ein echter Client behält seinen privaten Schlüssel lokal, schützt seine CMP-Anfrage mit einer genehmigten Identität und sendet nur die Zertifikatsanfrage an den CMP-Registrierungszugang.",
+  "protocols.cmpCheck.failedTitle": "CMP-Prüfung konnte nicht ausgeführt werden",
+  "protocols.cmpCheck.failedBody": "Die CMP-Prüfung ist fehlgeschlagen, bevor sie Nachweise zurückgeben konnte.",
+  "protocols.cmpCheck.invalidResult": "Die CMP-Prüfung hat unvollständige Nachweise zurückgegeben.",
   "protocols.guide.heading": "Wählen Sie, wie jede Maschine anfragt",
   "protocols.guide.description":
     "Beginnen Sie mit dem System, das Zugangsdaten benötigt. Technische Einrichtung und exakte Antwortdienst-Nachweise bleiben eine Ebene tiefer.",

@@ -90,6 +90,24 @@ func TestManagedKeyCustodyAndPreviewUseSecretFreeReadSurfaces(t *testing.T) {
 	}
 }
 
+func TestCMPQualificationUsesAuthenticatedReadOnlyPOST(t *testing.T) {
+	var captured capture
+	srv := mockServer(t, http.StatusOK,
+		`{"checked_at":"2026-08-28T12:00:00Z","ready":true,"effect_free":true,"endpoint":"/cmp","profile":"device-90d","binding_mode":"subject-bound","client_trust_anchor_count":1,"checks":[],"preview_writes":[],"preview_external_effects":[],"preview_signer_calls":[],"proof":[],"blockers":[]}`,
+		&captured)
+	env := cli.Env{Server: srv.URL, Token: strings.Join([]string{"cmp", "read", "token"}, "-"), Tenant: "tenant-a", HTTPClient: srv.Client()}
+
+	code, stdout, stderr := run(t, []string{"protocols", "cmp", "qualify"}, env, "")
+	if code != 0 || !strings.Contains(stdout, `"effect_free": true`) || stderr != "" {
+		t.Fatalf("protocols cmp qualify = exit %d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if captured.Method != http.MethodPost || captured.Path != "/api/v1/protocols/cmp/qualification" ||
+		captured.Header.Get("Idempotency-Key") != "" || len(captured.Body) != 0 {
+		t.Fatalf("CMP qualification request = %s %s key=%q body=%s", captured.Method, captured.Path,
+			captured.Header.Get("Idempotency-Key"), captured.Body)
+	}
+}
+
 func TestDiscoverySegmentCreateEnablesHeadlessSourceWorkflowAUD118(t *testing.T) {
 	segmentBody := `{"name":"edge-prod","ranges":["10.24.0.0/16"],"staleness_hours":24,"excluded":false}`
 	sourceBody := `{"kind":"network","name":"edge-tls","config":{"segment":"edge-prod","targets":["10.24.1.10:443"]}}`

@@ -18,6 +18,7 @@ import { EABCredentialsPanel } from "@/pages/protocols/EABCredentialsPanel";
 import { ACMEOperatorPanel } from "@/pages/protocols/ACMEOperatorPanel";
 import { ESTOperatorPanel } from "@/pages/protocols/ESTOperatorPanel";
 import { SCEPOperatorPanel } from "@/pages/protocols/SCEPOperatorPanel";
+import { CMPOperatorPanel } from "@/pages/protocols/CMPOperatorPanel";
 import { RevocationCachePanel } from "@/pages/protocols/RevocationCachePanel";
 import { DNS01PreflightDialog } from "@/pages/protocols/DNS01PreflightDialog";
 import { enrollmentRelaySegments } from "@/pages/protocols/enrollmentRelaySegments";
@@ -161,7 +162,8 @@ const protocolSurfaces: ProtocolSurface[] = [
     snippets: [
       {
         label: translateNow("source.openssl.p10cr.ac3c5c9967"),
-        command: "openssl cmp -server https://trstctl.example.test -path /cmp -cmd p10cr -csr device.csr -certout device.pem",
+        command:
+          'openssl cmp -config "" -cmd p10cr -server https://trstctl.example.test -path /cmp -csr device.csr -cert cmp-client.pem -key cmp-client.key -extracerts cmp-client.pem -srvcert cmp-ra.pem -ignore_keyusage -disable_confirm -certout device.pem -reqout request.der -rspout response.der -batch -verbosity 7',
       },
     ],
   },
@@ -791,6 +793,7 @@ export function Protocols() {
           <ACMEOperatorPanel />
           <ESTOperatorPanel />
           <SCEPOperatorPanel />
+          <CMPOperatorPanel diagnostics={diagnostics?.items ?? []} />
 
           <section aria-labelledby="protocol-status-heading" className="border-y border-border py-4">
             <h2 id="protocol-status-heading" className="text-title font-semibold">

@@ -566,6 +566,9 @@ describe("exported API surface census", () => {
       "/api/v1/ca/ceremonies/preview",
       "/api/v1/ca/authorities/item%2Fid/rotate/preview",
       "/api/v1/managed-keys/preview",
+	  // F55: this POST reads assembled in-memory CMP posture. It carries no
+	  // body and performs no enrollment, write, signer call, or network call.
+	  "/api/v1/protocols/cmp/qualification",
       "/api/v1/ai/query",
       "/api/v1/ai/rca",
       "/api/v1/graph/query",

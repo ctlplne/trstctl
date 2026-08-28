@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
@@ -443,6 +444,29 @@ func TestServedCMPEndToEnd(t *testing.T) {
 	}
 	if !h.hasEvent(t, "certificate.recorded") {
 		t.Error("no certificate.recorded event — the served CMP mint was not event-sourced (AN-2)")
+	}
+
+	// The operator qualification reads the exact assembled mount after the wire
+	// proof above, but must not need or accept the client's protection material.
+	// A certs:read token is sufficient because this is an effect-free status read,
+	// not an alternative enrollment path.
+	readToken := seedAPITokenWithScopes(t, h.store, servedTestTenant, []string{"certs:read"})
+	qualifyReq, _ := http.NewRequest(http.MethodPost, h.ts.URL+"/api/v1/protocols/cmp/qualification", nil)
+	qualifyReq.Header.Set("Authorization", "Bearer "+readToken)
+	qualifyResp, err := h.ts.Client().Do(qualifyReq)
+	if err != nil {
+		t.Fatalf("CMP qualification: %v", err)
+	}
+	qualifyBody, _ := readAllClose(qualifyResp)
+	if qualifyResp.StatusCode != http.StatusOK {
+		t.Fatalf("CMP qualification status %d: %s", qualifyResp.StatusCode, qualifyBody)
+	}
+	var qualification api.CMPQualification
+	if err := json.Unmarshal(qualifyBody, &qualification); err != nil {
+		t.Fatalf("decode CMP qualification: %v body=%s", err, qualifyBody)
+	}
+	if !qualification.Ready || !qualification.EffectFree || qualification.ClientTrustAnchorCount != 1 {
+		t.Fatalf("CMP qualification=%+v, want ready effect-free exact live posture", qualification)
 	}
 }
 

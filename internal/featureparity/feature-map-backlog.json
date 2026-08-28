@@ -7754,10 +7754,10 @@
             "phase": "P1",
             "priority": 25,
             "served_state": "conditional",
-            "backend_status": "conditional: served /cmp p10cr protocol workflow: server.Build mounts CMP when protocols.cmp.enabled, a tenant binding, a sealed RA transport identity, and an issuing CA/signer exist; TestServedCMPEndToEnd posts a protected p10cr PKIMessage through the assembled control-plane handler, verifies the signer-issued certificate against the served CA, records certificate.recorded, TestServedCMPOpenSSLClientP10CREnrollment proves stock OpenSSL cmp interoperability, TestCMPMalformedFailsClosed rejects malformed PKIMessage input, and protocol mounting and malformed input fail closed without required configuration",
-            "current_frontend_mapping": "operate: Protocols at /protocols serves CMP enrollment workflow evidence with tenant-binding requirements, RA transport/profile gates, live responder status, enrollment diagnostics, and copy-safe OpenSSL client guidance.",
-            "target_gui_mapping": "Roadmap residual: dedicated CMP admin console with endpoint, tenant, RA transport/profile gate status, enrollment transcript, PKIMessage diagnostics, and interoperable client guidance beyond the served Protocols workflow.",
-            "acceptance_test": "Served GA acceptance is TestServedCMPEndToEnd and TestServedCMPOpenSSLClientP10CREnrollment on the assembled control-plane handler plus TestProtectINTEROP003_ProtocolMountsGatedAndFailClosed; roadmap residual is the dedicated CMP admin console beyond the served Protocols workflow.",
+            "backend_status": "conditional: complete served /cmp p10cr PKIMessage workflow when protocols.cmp.enabled, its tenant binding, sealed RA transport identity, client-protection trust anchors, issuing profile, event/idempotency spine, isolated signer, and bounded protocol pool are ready. POST /api/v1/protocols/cmp/qualification reads those exact in-memory gates with zero writes, network calls, signer calls, or enrollment material; protected stock OpenSSL enrollment remains the external wire oracle, records certificate.recorded, and all missing prerequisites fail closed; typed CMP refusals persist as bounded tenant diagnostics.",
+            "current_frontend_mapping": "operate: Protocols at /protocols now previews four plain-language CMP readiness groups, runs the authenticated effect-free server qualification, shows exact gates and recovery, preserves recent tenant CMP refusal receipts, and hands off a copy-safe complete OpenSSL p10cr command for real enrollment.",
+            "target_gui_mapping": "Roadmap residual: an optional dedicated CMP admin console for advanced trust-anchor/profile editing and redacted transcript drill-down beyond this complete operator workflow; it is not required to configure, qualify, enroll, observe, repair, retry, or automate CMP.",
+            "acceptance_test": "Served GA acceptance is TestServedCMPEndToEnd and TestServedCMPOpenSSLClientP10CREnrollment on the assembled handler, TestCMPQualificationIsTenantScopedEffectFreeAndExact, CMP typed-diagnostic tests, CLI/API parity, web/src/__tests__/cmp_qualification.test.ts transport isolation, and web/src/__tests__/protocols.test.tsx preview/run/observe/recover coverage. Roadmap residual is the optional advanced CMP admin console beyond this complete workflow.",
             "source_docs": [
                 "docs/features/enrollment-protocols.md"
             ],
@@ -7765,19 +7765,24 @@
                 "/cmp"
             ],
             "source_frontend": [
-                "web/src/pages/Protocols.tsx"
+                "web/src/pages/Protocols.tsx",
+                "web/src/pages/protocols/CMPOperatorPanel.tsx"
             ],
             "status": "closed",
-            "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-            "api_surface": [],
-            "api_na": "N/A: served through protocol-specific endpoints/configuration, not the /api/v1 OpenAPI contract.",
-            "cli_surface": [],
-            "cli_na": "N/A: served through protocol-specific endpoints/configuration, not the trstctl CLI command table.",
+            "notes": "F55 closure adds one product-owned qualification contract without turning the browser into a CMP client. The read-only POST is authenticated, tenant-scoped, and assembled from live in-memory state; it cannot issue, sign, persist, contact a network target, or handle client credentials. Real p10cr execution remains a stock OpenSSL interoperability proof. Every server refusal now emits a closed, conservative CMP diagnosis: known protection, identity-binding, or local-capacity branches name a repair; ambiguous parser, enroller, signer, persistence, or encoding failures remain unknown instead of guessing. The Protocols console renders preview, exact result, recovery, bounded receipts, and the full protected OpenSSL command. Focused Go and web tests prove the effect boundary, transport shape, no-secret result, retry journey, and diagnostics.",
+            "api_surface": [
+                "qualifyCMP"
+            ],
+            "api_na": "",
+            "cli_surface": [
+                "protocols cmp qualify"
+            ],
+            "cli_na": "",
             "facet_evidence": {
                 "served": {
                     "evidence": [
                         "served_state=conditional",
-                        "backend_status=conditional: served /cmp p10cr protocol workflow: server.Build mounts CMP when protocols.cmp.enabled, a tenant binding, a sealed RA transport identity, and an issuing CA/signer exist; TestServedCMPEndToEnd posts a protected p10cr PKIMessage through the assembled control-plane handler, verifies the signer-issued certificate against the served CA, records certificate.recorded, TestServedCMPOpenSSLClientP10CREnrollment proves stock OpenSSL cmp interoperability, TestCMPMalformedFailsClosed rejects malformed PKIMessage input, and protocol mounting and malformed input fail closed without required configuration"
+                        "backend_status=conditional: complete /cmp p10cr PKIMessage workflow with effect-free live qualification, tenant-bound typed refusal diagnostics, isolated signer issuance, stock OpenSSL proof, certificate.recorded projection, and fail closed configuration gates"
                     ],
                     "commands": [
                         "make test"
@@ -7785,29 +7790,47 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: operate: Protocols at /protocols serves CMP enrollment workflow evidence with tenant-binding requirements, RA transport/profile gates, live responder status, enrollment diagnostics, and copy-safe OpenSSL client guidance.",
-                        "target_gui_mapping: Roadmap residual: dedicated CMP admin console with endpoint, tenant, RA transport/profile gate status, enrollment transcript, PKIMessage diagnostics, and interoperable client guidance beyond the served Protocols workflow."
+                        "current_frontend_mapping: Protocols at /protocols previews, runs, explains, recovers, and reruns exact CMP readiness, shows bounded refusal receipts, and hands off the full protected OpenSSL p10cr command.",
+                        "target_gui_mapping: Roadmap residual is an optional advanced CMP admin console beyond this complete operator workflow."
                     ],
                     "refs": [
                         "web/src/pages/Protocols.tsx",
+                        "web/src/pages/protocols/CMPOperatorPanel.tsx",
                         "web/src/lib/navigation.ts",
                         "web/src/App.tsx"
                     ]
                 },
                 "cli": {
-                    "na": "N/A: served through protocol-specific endpoints/configuration, not the trstctl CLI command table."
+                    "evidence": [
+                        "CLI command: protocols cmp qualify"
+                    ],
+                    "refs": [
+                        "internal/cli/command.go",
+                        "internal/cli/cli_test.go"
+                    ]
                 },
                 "api": {
-                    "na": "N/A: served through protocol-specific endpoints/configuration, not the /api/v1 OpenAPI contract."
+                    "evidence": [
+                        "OpenAPI operationId: qualifyCMP"
+                    ],
+                    "refs": [
+                        "internal/api/api.go",
+                        "internal/api/cmp_qualification.go",
+                        "internal/api/cmp_qualification_test.go",
+                        "internal/api/openapi.go"
+                    ]
                 },
                 "test": {
                     "evidence": [
-                        "acceptance_test: Served GA acceptance is TestServedCMPEndToEnd and TestServedCMPOpenSSLClientP10CREnrollment on the assembled control-plane handler plus TestProtectINTEROP003_ProtocolMountsGatedAndFailClosed; roadmap residual is the dedicated CMP admin console beyond the served Protocols workflow.",
+                        "acceptance_test: TestServedCMPEndToEnd proves live qualification and protected enrollment on the assembled handler; TestServedCMPOpenSSLClientP10CREnrollment proves stock OpenSSL; TestCMPQualificationIsTenantScopedEffectFreeAndExact proves the no-effect contract; CMP diagnostic tests prove typed recovery; web transport and page tests prove preview, execute, observe, recover, retry, and isolation.",
                         "TRACE-022 guard: TestTRACE022CMPRowSplitsServedGAFromRoadmapResidual keeps F55 in the served GA denominator only when the served CMP protocol workflow and explicit admin-console roadmap residual are both present.",
                         "TestServedCMPEndToEnd drives /cmp p10cr PKIMessage enrollment through the assembled control-plane handler, verifies the signer-issued certificate against the served CA, and records certificate.recorded.",
                         "TestServedCMPOpenSSLClientP10CREnrollment proves stock OpenSSL cmp p10cr interoperability against the mounted /cmp endpoint.",
                         "TestCMPMalformedFailsClosed covers malformed CMP PKIMessage fail-closed behavior.",
                         "TestProtectINTEROP003_ProtocolMountsGatedAndFailClosed proves protocol mounts, including CMP, are enablement-gated and fail closed when no issuing CA/signer exists.",
+                        "TestCMPIdentityMismatchEmitsTypedSecretFreeDiagnostic, TestCMPUntrustedProtectionIdentityNamesCredentialRepair, and TestCMPFullWorkerPoolEmitsRetryableCapacityDiagnosis prove conservative actionable CMP receipts.",
+                        "web/src/__tests__/cmp_qualification.test.ts proves the authenticated read-only POST carries no body or Idempotency-Key and makes zero requests under preview isolation.",
+                        "web/src/__tests__/protocols.test.tsx proves the operator previews the exact effect boundary, runs the server check, reads all gates and recovery, sees bounded refusal receipts, and reruns after repair.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
                         "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
                     ],
@@ -7816,10 +7839,14 @@
                         "internal/server/protocols_served_stock_clients_test.go",
                         "internal/server/protect_correct102_guard_test.go",
                         "internal/protocols/cmp/cmp_test.go",
+                        "internal/protocols/cmp/diagnosis_test.go",
+                        "internal/api/cmp_qualification_test.go",
                         "internal/featureparity/feature_served_ga_coverage_test.go",
                         "internal/featureparity/feature_facet_coverage_test.go",
                         "web/src/__tests__/route_parity.test.ts",
-                        "web/src/__tests__/feature_coverage.test.tsx"
+                        "web/src/__tests__/feature_coverage.test.tsx",
+                        "web/src/__tests__/cmp_qualification.test.ts",
+                        "web/src/__tests__/protocols.test.tsx"
                     ]
                 },
                 "docs": {
@@ -7832,22 +7859,25 @@
                 },
                 "rbac": {
                     "evidence": [
-                        "protocol authz manifest maps cmp route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
-                        "cmp is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+                        "protocol authz manifest maps /cmp to its explicit protocol-credential rationale, tenant binding, and admin enablement authority.",
+                        "The API feature authz manifest maps qualifyCMP to certs:read; POST /api/v1/protocols/cmp/qualification resolves the tenant only from authenticated context and cannot authorize or perform enrollment."
                     ],
                     "refs": [
                         "internal/server/protocol_authz.go",
                         "internal/server/protocol_authz_test.go",
-                        "internal/server/protocols_served_enroll_test.go"
+                        "internal/server/protocols_served_enroll_test.go",
+                        "internal/api/cmp_qualification_test.go",
+                        "internal/api/feature_authz_test.go"
                     ]
                 },
                 "audit": {
                     "evidence": [
-                        "protocol-served feature: protocol issuance/revocation paths emit protocol audit events or expose an explicit status gate."
+                        "CMP issuance emits protocol audit events; refusals emit bounded tenant enrollment-diagnostic events; effect-free qualification emits no event."
                     ],
                     "refs": [
                         "internal/server/protocols.go",
-                        "internal/server/protocol_mounts.go"
+                        "internal/server/protocol_mounts.go",
+                        "internal/protocols/cmp/cmp.go"
                     ]
                 },
                 "telemetry": {
@@ -7867,6 +7897,7 @@
                         "web/src/__tests__/feature_a11y_receipts.test.tsx",
                         "web/src/lib/navigation.ts",
                         "web/src/pages/Protocols.tsx",
+                        "web/src/pages/protocols/CMPOperatorPanel.tsx",
                         "web/src/App.tsx"
                     ]
                 },
@@ -7891,7 +7922,7 @@
                 "purpose": "Lets an operator understand and safely use cmp server while tenant, policy, and security authority remain on the server.",
                 "tool": "certificates",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/protocols",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -7905,7 +7936,7 @@
                 ],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -7926,12 +7957,20 @@
                         ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/protocols/CMPOperatorPanel.tsx",
+                            "internal/api/cmp_qualification.go",
+                            "web/src/__tests__/protocols.test.tsx"
+                        ]
                     },
                     "execute": {
-                        "status": "missing",
-                        "reason": "No complete console execution path is proved for this capability."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/lib/api.ts",
+                            "web/src/pages/protocols/CMPOperatorPanel.tsx",
+                            "internal/server/protocols_served_stock_clients_test.go"
+                        ]
                     },
                     "observe": {
                         "status": "complete",
@@ -7940,8 +7979,12 @@
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/protocols/CMPOperatorPanel.tsx",
+                            "internal/protocols/cmp/diagnosis_test.go",
+                            "web/src/__tests__/protocols.test.tsx"
+                        ]
                     },
                     "verify": {
                         "status": "complete",
@@ -7950,14 +7993,17 @@
                         ]
                     },
                     "automate": {
-                        "status": "not_applicable",
-                        "reason": "The catalog declares no supported API or CLI automation surface for this capability."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/api/cmp_qualification.go",
+                            "internal/cli/command.go"
+                        ]
                     }
                 },
                 "owner": "pki",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "345ed531692987c0d2f50be730e1f17e7de7c207",
+                "freshness": "2026-08-28"
             }
         },
         {

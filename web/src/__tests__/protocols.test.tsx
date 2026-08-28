@@ -13,6 +13,7 @@ const { apiMock } = vi.hoisted(() => ({
     protocolStatuses: vi.fn(),
     estQualification: vi.fn(),
     scepQualification: vi.fn(),
+    cmpQualification: vi.fn(),
     acmeOperatorPlan: vi.fn(),
     activateProtocolProfile: vi.fn(),
     acmeARIPosture: vi.fn(),
@@ -118,6 +119,7 @@ describe("protocol surface", () => {
     apiMock.protocolStatuses.mockReset();
     apiMock.estQualification.mockReset();
     apiMock.scepQualification.mockReset();
+    apiMock.cmpQualification.mockReset();
     apiMock.acmeOperatorPlan.mockReset();
     apiMock.activateProtocolProfile.mockReset();
     apiMock.acmeARIPosture.mockReset();
@@ -201,6 +203,30 @@ describe("protocol surface", () => {
           detail: "Enrollment refused the empty PKI message before reading a CSR or challenge.",
         },
       ],
+    });
+    apiMock.cmpQualification.mockResolvedValue({
+      checked_at: "2026-08-28T12:00:00Z",
+      ready: true,
+      effect_free: true,
+      endpoint: "/cmp",
+      profile: "device-90d",
+      binding_mode: "subject-bound",
+      client_trust_anchor_count: 2,
+      checks: [
+        { id: "configured", label: "CMP enabled", passed: true, detail: "CMP is enabled in startup configuration." },
+        { id: "endpoint-mounted", label: "CMP endpoint mounted", passed: true, detail: "The running control plane owns POST /cmp." },
+        { id: "tenant-binding", label: "Tenant binding", passed: true, detail: "The CMP mount is bound to this authenticated tenant." },
+        { id: "ra-transport", label: "RA transport identity", passed: true, detail: "The sealed CMP response-protection identity is loaded in memory." },
+        { id: "client-trust", label: "Client protection trust", passed: true, detail: "At least one operator-approved client protection trust anchor is loaded." },
+        { id: "issuing-path", label: "Isolated issuing path", passed: true, detail: "The event-sourced issuer and isolated signer path are attached." },
+        { id: "profile-policy", label: "Issuing profile", passed: true, detail: "The server can enforce the device-90d certificate profile." },
+        { id: "bounded-capacity", label: "Bounded enrollment capacity", passed: true, detail: "CMP enrollment uses the bounded protocol worker pool." },
+      ],
+      preview_writes: [],
+      preview_external_effects: [],
+      preview_signer_calls: [],
+      proof: ["In-memory only.", "No request material.", "No effects."],
+      blockers: [],
     });
     apiMock.activateProtocolProfile.mockResolvedValue({ profile: "eval", active: true, protocols: ["acme"] });
     apiMock.acmeUpstreamAuthorizations.mockResolvedValue({ items: [], never_validated_count: 0, guidance: "" });
@@ -1145,6 +1171,97 @@ describe("protocol surface", () => {
         "Keep the challenge gate and CMS checks strict. Repair the named responder, CA/RA, or signer configuration, then run this same check again.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("previews, runs, observes, and safely retries exact CMP readiness without a PKIMessage", async () => {
+    const user = userEvent.setup();
+    await renderProtocols();
+
+    const panel = screen.getByRole("region", { name: "CMP readiness check" });
+    expect(
+      within(panel).getByText(
+        "Safety boundary: this reads in-memory readiness only. It sends no PKIMessage, CSR, client certificate, credential, or private key; it makes no write, signer call, or network call.",
+      ),
+    ).toBeInTheDocument();
+    expect(within(panel).getByText("Endpoint and tenant")).toBeInTheDocument();
+    expect(within(panel).getByText("Protection identity and trust")).toBeInTheDocument();
+    expect(within(panel).getByText("Profile and isolated signer")).toBeInTheDocument();
+    expect(within(panel).getByText("Bounded capacity")).toBeInTheDocument();
+    expect(apiMock.cmpQualification).not.toHaveBeenCalled();
+
+    await user.click(within(panel).getByRole("button", { name: "Run safe CMP check" }));
+
+    await waitFor(() => expect(apiMock.cmpQualification).toHaveBeenCalledTimes(1));
+    expect((await within(panel).findAllByText("CMP is ready for a protected client")).length).toBeGreaterThanOrEqual(1);
+    expect(within(panel).getByText("device-90d")).toBeInTheDocument();
+    expect(within(panel).getByText("Client may request only its own names")).toBeInTheDocument();
+    expect(within(panel).getByText("2 approved trust anchor(s)")).toBeInTheDocument();
+    expect(within(panel).getByText(/0 writes · 0 outside calls · 0 signer calls/i)).toBeInTheDocument();
+    expect(within(panel).getByText(/not proof that a client has enrolled/i)).toBeInTheDocument();
+
+    apiMock.cmpQualification.mockResolvedValueOnce({
+      checked_at: "2026-08-28T12:01:00Z",
+      ready: false,
+      effect_free: true,
+      endpoint: "/cmp",
+      profile: "device-90d",
+      binding_mode: "subject-bound",
+      client_trust_anchor_count: 0,
+      checks: [
+        {
+          id: "client-trust",
+          label: "Client protection trust",
+          passed: false,
+          detail: "This gate is not ready in the running process.",
+          recovery: "Configure the approved client or RA chain and restart; anonymous CMP enrollment stays refused.",
+        },
+      ],
+      preview_writes: [],
+      preview_external_effects: [],
+      preview_signer_calls: [],
+      proof: ["In-memory only.", "No request material.", "No effects."],
+      blockers: ["Client protection trust: configure the approved chain."],
+    });
+    await user.click(within(panel).getByRole("button", { name: "Run again" }));
+
+    expect((await within(panel).findAllByText("CMP needs attention")).length).toBeGreaterThanOrEqual(1);
+    expect(within(panel).getByText(/anonymous CMP enrollment stays refused/i)).toBeInTheDocument();
+  });
+
+  it("renders bounded CMP refusal receipts and copy-safe interoperable OpenSSL guidance", async () => {
+    const writeText = installClipboardSpy();
+    apiMock.enrollmentDiagnostics.mockResolvedValueOnce({
+      items: [
+        {
+          id: "cmp-refusal-1",
+          protocol: "cmp",
+          step: "authorize",
+          cause: "client_cert_rejected",
+          summary: "The CMP protection certificate did not chain to an approved client trust anchor.",
+          remediation: "Install the approved client or RA chain; do not enable anonymous enrollment.",
+          actionable: true,
+          observed_at: "2026-08-28T11:58:00Z",
+          count: 2,
+          operation_ref: "cmp:sha256:bounded-reference",
+        },
+      ],
+      unknown_count: 0,
+      guidance: "Bounded tenant evidence.",
+    });
+    await renderProtocols();
+
+    const panel = screen.getByRole("region", { name: "CMP readiness check" });
+    expect(await within(panel).findByText(/did not chain to an approved client trust anchor/i)).toBeInTheDocument();
+    expect(within(panel).getByText("cmp:sha256:bounded-reference")).toBeInTheDocument();
+    expect(within(panel).getByText(/Raw PKIMessages, CSRs, protection certificates, keys, and secrets are never rendered/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy CMP OpenSSL p10cr command" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    const command = String(writeText.mock.calls.at(-1)?.[0]);
+    for (const required of ["-cert cmp-client.pem", "-key cmp-client.key", "-extracerts cmp-client.pem", "-srvcert cmp-ra.pem", "-reqout request.der", "-rspout response.der"]) {
+      expect(command).toContain(required);
+    }
+    expect(command).not.toMatch(/BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY|password=|secret=/i);
   });
 
   it("renders SPIFFE, SSH CA, and TSA setup without exposing private key material", async () => {

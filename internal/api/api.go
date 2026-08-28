@@ -108,6 +108,7 @@ type API struct {
 	transit                 TransitService // served transit/EaaS key operations (KMS-01); nil = not enabled
 	vaultCompat             *vaultCompatState
 	protocolProfile         ProtocolProfileControl
+	cmpQualificationPosture CMPQualificationPosture
 	codeSigning             CodeSigningService
 	ctSubmission            CTSubmissionService
 	secrets                 *secretsService // served secrets/identity surface (GAP-006); nil = not enabled
@@ -218,6 +219,7 @@ type config struct {
 	managedKeyCustody           ManagedKeyCustodyConfiguration
 	transit                     TransitService
 	protocolProfile             ProtocolProfileControl
+	cmpQualificationPosture     CMPQualificationPosture
 	codeSigning                 CodeSigningService
 	ctSubmission                CTSubmissionService
 	secrets                     *secretsService
@@ -504,6 +506,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		transit:                     cfg.transit,
 		vaultCompat:                 newVaultCompatState(cfg.eventLog),
 		protocolProfile:             cfg.protocolProfile,
+		cmpQualificationPosture:     cfg.cmpQualificationPosture,
 		codeSigning:                 cfg.codeSigning,
 		ctSubmission:                cfg.ctSubmission,
 		secrets:                     cfg.secrets,
@@ -1003,6 +1006,7 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/endpoints/key-custody", opID: "listEndpointKeyCustody", summary: "List where each deployment target's private key is generated: host agent or control plane", handler: a.listEndpointKeyCustody, resSchema: "EndpointKeyCustodyList", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/setup/protocols", opID: "getProtocolProfile", summary: "Get the tenant-bound eval protocol profile status", handler: a.getProtocolProfile, resSchema: "ProtocolProfileStatus", successCode: "200", perm: authz.IssuersRead},
 		{method: "POST", path: "/api/v1/setup/protocols/activate", opID: "activateProtocolProfile", summary: "Activate the tenant-bound eval protocol profile", handler: a.activateProtocolProfile, resSchema: "ProtocolProfileStatus", successCode: "200", mutation: true, perm: authz.IssuersWrite},
+		{method: "POST", path: "/api/v1/protocols/cmp/qualification", opID: "qualifyCMP", summary: "Check the tenant-bound CMP endpoint without sending a PKIMessage, calling the signer, or writing state", handler: a.qualifyCMP, resSchema: "CMPQualification", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/issuers/{id}", opID: "getIssuer", summary: "Get an issuer", handler: a.getIssuer, pathParams: idPath, resSchema: "Issuer", successCode: "200", perm: authz.IssuersRead, scope: scopeIssuerPath("id")},
 		{method: "POST", path: "/api/v1/ca/ceremonies/preview", opID: "previewCACeremony", summary: "Validate and explain an exact CA key ceremony without writing state, creating keys, or contacting an authority", handler: a.previewCACeremony, reqSchema: "CACeremonyStartRequest", resSchema: "CACeremonyPlanPreview", successCode: "200", perm: authz.IssuersWrite},
 		{method: "POST", path: "/api/v1/ca/ceremonies", opID: "createCACeremony", summary: "Start an m-of-n CA key ceremony", handler: a.createCACeremony, reqSchema: "CACeremonyStartRequest", resSchema: "CAKeyCeremony", successCode: "201", mutation: true, perm: authz.IssuersWrite},
@@ -1902,63 +1906,6 @@ func errWithStatus(status int, err error) *apiError {
 
 func decodeJSON(r *http.Request, v any) error {
 	return decodeJSONWithLimit(r, v, defaultRESTJSONBodyLimit)
-}
-
-// DecodeJSON is the licensed-route wrapper for the core request decoder.
-func DecodeJSON(r *http.Request, v any) error { return decodeJSON(r, v) }
-
-// DecodeJSONStrict applies the same size and trailing-token limits as DecodeJSON
-// and also rejects fields outside the exact wire struct. Use it for destructive
-// commands where silently ignoring a caller-asserted control could be unsafe.
-func DecodeJSONStrict(r *http.Request, v any) error {
-	return decodeJSONWithLimitOptions(r, v, defaultRESTJSONBodyLimit, true)
-}
-
-// AuthenticatedPrincipalSubject returns the exact authenticated subject already
-// placed in the request context by the shared authorization middleware. Licensed
-// handlers use this instead of accepting caller-asserted operator identities.
-func AuthenticatedPrincipalSubject(ctx context.Context) (string, error) {
-	return requestPrincipalSubject(ctx)
-}
-
-// ErrStatus lets licensed route handlers return core problem+json errors without
-// depending on unexported error types.
-func ErrStatus(status int, detail string) error { return errStatus(status, detail) }
-
-// ErrWithStatus wraps an arbitrary decode/domain error with an HTTP status for
-// the shared problem+json writer.
-func ErrWithStatus(status int, err error) error { return errWithStatus(status, err) }
-
-// Mutate runs a licensed mutating handler through the same idempotency path as
-// core routes.
-func (a *API) Mutate(w http.ResponseWriter, r *http.Request, idempotencyKey string, fn func(ctx context.Context, tenantID string) (int, any, error)) {
-	a.mutate(w, r, idempotencyKey, fn)
-}
-
-// ObserveFeature emits the shared per-feature telemetry signal for licensed
-// route handlers.
-func (a *API) ObserveFeature(feature, action string, start time.Time, err error) {
-	a.observeFeature(feature, action, start, err)
-}
-
-// Tenant resolves the authenticated caller's tenant for a licensed READ handler,
-// the same way Mutate resolves it for a licensed write. It is the feature-neutral
-// read seam: a licensed GET handler (which does not go through Mutate) uses it to
-// scope its query to the caller's tenant without the MPL core importing ee/. It
-// returns false when no valid tenant is present (the handler should then refuse).
-func (a *API) Tenant(r *http.Request) (string, bool) { return a.tenant(r) }
-
-// WriteJSON, WriteError, and WriteProblemUnauthorized complete the licensed
-// READ seam that Tenant opened: a licensed GET handler does not go through
-// Mutate, so without these it could not render a response without the MPL
-// core exporting its problem+json machinery. They are thin pass-throughs, so
-// a licensed route's error shape is identical to a core route's.
-func (a *API) WriteJSON(w http.ResponseWriter, status int, v any) { a.writeJSON(w, status, v) }
-
-func (a *API) WriteError(w http.ResponseWriter, err error) { a.writeError(w, err) }
-
-func (a *API) WriteProblemUnauthorized(w http.ResponseWriter) {
-	a.writeProblem(w, problemUnauthorized())
 }
 
 func decodeJSONWithLimit(r *http.Request, v any, limit int64) error {

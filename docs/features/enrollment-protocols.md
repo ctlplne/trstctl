@@ -135,7 +135,53 @@ serves the `p10cr` flow at `POST /cmp`: it reads the DER PKIMessage, extracts th
 transaction ID and CSR through the isolated cryptography path, and returns a signed
 `pkixcmp` response. As with SCEP, the CMP protection key is the sealed
 `protocols.ra_key_file` transport identity, distinct from the CA key in the isolated
-signing service.
+signing service. The certificate that protects a client PKIMessage must chain to
+`protocols.cmp_client_trust_anchor_file`. By default, the CSR may request only names
+already asserted by that authenticated protection certificate. Third-party
+registration-authority enrollment is possible only when
+`protocols.cmp_allow_ra_enrollment` is explicitly enabled.
+
+#### Check CMP safely before connecting a client
+
+Open **Certificates → Enrollment methods**, expand **Set up and operate methods**,
+then find **CMP readiness check**. Before any request, the page explains the four
+groups it will inspect: endpoint and tenant, protection identity and trust, issuing
+profile and isolated signer, and bounded worker capacity.
+
+Choosing **Run safe CMP check** calls the authenticated, tenant-scoped
+`POST /api/v1/protocols/cmp/qualification` endpoint. This is a read-only POST because
+it asks the running process to assemble one answer from its in-memory mount state. It
+does **not** query the database, call a network target or signer, append an event,
+enqueue an outbox row, or create, parse, transmit, or retain a CSR, PKIMessage,
+certificate, protection credential, or private key. The response contains eight
+named gates, exact recovery for every red gate, and three empty effect lists. The
+same check is available to automation:
+
+```sh
+trstctl protocols cmp qualify
+```
+
+A green readiness check is not a pretend enrollment. The final wire proof still
+comes from a real CMP client that owns its private key. The console provides this
+copy-safe OpenSSL `p10cr` handoff:
+
+```sh
+openssl cmp -config "" -cmd p10cr \
+  -server https://trstctl.example.test -path /cmp \
+  -csr device.csr \
+  -cert cmp-client.pem -key cmp-client.key -extracerts cmp-client.pem \
+  -srvcert cmp-ra.pem -ignore_keyusage -disable_confirm \
+  -certout device.pem -reqout request.der -rspout response.der \
+  -batch -verbosity 7
+```
+
+The client and RA files stay on the operator's machine; they are never pasted into
+the browser. A refused request creates only a bounded, tenant-scoped diagnostic
+receipt. When the server knows the exact branch, it distinguishes a rejected
+protection certificate, a CSR/name binding violation, and a full local worker pool.
+When it cannot safely tell whether policy, signer, persistence, parsing, or response
+encoding failed, it says **unknown** instead of guessing. Repair the named gate and
+run the identical safe check again before retrying the same CMP transaction.
 
 ### The embedded / IoT enrollment agent (F54)
 
@@ -238,7 +284,7 @@ Be precise about what's mounted in the running server today:
 | EST serverkeygen / channel binding / profile routes | **Served when configured** — `/serverkeygen`, RFC 9266 `tls-server-end-point`, per-profile PathID, and the mTLS sibling route |
 | SCEP server (F23) | **Served** at `/scep` (`protocols.scep.enabled` + `protocols.scep.tenant_id`) — CMS transport, orchestrator-backed, tenant-scoped |
 | SCEP per-profile RA and rate limits | **Served when configured** — per-profile SCEP RA cert/key plus per-device rate limiter |
-| CMP server (F55) | **Served** at `/cmp` (`protocols.cmp.enabled` + `protocols.cmp.tenant_id`) — orchestrator-backed, tenant-scoped |
+| CMP server (F55) | **Served** at `/cmp` (`protocols.cmp.enabled` + `protocols.cmp.tenant_id`) — orchestrator-backed, tenant-scoped, client-anchor authenticated, subject-bound by default; safe qualification is served by API, CLI, and console |
 | MDM challenge (F56) | **Served** — policy management (API/CLI/UI), challenge rotation, Intune JWS validation, tenant/CSR binding, single-use replay cache, and live trust-anchor resolution via `trust_anchor_refs` from the served secret store |
 
 The protocol servers each expose a `Handler()` and mount on the control-plane TLS
@@ -273,7 +319,9 @@ enables.
   variants mount under `/.well-known/est/<PathID>/...` and
   `/.well-known/est-mtls/<PathID>/...`.
 - **SCEP:** `/scep?operation=GetCACaps|GetCACert|PKIOperation` (RFC 8894).
-- **CMP:** `POST /cmp` (RFC 4210 / RFC 6712).
+- **CMP:** `POST /cmp` (RFC 4210 / RFC 6712) for protected `p10cr` enrollment;
+  authenticated read-only `POST /api/v1/protocols/cmp/qualification` and
+  `trstctl protocols cmp qualify` for effect-free runtime qualification.
 - **Embedded:** `POST /enroll/bootstrap` (one-time token) and `POST /enroll/renewal`
   (verified client certificate) are served by the running control plane.
 - **Events:** `protocol.est.est-enroll`, `protocol.scep.*`, `protocol.cmp.enroll`,

@@ -150,6 +150,46 @@ func TestSCEPBadRequestIsNotMappedToAGuess(t *testing.T) {
 	}
 }
 
+// CMP uses handler-owned reason codes, not text matching. These four branches
+// are the cases where the server has enough evidence to name a repair safely.
+func TestCMPClosedReasonsMapToDistinctRepairs(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name   string
+		step   enrollmentdiag.Step
+		reason enrollmentdiag.CMPReason
+		want   enrollmentdiag.Cause
+	}{
+		{"protection", enrollmentdiag.StepAccount, enrollmentdiag.CMPReasonProtectionRejected, enrollmentdiag.CauseClientCertRejected},
+		{"identity", enrollmentdiag.StepAuthorize, enrollmentdiag.CMPReasonIdentityMismatch, enrollmentdiag.CauseNameNotPermitted},
+		{"capacity", enrollmentdiag.StepIssue, enrollmentdiag.CMPReasonCapacityRejected, enrollmentdiag.CauseCapacityFull},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			diagnosis := enrollmentdiag.ClassifyCMP(tc.step, tc.reason, nil)
+			if diagnosis.Protocol != enrollmentdiag.ProtocolCMP || diagnosis.Cause != tc.want {
+				t.Fatalf("CMP diagnosis = %+v, want protocol cmp and cause %q", diagnosis, tc.want)
+			}
+			if !diagnosis.Actionable() {
+				t.Fatal("a closed CMP reason did not produce an actionable repair")
+			}
+		})
+	}
+}
+
+func TestCMPDoesNotGuessFromUnknownReasonsOrErrorProse(t *testing.T) {
+	t.Parallel()
+	for _, reason := range []enrollmentdiag.CMPReason{enrollmentdiag.CMPReasonUnknown, "new-server-reason", ""} {
+		diagnosis := enrollmentdiag.ClassifyCMP(enrollmentdiag.StepIssue, reason,
+			errors.New("policy denied because client certificate rate limit text appeared"))
+		if diagnosis.Cause != enrollmentdiag.CauseUnknown || diagnosis.Remediation != "" {
+			t.Fatalf("unknown CMP reason %q was guessed as %+v", reason, diagnosis)
+		}
+	}
+}
+
 // AD CS matches only its stable, unambiguous error phrases.
 func TestADCSMatchesOnlyItsUnambiguousErrors(t *testing.T) {
 	t.Parallel()

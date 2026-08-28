@@ -2727,7 +2727,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use cmp server while tenant, policy, and security authority remain on the server.",
       "tool": "certificates",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/protocols",
       "navigationEntrypoints": [
         "tool navigation",
@@ -2741,7 +2741,7 @@ export const canonicalCapabilities = [
       ],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -2762,12 +2762,20 @@ export const canonicalCapabilities = [
           ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/protocols/CMPOperatorPanel.tsx",
+            "internal/api/cmp_qualification.go",
+            "web/src/__tests__/protocols.test.tsx"
+          ]
         },
         "execute": {
-          "status": "missing",
-          "reason": "No complete console execution path is proved for this capability."
+          "status": "complete",
+          "evidence": [
+            "web/src/lib/api.ts",
+            "web/src/pages/protocols/CMPOperatorPanel.tsx",
+            "internal/server/protocols_served_stock_clients_test.go"
+          ]
         },
         "observe": {
           "status": "complete",
@@ -2776,8 +2784,12 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/protocols/CMPOperatorPanel.tsx",
+            "internal/protocols/cmp/diagnosis_test.go",
+            "web/src/__tests__/protocols.test.tsx"
+          ]
         },
         "verify": {
           "status": "complete",
@@ -2786,14 +2798,17 @@ export const canonicalCapabilities = [
           ]
         },
         "automate": {
-          "status": "not_applicable",
-          "reason": "The catalog declares no supported API or CLI automation surface for this capability."
+          "status": "complete",
+          "evidence": [
+            "internal/api/cmp_qualification.go",
+            "internal/cli/command.go"
+          ]
         }
       },
       "owner": "pki",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "345ed531692987c0d2f50be730e1f17e7de7c207",
+      "freshness": "2026-08-28"
     }
   },
   {

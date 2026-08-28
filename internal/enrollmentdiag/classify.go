@@ -107,6 +107,38 @@ func ClassifySCEP(step Step, failInfo string, err error) Diagnosis {
 	return Diagnose(ProtocolSCEP, orDefault(step, StepUnknownStep), CauseUnknown)
 }
 
+// CMPReason is the closed server-side reason attached at a CMP refusal
+// boundary. CMP's wire error is intentionally coarse, so the handler records
+// the exact branch it took rather than asking this classifier to interpret an
+// error string.
+type CMPReason string
+
+const (
+	CMPReasonProtectionRejected CMPReason = "protection_rejected"
+	CMPReasonIdentityMismatch   CMPReason = "identity_mismatch"
+	CMPReasonCapacityRejected   CMPReason = "capacity_rejected"
+	CMPReasonUnknown            CMPReason = "unknown"
+)
+
+// ClassifyCMP diagnoses a CMP refusal from the handler's closed reason code.
+// Unrecognized codes are unknown on purpose: protocol prose and wrapped error
+// strings are not reliable evidence for sending an operator to a credential,
+// policy, or capacity control.
+func ClassifyCMP(step Step, reason CMPReason, err error) Diagnosis {
+	switch reason {
+	case CMPReasonProtectionRejected:
+		return Diagnose(ProtocolCMP, orDefault(step, StepAccount), CauseClientCertRejected)
+	case CMPReasonIdentityMismatch:
+		return Diagnose(ProtocolCMP, orDefault(step, StepAuthorize), CauseNameNotPermitted)
+	case CMPReasonCapacityRejected:
+		return Diagnose(ProtocolCMP, orDefault(step, StepIssue), CauseCapacityFull)
+	}
+	if isUnreachable(err) {
+		return Diagnose(ProtocolCMP, orDefault(step, StepIssue), CauseResponderUnreachable)
+	}
+	return Diagnose(ProtocolCMP, orDefault(step, StepUnknownStep), CauseUnknown)
+}
+
 // ClassifyADCS diagnoses an AD CS failure from the Windows error text.
 //
 // Text matching, which is exactly the kind of thing this package is otherwise

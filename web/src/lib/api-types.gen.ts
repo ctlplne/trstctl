@@ -1445,6 +1445,30 @@ export interface CMDBReconcileSchedule {
   token_ref?: string;
 }
 
+export interface CMPQualification {
+  binding_mode: "subject-bound" | "registration-authority";
+  blockers: string[];
+  checked_at: string;
+  checks: CMPQualificationCheck[];
+  client_trust_anchor_count: number;
+  effect_free: boolean;
+  endpoint: string;
+  preview_external_effects: string[];
+  preview_signer_calls: string[];
+  preview_writes: string[];
+  profile: string;
+  proof: string[];
+  ready: boolean;
+}
+
+export interface CMPQualificationCheck {
+  detail: string;
+  id: string;
+  label: string;
+  passed: boolean;
+  recovery?: string;
+}
+
 export interface CRLDistribution {
   ca_id: string;
   delta_base_number?: number;
@@ -2783,7 +2807,7 @@ export interface EnrollmentDiagnostic {
   identity_ref?: string;
   observed_at: string;
   operation_ref?: string;
-  protocol: "acme" | "est" | "scep" | "adcs";
+  protocol: "acme" | "est" | "scep" | "cmp" | "adcs";
   remediation?: string;
   step: string;
   summary: string;
@@ -2809,7 +2833,7 @@ export interface EnrollmentDiagnosticSupportAggregate {
   actionable: boolean;
   cause: string;
   count: number;
-  protocol: "acme" | "est" | "scep" | "adcs";
+  protocol: "acme" | "est" | "scep" | "cmp" | "adcs";
 }
 
 export interface EnrollmentDiagnosticVerification {

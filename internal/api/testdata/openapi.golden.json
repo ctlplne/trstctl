@@ -5664,6 +5664,114 @@
         ],
         "type": "object"
       },
+      "CMPQualification": {
+        "properties": {
+          "binding_mode": {
+            "enum": [
+              "subject-bound",
+              "registration-authority"
+            ],
+            "type": "string"
+          },
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "checked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/CMPQualificationCheck"
+            },
+            "type": "array"
+          },
+          "client_trust_anchor_count": {
+            "type": "integer"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "endpoint": {
+            "type": "string"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_signer_calls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "profile": {
+            "type": "string"
+          },
+          "proof": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ready": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "checked_at",
+          "ready",
+          "effect_free",
+          "endpoint",
+          "profile",
+          "binding_mode",
+          "client_trust_anchor_count",
+          "checks",
+          "preview_writes",
+          "preview_external_effects",
+          "preview_signer_calls",
+          "proof",
+          "blockers"
+        ],
+        "type": "object"
+      },
+      "CMPQualificationCheck": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "passed": {
+            "type": "boolean"
+          },
+          "recovery": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "passed",
+          "detail"
+        ],
+        "type": "object"
+      },
       "CRLDistribution": {
         "properties": {
           "ca_id": {
@@ -11151,6 +11259,7 @@
               "acme",
               "est",
               "scep",
+              "cmp",
               "adcs"
             ],
             "type": "string"
@@ -11256,6 +11365,7 @@
               "acme",
               "est",
               "scep",
+              "cmp",
               "adcs"
             ],
             "type": "string"
@@ -46428,6 +46538,53 @@
         ],
         "summary": "Preview restoring a historical certificate-profile version",
         "x-trstctl-permission": "profiles:write"
+      }
+    },
+    "/api/v1/protocols/cmp/qualification": {
+      "post": {
+        "operationId": "qualifyCMP",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CMPQualification"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Check the tenant-bound CMP endpoint without sending a PKIMessage, calling the signer, or writing state",
+        "x-trstctl-permission": "certs:read"
       }
     },
     "/api/v1/remediation/owner-actions": {

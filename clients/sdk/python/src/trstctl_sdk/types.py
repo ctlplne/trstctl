@@ -2059,6 +2059,38 @@ CMDBReconcileSchedule = TypedDict(
     total=False,
 )
 
+CMPQualification = TypedDict(
+    'CMPQualification',
+    {
+        'binding_mode': str,
+        'blockers': list[str],
+        'checked_at': str,
+        'checks': list[dict[str, Any]],
+        'client_trust_anchor_count': int,
+        'effect_free': bool,
+        'endpoint': str,
+        'preview_external_effects': list[str],
+        'preview_signer_calls': list[str],
+        'preview_writes': list[str],
+        'profile': str,
+        'proof': list[str],
+        'ready': bool,
+    },
+    total=False,
+)
+
+CMPQualificationCheck = TypedDict(
+    'CMPQualificationCheck',
+    {
+        'detail': str,
+        'id': str,
+        'label': str,
+        'passed': bool,
+        'recovery': str,
+    },
+    total=False,
+)
+
 CRLDistribution = TypedDict(
     'CRLDistribution',
     {

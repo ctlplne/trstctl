@@ -73,11 +73,13 @@ type servedProtocols struct {
 	ssh    *sshProtocol
 	spiffe *spiffeProtocol
 
-	estTenant  string
-	acmeTenant string
-	scepTenant string
-	cmpTenant  string
-	tsaTenant  string
+	estTenant                 string
+	acmeTenant                string
+	scepTenant                string
+	cmpTenant                 string
+	tsaTenant                 string
+	cmpClientTrustAnchorCount int
+	cmpBulkheadReady          bool
 
 	names []string // protocols actually served (logging / assertions)
 
@@ -172,32 +174,9 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 			sp.names = append(sp.names, "scep")
 		}
 		if cfg.CMP.Enabled {
-			sp.cmpTenant = firstNonEmpty(cfg.CMP.TenantID, tenantFallback)
-			// CMP's protection identity travels in the message's own extraCerts,
-			// so it authenticates nothing until it is chained to an
-			// operator-configured anchor. Unset anchors leave the mount refusing
-			// to enrol rather than enrolling anyone who can compose a message.
-			cmpAnchors, anchorErr := loadCMPClientTrustAnchors(cfg.CMPClientTrustAnchorFile)
-			if anchorErr != nil {
-				return nil, anchorErr
+			if err := s.buildServedCMP(cfg, tenantFallback, issuer, raCertDER, raKeyPKCS8, pool, sp); err != nil {
+				return nil, err
 			}
-			sp.cmp = cmp.New(cmp.Config{
-				Enroller:              enrollerAdapter{tenantID: sp.cmpTenant, issuer: issuer},
-				CACertDER:             raCertDER,
-				CAKeyPKCS8:            raKeyPKCS8,
-				Pool:                  pool,
-				Log:                   s.log,
-				ClientTrustAnchorsDER: cmpAnchors,
-				// H1/V22: RA-style third-party enrollment is an explicit
-				// deployment opt-in; the default binds every CSR to the
-				// authenticated protection identity.
-				AllowRAEnrollment: cfg.CMPAllowRAEnrollment,
-				// The licensed-aware verifier: subject algorithms the core
-				// parser cannot check verify through the licensed seam, the
-				// same binding EST carries (protection stays core-verified).
-				CSRVerifier: issuer.verifyCSR,
-			})
-			sp.names = append(sp.names, "cmp")
 		}
 	}
 

@@ -113,6 +113,7 @@ func TestCreateIncludesOnlyTypedRedactedEnrollmentDiagnosticAddendum(t *testing.
 		SchemaVersion: 1,
 		Rows: []EnrollmentDiagnosticAggregate{
 			{Protocol: "est", Cause: "template_acl_denied", Actionable: true, Count: 7},
+			{Protocol: "cmp", Cause: "capacity_full", Actionable: true, Count: 3},
 			{Protocol: "acme", Cause: "unknown", Actionable: false, Count: 2},
 		},
 		UnknownCount: 2,
@@ -130,7 +131,10 @@ func TestCreateIncludesOnlyTypedRedactedEnrollmentDiagnosticAddendum(t *testing.
 		t.Fatal("support archive omitted the requested diagnostics addendum")
 	}
 	text := string(body)
-	for _, want := range []string{`"protocol": "est"`, `"cause": "template_acl_denied"`, `"count": 7`} {
+	for _, want := range []string{
+		`"protocol": "est"`, `"cause": "template_acl_denied"`, `"count": 7`,
+		`"protocol": "cmp"`, `"cause": "capacity_full"`, `"count": 3`,
+	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("diagnostics addendum missing %s: %s", want, text)
 		}

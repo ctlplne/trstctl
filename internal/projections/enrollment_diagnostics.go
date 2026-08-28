@@ -11,7 +11,7 @@ func validateEnrollmentDiagnosticObserved(diagnostic EnrollmentDiagnosticObserve
 	if strings.TrimSpace(diagnostic.DiagnosticID) == "" {
 		return fmt.Errorf("projections: enrollment diagnostic id is required")
 	}
-	if !diagnosticOneOf(diagnostic.Protocol, "acme", "est", "scep", "adcs") {
+	if !diagnosticOneOf(diagnostic.Protocol, "acme", "est", "scep", "cmp", "adcs") {
 		return fmt.Errorf("projections: enrollment diagnostic protocol %q is not known", diagnostic.Protocol)
 	}
 	if !diagnosticOneOf(diagnostic.Step, "account", "order", "challenge", "validation", "authorize", "issue", "chain_build", "revocation", "unknown") {
@@ -20,7 +20,7 @@ func validateEnrollmentDiagnosticObserved(diagnostic EnrollmentDiagnosticObserve
 	if !diagnosticOneOf(diagnostic.Cause,
 		"challenge_not_visible", "challenge_wrong_value", "template_acl_denied",
 		"eab_unauthorized", "client_cert_rejected", "responder_unreachable",
-		"chain_incomplete", "name_not_permitted", "rate_limited", "unknown") {
+		"chain_incomplete", "name_not_permitted", "rate_limited", "capacity_full", "unknown") {
 		return fmt.Errorf("projections: enrollment diagnostic cause %q is not known", diagnostic.Cause)
 	}
 	if strings.TrimSpace(diagnostic.Summary) == "" {

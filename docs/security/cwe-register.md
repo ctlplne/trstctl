@@ -474,8 +474,8 @@ not this file.
 | `internal/server/bundled_pg.go:65` | port validated into uint16 range by config parsing (CWE-190) |
 | `internal/server/managedkeys_pkcs11_served_test.go:47` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/pam_served_test.go:216` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/server/protocol_mounts.go:906` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
-| `internal/server/protocol_mounts.go:908` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
+| `internal/server/protocol_mounts.go:885` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
+| `internal/server/protocol_mounts.go:887` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
 | `internal/server/recovery_projection_factory_test.go:172` | event test sequence is PostgreSQL bigint-bounded. |
 | `internal/server/revocation.go:422` | value reduced modulo the shard count before conversion (CWE-190) |
 | `internal/server/secret_integrations_outbox.go:810` | positive int64 is exactly representable as uint64. |
@@ -746,7 +746,7 @@ not this file.
 | `internal/api/headerauth_guard_test.go:34` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/api/headerauth_guard_test.go:39` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/ca/shellca/shellca.go:120` | the shell-CA backend exists to run the operator's configured signing command (CWE-78) |
-| `internal/cli/cli_test.go:1939` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/cli/cli_test.go:1957` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/connector/localops.go:260` | operator-configured local-ops action command; running it is the feature (CWE-78) |
 | `internal/crypto/kmswrap/external_kms.go:122` | operator-configured external KMS helper command (CWE-78) |
 | `internal/kms/pkcs11/softhsm_container_test.go:116` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
@@ -879,7 +879,7 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:103` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/secret_third_party_scan_served_test.go:154` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_rotation_served_test.go:2447` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:2185` | served CA certificate directory; the PEM is public material (CWE-276) |
+| `internal/server/server.go:2186` | served CA certificate directory; the PEM is public material (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:24` | the loose mode IS the attack fixture this test defends against (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:56` | the wide mode IS the precondition this test proves gets narrowed (CWE-276) |
 | `internal/tsa/http_test.go:103` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
@@ -1065,7 +1065,7 @@ not this file.
 | `internal/cli/audit_verify.go:103` | path is the explicit read-only local artifact selected by this CLI command (CWE-22). |
 | `internal/cli/cli.go:162` | the operator explicitly names the public trust-bundle path (CWE-22) |
 | `internal/cli/cli.go:485` | operator-passed local file argument on their own command line (CWE-22) |
-| `internal/cli/cli_test.go:1518` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/cli/cli_test.go:1536` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/cli/doctor/doctor_test.go:98` | test reads its own tempdir receipt (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/config/config.go:2264` | the config loader reading the operator's own config file (CWE-22) |
@@ -1167,10 +1167,10 @@ not this file.
 | `internal/server/plugins.go:199` | operator-configured plugin dir; WASM and signature are verified after the read (CWE-22) |
 | `internal/server/plugins.go:203` | operator-configured plugin dir; WASM and signature are verified after the read (CWE-22) |
 | `internal/server/protect_correct102_guard_test.go:100` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `internal/server/protocol_mounts.go:686` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/protocol_mounts.go:793` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/protocol_mounts.go:858` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/protocol_mounts.go:1123` | operator-configured trust bundle path (CWE-22) |
+| `internal/server/protocol_mounts.go:665` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/protocol_mounts.go:772` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/protocol_mounts.go:837` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/protocol_mounts.go:1102` | operator-configured trust bundle path (CWE-22) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:558` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:228` | test reads its own tempdir fixture (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:232` | test reads its own tempdir fixture (CWE-22) |
@@ -1191,8 +1191,8 @@ not this file.
 | `internal/server/serve_test.go:80` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:81` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:125` | test-owned path under t.TempDir (CWE-22) |
-| `internal/server/server.go:2112` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/server.go:2189` | same operator-configured directory as the target certificate (CWE-22) |
+| `internal/server/server.go:2113` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/server.go:2190` | same operator-configured directory as the target certificate (CWE-22) |
 | `internal/signing/design_test.go:30` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/design_test.go:136` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/gated_destruction_journal.go:226` | exact signer-owned journal path. |
@@ -1214,7 +1214,7 @@ not this file.
 | `internal/supportbundle/supportbundle.go:438` | operator-invoked support bundle collecting its configured files (CWE-22) |
 | `internal/supportbundle/supportbundle_test.go:97` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/supportbundle/supportbundle_test.go:101` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/supportbundle/supportbundle_test.go:147` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/supportbundle/supportbundle_test.go:151` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/telemetry/instanceid.go:21` | fixed instance-id file under the configured data dir (CWE-22) |
 | `internal/transit/persist.go:247` | the store's own sealed state file (CWE-22) |
 | `internal/transit/persist_test.go:118` | reads the test's own sealed keyring file (CWE-22) |
@@ -1329,7 +1329,7 @@ not this file.
 | `internal/ca/profilelint/profilelint_test.go:241` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/ca/profilelint/profilelint_test.go:254` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/cbom/hostsource/hostsource_test.go:22` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/cli/cli_test.go:1969` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/cli/cli_test.go:1987` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/cli/secret_scan_local.go:137` | a git hook must be executable; 0755 is the working minimum (CWE-276) |
 | `internal/connector/localops_test.go:87` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/crypto/external_kms_test.go:88` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -1360,7 +1360,7 @@ not this file.
 | `internal/server/protocols_served_spiffe_ssh_test.go:537` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/protocols_served_stock_clients_test.go:574` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_scan_served_test.go:36` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:2195` | served CA certificate PEM is public material (CWE-276) |
+| `internal/server/server.go:2196` | served CA certificate PEM is public material (CWE-276) |
 | `internal/server/signer_authorization_test.go:132` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/ssh_journey_served_test.go:204` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
