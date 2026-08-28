@@ -708,9 +708,9 @@ function ProfileRestoreDialog({
       closeOnBackdropClick={!busy}
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       overlayClassName="absolute inset-0 bg-black/55"
-      panelClassName="relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-panel border border-border bg-card shadow-elevation2"
+      panelClassName="relative min-w-0 max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-x-hidden overflow-y-auto rounded-panel border border-border bg-card shadow-elevation2"
     >
-      <header className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
+      <header className="flex min-w-0 items-start justify-between gap-3 border-b border-border px-5 py-4">
         <div className="min-w-0">
           <h2 id={titleId} className="text-title font-semibold">
             {translateNow("profiles.restore.reviewTitle")}
@@ -724,24 +724,24 @@ function ProfileRestoreDialog({
         </Button>
       </header>
 
-      <div className="grid gap-5 p-5 text-sm">
+      <div className="grid min-w-0 grid-cols-1 gap-5 p-5 text-sm">
         <section
-          className="rounded-control border border-status-success/35 bg-status-success/5 p-4"
+          className="min-w-0 rounded-control border border-status-success/35 bg-status-success/5 p-4"
           aria-label={translateNow("profiles.restore.effectFreeLabel")}
         >
           <p className="font-semibold text-foreground">{translateNow("profiles.restore.effectFree")}</p>
           <p className="mt-1 text-muted-foreground">{translateNow("profiles.restore.effectFreeDetail")}</p>
         </section>
 
-        <dl className="grid gap-3 sm:grid-cols-2">
+        <dl className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
           <ProfileRestoreValue label={translateNow("profiles.restore.sourceVersion")} value={`v${preview.source_version}`} />
           <ProfileRestoreValue label={translateNow("profiles.restore.activeVersion")} value={`v${preview.active_version}`} />
           <ProfileRestoreValue label={translateNow("profiles.restore.nextVersion")} value={`v${preview.next_version}`} />
           <ProfileRestoreValue label={translateNow("profiles.restore.permission")} value={preview.required_permission} />
           <ProfileRestoreValue label={translateNow("profiles.restore.reasonLabel")} value={preview.reason} wide />
-          <div className="grid gap-1 sm:col-span-2">
+          <div className="grid min-w-0 gap-1 sm:col-span-2">
             <dt className="text-caption text-muted-foreground">{translateNow("profiles.restore.fingerprint")}</dt>
-            <dd>
+            <dd className="min-w-0">
               <CredentialChip value={preview.request_fingerprint} label={translateNow("profiles.restore.fingerprint")} head={12} tail={8} />
             </dd>
           </div>
@@ -752,11 +752,11 @@ function ProfileRestoreDialog({
         <ProfileRestoreList title={translateNow("profiles.restore.verify")} items={preview.verification_steps} />
 
         {error ? (
-          <p className="rounded-control border border-destructive/35 bg-destructive/5 p-3 text-destructive" role="alert">
+          <p className="min-w-0 break-words rounded-control border border-destructive/35 bg-destructive/5 p-3 text-destructive" role="alert">
             {error}
           </p>
         ) : null}
-        <footer className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
+        <footer className="flex min-w-0 flex-wrap justify-end gap-2 border-t border-border pt-4">
           <Button type="button" variant="outline" disabled={busy} onClick={onClose}>
             {translateNow("profiles.restore.cancel")}
           </Button>
@@ -772,22 +772,22 @@ function ProfileRestoreDialog({
 
 function ProfileRestoreValue({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) {
   return (
-    <div className={`grid gap-1 ${wide ? "sm:col-span-2" : ""}`}>
+    <div className={`grid min-w-0 gap-1 ${wide ? "sm:col-span-2" : ""}`}>
       <dt className="text-caption text-muted-foreground">{label}</dt>
-      <dd className="font-medium">{value}</dd>
+      <dd className="break-words font-medium">{value}</dd>
     </div>
   );
 }
 
 function ProfileRestoreList({ title, items }: { title: string; items: string[] }) {
   return (
-    <section className="grid gap-2">
+    <section className="grid min-w-0 gap-2">
       <h3 className="text-sm font-semibold">{title}</h3>
-      <ul className="grid gap-2 text-muted-foreground">
+      <ul className="grid min-w-0 gap-2 text-muted-foreground">
         {items.map((item) => (
-          <li key={item} className="flex gap-2">
+          <li key={item} className="flex min-w-0 gap-2">
             <span aria-hidden="true">•</span>
-            <span>{item}</span>
+            <span className="min-w-0 break-words">{item}</span>
           </li>
         ))}
       </ul>
