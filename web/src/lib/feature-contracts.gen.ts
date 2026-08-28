@@ -2524,7 +2524,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use est server while tenant, policy, and security authority remain on the server.",
       "tool": "certificates",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/protocols",
       "navigationEntrypoints": [
         "tool navigation",
@@ -2538,7 +2538,7 @@ export const canonicalCapabilities = [
       ],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -2559,12 +2559,19 @@ export const canonicalCapabilities = [
           ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/protocols/ESTOperatorPanel.tsx",
+            "web/src/__tests__/protocols.test.tsx"
+          ]
         },
         "execute": {
-          "status": "missing",
-          "reason": "No complete console execution path is proved for this capability."
+          "status": "complete",
+          "evidence": [
+            "web/src/lib/api.ts",
+            "web/src/pages/protocols/ESTOperatorPanel.tsx",
+            "web/src/__tests__/est_qualification.test.ts"
+          ]
         },
         "observe": {
           "status": "complete",
@@ -2573,8 +2580,11 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/protocols/ESTOperatorPanel.tsx",
+            "web/src/__tests__/protocols.test.tsx"
+          ]
         },
         "verify": {
           "status": "complete",
@@ -2588,9 +2598,9 @@ export const canonicalCapabilities = [
         }
       },
       "owner": "pki",
-      "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "targetCheckpoint": "maintain",
+      "candidateSHA": "ef9efa99fb2c26387309e6ecb06801b50c85b407",
+      "freshness": "2026-08-28"
     }
   },
   {

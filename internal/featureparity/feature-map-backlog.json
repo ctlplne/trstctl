@@ -7236,9 +7236,9 @@
             "priority": 23,
             "served_state": "conditional",
             "backend_status": "conditional: served /.well-known/est/* protocol workflow: server.Build mounts EST when protocols.est.enabled, a tenant binding, and an issuing CA/signer exist; TestServedESTEndToEnd drives Bearer-token-authenticated /simpleenroll with a base64 PKCS#10 CSR through the assembled control-plane handler, receives a signer-issued certs-only PKCS#7 leaf, verifies it against the served CA, records certificate.recorded, rejects unauthenticated and certs:read-only tokens, and the served EST dispatcher exposes /cacerts, /simpleenroll, /simplereenroll, and /csrattrs behind fail-closed protocol mounting",
-            "current_frontend_mapping": "operate: Protocols at /protocols serves EST CA-certs/simpleenroll workflow evidence with tenant-binding requirements, auth/profile gates, live responder status, enrollment diagnostics, and copy-safe client setup snippets.",
-            "target_gui_mapping": "Roadmap residual: dedicated EST admin console for server URL, CA chain, auth mode, tenant binding, enrollment logs, client snippets, and error diagnostics beyond the served Protocols workflow.",
-            "acceptance_test": "Served GA acceptance is TestServedESTEndToEnd on the assembled control-plane handler plus TestProtectINTEROP003_ProtocolMountsGatedAndFailClosed; roadmap residual is the dedicated EST admin console beyond the served Protocols workflow.",
+            "current_frontend_mapping": "complete: Protocols at /protocols explains EST, shows live responder and enrollment-failure evidence, previews the exact credential-free three-door qualification, runs CA-chain/CSR-rules/Bearer-challenge checks, and exposes a fail-safe repair-and-rerun path without issuing a certificate or handling a CSR, token, session cookie, or private key.",
+            "target_gui_mapping": "Roadmap residual: optional EST admin console for editing startup-owned auth mode, tenant binding, and per-profile PathID policy beyond the complete, safe qualification workflow now served in Protocols.",
+            "acceptance_test": "Served GA acceptance is TestServedESTEndToEnd on the assembled control-plane handler plus TestProtectINTEROP003_ProtocolMountsGatedAndFailClosed; web/src/__tests__/est_qualification.test.ts proves the credential-free CA/CSR-rules/auth-wall transport and negative controls, and web/src/__tests__/protocols.test.tsx proves preview, execution, observation, and repair-and-rerun. Roadmap residual is the optional policy-editing EST admin console beyond this complete operator workflow.",
             "source_docs": [
                 "docs/features/enrollment-protocols.md",
                 "docs/guides/est-enrollment.md"
@@ -7247,7 +7247,9 @@
                 "/.well-known/est/*"
             ],
             "source_frontend": [
-                "web/src/pages/Protocols.tsx"
+                "web/src/pages/Protocols.tsx",
+                "web/src/pages/protocols/ESTOperatorPanel.tsx",
+                "web/src/lib/api.ts"
             ],
             "status": "closed",
             "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
@@ -7267,11 +7269,13 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: operate: Protocols at /protocols serves EST CA-certs/simpleenroll workflow evidence with tenant-binding requirements, auth/profile gates, live responder status, enrollment diagnostics, and copy-safe client setup snippets.",
-                        "target_gui_mapping: Roadmap residual: dedicated EST admin console for server URL, CA chain, auth mode, tenant binding, enrollment logs, client snippets, and error diagnostics beyond the served Protocols workflow."
+                        "current_frontend_mapping: complete: Protocols at /protocols explains EST, shows live responder and enrollment-failure evidence, previews the exact credential-free three-door qualification, runs CA-chain/CSR-rules/Bearer-challenge checks, and exposes a fail-safe repair-and-rerun path without issuing a certificate or handling a CSR, token, session cookie, or private key.",
+                        "target_gui_mapping: Roadmap residual: optional EST admin console for editing startup-owned auth mode, tenant binding, and per-profile PathID policy beyond the complete, safe qualification workflow now served in Protocols."
                     ],
                     "refs": [
                         "web/src/pages/Protocols.tsx",
+                        "web/src/pages/protocols/ESTOperatorPanel.tsx",
+                        "web/src/lib/api.ts",
                         "web/src/lib/navigation.ts",
                         "web/src/App.tsx"
                     ]
@@ -7284,12 +7288,14 @@
                 },
                 "test": {
                     "evidence": [
-                        "acceptance_test: Served GA acceptance is TestServedESTEndToEnd on the assembled control-plane handler plus TestProtectINTEROP003_ProtocolMountsGatedAndFailClosed; roadmap residual is the dedicated EST admin console beyond the served Protocols workflow.",
+                        "acceptance_test: Served GA acceptance is TestServedESTEndToEnd on the assembled control-plane handler plus TestProtectINTEROP003_ProtocolMountsGatedAndFailClosed; web/src/__tests__/est_qualification.test.ts proves the credential-free CA/CSR-rules/auth-wall transport and negative controls, and web/src/__tests__/protocols.test.tsx proves preview, execution, observation, and repair-and-rerun. Roadmap residual is the optional policy-editing EST admin console beyond this complete operator workflow.",
                         "TRACE-020 guard: TestTRACE020ESTRowSplitsServedGAFromRoadmapResidual keeps F22 in the served GA denominator only when the served EST protocol workflow and explicit admin-console roadmap residual are both present.",
                         "TestServedESTEndToEnd drives /.well-known/est/simpleenroll with a Bearer API token and base64 PKCS#10 CSR through the assembled control-plane handler, verifies the signer-issued certs-only PKCS#7 leaf against the served CA, records certificate.recorded, and rejects unauthenticated or certs:read-only tokens.",
                         "TestProtectINTEROP003_ProtocolMountsGatedAndFailClosed proves protocol mounts, including EST, are enablement-gated and fail closed when no issuing CA/signer exists.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
-                        "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
+                        "Route parity and feature coverage tests keep feature evidence tied to registered customer routes.",
+                        "web/src/__tests__/est_qualification.test.ts proves all three same-origin requests omit credentials and enrollment input, accept only a valid PKCS#7 CA chain, HTTP 204 CSR rules, and fail-closed Bearer challenge, reject an unsafe HTTP 200 enrollment response, and make zero requests in isolated preview mode.",
+                        "web/src/__tests__/protocols.test.tsx proves the operator sees the exact effect boundary before running, executes on demand, observes per-door evidence, and can run the identical check again after a failed result."
                     ],
                     "refs": [
                         "internal/server/protocols_served_enroll_test.go",
@@ -7297,7 +7303,9 @@
                         "internal/featureparity/feature_served_ga_coverage_test.go",
                         "internal/featureparity/feature_facet_coverage_test.go",
                         "web/src/__tests__/route_parity.test.ts",
-                        "web/src/__tests__/feature_coverage.test.tsx"
+                        "web/src/__tests__/feature_coverage.test.tsx",
+                        "web/src/__tests__/est_qualification.test.ts",
+                        "web/src/__tests__/protocols.test.tsx"
                     ]
                 },
                 "docs": {
@@ -7371,7 +7379,7 @@
                 "purpose": "Lets an operator understand and safely use est server while tenant, policy, and security authority remain on the server.",
                 "tool": "certificates",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/protocols",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -7385,7 +7393,7 @@
                 ],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -7406,12 +7414,19 @@
                         ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/protocols/ESTOperatorPanel.tsx",
+                            "web/src/__tests__/protocols.test.tsx"
+                        ]
                     },
                     "execute": {
-                        "status": "missing",
-                        "reason": "No complete console execution path is proved for this capability."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/lib/api.ts",
+                            "web/src/pages/protocols/ESTOperatorPanel.tsx",
+                            "web/src/__tests__/est_qualification.test.ts"
+                        ]
                     },
                     "observe": {
                         "status": "complete",
@@ -7420,8 +7435,11 @@
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/protocols/ESTOperatorPanel.tsx",
+                            "web/src/__tests__/protocols.test.tsx"
+                        ]
                     },
                     "verify": {
                         "status": "complete",
@@ -7435,9 +7453,9 @@
                     }
                 },
                 "owner": "pki",
-                "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "target_checkpoint": "maintain",
+                "candidate_sha": "ef9efa99fb2c26387309e6ecb06801b50c85b407",
+                "freshness": "2026-08-28"
             }
         },
         {
