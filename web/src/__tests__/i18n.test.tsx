@@ -1256,8 +1256,12 @@ describe("i18n boundary", () => {
       // and audit handoffs. Placeholders and fail-honest path meaning were
       // reviewed. Machine-authored es/de translations — FLAG FOR HUMAN
       // TRANSLATION REVIEW before release.
-      "es-ES": "241a2a176e9c53c88d38c64419a7832abc0df964e094382edf84b51dac930d93",
-      "de-DE": "cb84287c80a7489cc12ace173ee8e26dbe96c9108be2ebb25c8a896c1fbd4d27",
+      // F47 revocation-center re-pin: translated effect-free review, reason,
+      // impact, propagation, irreversible confirmation, and proof copy. The
+      // unknown-state negations and placeholders remain intact. Machine-authored
+      // es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "6e017fd413be42e278434d15f7dec5eed9258da29ca0e8ed3dbc9fb9ce7b6fe4",
+      "de-DE": "2e8dd220c7d2490be788e621a12526ad8912fd5455ca9e23e3b1f5414db84334",
     });
   });
 

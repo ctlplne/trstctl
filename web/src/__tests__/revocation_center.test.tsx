@@ -112,7 +112,7 @@ describe("RevocationCenter", () => {
     expect(apiMock.graphBlastRadius).toHaveBeenCalledWith("cert:certificate-payments");
     expect(apiMock.transitionIdentity).not.toHaveBeenCalled();
     expect(await screen.findByText("No changes were made")).toBeInTheDocument();
-    expect(screen.getByText("2 downstream systems are in the served graph impact.")).toBeInTheDocument();
+    expect(screen.getByText("2 downstream systems are linked to this credential.")).toBeInTheDocument();
     expect(screen.getByText("sha256:reviewed-revocation")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Continue to confirmation" }));

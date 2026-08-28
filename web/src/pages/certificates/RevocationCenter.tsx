@@ -289,7 +289,7 @@ export function RevocationCenter({ distributions, health, identities, onRevoked 
               {review.impact && Object.keys(review.impact.by_kind ?? {}).length > 0 && (
                 <ul className="mt-2 flex flex-wrap gap-2 text-xs">
                   {Object.entries(review.impact.by_kind).map(([kind, count]) => (
-                    <li key={kind} className="rounded-full border border-border px-2 py-1">
+                    <li key={kind} className="rounded-control border border-border px-2 py-1">
                       {kind}: {String(count)}
                     </li>
                   ))}

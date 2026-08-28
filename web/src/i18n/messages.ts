@@ -4651,7 +4651,7 @@ export const messages = {
   "certificates.revocation.noExternalEffect": { defaultMessage: "No external effect", description: "Fallback when a transition has no queued external work." },
   "certificates.revocation.impactTitle": { defaultMessage: "Affected deployments", description: "Heading for revocation blast-radius evidence." },
   "certificates.revocation.impactLoading": {
-    defaultMessage: "Affected systems are still loading from the served credential graph.",
+    defaultMessage: "trstctl is still checking which systems use this credential.",
     description: "Honest blast-radius loading state.",
   },
   "certificates.revocation.impactUnknown": {
@@ -4659,11 +4659,11 @@ export const messages = {
     description: "Honest blast-radius unavailable state.",
   },
   "certificates.revocation.impactOne": {
-    defaultMessage: "{count} downstream system is in the served graph impact.",
+    defaultMessage: "{count} downstream system is linked to this credential.",
     description: "Singular blast-radius summary.",
   },
   "certificates.revocation.impactMany": {
-    defaultMessage: "{count} downstream systems are in the served graph impact.",
+    defaultMessage: "{count} downstream systems are linked to this credential.",
     description: "Plural blast-radius summary.",
   },
   "certificates.revocation.graphBindingMissing": {
