@@ -50,6 +50,28 @@ tokens without enrollment scope receive `insufficient_scope`. A Basic-authentica
 deployment still advertises Basic because the authenticator, not the EST handler,
 owns the challenge.
 
+#### Check EST safely from the console
+
+Open **Certificates → Enrollment methods**, expand **Set up and operate
+methods**, and use **EST connection check** before connecting a real device.
+The screen previews and then runs three same-origin checks:
+
+1. `GET /.well-known/est/cacerts` must return a structurally valid, base64
+   PKCS#7 CA chain.
+2. `GET /.well-known/est/csrattrs` must return the server's CSR rules. trstctl's
+   default “no extra attributes” answer is HTTP 204 and is valid.
+3. `POST /.well-known/est/simpleenroll` deliberately sends no credentials and
+   no body. It passes only when the server refuses it with HTTP 401 and the
+   expected Bearer challenge.
+
+The third request is a security negative control, not an enrollment attempt.
+The browser omits session cookies, authorization, CSR bytes, and private-key
+material. The workflow cannot issue a certificate. If any row fails, keep the
+authentication requirement in place, repair the named responder, tenant, CA,
+or signer configuration, and run the same check again. A real EST client still
+creates and protects its private key locally, sends its CSR with a scoped
+bootstrap token, and keeps the idempotency key for safe retries.
+
 EST also serves the C3 parity extensions: EST `/serverkeygen` (when a profile opts in)
 has the signer generate the key, returning the certificate plus encrypted private key
 material as CMS EnvelopedData, with the raw key never entering logs or audit events.

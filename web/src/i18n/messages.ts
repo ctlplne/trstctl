@@ -6565,6 +6565,78 @@ export const messages = {
   "protocols.acmePlan.blockers": { defaultMessage: "Fix before connecting a client", description: "ACME blocker list heading." },
   "protocols.acmePlan.warnings": { defaultMessage: "Limits to know", description: "ACME non-blocking warning disclosure." },
   "protocols.acmePlan.recovery": { defaultMessage: "If a client fails", description: "ACME recovery steps heading." },
+  "protocols.estCheck.region": { defaultMessage: "EST connection check", description: "Accessible label for the safe EST operator workflow." },
+  "protocols.estCheck.heading": { defaultMessage: "EST connection check", description: "Heading for the safe EST operator workflow." },
+  "protocols.estCheck.description": {
+    defaultMessage: "Check the three public doors a device needs before you point a real device at trstctl.",
+    description: "ELI5 explanation of the EST qualification workflow.",
+  },
+  "protocols.estCheck.previewHeading": { defaultMessage: "What this check will do", description: "EST qualification preview heading." },
+  "protocols.estCheck.safePreview": {
+    defaultMessage: "Safety boundary: no certificate, CSR, token, or private key will be created, sent, or stored.",
+    description: "Explicit effect boundary for the EST qualification workflow.",
+  },
+  "protocols.estCheck.caExpected": {
+    defaultMessage: "Expect a structurally valid PKCS#7 CA chain.",
+    description: "Expected outcome for the EST CA-chain check.",
+  },
+  "protocols.estCheck.csrExpected": {
+    defaultMessage: "Expect the server to answer with its CSR rules; no rules is a valid answer.",
+    description: "Expected outcome for the EST CSR-attributes check.",
+  },
+  "protocols.estCheck.authExpected": {
+    defaultMessage: "Send no credentials and expect a Bearer challenge before any CSR is read.",
+    description: "Expected outcome for the EST authentication-gate check.",
+  },
+  "protocols.estCheck.run": { defaultMessage: "Run safe EST check", description: "Run the effect-free EST qualification workflow." },
+  "protocols.estCheck.running": { defaultMessage: "Checking EST…", description: "Busy label while EST qualification runs." },
+  "protocols.estCheck.runAgain": { defaultMessage: "Run again", description: "Repeat the exact EST qualification workflow after repair." },
+  "protocols.estCheck.ready": { defaultMessage: "EST is ready for a client", description: "Successful EST qualification state." },
+  "protocols.estCheck.blocked": { defaultMessage: "EST needs attention", description: "Failed EST qualification state." },
+  "protocols.estCheck.passed": { defaultMessage: "Passed", description: "One EST qualification check passed." },
+  "protocols.estCheck.failed": { defaultMessage: "Failed", description: "One EST qualification check failed." },
+  "protocols.estCheck.noIssuance": {
+    defaultMessage: "No certificate was issued by this check.",
+    description: "Post-run reminder that EST qualification made no issuance mutation.",
+  },
+  "protocols.estCheck.recovery": {
+    defaultMessage: "Keep authentication strict. Repair the named responder or signer configuration, then run this same check again.",
+    description: "Fail-safe EST recovery guidance.",
+  },
+  "protocols.estCheck.clientBoundary": {
+    defaultMessage: "A real device still creates and keeps its own private key, then sends its CSR with an approved bootstrap token.",
+    description: "Clarifies the safe boundary between console qualification and real EST enrollment.",
+  },
+  "protocols.estCheck.failedTitle": { defaultMessage: "EST check could not run", description: "EST qualification transport failure heading." },
+  "protocols.estCheck.failedBody": { defaultMessage: "The EST check failed before returning evidence.", description: "Fallback EST qualification error." },
+  "protocols.estCheck.invalidResult": { defaultMessage: "The EST check returned incomplete evidence.", description: "EST qualification schema guard error." },
+  "protocols.estCheck.caPassed": { defaultMessage: "The CA chain is available and structurally valid.", description: "Successful EST CA-chain evidence." },
+  "protocols.estCheck.caFailed": { defaultMessage: "The CA chain could not be verified.", description: "Failed EST CA-chain evidence." },
+  "protocols.estCheck.csrPassed": { defaultMessage: "The server advertises no extra CSR attributes.", description: "Successful EST CSR-rules evidence." },
+  "protocols.estCheck.csrHTTPFailed": {
+    defaultMessage: "The CSR-rules responder returned HTTP {status}.",
+    description: "EST CSR-rules HTTP failure evidence.",
+  },
+  "protocols.estCheck.csrNetworkFailed": {
+    defaultMessage: "The CSR-rules probe failed before an HTTP response arrived.",
+    description: "EST CSR-rules network failure evidence.",
+  },
+  "protocols.estCheck.authPassed": {
+    defaultMessage: "Enrollment refused the credential-free probe before reading a CSR.",
+    description: "Successful EST authentication-wall evidence.",
+  },
+  "protocols.estCheck.authChallengeFailed": {
+    defaultMessage: "Enrollment refused the probe, but did not return the required Bearer challenge.",
+    description: "EST authentication challenge failure evidence.",
+  },
+  "protocols.estCheck.authHTTPFailed": {
+    defaultMessage: "The credential-free enrollment probe returned HTTP {status}; expected a fail-closed 401 challenge.",
+    description: "EST authentication-wall HTTP failure evidence.",
+  },
+  "protocols.estCheck.authNetworkFailed": {
+    defaultMessage: "The authentication-gate probe failed before an HTTP response arrived.",
+    description: "EST authentication-wall network failure evidence.",
+  },
   "protocols.guide.heading": {
     defaultMessage: "Choose how each machine asks",
     description: "Plain-language heading for the protocol method guide.",

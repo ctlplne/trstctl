@@ -1230,8 +1230,13 @@ describe("i18n boundary", () => {
       // dual-control wait state, risks, and verification steps. Negations and
       // security meaning were reviewed in both catalogs. Machine-authored es/de
       // - FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "7e5f3d65b317da054c14ef0f0066ed0ee235258fcdebbc6b5309a8ef19d69860",
-      "de-DE": "3a2a30849909fca9aa16574bd212fecb536da4b01c0e3950d533c90eebd4509c",
+      // F22 EST qualification re-pin: thirty keys explain the credential-free
+      // CA-chain, CSR-rule, and authentication-wall checks, their exact
+      // no-issuance boundary, and the safe repair-and-retry loop. The Bearer,
+      // CSR, PKCS#7, HTTP, EST, and trstctl identifiers remain byte-identical.
+      // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
+      "es-ES": "1e775370b2c4996177b857676717d36d4920b289c04386bdff9eb2b15b1c22c2",
+      "de-DE": "36d84e830abfb932715b42689ab7953a003770df202bf59523589b17c23bea01",
     });
   });
 

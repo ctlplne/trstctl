@@ -1123,6 +1123,24 @@ export interface ProtocolRuntimeStatusList {
   items: ProtocolRuntimeStatus[];
 }
 
+export type ESTQualificationCheckID = "ca-chain" | "csr-rules" | "auth-gate";
+
+export interface ESTQualificationCheck {
+  id: ESTQualificationCheckID;
+  method: "GET" | "POST";
+  endpoint: string;
+  expected: string;
+  status_code?: number;
+  passed: boolean;
+  detail: string;
+}
+
+export interface ESTQualificationResult {
+  checked_at: string;
+  passed: boolean;
+  checks: ESTQualificationCheck[];
+}
+
 export type EditionTier = "community" | "enterprise" | "provider";
 export type EditionState = "community" | "active" | "grace" | "read_only";
 export type FeatureMode = "enabled" | "read_only" | "off";
@@ -1219,6 +1237,7 @@ interface ProtocolProbeSpec {
   protocol: string;
   endpoint: string;
   method?: "GET" | "HEAD";
+  credentials?: RequestCredentials;
   accept?: string;
   methodMismatchMeansServed?: boolean;
   successDetail: string;
@@ -1235,6 +1254,7 @@ const protocolStatusProbes: ProtocolProbeSpec[] = [
   {
     protocol: "est",
     endpoint: "/.well-known/est/cacerts",
+    credentials: "omit",
     accept: "application/pkcs7-mime, application/pkcs7, */*",
     successDetail: "EST CA-certs responder returned a chain.",
   },
@@ -1346,7 +1366,7 @@ async function protocolProbe(spec: ProtocolProbeSpec): Promise<ProtocolRuntimeSt
   try {
     const res = await fetch(spec.endpoint, {
       method: spec.method ?? "GET",
-      credentials: "include",
+      credentials: spec.credentials ?? "include",
       headers: { Accept: spec.accept ?? "*/*" },
     });
     const methodMismatchServed = spec.methodMismatchMeansServed === true && res.status === 405;
@@ -1436,6 +1456,108 @@ async function protocolProbeContentMatches(spec: ProtocolProbeSpec, res: Respons
     default:
       return false;
   }
+}
+
+async function estQualification(): Promise<ESTQualificationResult> {
+  const ca = await protocolProbe(protocolStatusProbes.find((spec) => spec.protocol === "est")!);
+  const checks: ESTQualificationCheck[] = [
+    {
+      id: "ca-chain",
+      method: "GET",
+      endpoint: "/.well-known/est/cacerts",
+      expected: "HTTP 200 with a base64 PKCS#7 CA chain",
+      status_code: ca.status_code,
+      passed: ca.served,
+      detail: ca.served ? translateNow("protocols.estCheck.caPassed") : (ca.detail ?? translateNow("protocols.estCheck.caFailed")),
+    },
+  ];
+
+  if (previewTransportIsolated) {
+    checks.push(
+      {
+        id: "csr-rules",
+        method: "GET",
+        endpoint: "/.well-known/est/csrattrs",
+        expected: "HTTP 204 or a valid CSR-attributes response",
+        passed: false,
+        detail: translateNow("preview.probesDisabled"),
+      },
+      {
+        id: "auth-gate",
+        method: "POST",
+        endpoint: "/.well-known/est/simpleenroll",
+        expected: "HTTP 401 with a Bearer authentication challenge",
+        passed: false,
+        detail: translateNow("preview.probesDisabled"),
+      },
+    );
+    return { checked_at: new Date().toISOString(), passed: false, checks };
+  }
+
+  try {
+    const response = await fetch("/.well-known/est/csrattrs", {
+      method: "GET",
+      credentials: "omit",
+      headers: { Accept: "application/csrattrs, */*" },
+    });
+    const passed = response.status === 204;
+    checks.push({
+      id: "csr-rules",
+      method: "GET",
+      endpoint: "/.well-known/est/csrattrs",
+      expected: "HTTP 204 or a valid CSR-attributes response",
+      status_code: response.status,
+      passed,
+      detail: passed ? translateNow("protocols.estCheck.csrPassed") : translateNow("protocols.estCheck.csrHTTPFailed", { status: response.status }),
+    });
+  } catch {
+    checks.push({
+      id: "csr-rules",
+      method: "GET",
+      endpoint: "/.well-known/est/csrattrs",
+      expected: "HTTP 204 or a valid CSR-attributes response",
+      passed: false,
+      detail: translateNow("protocols.estCheck.csrNetworkFailed"),
+    });
+  }
+
+  try {
+    const response = await fetch("/.well-known/est/simpleenroll", {
+      method: "POST",
+      credentials: "omit",
+      headers: { Accept: "application/pkcs7-mime, */*", "Content-Type": "application/pkcs10" },
+    });
+    const challenge = response.headers.get("WWW-Authenticate") ?? "";
+    const passed = response.status === 401 && /^Bearer(?:\s|$)/i.test(challenge);
+    checks.push({
+      id: "auth-gate",
+      method: "POST",
+      endpoint: "/.well-known/est/simpleenroll",
+      expected: "HTTP 401 with a Bearer authentication challenge",
+      status_code: response.status,
+      passed,
+      detail: passed
+        ? translateNow("protocols.estCheck.authPassed")
+        : response.status === 401
+          ? translateNow("protocols.estCheck.authChallengeFailed")
+          : translateNow("protocols.estCheck.authHTTPFailed", { status: response.status }),
+    });
+  } catch {
+    checks.push({
+      id: "auth-gate",
+      method: "POST",
+      endpoint: "/.well-known/est/simpleenroll",
+      expected: "HTTP 401 with a Bearer authentication challenge",
+      passed: false,
+      detail: translateNow("protocols.estCheck.authNetworkFailed"),
+    });
+  }
+
+  return {
+    checked_at: new Date().toISOString(),
+    passed: checks.every((check) => check.passed),
+    checks,
+  };
 }
 
 function protocolProbeFailureDetail(res: Response): string {
@@ -1873,6 +1995,8 @@ export interface Api {
   revokeSSHCertificate(input: SSHRevokeCertificateRequest): Promise<SSHStatus>;
   retireSSHHost(input: SSHHostRetireRequest): Promise<SSHHostRetirement>;
   protocolStatuses(): Promise<ProtocolRuntimeStatusList>;
+  /** F22: effect-free, credential-free proof of the public EST CA, CSR-rules, and authentication surfaces. */
+  estQualification(): Promise<ESTQualificationResult>;
   mdmSCEPStatus(): Promise<MDMSCEPStatus>;
   mdmSCEPPolicies(): Promise<MDMSCEPPolicyList>;
   secretPage(options?: { limit?: number; cursor?: string }): Promise<SecretMetaList>;
@@ -2386,6 +2510,7 @@ const liveApi: Api = {
     checked_at: new Date().toISOString(),
     items: await Promise.all(protocolStatusProbes.map((spec) => protocolProbe(spec))),
   }),
+  estQualification,
   secretPage: (options) => {
     const qs = new URLSearchParams();
     if (options?.limit != null) qs.set("limit", String(options.limit));

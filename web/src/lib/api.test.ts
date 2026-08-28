@@ -572,9 +572,15 @@ describe("exported API surface census", () => {
       const url = String(target);
       expect(url, "the browser API client attempted absolute egress").toMatch(/^\//);
       const method = init?.method ?? "GET";
-      const readOnlyPost = readOnlyPosts.has(url) || url.endsWith("/restore/preview");
+      const headers = init?.headers as Record<string, string> | undefined;
+      // F22's EST qualification POST is a negative control, not enrollment:
+      // credentials are omitted, no CSR body exists, and a fail-closed 401 is
+      // the only passing result. If a future caller adds any enrollment input,
+      // it falls back under the mutation idempotency and CSRF requirements.
+      const credentialFreeESTAuthProbe =
+        url === "/.well-known/est/simpleenroll" && init?.credentials === "omit" && init?.body == null && headers?.Authorization == null;
+      const readOnlyPost = readOnlyPosts.has(url) || url.endsWith("/restore/preview") || credentialFreeESTAuthProbe;
       if ((method === "POST" || method === "PUT" || method === "DELETE") && url !== "/auth/logout" && !readOnlyPost) {
-        const headers = init?.headers as Record<string, string> | undefined;
         expect(headers?.["Idempotency-Key"], `${method} ${url} lacks mutation idempotency`).toBeTruthy();
         expect(headers?.["X-CSRF-Token"], `${method} ${url} lacks the session CSRF echo`).toBe("csrf-census");
       }

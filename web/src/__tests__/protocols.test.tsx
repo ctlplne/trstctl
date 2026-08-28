@@ -11,6 +11,7 @@ import { Protocols } from "@/pages/Protocols";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     protocolStatuses: vi.fn(),
+    estQualification: vi.fn(),
     acmeOperatorPlan: vi.fn(),
     activateProtocolProfile: vi.fn(),
     acmeARIPosture: vi.fn(),
@@ -114,6 +115,7 @@ describe("protocol surface", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     apiMock.protocolStatuses.mockReset();
+    apiMock.estQualification.mockReset();
     apiMock.acmeOperatorPlan.mockReset();
     apiMock.activateProtocolProfile.mockReset();
     apiMock.acmeARIPosture.mockReset();
@@ -132,6 +134,39 @@ describe("protocol surface", () => {
     apiMock.agentPage.mockReset();
     apiMock.revocationCaches.mockReset();
     apiMock.acmeOperatorPlan.mockResolvedValue(readyACMEOperatorPlan());
+    apiMock.estQualification.mockResolvedValue({
+      checked_at: "2026-08-28T12:00:00Z",
+      passed: true,
+      checks: [
+        {
+          id: "ca-chain",
+          method: "GET",
+          endpoint: "/.well-known/est/cacerts",
+          expected: "HTTP 200 with a base64 PKCS#7 CA chain",
+          status_code: 200,
+          passed: true,
+          detail: "The CA chain is available and structurally valid.",
+        },
+        {
+          id: "csr-rules",
+          method: "GET",
+          endpoint: "/.well-known/est/csrattrs",
+          expected: "HTTP 204 or a valid CSR-attributes response",
+          status_code: 204,
+          passed: true,
+          detail: "The server advertises no extra CSR attributes.",
+        },
+        {
+          id: "auth-gate",
+          method: "POST",
+          endpoint: "/.well-known/est/simpleenroll",
+          expected: "HTTP 401 with a Bearer authentication challenge",
+          status_code: 401,
+          passed: true,
+          detail: "Enrollment refused the credential-free probe before reading a CSR.",
+        },
+      ],
+    });
     apiMock.activateProtocolProfile.mockResolvedValue({ profile: "eval", active: true, protocols: ["acme"] });
     apiMock.acmeUpstreamAuthorizations.mockResolvedValue({ items: [], never_validated_count: 0, guidance: "" });
     apiMock.enrollmentDiagnostics.mockResolvedValue({ items: [], unknown_count: 0, guidance: "" });
@@ -987,6 +1022,47 @@ describe("protocol surface", () => {
     expect(screen.queryByText("SCEP enrollment transcript coming soon")).not.toBeInTheDocument();
     expect(screen.queryByText("CMP enrollment transcript coming soon")).not.toBeInTheDocument();
     expect(screen.queryByText(/does not invent order, challenge, or transcript data/i)).not.toBeInTheDocument();
+  });
+
+  it("previews, runs, observes, and safely retries the exact EST path without enrolling", async () => {
+    const user = userEvent.setup();
+    await renderProtocols();
+
+    const panel = screen.getByRole("region", { name: "EST connection check" });
+    expect(within(panel).getByText("Safety boundary: no certificate, CSR, token, or private key will be created, sent, or stored.")).toBeInTheDocument();
+    expect(within(panel).getByText("GET /.well-known/est/cacerts")).toBeInTheDocument();
+    expect(within(panel).getByText("GET /.well-known/est/csrattrs")).toBeInTheDocument();
+    expect(within(panel).getByText("POST /.well-known/est/simpleenroll")).toBeInTheDocument();
+    expect(apiMock.estQualification).not.toHaveBeenCalled();
+
+    await user.click(within(panel).getByRole("button", { name: "Run safe EST check" }));
+
+    await waitFor(() => expect(apiMock.estQualification).toHaveBeenCalledTimes(1));
+    expect((await within(panel).findAllByText("EST is ready for a client")).length).toBeGreaterThanOrEqual(1);
+    expect(within(panel).getByText("Enrollment refused the credential-free probe before reading a CSR.")).toBeInTheDocument();
+    expect(within(panel).getByText("No certificate was issued by this check.")).toBeInTheDocument();
+
+    apiMock.estQualification.mockResolvedValueOnce({
+      checked_at: "2026-08-28T12:01:00Z",
+      passed: false,
+      checks: [
+        {
+          id: "ca-chain",
+          method: "GET",
+          endpoint: "/.well-known/est/cacerts",
+          expected: "HTTP 200 with a base64 PKCS#7 CA chain",
+          status_code: 503,
+          passed: false,
+          detail: "The CA chain responder returned HTTP 503.",
+        },
+      ],
+    });
+    await user.click(within(panel).getByRole("button", { name: "Run again" }));
+
+    expect((await within(panel).findAllByText("EST needs attention")).length).toBeGreaterThanOrEqual(1);
+    expect(
+      within(panel).getByText("Keep authentication strict. Repair the named responder or signer configuration, then run this same check again."),
+    ).toBeInTheDocument();
   });
 
   it("renders SPIFFE, SSH CA, and TSA setup without exposing private key material", async () => {

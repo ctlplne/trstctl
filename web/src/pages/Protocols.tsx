@@ -16,6 +16,7 @@ import type { MessageKey } from "@/i18n/messages";
 import { ARIPosturePanel } from "@/pages/protocols/ARIPosturePanel";
 import { EABCredentialsPanel } from "@/pages/protocols/EABCredentialsPanel";
 import { ACMEOperatorPanel } from "@/pages/protocols/ACMEOperatorPanel";
+import { ESTOperatorPanel } from "@/pages/protocols/ESTOperatorPanel";
 import { RevocationCachePanel } from "@/pages/protocols/RevocationCachePanel";
 import { DNS01PreflightDialog } from "@/pages/protocols/DNS01PreflightDialog";
 import { enrollmentRelaySegments } from "@/pages/protocols/enrollmentRelaySegments";
@@ -787,6 +788,7 @@ export function Protocols() {
           </details>
 
           <ACMEOperatorPanel />
+          <ESTOperatorPanel />
 
           <section aria-labelledby="protocol-status-heading" className="border-y border-border py-4">
             <h2 id="protocol-status-heading" className="text-title font-semibold">
