@@ -560,6 +560,9 @@ describe("exported API surface census", () => {
       "/api/v1/agents/enrollment-tokens/preview",
       "/api/v1/issuance-requests/preview",
       "/api/v1/identities/item%2Fid/transitions/preview",
+      // F9: audit feed preview shares the execution validator but performs no
+      // write, idempotency insert, outbox enqueue, credential read, or egress.
+      "/api/v1/audit/feeds/item%2Fid/preview",
       "/api/v1/ca/ceremonies/preview",
       "/api/v1/ca/authorities/item%2Fid/rotate/preview",
       "/api/v1/ai/query",

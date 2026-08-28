@@ -563,24 +563,27 @@ function eventResultKey(event: AuditEvent): MessageKey {
 }
 
 function HashChainPanel({ events }: { events: AuditEvent[] }) {
+  const { t } = useTranslation();
   const hashed = events.filter((event) => event.hash).length;
   const message =
     events.length === 0
-      ? "No events in the current audit window."
+      ? t("audit.hash.empty")
       : hashed === events.length
-        ? "Every listed event includes a hash, so this window has tamper-evident links back to the append-only log projection."
-        : `${hashed} of ${events.length} listed events include a hash; export the evidence bundle for server-signed verification.`;
+        ? t("audit.hash.complete", { count: String(events.length) })
+        : t("audit.hash.partial", { hashed: String(hashed), total: String(events.length) });
   return (
     <section aria-labelledby="hash-chain-heading" className="ui-panel p-comfortable text-sm">
       <h2 id="hash-chain-heading" className="text-title font-semibold">
-        {translateNow("source.hash.chain.status.f5491b14e9")}
+        {t("audit.hash.heading")}
       </h2>
       <p className="mt-1 text-muted-foreground">{message}</p>
+      <p className="mt-2 text-muted-foreground">{t("audit.hash.boundary")}</p>
     </section>
   );
 }
 
 function EventDetail({ event }: { event: AuditEvent | null }) {
+  const { t } = useTranslation();
   if (!event) {
     return (
       <div role="note" className="ui-panel p-comfortable text-sm text-muted-foreground">
@@ -588,6 +591,7 @@ function EventDetail({ event }: { event: AuditEvent | null }) {
       </div>
     );
   }
+  const resources = affectedResourceLinks(event);
   return (
     <section aria-labelledby="audit-event-detail-heading" className="ui-panel p-comfortable text-sm">
       <h2 id="audit-event-detail-heading" className="text-title font-semibold">
@@ -611,12 +615,48 @@ function EventDetail({ event }: { event: AuditEvent | null }) {
           <dd className="break-all font-mono text-xs">{event.tenant_id}</dd>
         </div>
       </dl>
+      {resources.length ? (
+        <div className="mt-4">
+          <h3 className="font-semibold">{t("audit.event.affectedResources")}</h3>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {resources.map((resource) => (
+              <Link key={resource.to} className="rounded-control border border-border px-3 py-2 text-sm font-medium text-link underline" to={resource.to}>
+                {t(resource.label)}
+              </Link>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <h3 className="mt-4 font-semibold">{translateNow("source.actor.449995c4fe")}</h3>
       <pre className="mt-2 max-h-40 overflow-auto rounded-md bg-muted p-3 text-xs">{formatJSON(event.actor ?? {})}</pre>
       <h3 className="mt-4 font-semibold">{translateNow("source.data.cec3a9b89b")}</h3>
       <pre className="mt-2 max-h-72 overflow-auto rounded-md bg-muted p-3 text-xs">{formatJSON(event.data ?? {})}</pre>
     </section>
   );
+}
+
+function affectedResourceLinks(event: AuditEvent): Array<{ label: MessageKey; to: string }> {
+  const data = event.data ?? {};
+  const links: Array<{ label: MessageKey; to: string }> = [];
+  const seen = new Set<string>();
+  const add = (label: MessageKey, to: string) => {
+    if (!seen.has(to)) {
+      seen.add(to);
+      links.push({ label, to });
+    }
+  };
+  const value = (key: string): string => {
+    const candidate = data[key];
+    return typeof candidate === "string" ? candidate.trim() : "";
+  };
+
+  const identityID = value("identity_id") || value("credential_id") || (event.type.startsWith("identity.") ? value("id") : "");
+  if (identityID) add("audit.event.openIdentity", `/identities?identity=${encodeURIComponent(identityID)}`);
+  const ownerID = value("owner_id") || (event.type.startsWith("owner.") ? value("id") : "");
+  if (ownerID) add("audit.event.openOwner", `/owners?owner=${encodeURIComponent(ownerID)}`);
+  const issuerID = value("issuer_id") || (event.type.startsWith("issuer.") ? value("id") : "");
+  if (issuerID) add("audit.event.openIssuer", `/protocols?issuer=${encodeURIComponent(issuerID)}`);
+  return links;
 }
 
 function toAuditQuery(state: FilterState): AuditQuery {

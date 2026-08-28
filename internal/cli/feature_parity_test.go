@@ -225,9 +225,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// F48's ceremony and rotation previews raise it to 399 so headless operators
 	// get the same effect-free CA trust-change receipts as the console.
 	// F53's profile restore preview and append-only recovery raise it to 401.
-	// F59's effect-free lifecycle transition preview raises it to 402.
-	if len(out) != 402 {
-		t.Fatalf("CLI commands = %d, want 402", len(out))
+	// F59's effect-free lifecycle transition preview raises it to 402. F9's
+	// headless audit collector-feed preview raises it to 403.
+	if len(out) != 403 {
+		t.Fatalf("CLI commands = %d, want 403", len(out))
 	}
 	return out
 }

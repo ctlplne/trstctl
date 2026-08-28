@@ -498,10 +498,16 @@ CIDRs are private or explicitly allowlisted.
 ### Scheduled Splunk HEC and Sentinel audit feeds
 
 Audit-feed schedules are tenant configuration, not process-global environment
-settings. Create them with `PUT /api/v1/audit/feeds/{id}`, `trstctl-cli audit
-feeds set`, or the Audit console. Each request chooses `splunk-hec` or `sentinel`,
-an absolute endpoint URL, an interval of at least 60 seconds, and an exact maximum
-batch size from 1 through 500.
+settings. Review the exact candidate first with `POST
+/api/v1/audit/feeds/{id}/preview`, `trstctl-cli audit feeds preview`, or the Audit
+console. Preview runs the same server validator as save but creates no event, feed
+row, idempotency record, outbox row, or network call. Save only after the review
+shows the expected collector host, non-secret credential reference, permission,
+durable writes, later external effect, proof, and recovery steps. Saving uses `PUT
+/api/v1/audit/feeds/{id}`, `trstctl-cli audit feeds set`, or the Audit console.
+Each request chooses `splunk-hec` or `sentinel`, an absolute endpoint URL, an
+interval of at least 60 seconds, and an exact maximum batch size from 1 through
+500.
 
 The request stores only an `env:NAME` pointer. Put that pointer in
 `TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS`, then inject the named environment variable
@@ -517,6 +523,10 @@ outbox intent before a worker can call the collector. A retry or restart therefo
 uses the same batch ID and bytes. `GET /api/v1/audit/feeds` exposes the delivered
 cursor, persistent record-count lag, attempts, next retry, terminal error code,
 and collector request ID without exposing response bodies or credentials.
+Failed delivery retains the exact batch and delivered cursor. Automatic retry
+reuses the same durable batch ID and idempotency key; the cursor advances only
+after the collector accepts that exact batch. Disable the feed to stop scheduling
+new batches while retaining failure and delivery evidence.
 
 ## ITSM and ServiceNow bindings
 

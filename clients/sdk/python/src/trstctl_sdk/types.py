@@ -1236,6 +1236,32 @@ AuditFeedList = TypedDict(
     total=False,
 )
 
+AuditFeedPreview = TypedDict(
+    'AuditFeedPreview',
+    {
+        'capability': str,
+        'current_updated_at': str,
+        'effect_free': bool,
+        'endpoint_host': str,
+        'execution_external_effects': list[str],
+        'execution_writes': list[str],
+        'existing_configuration': bool,
+        'feed_id': str,
+        'guidance': str,
+        'normalized_request': dict[str, Any],
+        'prerequisites': list[str],
+        'preview_external_effects': list[str],
+        'preview_writes': list[str],
+        'ready': bool,
+        'recovery_steps': list[str],
+        'request_fingerprint': str,
+        'required_permission': str,
+        'verification_steps': list[str],
+        'warnings': list[str],
+    },
+    total=False,
+)
+
 AuditFeedRequest = TypedDict(
     'AuditFeedRequest',
     {

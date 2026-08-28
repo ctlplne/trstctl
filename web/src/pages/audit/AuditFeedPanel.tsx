@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { DataGrid, type DataGridColumn, type DataGridState } from "@/components/DataGrid";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useTranslation } from "@/i18n/I18nProvider";
-import { api, type AuditFeed, type AuditFeedRequest } from "@/lib/api";
+import { api, type AuditFeed, type AuditFeedPreview, type AuditFeedRequest } from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
 import { useApiQuery, useQueryClient } from "@/lib/query";
 
@@ -75,45 +75,68 @@ export function AuditFeedPanel() {
   const canRead = useCan("audit:read");
   const canWrite = useCan("audit:write");
   const queryClient = useQueryClient();
-  const available = typeof api.auditFeeds === "function" && typeof api.putAuditFeed === "function";
+  const available = typeof api.auditFeeds === "function" && typeof api.previewAuditFeed === "function" && typeof api.putAuditFeed === "function";
   const feeds = useApiQuery(["audit-feeds"], () => (available ? api.auditFeeds() : Promise.resolve({ items: [] })), { enabled: canRead && available });
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"review" | "save" | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [operationError, setOperationError] = useState<string | null>(null);
+  const [reviewed, setReviewed] = useState<{ plan: AuditFeedPreview; requestKey: string } | null>(null);
   const schema = useMemo(() => buildSchema(t), [t]);
   const form = useForm<FeedValues>({
     resolver: zodResolver(schema),
     mode: "onTouched",
     defaultValues: emptyValues(),
   });
+  // The form has a complete default for every field; react-hook-form's generic
+  // useWatch return remains DeepPartial even though this runtime invariant holds.
+  const watchedValues = useWatch({ control: form.control }) as FeedValues;
 
   if (!available) return null;
   const feedItems = feeds.data?.items ?? [];
+  const currentRequestKey = auditFeedRequestKey(watchedValues.id, auditFeedRequest(watchedValues));
+  const reviewCurrent = reviewed?.requestKey === currentRequestKey && reviewed.plan.ready && reviewed.plan.effect_free;
 
   const save = form.handleSubmit(async (values) => {
-    setBusy(true);
+    const request = auditFeedRequest(values);
+    if (!reviewed || reviewed.requestKey !== auditFeedRequestKey(values.id, request) || !reviewed.plan.ready || !reviewed.plan.effect_free) {
+      setOperationError(t("audit.feeds.reviewRequired"));
+      return;
+    }
+    setBusy("save");
     setNotice(null);
     setOperationError(null);
-    const request: AuditFeedRequest = {
-      name: values.name.trim(),
-      provider: values.provider,
-      endpoint_url: values.endpointUrl.trim(),
-      token_ref: values.tokenRef.trim(),
-      interval_seconds: values.intervalSeconds,
-      batch_size: values.batchSize,
-      enabled: values.enabled,
-      allow_private_endpoint: values.allowPrivateEndpoint,
-      private_egress_cidrs: values.allowPrivateEndpoint ? lines(values.privateEgressCidrs) : [],
-    };
     try {
       await api.putAuditFeed(values.id, request);
       form.reset(emptyValues());
+      setReviewed(null);
       setNotice(t("audit.feeds.saved"));
       await queryClient.invalidateQueries({ queryKey: ["audit-feeds"] });
     } catch (error) {
       setOperationError(apiProblemMessage(error, t("audit.feeds.mutationFailed")));
     } finally {
-      setBusy(false);
+      setBusy(null);
+    }
+  });
+
+  const review = form.handleSubmit(async (values) => {
+    setBusy("review");
+    setNotice(null);
+    setOperationError(null);
+    setReviewed(null);
+    const request = auditFeedRequest(values);
+    try {
+      const plan = await api.previewAuditFeed(values.id, request);
+      if (!plan.ready || !plan.effect_free || plan.preview_writes.length !== 0 || plan.preview_external_effects.length !== 0) {
+        throw new Error(t("audit.feeds.previewUnsafe"));
+      }
+      if (auditFeedRequestKey(values.id, plan.normalized_request) !== auditFeedRequestKey(values.id, request)) {
+        throw new Error(t("audit.feeds.previewMismatch"));
+      }
+      setReviewed({ plan, requestKey: auditFeedRequestKey(values.id, request) });
+    } catch (error) {
+      setOperationError(apiProblemMessage(error, t("audit.feeds.previewFailed")));
+    } finally {
+      setBusy(null);
     }
   });
 
@@ -132,6 +155,7 @@ export function AuditFeedPanel() {
     });
     setNotice(null);
     setOperationError(null);
+    setReviewed(null);
   }
 
   const columns: Array<DataGridColumn<AuditFeed>> = [
@@ -233,6 +257,7 @@ export function AuditFeedPanel() {
         emptyStateHeadingAs="h3"
         virtualization={false}
       />
+      <p className="text-sm text-muted-foreground">{t("audit.feeds.recoveryBoundary")}</p>
 
       {canWrite ? (
         <form aria-label={t("audit.feeds.configure")} className="grid gap-4 rounded-control border border-border p-3" onSubmit={save}>
@@ -293,13 +318,105 @@ export function AuditFeedPanel() {
               {notice}
             </p>
           ) : null}
-          <div>
-            <Button type="submit" disabled={busy}>
-              {busy ? t("audit.feeds.saving") : t("audit.feeds.save")}
+          {reviewed ? <AuditFeedReview plan={reviewed.plan} current={reviewCurrent} /> : null}
+          {reviewed && !reviewCurrent ? (
+            <p role="status" className="text-sm text-status-warning">
+              {t("audit.feeds.reviewChanged")}
+            </p>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" disabled={busy !== null} onClick={() => void review()}>
+              {busy === "review" ? t("audit.feeds.reviewing") : t("audit.feeds.review")}
+            </Button>
+            <Button type="submit" disabled={busy !== null || !reviewCurrent}>
+              {busy === "save" ? t("audit.feeds.saving") : t("audit.feeds.save")}
             </Button>
           </div>
         </form>
       ) : null}
+    </section>
+  );
+}
+
+function auditFeedRequest(values: FeedValues): AuditFeedRequest {
+  return {
+    name: values.name.trim(),
+    provider: values.provider,
+    endpoint_url: values.endpointUrl.trim(),
+    token_ref: values.tokenRef.trim(),
+    interval_seconds: values.intervalSeconds,
+    batch_size: values.batchSize,
+    enabled: values.enabled,
+    allow_private_endpoint: values.allowPrivateEndpoint,
+    private_egress_cidrs: values.allowPrivateEndpoint ? lines(values.privateEgressCidrs) : [],
+  };
+}
+
+function auditFeedRequestKey(id: string, request: AuditFeedRequest): string {
+  return JSON.stringify({
+    id: id.trim(),
+    request: {
+      name: request.name.trim(),
+      provider: request.provider,
+      endpoint_url: request.endpoint_url.trim(),
+      token_ref: request.token_ref.trim(),
+      interval_seconds: request.interval_seconds,
+      batch_size: request.batch_size,
+      enabled: request.enabled,
+      allow_private_endpoint: request.allow_private_endpoint ?? false,
+      private_egress_cidrs: request.private_egress_cidrs ?? [],
+    },
+  });
+}
+
+function AuditFeedReview({ plan, current }: { plan: AuditFeedPreview; current: boolean }) {
+  const { t } = useTranslation();
+  return (
+    <section className="grid gap-4 rounded-control border border-brand-accent/40 bg-brand-accent/5 p-4" aria-labelledby="audit-feed-review-heading">
+      <div>
+        <h4 id="audit-feed-review-heading" className="font-semibold">
+          {t("audit.feeds.reviewHeading")}
+        </h4>
+        <p className="mt-1 text-sm text-muted-foreground">{plan.guidance}</p>
+      </div>
+      <dl className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
+        <ReviewFact label={t("audit.feeds.reviewDestination")} value={plan.endpoint_host} mono />
+        <ReviewFact label={t("audit.feeds.reviewCredential")} value={plan.normalized_request.token_ref} mono />
+        <ReviewFact label={t("audit.feeds.reviewPermission")} value={plan.required_permission} mono />
+        <ReviewFact label={t("audit.feeds.reviewState")} value={current ? t("audit.feeds.reviewCurrent") : t("audit.feeds.reviewStale")} />
+      </dl>
+      <div className="grid gap-4 text-sm lg:grid-cols-2">
+        <ReviewList title={t("audit.feeds.reviewWrites")} items={plan.execution_writes} />
+        <ReviewList title={t("audit.feeds.reviewEffects")} items={plan.execution_external_effects} empty={t("audit.feeds.reviewNoEffects")} />
+        <ReviewList title={t("audit.feeds.reviewProof")} items={plan.verification_steps} />
+        <ReviewList title={t("audit.feeds.reviewRecovery")} items={plan.recovery_steps} />
+      </div>
+    </section>
+  );
+}
+
+function ReviewFact({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div>
+      <dt className="font-medium text-muted-foreground">{label}</dt>
+      <dd className={`mt-1 break-all ${mono ? "font-mono text-xs" : ""}`}>{value}</dd>
+    </div>
+  );
+}
+
+function ReviewList({ title, items, empty }: { title: string; items: string[]; empty?: string }) {
+  return (
+    <section>
+      <h5 className="font-medium">{title}</h5>
+      {items.length ? (
+        <ul className="mt-1 list-disc space-y-1 pl-5 text-muted-foreground">
+          {items.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-1 text-muted-foreground">{empty}</p>
+      )}
     </section>
   );
 }

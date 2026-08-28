@@ -194,8 +194,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// F53's effect-free profile recovery preview and append-only restore raise it
 	// to 389 and expose the full recovery boundary to API clients.
 	// F59's effect-free, version-bound identity lifecycle preview raises it to 390.
-	if len(out) != 390 {
-		t.Fatalf("OpenAPI operationIds = %d, want 390", len(out))
+	// F9's effect-free audit collector-feed preview raises it to 391.
+	if len(out) != 391 {
+		t.Fatalf("OpenAPI operationIds = %d, want 391", len(out))
 	}
 	return out
 }

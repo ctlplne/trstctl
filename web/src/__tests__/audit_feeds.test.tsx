@@ -7,6 +7,7 @@ import { AuditFeedPanel } from "@/pages/audit/AuditFeedPanel";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     auditFeeds: vi.fn(),
+    previewAuditFeed: vi.fn(),
     putAuditFeed: vi.fn(),
   },
 }));
@@ -56,8 +57,39 @@ const retryingFeed = {
   next_attempt_at: "2026-08-13T06:06:00Z",
 };
 
+const preview = {
+  capability: "audit_feed_configuration",
+  ready: true,
+  effect_free: true,
+  feed_id: "33333333-3333-4333-8333-333333333333",
+  endpoint_host: "collector.example.test",
+  request_fingerprint: "sha256:f9-preview",
+  required_permission: "audit:write",
+  normalized_request: {
+    name: "Production Splunk",
+    provider: "splunk-hec" as const,
+    endpoint_url: "https://collector.example.test/services/collector/event",
+    token_ref: "env:PROD_SPLUNK_TOKEN",
+    interval_seconds: 300,
+    batch_size: 100,
+    enabled: true,
+    allow_private_endpoint: false,
+    private_egress_cidrs: [],
+  },
+  prerequisites: ["Credential reference is allowlisted.", "Public destination uses HTTPS.", "Execution requires audit:write."],
+  preview_writes: [],
+  preview_external_effects: [],
+  execution_writes: ["Append one tenant-scoped configuration event.", "Project the durable feed."],
+  execution_external_effects: ["A later bounded outbox worker delivers exact batches to collector.example.test."],
+  verification_steps: ["Read the configured feed.", "Follow the collector receipt."],
+  recovery_steps: ["Failed batches retry without advancing the cursor.", "Disable the schedule to stop new batches."],
+  warnings: [],
+  guidance: "Preview performs no write and makes no network call.",
+};
+
 beforeEach(() => {
   apiMock.auditFeeds.mockReset().mockResolvedValue({ items: [deliveredFeed, retryingFeed] });
+  apiMock.previewAuditFeed.mockReset().mockResolvedValue(preview);
   apiMock.putAuditFeed.mockReset().mockResolvedValue(deliveredFeed);
 });
 
@@ -84,21 +116,37 @@ describe("AUD-52 scheduled audit collector feeds", () => {
     await user.type(screen.getByLabelText("Name"), "Production Splunk");
     await user.type(screen.getByLabelText("Collector endpoint URL"), "https://collector.example.test/services/collector/event");
     await user.type(screen.getByLabelText("Credential reference"), "env:PROD_SPLUNK_TOKEN");
+    expect(screen.getByText("A failed batch retries automatically without advancing the delivered cursor.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save collector feed" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Review collector feed" }));
+
+    const exactRequest = {
+      name: "Production Splunk",
+      provider: "splunk-hec",
+      endpoint_url: "https://collector.example.test/services/collector/event",
+      token_ref: "env:PROD_SPLUNK_TOKEN",
+      interval_seconds: 300,
+      batch_size: 100,
+      enabled: true,
+      allow_private_endpoint: false,
+      private_egress_cidrs: [],
+    };
+    await waitFor(() => expect(apiMock.previewAuditFeed).toHaveBeenCalledWith("33333333-3333-4333-8333-333333333333", exactRequest));
+    expect(await screen.findByRole("heading", { name: "Review collector feed" })).toBeInTheDocument();
+    expect(screen.getByText("collector.example.test")).toBeInTheDocument();
+    expect(screen.getByText("Preview performs no write and makes no network call.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save collector feed" })).toBeEnabled();
+
+    await user.type(screen.getByLabelText("Name"), " changed");
+    expect(screen.getByText("Configuration changed. Review it again before saving.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save collector feed" })).toBeDisabled();
+    await user.clear(screen.getByLabelText("Name"));
+    await user.type(screen.getByLabelText("Name"), "Production Splunk");
+    await user.click(screen.getByRole("button", { name: "Review collector feed" }));
+    await waitFor(() => expect(apiMock.previewAuditFeed).toHaveBeenCalledTimes(2));
     await user.click(screen.getByRole("button", { name: "Save collector feed" }));
 
-    await waitFor(() =>
-      expect(apiMock.putAuditFeed).toHaveBeenCalledWith("33333333-3333-4333-8333-333333333333", {
-        name: "Production Splunk",
-        provider: "splunk-hec",
-        endpoint_url: "https://collector.example.test/services/collector/event",
-        token_ref: "env:PROD_SPLUNK_TOKEN",
-        interval_seconds: 300,
-        batch_size: 100,
-        enabled: true,
-        allow_private_endpoint: false,
-        private_egress_cidrs: [],
-      }),
-    );
+    await waitFor(() => expect(apiMock.putAuditFeed).toHaveBeenCalledWith("33333333-3333-4333-8333-333333333333", exactRequest));
     expect(await screen.findByRole("status")).toHaveTextContent("Collector feed saved");
   });
 });

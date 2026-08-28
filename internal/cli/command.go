@@ -331,6 +331,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"audit", "export"}, Method: "GET", Path: "/api/v1/audit/export", Query: []string{"type", "since", "until", "as_of", "q", "limit", "format"}, Summary: "Export a signed audit bundle or record stream"},
 	{Name: []string{"audit", "verification-keys"}, Method: "GET", Path: "/api/v1/audit/verification-keys", Summary: "Download and pin public keys for offline audit verification"},
 	{Name: []string{"audit", "feeds", "set"}, Method: "PUT", Path: "/api/v1/audit/feeds/{id}", Body: bodyFile, Summary: "Configure a durable native Splunk HEC or Sentinel audit feed"},
+	{Name: []string{"audit", "feeds", "preview"}, Method: "POST", Path: "/api/v1/audit/feeds/{id}/preview", Body: bodyFile, ReadOnly: true, Summary: "Validate and explain an exact audit feed without writing state or contacting the collector"},
 	{Name: []string{"audit", "feeds", "list"}, Method: "GET", Path: "/api/v1/audit/feeds", Summary: "List audit-feed schedules, lag, retries, failures, and collector receipts"},
 	{Name: []string{"compliance", "inventory-report"}, Method: "GET", Path: "/api/v1/compliance/inventory-report", Summary: "Get compliance and inventory reporting coverage"},
 	{Name: []string{"compliance", "nhi-report"}, Method: "GET", Path: "/api/v1/compliance/nhi-report", Summary: "Get audit-ready NHI compliance mappings"},

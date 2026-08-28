@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"strings"
@@ -12,6 +13,8 @@ import (
 	googleuuid "github.com/google/uuid"
 
 	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -67,62 +70,126 @@ type auditFeedListResponse struct {
 	Count int                 `json:"count"`
 }
 
+type auditFeedPreviewResponse struct {
+	Capability             string           `json:"capability"`
+	Ready                  bool             `json:"ready"`
+	EffectFree             bool             `json:"effect_free"`
+	FeedID                 string           `json:"feed_id"`
+	EndpointHost           string           `json:"endpoint_host"`
+	ExistingConfiguration  bool             `json:"existing_configuration"`
+	CurrentUpdatedAt       string           `json:"current_updated_at,omitempty"`
+	RequestFingerprint     string           `json:"request_fingerprint"`
+	RequiredPermission     string           `json:"required_permission"`
+	NormalizedRequest      auditFeedRequest `json:"normalized_request"`
+	Prerequisites          []string         `json:"prerequisites"`
+	PreviewWrites          []string         `json:"preview_writes"`
+	PreviewExternalEffects []string         `json:"preview_external_effects"`
+	ExecutionWrites        []string         `json:"execution_writes"`
+	ExecutionEffects       []string         `json:"execution_external_effects"`
+	VerificationSteps      []string         `json:"verification_steps"`
+	RecoverySteps          []string         `json:"recovery_steps"`
+	Warnings               []string         `json:"warnings"`
+	Guidance               string           `json:"guidance"`
+}
+
+type normalizedAuditFeedConfiguration struct {
+	ID           string
+	Request      auditFeedRequest
+	Destination  projections.AuditFeedDestinationConfigured
+	EndpointHost string
+}
+
+// previewAuditFeed is a POST-shaped read because the proposed destination is a
+// structured body. It shares the execution validator, but writes no event,
+// projection, idempotency record, or outbox intent and contacts no collector.
+func (a *API) previewAuditFeed(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	var body auditFeedRequest
+	if err := decodeJSON(r, &body); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	configuration, err := a.normalizeAuditFeedConfiguration(r.Context(), tenantID, r.PathValue("id"), body)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	existing, found, err := a.store.GetAuditFeed(r.Context(), tenantID, configuration.ID)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	fingerprintBody, err := json.Marshal(struct {
+		Domain   string           `json:"domain"`
+		TenantID string           `json:"tenant_id"`
+		FeedID   string           `json:"feed_id"`
+		Request  auditFeedRequest `json:"request"`
+	}{
+		Domain: "trstctl.api.audit-feed-preview.v1", TenantID: tenantID,
+		FeedID: configuration.ID, Request: configuration.Request,
+	})
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	plan := auditFeedPreviewResponse{
+		Capability: "audit_feed_configuration", Ready: true, EffectFree: true,
+		FeedID: configuration.ID, EndpointHost: configuration.EndpointHost,
+		ExistingConfiguration: found,
+		RequestFingerprint:    crypto.SHA256Hex(fingerprintBody),
+		RequiredPermission:    string(authz.AuditWrite),
+		NormalizedRequest:     configuration.Request,
+		Prerequisites: []string{
+			"The credential reference is operator-allowlisted; credential bytes are neither read nor returned by preview.",
+			"The destination URL and private-egress boundary satisfy the same server policy used by execution.",
+			"Execution requires audit:write and one Idempotency-Key.",
+		},
+		PreviewWrites: []string{}, PreviewExternalEffects: []string{},
+		ExecutionWrites: []string{
+			"Append one tenant-scoped audit_feed_destination.configured event.",
+			"Project the durable collector instruction and its next schedule time.",
+		},
+		ExecutionEffects: []string{},
+		VerificationSteps: []string{
+			"Read GET /api/v1/audit/feeds and confirm the exact destination, credential reference, interval, batch bound, and enabled state.",
+			"When delivery begins, follow last_delivered_sequence and collector_request_id; configured is not the same as delivered.",
+		},
+		RecoverySteps: []string{
+			"A failed batch retries with the same durable batch and idempotency key without advancing the delivered cursor.",
+			"Disable the feed to stop scheduling new batches while preserving delivery and failure evidence.",
+		},
+		Warnings: []string{},
+		Guidance: "This preview performed no write and made no network call. Saving revalidates the same destination, credential-reference, permission, tenant, and egress boundaries.",
+	}
+	if found {
+		plan.CurrentUpdatedAt = existing.UpdatedAt.UTC().Format(time.RFC3339)
+	}
+	if configuration.Request.Enabled {
+		plan.ExecutionEffects = append(plan.ExecutionEffects,
+			"After the schedule becomes due, a bounded outbox worker may deliver exact audit batches to "+configuration.EndpointHost+".")
+	} else {
+		plan.Warnings = append(plan.Warnings, "The feed will be saved disabled, so no new batch is scheduled until it is enabled in a later reviewed configuration.")
+	}
+	a.writeJSON(w, http.StatusOK, plan)
+}
+
 //trstctl:mutation
 func (a *API) putAuditFeed(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		id := strings.TrimSpace(r.PathValue("id"))
-		if parsed, err := googleuuid.Parse(id); err != nil || parsed == googleuuid.Nil {
-			return 0, nil, errStatus(http.StatusBadRequest, "audit feed id must be a non-zero UUID")
-		}
 		var body auditFeedRequest
 		if err := decodeJSON(r, &body); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
-		name := strings.TrimSpace(body.Name)
-		if name == "" {
-			return 0, nil, errStatus(http.StatusBadRequest, "name is required")
-		}
-		provider, ok := auditsink.NormalizeProvider(body.Provider)
-		if !ok {
-			return 0, nil, errStatus(http.StatusBadRequest, "provider must be splunk-hec or sentinel")
-		}
-		endpoint := strings.TrimSpace(body.EndpointURL)
-		if err := validateAuditFeedEndpoint(endpoint, body.AllowPrivateEndpoint); err != nil {
+		configuration, err := a.normalizeAuditFeedConfiguration(ctx, tenantID, r.PathValue("id"), body)
+		if err != nil {
 			return 0, nil, err
 		}
-		tokenRef := strings.TrimSpace(body.TokenRef)
-		if !strings.HasPrefix(tokenRef, "env:") {
-			return 0, nil, errStatus(http.StatusBadRequest, "token_ref must be an operator-approved env:NAME credential reference")
-		}
-		if err := a.requireOutboundEnvCredentialRefAllowed(tokenRef, "token_ref"); err != nil {
-			return 0, nil, err
-		}
-		if body.IntervalSeconds < minAuditFeedInterval {
-			return 0, nil, errStatus(http.StatusBadRequest, "interval_seconds must be at least 60")
-		}
-		if body.BatchSize < 1 || body.BatchSize > maxAuditFeedBatch {
-			return 0, nil, errStatus(http.StatusBadRequest, "batch_size must be between 1 and 500")
-		}
-		cidrs := cleanAPIStringList(body.PrivateEgressCIDRs)
-		if body.AllowPrivateEndpoint {
-			if err := a.requirePrivateEgressPermission(ctx, tenantID); err != nil {
-				return 0, nil, err
-			}
-			if len(cidrs) == 0 {
-				return 0, nil, errStatus(http.StatusBadRequest, "private_egress_cidrs is required when allow_private_endpoint is true")
-			}
-			if err := validatePrivateEgressCIDRs(cidrs); err != nil {
-				return 0, nil, err
-			}
-		} else if len(cidrs) != 0 {
-			return 0, nil, errStatus(http.StatusBadRequest, "private_egress_cidrs requires allow_private_endpoint")
-		}
-		feed, err := a.orch.ConfigureAuditFeed(ctx, tenantID, projections.AuditFeedDestinationConfigured{
-			ID: id, Name: name, Provider: provider, EndpointURL: endpoint, TokenRef: tokenRef,
-			IntervalSeconds: body.IntervalSeconds, BatchSize: body.BatchSize, Enabled: body.Enabled,
-			AllowPrivateEndpoint: body.AllowPrivateEndpoint, PrivateEgressCIDRs: cidrs,
-		})
+		feed, err := a.orch.ConfigureAuditFeed(ctx, tenantID, configuration.Destination)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -130,18 +197,81 @@ func (a *API) putAuditFeed(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func validateAuditFeedEndpoint(endpoint string, allowPrivate bool) error {
+// normalizeAuditFeedConfiguration is the one security decision shared by
+// preview and execution. It returns public configuration only; token_ref remains
+// a locator and credential bytes are never resolved on this path.
+func (a *API) normalizeAuditFeedConfiguration(ctx context.Context, tenantID, rawID string, body auditFeedRequest) (normalizedAuditFeedConfiguration, error) {
+	id := strings.TrimSpace(rawID)
+	if parsed, err := googleuuid.Parse(id); err != nil || parsed == googleuuid.Nil {
+		return normalizedAuditFeedConfiguration{}, errStatus(http.StatusBadRequest, "audit feed id must be a non-zero UUID")
+	}
+	name := strings.TrimSpace(body.Name)
+	if name == "" {
+		return normalizedAuditFeedConfiguration{}, errStatus(http.StatusBadRequest, "name is required")
+	}
+	provider, ok := auditsink.NormalizeProvider(body.Provider)
+	if !ok {
+		return normalizedAuditFeedConfiguration{}, errStatus(http.StatusBadRequest, "provider must be splunk-hec or sentinel")
+	}
+	endpoint := strings.TrimSpace(body.EndpointURL)
+	parsedEndpoint, err := validatedAuditFeedEndpoint(endpoint, body.AllowPrivateEndpoint)
+	if err != nil {
+		return normalizedAuditFeedConfiguration{}, err
+	}
+	tokenRef := strings.TrimSpace(body.TokenRef)
+	if !strings.HasPrefix(tokenRef, "env:") {
+		return normalizedAuditFeedConfiguration{}, errStatus(http.StatusBadRequest, "token_ref must be an operator-approved env:NAME credential reference")
+	}
+	if err := a.requireOutboundEnvCredentialRefAllowed(tokenRef, "token_ref"); err != nil {
+		return normalizedAuditFeedConfiguration{}, err
+	}
+	if body.IntervalSeconds < minAuditFeedInterval {
+		return normalizedAuditFeedConfiguration{}, errStatus(http.StatusBadRequest, "interval_seconds must be at least 60")
+	}
+	if body.BatchSize < 1 || body.BatchSize > maxAuditFeedBatch {
+		return normalizedAuditFeedConfiguration{}, errStatus(http.StatusBadRequest, "batch_size must be between 1 and 500")
+	}
+	cidrs := cleanAPIStringList(body.PrivateEgressCIDRs)
+	if body.AllowPrivateEndpoint {
+		if err := a.requirePrivateEgressPermission(ctx, tenantID); err != nil {
+			return normalizedAuditFeedConfiguration{}, err
+		}
+		if len(cidrs) == 0 {
+			return normalizedAuditFeedConfiguration{}, errStatus(http.StatusBadRequest, "private_egress_cidrs is required when allow_private_endpoint is true")
+		}
+		if err := validatePrivateEgressCIDRs(cidrs); err != nil {
+			return normalizedAuditFeedConfiguration{}, err
+		}
+	} else if len(cidrs) != 0 {
+		return normalizedAuditFeedConfiguration{}, errStatus(http.StatusBadRequest, "private_egress_cidrs requires allow_private_endpoint")
+	}
+	normalized := auditFeedRequest{
+		Name: name, Provider: provider, EndpointURL: endpoint, TokenRef: tokenRef,
+		IntervalSeconds: body.IntervalSeconds, BatchSize: body.BatchSize, Enabled: body.Enabled,
+		AllowPrivateEndpoint: body.AllowPrivateEndpoint, PrivateEgressCIDRs: cidrs,
+	}
+	return normalizedAuditFeedConfiguration{
+		ID: id, Request: normalized, EndpointHost: parsedEndpoint.Hostname(),
+		Destination: projections.AuditFeedDestinationConfigured{
+			ID: id, Name: name, Provider: provider, EndpointURL: endpoint, TokenRef: tokenRef,
+			IntervalSeconds: body.IntervalSeconds, BatchSize: body.BatchSize, Enabled: body.Enabled,
+			AllowPrivateEndpoint: body.AllowPrivateEndpoint, PrivateEgressCIDRs: cidrs,
+		},
+	}, nil
+}
+
+func validatedAuditFeedEndpoint(endpoint string, allowPrivate bool) (*url.URL, error) {
 	parsed, err := url.ParseRequestURI(strings.TrimSpace(endpoint))
 	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-		return errStatus(http.StatusBadRequest, "endpoint_url must be an absolute HTTP(S) URL")
+		return nil, errStatus(http.StatusBadRequest, "endpoint_url must be an absolute HTTP(S) URL")
 	}
 	if parsed.User != nil {
-		return errStatus(http.StatusBadRequest, "endpoint_url must not contain credentials; use token_ref")
+		return nil, errStatus(http.StatusBadRequest, "endpoint_url must not contain credentials; use token_ref")
 	}
 	if !allowPrivate && parsed.Scheme != "https" {
-		return errStatus(http.StatusBadRequest, "public endpoint_url must use HTTPS")
+		return nil, errStatus(http.StatusBadRequest, "public endpoint_url must use HTTPS")
 	}
-	return nil
+	return parsed, nil
 }
 
 func (a *API) listAuditFeeds(w http.ResponseWriter, r *http.Request) {

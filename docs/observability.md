@@ -151,6 +151,11 @@ tenant-governed evidence stream: they deliver the production Splunk HEC or Senti
 mapping, including each audit record and a final chain trailer, in bounded batches.
 Configure them from the Audit console or `PUT /api/v1/audit/feeds/{id}` and inspect
 them with `GET /api/v1/audit/feeds` or `trstctl-cli audit feeds list`.
+Before saving, use `POST /api/v1/audit/feeds/{id}/preview` or `trstctl-cli audit
+feeds preview <id> -f <file>`. Preview uses the execution validator and explains
+the exact host, credential reference, permission, writes, later effect, proof, and
+recovery without creating durable state or contacting the collector. The console
+invalidates that review after any form field changes.
 
 The status response is the durable operator signal. `last_delivered_sequence` is
 the highest accepted record, `lag_records` is the exact queued batch size still
@@ -165,6 +170,12 @@ failure retries the byte-identical batch and deterministic batch ID. Startup
 reconciliation recreates a missing outbox row only after the event history still
 matches the recorded range, IDs, seed, and head. A changed range fails closed; it
 is never silently replaced by whichever records happen to be current.
+
+The Audit page's **Hash coverage** panel reports only whether listed events carry
+hashes. That is not independent cryptographic verification. Export the signed JWS
+evidence bundle and verify it with the published verification key or `trstctl-cli
+audit verify`; the UI deliberately does not turn hash presence into a green
+verification claim.
 
 ## Structured logs
 

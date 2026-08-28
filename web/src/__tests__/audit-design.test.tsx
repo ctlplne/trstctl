@@ -10,6 +10,7 @@ const { apiMock } = vi.hoisted(() => ({
     auditEvents: vi.fn(),
     auditFeeds: vi.fn(),
     exportAudit: vi.fn(),
+    previewAuditFeed: vi.fn(),
     putAuditFeed: vi.fn(),
   },
 }));
@@ -44,7 +45,7 @@ describe("Route 035 change-history hierarchy", () => {
         time: "2026-08-21T19:20:00Z",
         hash: "sha256:change-seven",
         actor: { email: "ra@example.test" },
-        data: { resource_id: "payments-api", result: "succeeded" },
+        data: { identity_id: "09090909-0909-4909-8909-090909090909", result: "succeeded" },
       },
     ]);
     apiMock.auditFeeds.mockResolvedValue({ items: [] });
@@ -86,9 +87,12 @@ describe("Route 035 change-history hierarchy", () => {
     expect(await screen.findByRole("table", { name: "Tenant audit events" })).toBeInTheDocument();
     expect(screen.getByRole("searchbox", { name: "Search activity" })).toHaveFocus();
     expect(screen.getByRole("button", { name: "View event 7" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "View event 7" }));
+    expect(screen.getByRole("link", { name: "Open affected identity" })).toHaveAttribute("href", "/identities?identity=09090909-0909-4909-8909-090909090909");
 
     await user.click(screen.getByText("Signatures and evidence export", { exact: true }));
-    expect(await screen.findByRole("heading", { name: "Hash-chain status" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Hash coverage" })).toBeInTheDocument();
+    expect(screen.getByText(/Hash presence is not independent verification/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Export evidence" })).toBeInTheDocument();
 
     await user.click(screen.getByText("Collector delivery", { exact: true }));

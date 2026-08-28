@@ -23,6 +23,104 @@ const (
 	auditFeedSentinelID = "52525252-5252-4525-8525-525252525202"
 )
 
+// F9 requires a server-owned explanation of the exact collector instruction
+// before the console can save it. Preview is deliberately POST-shaped because
+// the proposed configuration is structured, but it is not a mutation: no event,
+// projection, idempotency record, outbox intent, or collector call may occur.
+func TestServedAuditFeedPreviewIsEffectFreeAndExactF9(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.OutboundEnvCredentialRefs = []string{"env:F9_SPLUNK_TOKEN"}
+	})
+	token := seedServedAPIToken(t, t.Context(), h.store, h.tenant, "f9-audit-operator", []string{
+		string(authz.AuditRead), string(authz.AuditWrite),
+	})
+
+	beforeSequence, err := h.log.LastSequence(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeFeeds, beforeOutbox, beforeIdempotency := auditFeedPreviewCountsF9(t, h)
+	request := map[string]any{ // #nosec G101 -- token_ref is a non-secret environment locator (CWE-798).
+		"name": "Production security lake", "provider": "splunk-hec",
+		"endpoint_url": "https://splunk.example.test/services/collector/event",
+		"token_ref":    "env:F9_SPLUNK_TOKEN", "interval_seconds": 300,
+		"batch_size": 100, "enabled": true,
+	}
+	const feedID = "09090909-0909-4909-8909-090909090909"
+	status, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/audit/feeds/"+feedID+"/preview", token, "", request)
+	if status != http.StatusOK {
+		t.Fatalf("preview audit feed: status=%d body=%s", status, body)
+	}
+	var preview struct {
+		Capability             string   `json:"capability"`
+		Ready                  bool     `json:"ready"`
+		EffectFree             bool     `json:"effect_free"`
+		FeedID                 string   `json:"feed_id"`
+		EndpointHost           string   `json:"endpoint_host"`
+		RequestFingerprint     string   `json:"request_fingerprint"`
+		RequiredPermission     string   `json:"required_permission"`
+		Prerequisites          []string `json:"prerequisites"`
+		PreviewWrites          []string `json:"preview_writes"`
+		PreviewExternalEffects []string `json:"preview_external_effects"`
+		ExecutionWrites        []string `json:"execution_writes"`
+		ExecutionEffects       []string `json:"execution_external_effects"`
+		VerificationSteps      []string `json:"verification_steps"`
+		RecoverySteps          []string `json:"recovery_steps"`
+		NormalizedRequest      struct {
+			Name            string `json:"name"`
+			Provider        string `json:"provider"`
+			EndpointURL     string `json:"endpoint_url"`
+			TokenRef        string `json:"token_ref"`
+			IntervalSeconds int    `json:"interval_seconds"`
+			BatchSize       int    `json:"batch_size"`
+			Enabled         bool   `json:"enabled"`
+		} `json:"normalized_request"`
+	}
+	if err := json.Unmarshal(body, &preview); err != nil {
+		t.Fatalf("decode audit feed preview: %v body=%s", err, body)
+	}
+	if preview.Capability != "audit_feed_configuration" || !preview.Ready || !preview.EffectFree ||
+		preview.FeedID != feedID || preview.EndpointHost != "splunk.example.test" ||
+		preview.RequestFingerprint == "" || preview.RequiredPermission != string(authz.AuditWrite) ||
+		preview.NormalizedRequest.Name != "Production security lake" ||
+		preview.NormalizedRequest.Provider != "splunk-hec" ||
+		preview.NormalizedRequest.EndpointURL != "https://splunk.example.test/services/collector/event" ||
+		preview.NormalizedRequest.TokenRef != "env:F9_SPLUNK_TOKEN" ||
+		preview.NormalizedRequest.IntervalSeconds != 300 || preview.NormalizedRequest.BatchSize != 100 ||
+		!preview.NormalizedRequest.Enabled {
+		t.Fatalf("audit feed preview lost exact authority: %+v", preview)
+	}
+	if preview.PreviewWrites == nil || len(preview.PreviewWrites) != 0 ||
+		preview.PreviewExternalEffects == nil || len(preview.PreviewExternalEffects) != 0 ||
+		len(preview.Prerequisites) < 3 || len(preview.ExecutionWrites) < 2 ||
+		len(preview.ExecutionEffects) < 1 || len(preview.VerificationSteps) < 2 ||
+		len(preview.RecoverySteps) < 2 {
+		t.Fatalf("audit feed preview does not explain execution/recovery boundaries: %+v", preview)
+	}
+	afterSequence, err := h.log.LastSequence(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	afterFeeds, afterOutbox, afterIdempotency := auditFeedPreviewCountsF9(t, h)
+	if afterSequence != beforeSequence || afterFeeds != beforeFeeds || afterOutbox != beforeOutbox || afterIdempotency != beforeIdempotency {
+		t.Fatalf("preview changed durable state: sequence %d->%d feeds %d->%d outbox %d->%d idempotency %d->%d",
+			beforeSequence, afterSequence, beforeFeeds, afterFeeds, beforeOutbox, afterOutbox, beforeIdempotency, afterIdempotency)
+	}
+}
+
+func auditFeedPreviewCountsF9(t *testing.T, h *servedHarness) (feeds, outbox, idempotency int) {
+	t.Helper()
+	if err := h.store.SystemPool().QueryRow(t.Context(), `
+		SELECT
+		  (SELECT count(*) FROM audit_feed_destinations WHERE tenant_id = $1),
+		  (SELECT count(*) FROM outbox WHERE tenant_id = $1),
+		  (SELECT count(*) FROM idempotency_keys WHERE tenant_id = $1)
+	`, h.tenant).Scan(&feeds, &outbox, &idempotency); err != nil {
+		t.Fatalf("count audit feed preview state: %v", err)
+	}
+	return feeds, outbox, idempotency
+}
+
 // AUD-52 acceptance is a delivery journey, not another export-format test. The
 // API records standing tenant instructions, the scheduler records exact bounded
 // work before any network call, the outbox owns retries, and only a collector

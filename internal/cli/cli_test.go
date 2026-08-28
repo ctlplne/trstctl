@@ -546,10 +546,24 @@ func TestCreateSendsBodyFromStdin(t *testing.T) {
 }
 
 func TestAuditFeedCommandsExposeHeadlessCollectorWorkflowAUD52(t *testing.T) {
-	var configured capture
-	setServer := mockServer(t, http.StatusOK, `{"id":"feed-52"}`, &configured)
+	var previewed capture
+	previewServer := mockServer(t, http.StatusOK, `{"capability":"audit_feed_configuration","effect_free":true}`, &previewed)
 	body := `{"name":"soc","provider":"splunk-hec","endpoint_url":"https://splunk.example.test/services/collector/event","token_ref":"env:SPLUNK_HEC_TOKEN","interval_seconds":300,"batch_size":100,"enabled":true}`
 	code, _, stderr := run(t,
+		[]string{"audit", "feeds", "preview", "52525252-5252-4525-8525-525252525252", "-f", "-"},
+		cli.Env{Server: previewServer.URL, HTTPClient: previewServer.Client(), IdempotencyKey: "must-not-leak-to-preview"}, body)
+	if code != 0 {
+		t.Fatalf("audit feeds preview exit=%d stderr=%q", code, stderr)
+	}
+	if previewed.Method != http.MethodPost || previewed.Path != "/api/v1/audit/feeds/52525252-5252-4525-8525-525252525252/preview" ||
+		previewed.Header.Get("Idempotency-Key") != "" || !sameJSON(previewed.Body, []byte(body)) {
+		t.Fatalf("preview request=%s %s key=%q body=%s", previewed.Method, previewed.Path,
+			previewed.Header.Get("Idempotency-Key"), previewed.Body)
+	}
+
+	var configured capture
+	setServer := mockServer(t, http.StatusOK, `{"id":"feed-52"}`, &configured)
+	code, _, stderr = run(t,
 		[]string{"audit", "feeds", "set", "52525252-5252-4525-8525-525252525252", "-f", "-"},
 		cli.Env{Server: setServer.URL, HTTPClient: setServer.Client(), IdempotencyKey: "audit-feed-set-52"}, body)
 	if code != 0 {

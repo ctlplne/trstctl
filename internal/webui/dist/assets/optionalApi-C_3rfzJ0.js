@@ -1,1 +1,0 @@
-import{mt as e}from"./index-Colbc6VK.js";function t(t,n,...r){let i=e[t];return typeof i==`function`?i(...r):Promise.resolve(n)}export{t};

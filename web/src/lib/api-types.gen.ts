@@ -882,6 +882,28 @@ export interface AuditFeedList {
   items: AuditFeed[];
 }
 
+export interface AuditFeedPreview {
+  capability: string;
+  current_updated_at?: string;
+  effect_free: boolean;
+  endpoint_host: string;
+  execution_external_effects: string[];
+  execution_writes: string[];
+  existing_configuration: boolean;
+  feed_id: string;
+  guidance: string;
+  normalized_request: AuditFeedRequest;
+  prerequisites: string[];
+  preview_external_effects: string[];
+  preview_writes: string[];
+  ready: boolean;
+  recovery_steps: string[];
+  request_fingerprint: string;
+  required_permission: string;
+  verification_steps: string[];
+  warnings: string[];
+}
+
 export interface AuditFeedRequest {
   allow_private_endpoint?: boolean;
   batch_size: number;

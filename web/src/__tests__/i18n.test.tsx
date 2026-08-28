@@ -536,6 +536,11 @@ describe("i18n boundary", () => {
       // expiry rendered as healthy is the defect being fixed. One interpolated
       // message ({value1}-day leaves) preserves its placeholder in every locale.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
+      // F9 audit-feed review re-pin: the new copy distinguishes a zero-effect
+      // preview from the later durable write and still-later collector call,
+      // invalidates stale reviews after an edit, and explains automatic retry
+      // without cursor advancement. Machine-authored es/de translations —
+      // FLAG FOR HUMAN TRANSLATION REVIEW before release.
       // C1a truth-integrity re-pin: one key for the agent endpoint-discovery
       // panel's honest empty state. The console previously fell back to a
       // hardcoded capability list naming PKCS#11, the Windows certificate store,
@@ -1246,8 +1251,8 @@ describe("i18n boundary", () => {
       // durable writes, and fail-closed verification result. Placeholders and
       // security meaning were reviewed in both catalogs. Machine-authored es/de
       // translations — FLAG FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "4e79a1f0f40621f0d75a260095b0b3fad200f9ce12d44d8e06a0af1e06a8cd98",
-      "de-DE": "855e9ae4d61f9ea5d03a58495be9e517b335fcb070fbf3760777db5e54dd3508",
+      "es-ES": "8bd8d245d4d05158c6605bb1d38bf05105cc7cbb39a0d44aaace7c72f7a45abb",
+      "de-DE": "66901bb9b12c75eaa42ed6d5490488d1591cb88f869b0e7c1add1a3750241a57",
     });
   });
 

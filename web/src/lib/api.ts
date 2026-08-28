@@ -87,6 +87,7 @@ import type {
   AuditBundle,
   AuditFeed,
   AuditFeedList,
+  AuditFeedPreview,
   AuditFeedRequest,
   AuditEvent as GenAuditEvent,
   BreakglassBundle,
@@ -719,6 +720,7 @@ export type {
   AuditBundle,
   AuditFeed,
   AuditFeedList,
+  AuditFeedPreview,
   AuditFeedRequest,
   BreakglassBundle,
   BreakglassIssueRequest,
@@ -2028,6 +2030,7 @@ export interface Api {
   auditEvents(options?: AuditQuery): Promise<AuditEvent[]>;
   exportAudit(options?: AuditQuery): Promise<AuditBundle>;
   auditFeeds(): Promise<AuditFeedList>;
+  previewAuditFeed(id: string, input: AuditFeedRequest): Promise<AuditFeedPreview>;
   putAuditFeed(id: string, input: AuditFeedRequest): Promise<AuditFeed>;
   // J1: download a record stream (ndjson/csv/splunk-hec/sentinel) as a file.
   downloadAuditExport(options: AuditQuery | undefined, format: string): Promise<string>;
@@ -2543,6 +2546,7 @@ const liveApi: Api = {
   auditEvents: (options) => req<{ events: AuditEvent[] }>(`/api/v1/audit/events${auditQueryString(options)}`).then((r) => r.events ?? []),
   exportAudit: (options) => req<AuditBundle>(`/api/v1/audit/export${auditQueryString(options)}`),
   auditFeeds: () => req<AuditFeedList>("/api/v1/audit/feeds"),
+  previewAuditFeed: (id, input) => postRead<AuditFeedPreview>(`/api/v1/audit/feeds/${encodeURIComponent(id)}/preview`, input),
   putAuditFeed: (id, input) => mutate<AuditFeed>("PUT", `/api/v1/audit/feeds/${encodeURIComponent(id)}`, input),
   downloadAuditExport: (options, format) => downloadAuditExportImpl(options, format),
   complianceEvidencePack: (framework) => req<ComplianceEvidencePack>(`/api/v1/compliance/evidence-packs/${encodeURIComponent(framework)}`),

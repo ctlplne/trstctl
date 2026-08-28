@@ -369,7 +369,8 @@ trstctl-cli audit events --type policy.decision --since 2026-01-01T00:00:00Z --l
 # download a signed evidence bundle for a date range
 trstctl-cli audit export --since 2026-01-01T00:00:00Z --until 2026-06-01T00:00:00Z
 
-# configure and observe a native collector feed (request body shown in docs/cli.md)
+# review, configure, and observe a native collector feed (body shown in docs/cli.md)
+trstctl-cli audit feeds preview <feed-uuid> -f audit-feed.json
 trstctl-cli --idempotency-key audit-feed-production audit feeds set <feed-uuid> -f audit-feed.json
 trstctl-cli audit feeds list
 

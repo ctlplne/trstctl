@@ -592,6 +592,11 @@ trstctl-cli compliance nhi-report
 cat > audit-feed.json <<'JSON'
 {"name":"production-soc","provider":"splunk-hec","endpoint_url":"https://splunk.example.com/services/collector/event","token_ref":"env:SPLUNK_HEC_TOKEN","interval_seconds":300,"batch_size":100,"enabled":true}
 JSON
+# Validate the exact destination and see writes, later effects, proof, and recovery.
+# This POST-shaped read sends no Idempotency-Key and performs no write or network call.
+trstctl-cli audit feeds preview 52525252-5252-4525-8525-525252525252 -f audit-feed.json
+
+# Save only after the preview matches the intended collector configuration.
 trstctl-cli --idempotency-key audit-feed-production audit feeds set 52525252-5252-4525-8525-525252525252 -f audit-feed.json
 
 # Read schedule, cursor, exact record lag, retry/failure, and collector receipt

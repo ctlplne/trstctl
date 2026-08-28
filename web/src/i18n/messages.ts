@@ -630,6 +630,43 @@ export const messages = {
     defaultMessage: "One audit stream, filtered to this module. Clear to see all events.",
     description: "Explanatory note beside the audit module-scope chip.",
   },
+  "audit.hash.heading": {
+    defaultMessage: "Hash coverage",
+    description: "Heading that accurately describes hash presence without claiming verification.",
+  },
+  "audit.hash.empty": {
+    defaultMessage: "No events are present in this audit window.",
+    description: "Empty audit hash-coverage explanation.",
+  },
+  "audit.hash.complete": {
+    defaultMessage: "All {count} listed events include a hash from the append-only audit projection.",
+    description: "Audit hash-coverage explanation when every listed event has a hash.",
+  },
+  "audit.hash.partial": {
+    defaultMessage: "{hashed} of {total} listed events include a hash.",
+    description: "Audit hash-coverage explanation when only some listed events have hashes.",
+  },
+  "audit.hash.boundary": {
+    defaultMessage:
+      "Hash presence is not independent verification. Export the signed evidence bundle and verify it with the published key or the audit verify CLI command.",
+    description: "Security boundary between displaying audit hashes and cryptographic verification.",
+  },
+  "audit.event.affectedResources": {
+    defaultMessage: "Affected resources",
+    description: "Heading for conservative links derived from recognized audit-event resource identifiers.",
+  },
+  "audit.event.openIdentity": {
+    defaultMessage: "Open affected identity",
+    description: "Audit event detail link to a recognized identity resource.",
+  },
+  "audit.event.openOwner": {
+    defaultMessage: "Open affected owner",
+    description: "Audit event detail link to a recognized owner resource.",
+  },
+  "audit.event.openIssuer": {
+    defaultMessage: "Open affected issuer",
+    description: "Audit event detail link to a recognized issuer resource.",
+  },
   "audit.feeds.heading": {
     defaultMessage: "Scheduled collector feeds",
     description: "Heading for native scheduled audit delivery to external collectors.",
@@ -638,6 +675,10 @@ export const messages = {
     defaultMessage:
       "Deliver exact, bounded audit batches to Splunk HEC or Microsoft Sentinel. Retries reuse the same batch, and this table keeps durable lag, failure, and collector-receipt evidence.",
     description: "Technical explanation of native audit feed delivery guarantees.",
+  },
+  "audit.feeds.recoveryBoundary": {
+    defaultMessage: "A failed batch retries automatically without advancing the delivered cursor.",
+    description: "Plain-language recovery guarantee below the audit feed delivery table.",
   },
   "audit.feeds.listLabel": {
     defaultMessage: "Scheduled audit collector feeds",
@@ -782,6 +823,82 @@ export const messages = {
   "audit.feeds.save": {
     defaultMessage: "Save collector feed",
     description: "Audit feed configuration submit button.",
+  },
+  "audit.feeds.review": {
+    defaultMessage: "Review collector feed",
+    description: "Audit feed action that requests an effect-free server preview.",
+  },
+  "audit.feeds.reviewing": {
+    defaultMessage: "Reviewing collector feed...",
+    description: "Audit feed preview progress label.",
+  },
+  "audit.feeds.reviewHeading": {
+    defaultMessage: "Review collector feed",
+    description: "Heading for the exact server-owned audit feed review.",
+  },
+  "audit.feeds.reviewDestination": {
+    defaultMessage: "Collector host",
+    description: "Exact audit feed destination host in the review.",
+  },
+  "audit.feeds.reviewCredential": {
+    defaultMessage: "Credential reference",
+    description: "Non-secret credential locator shown in the audit feed review.",
+  },
+  "audit.feeds.reviewPermission": {
+    defaultMessage: "Permission required",
+    description: "Permission required to execute an audit feed configuration.",
+  },
+  "audit.feeds.reviewState": {
+    defaultMessage: "Review state",
+    description: "Whether the audit feed review still matches the form.",
+  },
+  "audit.feeds.reviewCurrent": {
+    defaultMessage: "Matches this form",
+    description: "Audit feed review matches the current form values.",
+  },
+  "audit.feeds.reviewStale": {
+    defaultMessage: "Review again",
+    description: "Audit feed review no longer matches the current form values.",
+  },
+  "audit.feeds.reviewWrites": {
+    defaultMessage: "What saving writes",
+    description: "Audit feed review list of durable execution writes.",
+  },
+  "audit.feeds.reviewEffects": {
+    defaultMessage: "What may happen later",
+    description: "Audit feed review list of delayed external effects.",
+  },
+  "audit.feeds.reviewNoEffects": {
+    defaultMessage: "No later external effect is scheduled by this disabled configuration.",
+    description: "Audit feed review empty state for delayed external effects.",
+  },
+  "audit.feeds.reviewProof": {
+    defaultMessage: "How to prove it worked",
+    description: "Audit feed review verification steps heading.",
+  },
+  "audit.feeds.reviewRecovery": {
+    defaultMessage: "How recovery works",
+    description: "Audit feed review recovery steps heading.",
+  },
+  "audit.feeds.reviewChanged": {
+    defaultMessage: "Configuration changed. Review it again before saving.",
+    description: "Audit feed stale-review warning after a form edit.",
+  },
+  "audit.feeds.reviewRequired": {
+    defaultMessage: "Review the current collector configuration before saving it.",
+    description: "Audit feed save guard when no current review exists.",
+  },
+  "audit.feeds.previewFailed": {
+    defaultMessage: "Could not review collector feed",
+    description: "Audit feed preview error fallback.",
+  },
+  "audit.feeds.previewUnsafe": {
+    defaultMessage: "The server did not prove that preview is effect-free.",
+    description: "Audit feed client guard when a preview claims writes or network effects.",
+  },
+  "audit.feeds.previewMismatch": {
+    defaultMessage: "The server reviewed a different collector configuration. Review again.",
+    description: "Audit feed client guard when normalized preview input differs from the form.",
   },
   "audit.feeds.saving": {
     defaultMessage: "Saving collector feed...",
@@ -18241,10 +18358,6 @@ export const messages = {
   },
   "source.hash.a91069147f": {
     defaultMessage: "Hash",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Audit.tsx.",
-  },
-  "source.hash.chain.status.f5491b14e9": {
-    defaultMessage: "Hash-chain status",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Audit.tsx.",
   },
   "source.health.command.5ad9864488": {

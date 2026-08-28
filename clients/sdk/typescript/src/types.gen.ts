@@ -794,6 +794,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/audit/feeds/{id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate and explain an exact audit collector feed without writing state or contacting the collector */
+        post: operations["previewAuditFeed"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit/verification-keys": {
         parameters: {
             query?: never;
@@ -6629,6 +6646,29 @@ export interface components {
         AuditFeedList: {
             count?: number;
             items: components["schemas"]["AuditFeed"][];
+        };
+        AuditFeedPreview: {
+            capability: string;
+            /** Format: date-time */
+            current_updated_at?: string;
+            effect_free: boolean;
+            endpoint_host: string;
+            execution_external_effects: string[];
+            execution_writes: string[];
+            existing_configuration: boolean;
+            /** Format: uuid */
+            feed_id: string;
+            guidance: string;
+            normalized_request: components["schemas"]["AuditFeedRequest"];
+            prerequisites: string[];
+            preview_external_effects: string[];
+            preview_writes: string[];
+            ready: boolean;
+            recovery_steps: string[];
+            request_fingerprint: string;
+            required_permission: string;
+            verification_steps: string[];
+            warnings: string[];
         };
         AuditFeedRequest: {
             allow_private_endpoint?: boolean;
@@ -15034,6 +15074,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditFeed"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewAuditFeed: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuditFeedRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditFeedPreview"];
                 };
             };
             /** @description client error */

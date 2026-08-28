@@ -101,6 +101,7 @@ public final class OpenApiSchemas {
       "AuditEventList",
       "AuditFeed",
       "AuditFeedList",
+      "AuditFeedPreview",
       "AuditFeedRequest",
       "AuditTimestampInfo",
       "AuditTimestampToken",
