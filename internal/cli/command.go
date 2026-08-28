@@ -20,13 +20,14 @@ const (
 // Command maps a CLI invocation to one API operation, so the command set is
 // data-driven and provably at parity with the API route table.
 type Command struct {
-	Name    []string // command words, e.g. ["certificates","list"]
-	Method  string   // HTTP method
-	Path    string   // API path template, with {param} placeholders
-	Query   []string // accepted query-parameter flag names
-	Body    bodyMode
-	Action  string // fixed action validated for bodyApprovalFile commands
-	Summary string
+	Name     []string // command words, e.g. ["certificates","list"]
+	Method   string   // HTTP method
+	Path     string   // API path template, with {param} placeholders
+	Query    []string // accepted query-parameter flag names
+	Body     bodyMode
+	ReadOnly bool   // true for POST-shaped reads that accept a structured body
+	Action   string // fixed action validated for bodyApprovalFile commands
+	Summary  string
 }
 
 // Destructive reports whether the command can remove, revoke, erase, zeroize,
@@ -154,6 +155,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"identities", "create"}, Method: "POST", Path: "/api/v1/identities", Body: bodyFile, Summary: "Create an identity"},
 	{Name: []string{"identities", "list"}, Method: "GET", Path: "/api/v1/identities", Query: []string{"limit", "cursor"}, Summary: "List identities"},
 	{Name: []string{"identities", "get"}, Method: "GET", Path: "/api/v1/identities/{id}", Summary: "Get an identity"},
+	{Name: []string{"identities", "transition-preview"}, Method: "POST", Path: "/api/v1/identities/{id}/transitions/preview", Body: bodyFile, ReadOnly: true, Summary: "Review the exact lifecycle transition plan without changing state"},
 	{Name: []string{"identities", "transition"}, Method: "POST", Path: "/api/v1/identities/{id}/transitions", Body: bodyFile, Summary: "Apply a lifecycle transition"},
 	{Name: []string{"identities", "approve"}, Method: "POST", Path: "/api/v1/identities/{id}/approvals", Body: bodyApprovalFile, Summary: "Approve an identity action using its exact request ID and intent digest"},
 	{Name: []string{"identities", "approve", "issue"}, Method: "POST", Path: "/api/v1/identities/{id}/approvals", Body: bodyApprovalFile, Action: "issue", Summary: "Approve an exact immutable identity issuance request"},

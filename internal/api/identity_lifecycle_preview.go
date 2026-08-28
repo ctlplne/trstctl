@@ -1,0 +1,162 @@
+// SPDX-License-Identifier: MPL-2.0
+
+package api
+
+import (
+	"encoding/json"
+	"errors"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/orchestrator"
+)
+
+type identityLifecyclePreviewResponse struct {
+	Capability             string   `json:"capability"`
+	Ready                  bool     `json:"ready"`
+	IdentityID             string   `json:"identity_id"`
+	IdentityName           string   `json:"identity_name"`
+	IdentityKind           string   `json:"identity_kind"`
+	OwnerID                string   `json:"owner_id"`
+	OwnerName              string   `json:"owner_name,omitempty"`
+	From                   string   `json:"from"`
+	To                     string   `json:"to"`
+	ExpectedVersion        uint64   `json:"expected_version"`
+	EventType              string   `json:"event_type"`
+	SideEffect             bool     `json:"side_effect"`
+	SideEffectDestination  string   `json:"side_effect_destination,omitempty"`
+	RequestFingerprint     string   `json:"request_fingerprint"`
+	RequiredPermission     string   `json:"required_permission"`
+	Prerequisites          []string `json:"prerequisites"`
+	PreviewWrites          []string `json:"preview_writes"`
+	PreviewExternalEffects []string `json:"preview_external_effects"`
+	ExecutionWrites        []string `json:"execution_writes"`
+	ExecutionEffects       []string `json:"execution_external_effects"`
+	VerificationSteps      []string `json:"verification_steps"`
+	Warnings               []string `json:"warnings"`
+	Guidance               string   `json:"guidance"`
+}
+
+func lifecyclePreviewAPIError(err error) error {
+	if errors.Is(err, orchestrator.ErrStaleLifecyclePreview) {
+		return errStatus(http.StatusConflict, "The identity changed after this lifecycle action was previewed. Review the current state and preview the action again.")
+	}
+	return err
+}
+
+// previewIdentityTransition is a POST-shaped read because the proposed target,
+// reason, and optional public CSR live in a structured body. It emits no event,
+// writes no projection, enqueues no outbox intent, and contacts no signer or
+// external system. Execution rechecks ExpectedVersion while holding the identity
+// row lock, so this explanation cannot authorize work against newer state.
+func (a *API) previewIdentityTransition(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	var req transitionRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	// A client cannot choose the preview fence. The server returns the current
+	// immutable projection sequence and execution must echo that value.
+	req.ExpectedVersion = nil
+	if err := canonicalizeTransitionRequest(&req); err != nil {
+		a.writeError(w, err)
+		return
+	}
+	id := r.PathValue("id")
+	identity, version, err := a.store.IdentityApprovalTarget(r.Context(), tenantID, id)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	to := orchestrator.State(req.To)
+	eventType, valid := orchestrator.EventTypeFor(orchestrator.State(identity.Status), to)
+	if !valid {
+		a.writeError(w, &orchestrator.TransitionError{IdentityID: id, From: orchestrator.State(identity.Status), To: to})
+		return
+	}
+	csrPEM := strings.TrimSpace(req.SubjectCSRPEM)
+	if csrPEM != "" {
+		if to != orchestrator.StateIssued {
+			a.writeError(w, errStatus(http.StatusBadRequest, "subject_csr_pem is only meaningful on a transition to issued"))
+			return
+		}
+		if err := validateSubjectCSRPEM(csrPEM); err != nil {
+			a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+			return
+		}
+	}
+	owner, err := a.store.GetOwner(r.Context(), tenantID, identity.OwnerID)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	destination, sideEffect := orchestrator.SideEffectFor(orchestrator.State(identity.Status), to)
+	fingerprintBody, err := json.Marshal(struct {
+		Domain          string `json:"domain"`
+		TenantID        string `json:"tenant_id"`
+		IdentityID      string `json:"identity_id"`
+		ExpectedVersion uint64 `json:"expected_version"`
+		To              string `json:"to"`
+		Reason          string `json:"reason"`
+		CSRDigest       string `json:"csr_digest,omitempty"`
+	}{
+		Domain: "trstctl.api.identity-lifecycle-preview.v1", TenantID: tenantID,
+		IdentityID: id, ExpectedVersion: version, To: req.To, Reason: req.Reason,
+		CSRDigest: crypto.SHA256Hex([]byte(csrPEM)),
+	})
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	plan := identityLifecyclePreviewResponse{
+		Capability: "nhi_lifecycle_transition", Ready: true,
+		IdentityID: id, IdentityName: identity.Name, IdentityKind: string(identity.Kind),
+		OwnerID: identity.OwnerID, OwnerName: owner.Name,
+		From: identity.Status, To: req.To, ExpectedVersion: version, EventType: eventType,
+		SideEffect: sideEffect, SideEffectDestination: destination,
+		RequestFingerprint: crypto.SHA256Hex(fingerprintBody),
+		RequiredPermission: string(authz.IdentitiesWrite),
+		Prerequisites: []string{
+			"The identity is still in " + identity.Status + " state at lifecycle version " + strconv.FormatUint(version, 10) + ".",
+			"The tenant-local owner “" + owner.Name + "” is still assigned.",
+			"Execution requires identities:write and one Idempotency-Key.",
+		},
+		PreviewWrites: []string{}, PreviewExternalEffects: []string{},
+		ExecutionWrites: []string{
+			"Append one tenant-scoped " + eventType + " event.",
+			"Project the identity from " + identity.Status + " to " + req.To + ".",
+		},
+		ExecutionEffects: []string{},
+		VerificationSteps: []string{
+			"Read /api/v1/identities/" + id + " and confirm status is " + req.To + ".",
+			"Find the immutable " + eventType + " audit event for this identity.",
+		},
+		Warnings: []string{},
+		Guidance: "This preview performed no write and contacted no external system. Execution rechecks the lifecycle version, policy, quota, approval, and idempotency boundaries.",
+	}
+	if sideEffect {
+		plan.ExecutionWrites = append(plan.ExecutionWrites,
+			"Enqueue one "+destination+" intent in the same PostgreSQL transaction as the state change.")
+		plan.ExecutionEffects = append(plan.ExecutionEffects,
+			"A bounded outbox worker performs "+destination+" asynchronously after the transaction commits.")
+		plan.VerificationSteps = append(plan.VerificationSteps,
+			"Follow the matching delivery or rotation receipt; accepted lifecycle state is not the same as completed external delivery.")
+	}
+	if to == orchestrator.StateIssued {
+		plan.Prerequisites = append(plan.Prerequisites,
+			"Certificate profile, quota, approval, CSR, and signer checks run again at execution.")
+		if csrPEM == "" {
+			plan.Warnings = append(plan.Warnings,
+				"No requester-generated CSR is attached. The deprecated compatibility path may generate a subject key inside the control plane.")
+		}
+	}
+	a.writeJSON(w, http.StatusOK, plan)
+}

@@ -193,8 +193,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// authorities pass the mutation's eligibility rules before confirmation.
 	// F53's effect-free profile recovery preview and append-only restore raise it
 	// to 389 and expose the full recovery boundary to API clients.
-	if len(out) != 389 {
-		t.Fatalf("OpenAPI operationIds = %d, want 389", len(out))
+	// F59's effect-free, version-bound identity lifecycle preview raises it to 390.
+	if len(out) != 390 {
+		t.Fatalf("OpenAPI operationIds = %d, want 390", len(out))
 	}
 	return out
 }

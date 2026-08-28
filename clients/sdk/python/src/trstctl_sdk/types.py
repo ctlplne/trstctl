@@ -4513,6 +4513,36 @@ IdentityRequest = TypedDict(
     total=False,
 )
 
+IdentityTransitionPreview = TypedDict(
+    'IdentityTransitionPreview',
+    {
+        'capability': str,
+        'event_type': str,
+        'execution_external_effects': list[str],
+        'execution_writes': list[str],
+        'expected_version': int,
+        'from': str,
+        'guidance': str,
+        'identity_id': str,
+        'identity_kind': str,
+        'identity_name': str,
+        'owner_id': str,
+        'owner_name': str,
+        'prerequisites': list[str],
+        'preview_external_effects': list[str],
+        'preview_writes': list[str],
+        'ready': bool,
+        'request_fingerprint': str,
+        'required_permission': str,
+        'side_effect': bool,
+        'side_effect_destination': str,
+        'to': str,
+        'verification_steps': list[str],
+        'warnings': list[str],
+    },
+    total=False,
+)
+
 IncidentExecution = TypedDict(
     'IncidentExecution',
     {
@@ -9121,6 +9151,7 @@ TransitVerifyRequest = TypedDict(
 TransitionRequest = TypedDict(
     'TransitionRequest',
     {
+        'expected_version': int,
         'reason': str,
         'subject_csr_pem': str,
         'to': str,

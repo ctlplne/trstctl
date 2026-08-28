@@ -12818,6 +12818,134 @@
         ],
         "type": "object"
       },
+      "IdentityTransitionPreview": {
+        "properties": {
+          "capability": {
+            "type": "string"
+          },
+          "event_type": {
+            "type": "string"
+          },
+          "execution_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "execution_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "expected_version": {
+            "type": "integer"
+          },
+          "from": {
+            "type": "string"
+          },
+          "guidance": {
+            "type": "string"
+          },
+          "identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "identity_kind": {
+            "enum": [
+              "x509_certificate",
+              "ssh_certificate",
+              "ssh_key",
+              "secret",
+              "api_key",
+              "workload_identity"
+            ],
+            "type": "string"
+          },
+          "identity_name": {
+            "type": "string"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "owner_name": {
+            "type": "string"
+          },
+          "prerequisites": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "request_fingerprint": {
+            "type": "string"
+          },
+          "required_permission": {
+            "type": "string"
+          },
+          "side_effect": {
+            "type": "boolean"
+          },
+          "side_effect_destination": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "verification_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "ready",
+          "identity_id",
+          "identity_name",
+          "identity_kind",
+          "owner_id",
+          "from",
+          "to",
+          "expected_version",
+          "event_type",
+          "side_effect",
+          "request_fingerprint",
+          "required_permission",
+          "prerequisites",
+          "preview_writes",
+          "preview_external_effects",
+          "execution_writes",
+          "execution_external_effects",
+          "verification_steps",
+          "warnings",
+          "guidance"
+        ],
+        "type": "object"
+      },
       "IncidentExecution": {
         "properties": {
           "blast_radius": {
@@ -25746,6 +25874,9 @@
       },
       "TransitionRequest": {
         "properties": {
+          "expected_version": {
+            "type": "integer"
+          },
           "reason": {
             "type": "string"
           },
@@ -37296,6 +37427,74 @@
           }
         ],
         "summary": "Apply a lifecycle transition",
+        "x-trstctl-permission": "identities:write"
+      }
+    },
+    "/api/v1/identities/{id}/transitions/preview": {
+      "post": {
+        "operationId": "previewIdentityTransition",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransitionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityTransitionPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Explain and validate an exact lifecycle transition without writing state or contacting an external system",
         "x-trstctl-permission": "identities:write"
       }
     },

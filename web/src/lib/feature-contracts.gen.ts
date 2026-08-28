@@ -3242,7 +3242,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use non-human identity lifecycle management while tenant, policy, and security authority remain on the server.",
       "tool": "workloads_machines",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/identities",
       "navigationEntrypoints": [
         "tool navigation",
@@ -3254,7 +3254,7 @@ export const canonicalCapabilities = [
       "dependencies": [],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -3269,12 +3269,20 @@ export const canonicalCapabilities = [
           ]
         },
         "configure": {
-          "status": "missing",
-          "reason": "No structured evidence proves an operator can configure every required prerequisite from this console journey."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/Identities.tsx",
+            "web/src/__tests__/lifecycle.test.tsx"
+          ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: previewIdentityTransition",
+            "internal/api/identity_lifecycle_preview.go",
+            "internal/server/nhi_lifecycle_preview_served_test.go",
+            "web/src/pages/Identities.tsx"
+          ]
         },
         "execute": {
           "status": "complete",
@@ -3297,8 +3305,11 @@ export const canonicalCapabilities = [
           ]
         },
         "verify": {
-          "status": "missing",
-          "reason": "Durable or external-effect verification is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "internal/server/nhi_lifecycle_preview_served_test.go",
+            "web/src/__tests__/lifecycle.test.tsx"
+          ]
         },
         "automate": {
           "status": "complete",
@@ -3306,6 +3317,7 @@ export const canonicalCapabilities = [
             "OpenAPI operationId: createIdentity",
             "OpenAPI operationId: listIdentities",
             "OpenAPI operationId: getIdentity",
+            "OpenAPI operationId: previewIdentityTransition",
             "OpenAPI operationId: transitionIdentity",
             "OpenAPI operationId: approveIdentityAction",
             "OpenAPI operationId: listNHIInventory",
@@ -3324,8 +3336,8 @@ export const canonicalCapabilities = [
       },
       "owner": "identity",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "ed959a960979771e1ef91796f2152bcd3981cfeb",
+      "freshness": "2026-08-28"
     }
   },
   {

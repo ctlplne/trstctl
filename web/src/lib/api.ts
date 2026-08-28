@@ -225,6 +225,7 @@ import type {
   GraphReachable,
   GraphResponse,
   Identity as GenIdentity,
+  IdentityTransitionPreview as GenIdentityTransitionPreview,
   IdentityConnectorTargetRequest,
   IdentityRequest,
   IncidentExecution,
@@ -534,6 +535,7 @@ export type Issuer = GenIssuer;
 export type ExternalCA = GenExternalCA;
 export type CADiscovery = CADiscoveryInventory;
 export type Identity = GenIdentity;
+export type IdentityTransitionPreview = GenIdentityTransitionPreview;
 export type ADCSPosture = GenADCSPosture;
 export type ADCSDriftHistory = GenADCSDriftHistory;
 export type ADCSInventorySource = GenADCSInventorySource;
@@ -1902,7 +1904,15 @@ export interface Api {
   ownershipAttribution(): Promise<OwnershipAttribution>;
   getIdentity(id: string): Promise<Identity>;
   createIdentity(input: IdentityRequest): Promise<Identity>;
-  transitionIdentity(id: string, to: TransitionRequest["to"], reason?: string, subjectCSRPEM?: string, idempotencyKey?: string): Promise<Identity>;
+  previewIdentityTransition(id: string, to: TransitionRequest["to"], reason?: string, subjectCSRPEM?: string): Promise<IdentityTransitionPreview>;
+  transitionIdentity(
+    id: string,
+    to: TransitionRequest["to"],
+    reason?: string,
+    subjectCSRPEM?: string,
+    idempotencyKey?: string,
+    expectedVersion?: number,
+  ): Promise<Identity>;
   /** Compatibility route for identity decisions; the complete immutable request
    * binding is mandatory, just like the canonical approval-request route. */
   approveIdentityAction(id: string, input: ApprovalRequest): Promise<Approval>;
@@ -2366,7 +2376,13 @@ const liveApi: Api = {
   ownershipAttribution: () => req<OwnershipAttribution>("/api/v1/ownership/attribution"),
   getIdentity: (id) => req<Identity>(`/api/v1/identities/${encodeURIComponent(id)}`),
   createIdentity: (input) => mutate<Identity>("POST", "/api/v1/identities", input),
-  transitionIdentity: (id, to, reason, subjectCSRPEM, idempotencyKey) =>
+  previewIdentityTransition: (id, to, reason, subjectCSRPEM) =>
+    postRead<IdentityTransitionPreview>(`/api/v1/identities/${encodeURIComponent(id)}/transitions/preview`, {
+      to,
+      reason,
+      ...(subjectCSRPEM ? { subject_csr_pem: subjectCSRPEM } : {}),
+    }),
+  transitionIdentity: (id, to, reason, subjectCSRPEM, idempotencyKey, expectedVersion) =>
     mutate<Identity>(
       "POST",
       `/api/v1/identities/${encodeURIComponent(id)}/transitions`,
@@ -2374,6 +2390,7 @@ const liveApi: Api = {
         to,
         reason,
         ...(subjectCSRPEM ? { subject_csr_pem: subjectCSRPEM } : {}),
+        ...(expectedVersion == null ? {} : { expected_version: expectedVersion }),
       },
       idempotencyKey,
     ),

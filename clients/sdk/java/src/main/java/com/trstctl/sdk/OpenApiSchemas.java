@@ -340,6 +340,7 @@ public final class OpenApiSchemas {
       "IdentityConnectorTargetRequest",
       "IdentityList",
       "IdentityRequest",
+      "IdentityTransitionPreview",
       "IncidentExecution",
       "IncidentExecutionList",
       "IncidentExecutionRequest",

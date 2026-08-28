@@ -2591,6 +2591,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/identities/{id}/transitions/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Explain and validate an exact lifecycle transition without writing state or contacting an external system */
+        post: operations["previewIdentityTransition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/incidents/executions": {
         parameters: {
             query?: never;
@@ -9034,6 +9051,34 @@ export interface components {
             /** Format: uuid */
             owner_id: string;
         };
+        IdentityTransitionPreview: {
+            capability: string;
+            event_type: string;
+            execution_external_effects: string[];
+            execution_writes: string[];
+            expected_version: number;
+            from: string;
+            guidance: string;
+            /** Format: uuid */
+            identity_id: string;
+            /** @enum {string} */
+            identity_kind: "x509_certificate" | "ssh_certificate" | "ssh_key" | "secret" | "api_key" | "workload_identity";
+            identity_name: string;
+            /** Format: uuid */
+            owner_id: string;
+            owner_name?: string;
+            prerequisites: string[];
+            preview_external_effects: string[];
+            preview_writes: string[];
+            ready: boolean;
+            request_fingerprint: string;
+            required_permission: string;
+            side_effect: boolean;
+            side_effect_destination?: string;
+            to: string;
+            verification_steps: string[];
+            warnings: string[];
+        };
         IncidentExecution: {
             blast_radius: components["schemas"]["GraphImpact"];
             /** Format: uuid */
@@ -12498,6 +12543,7 @@ export interface components {
             signature: string;
         };
         TransitionRequest: {
+            expected_version?: number;
             reason?: string;
             subject_csr_pem?: string;
             /** @enum {string} */
@@ -20005,6 +20051,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Identity"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewIdentityTransition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransitionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityTransitionPreview"];
                 };
             };
             /** @description client error */

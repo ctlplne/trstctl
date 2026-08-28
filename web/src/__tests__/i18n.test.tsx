@@ -1241,8 +1241,13 @@ describe("i18n boundary", () => {
       // CMS, CSR, MDM, CA/RA, SHA-256, HTTP, SCEP, and trstctl remain
       // byte-identical. Machine-authored es/de translations — FLAG FOR HUMAN
       // REVIEW.
-      "es-ES": "a8a104071ab4e1d7e30abd323b573a9761f73555548d90441ba435b33b0c669a",
-      "de-DE": "10f7d28da3acb3d1d62ddca04d3344f4bfbbe77bed6b186f9a5dc5da6063b8bf",
+      // F59 lifecycle-review re-pin: nineteen keys explain the effect-free
+      // preview, exact owner/effect/version/permission, changed-plan boundary,
+      // durable writes, and fail-closed verification result. Placeholders and
+      // security meaning were reviewed in both catalogs. Machine-authored es/de
+      // translations — FLAG FOR HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "4e79a1f0f40621f0d75a260095b0b3fad200f9ce12d44d8e06a0af1e06a8cd98",
+      "de-DE": "855e9ae4d61f9ea5d03a58495be9e517b335fcb070fbf3760777db5e54dd3508",
     });
   });
 

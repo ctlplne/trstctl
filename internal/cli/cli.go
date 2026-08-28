@@ -125,9 +125,12 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 
 	// Mutations require an Idempotency-Key (AN-5); generate a fresh one per
 	// invocation unless the caller supplies a stable key for safe retries.
-	idemKey := *idem
-	if idemKey == "" && cmd.Method != http.MethodGet {
-		idemKey = generateIdempotencyKey()
+	idemKey := ""
+	if cmd.Method != http.MethodGet && !cmd.ReadOnly {
+		idemKey = *idem
+		if idemKey == "" {
+			idemKey = generateIdempotencyKey()
+		}
 	}
 
 	client, err := httpClientForEnv(env, *caFile)

@@ -151,8 +151,9 @@ func toIdentityResponse(it store.Identity) identityResponse {
 }
 
 type transitionRequest struct {
-	To     string `json:"to"`
-	Reason string `json:"reason"`
+	To              string  `json:"to"`
+	Reason          string  `json:"reason"`
+	ExpectedVersion *uint64 `json:"expected_version,omitempty"`
 	// SubjectCSRPEM lets the caller supply their own PKCS#10 request on a
 	// transition to issued (epic B1). When present the control plane signs that
 	// request and generates no key, so the subject private key stays wherever the
@@ -500,6 +501,9 @@ func (a *API) transitionIdentity(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err
 		}
+		if req.ExpectedVersion != nil && targetVersion != *req.ExpectedVersion {
+			return 0, nil, lifecyclePreviewAPIError(orchestrator.ErrStaleLifecyclePreview)
+		}
 		csrPEM := strings.TrimSpace(req.SubjectCSRPEM)
 		idempotencyKeyDigest, subjectCSRDigest := identityTransitionAttemptDigests(idempotencyKey, csrPEM)
 		if csrPEM != "" {
@@ -593,7 +597,7 @@ func (a *API) transitionIdentity(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		var terr error
 		if authority != nil {
-			terr = a.orch.TransitionWithSubjectCSRAndApproval(ctx, tenantID, id, state,
+			terr = a.orch.TransitionWithSubjectCSRAndApprovalAtVersion(ctx, tenantID, id, state,
 				req.Reason, idempotencyKey, csrPEM, store.OperationApprovalUse{
 					RequestID: authority.RequestID, IntentDigest: authority.IntentDigest,
 					Requester: authority.Requester, ResourceKind: authority.ResourceKind,
@@ -602,15 +606,15 @@ func (a *API) transitionIdentity(w http.ResponseWriter, r *http.Request) {
 					TargetVersion: authority.TargetVersion, RequiredApprovals: authority.RequiredApprovals,
 					Reason: authority.Reason, EvidenceRefs: append([]string(nil), authority.EvidenceRefs...),
 					Issuance: authority.Issuance,
-				})
+				}, req.ExpectedVersion)
 		} else {
-			terr = a.orch.TransitionWithSubjectCSR(ctx, tenantID, id, state, req.Reason, idempotencyKey, csrPEM, issuanceBinding)
+			terr = a.orch.TransitionWithSubjectCSRAtVersion(ctx, tenantID, id, state, req.Reason, idempotencyKey, csrPEM, req.ExpectedVersion, issuanceBinding)
 		}
 		if feature, action, ok := transitionFeatureAction(state); ok {
 			a.observeFeature(feature, action, start, terr)
 		}
 		if terr != nil {
-			return 0, nil, approvalAPIError(terr)
+			return 0, nil, lifecyclePreviewAPIError(approvalAPIError(terr))
 		}
 		updated, err := a.store.GetIdentity(ctx, tenantID, id)
 		if err != nil {

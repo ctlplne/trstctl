@@ -614,10 +614,11 @@ func TestJourney005IssueFlowAndRouteParityStayWired(t *testing.T) {
 		"api.transitionIdentity(",
 		"identity.id,",
 		`"issued",`,
-		"transitionIdentity: (id, to, reason, subjectCSRPEM, idempotencyKey) =>",
+		"transitionIdentity: (id, to, reason, subjectCSRPEM, idempotencyKey, expectedVersion) =>",
 		"mutate<Identity>(",
 		"`/api/v1/identities/${encodeURIComponent(id)}/transitions`",
 		"...(subjectCSRPEM ? { subject_csr_pem: subjectCSRPEM } : {}),",
+		"...(expectedVersion == null ? {} : { expected_version: expectedVersion }),",
 		"idempotencyKey,",
 	)
 

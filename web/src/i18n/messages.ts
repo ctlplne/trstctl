@@ -21892,10 +21892,6 @@ export const messages = {
     defaultMessage: "Dismiss {value1}",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Posture.tsx:594.",
   },
-  "source.e.g.key.compromise.cab.1234.ff97b4f9ff": {
-    defaultMessage: "e.g. key compromise CAB-1234",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Identities.tsx:659.",
-  },
   "source.e.g.record.cleanup.approved.in.cab.1234.8cc38f337d": {
     defaultMessage: "e.g. record cleanup approved in CAB-1234",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Identities.tsx:659.",
@@ -22597,6 +22593,52 @@ export const messages = {
   "identities.lifecycle.rulesSummary": {
     defaultMessage: "Show all lifecycle rules",
     description: "Progressive disclosure for every valid and invalid identity state transition.",
+  },
+  "identities.lifecycle.reviewTitle": {
+    defaultMessage: "Review {action} for {identity}",
+    description: "Lifecycle review dialog heading naming the exact action and identity.",
+  },
+  "identities.lifecycle.reviewIntro": {
+    defaultMessage: "Check the exact prerequisites, durable writes, queued effect, and proof before this action runs.",
+    description: "Plain-language introduction to a non-destructive lifecycle review.",
+  },
+  "identities.lifecycle.reviewLoading": {
+    defaultMessage: "Reviewing the exact action with the server…",
+    description: "Status while the server builds an effect-free lifecycle plan.",
+  },
+  "identities.lifecycle.reviewRetry": { defaultMessage: "Retry preview", description: "Retries a failed lifecycle preview read." },
+  "identities.lifecycle.reviewNoChanges": {
+    defaultMessage: "No changes made by preview",
+    description: "Assurance that the lifecycle preview was effect-free.",
+  },
+  "identities.lifecycle.reviewOwner": { defaultMessage: "Identity owner", description: "Lifecycle preview owner label." },
+  "identities.lifecycle.reviewEffect": { defaultMessage: "Exact queued effect", description: "Lifecycle preview outbox-effect label." },
+  "identities.lifecycle.reviewNoEffect": {
+    defaultMessage: "No external effect",
+    description: "Lifecycle preview fallback when execution queues no external work.",
+  },
+  "identities.lifecycle.reviewVersion": { defaultMessage: "Lifecycle version", description: "Version fence shown in a lifecycle preview." },
+  "identities.lifecycle.reviewPermission": { defaultMessage: "Required permission", description: "Permission label in a lifecycle preview." },
+  "identities.lifecycle.reviewBefore": { defaultMessage: "Before it runs", description: "Lifecycle preview prerequisite heading." },
+  "identities.lifecycle.reviewWrites": { defaultMessage: "What it writes", description: "Lifecycle preview durable-write heading." },
+  "identities.lifecycle.reviewProof": { defaultMessage: "How trstctl proves it", description: "Lifecycle preview verification heading." },
+  "identities.lifecycle.reviewChanged": {
+    defaultMessage: "The reason changed after preview. Review the updated action before running it.",
+    description: "Warning that invalidates a lifecycle preview after operator input changes.",
+  },
+  "identities.lifecycle.reviewRun": { defaultMessage: "Run reviewed action", description: "Executes the exact reviewed lifecycle plan." },
+  "identities.lifecycle.reviewUpdated": { defaultMessage: "Review updated action", description: "Requests a fresh lifecycle plan after input changes." },
+  "identities.lifecycle.previewFailed": {
+    defaultMessage: "Could not preview lifecycle action",
+    description: "Safe fallback heading when lifecycle preview fails.",
+  },
+  "identities.lifecycle.verificationFailed": {
+    defaultMessage: "Verification failed: the server returned {actual}, not {expected}.",
+    description: "Fail-closed lifecycle result mismatch shown after execution.",
+  },
+  "identities.lifecycle.verified": {
+    defaultMessage: "Verified: {identity} is now {state}. {detail}",
+    description: "Lifecycle success notice shown only after the server returns the requested state.",
   },
   "identities.find.action": { defaultMessage: "Find identities", description: "Primary action that jumps to identity search." },
   "identities.search.label": { defaultMessage: "Find identities", description: "Identity inventory search label." },

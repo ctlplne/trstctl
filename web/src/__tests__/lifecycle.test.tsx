@@ -14,6 +14,7 @@ const { apiMock } = vi.hoisted(() => ({
     owners: vi.fn(),
     getIdentity: vi.fn(),
     issueCertificate: vi.fn(),
+    previewIdentityTransition: vi.fn(),
     transitionIdentity: vi.fn(),
     decommissionNHI: vi.fn(),
     approveIdentityAction: vi.fn(),
@@ -43,6 +44,55 @@ async function openIdentityDetails(user: ReturnType<typeof userEvent.setup>, nam
   return screen.findByRole("dialog", { name: "Identity detail" });
 }
 
+function transitionPlanFor(id: string, to: string) {
+  const fromByTarget: Record<string, string> = {
+    issued: "requested",
+    deployed: "issued",
+    renewing: "deployed",
+    revoked: "deployed",
+    retired: "revoked",
+  };
+  const destinationByTarget: Record<string, string> = {
+    issued: "ca.issue",
+    deployed: "connector.deploy",
+    renewing: "ca.renew",
+    revoked: "revocation.publish",
+  };
+  const from = fromByTarget[to] ?? "requested";
+  const destination = destinationByTarget[to];
+  return {
+    capability: "nhi_lifecycle_transition",
+    ready: true,
+    identity_id: id,
+    identity_name: id,
+    identity_kind: "x509_certificate",
+    owner_id: "own-1",
+    owner_name: "team",
+    from,
+    to,
+    expected_version: 2,
+    event_type: `identity.${to}`,
+    side_effect: Boolean(destination),
+    side_effect_destination: destination,
+    request_fingerprint: `sha256:${id}:${to}`,
+    required_permission: "identities:write",
+    prerequisites: [`The identity is still ${from}.`, "An accountable owner is assigned.", "The operator can write identities."],
+    preview_writes: [],
+    preview_external_effects: [],
+    execution_writes: [`Append identity.${to}.`, `Project the identity to ${to}.`],
+    execution_external_effects: destination ? [`Queue one ${destination} intent through the outbox.`] : [],
+    verification_steps: [`Read the identity and confirm ${to}.`, "Follow the durable receipt."],
+    warnings: [],
+    guidance: "This preview performed no write and contacted no external system.",
+  };
+}
+
+async function confirmReviewedAction(user: ReturnType<typeof userEvent.setup>) {
+  const review = await screen.findByRole("dialog", { name: /^Review /i });
+  expect(await within(review).findByText("No changes made by preview")).toBeInTheDocument();
+  await user.click(within(review).getByRole("button", { name: "Run reviewed action" }));
+}
+
 describe("lifecycle actions from the UI", () => {
   beforeEach(() => {
     apiMock.issuers.mockReset().mockResolvedValue([{ id: "iss-1", kind: "x509_ca", name: "LE" }]);
@@ -51,7 +101,8 @@ describe("lifecycle actions from the UI", () => {
     // and that identityState() reads (SURFACE-005: the FE no longer guesses `state`).
     apiMock.issueCertificate.mockReset().mockResolvedValue({ id: "new-1", name: "svc", status: "issued" });
     apiMock.getIdentity.mockReset();
-    apiMock.transitionIdentity.mockReset().mockResolvedValue({ id: "x", name: "x", status: "x" });
+    apiMock.previewIdentityTransition.mockReset().mockImplementation(async (id: string, to: string) => transitionPlanFor(id, to));
+    apiMock.transitionIdentity.mockReset().mockImplementation(async (id: string, to: string) => ({ id, name: id, status: to }));
     apiMock.decommissionNHI.mockReset().mockResolvedValue({
       capability: "CAP-GOV-04",
       coverage: ["departure", "vendor_term", "inactivity", "revoke", "retire"],
@@ -145,19 +196,48 @@ describe("lifecycle actions from the UI", () => {
     // A requested identity can be issued.
     let dialog = await openIdentityDetails(user, "requested-svc");
     await user.click(within(dialog).getByRole("button", { name: /^issue$/i }));
-    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("req-1", "issued", expect.anything()));
+    await confirmReviewedAction(user);
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("req-1", "issued", expect.anything(), undefined, undefined, 2));
     await user.click(within(dialog).getByRole("button", { name: "Close" }));
 
     // An issued identity can be deployed or revoked.
     dialog = await openIdentityDetails(user, "issued-svc");
     await user.click(within(dialog).getByRole("button", { name: /^deploy$/i }));
-    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("iss-1", "deployed", expect.anything()));
+    await confirmReviewedAction(user);
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("iss-1", "deployed", expect.anything(), undefined, undefined, 2));
     await user.click(within(dialog).getByRole("button", { name: "Close" }));
 
     // A deployed identity can be renewed.
     dialog = await openIdentityDetails(user, "deployed-svc");
     await user.click(within(dialog).getByRole("button", { name: /^renew$/i }));
-    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("dep-1", "renewing", expect.anything()));
+    await confirmReviewedAction(user);
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("dep-1", "renewing", expect.anything(), undefined, undefined, 2));
+  });
+
+  it("reviews an exact server-owned lifecycle plan before execution and verifies the returned state", async () => {
+    const identity = { id: "dep-1", name: "deployed-svc", kind: "x509_certificate", owner_id: "own-1", status: "deployed" };
+    apiMock.identities.mockResolvedValue([identity]);
+    apiMock.getIdentity.mockResolvedValue(identity);
+    apiMock.transitionIdentity.mockResolvedValue({ ...identity, status: "renewing" });
+    const user = userEvent.setup();
+    renderIdentities();
+
+    const detail = await openIdentityDetails(user, "deployed-svc");
+    await user.type(within(detail).getByLabelText("Transition reason"), "rotate before maintenance");
+    await user.click(within(detail).getByRole("button", { name: /^renew$/i }));
+
+    expect(apiMock.transitionIdentity).not.toHaveBeenCalled();
+    await waitFor(() => expect(apiMock.previewIdentityTransition).toHaveBeenCalledWith("dep-1", "renewing", "rotate before maintenance"));
+    const review = await screen.findByRole("dialog", { name: /Review Renew for deployed-svc/i });
+    expect(within(review).getByText("No changes made by preview")).toBeInTheDocument();
+    expect(within(review).getByText(/deployed → renewing/)).toBeInTheDocument();
+    expect(within(review).getAllByText(/ca.renew/).length).toBeGreaterThan(0);
+    expect(within(review).getByText(/Append identity.renewing/)).toBeInTheDocument();
+    expect(within(review).getByText(/Read the identity and confirm renewing/)).toBeInTheDocument();
+
+    await user.click(within(review).getByRole("button", { name: "Run reviewed action" }));
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("dep-1", "renewing", "rotate before maintenance", undefined, undefined, 2));
+    expect(await screen.findByText(/Verified: deployed-svc is now renewing/i)).toBeInTheDocument();
   });
 
   it("renders identities on the shared DataGrid with lifecycle badges and all six kind filters", async () => {
@@ -393,8 +473,8 @@ describe("lifecycle actions from the UI", () => {
 
     await user.type(screen.getByLabelText("Transition reason"), "approved in CAB-1234");
     await user.click(screen.getByRole("button", { name: "Move to issued" }));
-
-    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("req-1", "issued", "approved in CAB-1234"));
+    await confirmReviewedAction(user);
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("req-1", "issued", "approved in CAB-1234", undefined, undefined, 2));
   });
 
   it("shows revoked and retired terminal handling in the state machine", async () => {
@@ -437,7 +517,7 @@ describe("lifecycle actions from the UI", () => {
     const dialog = await screen.findByRole("alertdialog");
     // The dialog names the credential (it appears in both the heading and the body).
     expect(within(dialog).getAllByText(/to-revoke/).length).toBeGreaterThan(0);
-    expect(within(dialog).getByRole("heading")).toHaveTextContent(/revoke.*to-revoke/i);
+    expect(within(dialog).getByRole("heading", { level: 2, name: /review revoke for to-revoke/i })).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: /yes, revoke/i })).toBeDisabled();
     expect(within(dialog).getByLabelText(/type credential name/i)).toHaveFocus();
 
@@ -450,10 +530,12 @@ describe("lifecycle actions from the UI", () => {
     // Confirming requires the credential name and sends the operator reason.
     await user.type(within(dialog).getByLabelText(/type credential name/i), "to-revoke");
     const reason = within(dialog).getByLabelText(/revocation reason/i);
-    await user.clear(reason);
-    await user.type(reason, "key compromise CAB-9001");
+    await user.selectOptions(reason, "keyCompromise");
+    expect(within(dialog).getByRole("button", { name: /yes, revoke/i })).toBeDisabled();
+    await user.click(within(dialog).getByRole("button", { name: "Review updated action" }));
+    await waitFor(() => expect(apiMock.previewIdentityTransition).toHaveBeenLastCalledWith("dep-9", "revoked", "keyCompromise"));
     await user.click(within(dialog).getByRole("button", { name: /yes, revoke/i }));
-    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("dep-9", "revoked", "key compromise CAB-9001"));
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("dep-9", "revoked", "keyCompromise", undefined, undefined, 2));
   });
 
   it("shows served blast-radius impact before destructive confirmation (FE-083)", async () => {
@@ -477,13 +559,14 @@ describe("lifecycle actions from the UI", () => {
 
     await waitFor(() => expect(apiMock.graphBlastRadius).toHaveBeenCalledWith("cert:dep-9"));
     const dialog = await screen.findByRole("alertdialog");
-    expect(await within(dialog).findByText("Blast-radius impact")).toBeInTheDocument();
-    expect(within(dialog).getByText(/cert:dep-9/)).toBeInTheDocument();
-    expect(within(dialog).getByText(/3 downstream affected nodes/i)).toBeInTheDocument();
-    expect(within(dialog).getByText("workload")).toBeInTheDocument();
-    expect(within(dialog).getByText("2")).toBeInTheDocument();
-    expect(within(dialog).getByText("resource")).toBeInTheDocument();
-    expect(within(dialog).getByText("1")).toBeInTheDocument();
+    const impactHeading = await within(dialog).findByRole("heading", { name: "Blast-radius impact" });
+    const impact = impactHeading.closest("section")!;
+    expect(within(impact).getByText(/cert:dep-9/)).toBeInTheDocument();
+    expect(within(impact).getByText(/3 downstream affected nodes/i)).toBeInTheDocument();
+    expect(within(impact).getByText("workload")).toBeInTheDocument();
+    expect(within(impact).getByText("2")).toBeInTheDocument();
+    expect(within(impact).getByText("resource")).toBeInTheDocument();
+    expect(within(impact).getByText("1")).toBeInTheDocument();
   });
 
   it("does not invent blast-radius impact when no graph node mapping exists (FE-083)", async () => {
@@ -637,9 +720,10 @@ describe("lifecycle actions from the UI", () => {
     const user = userEvent.setup();
     renderIdentities();
 
-    // Issue is non-destructive, so it runs without confirmation and hits the 429.
+    // The reviewed action reaches the mutation and keeps the Retry-After detail.
     const detail = await openIdentityDetails(user, "svc");
     await user.click(within(detail).getByRole("button", { name: /^issue$/i }));
+    await confirmReviewedAction(user);
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent(/rate limited/i);
     expect(alert).toHaveTextContent(/12s/);
@@ -663,6 +747,7 @@ describe("lifecycle actions from the UI", () => {
     const detail = await openIdentityDetails(user, "request-only-svc");
     const issue = within(detail).getByRole("button", { name: /^issue$/i });
     await user.click(issue);
+    await confirmReviewedAction(user);
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent(/certs:request principals cannot self-issue/i);
@@ -785,8 +870,9 @@ describe("lifecycle actions from the UI", () => {
 
     const detail = await openIdentityDetails(user, "idempotent-svc");
     await user.click(within(detail).getByRole("button", { name: /^issue$/i }));
+    await confirmReviewedAction(user);
 
-    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("req-1", "issued", expect.anything()));
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("req-1", "issued", expect.anything(), undefined, undefined, 2));
     expect(await screen.findByRole("status")).toHaveTextContent(/Idempotency-Key protects/i);
     expect(screen.getByRole("status")).toHaveTextContent(/duplicate execution/i);
   });

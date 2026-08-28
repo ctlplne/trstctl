@@ -3203,6 +3203,32 @@ export interface IdentityRequest {
   owner_id: string;
 }
 
+export interface IdentityTransitionPreview {
+  capability: string;
+  event_type: string;
+  execution_external_effects: string[];
+  execution_writes: string[];
+  expected_version: number;
+  from: string;
+  guidance: string;
+  identity_id: string;
+  identity_kind: "x509_certificate" | "ssh_certificate" | "ssh_key" | "secret" | "api_key" | "workload_identity";
+  identity_name: string;
+  owner_id: string;
+  owner_name?: string;
+  prerequisites: string[];
+  preview_external_effects: string[];
+  preview_writes: string[];
+  ready: boolean;
+  request_fingerprint: string;
+  required_permission: string;
+  side_effect: boolean;
+  side_effect_destination?: string;
+  to: string;
+  verification_steps: string[];
+  warnings: string[];
+}
+
 export interface IncidentExecution {
   blast_radius: GraphImpact;
   compromised_identity_id: string;
@@ -6513,6 +6539,7 @@ export interface TransitVerifyRequest {
 }
 
 export interface TransitionRequest {
+  expected_version?: number;
   reason?: string;
   subject_csr_pem?: string;
   to: "issued" | "deployed" | "renewing" | "renewal_failed" | "revoked" | "retired";

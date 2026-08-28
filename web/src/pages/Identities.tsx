@@ -8,6 +8,7 @@ import {
   type ConnectorDelivery,
   type GraphImpact,
   type Identity,
+  type IdentityTransitionPreview,
   type NHIDecommissionRequest,
   type NHIDecommissionResponse,
   type Owner,
@@ -57,6 +58,22 @@ type BlastRadiusState = {
   impact: GraphImpact | null;
   loading: boolean;
   nodeId: string | null;
+};
+
+type PendingTransition = {
+  id: string;
+  name: string;
+  to: TransitionTo;
+  label: string;
+  reason: string;
+  destructive: boolean;
+};
+
+type TransitionPreviewState = {
+  key: string;
+  plan: IdentityTransitionPreview | null;
+  loading: boolean;
+  error: string | null;
 };
 
 const emptyBlastRadiusState: BlastRadiusState = {
@@ -253,6 +270,10 @@ function deniedKey(id: string, to: TransitionTo): string {
   return `${id}:${to}`;
 }
 
+function transitionPreviewKey(id: string, to: TransitionTo, reason: string): string {
+  return JSON.stringify([id, to, reason.trim()]);
+}
+
 function decommissionInputLabelKey(
   type: DecommissionSignalType,
 ): "identities.decommission.vendor" | "identities.decommission.inactiveBefore" | "identities.decommission.subject" {
@@ -325,9 +346,10 @@ export function Identities() {
   const [showForm, setShowForm] = useState(false);
   // A destructive transition awaiting explicit confirmation (SURFACE-007). null
   // means no confirmation is pending.
-  const [pending, setPending] = useState<{ id: string; name: string; to: TransitionTo; label: string; reason?: string } | null>(null);
+  const [pending, setPending] = useState<PendingTransition | null>(null);
   const [pendingConfirmName, setPendingConfirmName] = useState("");
   const [pendingReason, setPendingReason] = useState("");
+  const [transitionPreview, setTransitionPreview] = useState<TransitionPreviewState>({ key: "", plan: null, loading: false, error: null });
   const [query, setQuery] = useState("");
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
@@ -411,28 +433,44 @@ export function Identities() {
   );
 
   const act = useCallback(
-    async (id: string, to: TransitionTo, reason?: string) => {
+    async (id: string, to: TransitionTo, reason?: string, expectedVersion?: number, identityName?: string): Promise<boolean> => {
       setBusyId(id);
       setError(null);
       setNotice(null);
       try {
-        await api.transitionIdentity(id, to, reason?.trim() || `${to} via UI`);
+        const updated = await api.transitionIdentity(id, to, reason?.trim() || `${to} via UI`, undefined, undefined, expectedVersion);
+        if (identityState(updated) !== to) {
+          throw new Error(
+            translateNow("identities.lifecycle.verificationFailed", {
+              actual: identityState(updated) || "unknown",
+              expected: to,
+            }),
+          );
+        }
         await load();
         await loadEvidence();
         if (selectedId === id) {
           await loadDetail(id);
         }
-        setNotice(transitionNotice(to));
+        setNotice(
+          translateNow("identities.lifecycle.verified", {
+            identity: identityName || updated.name || id,
+            state: to,
+            detail: transitionNotice(to),
+          }),
+        );
         setDeniedTransitions((current) => {
           const next = { ...current };
           delete next[deniedKey(id, to)];
           return next;
         });
+        return true;
       } catch (err) {
         if (err instanceof ApiError && err.status === 403) {
           setDeniedTransitions((current) => ({ ...current, [deniedKey(id, to)]: apiProblemMessage(err, "Transition denied") }));
         }
         setError(errorMessage(err));
+        return false;
       } finally {
         setBusyId(null);
       }
@@ -448,6 +486,8 @@ export function Identities() {
     impactRequestRef.current += 1;
     setPending(null);
     setPendingConfirmName("");
+    setPendingReason("");
+    setTransitionPreview({ key: "", plan: null, loading: false, error: null });
     setPendingImpact(emptyBlastRadiusState);
     if (returnTarget) {
       requestAnimationFrame(() => {
@@ -491,18 +531,43 @@ export function Identities() {
       });
   }, []);
 
+  const reviewTransition = useCallback(async (transition: PendingTransition, reason: string) => {
+    const key = transitionPreviewKey(transition.id, transition.to, reason);
+    setTransitionPreview({ key, plan: null, loading: true, error: null });
+    try {
+      const plan = await api.previewIdentityTransition(transition.id, transition.to, reason.trim() || `${transition.to} via UI`);
+      setTransitionPreview({ key, plan, loading: false, error: null });
+    } catch (err) {
+      setTransitionPreview({
+        key,
+        plan: null,
+        loading: false,
+        error: apiProblemContext(err, translateNow("identities.lifecycle.previewFailed")),
+      });
+    }
+  }, []);
+
   const request = useCallback(
     (identity: Identity, to: TransitionTo, label: string, reason?: string) => {
-      if (isDestructive(to)) {
-        setPendingConfirmName("");
-        setPendingReason(reason?.trim() || (to === "revoked" ? "operator requested revocation" : "operator requested retirement"));
-        setPending({ id: identity.id, name: identity.name, to, label, reason });
+      const destructive = isDestructive(to);
+      const requestedReason = reason?.trim() || "";
+      const reviewedReason =
+        to === "revoked"
+          ? bulkRevokeReasons.includes(requestedReason as BulkRevokeRequest["reason"])
+            ? requestedReason
+            : "unspecified"
+          : requestedReason || (to === "retired" ? "operator requested retirement" : `${to} via UI`);
+      const transition: PendingTransition = { id: identity.id, name: identity.name, to, label, reason: reviewedReason, destructive };
+      setPendingConfirmName("");
+      setPendingReason(reviewedReason);
+      setPending(transition);
+      setPendingImpact(emptyBlastRadiusState);
+      void reviewTransition(transition, reviewedReason);
+      if (destructive) {
         loadBlastRadius(identity);
-        return;
       }
-      void act(identity.id, to, reason);
     },
-    [act, loadBlastRadius],
+    [loadBlastRadius, reviewTransition],
   );
 
   /** runBulkRevoke sends ONE bulk revocation request for the selected
@@ -920,73 +985,190 @@ export function Identities() {
           }}
           onTransition={(to, label, returnFocus) => {
             if (!detail) return;
-            if (isDestructive(to)) pendingReturnFocusRef.current = returnFocus ?? null;
+            pendingReturnFocusRef.current = returnFocus ?? null;
             request(detail, to, label, transitionReasons[detail.id]);
           }}
         />
         {pending && (
           <Dialog
             open
-            role="alertdialog"
+            role={pending.destructive ? "alertdialog" : "dialog"}
             onClose={clearPending}
             titleId="confirm-title"
             descriptionId="confirm-desc"
-            initialFocusRef={pendingConfirmRef}
+            initialFocusRef={pending.destructive ? pendingConfirmRef : undefined}
             returnFocusRef={pendingReturnFocusRef}
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
             overlayClassName="absolute inset-0 bg-black/55"
-            panelClassName="relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-panel border border-destructive/40 bg-card p-4 shadow-elevation2"
+            panelClassName={`relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-panel border bg-card p-4 shadow-elevation2 ${pending.destructive ? "border-destructive/40" : "border-border"}`}
           >
-            <h2 id="confirm-title" className="text-title font-semibold text-destructive">
-              {pending.label} “{pending.name}”?
+            <h2 id="confirm-title" className={`text-title font-semibold ${pending.destructive ? "text-destructive" : "text-foreground"}`}>
+              {translateNow("identities.lifecycle.reviewTitle", { action: pending.label, identity: pending.name })}
             </h2>
-            <p id="confirm-desc" className="mt-1 text-sm text-destructive">
+            <p id="confirm-desc" className={`mt-1 text-sm ${pending.destructive ? "text-destructive" : "text-muted-foreground"}`}>
               {pending.to === "revoked"
                 ? `Revoking “${pending.name}” permanently invalidates the credential; relying parties will stop trusting it. This cannot be undone.`
-                : translateNow("source.retiring.value1.discards.the.credential.re.7f368527a3", { value1: pending.name })}
+                : pending.to === "retired"
+                  ? translateNow("source.retiring.value1.discards.the.credential.re.7f368527a3", { value1: pending.name })
+                  : translateNow("identities.lifecycle.reviewIntro")}
             </p>
-            <BlastRadiusImpactPanel state={pendingImpact} />
-            <div className="mt-3 grid gap-3">
-              <label className="block text-sm font-medium text-destructive" htmlFor="destructive-confirm-name">
-                {translateNow("source.type.credential.name.to.confirm.cc8d26a179")}
-              </label>
-              <input
-                ref={pendingConfirmRef}
-                id="destructive-confirm-name"
-                value={pendingConfirmName}
-                onChange={(event) => setPendingConfirmName(event.target.value)}
-                className="rounded-control border border-destructive/40 bg-background px-3 py-2 text-sm text-foreground"
-                placeholder={pending.name}
-              />
-              <label className="block text-sm font-medium text-destructive" htmlFor="destructive-reason">
-                {pending.to === "revoked" ? translateNow("source.revocation.reason.b11670420f") : translateNow("source.transition.reason.2b9e603491")}
-              </label>
-              <textarea
-                id="destructive-reason"
-                value={pendingReason}
-                onChange={(event) => setPendingReason(event.target.value)}
-                className="min-h-20 rounded-control border border-destructive/40 bg-background px-3 py-2 text-sm text-foreground"
-                placeholder={
-                  pending.to === "revoked"
-                    ? translateNow("source.e.g.key.compromise.cab.1234.ff97b4f9ff")
-                    : translateNow("source.e.g.record.cleanup.approved.in.cab.1234.8cc38f337d")
-                }
-              />
-            </div>
+
+            {transitionPreview.loading && (
+              <p role="status" className="mt-4 text-sm text-muted-foreground">
+                {translateNow("identities.lifecycle.reviewLoading")}
+              </p>
+            )}
+            {transitionPreview.error && (
+              <div role="alert" className="mt-4 rounded-control border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                <p>{transitionPreview.error}</p>
+                <Button type="button" size="sm" variant="outline" className="mt-2" onClick={() => void reviewTransition(pending, pendingReason)}>
+                  {translateNow("identities.lifecycle.reviewRetry")}
+                </Button>
+              </div>
+            )}
+            {transitionPreview.plan && (
+              <section aria-labelledby="lifecycle-preview-heading" className="mt-4 grid gap-4 rounded-panel border border-border bg-muted/20 p-4 text-sm">
+                <div>
+                  <p className="text-caption font-semibold text-status-success">{translateNow("identities.lifecycle.reviewNoChanges")}</p>
+                  <h3 id="lifecycle-preview-heading" className="mt-1 font-semibold">
+                    {transitionPreview.plan.from} → {transitionPreview.plan.to}
+                  </h3>
+                  <p className="mt-1 text-muted-foreground">{transitionPreview.plan.guidance}</p>
+                </div>
+                <dl className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <dt className="text-caption text-muted-foreground">{translateNow("identities.lifecycle.reviewOwner")}</dt>
+                    <dd className="font-medium">{transitionPreview.plan.owner_name || transitionPreview.plan.owner_id}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-caption text-muted-foreground">{translateNow("identities.lifecycle.reviewEffect")}</dt>
+                    <dd className="font-medium">{transitionPreview.plan.side_effect_destination || translateNow("identities.lifecycle.reviewNoEffect")}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-caption text-muted-foreground">{translateNow("identities.lifecycle.reviewVersion")}</dt>
+                    <dd className="font-medium">{transitionPreview.plan.expected_version}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-caption text-muted-foreground">{translateNow("identities.lifecycle.reviewPermission")}</dt>
+                    <dd className="font-medium">{transitionPreview.plan.required_permission}</dd>
+                  </div>
+                </dl>
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div>
+                    <h4 className="font-semibold">{translateNow("identities.lifecycle.reviewBefore")}</h4>
+                    <ul className="mt-1 list-disc space-y-1 ps-5 text-muted-foreground">
+                      {transitionPreview.plan.prerequisites.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold">{translateNow("identities.lifecycle.reviewWrites")}</h4>
+                    <ul className="mt-1 list-disc space-y-1 ps-5 text-muted-foreground">
+                      {transitionPreview.plan.execution_writes.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                      {transitionPreview.plan.execution_external_effects.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold">{translateNow("identities.lifecycle.reviewProof")}</h4>
+                    <ul className="mt-1 list-disc space-y-1 ps-5 text-muted-foreground">
+                      {transitionPreview.plan.verification_steps.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+                {(transitionPreview.plan.warnings ?? []).length > 0 && (
+                  <ul className="list-disc space-y-1 rounded-control border border-status-warning/30 bg-status-warning/5 p-3 ps-8 text-status-warning">
+                    {(transitionPreview.plan.warnings ?? []).map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            )}
+
+            {pending.destructive && (
+              <>
+                <BlastRadiusImpactPanel state={pendingImpact} />
+                <div className="mt-3 grid gap-3">
+                  <label className="block text-sm font-medium text-destructive" htmlFor="destructive-confirm-name">
+                    {translateNow("source.type.credential.name.to.confirm.cc8d26a179")}
+                  </label>
+                  <input
+                    ref={pendingConfirmRef}
+                    id="destructive-confirm-name"
+                    value={pendingConfirmName}
+                    onChange={(event) => setPendingConfirmName(event.target.value)}
+                    className="rounded-control border border-destructive/40 bg-background px-3 py-2 text-sm text-foreground"
+                    placeholder={pending.name}
+                  />
+                  <label className="block text-sm font-medium text-destructive" htmlFor="destructive-reason">
+                    {pending.to === "revoked" ? translateNow("source.revocation.reason.b11670420f") : translateNow("source.transition.reason.2b9e603491")}
+                  </label>
+                  {pending.to === "revoked" ? (
+                    <select
+                      id="destructive-reason"
+                      value={pendingReason}
+                      onChange={(event) => setPendingReason(event.target.value)}
+                      className="rounded-control border border-destructive/40 bg-background px-3 py-2 text-sm text-foreground"
+                    >
+                      {bulkRevokeReasons.map((reason) => (
+                        <option key={reason} value={reason}>
+                          {reason}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <textarea
+                      id="destructive-reason"
+                      value={pendingReason}
+                      onChange={(event) => setPendingReason(event.target.value)}
+                      className="min-h-20 rounded-control border border-destructive/40 bg-background px-3 py-2 text-sm text-foreground"
+                      placeholder={translateNow("source.e.g.record.cleanup.approved.in.cab.1234.8cc38f337d")}
+                    />
+                  )}
+                </div>
+              </>
+            )}
+
+            {transitionPreview.plan && transitionPreview.key !== transitionPreviewKey(pending.id, pending.to, pendingReason) && (
+              <p role="status" className="mt-3 text-sm text-status-warning">
+                {translateNow("identities.lifecycle.reviewChanged")}
+              </p>
+            )}
             <div className="mt-3 flex gap-2">
               <Button
                 type="button"
                 size="sm"
-                variant="destructive"
-                disabled={busyId === pending.id || pendingConfirmName.trim() !== pending.name}
+                variant={pending.destructive ? "destructive" : "default"}
+                disabled={
+                  busyId === pending.id ||
+                  !transitionPreview.plan?.ready ||
+                  transitionPreview.key !== transitionPreviewKey(pending.id, pending.to, pendingReason) ||
+                  (pending.destructive && pendingConfirmName.trim() !== pending.name)
+                }
                 onClick={() => {
                   const transition = pending;
-                  clearPending();
-                  void act(transition.id, transition.to, pendingReason);
+                  const expectedVersion = transitionPreview.plan?.expected_version;
+                  void act(transition.id, transition.to, pendingReason, expectedVersion, transition.name).then((succeeded) => {
+                    if (succeeded) clearPending();
+                  });
                 }}
               >
-                {translateNow("source.yes.value1.0cb667502c", { value1: pending.label.toLowerCase() })}
+                {pending.destructive
+                  ? translateNow("source.yes.value1.0cb667502c", { value1: pending.label.toLowerCase() })
+                  : translateNow("identities.lifecycle.reviewRun")}
               </Button>
+              {transitionPreview.key !== transitionPreviewKey(pending.id, pending.to, pendingReason) && (
+                <Button type="button" size="sm" variant="outline" onClick={() => void reviewTransition(pending, pendingReason)}>
+                  {translateNow("identities.lifecycle.reviewUpdated")}
+                </Button>
+              )}
               <Button type="button" size="sm" variant="ghost" onClick={clearPending}>
                 {translateNow("source.cancel.19766ed6cc")}
               </Button>

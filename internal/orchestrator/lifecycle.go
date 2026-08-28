@@ -110,8 +110,20 @@ func sideEffectFor(from, to State) (string, bool) {
 	return d, ok
 }
 
+// SideEffectFor reports the outbox destination a valid lifecycle edge will
+// enqueue. It is intentionally read-only: operator previews use the same
+// registry as execution instead of maintaining a second, drift-prone table.
+func SideEffectFor(from, to State) (string, bool) {
+	return sideEffectFor(from, to)
+}
+
 // ErrInvalidTransition matches any invalid-transition rejection via errors.Is.
 var ErrInvalidTransition = errors.New("orchestrator: invalid lifecycle transition")
+
+// ErrStaleLifecyclePreview means the identity changed after an operator
+// reviewed a lifecycle plan. The action must be previewed again; silently
+// applying an old plan would make review theatre rather than authority.
+var ErrStaleLifecyclePreview = errors.New("orchestrator: stale lifecycle preview")
 
 // TransitionError is the structured error returned when a transition is not
 // permitted by the state machine.

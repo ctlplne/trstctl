@@ -32,11 +32,7 @@ describe("EST qualification transport", () => {
       ["auth-gate", 401, true],
     ]);
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      1,
-      "/.well-known/est/cacerts",
-      expect.objectContaining({ method: "GET", credentials: "omit" }),
-    );
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/.well-known/est/cacerts", expect.objectContaining({ method: "GET", credentials: "omit" }));
     expect(fetchMock).toHaveBeenNthCalledWith(3, "/.well-known/est/simpleenroll", expect.objectContaining({ method: "POST", credentials: "omit" }));
     const enrollInit = fetchMock.mock.calls[2]?.[1] as RequestInit;
     expect(enrollInit.body).toBeUndefined();

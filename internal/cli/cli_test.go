@@ -824,6 +824,29 @@ func TestProfileRecoveryCommandsCarryExactReviewedBody(t *testing.T) {
 	}
 }
 
+func TestIdentityTransitionPreviewSendsExactBodyWithoutMutationHeader(t *testing.T) {
+	body := `{"to":"issued","reason":"reviewed issuance","subject_csr_pem":"public-csr"}`
+	var captured capture
+	srv := mockServer(t, http.StatusOK, `{"ready":true,"expected_version":3}`, &captured)
+	code, _, stderr := run(t,
+		[]string{"identities", "transition-preview", "identity-1", "-f", "-"},
+		cli.Env{Server: srv.URL, HTTPClient: srv.Client(), IdempotencyKey: "must-not-send"},
+		body,
+	)
+	if code != 0 {
+		t.Fatalf("preview exit = %d, stderr = %q", code, stderr)
+	}
+	if captured.Method != http.MethodPost || captured.Path != "/api/v1/identities/identity-1/transitions/preview" {
+		t.Fatalf("preview request = %s %s", captured.Method, captured.Path)
+	}
+	if !sameJSON(captured.Body, []byte(body)) {
+		t.Fatalf("preview body = %s, want %s", captured.Body, body)
+	}
+	if got := captured.Header.Get("Idempotency-Key"); got != "" {
+		t.Fatalf("effect-free preview sent mutation Idempotency-Key %q", got)
+	}
+}
+
 func TestCAAuthorityRekeyCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 201, `{"issue_path":"/api/v1/ca/authorities/ca-old/issue","active_issue_path":"/api/v1/ca/authorities/ca-new/issue"}`, &cap)

@@ -775,10 +775,36 @@ func componentSchemas() map[string]*Schema {
 	// Omitting it keeps the deprecated server-side-keygen path, which records an
 	// issuance.server_side_keygen event every time it runs.
 	transitionReq := object(map[string]*Schema{
-		"to":              {Type: "string", Enum: []string{"issued", "deployed", "renewing", "renewal_failed", "revoked", "retired"}},
-		"reason":          str(),
-		"subject_csr_pem": str(),
+		"to":               {Type: "string", Enum: []string{"issued", "deployed", "renewing", "renewal_failed", "revoked", "retired"}},
+		"reason":           str(),
+		"subject_csr_pem":  str(),
+		"expected_version": {Type: "integer"},
 	}, "to")
+	identityTransitionPreview := object(map[string]*Schema{
+		"capability":                 str(),
+		"ready":                      {Type: "boolean"},
+		"identity_id":                uuid(),
+		"identity_name":              str(),
+		"identity_kind":              {Type: "string", Enum: identityKinds},
+		"owner_id":                   uuid(),
+		"owner_name":                 str(),
+		"from":                       str(),
+		"to":                         str(),
+		"expected_version":           {Type: "integer"},
+		"event_type":                 str(),
+		"side_effect":                {Type: "boolean"},
+		"side_effect_destination":    str(),
+		"request_fingerprint":        str(),
+		"required_permission":        str(),
+		"prerequisites":              {Type: "array", Items: str()},
+		"preview_writes":             {Type: "array", Items: str()},
+		"preview_external_effects":   {Type: "array", Items: str()},
+		"execution_writes":           {Type: "array", Items: str()},
+		"execution_external_effects": {Type: "array", Items: str()},
+		"verification_steps":         {Type: "array", Items: str()},
+		"warnings":                   {Type: "array", Items: str()},
+		"guidance":                   str(),
+	}, "capability", "ready", "identity_id", "identity_name", "identity_kind", "owner_id", "from", "to", "expected_version", "event_type", "side_effect", "request_fingerprint", "required_permission", "prerequisites", "preview_writes", "preview_external_effects", "execution_writes", "execution_external_effects", "verification_steps", "warnings", "guidance")
 	revocationReasons := []string{"unspecified", "keyCompromise", "caCompromise", "affiliationChanged", "superseded", "cessationOfOperation", "certificateHold", "removeFromCRL", "privilegeWithdrawn", "aaCompromise"}
 	bulkRevokeReq := object(map[string]*Schema{
 		"ids":             {Type: "array", Items: uuid()},
@@ -5703,6 +5729,7 @@ func componentSchemas() map[string]*Schema {
 		"IdentityRequest":                          identityReq,
 		"IdentityList":                             list("Identity"),
 		"TransitionRequest":                        transitionReq,
+		"IdentityTransitionPreview":                identityTransitionPreview,
 		"BulkRevokeRequest":                        bulkRevokeReq,
 		"BulkRevokeItem":                           bulkRevokeItem,
 		"BulkRevokeResult":                         bulkRevokeResult,

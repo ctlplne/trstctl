@@ -166,6 +166,37 @@ there's no parallel in-memory NHI manager — the PostgreSQL-backed identity row
 orchestrator events, audit trail, graph projection, and OpenAPI/CLI paths are the
 product path operators run.
 
+The console now makes that state machine reviewable before it runs. It first calls
+`POST /api/v1/identities/{id}/transitions/preview`, a POST-shaped **read** that accepts
+the proposed target, reason, and optional public CSR. The server returns the current
+owner, lifecycle version, legal event, exact outbox destination, prerequisites,
+durable writes, external effects, warnings, and verification steps. Preview writes no
+event, changes no projection, enqueues no outbox item, and contacts no signer or
+external system. The response says this plainly so an operator can tell the
+difference between “look” and “do.”
+
+The same safe review is available to headless operators. Pass the intended
+transition body to `trstctl-cli identities transition-preview <id> -f -`; the CLI
+sends it to the effect-free preview route without adding an `Idempotency-Key`. After
+reviewing that response, add its `expected_version` to the body and run
+`identities transition` with a stable idempotency key.
+
+Execution echoes the preview's server-owned `expected_version` to
+`POST /api/v1/identities/{id}/transitions`. The orchestrator checks that version while
+holding the identity row lock in the same tenant transaction that appends the event
+and outbox intent. If anything changed after review, execution returns `409 Conflict`,
+makes no lifecycle change, and requires a fresh preview. A matching
+`Idempotency-Key` still returns the original result instead of applying the action
+twice.
+
+After execution, the console checks that the returned identity reached the requested
+state, reloads the inventory and evidence panels, and only then says **Verified**.
+For transitions with an asynchronous effect, “state accepted” is deliberately not
+presented as “deployment finished”: the plan tells the operator to follow the
+matching delivery or rotation receipt. Revocation uses the backend's closed RFC 5280
+reason set instead of accepting free text that the API would reject. Revoke and
+retire also retain typed-name confirmation and served credential-graph blast radius.
+
 ### The AI-agent identity broker (F61)
 
 AI agents are a sharp case: they appear fast, act with real privileges, and chain

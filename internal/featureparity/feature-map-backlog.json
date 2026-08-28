@@ -9231,15 +9231,16 @@
             "priority": 6,
             "served_state": "served",
             "backend_status": "served",
-            "current_frontend_mapping": "Dashboard unified NHI inventory summary backed by /api/v1/nhi/inventory; Discovery renders CAP-NHI-05 shadow/unmanaged NHI posture from /api/v1/nhi/posture/shadow; identities lifecycle grid remains at /identities; NHI decommissioning is served through API/CLI and documented for operator automation",
+            "current_frontend_mapping": "Dashboard and Discovery expose unified and shadow NHI posture; /identities serves owner-aware lifecycle configuration plus a server-owned, effect-free review plan for every individual transition, destructive blast radius, a version-bound execution fence, and explicit post-action verification; NHI decommissioning remains available through API/CLI automation.",
             "target_gui_mapping": "Unified NHI inventory with kind-specific views for certificate, SSH, secret, token, workload, agent, and AI identity lifecycle.",
-            "acceptance_test": "Served Go tests prove /api/v1/nhi/inventory merges identities, certificates, API-token metadata, agents, and cross-surface discovery findings across the CAP-NHI-02 denominator, /api/v1/nhi/posture/shadow enumerates CAP-NHI-05 shadow/unmanaged/unregistered NHI findings from tenant discovery projections, and /api/v1/nhi/decommission executes CAP-GOV-04 departure/vendor-term/inactivity decommissioning through lifecycle revoke/retire events; Vitest covers dashboard and Discovery posture rendering from the served inventory/posture types.",
+            "acceptance_test": "TestServedNHILifecyclePlanIsEffectFreeVersionBoundAndVerifiable proves the exact /transitions/preview plan is tenant/owner bound, emits no event or effect, rejects a stale expected_version without mutation, executes exactly once, replays byte-identically, and verifies the projected state plus one immutable lifecycle event. Vitest proves all individual lifecycle actions are blocked until their exact plan is reviewed, reason changes invalidate the plan, destructive actions keep typed-name and served blast-radius confirmation, RFC 5280 revocation reasons are constrained, and success is shown only after the server response verifies the requested state. Existing served tests retain unified inventory, shadow posture, and decommission coverage.",
             "source_docs": [
                 "docs/features/workload-identity.md",
                 "docs/features/discovery-and-inventory.md"
             ],
             "source_backend": [
                 "/api/v1/identities",
+                "/api/v1/identities/{id}/transitions/preview",
                 "/api/v1/nhi/inventory",
                 "/api/v1/nhi/posture/shadow",
                 "/api/v1/nhi/decommission"
@@ -9251,11 +9252,12 @@
                 "web/src/pages/Identities.tsx"
             ],
             "status": "closed",
-            "notes": "COMPETE-030 update adds served CAP-NHI-02 inventory: /api/v1/nhi/inventory normalizes identities, certificate inventory, API-token metadata, agents, and discovery findings across certificate, SSH-key, secret, API-key, OAuth-app, token/PAT, service-account, IAM-role, webhook, workload-identity, and agent rows without exposing credential bytes. COMPETE-060 update serves CAP-NHI-05 shadow/unmanaged/unregistered NHI posture through GET /api/v1/nhi/posture/shadow and CLI nhi posture shadow: the read path pages tenant discovery findings, excludes claimed/dismissed rows, counts unmanaged, unregistered, ownerless external NHIs by kind/surface, and returns recommendation/evidence refs without raw credential values. COMPETE-034 update serves CAP-GOV-04 managed NHI decommissioning through POST /api/v1/nhi/decommission and CLI nhi decommission: departure, vendor-term, and inactivity signals resolve tenant-local identities and drive event-sourced revoke/retire lifecycle transitions instead of counting tenant/member offboarding docs as NHI decommissioning.",
+            "notes": "F59 frontend-convergence closes the lifecycle operator gap without duplicating server authority: POST /api/v1/identities/{id}/transitions/preview reads the tenant-local identity and owner, derives the legal event and outbox destination from the same orchestrator registries execution uses, and returns exact prerequisites, writes, effects, warnings, and verification steps while producing zero writes/effects. Execution echoes the server-owned expected_version, which is rechecked under the identity row lock before event append/outbox work; a stale plan returns 409 and requires review again. The console constrains revoke reasons to the backend's RFC 5280 enum and verifies the returned lifecycle state before claiming success. COMPETE-030 adds served CAP-NHI-02 inventory; COMPETE-060 serves CAP-NHI-05 shadow posture; COMPETE-034 serves CAP-GOV-04 managed NHI decommissioning through the same event-sourced transitions.",
             "api_surface": [
                 "createIdentity",
                 "listIdentities",
                 "getIdentity",
+                "previewIdentityTransition",
                 "transitionIdentity",
                 "approveIdentityAction",
                 "listNHIInventory",
@@ -9267,6 +9269,7 @@
                 "identities create",
                 "identities list",
                 "identities get",
+                "identities transition-preview",
                 "identities transition",
                 "identities approve",
                 "nhi inventory",
@@ -9286,7 +9289,7 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: Dashboard unified NHI inventory summary backed by /api/v1/nhi/inventory; Discovery renders CAP-NHI-05 shadow/unmanaged NHI posture from /api/v1/nhi/posture/shadow; identities lifecycle grid remains at /identities",
+                        "current_frontend_mapping: /identities configures owner-bound identities, reviews the exact server plan before every transition, invalidates changed plans, confirms destructive blast radius, and verifies returned state before success",
                         "target_gui_mapping: Unified NHI inventory with kind-specific views for certificate, SSH, secret, token, workload, agent, and AI identity lifecycle."
                     ],
                     "refs": [
@@ -9303,6 +9306,7 @@
                         "CLI command: identities create",
                         "CLI command: identities list",
                         "CLI command: identities get",
+                        "CLI command: identities transition-preview",
                         "CLI command: identities transition",
                         "CLI command: identities approve",
                         "CLI command: nhi inventory",
@@ -9319,6 +9323,7 @@
                         "OpenAPI operationId: createIdentity",
                         "OpenAPI operationId: listIdentities",
                         "OpenAPI operationId: getIdentity",
+                        "OpenAPI operationId: previewIdentityTransition",
                         "OpenAPI operationId: transitionIdentity",
                         "OpenAPI operationId: approveIdentityAction",
                         "OpenAPI operationId: listNHIInventory",
@@ -9327,6 +9332,7 @@
                     ],
                     "refs": [
                         "internal/api/api.go",
+                        "internal/api/identity_lifecycle_preview.go",
                         "internal/api/nhi_inventory.go",
                         "internal/api/nhi_shadow_posture.go",
                         "internal/api/testdata/openapi.golden.json",
@@ -9335,7 +9341,8 @@
                 },
                 "test": {
                     "evidence": [
-                        "acceptance_test: Served Go tests prove /api/v1/nhi/inventory merges identities, certificates, API-token metadata, agents, and cross-surface discovery findings across the CAP-NHI-02 denominator, /api/v1/nhi/posture/shadow enumerates CAP-NHI-05 shadow/unmanaged/unregistered NHI findings from tenant discovery projections, and /api/v1/nhi/decommission executes CAP-GOV-04 departure/vendor-term/inactivity decommissioning through lifecycle revoke/retire events; Vitest covers dashboard and Discovery posture rendering from the served inventory/posture types.",
+                        "acceptance_test: Served and browser-level controls prove effect-free lifecycle review, atomic stale-plan rejection, replay safety, exact-state verification, RFC 5280 reason accuracy, inventory, shadow posture, and decommissioning.",
+                        "TestServedNHILifecyclePlanIsEffectFreeVersionBoundAndVerifiable proves the lifecycle plan/execute/verify contract over the assembled server.",
                         "TestServedShadowUnmanagedNHIDetectionCAPNHI05EndToEnd proves CAP-NHI-05 over the assembled server, cross-surface discovery source, outbox worker, triage claim endpoint, and /api/v1/nhi/posture/shadow response.",
                         "TestServedNHIDecommissionCAPGOV04EndToEnd proves CAP-GOV-04 over the served API path.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
@@ -9343,9 +9350,11 @@
                     ],
                     "refs": [
                         "internal/server/discovery_served_test.go",
+                        "internal/server/nhi_lifecycle_preview_served_test.go",
                         "internal/server/nhi_decommission_served_test.go",
                         "web/src/__tests__/accept/U3-1.test.tsx",
                         "web/src/__tests__/discovery.test.tsx",
+                        "web/src/__tests__/lifecycle.test.tsx",
                         "internal/featureparity/feature_facet_coverage_test.go",
                         "web/src/__tests__/route_parity.test.ts",
                         "web/src/__tests__/feature_coverage.test.tsx"
@@ -9364,7 +9373,7 @@
                 },
                 "rbac": {
                     "evidence": [
-                        "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: createIdentity, listIdentities, getIdentity, transitionIdentity, approveIdentityAction, listNHIInventory, listNHIShadowPosture, decommissionNHI",
+                        "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: createIdentity, listIdentities, getIdentity, previewIdentityTransition, transitionIdentity, approveIdentityAction, listNHIInventory, listNHIShadowPosture, decommissionNHI",
                         "listNHIInventory and listNHIShadowPosture require nhi:read so token metadata and shadow posture are not exposed through the broader discovery:read permission.",
                         "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
                     ],
@@ -9378,7 +9387,7 @@
                 },
                 "audit": {
                     "evidence": [
-                        "mutating served surface requires audit/event evidence: createIdentity, listIdentities, getIdentity, transitionIdentity, approveIdentityAction, decommissionNHI; listNHIShadowPosture is read-only over the event-sourced discovery projection.",
+                        "createIdentity, transitionIdentity, approveIdentityAction, and decommissionNHI require durable audit/event evidence; previewIdentityTransition is an explicitly effect-free read over tenant-scoped projections and its served test proves the event sequence is unchanged.",
                         "served mutations route through handlers/orchestrator paths that emit event/audit evidence or expose signed audit search/export."
                     ],
                     "refs": [
@@ -9426,7 +9435,7 @@
                 "purpose": "Lets an operator understand and safely use non-human identity lifecycle management while tenant, policy, and security authority remain on the server.",
                 "tool": "workloads_machines",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/identities",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -9438,7 +9447,7 @@
                 "dependencies": [],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -9453,12 +9462,20 @@
                         ]
                     },
                     "configure": {
-                        "status": "missing",
-                        "reason": "No structured evidence proves an operator can configure every required prerequisite from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/Identities.tsx",
+                            "web/src/__tests__/lifecycle.test.tsx"
+                        ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: previewIdentityTransition",
+                            "internal/api/identity_lifecycle_preview.go",
+                            "internal/server/nhi_lifecycle_preview_served_test.go",
+                            "web/src/pages/Identities.tsx"
+                        ]
                     },
                     "execute": {
                         "status": "complete",
@@ -9481,8 +9498,11 @@
                         ]
                     },
                     "verify": {
-                        "status": "missing",
-                        "reason": "Durable or external-effect verification is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/server/nhi_lifecycle_preview_served_test.go",
+                            "web/src/__tests__/lifecycle.test.tsx"
+                        ]
                     },
                     "automate": {
                         "status": "complete",
@@ -9490,6 +9510,7 @@
                             "OpenAPI operationId: createIdentity",
                             "OpenAPI operationId: listIdentities",
                             "OpenAPI operationId: getIdentity",
+                            "OpenAPI operationId: previewIdentityTransition",
                             "OpenAPI operationId: transitionIdentity",
                             "OpenAPI operationId: approveIdentityAction",
                             "OpenAPI operationId: listNHIInventory",
@@ -9508,8 +9529,8 @@
                 },
                 "owner": "identity",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "ed959a960979771e1ef91796f2152bcd3981cfeb",
+                "freshness": "2026-08-28"
             }
         },
         {

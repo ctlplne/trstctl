@@ -201,7 +201,7 @@ type SideEffectPayloadTransform func(context.Context, SideEffectPayloadContext) 
 // transaction updates the identity's status and enqueues any outbox side effect,
 // so the external call is recorded with the state change (AN-6).
 func (o *Orchestrator) Transition(ctx context.Context, tenantID, identityID string, to State, reason string) error {
-	return o.transition(ctx, tenantID, identityID, to, reason, nil, "", "", nil, nil, nil)
+	return o.transition(ctx, tenantID, identityID, to, reason, nil, "", "", nil, nil, nil, nil)
 }
 
 // TransitionWithIdempotency moves an identity like Transition, but binds any
@@ -211,7 +211,7 @@ func (o *Orchestrator) Transition(ctx context.Context, tenantID, identityID stri
 // async issue/revoke/deploy work from minting twice if the response cache is not
 // the layer that observes the retry (CORRECT-001).
 func (o *Orchestrator) TransitionWithIdempotency(ctx context.Context, tenantID, identityID string, to State, reason, idempotencyKey string) error {
-	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, "", nil, nil, nil)
+	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, "", nil, nil, nil, nil)
 }
 
 // TransitionWithSubjectCSR is TransitionWithIdempotency for a requested→issued
@@ -231,9 +231,25 @@ func (o *Orchestrator) TransitionWithSubjectCSR(ctx context.Context, tenantID, i
 		binding = issuance[0]
 	}
 	if strings.TrimSpace(csrPEM) == "" {
-		return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, "", nil, nil, binding)
+		return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, "", nil, nil, binding, nil)
 	}
-	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, csrPEM, nil, nil, binding)
+	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, csrPEM, nil, nil, binding, nil)
+}
+
+// TransitionWithSubjectCSRAtVersion is the reviewed console path. A nil version
+// preserves API compatibility for callers that intentionally did not preview;
+// a supplied version is checked while the identity row is locked in the same
+// transaction that appends and projects the lifecycle event.
+func (o *Orchestrator) TransitionWithSubjectCSRAtVersion(ctx context.Context, tenantID, identityID string, to State, reason, idempotencyKey, csrPEM string, expectedVersion *uint64, issuance ...*store.OperationApprovalIssuanceBinding) error {
+	if len(issuance) > 1 {
+		return errors.New("orchestrator: lifecycle transition has multiple issuance bindings")
+	}
+	var binding *store.OperationApprovalIssuanceBinding
+	if len(issuance) == 1 {
+		binding = issuance[0]
+	}
+	csrPEM = strings.TrimSpace(csrPEM)
+	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, csrPEM, nil, nil, binding, expectedVersion)
 }
 
 // TransitionWithSubjectCSRAndApproval is the served dual-control path. The exact
@@ -241,7 +257,13 @@ func (o *Orchestrator) TransitionWithSubjectCSR(ctx context.Context, tenantID, i
 // consumes that authority in the same PostgreSQL transaction as the status and
 // external-effect outbox intent.
 func (o *Orchestrator) TransitionWithSubjectCSRAndApproval(ctx context.Context, tenantID, identityID string, to State, reason, idempotencyKey, csrPEM string, approval store.OperationApprovalUse) error {
-	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, strings.TrimSpace(csrPEM), nil, &approval, nil)
+	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, strings.TrimSpace(csrPEM), nil, &approval, nil, nil)
+}
+
+// TransitionWithSubjectCSRAndApprovalAtVersion combines dual-control authority
+// with the same atomic reviewed-version fence used by non-approval transitions.
+func (o *Orchestrator) TransitionWithSubjectCSRAndApprovalAtVersion(ctx context.Context, tenantID, identityID string, to State, reason, idempotencyKey, csrPEM string, approval store.OperationApprovalUse, expectedVersion *uint64) error {
+	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, strings.TrimSpace(csrPEM), nil, &approval, nil, expectedVersion)
 }
 
 // TransitionWithSideEffectPayload moves an identity through the normal lifecycle
@@ -253,7 +275,7 @@ func (o *Orchestrator) TransitionWithSideEffectPayload(ctx context.Context, tena
 	if len(payload) == 0 {
 		return o.Transition(ctx, tenantID, identityID, to, reason)
 	}
-	return o.transition(ctx, tenantID, identityID, to, reason, payload, "", "", nil, nil, nil)
+	return o.transition(ctx, tenantID, identityID, to, reason, payload, "", "", nil, nil, nil, nil)
 }
 
 // TransitionWithSideEffectPayloadTransform is TransitionWithSideEffectPayload with
@@ -264,10 +286,10 @@ func (o *Orchestrator) TransitionWithSideEffectPayloadTransform(ctx context.Cont
 	if len(payload) == 0 {
 		return o.Transition(ctx, tenantID, identityID, to, reason)
 	}
-	return o.transition(ctx, tenantID, identityID, to, reason, payload, "", "", transform, nil, nil)
+	return o.transition(ctx, tenantID, identityID, to, reason, payload, "", "", transform, nil, nil, nil)
 }
 
-func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID string, to State, reason string, sideEffectPayload []byte, idempotencyKey, subjectCSRPEM string, transform SideEffectPayloadTransform, approval *store.OperationApprovalUse, issuance *store.OperationApprovalIssuanceBinding) error {
+func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID string, to State, reason string, sideEffectPayload []byte, idempotencyKey, subjectCSRPEM string, transform SideEffectPayloadTransform, approval *store.OperationApprovalUse, issuance *store.OperationApprovalIssuanceBinding, expectedVersion *uint64) error {
 	idempotencyKey = strings.TrimSpace(idempotencyKey)
 	subjectCSRPEM = strings.TrimSpace(subjectCSRPEM)
 	if approval != nil && issuance != nil {
@@ -430,6 +452,9 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 			locked, version, err := o.store.IdentityApprovalTargetTx(ctx, tx, tenantID, identityID, true)
 			if err != nil {
 				return err
+			}
+			if expectedVersion != nil && version != *expectedVersion {
+				return ErrStaleLifecyclePreview
 			}
 			if State(locked.Status) != from {
 				if approval != nil {

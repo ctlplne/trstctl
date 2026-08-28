@@ -42,8 +42,8 @@ func TestRenderControlPanelUsesCanonicalCatalogOnly(t *testing.T) {
 		// F4, F5, F17, F22, F23, F48, and F53 now have effect-free preview,
 		// safe execution and recovery, so all seven have moved from blockers to
 		// complete slices.
-		"44 release blockers",
-		"25 complete vertical slices",
+		"43 release blockers",
+		"26 complete vertical slices",
 		"Filter capabilities",
 		"data-tool=\"secrets\"",
 		"F66",
