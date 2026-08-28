@@ -183,7 +183,7 @@ func (s *Store) ApplyDiscoverySourceUpsertedTx(ctx context.Context, tx pgx.Tx, s
 		      (id, tenant_id, kind, name, config, created_at, updated_at,
 		       projection_event_id, projection_event_sequence)
 		      VALUES ($1, $2, $3, $4, $5, $6, $7, NULLIF($8, ''), $9)
-		 ON CONFLICT ON CONSTRAINT discovery_sources_tenant_id_id_key DO UPDATE
+		 ON CONFLICT ON CONSTRAINT discovery_sources_pkey DO UPDATE
 		      SET kind = CASE WHEN $10 OR (
 		              EXCLUDED.projection_event_sequence > discovery_sources.projection_event_sequence
 		              AND discovery_sources.projection_event_id IS DISTINCT FROM EXCLUDED.projection_event_id
@@ -276,17 +276,24 @@ func discoveryDeclarationWriteError(kind string, err error) error {
 
 // ApplyDiscoveryScheduleUpsertedTx projects a discovery.schedule.upserted event.
 func (s *Store) ApplyDiscoveryScheduleUpsertedTx(ctx context.Context, tx pgx.Tx, sched DiscoverySchedule) error {
-	_, err := tx.Exec(ctx,
+	tag, err := tx.Exec(ctx,
 		`INSERT INTO discovery_schedules (id, tenant_id, source_id, name, interval_seconds, enabled, created_at, updated_at)
 		      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		 ON CONFLICT (tenant_id, id) DO UPDATE
+		 ON CONFLICT ON CONSTRAINT discovery_schedules_pkey DO UPDATE
 		      SET source_id = EXCLUDED.source_id,
 		          name = EXCLUDED.name,
 		          interval_seconds = EXCLUDED.interval_seconds,
 		          enabled = EXCLUDED.enabled,
-		          updated_at = EXCLUDED.updated_at`,
+		          updated_at = EXCLUDED.updated_at
+		    WHERE discovery_schedules.tenant_id = EXCLUDED.tenant_id`,
 		sched.ID, sched.TenantID, sched.SourceID, sched.Name, sched.IntervalSeconds, sched.Enabled, sched.CreatedAt, sched.UpdatedAt)
-	return err
+	if err != nil {
+		return discoveryDeclarationWriteError("schedule", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return discoveryDeclarationWriteError("schedule", pgx.ErrNoRows)
+	}
+	return nil
 }
 
 // ApplyDiscoveryRunQueuedTx projects a discovery.run.queued event.
@@ -295,12 +302,12 @@ func (s *Store) ApplyDiscoveryRunQueuedTx(ctx context.Context, tx pgx.Tx, run Di
 	if execution == "" {
 		execution = "control_plane"
 	}
-	_, err := tx.Exec(ctx,
+	tag, err := tx.Exec(ctx,
 		`INSERT INTO discovery_runs
 		        (id, tenant_id, source_id, schedule_id, retry_of_run_id, status, dry_run, requested_by,
 		         execution, segment, required_agent_role, required_agent_id, created_at)
 		      VALUES ($1, $2, $3, $4, NULLIF($5, '')::uuid, $6, $7, $8, $9, $10, $11, NULLIF($12, '')::uuid, $13)
-		 ON CONFLICT (tenant_id, id) DO UPDATE
+		 ON CONFLICT ON CONSTRAINT discovery_runs_pkey DO UPDATE
 		      SET status = EXCLUDED.status,
 		          retry_of_run_id = EXCLUDED.retry_of_run_id,
 		          dry_run = EXCLUDED.dry_run,
@@ -308,10 +315,17 @@ func (s *Store) ApplyDiscoveryRunQueuedTx(ctx context.Context, tx pgx.Tx, run Di
 		          execution = EXCLUDED.execution,
 		          segment = EXCLUDED.segment,
 		          required_agent_role = EXCLUDED.required_agent_role,
-		          required_agent_id = EXCLUDED.required_agent_id`,
+		          required_agent_id = EXCLUDED.required_agent_id
+		    WHERE discovery_runs.tenant_id = EXCLUDED.tenant_id`,
 		run.ID, run.TenantID, run.SourceID, run.ScheduleID, run.RetryOfRunID, run.Status, run.DryRun, run.RequestedBy,
 		execution, run.Segment, run.RequiredAgentRole, run.RequiredAgentID, run.CreatedAt)
-	return err
+	if err != nil {
+		return discoveryDeclarationWriteError("run", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return discoveryDeclarationWriteError("run", pgx.ErrNoRows)
+	}
+	return nil
 }
 
 // ApplyDiscoveryRunStartedTx projects a discovery.run.started event.
