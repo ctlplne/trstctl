@@ -3123,6 +3123,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/managed-keys/custody": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the secret-free HSM/KMS custody readiness and provider configuration plan */
+        get: operations["getManagedKeyCustody"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/managed-keys/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview HSM/KMS key generation without contacting the provider or changing state */
+        post: operations["previewManagedKeyGeneration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/managed-keys/revoke": {
         parameters: {
             query?: never;
@@ -9660,8 +9694,68 @@ export interface components {
             /** Format: uuid */
             request_id: string;
         };
+        ManagedKeyCustodyPlan: {
+            blockers: string[];
+            /** @enum {string} */
+            configuration_mode: "startup_static";
+            /** @enum {string} */
+            configured_provider: "" | "aws" | "azure-key-vault" | "gcp-kms" | "pkcs11" | "tpm2" | "yubihsm2";
+            enabled: boolean;
+            lifecycle_attached: boolean;
+            providers: components["schemas"]["ManagedKeyCustodyProvider"][];
+            ready: boolean;
+            restart_required: boolean;
+            /** @enum {string} */
+            secret_delivery: "file_reference_only";
+            security_boundary: string;
+        };
+        ManagedKeyCustodyProvider: {
+            custody: string;
+            /** @enum {string} */
+            id: "aws" | "azure-key-vault" | "gcp-kms" | "pkcs11" | "tpm2" | "yubihsm2";
+            label: string;
+            requirements: components["schemas"]["ManagedKeyCustodyRequirement"][];
+        };
+        ManagedKeyCustodyRequirement: {
+            description: string;
+            environment_variable: string;
+            key: string;
+            /** @enum {string} */
+            kind: "value" | "secret_file";
+            label: string;
+            required: boolean;
+        };
         ManagedKeyGenerateRequest: {
+            /** @enum {string} */
+            algorithm: "RSA-2048" | "RSA-3072" | "RSA-4096" | "ECDSA-P256" | "ECDSA-P384" | "ECDSA-P521";
+        };
+        ManagedKeyGenerationPreview: {
             algorithm: string;
+            approval_required: boolean;
+            blockers: string[];
+            /** @enum {string} */
+            configuration_mode: "startup_static";
+            effect_free: boolean;
+            execution_external_effects: string[];
+            execution_writes: string[];
+            extractable: boolean;
+            preview_external_effects: string[];
+            preview_writes: string[];
+            private_key_location: string;
+            proof: string[];
+            /** @enum {string} */
+            provider: "aws" | "azure-key-vault" | "gcp-kms" | "pkcs11" | "tpm2" | "yubihsm2";
+            provider_label: string;
+            ready: boolean;
+            required_permission: string;
+            requirements: components["schemas"]["ManagedKeyCustodyRequirement"][];
+            restart_required: boolean;
+        };
+        ManagedKeyGenerationPreviewRequest: {
+            /** @enum {string} */
+            algorithm: "RSA-2048" | "RSA-3072" | "RSA-4096" | "ECDSA-P256" | "ECDSA-P384" | "ECDSA-P521";
+            /** @enum {string} */
+            provider: "aws" | "azure-key-vault" | "gcp-kms" | "pkcs11" | "tpm2" | "yubihsm2";
         };
         ManagedOfferingStatus: {
             billing_unit: string;
@@ -21647,6 +21741,86 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ManagedKeyApproval"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getManagedKeyCustody: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedKeyCustodyPlan"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewManagedKeyGeneration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManagedKeyGenerationPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedKeyGenerationPreview"];
                 };
             };
             /** @description client error */

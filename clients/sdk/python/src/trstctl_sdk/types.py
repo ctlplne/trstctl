@@ -5293,10 +5293,85 @@ ManagedKeyApprovalRequest = TypedDict(
     total=False,
 )
 
+ManagedKeyCustodyPlan = TypedDict(
+    'ManagedKeyCustodyPlan',
+    {
+        'blockers': list[str],
+        'configuration_mode': str,
+        'configured_provider': str,
+        'enabled': bool,
+        'lifecycle_attached': bool,
+        'providers': list[dict[str, Any]],
+        'ready': bool,
+        'restart_required': bool,
+        'secret_delivery': str,
+        'security_boundary': str,
+    },
+    total=False,
+)
+
+ManagedKeyCustodyProvider = TypedDict(
+    'ManagedKeyCustodyProvider',
+    {
+        'custody': str,
+        'id': str,
+        'label': str,
+        'requirements': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+ManagedKeyCustodyRequirement = TypedDict(
+    'ManagedKeyCustodyRequirement',
+    {
+        'description': str,
+        'environment_variable': str,
+        'key': str,
+        'kind': str,
+        'label': str,
+        'required': bool,
+    },
+    total=False,
+)
+
 ManagedKeyGenerateRequest = TypedDict(
     'ManagedKeyGenerateRequest',
     {
         'algorithm': str,
+    },
+    total=False,
+)
+
+ManagedKeyGenerationPreview = TypedDict(
+    'ManagedKeyGenerationPreview',
+    {
+        'algorithm': str,
+        'approval_required': bool,
+        'blockers': list[str],
+        'configuration_mode': str,
+        'effect_free': bool,
+        'execution_external_effects': list[str],
+        'execution_writes': list[str],
+        'extractable': bool,
+        'preview_external_effects': list[str],
+        'preview_writes': list[str],
+        'private_key_location': str,
+        'proof': list[str],
+        'provider': str,
+        'provider_label': str,
+        'ready': bool,
+        'required_permission': str,
+        'requirements': list[dict[str, Any]],
+        'restart_required': bool,
+    },
+    total=False,
+)
+
+ManagedKeyGenerationPreviewRequest = TypedDict(
+    'ManagedKeyGenerationPreviewRequest',
+    {
+        'algorithm': str,
+        'provider': str,
     },
     total=False,
 )

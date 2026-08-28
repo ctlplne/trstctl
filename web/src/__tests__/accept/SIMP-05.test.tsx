@@ -13,6 +13,8 @@ const { apiMock } = vi.hoisted(() => ({
     previewCACeremony: vi.fn(),
     createCACeremony: vi.fn(),
     approveCACeremony: vi.fn(),
+    managedKeyCustody: vi.fn(),
+    previewManagedKeyGeneration: vi.fn(),
     generateManagedKey: vi.fn(),
     rotateManagedKey: vi.fn(),
     revokeManagedKey: vi.fn(),
@@ -84,6 +86,38 @@ describe("SIMP-05 CA hierarchy ceremony and custody wiring", () => {
       opener: "ra@example.test",
       created_at: "2026-06-26T14:00:00Z",
     });
+    apiMock.managedKeyCustody.mockResolvedValue({
+      enabled: true,
+      lifecycle_attached: true,
+      ready: true,
+      configured_provider: "aws",
+      configuration_mode: "startup_static",
+      secret_delivery: "file_reference_only",
+      restart_required: false,
+      security_boundary: "AWS retains the private key.",
+      blockers: [],
+      providers: [{ id: "aws", label: "AWS KMS", custody: "AWS retains the private key.", requirements: [] }],
+    });
+    apiMock.previewManagedKeyGeneration.mockResolvedValue({
+      ready: true,
+      effect_free: true,
+      provider: "aws",
+      provider_label: "AWS KMS",
+      algorithm: "ECDSA-P256",
+      configuration_mode: "startup_static",
+      restart_required: false,
+      extractable: false,
+      private_key_location: "AWS KMS",
+      required_permission: "keys:write",
+      approval_required: false,
+      requirements: [],
+      preview_writes: [],
+      preview_external_effects: [],
+      execution_writes: ["One tenant-scoped managed-key event."],
+      execution_external_effects: ["One durable signer command."],
+      proof: ["Public-key fingerprint"],
+      blockers: [],
+    });
     apiMock.generateManagedKey.mockResolvedValue({
       key_id: "kms/root-1",
       algorithm: "ECDSA-P256",
@@ -129,6 +163,9 @@ describe("SIMP-05 CA hierarchy ceremony and custody wiring", () => {
     const user = userEvent.setup();
     renderCAHierarchy();
 
+    await user.click(screen.getByRole("tab", { name: "Key custody" }));
+    await user.click(await screen.findByRole("button", { name: "Review generation plan" }));
+    await user.click(await screen.findByRole("button", { name: "Continue to generation" }));
     await user.click(await screen.findByRole("button", { name: "Generate managed key" }));
 
     await waitFor(() => expect(apiMock.generateManagedKey).toHaveBeenCalledWith({ algorithm: "ECDSA-P256" }));

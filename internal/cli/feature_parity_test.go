@@ -226,9 +226,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// get the same effect-free CA trust-change receipts as the console.
 	// F53's profile restore preview and append-only recovery raise it to 401.
 	// F59's effect-free lifecycle transition preview raises it to 402. F9's
-	// headless audit collector-feed preview raises it to 403.
-	if len(out) != 403 {
-		t.Fatalf("CLI commands = %d, want 403", len(out))
+	// headless audit collector-feed preview raises it to 403; the secret-free
+	// managed-key custody read and effect-free preview raise it to 405.
+	if len(out) != 405 {
+		t.Fatalf("CLI commands = %d, want 405", len(out))
 	}
 	return out
 }

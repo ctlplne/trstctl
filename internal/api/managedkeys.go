@@ -60,11 +60,101 @@ type ManagedKeyService interface {
 	Zeroize(ctx context.Context, tenantID, keyID, requester, idempotencyKey, requestBinding string) (ManagedKey, error)
 }
 
+// ManagedKeyCustodyConfiguration is the intentionally tiny, secret-free part of
+// startup configuration the operator workflow may observe. Provider credentials,
+// token values, module PINs, auth values, and filesystem paths never cross this
+// seam. The full configuration remains owned by the composition root and isolated
+// signer (AN-4/AN-8).
+type ManagedKeyCustodyConfiguration struct {
+	Enabled  bool
+	Provider string
+}
+
+// ManagedKeyCustodyRequirement describes one deployment prerequisite without its
+// value. Secret inputs are always described as file references; the API and browser
+// never accept or return their contents.
+type ManagedKeyCustodyRequirement struct {
+	Key                 string `json:"key"`
+	Label               string `json:"label"`
+	Kind                string `json:"kind"`
+	Required            bool   `json:"required"`
+	EnvironmentVariable string `json:"environment_variable"`
+	Description         string `json:"description"`
+}
+
+// ManagedKeyCustodyProvider is one shipped custody adapter and its structured,
+// secret-free deployment contract.
+type ManagedKeyCustodyProvider struct {
+	ID           string                         `json:"id"`
+	Label        string                         `json:"label"`
+	Custody      string                         `json:"custody"`
+	Requirements []ManagedKeyCustodyRequirement `json:"requirements"`
+}
+
+// ManagedKeyCustodyPlan reports what this exact process has attached and how to
+// configure each shipped provider. It is a plan/readiness surface, not a runtime
+// configuration mutation: changing custody requires a reviewed deployment restart.
+type ManagedKeyCustodyPlan struct {
+	Enabled            bool                        `json:"enabled"`
+	LifecycleAttached  bool                        `json:"lifecycle_attached"`
+	Ready              bool                        `json:"ready"`
+	ConfiguredProvider string                      `json:"configured_provider"`
+	ConfigurationMode  string                      `json:"configuration_mode"`
+	SecretDelivery     string                      `json:"secret_delivery"`
+	RestartRequired    bool                        `json:"restart_required"`
+	SecurityBoundary   string                      `json:"security_boundary"`
+	Providers          []ManagedKeyCustodyProvider `json:"providers"`
+	Blockers           []string                    `json:"blockers"`
+}
+
+// ManagedKeyGenerationPreview is the exact effect-free review returned before a
+// key generation request. Preview never calls the provider, appends an event, or
+// enqueues outbox work; it names the effects the later execution will perform.
+type ManagedKeyGenerationPreview struct {
+	Ready                    bool                           `json:"ready"`
+	EffectFree               bool                           `json:"effect_free"`
+	Provider                 string                         `json:"provider"`
+	ProviderLabel            string                         `json:"provider_label"`
+	Algorithm                string                         `json:"algorithm"`
+	ConfigurationMode        string                         `json:"configuration_mode"`
+	RestartRequired          bool                           `json:"restart_required"`
+	Extractable              bool                           `json:"extractable"`
+	PrivateKeyLocation       string                         `json:"private_key_location"`
+	RequiredPermission       string                         `json:"required_permission"`
+	ApprovalRequired         bool                           `json:"approval_required"`
+	Requirements             []ManagedKeyCustodyRequirement `json:"requirements"`
+	PreviewWrites            []string                       `json:"preview_writes"`
+	PreviewExternalEffects   []string                       `json:"preview_external_effects"`
+	ExecutionWrites          []string                       `json:"execution_writes"`
+	ExecutionExternalEffects []string                       `json:"execution_external_effects"`
+	Proof                    []string                       `json:"proof"`
+	Blockers                 []string                       `json:"blockers"`
+}
+
+type managedKeyGenerationPreviewRequest struct {
+	Provider  string `json:"provider"`
+	Algorithm string `json:"algorithm"`
+}
+
 // WithManagedKeys mounts the served managed-key lifecycle surface (CRYPTO-005). When
 // unset, the /api/v1/managed-keys/* routes fail closed with a clear "not enabled"
 // problem (the capability requires a configured KMS/HSM custody backend).
 func WithManagedKeys(svc ManagedKeyService) Option {
 	return func(c *config) { c.managedKeys = svc }
+}
+
+// WithManagedKeyCustody publishes only the enabled/provider posture needed by the
+// planning UI. Provider credentials and paths deliberately remain outside the API.
+func WithManagedKeyCustody(posture ManagedKeyCustodyConfiguration) Option {
+	return func(c *config) {
+		posture.Provider = normalizeManagedKeyProvider(posture.Provider)
+		if posture.Enabled && posture.Provider == "" {
+			posture.Provider = "aws"
+		} else if !posture.Enabled {
+			posture.Provider = ""
+		}
+		c.managedKeyCustody = posture
+	}
 }
 
 // ManagedKeysServed reports whether the served managed-key surface is wired
@@ -75,6 +165,126 @@ func (a *API) ManagedKeysServed() bool { return a.managedKeys != nil }
 func managedKeysDisabledProblem() *apiError {
 	return errStatus(http.StatusNotImplemented,
 		"managed-key lifecycle is not enabled (configure a KMS/HSM custody backend)")
+}
+
+const (
+	managedKeyConfigurationMode = "startup_static"
+	managedKeySecretDelivery    = "file_reference_only"
+)
+
+func managedKeyCustodyProviders() []ManagedKeyCustodyProvider {
+	value := func(key, label, env, description string, required bool) ManagedKeyCustodyRequirement {
+		return ManagedKeyCustodyRequirement{Key: key, Label: label, Kind: "value", Required: required, EnvironmentVariable: env, Description: description}
+	}
+	secretFile := func(key, label, env, description string, required bool) ManagedKeyCustodyRequirement {
+		return ManagedKeyCustodyRequirement{Key: key, Label: label, Kind: "secret_file", Required: required, EnvironmentVariable: env, Description: description}
+	}
+	return []ManagedKeyCustodyProvider{
+		{ID: "aws", Label: "AWS KMS", Custody: "AWS creates and retains the asymmetric private key inside KMS.", Requirements: []ManagedKeyCustodyRequirement{
+			value("region", "AWS region", "TRSTCTL_MANAGED_KEYS_AWS_REGION", "Region containing the KMS key.", true),
+			value("access_key_id", "Access key ID", "TRSTCTL_MANAGED_KEYS_AWS_ACCESS_KEY_ID", "Identifier for the narrowly scoped KMS principal.", true),
+			secretFile("secret_access_key_file", "Secret access key file", "TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY_FILE", "Mode-0600 file read by the isolated signer at startup.", true),
+			secretFile("session_token_file", "Session token file", "TRSTCTL_MANAGED_KEYS_AWS_SESSION_TOKEN_FILE", "Optional mode-0600 file for temporary AWS credentials.", false),
+		}},
+		{ID: "azure-key-vault", Label: "Azure Key Vault / Managed HSM", Custody: "Azure creates and retains the asymmetric private key inside the selected vault or Managed HSM.", Requirements: []ManagedKeyCustodyRequirement{
+			value("vault_url", "Vault URL", "TRSTCTL_MANAGED_KEYS_AZURE_VAULT_URL", "HTTPS URL of the tenant-approved vault or Managed HSM.", true),
+			secretFile("bearer_token_file", "Bearer token file", "TRSTCTL_MANAGED_KEYS_AZURE_BEARER_TOKEN_FILE", "Mode-0600 file containing a short-lived Azure access token.", true),
+		}},
+		{ID: "gcp-kms", Label: "Google Cloud KMS", Custody: "Google Cloud creates and retains the asymmetric private key inside Cloud KMS.", Requirements: []ManagedKeyCustodyRequirement{
+			value("parent", "Key ring resource", "TRSTCTL_MANAGED_KEYS_GCP_PARENT", "Full projects/.../locations/.../keyRings/... parent resource.", true),
+			secretFile("bearer_token_file", "Bearer token file", "TRSTCTL_MANAGED_KEYS_GCP_BEARER_TOKEN_FILE", "Mode-0600 file containing a short-lived Google Cloud access token.", true),
+		}},
+		{ID: "pkcs11", Label: "PKCS#11 HSM", Custody: "The HSM creates and retains the asymmetric private key in its token slot.", Requirements: []ManagedKeyCustodyRequirement{
+			value("module_path", "PKCS#11 module", "TRSTCTL_MANAGED_KEYS_PKCS11_MODULE_PATH", "Native module path available only to the cgo signer artifact.", true),
+			value("token_label", "Token label", "TRSTCTL_MANAGED_KEYS_PKCS11_TOKEN_LABEL", "Initialized HSM token selected by the signer.", true),
+			secretFile("user_pin_file", "User PIN file", "TRSTCTL_MANAGED_KEYS_PKCS11_USER_PIN_FILE", "Mode-0600 file used only by the isolated signer.", true),
+		}},
+		{ID: "tpm2", Label: "TPM 2.0", Custody: "The TPM creates and retains the asymmetric private key behind a persistent device handle.", Requirements: []ManagedKeyCustodyRequirement{
+			value("path", "TPM device or socket", "TRSTCTL_MANAGED_KEYS_TPM2_PATH", "Linux TPM resource-manager device or approved swtpm Unix socket.", true),
+			secretFile("owner_auth_file", "Owner authorization file", "TRSTCTL_MANAGED_KEYS_TPM2_OWNER_AUTH_FILE", "Optional mode-0600 TPM owner authorization file.", false),
+			secretFile("key_auth_file", "Key authorization file", "TRSTCTL_MANAGED_KEYS_TPM2_KEY_AUTH_FILE", "Optional mode-0600 authorization file for created keys.", false),
+		}},
+		{ID: "yubihsm2", Label: "YubiHSM 2", Custody: "YubiHSM creates and retains the asymmetric private key behind its PKCS#11 connector.", Requirements: []ManagedKeyCustodyRequirement{
+			value("module_path", "YubiHSM PKCS#11 module", "TRSTCTL_MANAGED_KEYS_YUBIHSM2_MODULE_PATH", "Path to Yubico's yubihsm_pkcs11 module in the cgo signer artifact.", true),
+			value("token_label", "Connector token label", "TRSTCTL_MANAGED_KEYS_YUBIHSM2_TOKEN_LABEL", "Approved YubiHSM connector/token label.", true),
+			secretFile("user_pin_file", "Authentication file", "TRSTCTL_MANAGED_KEYS_YUBIHSM2_USER_PIN_FILE", "Mode-0600 authentication file used only by the isolated signer.", true),
+		}},
+	}
+}
+
+func normalizeManagedKeyProvider(provider string) string {
+	return strings.ToLower(strings.TrimSpace(provider))
+}
+
+func managedKeyProvider(provider string) (ManagedKeyCustodyProvider, bool) {
+	provider = normalizeManagedKeyProvider(provider)
+	for _, candidate := range managedKeyCustodyProviders() {
+		if candidate.ID == provider {
+			return candidate, true
+		}
+	}
+	return ManagedKeyCustodyProvider{}, false
+}
+
+func (a *API) managedKeyCustodyPlan() ManagedKeyCustodyPlan {
+	blockers := make([]string, 0, 2)
+	if !a.managedKeyCustody.Enabled {
+		blockers = append(blockers, "Managed-key custody is disabled. Enable it, select one provider, supply file-backed credentials where required, and restart the control plane and isolated signer.")
+	}
+	if a.managedKeys == nil {
+		blockers = append(blockers, "The managed-key runtime is not attached. Verify the Enterprise BYOK license and provider configuration, then restart the deployment.")
+	}
+	ready := len(blockers) == 0
+	return ManagedKeyCustodyPlan{
+		Enabled: a.managedKeyCustody.Enabled, LifecycleAttached: a.managedKeys != nil, Ready: ready,
+		ConfiguredProvider: a.managedKeyCustody.Provider, ConfigurationMode: managedKeyConfigurationMode,
+		SecretDelivery: managedKeySecretDelivery, RestartRequired: !ready,
+		SecurityBoundary: "Private keys stay in the selected provider. Provider credentials are startup file references consumed by the isolated signer; the browser never receives their values.",
+		Providers:        managedKeyCustodyProviders(), Blockers: blockers,
+	}
+}
+
+func (a *API) getManagedKeyCustody(w http.ResponseWriter, _ *http.Request) {
+	a.writeJSON(w, http.StatusOK, a.managedKeyCustodyPlan())
+}
+
+func (a *API) previewManagedKeyGeneration(w http.ResponseWriter, r *http.Request) {
+	var req managedKeyGenerationPreviewRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	provider, ok := managedKeyProvider(req.Provider)
+	if !ok {
+		a.writeError(w, errStatus(http.StatusBadRequest, `provider must be "aws", "azure-key-vault", "gcp-kms", "pkcs11", "tpm2", or "yubihsm2"`))
+		return
+	}
+	alg, err := parseManagedKeyAlgorithm(req.Algorithm)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	blockers := make([]string, 0, 2)
+	if !a.managedKeyCustody.Enabled {
+		blockers = append(blockers, "Managed-key custody is disabled. Apply the selected provider's startup configuration and restart the control plane and isolated signer.")
+	} else if a.managedKeyCustody.Provider != provider.ID {
+		blockers = append(blockers, "This deployment is configured for "+a.managedKeyCustody.Provider+", not "+provider.ID+". Change the startup provider configuration and restart before generating a key.")
+	}
+	if a.managedKeys == nil {
+		blockers = append(blockers, "The managed-key runtime is not attached. Verify the Enterprise BYOK license and provider configuration, then restart the deployment.")
+	}
+	ready := len(blockers) == 0
+	a.writeJSON(w, http.StatusOK, ManagedKeyGenerationPreview{
+		Ready: ready, EffectFree: true, Provider: provider.ID, ProviderLabel: provider.Label,
+		Algorithm: string(alg), ConfigurationMode: managedKeyConfigurationMode, RestartRequired: !ready,
+		Extractable: false, PrivateKeyLocation: provider.Label,
+		RequiredPermission: string(authz.KeysWrite), ApprovalRequired: false,
+		Requirements: provider.Requirements, PreviewWrites: []string{}, PreviewExternalEffects: []string{},
+		ExecutionWrites:          []string{"One tenant-scoped byok.key.generated event and its managed-key projection."},
+		ExecutionExternalEffects: []string{"One durable managedkey.command outbox intent to the isolated signer and selected custody provider."},
+		Proof:                    []string{"Provider key handle", "public-key fingerprint", "non-extractable state", "immutable audit event"},
+		Blockers:                 blockers,
+	})
 }
 
 // ---- request/response shapes (key-material-free) ---------------------------

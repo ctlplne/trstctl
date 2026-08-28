@@ -3771,8 +3771,63 @@ export interface ManagedKeyApprovalRequest {
   request_id: string;
 }
 
+export interface ManagedKeyCustodyPlan {
+  blockers: string[];
+  configuration_mode: "startup_static";
+  configured_provider: "" | "aws" | "azure-key-vault" | "gcp-kms" | "pkcs11" | "tpm2" | "yubihsm2";
+  enabled: boolean;
+  lifecycle_attached: boolean;
+  providers: ManagedKeyCustodyProvider[];
+  ready: boolean;
+  restart_required: boolean;
+  secret_delivery: "file_reference_only";
+  security_boundary: string;
+}
+
+export interface ManagedKeyCustodyProvider {
+  custody: string;
+  id: "aws" | "azure-key-vault" | "gcp-kms" | "pkcs11" | "tpm2" | "yubihsm2";
+  label: string;
+  requirements: ManagedKeyCustodyRequirement[];
+}
+
+export interface ManagedKeyCustodyRequirement {
+  description: string;
+  environment_variable: string;
+  key: string;
+  kind: "value" | "secret_file";
+  label: string;
+  required: boolean;
+}
+
 export interface ManagedKeyGenerateRequest {
+  algorithm: "RSA-2048" | "RSA-3072" | "RSA-4096" | "ECDSA-P256" | "ECDSA-P384" | "ECDSA-P521";
+}
+
+export interface ManagedKeyGenerationPreview {
   algorithm: string;
+  approval_required: boolean;
+  blockers: string[];
+  configuration_mode: "startup_static";
+  effect_free: boolean;
+  execution_external_effects: string[];
+  execution_writes: string[];
+  extractable: boolean;
+  preview_external_effects: string[];
+  preview_writes: string[];
+  private_key_location: string;
+  proof: string[];
+  provider: "aws" | "azure-key-vault" | "gcp-kms" | "pkcs11" | "tpm2" | "yubihsm2";
+  provider_label: string;
+  ready: boolean;
+  required_permission: string;
+  requirements: ManagedKeyCustodyRequirement[];
+  restart_required: boolean;
+}
+
+export interface ManagedKeyGenerationPreviewRequest {
+  algorithm: "RSA-2048" | "RSA-3072" | "RSA-4096" | "ECDSA-P256" | "ECDSA-P384" | "ECDSA-P521";
+  provider: "aws" | "azure-key-vault" | "gcp-kms" | "pkcs11" | "tpm2" | "yubihsm2";
 }
 
 export interface ManagedOfferingStatus {

@@ -5144,8 +5144,8 @@
             "priority": 54,
             "served_state": "conditional",
             "backend_status": "conditional: all six advertised HSM/KMS backends are required/census-served through the shipped control-plane and cgo HSM signer artifacts; an active Enterprise BYOK license and one provider configuration are required at runtime",
-            "current_frontend_mapping": "conditional action surface: CA Hierarchy shows licensed/configured managed-key metadata/actions for the six served backends, while Platform shows the separate FIPS build/module posture",
-            "target_gui_mapping": "Key custody UI showing signer handles, backend type, purpose constraints, HSM/KMS health, last probe, and fail-closed state.",
+            "current_frontend_mapping": "complete conditional journey: CA Hierarchy names all six custody providers, explains secret-free startup requirements, reads configured/signer-attached posture, obtains an effect-free server preview, locks generation until the preview is ready, and then shows public managed-key metadata and lifecycle actions; Platform shows the separate FIPS build/module posture",
+            "target_gui_mapping": "Delivered for provider selection, configuration guidance, effect-free preview, generation, public metadata, and lifecycle controls. Continuous HSM/KMS health history remains an observability enhancement rather than a release blocker.",
             "acceptance_test": "TestDODManagedKeyProductionAssembly launches the licensed control-plane and shipped cgo signer artifact, drives generate/idempotent replay/rotate-through-restart/revoke/zeroize for AWS, Azure, GCP, PKCS#11, TPM 2.0, and YubiHSM 2, and completes nonce-bound independent substrate receipts. TestEditionsEndpointServesCAPKEY03ValidatedModulePath separately proves the FIPS editions posture.",
             "source_docs": [
                 "docs/features/issuance-and-cas.md",
@@ -5180,12 +5180,15 @@
             ],
             "source_frontend": [
                 "web/src/pages/CAHierarchy.tsx",
+                "web/src/pages/cahierarchy/CAHierarchyCustodyParts.tsx",
                 "web/src/pages/Platform.tsx",
                 "web/src/__tests__/ca_hierarchy.test.tsx"
             ],
             "status": "closed",
-            "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+            "notes": "The final conditional vertical slice is closed by a secret-free readiness plan and effect-free generation preview for all six served providers. The console never accepts provider credentials or private-key bytes: it shows startup variable/file-reference names, exact blockers, zero preview writes/outside calls, the later execution effects, and proof expectations before unlocking generation. Focused API and CA Hierarchy tests preserve both ready and deliberately blocked controls.",
             "api_surface": [
+                "getManagedKeyCustody",
+                "previewManagedKeyGeneration",
                 "generateManagedKey",
                 "approveManagedKeyAction",
                 "rotateManagedKey",
@@ -5194,6 +5197,8 @@
                 "getEditions"
             ],
             "cli_surface": [
+                "managed-keys custody",
+                "managed-keys preview",
                 "managed-keys generate",
                 "managed-keys approve",
                 "managed-keys rotate",
@@ -5225,19 +5230,21 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: conditional action: CAHierarchy at /ca-hierarchy shows configured AWS, Azure, GCP, PKCS#11, TPM 2.0, and YubiHSM 2 metadata/actions backed by required census receipts; Platform at /platform shows the separate FIPS build posture and product CMVP residual",
-                        "target_gui_mapping: Key custody UI showing signer handles, backend type, purpose constraints, HSM/KMS health, last probe, and fail-closed state."
+                        "current_frontend_mapping: /ca-hierarchy?tab=custody presents a three-step choose, preview, and generate/manage journey for AWS, Azure, GCP, PKCS#11, TPM 2.0, and YubiHSM 2; it shows only secret-free startup requirement descriptors, provider/signer readiness, exact blockers, zero-effect preview evidence, execution effects, public key metadata, and lifecycle actions",
+                        "web/src/__tests__/ca_hierarchy.test.tsx proves the ready journey and a deliberately disabled/unattached oracle that must keep generation locked",
+                        "target_gui_mapping: delivered for the operator lifecycle; dedicated continuous device-health history is separately deferred as an observability enhancement"
                     ],
                     "refs": [
                         "web/src/lib/navigation.ts",
                         "web/src/App.tsx",
                         "web/src/pages/CAHierarchy.tsx",
+                        "web/src/pages/cahierarchy/CAHierarchyCustodyParts.tsx",
                         "web/src/pages/Platform.tsx"
                     ]
                 },
                 "cli": {
                     "evidence": [
-                        "CLI parity exposes managed-keys generate, approve, rotate, revoke, and zeroize against the same licensed/configured API; approvers hold keys:approve without needing provider-mutation authority, and the launched-binary DoD receipt, not CLI shape alone, proves backend runtime wiring."
+                        "CLI parity exposes the secret-free managed-keys custody read, effect-free managed-keys preview, and generate, approve, rotate, revoke, and zeroize lifecycle commands against the same licensed/configured API. The preview carries no idempotency key because it cannot write state or contact a provider; mutations remain safely retryable. Approvers hold keys:approve without needing provider-mutation authority, and the launched-binary DoD receipt, not CLI shape alone, proves backend runtime wiring."
                     ],
                     "refs": [
                         "internal/cli/command.go",
@@ -5246,6 +5253,7 @@
                 },
                 "api": {
                     "evidence": [
+                        "OpenAPI includes an authenticated secret-free custody readiness plan for all six providers and an exact effect-free generation preview.",
                         "OpenAPI includes the managed-key lifecycle and dedicated approval routes with key-material-free request/response schemas.",
                         "ManagedKey includes extractable=false so generated clients and the console can display non-extractable custody without exposing private material.",
                         "OpenAPI operation getEditions includes additive FIPS posture fields for the validated-module path without making product certification a required claim."
@@ -5296,7 +5304,7 @@
                 },
                 "rbac": {
                     "evidence": [
-                        "managed-key lifecycle routes require keys:write, the dedicated approval route requires keys:approve, and every route requires authenticated tenant context; the feature authz manifest/test covers generateManagedKey, approveManagedKeyAction, rotateManagedKey, revokeManagedKey, and zeroizeManagedKey."
+                        "managed-key custody planning requires keys:read, generation preview and lifecycle routes require keys:write, the dedicated approval route requires keys:approve, and every route requires authenticated tenant context; the feature authz manifest/test covers the full surface."
                     ],
                     "refs": [
                         "internal/api/api.go",
@@ -5356,7 +5364,7 @@
                 "purpose": "Lets an operator understand and safely use hsm integration while tenant, policy, and security authority remain on the server.",
                 "tool": "certificates",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/ca-hierarchy",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -5370,7 +5378,7 @@
                 ],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -5385,12 +5393,19 @@
                         ]
                     },
                     "configure": {
-                        "status": "missing",
-                        "reason": "No structured evidence proves an operator can configure every required prerequisite from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "GET /api/v1/managed-keys/custody returns the configured provider, lifecycle attachment, exact blockers, and secret-free environment-variable/file-reference requirements for all six providers.",
+                            "web/src/pages/cahierarchy/CAHierarchyCustodyParts.tsx"
+                        ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "POST /api/v1/managed-keys/preview returns an effect-free plan with empty preview writes/outside effects, later execution effects, permission, blockers, and verification proof.",
+                            "internal/api/managedkeys_test.go",
+                            "web/src/__tests__/ca_hierarchy.test.tsx"
+                        ]
                     },
                     "execute": {
                         "status": "complete",
@@ -5421,12 +5436,16 @@
                     "automate": {
                         "status": "complete",
                         "evidence": [
+                            "OpenAPI operationId: getManagedKeyCustody",
+                            "OpenAPI operationId: previewManagedKeyGeneration",
                             "OpenAPI operationId: generateManagedKey",
                             "OpenAPI operationId: approveManagedKeyAction",
                             "OpenAPI operationId: rotateManagedKey",
                             "OpenAPI operationId: revokeManagedKey",
                             "OpenAPI operationId: zeroizeManagedKey",
                             "OpenAPI operationId: getEditions",
+                            "CLI command: managed-keys custody",
+                            "CLI command: managed-keys preview",
                             "CLI command: managed-keys generate",
                             "CLI command: managed-keys approve",
                             "CLI command: managed-keys rotate",
@@ -5437,8 +5456,8 @@
                 },
                 "owner": "pki",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "9518d3ddadab108ed0f89a33e798255decb3d5f9",
+                "freshness": "2026-08-28"
             }
         },
         {

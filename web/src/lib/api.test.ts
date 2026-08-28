@@ -565,6 +565,7 @@ describe("exported API surface census", () => {
       "/api/v1/audit/feeds/item%2Fid/preview",
       "/api/v1/ca/ceremonies/preview",
       "/api/v1/ca/authorities/item%2Fid/rotate/preview",
+      "/api/v1/managed-keys/preview",
       "/api/v1/ai/query",
       "/api/v1/ai/rca",
       "/api/v1/graph/query",

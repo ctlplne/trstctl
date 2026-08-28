@@ -542,6 +542,13 @@ func runBreakglassConfig(
 	return caCertDER, publicKeyDER, runtime, nil
 }
 
+// managedKeyCustodyFromConfig deliberately copies only public runtime posture
+// into the HTTP server. Provider credentials and file paths stay behind startup
+// and signer boundaries and can never appear in the readiness response.
+func managedKeyCustodyFromConfig(cfg config.ManagedKeys) api.ManagedKeyCustodyConfiguration {
+	return api.ManagedKeyCustodyConfiguration{Enabled: cfg.Enabled, Provider: cfg.Provider}
+}
+
 func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log *events.Log, signer runSigner, sec runSecrets, logger *slog.Logger, egressGuard *egress.Guard, suppliedAuditKey ...*jose.SigningKey) (_ Deps, err error) {
 	auditKey, err := loadRunAuditSigningKey(ctx, signer.signer, suppliedAuditKey)
 	if err != nil {
@@ -610,17 +617,15 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		// J2: empty when the operator configured no backup directory, which the
 		// DR surface reports as "not configured" rather than as a failure.
 		BackupDirectory: cfg.Backup.Directory,
-		// J2: the drill closes over the config here, in the one place that
-		// already holds it, so the Server never gets a handle on the DSN it
-		// would have no other reason to have. Nil when no backup directory is
-		// configured — there is nothing to drill, and a drill against a path
-		// nobody chose would fail nightly and mean nothing.
+		// J2: keep the DSN inside the drill closure. Nil means no operator-chosen
+		// backup directory exists, so a nightly drill would be meaningless.
 		RestoreDrill:         drill,
 		RestoreDrillInterval: drillInterval,
 		RestoreDrillRPO:      drillRPO,
 		RestoreDrillRTO:      drillRTO,
 		Store:                st, Log: log, Signer: signer.signer, SignerMode: signer.topology, SignTokenProvider: signer.tokenProvider,
 		SignerKeyStoreDir:  cfg.Signer.KeyStoreDir,
+		ManagedKeyCustody:  managedKeyCustodyFromConfig(cfg.ManagedKeys),
 		EgressGuard:        egressGuard,
 		ServiceNowBindings: serviceNowBindingsFromConfig(cfg.ITSM.ServiceNow),
 		// AUD-10/12/13: none of these three was ever assigned in production, so

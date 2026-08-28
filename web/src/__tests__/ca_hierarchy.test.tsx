@@ -25,6 +25,8 @@ const { apiMock } = vi.hoisted(() => ({
     previewCAAuthorityRotation: vi.fn(),
     rotateCAAuthority: vi.fn(),
     rekeyCAAuthority: vi.fn(),
+    managedKeyCustody: vi.fn(),
+    previewManagedKeyGeneration: vi.fn(),
     generateManagedKey: vi.fn(),
     rotateManagedKey: vi.fn(),
     revokeManagedKey: vi.fn(),
@@ -293,6 +295,45 @@ describe("CA hierarchy and custody surface", () => {
       created_at: "2026-06-26T14:00:00Z",
     });
     apiMock.generateManagedKey.mockResolvedValue({ key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 1, state: "active", public_der: "BASE64PUBLICDER" });
+    apiMock.managedKeyCustody.mockResolvedValue({
+      enabled: true,
+      lifecycle_attached: true,
+      ready: true,
+      configured_provider: "gcp-kms",
+      configuration_mode: "startup_static",
+      secret_delivery: "file_reference_only",
+      restart_required: false,
+      security_boundary: "Private keys stay in the selected provider. Provider credentials are file references read only by the isolated signer.",
+      blockers: [],
+      providers: [
+        { id: "aws", label: "AWS KMS", custody: "AWS keeps the private key.", requirements: [{ key: "region", label: "AWS region", kind: "value", required: true, environment_variable: "TRSTCTL_MANAGED_KEYS_AWS_REGION", description: "Region containing the key." }] },
+        { id: "azure-key-vault", label: "Azure Key Vault / Managed HSM", custody: "Azure keeps the private key.", requirements: [{ key: "vault_url", label: "Vault URL", kind: "value", required: true, environment_variable: "TRSTCTL_MANAGED_KEYS_AZURE_VAULT_URL", description: "Approved vault URL." }] },
+        { id: "gcp-kms", label: "Google Cloud KMS", custody: "Google keeps the private key.", requirements: [{ key: "parent", label: "Key ring resource", kind: "value", required: true, environment_variable: "TRSTCTL_MANAGED_KEYS_GCP_PARENT", description: "Full key ring parent." }] },
+        { id: "pkcs11", label: "PKCS#11 HSM", custody: "The HSM keeps the private key.", requirements: [{ key: "module_path", label: "PKCS#11 module", kind: "value", required: true, environment_variable: "TRSTCTL_MANAGED_KEYS_PKCS11_MODULE_PATH", description: "Signer-only module path." }] },
+        { id: "tpm2", label: "TPM 2.0", custody: "The TPM keeps the private key.", requirements: [{ key: "path", label: "TPM device or socket", kind: "value", required: true, environment_variable: "TRSTCTL_MANAGED_KEYS_TPM2_PATH", description: "TPM resource path." }] },
+        { id: "yubihsm2", label: "YubiHSM 2", custody: "YubiHSM keeps the private key.", requirements: [{ key: "user_pin_file", label: "Authentication file", kind: "secret_file", required: true, environment_variable: "TRSTCTL_MANAGED_KEYS_YUBIHSM2_USER_PIN_FILE", description: "Signer-only mode-0600 file." }] },
+      ],
+    });
+    apiMock.previewManagedKeyGeneration.mockResolvedValue({
+      ready: true,
+      effect_free: true,
+      provider: "gcp-kms",
+      provider_label: "Google Cloud KMS",
+      algorithm: "ECDSA-P256",
+      configuration_mode: "startup_static",
+      restart_required: false,
+      extractable: false,
+      private_key_location: "Google Cloud KMS",
+      required_permission: "keys:write",
+      approval_required: false,
+      requirements: [{ key: "parent", label: "Key ring resource", kind: "value", required: true, environment_variable: "TRSTCTL_MANAGED_KEYS_GCP_PARENT", description: "Full key ring parent." }],
+      preview_writes: [],
+      preview_external_effects: [],
+      execution_writes: ["One tenant-scoped byok.key.generated event and its managed-key projection."],
+      execution_external_effects: ["One durable managedkey.command outbox intent to the isolated signer and selected custody provider."],
+      proof: ["Provider key handle", "public-key fingerprint", "non-extractable state", "immutable audit event"],
+      blockers: [],
+    });
     apiMock.rotateManagedKey.mockResolvedValue({ key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 2, state: "active", public_der: "ROTATEDDER" });
     apiMock.revokeManagedKey.mockResolvedValue({ key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 2, state: "revoked", public_der: "ROTATEDDER" });
     apiMock.zeroizeManagedKey.mockResolvedValue({ key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 2, state: "zeroized" });
@@ -626,11 +667,25 @@ describe("CA hierarchy and custody surface", () => {
     expect(screen.queryByText("root:<sha256-of-ca-spec>")).not.toBeInTheDocument();
   });
 
-  it("generates and acts on managed-key custody metadata without private key bytes", async () => {
+  it("configures, previews, then generates managed-key custody without private key bytes", async () => {
     const user = userEvent.setup();
-    renderCAHierarchy();
+    renderCAHierarchy("/ca-hierarchy?tab=custody");
 
     expect(await screen.findByRole("heading", { name: "Managed key custody" })).toBeInTheDocument();
+    const provider = await screen.findByRole("combobox", { name: "Custody provider" });
+    expect(within(provider).getAllByRole("option")).toHaveLength(6);
+    expect(screen.getByText("Configured now: Google Cloud KMS")).toBeInTheDocument();
+    expect(screen.getByText("Key ring resource")).toBeInTheDocument();
+    expect(screen.getByText("TRSTCTL_MANAGED_KEYS_GCP_PARENT")).toBeInTheDocument();
+    expect(apiMock.generateManagedKey).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Review generation plan" }));
+    await waitFor(() => expect(apiMock.previewManagedKeyGeneration).toHaveBeenCalledWith({ provider: "gcp-kms", algorithm: "ECDSA-P256" }));
+    expect(await screen.findByRole("heading", { name: "Nothing changed yet" })).toBeInTheDocument();
+    expect(screen.getByText("0 preview writes · 0 outside calls")).toBeInTheDocument();
+    expect(screen.getByText("One tenant-scoped byok.key.generated event and its managed-key projection.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Continue to generation" }));
     await user.click(screen.getByRole("button", { name: "Generate managed key" }));
 
     await waitFor(() => expect(apiMock.generateManagedKey).toHaveBeenCalledWith({ algorithm: "ECDSA-P256" }));
@@ -650,6 +705,31 @@ describe("CA hierarchy and custody surface", () => {
     expect(await screen.findByText("zeroized")).toBeInTheDocument();
     expect(screen.queryByText(/BEGIN PRIVATE KEY/)).not.toBeInTheDocument();
     expect(screen.queryByText(/PRIVATE KEY-----/)).not.toBeInTheDocument();
+  });
+
+  it("keeps generation locked when the server preview names a deployment blocker", async () => {
+    const user = userEvent.setup();
+    apiMock.managedKeyCustody.mockResolvedValueOnce({
+      ...(await apiMock.managedKeyCustody()),
+      enabled: false,
+      lifecycle_attached: false,
+      ready: false,
+      configured_provider: "",
+      restart_required: true,
+      blockers: ["Managed-key custody is disabled. Enable it and restart the control plane and isolated signer."],
+    });
+    apiMock.previewManagedKeyGeneration.mockResolvedValueOnce({
+      ...(await apiMock.previewManagedKeyGeneration()),
+      ready: false,
+      restart_required: true,
+      blockers: ["Managed-key custody is disabled. Apply the startup configuration and restart."],
+    });
+    renderCAHierarchy("/ca-hierarchy?tab=custody");
+
+    await user.click(await screen.findByRole("button", { name: "Review generation plan" }));
+    expect(await screen.findByText("Managed-key custody is disabled. Apply the startup configuration and restart.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Continue to generation" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Generate managed key" })).not.toBeInTheDocument();
   });
 
   it("drives the offline-root import and offline-signed intermediate workflow", async () => {
@@ -755,13 +835,15 @@ describe("CA hierarchy and custody surface", () => {
   });
 
   it("surfaces issuer permission errors without hiding ceremony and custody actions", async () => {
+    const user = userEvent.setup();
     apiMock.issuers.mockRejectedValueOnce(new ApiError(403, JSON.stringify({ detail: "missing issuers:read" })));
     renderCAHierarchy();
 
     expect(await screen.findByText("Permission denied")).toBeInTheDocument();
     expect(screen.getByText("missing issuers:read")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start root ceremony" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Generate managed key" })).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Key custody" }));
+    expect(await screen.findByRole("button", { name: "Review generation plan" })).toBeInTheDocument();
   });
 
   it("traps focus in the issuer configuration dialog and returns focus to the opener", async () => {

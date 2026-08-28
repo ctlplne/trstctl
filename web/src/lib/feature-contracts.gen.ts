@@ -1814,7 +1814,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use hsm integration while tenant, policy, and security authority remain on the server.",
       "tool": "certificates",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/ca-hierarchy",
       "navigationEntrypoints": [
         "tool navigation",
@@ -1828,7 +1828,7 @@ export const canonicalCapabilities = [
       ],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -1843,12 +1843,19 @@ export const canonicalCapabilities = [
           ]
         },
         "configure": {
-          "status": "missing",
-          "reason": "No structured evidence proves an operator can configure every required prerequisite from this console journey."
+          "status": "complete",
+          "evidence": [
+            "GET /api/v1/managed-keys/custody returns the configured provider, lifecycle attachment, exact blockers, and secret-free environment-variable/file-reference requirements for all six providers.",
+            "web/src/pages/cahierarchy/CAHierarchyCustodyParts.tsx"
+          ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "POST /api/v1/managed-keys/preview returns an effect-free plan with empty preview writes/outside effects, later execution effects, permission, blockers, and verification proof.",
+            "internal/api/managedkeys_test.go",
+            "web/src/__tests__/ca_hierarchy.test.tsx"
+          ]
         },
         "execute": {
           "status": "complete",
@@ -1879,12 +1886,16 @@ export const canonicalCapabilities = [
         "automate": {
           "status": "complete",
           "evidence": [
+            "OpenAPI operationId: getManagedKeyCustody",
+            "OpenAPI operationId: previewManagedKeyGeneration",
             "OpenAPI operationId: generateManagedKey",
             "OpenAPI operationId: approveManagedKeyAction",
             "OpenAPI operationId: rotateManagedKey",
             "OpenAPI operationId: revokeManagedKey",
             "OpenAPI operationId: zeroizeManagedKey",
             "OpenAPI operationId: getEditions",
+            "CLI command: managed-keys custody",
+            "CLI command: managed-keys preview",
             "CLI command: managed-keys generate",
             "CLI command: managed-keys approve",
             "CLI command: managed-keys rotate",
@@ -1895,8 +1906,8 @@ export const canonicalCapabilities = [
       },
       "owner": "pki",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "9518d3ddadab108ed0f89a33e798255decb3d5f9",
+      "freshness": "2026-08-28"
     }
   },
   {

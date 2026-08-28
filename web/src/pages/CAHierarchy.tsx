@@ -31,6 +31,7 @@ import { Button } from "@/components/ui/button";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { CAHorizonBadge, CAHorizonRenewBy, CALineageTree } from "./cahierarchy/CAHierarchyPageParts";
 import { CACeremonyReviewDialog, CARotationReviewDialog, CeremonyDetailDialog, CeremonyPanel } from "./cahierarchy/CAHierarchyCeremonyParts";
+import { ManagedKeyCustodyWorkspace } from "./cahierarchy/CAHierarchyCustodyParts";
 import {
   api,
   ApiError,
@@ -52,7 +53,6 @@ import {
   type IssuerCapabilityMatrix,
   type RetirementChecklist,
   type IssuerRequest,
-  type ManagedKey,
   type Profile,
 } from "@/lib/api";
 import { defaultIssuerConfigValues, issuerTypes, splitPEMChain, type IssuerConfigField, type IssuerTypeConfig } from "@/lib/issuerCatalog";
@@ -101,7 +101,6 @@ const rootCeremonyRequest: CACeremonyStartRequest = {
   },
 };
 
-const managedKeyRequest = { algorithm: "ECDSA-P256" };
 const offlineRootDefaults: OfflineCAForm = {
   certificatePEM: "",
   commonName: "Offline Root CA",
@@ -362,9 +361,6 @@ export function CAHierarchy() {
   const [ceremony, setCeremony] = useState<CAKeyCeremony | null>(null);
   const [ceremonyBusy, setCeremonyBusy] = useState(false);
   const [ceremonyError, setCeremonyError] = useState<string | null>(null);
-  const [managedKey, setManagedKey] = useState<ManagedKey | null>(null);
-  const [keyBusy, setKeyBusy] = useState(false);
-  const [keyError, setKeyError] = useState<string | null>(null);
   const [issuerDialogType, setIssuerDialogType] = useState<IssuerTypeConfig | null>(null);
   const [issuerBusy, setIssuerBusy] = useState(false);
   const [issuerError, setIssuerError] = useState<string | null>(null);
@@ -573,32 +569,6 @@ export function CAHierarchy() {
       setCeremonyError(errorText(err, "Could not approve ceremony"));
     } finally {
       setCeremonyBusy(false);
-    }
-  }
-
-  async function generateManagedKey() {
-    setKeyBusy(true);
-    setKeyError(null);
-    try {
-      setManagedKey(await api.generateManagedKey(managedKeyRequest));
-    } catch (err) {
-      setKeyError(errorText(err, "Could not generate managed key"));
-    } finally {
-      setKeyBusy(false);
-    }
-  }
-
-  async function runManagedKeyAction(action: "rotate" | "revoke" | "zeroize", keyId: string) {
-    setKeyBusy(true);
-    setKeyError(null);
-    try {
-      const next =
-        action === "rotate" ? await api.rotateManagedKey(keyId) : action === "revoke" ? await api.revokeManagedKey(keyId) : await api.zeroizeManagedKey(keyId);
-      setManagedKey(next);
-    } catch (err) {
-      setKeyError(errorText(err, `Could not ${action} managed key`));
-    } finally {
-      setKeyBusy(false);
     }
   }
 
@@ -938,7 +908,6 @@ export function CAHierarchy() {
           ceremony={ceremony}
           discovery={caDiscovery}
           loading={loading}
-          managedKey={managedKey}
           onRefresh={() => void load()}
         />
         {externalCAError &&
@@ -1153,31 +1122,9 @@ export function CAHierarchy() {
         />
       </div>
 
-      <section {...tabPanelProps("ca", "custody")} className={tab === "custody" ? "grid gap-3 border-y border-border py-4" : "hidden"}>
-        <div className="flex items-start gap-3">
-          <KeyRound className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <div>
-            <h2 id="custody-heading" className="text-title font-semibold">
-              {translateNow("source.managed.key.custody.ba98c44d9c")}
-            </h2>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.aws.kms.azure.key.vault.hsm.gcp.cloud.kms.957ee3c57b")}</p>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" onClick={() => void generateManagedKey()} disabled={keyBusy}>
-            {translateNow("source.generate.managed.key.9ff7b150a0")}
-          </Button>
-          <span className="text-sm text-muted-foreground">{translateNow("source.default.algorithm.ecdsa.p256.e268f7deba")}</span>
-        </div>
-        {keyError && <ErrorState title={translateNow("source.managed.key.action.failed.934f359a98")}>{keyError}</ErrorState>}
-        {managedKey ? (
-          <ManagedKeyPanel managedKey={managedKey} busy={keyBusy} onAction={(action, keyId) => void runManagedKeyAction(action, keyId)} />
-        ) : (
-          <EmptyState title={translateNow("source.no.managed.key.loaded.c921eb07f2")}>
-            {translateNow("source.generate.a.managed.key.to.inspect.its.publ.0756dcae94")}
-          </EmptyState>
-        )}
-      </section>
+      <div {...tabPanelProps("ca", "custody")} className={tab === "custody" ? undefined : "hidden"}>
+        <ManagedKeyCustodyWorkspace />
+      </div>
 
       {issuerDialogType && (
         <CreateIssuerDialog
@@ -1253,7 +1200,6 @@ function CAWorkspaceOverview({
   ceremony,
   discovery,
   loading,
-  managedKey,
   onRefresh,
 }: {
   authorities: CAAuthority[];
@@ -1261,7 +1207,6 @@ function CAWorkspaceOverview({
   ceremony: CAKeyCeremony | null;
   discovery: CADiscovery | null;
   loading: boolean;
-  managedKey: ManagedKey | null;
   onRefresh: () => void;
 }) {
   const { t } = useTranslation();
@@ -1277,9 +1222,7 @@ function CAWorkspaceOverview({
     intermediates,
     discovered: discovery?.summary.authority_count ?? authorities.length,
   });
-  const custody = managedKey
-    ? t("caHierarchy.workspace.custodyLoaded", { algorithm: managedKey.algorithm, version: managedKey.version, state: managedKey.state })
-    : t("caHierarchy.workspace.custodyEmpty");
+  const custody = t("caHierarchy.workspace.custodyEmpty");
   const pending = ceremony
     ? t("caHierarchy.workspace.pendingCeremony", { status: ceremony.status, approvals: ceremony.approvals, threshold: ceremony.threshold })
     : t("caHierarchy.workspace.pendingEmpty");
@@ -2966,68 +2909,6 @@ function ProbeBanner({ onDismiss, probe }: { probe: ProbeState; onDismiss: () =>
         {translateNow("source.dismiss.48845bff33")}
       </Button>
     </div>
-  );
-}
-
-function ManagedKeyPanel({
-  busy,
-  managedKey,
-  onAction,
-}: {
-  busy: boolean;
-  managedKey: ManagedKey;
-  onAction: (action: "rotate" | "revoke" | "zeroize", keyId: string) => void;
-}) {
-  return (
-    <section aria-labelledby="managed-key-heading" className="ui-panel p-comfortable text-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 id="managed-key-heading" className="text-title font-semibold">
-            {translateNow("source.managed.key.f08acca719")}
-          </h3>
-          <p className="mt-1 font-mono text-xs">{managedKey.key_id}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={busy}
-            onClick={() => onAction("rotate", managedKey.key_id)}
-            aria-label={translateNow("source.rotate.key.value1.f9e66701f9", { value1: managedKey.key_id })}
-          >
-            {translateNow("source.rotate.c3613b1704")}
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={busy}
-            onClick={() => onAction("revoke", managedKey.key_id)}
-            aria-label={translateNow("source.revoke.key.value1.2e6b1284fb", { value1: managedKey.key_id })}
-          >
-            {translateNow("source.revoke.87e6d00bbf")}
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={busy}
-            onClick={() => onAction("zeroize", managedKey.key_id)}
-            aria-label={translateNow("source.zeroize.key.value1.4e92e53f48", { value1: managedKey.key_id })}
-          >
-            {translateNow("source.zeroize.9fb44dd187")}
-          </Button>
-        </div>
-      </div>
-      <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <KeyValue label="Algorithm" value={managedKey.algorithm} />
-        <KeyValue label="Version" value={`Version ${managedKey.version}`} />
-        <KeyValue label="State" value={managedKey.state} />
-        <KeyValue label="Public DER" value={managedKey.public_der ? `${managedKey.public_der.length} bytes` : "-"} />
-        <KeyValue label="Extractable" value={managedKey.extractable ? "Yes" : "No"} />
-      </dl>
-    </section>
   );
 }
 

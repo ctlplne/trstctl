@@ -57,6 +57,39 @@ func TestCapabilitiesListUsesTheAuthenticatedReadSurface(t *testing.T) {
 	}
 }
 
+func TestManagedKeyCustodyAndPreviewUseSecretFreeReadSurfaces(t *testing.T) {
+	var custody capture
+	custodyServer := mockServer(t, http.StatusOK,
+		`{"enabled":true,"configured_provider":"aws_kms","lifecycle_attached":true,"providers":[{"id":"aws_kms","name":"AWS KMS","requirements":[]}]}`,
+		&custody)
+	custodyEnv := cli.Env{Server: custodyServer.URL, Token: "keys-token", Tenant: "tenant-a", HTTPClient: custodyServer.Client()}
+
+	code, stdout, stderr := run(t, []string{"managed-keys", "custody"}, custodyEnv, "")
+	if code != 0 || !strings.Contains(stdout, `"configured_provider": "aws_kms"`) || stderr != "" {
+		t.Fatalf("managed-keys custody = exit %d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if custody.Method != http.MethodGet || custody.Path != "/api/v1/managed-keys/custody" || custody.Header.Get("Idempotency-Key") != "" || len(custody.Body) != 0 {
+		t.Fatalf("custody request = %s %s key=%q body=%s", custody.Method, custody.Path, custody.Header.Get("Idempotency-Key"), custody.Body)
+	}
+
+	previewBody := `{"provider":"aws_kms","algorithm":"ecdsa-p256"}`
+	var preview capture
+	previewServer := mockServer(t, http.StatusOK,
+		`{"ready":true,"provider":"aws_kms","algorithm":"ecdsa-p256","preview_writes":[],"preview_external_calls":[]}`,
+		&preview)
+	previewEnv := cli.Env{Server: previewServer.URL, Token: "keys-token", Tenant: "tenant-a", HTTPClient: previewServer.Client()}
+
+	code, stdout, stderr = run(t, []string{"managed-keys", "preview", "-f", "-"}, previewEnv, previewBody)
+	if code != 0 || !strings.Contains(stdout, `"ready": true`) || stderr != "" {
+		t.Fatalf("managed-keys preview = exit %d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if preview.Method != http.MethodPost || preview.Path != "/api/v1/managed-keys/preview" ||
+		preview.Header.Get("Idempotency-Key") != "" || !sameJSON(preview.Body, []byte(previewBody)) {
+		t.Fatalf("preview request = %s %s key=%q body=%s", preview.Method, preview.Path,
+			preview.Header.Get("Idempotency-Key"), preview.Body)
+	}
+}
+
 func TestDiscoverySegmentCreateEnablesHeadlessSourceWorkflowAUD118(t *testing.T) {
 	segmentBody := `{"name":"edge-prod","ranges":["10.24.0.0/16"],"staleness_hours":24,"excluded":false}`
 	sourceBody := `{"kind":"network","name":"edge-tls","config":{"segment":"edge-prod","targets":["10.24.1.10:443"]}}`

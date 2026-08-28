@@ -15111,13 +15111,300 @@
         ],
         "type": "object"
       },
-      "ManagedKeyGenerateRequest": {
+      "ManagedKeyCustodyPlan": {
         "properties": {
-          "algorithm": {
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "configuration_mode": {
+            "enum": [
+              "startup_static"
+            ],
+            "type": "string"
+          },
+          "configured_provider": {
+            "enum": [
+              "",
+              "aws",
+              "azure-key-vault",
+              "gcp-kms",
+              "pkcs11",
+              "tpm2",
+              "yubihsm2"
+            ],
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "lifecycle_attached": {
+            "type": "boolean"
+          },
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/ManagedKeyCustodyProvider"
+            },
+            "type": "array"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "restart_required": {
+            "type": "boolean"
+          },
+          "secret_delivery": {
+            "enum": [
+              "file_reference_only"
+            ],
+            "type": "string"
+          },
+          "security_boundary": {
             "type": "string"
           }
         },
         "required": [
+          "enabled",
+          "lifecycle_attached",
+          "ready",
+          "configured_provider",
+          "configuration_mode",
+          "secret_delivery",
+          "restart_required",
+          "security_boundary",
+          "providers",
+          "blockers"
+        ],
+        "type": "object"
+      },
+      "ManagedKeyCustodyProvider": {
+        "properties": {
+          "custody": {
+            "type": "string"
+          },
+          "id": {
+            "enum": [
+              "aws",
+              "azure-key-vault",
+              "gcp-kms",
+              "pkcs11",
+              "tpm2",
+              "yubihsm2"
+            ],
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "requirements": {
+            "items": {
+              "$ref": "#/components/schemas/ManagedKeyCustodyRequirement"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "custody",
+          "requirements"
+        ],
+        "type": "object"
+      },
+      "ManagedKeyCustodyRequirement": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "environment_variable": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "value",
+              "secret_file"
+            ],
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "kind",
+          "required",
+          "environment_variable",
+          "description"
+        ],
+        "type": "object"
+      },
+      "ManagedKeyGenerateRequest": {
+        "properties": {
+          "algorithm": {
+            "enum": [
+              "RSA-2048",
+              "RSA-3072",
+              "RSA-4096",
+              "ECDSA-P256",
+              "ECDSA-P384",
+              "ECDSA-P521"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "algorithm"
+        ],
+        "type": "object"
+      },
+      "ManagedKeyGenerationPreview": {
+        "properties": {
+          "algorithm": {
+            "type": "string"
+          },
+          "approval_required": {
+            "type": "boolean"
+          },
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "configuration_mode": {
+            "enum": [
+              "startup_static"
+            ],
+            "type": "string"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "execution_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "execution_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "extractable": {
+            "type": "boolean"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "private_key_location": {
+            "type": "string"
+          },
+          "proof": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "provider": {
+            "enum": [
+              "aws",
+              "azure-key-vault",
+              "gcp-kms",
+              "pkcs11",
+              "tpm2",
+              "yubihsm2"
+            ],
+            "type": "string"
+          },
+          "provider_label": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "required_permission": {
+            "type": "string"
+          },
+          "requirements": {
+            "items": {
+              "$ref": "#/components/schemas/ManagedKeyCustodyRequirement"
+            },
+            "type": "array"
+          },
+          "restart_required": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ready",
+          "effect_free",
+          "provider",
+          "provider_label",
+          "algorithm",
+          "configuration_mode",
+          "restart_required",
+          "extractable",
+          "private_key_location",
+          "required_permission",
+          "approval_required",
+          "requirements",
+          "preview_writes",
+          "preview_external_effects",
+          "execution_writes",
+          "execution_external_effects",
+          "proof",
+          "blockers"
+        ],
+        "type": "object"
+      },
+      "ManagedKeyGenerationPreviewRequest": {
+        "properties": {
+          "algorithm": {
+            "enum": [
+              "RSA-2048",
+              "RSA-3072",
+              "RSA-4096",
+              "ECDSA-P256",
+              "ECDSA-P384",
+              "ECDSA-P521"
+            ],
+            "type": "string"
+          },
+          "provider": {
+            "enum": [
+              "aws",
+              "azure-key-vault",
+              "gcp-kms",
+              "pkcs11",
+              "tpm2",
+              "yubihsm2"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
           "algorithm"
         ],
         "type": "object"
@@ -39884,6 +40171,110 @@
         ],
         "summary": "Approve an exact managed-key rotate, revoke, or zeroize action",
         "x-trstctl-permission": "keys:approve"
+      }
+    },
+    "/api/v1/managed-keys/custody": {
+      "get": {
+        "operationId": "getManagedKeyCustody",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedKeyCustodyPlan"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get the secret-free HSM/KMS custody readiness and provider configuration plan",
+        "x-trstctl-permission": "keys:read"
+      }
+    },
+    "/api/v1/managed-keys/preview": {
+      "post": {
+        "operationId": "previewManagedKeyGeneration",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManagedKeyGenerationPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedKeyGenerationPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Preview HSM/KMS key generation without contacting the provider or changing state",
+        "x-trstctl-permission": "keys:write"
       }
     },
     "/api/v1/managed-keys/revoke": {

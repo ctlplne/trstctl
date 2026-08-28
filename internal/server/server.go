@@ -147,6 +147,9 @@ type Deps struct {
 	// Enterprise BYOK feature is licensed and configured. Nil leaves the
 	// /api/v1/managed-keys/* surface unmounted, so Community receives 404.
 	ManagedKeyFactory ManagedKeyServiceFactory
+	// ManagedKeyCustody is the secret-free enabled/provider posture used by the
+	// planning API. The composition root never passes provider credentials or paths.
+	ManagedKeyCustody api.ManagedKeyCustodyConfiguration
 	// KMIPFactory is supplied only by the tagged EE attach seam when the Enterprise
 	// BYOK feature is licensed. Nil leaves the KMIP listener unmounted even if KMIP
 	// config is present.
@@ -1265,6 +1268,7 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	} else if externalCAs != nil {
 		defaults = append(defaults, api.WithExternalCAs(externalCAs))
 	}
+	defaults = append(defaults, api.WithManagedKeyCustody(d.ManagedKeyCustody))
 	if mk, err := buildManagedKeyService(d, idem, s.outbox, orch); err != nil {
 		return nil, nil, fmt.Errorf("server: configure managed-key lifecycle: %w", err)
 	} else if mk != nil {

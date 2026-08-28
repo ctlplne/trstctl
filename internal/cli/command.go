@@ -528,6 +528,8 @@ var coreCommandTable = []Command{
 	// BYOK/HSM managed-key lifecycle (CRYPTO-005). Generate mints provider-resident
 	// material; rotate/revoke/zeroize are destructive and require a distinct-approver
 	// approval (dual control) recorded through the dedicated served approval route.
+	{Name: []string{"managed-keys", "custody"}, Method: "GET", Path: "/api/v1/managed-keys/custody", Summary: "Show secret-free HSM/KMS provider requirements and current signer readiness"},
+	{Name: []string{"managed-keys", "preview"}, Method: "POST", Path: "/api/v1/managed-keys/preview", Body: bodyFile, ReadOnly: true, Summary: "Review managed-key generation without writing state or contacting the provider"},
 	{Name: []string{"managed-keys", "generate"}, Method: "POST", Path: "/api/v1/managed-keys", Body: bodyFile, Summary: "Generate a BYOK/HSM-resident managed key"},
 	{Name: []string{"managed-keys", "approve"}, Method: "POST", Path: "/api/v1/managed-keys/approvals", Body: bodyApprovalFile, Summary: "Approve an exact immutable managed-key request"},
 	{Name: []string{"managed-keys", "rotate"}, Method: "POST", Path: "/api/v1/managed-keys/rotate", Body: bodyFile, Summary: "Rotate a managed key (requires dual-control approval)"},

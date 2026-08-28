@@ -308,6 +308,89 @@ export const messages = {
     defaultMessage: "No managed key is loaded; custody actions remain available in their workspace.",
     description: "CA hierarchy overview summary when no managed key has been generated or loaded.",
   },
+  "caHierarchy.custody.title": { defaultMessage: "Managed key custody", description: "Heading for the managed-key custody workspace." },
+  "caHierarchy.custody.description": {
+    defaultMessage: "Choose where a private key stays, review the exact generation plan, then create and manage the key without exposing its private bytes to trstctl or your browser.",
+    description: "Plain-language explanation of the managed-key custody journey and its private-key boundary.",
+  },
+  "caHierarchy.custody.loading": { defaultMessage: "Checking available custody providers and signer configuration.", description: "Managed-key custody loading state." },
+  "caHierarchy.custody.unavailable": { defaultMessage: "Key custody configuration is unavailable", description: "Heading when the custody plan cannot be read." },
+  "caHierarchy.custody.loadFailed": { defaultMessage: "Could not load key custody configuration", description: "Fallback error when the custody plan request fails." },
+  "caHierarchy.custody.steps.configure.label": { defaultMessage: "Choose custody", description: "First managed-key journey step." },
+  "caHierarchy.custody.steps.configure.description": {
+    defaultMessage: "Choose where the private key will live and which public-key algorithm it will use.",
+    description: "Description of the managed-key custody selection step.",
+  },
+  "caHierarchy.custody.steps.preview.label": { defaultMessage: "Review the plan", description: "Second managed-key journey step." },
+  "caHierarchy.custody.steps.preview.description": {
+    defaultMessage: "Ask the server to prove what generation will do before anything changes.",
+    description: "Description of the effect-free managed-key preview step.",
+  },
+  "caHierarchy.custody.steps.generate.label": { defaultMessage: "Generate and manage", description: "Third managed-key journey step." },
+  "caHierarchy.custody.steps.generate.description": {
+    defaultMessage: "Create the reviewed non-extractable key, then manage its lifecycle.",
+    description: "Description of the managed-key execution step.",
+  },
+  "caHierarchy.custody.progress": { defaultMessage: "Managed key custody progress", description: "Accessible label for managed-key journey progress." },
+  "caHierarchy.custody.review": { defaultMessage: "Review generation plan", description: "Action that requests an effect-free managed-key preview." },
+  "caHierarchy.custody.continue": { defaultMessage: "Continue to generation", description: "Action that advances from a safe preview to generation." },
+  "caHierarchy.custody.chooseTitle": { defaultMessage: "Where should this key live?", description: "Heading above custody provider and algorithm selection." },
+  "caHierarchy.custody.chooseDescription": {
+    defaultMessage: "The provider keeps the private key. trstctl stores a provider handle and the public key, not exportable private-key bytes.",
+    description: "Explanation of custody provider selection and non-extractability.",
+  },
+  "caHierarchy.custody.provider": { defaultMessage: "Custody provider", description: "Label for the managed-key custody provider selection." },
+  "caHierarchy.custody.providerHelp": { defaultMessage: "This must match the provider configured when the server started.", description: "Help below custody provider selection." },
+  "caHierarchy.custody.algorithm": { defaultMessage: "Key algorithm", description: "Label for managed-key algorithm selection." },
+  "caHierarchy.custody.algorithmHelp": { defaultMessage: "Choose the algorithm required by the certificate policy and relying systems.", description: "Help below managed-key algorithm selection." },
+  "caHierarchy.custody.configured": { defaultMessage: "Configured now: {provider}", description: "Heading naming the provider configured in the running server." },
+  "caHierarchy.custody.notConfigured": { defaultMessage: "No provider is configured yet", description: "Heading when managed-key custody is disabled." },
+  "caHierarchy.custody.startupOnly": {
+    defaultMessage: "Configuration is startup-only. Set these references outside the browser, then restart the control plane and isolated signer.",
+    description: "Security guidance for custody configuration changes.",
+  },
+  "caHierarchy.custody.signerAttached": { defaultMessage: "The managed-key lifecycle is attached to this running server.", description: "Positive signer attachment status." },
+  "caHierarchy.custody.signerNotAttached": { defaultMessage: "The managed-key lifecycle is not attached to this running server.", description: "Negative signer attachment status." },
+  "caHierarchy.custody.requirements": { defaultMessage: "Provider requirements", description: "Fallback heading for custody provider requirements." },
+  "caHierarchy.custody.required": { defaultMessage: "Required", description: "Badge for a required custody setting." },
+  "caHierarchy.custody.optional": { defaultMessage: "Optional", description: "Badge for an optional custody setting." },
+  "caHierarchy.custody.fileReference": { defaultMessage: "Secret file reference", description: "Badge for a signer-only file reference that locates a secret." },
+  "caHierarchy.custody.noRequirements": { defaultMessage: "This provider has no additional startup requirements.", description: "Empty state for a provider without settings." },
+  "caHierarchy.custody.setupNeeded": { defaultMessage: "Setup is needed before generation", description: "Heading above custody configuration blockers." },
+  "caHierarchy.custody.previewLoading": { defaultMessage: "Reviewing the generation plan without changing anything.", description: "Managed-key preview loading state." },
+  "caHierarchy.custody.previewFailed": { defaultMessage: "Could not review the generation plan", description: "Fallback and heading for a managed-key preview error." },
+  "caHierarchy.custody.nothingChanged": { defaultMessage: "Nothing changed yet", description: "Heading confirming that a managed-key preview has no effects." },
+  "caHierarchy.custody.previewCounts": { defaultMessage: "{writes} preview writes · {calls} outside calls", description: "Counts proving the preview did not write state or call an external system." },
+  "caHierarchy.custody.privateKey": { defaultMessage: "Private key stays in", description: "Label for the provider custody boundary." },
+  "caHierarchy.custody.extractable": { defaultMessage: "Extractable", description: "Label showing whether private-key bytes can leave custody." },
+  "caHierarchy.custody.permission": { defaultMessage: "Permission needed", description: "Label for the generation permission." },
+  "caHierarchy.custody.approval": { defaultMessage: "Extra approval required", description: "Label for managed-key generation approval policy." },
+  "caHierarchy.custody.blocked": { defaultMessage: "Generation stays locked", description: "Heading above blockers returned by the managed-key preview." },
+  "caHierarchy.custody.executionWrites": { defaultMessage: "What generation will record", description: "Heading above state writes expected during managed-key generation." },
+  "caHierarchy.custody.outsideEffects": { defaultMessage: "What generation will ask outside trstctl", description: "Heading above external effects expected during managed-key generation." },
+  "caHierarchy.custody.proof": { defaultMessage: "How to prove it worked", description: "Heading above managed-key verification evidence." },
+  "caHierarchy.custody.reviewedReady": { defaultMessage: "The reviewed plan is ready", description: "Heading before managed-key execution." },
+  "caHierarchy.custody.reviewedReadyDetail": { defaultMessage: "Generate one {algorithm} key in {provider}. The private key will remain non-extractable.", description: "Final summary of the reviewed managed-key plan." },
+  "caHierarchy.custody.generating": { defaultMessage: "Generating key...", description: "Busy label while managed-key generation runs." },
+  "caHierarchy.custody.generate": { defaultMessage: "Generate managed key", description: "Action that executes the reviewed managed-key plan." },
+  "caHierarchy.custody.generateFailed": { defaultMessage: "Could not generate the reviewed managed key", description: "Fallback error for managed-key generation." },
+  "caHierarchy.custody.actionFailed": { defaultMessage: "Could not {action} the managed key", description: "Fallback error for a managed-key lifecycle action." },
+  "caHierarchy.custody.actionFailedTitle": { defaultMessage: "Managed key action failed", description: "Heading for a managed-key lifecycle action error." },
+  "caHierarchy.custody.noKey": { defaultMessage: "No managed key has been generated", description: "Empty-state heading before reviewed key generation." },
+  "caHierarchy.custody.noKeyDetail": { defaultMessage: "Generate the reviewed key to see its public identifier, version, and lifecycle state.", description: "Empty-state guidance before managed-key generation." },
+  "caHierarchy.custody.managedKey": { defaultMessage: "Managed key", description: "Heading for generated managed-key metadata." },
+  "caHierarchy.custody.keyID": { defaultMessage: "key ID", description: "Accessible copy label for a managed-key identifier." },
+  "caHierarchy.custody.actions.rotate.button": { defaultMessage: "Rotate", description: "Managed-key rotate action." },
+  "caHierarchy.custody.actions.rotate.label": { defaultMessage: "Rotate key {keyId}", description: "Accessible label for managed-key rotation." },
+  "caHierarchy.custody.actions.revoke.button": { defaultMessage: "Revoke", description: "Managed-key revoke action." },
+  "caHierarchy.custody.actions.revoke.label": { defaultMessage: "Revoke key {keyId}", description: "Accessible label for managed-key revocation." },
+  "caHierarchy.custody.actions.zeroize.button": { defaultMessage: "Zeroize", description: "Managed-key zeroize action." },
+  "caHierarchy.custody.actions.zeroize.label": { defaultMessage: "Zeroize key {keyId}", description: "Accessible label for managed-key zeroization." },
+  "caHierarchy.custody.version": { defaultMessage: "Version", description: "Managed-key version label." },
+  "caHierarchy.custody.versionValue": { defaultMessage: "Version {version}", description: "Managed-key version value." },
+  "caHierarchy.custody.state": { defaultMessage: "State", description: "Managed-key lifecycle state label." },
+  "caHierarchy.custody.publicDER": { defaultMessage: "Public key DER", description: "Managed-key public-key encoding label." },
+  "caHierarchy.custody.bytes": { defaultMessage: "{count} bytes", description: "Byte count for managed-key public material." },
   "caHierarchy.workspace.pendingCeremony": {
     defaultMessage: "Ceremony is {status} with {approvals} of {threshold} approvals.",
     description: "CA hierarchy overview summary for the current key ceremony.",
@@ -17303,11 +17386,6 @@ export const messages = {
     defaultMessage: "AWS IAM",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
-  "source.aws.kms.azure.key.vault.hsm.gcp.cloud.kms.957ee3c57b": {
-    defaultMessage:
-      "AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and PKCS#11 HSM keys stay inside their provider. This panel shows public metadata and drives custody actions by key id.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
-  },
   "source.batches.467629e63d": {
     defaultMessage: "batches",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Incidents.tsx.",
@@ -17977,10 +18055,6 @@ export const messages = {
     defaultMessage: "Decrypted plaintext",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
-  "source.default.algorithm.ecdsa.p256.e268f7deba": {
-    defaultMessage: "Default algorithm: ECDSA-P256.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
-  },
   "source.default.request.trust.root.ca.2.approvals.246b100b12": {
     defaultMessage: "Default request: Trust Root CA, 2 approvals, ECDSA-P256.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
@@ -18463,14 +18537,6 @@ export const messages = {
   "source.full.delivery.subject.ownership.and.routin.32d5733727": {
     defaultMessage: "· full delivery, subject, ownership, and routing state.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Notifications.tsx.",
-  },
-  "source.generate.a.managed.key.to.inspect.its.publ.0756dcae94": {
-    defaultMessage: "Generate a managed key to inspect its public metadata and lifecycle state.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
-  },
-  "source.generate.managed.key.9ff7b150a0": {
-    defaultMessage: "Generate managed key",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
   },
   "source.generated.827ec8d9f9": {
     defaultMessage: "Generated",
@@ -19034,18 +19100,6 @@ export const messages = {
     defaultMessage: "Managed",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Posture.tsx.",
   },
-  "source.managed.key.action.failed.934f359a98": {
-    defaultMessage: "Managed-key action failed",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
-  },
-  "source.managed.key.custody.ba98c44d9c": {
-    defaultMessage: "Managed key custody",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
-  },
-  "source.managed.key.f08acca719": {
-    defaultMessage: "Managed key",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
-  },
   "source.managed.key.id.8d05580702": {
     defaultMessage: "Managed key id",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/CodeSigning.tsx.",
@@ -19308,10 +19362,6 @@ export const messages = {
   "source.no.labels.in.this.pack.afb9ef5039": {
     defaultMessage: "No labels in this pack.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Policy.tsx.",
-  },
-  "source.no.managed.key.loaded.c921eb07f2": {
-    defaultMessage: "No managed key loaded",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
   },
   "source.no.mcp.tools.are.available.for.this.tenant.66ea7cda3e": {
     defaultMessage: "No MCP tools are available for this tenant.",
@@ -22021,10 +22071,6 @@ export const messages = {
     defaultMessage: "Your session cannot read the credential graph for this tenant.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
   },
-  "source.zeroize.9fb44dd187": {
-    defaultMessage: "Zeroize",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
-  },
   "source.a.non.human.identity.bound.to.this.tenant.f58740df6d": {
     defaultMessage: "A non-human identity bound to this tenant.",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Identities.tsx:1121.",
@@ -22563,10 +22609,6 @@ export const messages = {
     defaultMessage: "Retiring “{value1}” discards the credential record. This cannot be undone.",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Identities.tsx:636.",
   },
-  "source.revoke.key.value1.2e6b1284fb": {
-    defaultMessage: "Revoke key {value1}",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:2529.",
-  },
   "source.rollback.fleet.run.value1.21446f0a1d": {
     defaultMessage: "Rollback fleet run {value1}",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Incidents.tsx:1548.",
@@ -22583,10 +22625,6 @@ export const messages = {
   "source.rotate.challenge.for.value1.c7c084eaeb": {
     defaultMessage: "Rotate challenge for {value1}",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Protocols.tsx:599.",
-  },
-  "source.rotate.key.value1.f9e66701f9": {
-    defaultMessage: "Rotate key {value1}",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:2519.",
   },
   "source.rotation.run.value1.e6b35404aa": {
     defaultMessage: "Rotation run {value1}",
@@ -22818,10 +22856,6 @@ export const messages = {
   "source.your.first.certificate.d48ee36f3a": {
     defaultMessage: "Your first certificate",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Wizard.tsx:103.",
-  },
-  "source.zeroize.key.value1.4e92e53f48": {
-    defaultMessage: "Zeroize key {value1}",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:2539.",
   },
   "source.plaintext.local.preview.no.private.cert.ke.e5059d6667": {
     defaultMessage: "Plaintext local preview. No private cert/key bytes are exposed in this browser view.",

@@ -5,6 +5,7 @@ package api_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -300,5 +301,150 @@ func TestManagedKeyRouteRejectsUnauthenticated(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("unauthenticated managed-keys status = %d, want 401; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestManagedKeyCustodyPlanIsSecretFreeAndNamesAllSixProviders(t *testing.T) {
+	handler := api.New(nil, nil, nil,
+		api.WithInsecureHeaderResolver(),
+		api.WithManagedKeyCustody(api.ManagedKeyCustodyConfiguration{Enabled: true, Provider: "pkcs11"}),
+		api.WithManagedKeys(&stubManagedKeys{}),
+	)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/managed-keys/custody", nil)
+	req.Header.Set("X-Tenant-ID", managedKeyTestTenant)
+	req.Header.Set("X-Subject", "operator-a")
+	req.Header.Set("X-Roles", "admin")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("custody plan status=%d body=%s, want 200", rec.Code, rec.Body.String())
+	}
+	var got api.ManagedKeyCustodyPlan
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode custody plan: %v", err)
+	}
+	if !got.Enabled || !got.LifecycleAttached || got.ConfiguredProvider != "pkcs11" || got.ConfigurationMode != "startup_static" {
+		t.Fatalf("custody posture=%+v, want enabled attached PKCS#11 startup-static plan", got)
+	}
+	want := []string{"aws", "azure-key-vault", "gcp-kms", "pkcs11", "tpm2", "yubihsm2"}
+	if len(got.Providers) != len(want) {
+		t.Fatalf("provider count=%d, want %d", len(got.Providers), len(want))
+	}
+	for i, provider := range got.Providers {
+		if provider.ID != want[i] {
+			t.Fatalf("provider[%d]=%q, want %q", i, provider.ID, want[i])
+		}
+		if len(provider.Requirements) == 0 {
+			t.Fatalf("provider %q has no structured requirements", provider.ID)
+		}
+	}
+	body := strings.ToLower(rec.Body.String())
+	for _, forbidden := range []string{"secret_access_key\"", "bearer_token\"", "user_pin\"", "owner_auth\"", "key_auth\""} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("custody plan exposed an inline secret field %q: %s", forbidden, rec.Body.String())
+		}
+	}
+}
+
+func TestManagedKeyGenerationPreviewIsEffectFreeAndFailsClosedWhenRuntimeIsUnavailable(t *testing.T) {
+	service := &stubManagedKeys{}
+	handler := api.New(nil, nil, nil,
+		api.WithInsecureHeaderResolver(),
+		api.WithManagedKeyCustody(api.ManagedKeyCustodyConfiguration{}),
+	)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/managed-keys/preview", strings.NewReader(`{"provider":"aws","algorithm":"ECDSA-P256"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Tenant-ID", managedKeyTestTenant)
+	req.Header.Set("X-Subject", "operator-a")
+	req.Header.Set("X-Roles", "admin")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("preview status=%d body=%s, want 200", rec.Code, rec.Body.String())
+	}
+	var got api.ManagedKeyGenerationPreview
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode generation preview: %v", err)
+	}
+	if got.Ready || !got.EffectFree || got.Provider != "aws" || got.Algorithm != "ECDSA-P256" {
+		t.Fatalf("unavailable preview=%+v, want effect-free not-ready AWS plan", got)
+	}
+	if len(got.PreviewWrites) != 0 || len(got.PreviewExternalEffects) != 0 {
+		t.Fatalf("preview claimed effects: writes=%v external=%v", got.PreviewWrites, got.PreviewExternalEffects)
+	}
+	if len(got.Blockers) == 0 || len(got.ExecutionWrites) == 0 || len(got.ExecutionExternalEffects) == 0 {
+		t.Fatalf("preview must name blockers and the later execution effects: %+v", got)
+	}
+	if calls := managedKeyServiceCalls(service); calls != 0 {
+		t.Fatalf("preview called managed-key lifecycle %d times, want zero", calls)
+	}
+}
+
+func TestManagedKeyGenerationPreviewBecomesReadyOnlyForConfiguredAttachedProvider(t *testing.T) {
+	service := &stubManagedKeys{}
+	handler := api.New(nil, nil, nil,
+		api.WithInsecureHeaderResolver(),
+		api.WithManagedKeyCustody(api.ManagedKeyCustodyConfiguration{Enabled: true, Provider: "gcp-kms"}),
+		api.WithManagedKeys(service),
+	)
+	request := func(provider string) api.ManagedKeyGenerationPreview {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/managed-keys/preview", strings.NewReader(`{"provider":"`+provider+`","algorithm":"ECDSA-P256"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Tenant-ID", managedKeyTestTenant)
+		req.Header.Set("X-Subject", "operator-a")
+		req.Header.Set("X-Roles", "admin")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("preview %q status=%d body=%s, want 200", provider, rec.Code, rec.Body.String())
+		}
+		var got api.ManagedKeyGenerationPreview
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatalf("decode %q preview: %v", provider, err)
+		}
+		return got
+	}
+	if mismatched := request("aws"); mismatched.Ready || !mismatched.RestartRequired || len(mismatched.Blockers) == 0 {
+		t.Fatalf("mismatched provider preview=%+v, want blocked restart plan", mismatched)
+	}
+	if ready := request("gcp-kms"); !ready.Ready || ready.RestartRequired || len(ready.Blockers) != 0 {
+		t.Fatalf("configured provider preview=%+v, want ready plan", ready)
+	}
+	if calls := managedKeyServiceCalls(service); calls != 0 {
+		t.Fatalf("previews called managed-key lifecycle %d times, want zero", calls)
+	}
+}
+
+func TestManagedKeyPlanningRoutesAreRegisteredAndAuthenticated(t *testing.T) {
+	want := map[string]bool{
+		"GET /api/v1/managed-keys/custody":  false,
+		"POST /api/v1/managed-keys/preview": false,
+	}
+	for _, route := range api.New(nil, nil, nil).Routes() {
+		key := route.Method + " " + route.Path
+		if _, ok := want[key]; ok {
+			want[key] = true
+		}
+	}
+	for route, found := range want {
+		if !found {
+			t.Errorf("managed-key planning route %q is not registered", route)
+		}
+	}
+
+	handler := api.New(nil, nil, nil)
+	for method, path := range map[string]string{
+		http.MethodGet:  "/api/v1/managed-keys/custody",
+		http.MethodPost: "/api/v1/managed-keys/preview",
+	} {
+		req := httptest.NewRequest(method, path, strings.NewReader(`{"provider":"aws","algorithm":"ECDSA-P256"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Tenant-ID", managedKeyTestTenant)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("unauthenticated %s %s status=%d body=%s, want 401", method, path, rec.Code, rec.Body.String())
+		}
 	}
 }

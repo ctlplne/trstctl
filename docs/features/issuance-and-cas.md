@@ -496,6 +496,11 @@ Vault/Managed HSM, GCP Cloud KMS, PKCS#11, TPM 2.0, and YubiHSM 2 custody: once
 `azure-key-vault`, `gcp-kms`, `pkcs11`, `tpm2`, or `yubihsm2`, the control plane
 exposes:
 
+- `GET /api/v1/managed-keys/custody` — return a secret-free startup plan for all six
+  providers, the configured provider, signer attachment, and exact blockers;
+- `POST /api/v1/managed-keys/preview` — validate provider and algorithm without
+  writing state or calling the signer/provider, then name the later execution effects
+  and verification evidence;
 - `POST /api/v1/managed-keys` — create a non-extractable KMS/HSM-resident signing key
   (`extractable: false`; no private material returned);
 - `POST /api/v1/managed-keys/approvals` — record a distinct custodian's approval for
@@ -503,6 +508,14 @@ exposes:
 - `POST /api/v1/managed-keys/rotate` — mint a successor key;
 - `POST /api/v1/managed-keys/revoke` — disable the current key at the provider;
 - `POST /api/v1/managed-keys/zeroize` — schedule provider-side destruction.
+
+The **Certificate authorities → Key custody** console turns those first two routes
+into a three-step ELI5 journey: choose a provider and algorithm, review proof that
+nothing changed, then generate and manage the key. It lists configuration variable
+and file-reference names but never accepts provider credentials, file contents, or
+private-key bytes in the browser. A provider mismatch, disabled lifecycle, missing
+signer attachment, non-effect-free preview, or any server blocker keeps generation
+locked.
 
 The CLI mirrors those verbs under `trstctl managed-keys`, including `approve`.
 Approval requires `keys:approve`; lifecycle mutation requires `keys:write`; the

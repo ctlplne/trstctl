@@ -505,6 +505,10 @@ describe("i18n boundary", () => {
       // FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
       // D-7806a198 adds the isolated-preview banner and sample-playbook copy,
       // and removes "served" implementation jargon from CA health copy.
+      // F26 custody re-pin: the reviewed three-step HSM/KMS journey now names
+      // all six providers, startup-only secret-reference requirements, the
+      // zero-effect preview, exact blockers, execution effects, and proof.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW.
       // I-60770d64 adds the reviewed core PQC campaign workflow copy while
       // preserving placeholders and technical identifiers in every locale.
       // I-093b9270 adds the AWS workload-identity source wizard, honest
@@ -1260,8 +1264,8 @@ describe("i18n boundary", () => {
       // impact, propagation, irreversible confirmation, and proof copy. The
       // unknown-state negations and placeholders remain intact. Machine-authored
       // es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "6e017fd413be42e278434d15f7dec5eed9258da29ca0e8ed3dbc9fb9ce7b6fe4",
-      "de-DE": "2e8dd220c7d2490be788e621a12526ad8912fd5455ca9e23e3b1f5414db84334",
+      "es-ES": "3004ae000f371a609959a2546f98886f1065cccc5b456f83711e8d03b5211314",
+      "de-DE": "85eacfde10702c3742a83aae5fc36c0587dd5e34450609b88580d5ba92ad5185",
     });
   });
 

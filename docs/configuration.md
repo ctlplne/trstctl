@@ -1184,6 +1184,16 @@ plane records a tenant event and PostgreSQL outbox command, while the isolated s
 constructs the provider and performs the private operation. The control-plane process
 never receives provider credentials.
 
+The **Certificate authorities → Key custody** console reads
+`GET /api/v1/managed-keys/custody` to show this startup configuration as a secret-free
+plan. It names environment variables and signer-only file-reference requirements for
+all six providers; it does not accept their values. After startup configuration is
+applied and the control plane and isolated signer are restarted, the console calls
+`POST /api/v1/managed-keys/preview`. That request is effect-free: it writes no event or
+projection and makes no provider call. Generation stays locked until the preview
+confirms the selected provider matches the running provider, the lifecycle is
+attached, and the exact plan is ready.
+
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `TRSTCTL_MANAGED_KEYS_ENABLED` | `false` | Enables licensed managed-key event/outbox assembly. When false, the routes fail closed; no provider is constructed. |

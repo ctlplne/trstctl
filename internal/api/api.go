@@ -104,7 +104,8 @@ type API struct {
 	ephemeral               EphemeralIssuerService
 	pam                     PAMService
 	managedKeys             ManagedKeyService // served BYOK/HSM key lifecycle (CRYPTO-005); nil = not enabled
-	transit                 TransitService    // served transit/EaaS key operations (KMS-01); nil = not enabled
+	managedKeyCustody       ManagedKeyCustodyConfiguration
+	transit                 TransitService // served transit/EaaS key operations (KMS-01); nil = not enabled
 	vaultCompat             *vaultCompatState
 	protocolProfile         ProtocolProfileControl
 	codeSigning             CodeSigningService
@@ -214,6 +215,7 @@ type config struct {
 	ephemeral                   EphemeralIssuerService
 	pam                         PAMService
 	managedKeys                 ManagedKeyService
+	managedKeyCustody           ManagedKeyCustodyConfiguration
 	transit                     TransitService
 	protocolProfile             ProtocolProfileControl
 	codeSigning                 CodeSigningService
@@ -498,6 +500,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		ephemeral:                   cfg.ephemeral,
 		pam:                         cfg.pam,
 		managedKeys:                 cfg.managedKeys,
+		managedKeyCustody:           cfg.managedKeyCustody,
 		transit:                     cfg.transit,
 		vaultCompat:                 newVaultCompatState(cfg.eventLog),
 		protocolProfile:             cfg.protocolProfile,
@@ -1373,6 +1376,8 @@ func (a *API) routes() []route {
 		// new material (no prior approval); rotate/revoke/zeroize are destructive and
 		// require a distinct-approver approval (dual control) enforced by the service.
 		// All four are idempotent (AN-5) and event-sourced (AN-2).
+		{method: "GET", path: "/api/v1/managed-keys/custody", opID: "getManagedKeyCustody", summary: "Get the secret-free HSM/KMS custody readiness and provider configuration plan", handler: a.getManagedKeyCustody, resSchema: "ManagedKeyCustodyPlan", successCode: "200", perm: authz.KeysRead},
+		{method: "POST", path: "/api/v1/managed-keys/preview", opID: "previewManagedKeyGeneration", summary: "Preview HSM/KMS key generation without contacting the provider or changing state", handler: a.previewManagedKeyGeneration, reqSchema: "ManagedKeyGenerationPreviewRequest", resSchema: "ManagedKeyGenerationPreview", successCode: "200", perm: authz.KeysWrite},
 		{method: "POST", path: "/api/v1/managed-keys", opID: "generateManagedKey", summary: "Generate a BYOK/HSM-resident managed key (private material stays in the provider)", handler: a.generateManagedKey, reqSchema: "ManagedKeyGenerateRequest", resSchema: "ManagedKey", successCode: "201", mutation: true, perm: authz.KeysWrite},
 		{method: "POST", path: "/api/v1/managed-keys/approvals", opID: "approveManagedKeyAction", summary: "Approve an exact managed-key rotate, revoke, or zeroize action", handler: a.approveManagedKeyAction, reqSchema: "ManagedKeyApprovalRequest", resSchema: "ManagedKeyApproval", successCode: "200", mutation: true, perm: authz.KeysApprove},
 		{method: "POST", path: "/api/v1/managed-keys/rotate", opID: "rotateManagedKey", summary: "Rotate a managed key (mint a successor; requires dual-control approval)", handler: a.rotateManagedKey, reqSchema: "ManagedKeyActionRequest", resSchema: "ManagedKey", successCode: "200", mutation: true, perm: authz.KeysWrite},

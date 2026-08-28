@@ -195,8 +195,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// to 389 and expose the full recovery boundary to API clients.
 	// F59's effect-free, version-bound identity lifecycle preview raises it to 390.
 	// F9's effect-free audit collector-feed preview raises it to 391.
-	if len(out) != 391 {
-		t.Fatalf("OpenAPI operationIds = %d, want 391", len(out))
+	// F26's secret-free custody plan and effect-free generation preview raise it
+	// to 393 and map to the existing HSM integration row.
+	if len(out) != 393 {
+		t.Fatalf("OpenAPI operationIds = %d, want 393", len(out))
 	}
 	return out
 }
