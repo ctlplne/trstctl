@@ -7467,17 +7467,20 @@
             "priority": 24,
             "served_state": "conditional",
             "backend_status": "conditional: served /scep protocol workflow: server.Build mounts SCEP when protocols.scep.enabled, a tenant binding, and an issuing CA/signer exist; TestServedSCEPEndToEnd retrieves GetCACert from the assembled control-plane handler, posts a CMS-enveloped PKIOperation, verifies the signer-issued CertRep against the served CA, records certificate.recorded, rejects missing challenge credentials, and the served SCEP dispatcher exposes GetCACaps, GetCACert, and PKIOperation behind fail-closed protocol mounting",
-            "current_frontend_mapping": "operate: Protocols at /protocols serves SCEP GetCACaps/GetCACert/PKIOperation workflow evidence with tenant-binding requirements, RA/challenge/MDM policy status, CMS diagnostics, and copy-safe client setup snippets.",
-            "target_gui_mapping": "Roadmap residual: dedicated SCEP admin console with endpoint, RA cert chain, tenant, challenge-password/MDM gate status, enrollment transcript, and CMS diagnostics beyond the served Protocols workflow.",
-            "acceptance_test": "Served GA acceptance is TestServedSCEPEndToEnd on the assembled control-plane handler plus TestProtectINTEROP003_ProtocolMountsGatedAndFailClosed; roadmap residual is the dedicated SCEP admin console beyond the served Protocols workflow.",
-            "source_docs": [
-                "docs/features/enrollment-protocols.md"
+      "current_frontend_mapping": "complete: Protocols at /protocols explains SCEP, shows live responder, RA/challenge/MDM policy, and CMS diagnostic evidence, previews the exact credential-free three-door qualification, runs capabilities/CA-material/empty-message checks, and exposes a fail-safe repair-and-rerun path without issuing a certificate or handling a PKI message, CSR, challenge, credential, session cookie, or private key.",
+      "target_gui_mapping": "Roadmap residual: optional dedicated SCEP admin console for editing startup-owned endpoint, RA chain, tenant binding, and challenge/MDM policy beyond the complete, safe qualification workflow now served in Protocols.",
+      "acceptance_test": "Served GA acceptance is TestServedSCEPEndToEnd on the assembled control-plane handler plus TestProtectINTEROP003_ProtocolMountsGatedAndFailClosed; web/src/__tests__/scep_qualification.test.ts proves the credential-free capabilities/CA-material/empty-message transport and negative controls, and web/src/__tests__/protocols.test.tsx proves preview, execution, observation, and repair-and-rerun. Roadmap residual is the optional policy-editing SCEP admin console beyond this complete operator workflow.",
+      "source_docs": [
+        "docs/features/enrollment-protocols.md",
+        "docs/guides/scep-enrollment.md"
             ],
             "source_backend": [
                 "/scep"
             ],
-            "source_frontend": [
-                "web/src/pages/Protocols.tsx"
+      "source_frontend": [
+        "web/src/pages/Protocols.tsx",
+        "web/src/pages/protocols/SCEPOperatorPanel.tsx",
+        "web/src/lib/api.ts"
             ],
             "status": "closed",
             "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
@@ -7497,12 +7500,14 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: operate: Protocols at /protocols serves SCEP GetCACaps/GetCACert/PKIOperation workflow evidence with tenant-binding requirements, RA/challenge/MDM policy status, CMS diagnostics, and copy-safe client setup snippets.",
-                        "target_gui_mapping: Roadmap residual: dedicated SCEP admin console with endpoint, RA cert chain, tenant, challenge-password/MDM gate status, enrollment transcript, and CMS diagnostics beyond the served Protocols workflow."
+            "current_frontend_mapping: complete: Protocols at /protocols explains SCEP, shows live responder, RA/challenge/MDM policy, and CMS diagnostic evidence, previews the exact credential-free three-door qualification, runs capabilities/CA-material/empty-message checks, and exposes a fail-safe repair-and-rerun path without issuing a certificate or handling a PKI message, CSR, challenge, credential, session cookie, or private key.",
+            "target_gui_mapping: Roadmap residual: optional dedicated SCEP admin console for editing startup-owned endpoint, RA chain, tenant binding, and challenge/MDM policy beyond the complete, safe qualification workflow now served in Protocols."
                     ],
-                    "refs": [
-                        "web/src/pages/Protocols.tsx",
-                        "web/src/lib/navigation.ts",
+          "refs": [
+            "web/src/pages/Protocols.tsx",
+            "web/src/pages/protocols/SCEPOperatorPanel.tsx",
+            "web/src/lib/api.ts",
+            "web/src/lib/navigation.ts",
                         "web/src/App.tsx"
                     ]
                 },
@@ -7514,13 +7519,15 @@
                 },
                 "test": {
                     "evidence": [
-                        "acceptance_test: Served GA acceptance is TestServedSCEPEndToEnd on the assembled control-plane handler plus TestProtectINTEROP003_ProtocolMountsGatedAndFailClosed; roadmap residual is the dedicated SCEP admin console beyond the served Protocols workflow.",
+            "acceptance_test: Served GA acceptance is TestServedSCEPEndToEnd on the assembled control-plane handler plus TestProtectINTEROP003_ProtocolMountsGatedAndFailClosed; web/src/__tests__/scep_qualification.test.ts proves the credential-free capabilities/CA-material/empty-message transport and negative controls, and web/src/__tests__/protocols.test.tsx proves preview, execution, observation, and repair-and-rerun. Roadmap residual is the optional policy-editing SCEP admin console beyond this complete operator workflow.",
                         "TRACE-021 guard: TestTRACE021SCEPRowSplitsServedGAFromRoadmapResidual keeps F23 in the served GA denominator only when the served SCEP protocol workflow and explicit admin-console roadmap residual are both present.",
                         "TestServedSCEPEndToEnd drives /scep GetCACert and PKIOperation through the assembled control-plane handler, verifies the signer-issued CertRep against the served CA, records certificate.recorded, and rejects missing challenge credentials.",
                         "TestGetCACapsAdvertisesPOST and TestMalformedPKIOperationFailsClosed cover SCEP GetCACaps capability disclosure and malformed PKIOperation fail-closed behavior.",
                         "TestProtectINTEROP003_ProtocolMountsGatedAndFailClosed proves protocol mounts, including SCEP, are enablement-gated and fail closed when no issuing CA/signer exists.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
-                        "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
+            "Route parity and feature coverage tests keep feature evidence tied to registered customer routes.",
+            "web/src/__tests__/scep_qualification.test.ts proves all three same-origin requests omit credentials and enrollment input, accept only the required capabilities and structurally valid DER CA/RA material, require the exact fail-closed HTTP 400 empty-message response, reject an unsafe HTTP 200 response and fake DER, and make zero requests in isolated preview mode.",
+            "web/src/__tests__/protocols.test.tsx proves the operator sees the exact effect boundary before running, executes on demand, observes per-door evidence, and can run the identical check again after a failed result."
                     ],
                     "refs": [
                         "internal/server/protocols_served_enroll_test.go",
@@ -7528,16 +7535,20 @@
                         "internal/protocols/scep/scep_test.go",
                         "internal/featureparity/feature_served_ga_coverage_test.go",
                         "internal/featureparity/feature_facet_coverage_test.go",
-                        "web/src/__tests__/route_parity.test.ts",
-                        "web/src/__tests__/feature_coverage.test.tsx"
+            "web/src/__tests__/route_parity.test.ts",
+            "web/src/__tests__/feature_coverage.test.tsx",
+            "web/src/__tests__/scep_qualification.test.ts",
+            "web/src/__tests__/protocols.test.tsx"
                     ]
                 },
                 "docs": {
-                    "evidence": [
-                        "documented in docs/features/enrollment-protocols.md"
-                    ],
-                    "refs": [
-                        "docs/features/enrollment-protocols.md"
+          "evidence": [
+            "documented in docs/features/enrollment-protocols.md",
+            "documented in docs/guides/scep-enrollment.md"
+          ],
+          "refs": [
+            "docs/features/enrollment-protocols.md",
+            "docs/guides/scep-enrollment.md"
                     ]
                 },
                 "rbac": {
@@ -7601,7 +7612,7 @@
                 "purpose": "Lets an operator understand and safely use scep server while tenant, policy, and security authority remain on the server.",
                 "tool": "certificates",
                 "classification": "primary",
-                "release_blocking": true,
+        "release_blocking": false,
                 "console_route": "/protocols",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -7615,7 +7626,7 @@
                 ],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+        "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -7635,13 +7646,20 @@
                             "web/src/pages/Protocols.tsx"
                         ]
                     },
-                    "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
-                    },
-                    "execute": {
-                        "status": "missing",
-                        "reason": "No complete console execution path is proved for this capability."
+          "preview": {
+            "status": "complete",
+            "evidence": [
+              "web/src/pages/protocols/SCEPOperatorPanel.tsx",
+              "web/src/__tests__/protocols.test.tsx"
+            ]
+          },
+          "execute": {
+            "status": "complete",
+            "evidence": [
+              "web/src/lib/api.ts",
+              "web/src/pages/protocols/SCEPOperatorPanel.tsx",
+              "web/src/__tests__/scep_qualification.test.ts"
+            ]
                     },
                     "observe": {
                         "status": "complete",
@@ -7649,9 +7667,12 @@
                             "web/src/pages/Protocols.tsx"
                         ]
                     },
-                    "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "recover": {
+            "status": "complete",
+            "evidence": [
+              "web/src/pages/protocols/SCEPOperatorPanel.tsx",
+              "web/src/__tests__/protocols.test.tsx"
+            ]
                     },
                     "verify": {
                         "status": "complete",
@@ -7666,8 +7687,8 @@
                 },
                 "owner": "pki",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+        "candidate_sha": "0b3ceb7dacc7b44412c0e68a0abd7bdf219ca73a",
+        "freshness": "2026-08-28"
             }
         },
         {
