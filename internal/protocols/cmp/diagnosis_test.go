@@ -7,6 +7,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/bulkhead"
@@ -29,8 +30,9 @@ func TestCMPIdentityMismatchEmitsTypedSecretFreeDiagnostic(t *testing.T) {
 		},
 	})
 	clientCert, clientKey := anchoredIdentity(t, ca, "device-alpha")
+	requestBody := buildRequest(t, clientCert, clientKey, csrFor(t, "device-beta"))
 	req := httptest.NewRequest(http.MethodPost, "https://cmp.example.test:9443/cmp",
-		bytes.NewReader(buildRequest(t, clientCert, clientKey, csrFor(t, "device-beta"))))
+		bytes.NewReader(requestBody))
 	req.Host = "cmp.example.test:9443"
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
@@ -46,11 +48,46 @@ func TestCMPIdentityMismatchEmitsTypedSecretFreeDiagnostic(t *testing.T) {
 		diagnosis.Cause != enrollmentdiag.CauseNameNotPermitted {
 		t.Fatalf("diagnosis = %+v, want CMP authorize/name_not_permitted", diagnosis)
 	}
-	if diagnosis.OperationRef != "POST /cmp" || diagnosis.EndpointRef != "cmp.example.test:9443" {
+	if !strings.HasPrefix(diagnosis.OperationRef, "cmp-message:sha256:") ||
+		diagnosis.OperationRef == "cmp-message:sha256:" || diagnosis.EndpointRef != "cmp.example.test:9443" {
 		t.Fatalf("diagnostic references = %+v, want exact operation and endpoint", diagnosis)
 	}
 	if diagnosis.IdentityRef != "" {
 		t.Fatalf("pre-parse identity reference = %q, want empty rather than a guessed or raw identity", diagnosis.IdentityRef)
+	}
+}
+
+func TestCMPPreParseFailuresUseStableDistinctMessageReferences(t *testing.T) {
+	ca := newRSACA(t)
+	var got []enrollmentdiag.Diagnosis
+	srv := cmpsrv.New(cmpsrv.Config{
+		Enroller: realEnroller{ca: ca}, CACertDER: ca.certDER, CAKeyPKCS8: ca.keyPKCS8,
+		ProfileName: "device", ClientTrustAnchorsDER: [][]byte{ca.certDER},
+		FailureDiagnosis: func(_ context.Context, diagnosis enrollmentdiag.Diagnosis) {
+			got = append(got, diagnosis)
+		},
+	})
+	selfSignedCert, selfSignedKey, csrDER := newClient(t)
+	bodyA := buildRequest(t, selfSignedCert, selfSignedKey, csrDER)
+	bodyB := buildRequest(t, selfSignedCert, selfSignedKey, csrFor(t, "another-device"))
+
+	for _, body := range [][]byte{bodyA, bodyA, bodyB} {
+		req := httptest.NewRequest(http.MethodPost, "https://cmp.example.test/cmp", bytes.NewReader(body))
+		srv.ServeHTTP(httptest.NewRecorder(), req)
+	}
+	if len(got) != 3 {
+		t.Fatalf("CMP controls emitted %d diagnostics, want 3", len(got))
+	}
+	if got[0].OperationRef != got[1].OperationRef {
+		t.Fatalf("same message refs differ: %q != %q", got[0].OperationRef, got[1].OperationRef)
+	}
+	if got[0].OperationRef == got[2].OperationRef {
+		t.Fatalf("distinct message refs collided: %q", got[0].OperationRef)
+	}
+	for _, diagnosis := range got {
+		if !strings.HasPrefix(diagnosis.OperationRef, "cmp-message:sha256:") || len(diagnosis.OperationRef) != len("cmp-message:sha256:")+64 {
+			t.Fatalf("operation ref = %q, want bounded SHA-256 reference", diagnosis.OperationRef)
+		}
 	}
 }
 

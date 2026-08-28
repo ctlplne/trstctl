@@ -165,7 +165,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		// cross-identity attempt from a malformed message.
 		s.audit(r.Context(), "deny", "csr not bound to protection identity", "")
 		s.emitFailure(r, enrollmentdiag.ClassifyCMP(enrollmentdiag.StepAuthorize, enrollmentdiag.CMPReasonIdentityMismatch, err),
-			r.Method+" "+r.URL.Path, "")
+			cmpMessageRef(body), "")
 		http.Error(w, "cmp: csr not authorized for protection identity", http.StatusForbidden)
 		return
 	}
@@ -178,7 +178,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			step = enrollmentdiag.StepAccount
 		}
 		s.emitFailure(r, enrollmentdiag.ClassifyCMP(step, reason, err),
-			r.Method+" "+r.URL.Path, "")
+			cmpMessageRef(body), "")
 		http.Error(w, "cmp: bad request", http.StatusBadRequest)
 		return
 	}
@@ -209,6 +209,14 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/pkixcmp")
 		_, _ = w.Write(reply)
 	}
+}
+
+// cmpMessageRef correlates a refusal with the exact bounded PKIMessage without
+// retaining the message, CSR, certificate, or signature. Pre-parse failures do
+// not expose a trusted transaction ID, while "POST /cmp" is too coarse: it
+// collapses unrelated trust and authorization failures into one operator row.
+func cmpMessageRef(body []byte) string {
+	return "cmp-message:sha256:" + crypto.SHA256Hex(body)
 }
 
 func (s *Server) emitFailure(r *http.Request, diagnosis enrollmentdiag.Diagnosis, operationRef, identityRef string) {
