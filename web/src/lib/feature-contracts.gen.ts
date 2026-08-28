@@ -128,8 +128,8 @@ export const canonicalCapabilities = [
       },
       "owner": "pki",
       "targetCheckpoint": "maintain",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "bb11df319da39d41922978c6549f039367fb062b",
+      "freshness": "2026-08-27"
     }
   },
   {
