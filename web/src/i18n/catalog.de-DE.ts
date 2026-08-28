@@ -2013,6 +2013,43 @@ const deDECatalog = {
   "protocols.estCheck.authHTTPFailed":
     "Die Registrierungsprüfung ohne Anmeldedaten gab HTTP {status} zurück; erwartet wurde eine sicher geschlossene 401-Abfrage.",
   "protocols.estCheck.authNetworkFailed": "Die Prüfung der Authentifizierungssperre ist fehlgeschlagen, bevor eine HTTP-Antwort eintraf.",
+  // Machine-authored SCEP operator translations — FLAG FOR HUMAN REVIEW.
+  "protocols.scepCheck.region": "SCEP-Verbindungsprüfung",
+  "protocols.scepCheck.heading": "SCEP-Verbindungsprüfung",
+  "protocols.scepCheck.description":
+    "Prüft die drei öffentlichen Zugänge, die ein verwaltetes Gerät benötigt, bevor ein echtes Gerät oder MDM-Profil mit trstctl verbunden wird.",
+  "protocols.scepCheck.previewHeading": "Was diese Prüfung ausführt",
+  "protocols.scepCheck.safePreview":
+    "Sicherheitsgrenze: Es werden keine PKI-Nachrichten, CSRs, Challenges, Anmeldedaten, Zertifikatsanfragen oder privaten Schlüssel erstellt, gesendet oder gespeichert.",
+  "protocols.scepCheck.capabilitiesExpected": "Der Responder soll POST-Registrierung, SHA-256 und standardmäßiges SCEP-Verhalten ankündigen.",
+  "protocols.scepCheck.caExpected": "Erwartet wird ein strukturell gültiges öffentliches CA-Zertifikat oder CA/RA-Bündel.",
+  "protocols.scepCheck.emptyExpected":
+    "Es werden keine PKI-Nachricht und keine Anmeldedaten gesendet; vor der Registrierung wird eine eindeutige Ablehnung erwartet.",
+  "protocols.scepCheck.run": "Sichere SCEP-Prüfung ausführen",
+  "protocols.scepCheck.running": "SCEP wird geprüft…",
+  "protocols.scepCheck.runAgain": "Erneut ausführen",
+  "protocols.scepCheck.ready": "SCEP ist für einen Client bereit",
+  "protocols.scepCheck.blocked": "SCEP benötigt Aufmerksamkeit",
+  "protocols.scepCheck.passed": "Bestanden",
+  "protocols.scepCheck.failed": "Fehlgeschlagen",
+  "protocols.scepCheck.noIssuance": "Diese Prüfung hat kein Zertifikat ausgestellt.",
+  "protocols.scepCheck.recovery":
+    "Die Challenge-Sperre und CMS-Prüfungen müssen streng bleiben. Reparieren Sie die genannte Responder-, CA/RA- oder Signer-Konfiguration und führen Sie dieselbe Prüfung erneut aus.",
+  "protocols.scepCheck.clientBoundary":
+    "Ein echtes Gerät erstellt und behält seinen privaten Schlüssel selbst und sendet anschließend eine CMS-verpackte CSR mit einer genehmigten MDM-Challenge.",
+  "protocols.scepCheck.failedTitle": "SCEP-Prüfung konnte nicht ausgeführt werden",
+  "protocols.scepCheck.failedBody": "Die SCEP-Prüfung ist fehlgeschlagen, bevor sie Nachweise zurückgeben konnte.",
+  "protocols.scepCheck.invalidResult": "Die SCEP-Prüfung hat unvollständige Nachweise zurückgegeben.",
+  "protocols.scepCheck.capabilitiesPassed": "Der Responder kündigt die erforderlichen SCEP-Fähigkeiten an.",
+  "protocols.scepCheck.capabilitiesHTTPFailed": "Der Fähigkeiten-Responder gab HTTP {status} oder unvollständige SCEP-Fähigkeiten zurück.",
+  "protocols.scepCheck.capabilitiesNetworkFailed": "Die Fähigkeiten-Prüfung ist fehlgeschlagen, bevor eine HTTP-Antwort eintraf.",
+  "protocols.scepCheck.caPassed": "Das öffentliche CA- oder CA/RA-Material ist verfügbar und strukturell gültig.",
+  "protocols.scepCheck.caHTTPFailed": "Der CA-Material-Responder gab HTTP {status} oder ungültige Zertifikatsdaten zurück.",
+  "protocols.scepCheck.caNetworkFailed": "Die CA-Material-Prüfung ist fehlgeschlagen, bevor eine HTTP-Antwort eintraf.",
+  "protocols.scepCheck.emptyPassed": "Die Registrierung lehnte die leere PKI-Nachricht ab, bevor eine CSR oder Challenge gelesen wurde.",
+  "protocols.scepCheck.emptyHTTPFailed":
+    "Die Prüfung mit leerer Nachricht gab HTTP {status} zurück; erwartet wurde die exakte sicher geschlossene HTTP-400-Antwort.",
+  "protocols.scepCheck.emptyNetworkFailed": "Die Prüfung der Leernachrichten-Sperre ist fehlgeschlagen, bevor eine HTTP-Antwort eintraf.",
   "protocols.guide.heading": "Wählen Sie, wie jede Maschine anfragt",
   "protocols.guide.description":
     "Beginnen Sie mit dem System, das Zugangsdaten benötigt. Technische Einrichtung und exakte Antwortdienst-Nachweise bleiben eine Ebene tiefer.",

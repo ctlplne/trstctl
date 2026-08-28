@@ -1235,8 +1235,14 @@ describe("i18n boundary", () => {
       // no-issuance boundary, and the safe repair-and-retry loop. The Bearer,
       // CSR, PKCS#7, HTTP, EST, and trstctl identifiers remain byte-identical.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "1e775370b2c4996177b857676717d36d4920b289c04386bdff9eb2b15b1c22c2",
-      "de-DE": "36d84e830abfb932715b42689ab7953a003770df202bf59523589b17c23bea01",
+      // F23 SCEP qualification re-pin: thirty keys explain the no-body,
+      // credential-free capabilities, CA/RA-material, and empty-message checks,
+      // their exact no-issuance boundary, and strict repair-and-retry loop.
+      // CMS, CSR, MDM, CA/RA, SHA-256, HTTP, SCEP, and trstctl remain
+      // byte-identical. Machine-authored es/de translations — FLAG FOR HUMAN
+      // REVIEW.
+      "es-ES": "a8a104071ab4e1d7e30abd323b573a9761f73555548d90441ba435b33b0c669a",
+      "de-DE": "10f7d28da3acb3d1d62ddca04d3344f4bfbbe77bed6b186f9a5dc5da6063b8bf",
     });
   });
 

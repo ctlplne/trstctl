@@ -1141,6 +1141,24 @@ export interface ESTQualificationResult {
   checks: ESTQualificationCheck[];
 }
 
+export type SCEPQualificationCheckID = "capabilities" | "ca-material" | "empty-message-gate";
+
+export interface SCEPQualificationCheck {
+  id: SCEPQualificationCheckID;
+  method: "GET" | "POST";
+  endpoint: string;
+  expected: string;
+  status_code?: number;
+  passed: boolean;
+  detail: string;
+}
+
+export interface SCEPQualificationResult {
+  checked_at: string;
+  passed: boolean;
+  checks: SCEPQualificationCheck[];
+}
+
 export type EditionTier = "community" | "enterprise" | "provider";
 export type EditionState = "community" | "active" | "grace" | "read_only";
 export type FeatureMode = "enabled" | "read_only" | "off";
@@ -1558,6 +1576,125 @@ async function estQualification(): Promise<ESTQualificationResult> {
     passed: checks.every((check) => check.passed),
     checks,
   };
+}
+
+function isDefiniteLengthDERSequence(bytes: Uint8Array): boolean {
+  if (bytes.byteLength < 3 || bytes.byteLength > 1 << 20 || bytes[0] !== 0x30) return false;
+  const firstLength = bytes[1];
+  if (firstLength < 0x80) return 2 + firstLength === bytes.byteLength;
+  const lengthOctets = firstLength & 0x7f;
+  if (lengthOctets === 0 || lengthOctets > 4 || bytes.byteLength < 2 + lengthOctets) return false;
+  if (bytes[2] === 0) return false;
+  let contentLength = 0;
+  for (let index = 0; index < lengthOctets; index += 1) contentLength = contentLength * 256 + bytes[2 + index];
+  return 2 + lengthOctets + contentLength === bytes.byteLength;
+}
+
+async function scepQualification(): Promise<SCEPQualificationResult> {
+  if (previewTransportIsolated) throw previewRefusal();
+
+  const checks: SCEPQualificationCheck[] = [];
+  try {
+    const response = await fetch("/scep?operation=GetCACaps", {
+      method: "GET",
+      credentials: "omit",
+      headers: { Accept: "text/plain" },
+    });
+    const mediaType = (response.headers.get("Content-Type") ?? "").split(";", 1)[0].trim().toLowerCase();
+    const capabilities = new Set(
+      (await response.text())
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean),
+    );
+    const passed =
+      response.status === 200 &&
+      mediaType === "text/plain" &&
+      ["POSTPKIOperation", "SHA-256", "SCEPStandard"].every((capability) => capabilities.has(capability));
+    checks.push({
+      id: "capabilities",
+      method: "GET",
+      endpoint: "/scep?operation=GetCACaps",
+      expected: "HTTP 200 with POSTPKIOperation, SHA-256, and SCEPStandard",
+      status_code: response.status,
+      passed,
+      detail: passed
+        ? translateNow("protocols.scepCheck.capabilitiesPassed")
+        : translateNow("protocols.scepCheck.capabilitiesHTTPFailed", { status: response.status }),
+    });
+  } catch {
+    checks.push({
+      id: "capabilities",
+      method: "GET",
+      endpoint: "/scep?operation=GetCACaps",
+      expected: "HTTP 200 with POSTPKIOperation, SHA-256, and SCEPStandard",
+      passed: false,
+      detail: translateNow("protocols.scepCheck.capabilitiesNetworkFailed"),
+    });
+  }
+
+  try {
+    const response = await fetch("/scep?operation=GetCACert", {
+      method: "GET",
+      credentials: "omit",
+      headers: { Accept: "application/x-x509-ca-cert, application/x-x509-ca-ra-cert" },
+    });
+    const mediaType = (response.headers.get("Content-Type") ?? "").split(";", 1)[0].trim().toLowerCase();
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const passed =
+      response.status === 200 &&
+      (mediaType === "application/x-x509-ca-cert" || mediaType === "application/x-x509-ca-ra-cert") &&
+      isDefiniteLengthDERSequence(bytes);
+    checks.push({
+      id: "ca-material",
+      method: "GET",
+      endpoint: "/scep?operation=GetCACert",
+      expected: "HTTP 200 with a structurally valid CA certificate or CA/RA bundle",
+      status_code: response.status,
+      passed,
+      detail: passed ? translateNow("protocols.scepCheck.caPassed") : translateNow("protocols.scepCheck.caHTTPFailed", { status: response.status }),
+    });
+  } catch {
+    checks.push({
+      id: "ca-material",
+      method: "GET",
+      endpoint: "/scep?operation=GetCACert",
+      expected: "HTTP 200 with a structurally valid CA certificate or CA/RA bundle",
+      passed: false,
+      detail: translateNow("protocols.scepCheck.caNetworkFailed"),
+    });
+  }
+
+  try {
+    const response = await fetch("/scep?operation=PKIOperation", {
+      method: "POST",
+      credentials: "omit",
+      headers: { Accept: "text/plain", "Content-Type": "application/x-pki-message" },
+    });
+    const mediaType = (response.headers.get("Content-Type") ?? "").split(";", 1)[0].trim().toLowerCase();
+    const body = await response.text();
+    const passed = response.status === 400 && mediaType === "text/plain" && body.trim() === "scep: empty PKIOperation body";
+    checks.push({
+      id: "empty-message-gate",
+      method: "POST",
+      endpoint: "/scep?operation=PKIOperation",
+      expected: "HTTP 400 before an empty PKI message can reach enrollment",
+      status_code: response.status,
+      passed,
+      detail: passed ? translateNow("protocols.scepCheck.emptyPassed") : translateNow("protocols.scepCheck.emptyHTTPFailed", { status: response.status }),
+    });
+  } catch {
+    checks.push({
+      id: "empty-message-gate",
+      method: "POST",
+      endpoint: "/scep?operation=PKIOperation",
+      expected: "HTTP 400 before an empty PKI message can reach enrollment",
+      passed: false,
+      detail: translateNow("protocols.scepCheck.emptyNetworkFailed"),
+    });
+  }
+
+  return { checked_at: new Date().toISOString(), passed: checks.every((check) => check.passed), checks };
 }
 
 function protocolProbeFailureDetail(res: Response): string {
@@ -1997,6 +2134,8 @@ export interface Api {
   protocolStatuses(): Promise<ProtocolRuntimeStatusList>;
   /** F22: effect-free, credential-free proof of the public EST CA, CSR-rules, and authentication surfaces. */
   estQualification(): Promise<ESTQualificationResult>;
+  /** F23: effect-free proof of public SCEP capabilities, CA material, and the empty-message refusal wall. */
+  scepQualification(): Promise<SCEPQualificationResult>;
   mdmSCEPStatus(): Promise<MDMSCEPStatus>;
   mdmSCEPPolicies(): Promise<MDMSCEPPolicyList>;
   secretPage(options?: { limit?: number; cursor?: string }): Promise<SecretMetaList>;
@@ -2511,6 +2650,7 @@ const liveApi: Api = {
     items: await Promise.all(protocolStatusProbes.map((spec) => protocolProbe(spec))),
   }),
   estQualification,
+  scepQualification,
   secretPage: (options) => {
     const qs = new URLSearchParams();
     if (options?.limit != null) qs.set("limit", String(options.limit));

@@ -105,6 +105,29 @@ profile, same issuance path), a per-device rate limiter capping repeated attempt
 a challenge hook that can require an MDM-issued challenge before any CSR is signed.
 Routes `/scep`, `/scep/pkiclient.exe`.
 
+#### Check SCEP safely from the console
+
+Open **Certificates → Enrollment methods**, expand **Set up and operate
+methods**, and use **SCEP connection check** before connecting a real device or
+MDM profile. The screen shows the exact plan before it makes three same-origin
+requests:
+
+1. `GET /scep?operation=GetCACaps` must return HTTP 200, `text/plain`, and
+   advertise `POSTPKIOperation`, `SHA-256`, and `SCEPStandard`.
+2. `GET /scep?operation=GetCACert` must return HTTP 200 and a structurally valid
+   DER CA certificate or CA/RA bundle with the matching SCEP media type.
+3. `POST /scep?operation=PKIOperation` deliberately sends no body, browser
+   session, authorization header, challenge, CSR, or private-key material. It
+   passes only when the responder returns the exact fail-closed HTTP 400 empty
+   message response.
+
+The third request is a broken-input control, not an enrollment attempt. If it
+ever succeeds, the whole check is red. The workflow cannot issue a certificate.
+If a row fails, keep the MDM challenge gate and CMS validation strict, repair
+the named responder, CA/RA, or signer configuration, and run the same check
+again. A real SCEP device still creates and protects its private key locally,
+then sends a CMS-wrapped CSR with an approved, short-lived MDM challenge.
+
 ### CMP (F55) — for telecom and industrial PKI
 
 CMP (RFC 4210, over HTTP per RFC 6712) is common in 5G and industrial systems. trstctl

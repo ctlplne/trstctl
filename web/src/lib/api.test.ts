@@ -579,7 +579,17 @@ describe("exported API surface census", () => {
       // it falls back under the mutation idempotency and CSRF requirements.
       const credentialFreeESTAuthProbe =
         url === "/.well-known/est/simpleenroll" && init?.credentials === "omit" && init?.body == null && headers?.Authorization == null;
-      const readOnlyPost = readOnlyPosts.has(url) || url.endsWith("/restore/preview") || credentialFreeESTAuthProbe;
+      // F23's SCEP qualification POST is also a negative control. It is
+      // read-only only at this exact route with cookie credentials omitted,
+      // an absent body and Authorization header, and the SCEP wire MIME. Any
+      // future request content falls back under the mutation protections.
+      const credentialFreeSCEPEmptyProbe =
+        url === "/scep?operation=PKIOperation" &&
+        init?.credentials === "omit" &&
+        init?.body == null &&
+        headers?.Authorization == null &&
+        headers?.["Content-Type"] === "application/x-pki-message";
+      const readOnlyPost = readOnlyPosts.has(url) || url.endsWith("/restore/preview") || credentialFreeESTAuthProbe || credentialFreeSCEPEmptyProbe;
       if ((method === "POST" || method === "PUT" || method === "DELETE") && url !== "/auth/logout" && !readOnlyPost) {
         expect(headers?.["Idempotency-Key"], `${method} ${url} lacks mutation idempotency`).toBeTruthy();
         expect(headers?.["X-CSRF-Token"], `${method} ${url} lacks the session CSRF echo`).toBe("csrf-census");

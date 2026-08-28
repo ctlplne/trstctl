@@ -54,6 +54,7 @@ var requiredPages = []string{
 	"guides/connector-authoring.md",
 	"guides/profile-authoring.md",
 	"guides/est-enrollment.md",
+	"guides/scep-enrollment.md",
 }
 
 func read(t *testing.T, rel string) string {

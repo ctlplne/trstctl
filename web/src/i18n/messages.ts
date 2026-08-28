@@ -6637,6 +6637,91 @@ export const messages = {
     defaultMessage: "The authentication-gate probe failed before an HTTP response arrived.",
     description: "EST authentication-wall network failure evidence.",
   },
+  "protocols.scepCheck.region": { defaultMessage: "SCEP connection check", description: "Accessible label for the safe SCEP operator workflow." },
+  "protocols.scepCheck.heading": { defaultMessage: "SCEP connection check", description: "Heading for the safe SCEP operator workflow." },
+  "protocols.scepCheck.description": {
+    defaultMessage: "Check the three public doors a managed device needs before you point a real device or MDM profile at trstctl.",
+    description: "ELI5 explanation of the SCEP qualification workflow.",
+  },
+  "protocols.scepCheck.previewHeading": { defaultMessage: "What this check will do", description: "SCEP qualification preview heading." },
+  "protocols.scepCheck.safePreview": {
+    defaultMessage: "Safety boundary: no PKI message, CSR, challenge, credential, certificate request, or private key will be created, sent, or stored.",
+    description: "Explicit effect boundary for the SCEP qualification workflow.",
+  },
+  "protocols.scepCheck.capabilitiesExpected": {
+    defaultMessage: "Expect the responder to advertise POST enrollment, SHA-256, and standard SCEP behavior.",
+    description: "Expected outcome for the SCEP capabilities check.",
+  },
+  "protocols.scepCheck.caExpected": {
+    defaultMessage: "Expect a structurally valid public CA certificate or CA/RA bundle.",
+    description: "Expected outcome for the SCEP CA-material check.",
+  },
+  "protocols.scepCheck.emptyExpected": {
+    defaultMessage: "Send no PKI message or credentials and expect a precise refusal before enrollment.",
+    description: "Expected outcome for the SCEP empty-message negative control.",
+  },
+  "protocols.scepCheck.run": { defaultMessage: "Run safe SCEP check", description: "Run the effect-free SCEP qualification workflow." },
+  "protocols.scepCheck.running": { defaultMessage: "Checking SCEP…", description: "Busy label while SCEP qualification runs." },
+  "protocols.scepCheck.runAgain": { defaultMessage: "Run again", description: "Repeat the exact SCEP qualification workflow after repair." },
+  "protocols.scepCheck.ready": { defaultMessage: "SCEP is ready for a client", description: "Successful SCEP qualification state." },
+  "protocols.scepCheck.blocked": { defaultMessage: "SCEP needs attention", description: "Failed SCEP qualification state." },
+  "protocols.scepCheck.passed": { defaultMessage: "Passed", description: "One SCEP qualification check passed." },
+  "protocols.scepCheck.failed": { defaultMessage: "Failed", description: "One SCEP qualification check failed." },
+  "protocols.scepCheck.noIssuance": {
+    defaultMessage: "No certificate was issued by this check.",
+    description: "Post-run reminder that SCEP qualification made no issuance mutation.",
+  },
+  "protocols.scepCheck.recovery": {
+    defaultMessage:
+      "Keep the challenge gate and CMS checks strict. Repair the named responder, CA/RA, or signer configuration, then run this same check again.",
+    description: "Fail-safe SCEP recovery guidance.",
+  },
+  "protocols.scepCheck.clientBoundary": {
+    defaultMessage: "A real device still creates and keeps its own private key, then sends a CMS-wrapped CSR with an approved MDM challenge.",
+    description: "Clarifies the safe boundary between console qualification and real SCEP enrollment.",
+  },
+  "protocols.scepCheck.failedTitle": { defaultMessage: "SCEP check could not run", description: "SCEP qualification transport failure heading." },
+  "protocols.scepCheck.failedBody": { defaultMessage: "The SCEP check failed before returning evidence.", description: "Fallback SCEP qualification error." },
+  "protocols.scepCheck.invalidResult": {
+    defaultMessage: "The SCEP check returned incomplete evidence.",
+    description: "SCEP qualification schema guard error.",
+  },
+  "protocols.scepCheck.capabilitiesPassed": {
+    defaultMessage: "The responder advertises the required SCEP capabilities.",
+    description: "Successful SCEP capabilities evidence.",
+  },
+  "protocols.scepCheck.capabilitiesHTTPFailed": {
+    defaultMessage: "The capabilities responder returned HTTP {status} or incomplete SCEP capabilities.",
+    description: "SCEP capabilities HTTP or content failure evidence.",
+  },
+  "protocols.scepCheck.capabilitiesNetworkFailed": {
+    defaultMessage: "The capabilities check failed before an HTTP response arrived.",
+    description: "SCEP capabilities network failure evidence.",
+  },
+  "protocols.scepCheck.caPassed": {
+    defaultMessage: "The public CA or CA/RA material is available and structurally valid.",
+    description: "Successful SCEP CA-material evidence.",
+  },
+  "protocols.scepCheck.caHTTPFailed": {
+    defaultMessage: "The CA-material responder returned HTTP {status} or invalid certificate data.",
+    description: "SCEP CA-material HTTP or content failure evidence.",
+  },
+  "protocols.scepCheck.caNetworkFailed": {
+    defaultMessage: "The CA-material check failed before an HTTP response arrived.",
+    description: "SCEP CA-material network failure evidence.",
+  },
+  "protocols.scepCheck.emptyPassed": {
+    defaultMessage: "Enrollment refused the empty PKI message before reading a CSR or challenge.",
+    description: "Successful SCEP empty-message security control evidence.",
+  },
+  "protocols.scepCheck.emptyHTTPFailed": {
+    defaultMessage: "The empty-message probe returned HTTP {status}; expected the exact fail-closed HTTP 400 response.",
+    description: "SCEP empty-message HTTP failure evidence.",
+  },
+  "protocols.scepCheck.emptyNetworkFailed": {
+    defaultMessage: "The empty-message gate check failed before an HTTP response arrived.",
+    description: "SCEP empty-message network failure evidence.",
+  },
   "protocols.guide.heading": {
     defaultMessage: "Choose how each machine asks",
     description: "Plain-language heading for the protocol method guide.",

@@ -12,6 +12,7 @@ const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     protocolStatuses: vi.fn(),
     estQualification: vi.fn(),
+    scepQualification: vi.fn(),
     acmeOperatorPlan: vi.fn(),
     activateProtocolProfile: vi.fn(),
     acmeARIPosture: vi.fn(),
@@ -116,6 +117,7 @@ describe("protocol surface", () => {
     vi.restoreAllMocks();
     apiMock.protocolStatuses.mockReset();
     apiMock.estQualification.mockReset();
+    apiMock.scepQualification.mockReset();
     apiMock.acmeOperatorPlan.mockReset();
     apiMock.activateProtocolProfile.mockReset();
     apiMock.acmeARIPosture.mockReset();
@@ -164,6 +166,39 @@ describe("protocol surface", () => {
           status_code: 401,
           passed: true,
           detail: "Enrollment refused the credential-free probe before reading a CSR.",
+        },
+      ],
+    });
+    apiMock.scepQualification.mockResolvedValue({
+      checked_at: "2026-08-28T12:00:00Z",
+      passed: true,
+      checks: [
+        {
+          id: "capabilities",
+          method: "GET",
+          endpoint: "/scep?operation=GetCACaps",
+          expected: "HTTP 200 with POSTPKIOperation, SHA-256, and SCEPStandard",
+          status_code: 200,
+          passed: true,
+          detail: "The responder advertises the required SCEP capabilities.",
+        },
+        {
+          id: "ca-material",
+          method: "GET",
+          endpoint: "/scep?operation=GetCACert",
+          expected: "HTTP 200 with a structurally valid CA certificate or CA/RA bundle",
+          status_code: 200,
+          passed: true,
+          detail: "The public CA or CA/RA material is available and structurally valid.",
+        },
+        {
+          id: "empty-message-gate",
+          method: "POST",
+          endpoint: "/scep?operation=PKIOperation",
+          expected: "HTTP 400 before an empty PKI message can reach enrollment",
+          status_code: 400,
+          passed: true,
+          detail: "Enrollment refused the empty PKI message before reading a CSR or challenge.",
         },
       ],
     });
@@ -1062,6 +1097,53 @@ describe("protocol surface", () => {
     expect((await within(panel).findAllByText("EST needs attention")).length).toBeGreaterThanOrEqual(1);
     expect(
       within(panel).getByText("Keep authentication strict. Repair the named responder or signer configuration, then run this same check again."),
+    ).toBeInTheDocument();
+  });
+
+  it("previews, runs, observes, and safely retries the exact SCEP path without enrolling", async () => {
+    const user = userEvent.setup();
+    await renderProtocols();
+
+    const panel = screen.getByRole("region", { name: "SCEP connection check" });
+    expect(
+      within(panel).getByText(
+        "Safety boundary: no PKI message, CSR, challenge, credential, certificate request, or private key will be created, sent, or stored.",
+      ),
+    ).toBeInTheDocument();
+    expect(within(panel).getByText("GET /scep?operation=GetCACaps")).toBeInTheDocument();
+    expect(within(panel).getByText("GET /scep?operation=GetCACert")).toBeInTheDocument();
+    expect(within(panel).getByText("POST /scep?operation=PKIOperation")).toBeInTheDocument();
+    expect(apiMock.scepQualification).not.toHaveBeenCalled();
+
+    await user.click(within(panel).getByRole("button", { name: "Run safe SCEP check" }));
+
+    await waitFor(() => expect(apiMock.scepQualification).toHaveBeenCalledTimes(1));
+    expect((await within(panel).findAllByText("SCEP is ready for a client")).length).toBeGreaterThanOrEqual(1);
+    expect(within(panel).getByText("Enrollment refused the empty PKI message before reading a CSR or challenge.")).toBeInTheDocument();
+    expect(within(panel).getByText("No certificate was issued by this check.")).toBeInTheDocument();
+
+    apiMock.scepQualification.mockResolvedValueOnce({
+      checked_at: "2026-08-28T12:01:00Z",
+      passed: false,
+      checks: [
+        {
+          id: "ca-material",
+          method: "GET",
+          endpoint: "/scep?operation=GetCACert",
+          expected: "HTTP 200 with a structurally valid CA certificate or CA/RA bundle",
+          status_code: 503,
+          passed: false,
+          detail: "The CA-material responder returned HTTP 503.",
+        },
+      ],
+    });
+    await user.click(within(panel).getByRole("button", { name: "Run again" }));
+
+    expect((await within(panel).findAllByText("SCEP needs attention")).length).toBeGreaterThanOrEqual(1);
+    expect(
+      within(panel).getByText(
+        "Keep the challenge gate and CMS checks strict. Repair the named responder, CA/RA, or signer configuration, then run this same check again.",
+      ),
     ).toBeInTheDocument();
   });
 

@@ -107,6 +107,7 @@ nav:
           - Plugins: guides/plugin-authoring.md
           - Certificate profiles: guides/profile-authoring.md
           - EST enrollment: guides/est-enrollment.md
+          - SCEP enrollment: guides/scep-enrollment.md
           - Kubernetes agent (kind E2E): guides/kubernetes-agent.md
   - Security and assurance:
       - Auditor:
