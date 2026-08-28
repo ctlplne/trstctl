@@ -3336,7 +3336,7 @@ export const canonicalCapabilities = [
       },
       "owner": "identity",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "ed959a960979771e1ef91796f2152bcd3981cfeb",
+      "candidateSHA": "87a62d29fd359247e56e6f0f1f6f3f5b05a1466a",
       "freshness": "2026-08-28"
     }
   },
