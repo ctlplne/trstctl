@@ -249,7 +249,7 @@ function CertificateHealthPanel({ health }: { health: CertificateHealthDashboard
 
 function CRLDistributionPanel({ distributions }: { distributions: CRLDistribution[] }) {
   const { t } = useTranslation();
-  const totalShards = distributions.reduce((sum, item) => sum + item.shards.length, 0);
+  const totalShards = distributions.reduce((sum, item) => sum + (item.shards?.length ?? 0), 0);
   const totalRevoked = distributions.reduce((sum, item) => sum + item.revoked_count, 0);
   return (
     <section aria-labelledby="crl-distribution-heading" className="border-y border-border py-4">
@@ -275,7 +275,7 @@ function CRLDistributionPanel({ distributions }: { distributions: CRLDistributio
                   #{item.full_number}
                 </a>
                 <span>
-                  {formatCount(item.shards.length)} · {t("certificates.crl.shardPlan", { shardCount: formatCount(item.shard_count) })}
+                  {formatCount(item.shards?.length ?? 0)} · {t("certificates.crl.shardPlan", { shardCount: formatCount(item.shard_count) })}
                 </span>
                 {item.delta_url && (
                   <a className="font-mono text-primary underline" href={item.delta_url}>

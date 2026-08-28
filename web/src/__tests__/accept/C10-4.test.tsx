@@ -148,4 +148,30 @@ describe("C10-4 certificate inventory filters", () => {
     expect(params.get("environment")).toBe("prod");
     await waitFor(() => expect(apiMock.certificatePage).toHaveBeenCalledWith({ limit: 20, expiringBefore: undefined }));
   });
+
+  it("keeps the CRL workspace usable when an older server returns null shards", async () => {
+    apiMock.crlDistributions.mockResolvedValue({
+      items: [
+        {
+          tenant_id: "t1",
+          ca_id: "ca-no-shards",
+          full_number: 7,
+          full_url: "/crl/t1",
+          shard_count: 1,
+          shards: null,
+          revoked_count: 0,
+          this_update: "2026-08-28T18:00:00Z",
+          next_update: "2026-09-04T18:00:00Z",
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    renderCerts();
+
+    expect(await screen.findByText("CN=payments.example.test")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "CRL & CT" }));
+
+    expect(screen.getByRole("heading", { name: "CRL distribution" })).toBeInTheDocument();
+    expect(screen.getByText("ca-no-shards")).toBeInTheDocument();
+  });
 });

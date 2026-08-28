@@ -55,7 +55,11 @@ func crlDistributionsFromArtifacts(tenantID string, artifacts []store.CRL) []crl
 	for _, artifact := range artifacts {
 		item := byCA[artifact.CAID]
 		if item == nil {
-			out = append(out, crlDistributionResponse{TenantID: tenantID, CAID: artifact.CAID})
+			out = append(out, crlDistributionResponse{
+				TenantID: tenantID,
+				CAID:     artifact.CAID,
+				Shards:   make([]crlDistributionShardResponse, 0),
+			})
 			item = &out[len(out)-1]
 			byCA[artifact.CAID] = item
 		}
