@@ -51,7 +51,7 @@ func TestRenderControlPanelUsesCanonicalCatalogOnly(t *testing.T) {
 		"http://127.0.0.1:58780/secrets/engines",
 		"candidate bbbbbbbb",
 		"Report candidate: <code>bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb</code>",
-		"Contract evidence recorded at: <code>345ed531692987c0d2f50be730e1f17e7de7c207</code>",
+		"Contract evidence recorded at: <code>e58ad4ed538426d06e54c77579da4499e39d138c</code>",
 		"discover",
 		"verify",
 	} {

@@ -8002,7 +8002,7 @@
                 },
                 "owner": "pki",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "345ed531692987c0d2f50be730e1f17e7de7c207",
+                "candidate_sha": "e58ad4ed538426d06e54c77579da4499e39d138c",
                 "freshness": "2026-08-28"
             }
         },
