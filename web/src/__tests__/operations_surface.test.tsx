@@ -344,10 +344,14 @@ describe("operational console surface", () => {
     const user = userEvent.setup();
 
     renderAt("/profiles");
+    expect(await screen.findByRole("region", { name: "Certificate rules" })).toHaveClass("min-w-0", "grid-cols-1");
+    expect(screen.getByRole("region", { name: "Certificate rule versions" })).toHaveClass("min-w-0", "grid-cols-1");
+    expect(screen.getByRole("group", { name: "Scrollable columns for Certificate rule versions" })).toHaveClass("min-w-0", "max-w-full");
     await user.click(await screen.findByRole("button", { name: "View server version 1" }));
     await user.click(screen.getByRole("button", { name: /Diff version/i }));
     await user.type(await screen.findByLabelText("Why is recovery needed?"), "Recover the known-good web TLS rule");
-    await user.click(screen.getByRole("button", { name: "Review recovery" }));
+    const reviewTrigger = screen.getByRole("button", { name: "Review recovery" });
+    await user.click(reviewTrigger);
 
     await waitFor(() =>
       expect(apiMock.previewProfileRestore).toHaveBeenCalledWith("server", 1, {
@@ -362,7 +366,13 @@ describe("operational console surface", () => {
     expect(within(dialog).getByText("Recover the known-good web TLS rule")).toHaveClass("break-words");
     expect(apiMock.restoreProfileVersion).not.toHaveBeenCalled();
 
-    await user.click(within(dialog).getByRole("button", { name: "Restore as new version" }));
+    await user.click(within(dialog).getByRole("button", { name: "Go back" }));
+    expect(screen.queryByRole("dialog", { name: "Review rule recovery" })).not.toBeInTheDocument();
+    expect(reviewTrigger).toHaveFocus();
+
+    await user.click(reviewTrigger);
+    const confirmedDialog = await screen.findByRole("dialog", { name: "Review rule recovery" });
+    await user.click(within(confirmedDialog).getByRole("button", { name: "Restore as new version" }));
     await waitFor(() =>
       expect(apiMock.restoreProfileVersion).toHaveBeenCalledWith("server", 1, {
         expected_active_version: 2,

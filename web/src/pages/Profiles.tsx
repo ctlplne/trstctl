@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Eye, GitCompare, Plus, RotateCcw, X } from "lucide-react";
 import { api, type Profile, type ProfileRestorePreview } from "@/lib/api";
 // This page renders errors in the fallback-prefixed shape ("Could not load
@@ -140,7 +140,7 @@ export function Profiles() {
   ];
 
   return (
-    <section aria-labelledby="profiles-heading" className="grid gap-6">
+    <section aria-labelledby="profiles-heading" className="grid min-w-0 grid-cols-1 gap-6">
       <PageHeader
         titleId="profiles-heading"
         title={t("nav.item.profiles")}
@@ -464,6 +464,7 @@ function ProfileVersionDetail({
   const [restoreBusy, setRestoreBusy] = useState(false);
   const [restoreError, setRestoreError] = useState<string | null>(null);
   const [restoreNotice, setRestoreNotice] = useState<string | null>(null);
+  const restoreTriggerRef = useRef<HTMLButtonElement>(null);
   const diffRows = compare ? diffProfileSpecs(profile.spec ?? {}, compare.spec ?? {}) : [];
   const activeProfile = listedProfiles.find((candidate) => candidate.name === profile.name && candidate.active) ?? (profile.active ? profile : null);
   const recoverySource =
@@ -550,7 +551,7 @@ function ProfileVersionDetail({
   }
 
   return (
-    <section aria-labelledby="profile-detail-heading" className="grid gap-4 border-y border-border py-4">
+    <section aria-labelledby="profile-detail-heading" className="grid min-w-0 grid-cols-1 gap-4 border-y border-border py-4">
       <div>
         <h2 id="profile-detail-heading" className="text-title font-semibold">
           {profile.name} {translateNow("source.version.5ca4f3850c")} {profile.version}
@@ -561,14 +562,14 @@ function ProfileVersionDetail({
         </p>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <section aria-labelledby="selected-profile-spec-heading">
+      <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
+        <section className="min-w-0" aria-labelledby="selected-profile-spec-heading">
           <h3 id="selected-profile-spec-heading" className="mb-2 text-sm font-semibold">
             {translateNow("source.selected.spec.757c23e3eb")}
           </h3>
           <pre className="max-h-96 overflow-auto rounded-md bg-muted p-3 text-xs">{formatSpec(profile.spec ?? {})}</pre>
         </section>
-        <section aria-labelledby="profile-diff-heading">
+        <section className="min-w-0" aria-labelledby="profile-diff-heading">
           <h3 id="profile-diff-heading" className="mb-2 text-sm font-semibold">
             {translateNow("source.profile.diff.e8bc2bbc32")}
           </h3>
@@ -644,6 +645,7 @@ function ProfileVersionDetail({
                   </label>
                   <div>
                     <Button
+                      ref={restoreTriggerRef}
                       type="button"
                       variant="outline"
                       loading={restoreBusy && !restorePreview}
@@ -671,6 +673,7 @@ function ProfileVersionDetail({
           preview={restorePreview}
           busy={restoreBusy}
           error={restoreError}
+          returnFocusRef={restoreTriggerRef}
           onClose={() => {
             if (!restoreBusy) {
               setRestorePreview(null);
@@ -688,12 +691,14 @@ function ProfileRestoreDialog({
   preview,
   busy,
   error,
+  returnFocusRef,
   onClose,
   onConfirm,
 }: {
   preview: ProfileRestorePreview;
   busy: boolean;
   error: string | null;
+  returnFocusRef: RefObject<HTMLElement>;
   onClose: () => void;
   onConfirm: () => void;
 }) {
@@ -703,6 +708,7 @@ function ProfileRestoreDialog({
     <Dialog
       open
       onClose={busy ? () => undefined : onClose}
+      returnFocusRef={returnFocusRef}
       titleId={titleId}
       descriptionId={descriptionId}
       closeOnBackdropClick={!busy}

@@ -313,8 +313,8 @@ export function DataGrid<Row>({
   const toolbarNode = typeof toolbar === "function" ? toolbar({ columnChooser: columnChooserControl, savedViews: savedViewControls }) : toolbar;
 
   return (
-    <section className={cn("grid gap-3", className)} aria-label={ariaLabel}>
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <section className={cn("grid min-w-0 grid-cols-1 gap-3", className)} aria-label={ariaLabel}>
+      <div className="flex min-w-0 flex-wrap items-end justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           {toolbarNode}
           {bulkSlot}
@@ -334,7 +334,7 @@ export function DataGrid<Row>({
       ) : (
         <div
           aria-label={translateNow("grid.scrollableColumns", { label: ariaLabel })}
-          className="overflow-auto rounded-panel border border-border bg-card shadow-elevation1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 [contain:paint]"
+          className="min-w-0 max-w-full overflow-auto rounded-panel border border-border bg-card shadow-elevation1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 [contain:paint]"
           data-testid="data-grid-scroll-viewport"
           data-virtualized={virtualized ? "true" : "false"}
           data-total-rows={rows.length}
