@@ -2241,10 +2241,10 @@
             "phase": "P2",
             "priority": 49,
             "served_state": "served",
-            "backend_status": "served dedicated CT monitoring API/CLI/UI watchlist management plus ct_log discovery source/run/finding execution with outbox-backed unexpected-issuance alerts",
-            "current_frontend_mapping": "strong: Posture at /posture serves CT watchlist/log configuration, checkpoint summary, unexpected-issuance findings, and run queueing; Discovery remains the generic source/run/finding surface",
-            "target_gui_mapping": "Production CT monitor UI for domain watchlists, log checkpoints, unexpected issuance alerts, outbox notification status, and historical CT findings.",
-            "acceptance_test": "Served test proves a CT-log fixture certificate for a watched domain configured through the dedicated CT monitoring endpoint creates a ct_unexpected_issuance finding and dispatches an outbox-backed alert; UI configures watched names/logs and queues a CT poll.",
+            "backend_status": "served CT monitoring API/CLI/UI with exact effect-free plan preview, durable latest-run status, saved-source preflight, lineage-preserving retry, ct_log execution, checkpoints, findings, and outbox-backed unexpected-issuance alerts",
+            "current_frontend_mapping": "complete: Discovery at /discovery owns the single CT workflow for exact preview, watchlist save/run, checkpoint and finding evidence, terminal status, and safe retry; Posture is read-only and links to Discovery",
+            "target_gui_mapping": "Production CT monitor UI for domain watchlists, exact effect-free plan review, log checkpoints, unexpected issuance alerts, outbox notification status, historical findings, and lineage-preserving recovery.",
+            "acceptance_test": "Served tests prove the CT plan preview is exact and state-free, a CT-log fixture creates an unexpected-issuance finding and outbox alert, latest terminal state survives refresh, and retry preserves the original failure; UI tests require preview before save and preflight before a distinct replacement run.",
             "source_docs": [
                 "docs/features/observability-and-risk.md"
             ],
@@ -2254,11 +2254,12 @@
                 "internal/server/discovery.go"
             ],
             "source_frontend": [
+                "web/src/components/discovery/CTMonitoringPanel.tsx",
                 "web/src/pages/Discovery.tsx",
                 "web/src/pages/Posture.tsx"
             ],
             "status": "closed",
-            "notes": "TRACE-004 closes the residual CT monitoring gap with dedicated get/update CT monitoring API operations, CLI commands, Posture watchlist/checkpoint controls, served CT run/finding/alert acceptance, and updated docs/OpenAPI evidence.",
+            "notes": "F17 is a complete vertical slice: Discovery uses the server's exact effect-free preview before save/run, reloads the latest durable CT run, preflights terminal failures, and queues a separate retry with lineage; Posture is read-only so no second direct-save path can bypass review.",
             "api_surface": [
                 "createDiscoverySource",
                 "listDiscoverySources",
@@ -2269,7 +2270,10 @@
                 "getDiscoveryRun",
                 "listDiscoveryFindings",
                 "getCTMonitoring",
-                "updateCTMonitoring"
+                "updateCTMonitoring",
+                "previewDiscoveryPlan",
+                "preflightDiscoverySource",
+                "retryDiscoveryRun"
             ],
             "api_na": "",
             "cli_surface": [
@@ -2282,13 +2286,18 @@
                 "discovery runs get",
                 "discovery findings list",
                 "discovery ct-monitoring get",
-                "discovery ct-monitoring update"
+                "discovery ct-monitoring update",
+                "discovery plans preview",
+                "discovery sources preflight",
+                "discovery runs retry"
             ],
             "cli_na": "",
             "facet_evidence": {
                 "served": {
                     "evidence": [
                         "Dedicated CT monitoring endpoint creates or replaces a ct_log discovery source, optionally queues a poll, returns watched domains/log checkpoints/finding summary, and the served worker records ct_unexpected_issuance findings with outbox-backed alerts.",
+                        "The generic discovery plan oracle applies the dedicated CT validator, returns exact normalized domain/log targets and bounded RFC 6962 execution facts, and creates no state or external effect.",
+                        "Fresh CT monitoring reads include the latest tenant-scoped run; terminal recovery preflights the saved source and creates a distinct replacement linked through retry_of_run_id.",
                         "Served discovery worker accepts source kind ct_log, polls CT logs through a bounded lane, persists checkpoints, records ct_unexpected_issuance findings, and enqueues notification.unexpected_issuance alerts.",
                         "served_state=served",
                         "backend_status=served dedicated CT monitoring API/CLI/UI watchlist management plus ct_log discovery source/run/finding execution with outbox-backed unexpected-issuance alerts"
@@ -2305,11 +2314,12 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: strong: Posture at /posture serves CT watchlist/log configuration, checkpoint summary, unexpected-issuance findings, and run queueing; Discovery remains the generic source/run/finding surface",
+                        "current_frontend_mapping: complete: Discovery at /discovery owns the single CT workflow for exact preview, watchlist save/run, checkpoint and finding evidence, terminal status, and safe retry; Posture is read-only and links to Discovery",
                         "target_gui_mapping: Production CT monitor UI for domain watchlists, log checkpoints, unexpected issuance alerts, outbox notification status, and historical CT findings."
                     ],
                     "refs": [
                         "web/src/lib/navigation.ts",
+                        "web/src/components/discovery/CTMonitoringPanel.tsx",
                         "web/src/pages/Discovery.tsx",
                         "web/src/pages/Posture.tsx",
                         "web/src/App.tsx"
@@ -2319,6 +2329,7 @@
                     "evidence": [
                         "CLI commands create/list discovery sources and schedules, start/list/get discovery runs, and list findings for ct_log sources through the generic discovery surface.",
                         "Dedicated CLI commands discovery ct-monitoring get and discovery ct-monitoring update expose the CT watchlist/checkpoint endpoint.",
+                        "discovery plans preview, discovery sources preflight, and discovery runs retry expose the same review and recovery contract for automation.",
                         "internal/cli parity tests require every discovery API operation to have a CLI command and every catalog CLI command to exist."
                     ],
                     "refs": [
@@ -2330,7 +2341,8 @@
                 "api": {
                     "evidence": [
                         "OpenAPI operationIds cover the generic Discovery source, schedule, run, and finding surface used by ct_log sources: createDiscoverySource, listDiscoverySources, createDiscoverySchedule, listDiscoverySchedules, startDiscoveryRun, listDiscoveryRuns, getDiscoveryRun, listDiscoveryFindings.",
-                        "Dedicated CT monitoring operationIds getCTMonitoring and updateCTMonitoring serve watchlist/log configuration, checkpoints, finding summary, and run queueing."
+                        "Dedicated CT monitoring operationIds getCTMonitoring and updateCTMonitoring serve watchlist/log configuration, checkpoints, finding summary, and run queueing.",
+                        "previewDiscoveryPlan, preflightDiscoverySource, and retryDiscoveryRun serve exact review and lineage-preserving recovery without a parallel CT-only oracle."
                     ],
                     "refs": [
                         "internal/api/ct_monitoring.go",
@@ -2344,10 +2356,14 @@
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
                         "Route parity and feature coverage tests keep feature evidence tied to registered customer routes.",
                         "TestServedCTMonitoringDashboardConfiguresWatchlistAndFindings is a named acceptance test executed by the CI make test package set."
+                        ,
+                        "TestServedCTPlanPreviewIsExactAndEffectFree proves normalization and no state change; the CT monitoring surface test proves preview-before-save and preflight-before-retry."
                     ],
                     "refs": [
                         "internal/featureparity/feature_facet_coverage_test.go",
                         "internal/server/ct_drift_served_test.go",
+                        "internal/server/discovery_recovery_served_test.go",
+                        "web/src/__tests__/ct_monitoring_surface.test.tsx",
                         "web/src/__tests__/feature_coverage.test.tsx",
                         "web/src/__tests__/posture.test.tsx",
                         "web/src/__tests__/route_parity.test.ts"
@@ -2419,19 +2435,19 @@
                 "purpose": "Lets an operator understand and safely use certificate transparency monitoring while tenant, policy, and security authority remain on the server.",
                 "tool": "certificates",
                 "classification": "primary",
-                "release_blocking": true,
-                "console_route": "/posture",
+                "release_blocking": false,
+                "console_route": "/discovery",
                 "navigation_entrypoints": [
                     "tool navigation",
                     "task search",
-                    "/posture"
+                    "/discovery"
                 ],
                 "permission_authority": "internal/api route registry and feature authorization manifest",
                 "edition": "core",
                 "dependencies": [],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -2448,13 +2464,20 @@
                     "configure": {
                         "status": "complete",
                         "evidence": [
+                            "web/src/components/discovery/CTMonitoringPanel.tsx",
                             "web/src/pages/Discovery.tsx",
                             "web/src/pages/Posture.tsx"
                         ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: previewDiscoveryPlan",
+                            "internal/api/discovery.go",
+                            "internal/server/ct_drift_served_test.go",
+                            "web/src/components/discovery/CTMonitoringPanel.tsx",
+                            "web/src/__tests__/ct_monitoring_surface.test.tsx"
+                        ]
                     },
                     "execute": {
                         "status": "complete",
@@ -2466,12 +2489,21 @@
                     "observe": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/lib/navigation.ts"
+                            "internal/api/ct_monitoring.go",
+                            "web/src/components/discovery/CTMonitoringPanel.tsx"
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: preflightDiscoverySource",
+                            "OpenAPI operationId: retryDiscoveryRun",
+                            "CLI command: discovery sources preflight",
+                            "CLI command: discovery runs retry",
+                            "internal/server/discovery_recovery_served_test.go",
+                            "web/src/components/discovery/CTMonitoringPanel.tsx",
+                            "web/src/__tests__/ct_monitoring_surface.test.tsx"
+                        ]
                     },
                     "verify": {
                         "status": "complete",
@@ -2492,6 +2524,9 @@
                             "OpenAPI operationId: listDiscoveryFindings",
                             "OpenAPI operationId: getCTMonitoring",
                             "OpenAPI operationId: updateCTMonitoring",
+                            "OpenAPI operationId: previewDiscoveryPlan",
+                            "OpenAPI operationId: preflightDiscoverySource",
+                            "OpenAPI operationId: retryDiscoveryRun",
                             "CLI command: discovery sources create",
                             "CLI command: discovery sources list",
                             "CLI command: discovery schedules create",
@@ -2501,14 +2536,17 @@
                             "CLI command: discovery runs get",
                             "CLI command: discovery findings list",
                             "CLI command: discovery ct-monitoring get",
-                            "CLI command: discovery ct-monitoring update"
+                            "CLI command: discovery ct-monitoring update",
+                            "CLI command: discovery plans preview",
+                            "CLI command: discovery sources preflight",
+                            "CLI command: discovery runs retry"
                         ]
                     }
                 },
                 "owner": "pki",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "e563bd4fc880c1545004be93cf504489121e8d43",
+                "freshness": "2026-08-27"
             }
         },
         {

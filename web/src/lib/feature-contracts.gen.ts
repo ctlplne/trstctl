@@ -820,19 +820,19 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use certificate transparency monitoring while tenant, policy, and security authority remain on the server.",
       "tool": "certificates",
       "classification": "primary",
-      "releaseBlocking": true,
-      "consoleRoute": "/posture",
+      "releaseBlocking": false,
+      "consoleRoute": "/discovery",
       "navigationEntrypoints": [
         "tool navigation",
         "task search",
-        "/posture"
+        "/discovery"
       ],
       "permissionAuthority": "internal/api route registry and feature authorization manifest",
       "edition": "core",
       "dependencies": [],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -849,13 +849,20 @@ export const canonicalCapabilities = [
         "configure": {
           "status": "complete",
           "evidence": [
+            "web/src/components/discovery/CTMonitoringPanel.tsx",
             "web/src/pages/Discovery.tsx",
             "web/src/pages/Posture.tsx"
           ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: previewDiscoveryPlan",
+            "internal/api/discovery.go",
+            "internal/server/ct_drift_served_test.go",
+            "web/src/components/discovery/CTMonitoringPanel.tsx",
+            "web/src/__tests__/ct_monitoring_surface.test.tsx"
+          ]
         },
         "execute": {
           "status": "complete",
@@ -867,12 +874,21 @@ export const canonicalCapabilities = [
         "observe": {
           "status": "complete",
           "evidence": [
-            "web/src/lib/navigation.ts"
+            "internal/api/ct_monitoring.go",
+            "web/src/components/discovery/CTMonitoringPanel.tsx"
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: preflightDiscoverySource",
+            "OpenAPI operationId: retryDiscoveryRun",
+            "CLI command: discovery sources preflight",
+            "CLI command: discovery runs retry",
+            "internal/server/discovery_recovery_served_test.go",
+            "web/src/components/discovery/CTMonitoringPanel.tsx",
+            "web/src/__tests__/ct_monitoring_surface.test.tsx"
+          ]
         },
         "verify": {
           "status": "complete",
@@ -893,6 +909,9 @@ export const canonicalCapabilities = [
             "OpenAPI operationId: listDiscoveryFindings",
             "OpenAPI operationId: getCTMonitoring",
             "OpenAPI operationId: updateCTMonitoring",
+            "OpenAPI operationId: previewDiscoveryPlan",
+            "OpenAPI operationId: preflightDiscoverySource",
+            "OpenAPI operationId: retryDiscoveryRun",
             "CLI command: discovery sources create",
             "CLI command: discovery sources list",
             "CLI command: discovery schedules create",
@@ -902,14 +921,17 @@ export const canonicalCapabilities = [
             "CLI command: discovery runs get",
             "CLI command: discovery findings list",
             "CLI command: discovery ct-monitoring get",
-            "CLI command: discovery ct-monitoring update"
+            "CLI command: discovery ct-monitoring update",
+            "CLI command: discovery plans preview",
+            "CLI command: discovery sources preflight",
+            "CLI command: discovery runs retry"
           ]
         }
       },
       "owner": "pki",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "e563bd4fc880c1545004be93cf504489121e8d43",
+      "freshness": "2026-08-27"
     }
   },
   {
