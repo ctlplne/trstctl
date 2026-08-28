@@ -6325,7 +6325,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use audit log surfaces while tenant, policy, and security authority remain on the server.",
       "tool": "operations",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/audit",
       "navigationEntrypoints": [
         "tool navigation",
@@ -6337,7 +6337,7 @@ export const canonicalCapabilities = [
       "dependencies": [],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -6352,12 +6352,21 @@ export const canonicalCapabilities = [
           ]
         },
         "configure": {
-          "status": "missing",
-          "reason": "No structured evidence proves an operator can configure every required prerequisite from this console journey."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/Audit.tsx",
+            "web/src/__tests__/audit_feeds.test.tsx",
+            "internal/server/audit_feed_served_test.go"
+          ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: previewAuditFeed",
+            "internal/api/audit.go",
+            "internal/server/audit_feed_served_test.go",
+            "web/src/pages/Audit.tsx"
+          ]
         },
         "execute": {
           "status": "complete",
@@ -6373,8 +6382,12 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "internal/server/audit_feed_served_test.go",
+            "web/src/pages/Audit.tsx",
+            "web/src/__tests__/audit_feeds.test.tsx"
+          ]
         },
         "verify": {
           "status": "complete",
@@ -6388,12 +6401,14 @@ export const canonicalCapabilities = [
             "OpenAPI operationId: searchAudit",
             "OpenAPI operationId: exportAudit",
             "OpenAPI operationId: getAuditVerificationKeys",
+            "OpenAPI operationId: previewAuditFeed",
             "OpenAPI operationId: putAuditFeed",
             "OpenAPI operationId: listAuditFeeds",
             "CLI command: audit events",
             "CLI command: audit export",
             "CLI command: audit verification-keys",
             "CLI command: audit verify",
+            "CLI command: audit feeds preview",
             "CLI command: audit feeds set",
             "CLI command: audit feeds list"
           ]
@@ -6401,8 +6416,8 @@ export const canonicalCapabilities = [
       },
       "owner": "operations",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "21284297a4eecc8d0cdf5c08619594bd83c3af09",
+      "freshness": "2026-08-28"
     }
   },
   {

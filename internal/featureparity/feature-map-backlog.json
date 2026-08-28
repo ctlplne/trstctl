@@ -18203,7 +18203,7 @@
                 "web/src/pages/Audit.tsx"
             ],
             "status": "closed",
-            "notes": "Closed by route-level feature-map evidence. COMP-02 adds served OTLP/HTTP protobuf export for HTTP traces plus event-sourced audit records so SIEM/OpenTelemetry Collector pipelines consume the audit stream. Test evidence: go test./internal/server -run TestServedOTLPExporterStreamsTracesAndAuditEvents -count=1; web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+            "notes": "Qualified as a complete operator slice on 2026-08-28. The Audit page now combines answer-first search, conservative affected-resource navigation, accurate hash coverage, signed evidence export, an effect-free server-owned collector preview, exact-form review invalidation, event-sourced save, durable delivery evidence, and explicit retry/disable recovery. Live g60 proof showed preview changed no feed, event, outbox, or idempotency state beyond tenant bootstrap; execution appended exactly one event and one feed, same-key replay was byte-identical, the disabled feed contacted no collector, desktop review safeguards worked, the 390x844 viewport had no horizontal overflow, and browser diagnostics were empty. COMP-02 separately provides served OTLP/HTTP protobuf export for HTTP traces and event-sourced audit records.",
             "api_surface": [
                 "searchAudit",
                 "exportAudit",
@@ -18365,7 +18365,7 @@
                 "purpose": "Lets an operator understand and safely use audit log surfaces while tenant, policy, and security authority remain on the server.",
                 "tool": "operations",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/audit",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -18377,7 +18377,7 @@
                 "dependencies": [],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -18392,12 +18392,21 @@
                         ]
                     },
                     "configure": {
-                        "status": "missing",
-                        "reason": "No structured evidence proves an operator can configure every required prerequisite from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/Audit.tsx",
+                            "web/src/__tests__/audit_feeds.test.tsx",
+                            "internal/server/audit_feed_served_test.go"
+                        ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: previewAuditFeed",
+                            "internal/api/audit.go",
+                            "internal/server/audit_feed_served_test.go",
+                            "web/src/pages/Audit.tsx"
+                        ]
                     },
                     "execute": {
                         "status": "complete",
@@ -18413,8 +18422,12 @@
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/server/audit_feed_served_test.go",
+                            "web/src/pages/Audit.tsx",
+                            "web/src/__tests__/audit_feeds.test.tsx"
+                        ]
                     },
                     "verify": {
                         "status": "complete",
@@ -18428,12 +18441,14 @@
                             "OpenAPI operationId: searchAudit",
                             "OpenAPI operationId: exportAudit",
                             "OpenAPI operationId: getAuditVerificationKeys",
+                            "OpenAPI operationId: previewAuditFeed",
                             "OpenAPI operationId: putAuditFeed",
                             "OpenAPI operationId: listAuditFeeds",
                             "CLI command: audit events",
                             "CLI command: audit export",
                             "CLI command: audit verification-keys",
                             "CLI command: audit verify",
+                            "CLI command: audit feeds preview",
                             "CLI command: audit feeds set",
                             "CLI command: audit feeds list"
                         ]
@@ -18441,8 +18456,8 @@
                 },
                 "owner": "operations",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "21284297a4eecc8d0cdf5c08619594bd83c3af09",
+                "freshness": "2026-08-28"
             }
         },
         {
