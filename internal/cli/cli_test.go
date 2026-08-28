@@ -798,6 +798,32 @@ func TestCAAuthorityRotateCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	}
 }
 
+func TestProfileRecoveryCommandsCarryExactReviewedBody(t *testing.T) {
+	body := `{"expected_active_version":2,"reason":"Recover the known-good web TLS rule"}`
+	var preview capture
+	previewServer := mockServer(t, 200, `{"capability":"certificate_profile_recovery","operation":"restore_as_new_version","ready":true}`, &preview)
+	code, _, _ := run(t, []string{"profiles", "restore-preview", "web-server", "1", "-f", "-"}, cli.Env{Server: previewServer.URL, HTTPClient: previewServer.Client()}, body)
+	if code != 0 {
+		t.Fatalf("preview exit = %d", code)
+	}
+	if preview.Method != "POST" || preview.Path != "/api/v1/profiles/web-server/versions/1/restore/preview" || !sameJSON(preview.Body, []byte(body)) {
+		t.Fatalf("preview request = %s %s body=%s", preview.Method, preview.Path, preview.Body)
+	}
+
+	var restore capture
+	restoreServer := mockServer(t, 201, `{"id":"profile-v3","name":"web-server","version":3,"active":true}`, &restore)
+	code, _, _ = run(t, []string{"profiles", "restore", "web-server", "1", "-f", "-"}, cli.Env{Server: restoreServer.URL, HTTPClient: restoreServer.Client(), IdempotencyKey: "profile-restore-1"}, body)
+	if code != 0 {
+		t.Fatalf("restore exit = %d", code)
+	}
+	if restore.Method != "POST" || restore.Path != "/api/v1/profiles/web-server/versions/1/restore" || !sameJSON(restore.Body, []byte(body)) {
+		t.Fatalf("restore request = %s %s body=%s", restore.Method, restore.Path, restore.Body)
+	}
+	if got := restore.Header.Get("Idempotency-Key"); got != "profile-restore-1" {
+		t.Fatalf("restore Idempotency-Key = %q, want profile-restore-1", got)
+	}
+}
+
 func TestCAAuthorityRekeyCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 201, `{"issue_path":"/api/v1/ca/authorities/ca-old/issue","active_issue_path":"/api/v1/ca/authorities/ca-new/issue"}`, &cap)

@@ -219,6 +219,45 @@ describe("first-class issuance requests (AUD-78)", () => {
   });
 });
 
+describe("certificate-profile recovery (F53)", () => {
+  it("keeps preview effect-free and confirmation idempotent on the exact version path", async () => {
+    document.cookie = "trstctl_csrf=csrf-profile-restore; path=/";
+    mockFetchSequence([
+      {
+        status: 200,
+        body: JSON.stringify({
+          capability: "certificate_profile_recovery",
+          operation: "restore_as_new_version",
+          ready: true,
+          name: "web-server",
+          source_version: 1,
+          active_version: 2,
+          next_version: 3,
+          preview_writes: [],
+          preview_external_effects: [],
+        }),
+      },
+      { status: 201, body: JSON.stringify({ id: "profile-v3", name: "web-server", version: 3, active: true, spec: {} }) },
+    ]);
+    const input = { expected_active_version: 2, reason: "Recover the known-good web TLS rule" };
+
+    await api.previewProfileRestore("web-server", 1, input);
+    const previewCall = vi.mocked(fetch).mock.calls[0];
+    expect(previewCall[0]).toBe("/api/v1/profiles/web-server/versions/1/restore/preview");
+    expect(previewCall[1]?.method).toBe("POST");
+    expect((previewCall[1]?.headers as Record<string, string>)?.["Idempotency-Key"]).toBeUndefined();
+    expect(JSON.parse(String(previewCall[1]?.body))).toEqual(input);
+
+    await api.restoreProfileVersion("web-server", 1, input);
+    const restoreCall = vi.mocked(fetch).mock.calls[1];
+    expect(restoreCall[0]).toBe("/api/v1/profiles/web-server/versions/1/restore");
+    expect(restoreCall[1]?.method).toBe("POST");
+    expect((restoreCall[1]?.headers as Record<string, string>)?.["X-CSRF-Token"]).toBe("csrf-profile-restore");
+    expect((restoreCall[1]?.headers as Record<string, string>)?.["Idempotency-Key"]).toBeTruthy();
+    expect(JSON.parse(String(restoreCall[1]?.body))).toEqual(input);
+  });
+});
+
 describe("enrollment diagnostic verification (AUD-49)", () => {
   it("posts the exact diagnostic route with an Idempotency-Key", async () => {
     mockFetch(
@@ -533,7 +572,8 @@ describe("exported API surface census", () => {
       const url = String(target);
       expect(url, "the browser API client attempted absolute egress").toMatch(/^\//);
       const method = init?.method ?? "GET";
-      if ((method === "POST" || method === "PUT" || method === "DELETE") && url !== "/auth/logout" && !readOnlyPosts.has(url)) {
+      const readOnlyPost = readOnlyPosts.has(url) || url.endsWith("/restore/preview");
+      if ((method === "POST" || method === "PUT" || method === "DELETE") && url !== "/auth/logout" && !readOnlyPost) {
         const headers = init?.headers as Record<string, string> | undefined;
         expect(headers?.["Idempotency-Key"], `${method} ${url} lacks mutation idempotency`).toBeTruthy();
         expect(headers?.["X-CSRF-Token"], `${method} ${url} lacks the session CSRF echo`).toBe("csrf-census");

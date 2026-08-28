@@ -1225,8 +1225,13 @@ describe("i18n boundary", () => {
       // F48 review re-pin: twelve reviewed keys name the effect-free CA
       // rotation receipt, predecessor/successor, risks, and exact confirmation.
       // Machine-authored es/de - FLAGGED FOR HUMAN TRANSLATION REVIEW.
-      "es-ES": "d947c5314b0cd27f6281307c46cd382419a675a80193be25910b0a1e7cf0edef",
-      "de-DE": "a5a2531908f52809f3e0edb3720cbd19797803f32a1d3caef63ce9d6a2e09332",
+      // F53 recovery re-pin: the certificate-profile journey now names the
+      // effect-free preview, active/source/next versions, stale-review failure,
+      // dual-control wait state, risks, and verification steps. Negations and
+      // security meaning were reviewed in both catalogs. Machine-authored es/de
+      // - FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "7e5f3d65b317da054c14ef0f0066ed0ee235258fcdebbc6b5309a8ef19d69860",
+      "de-DE": "3a2a30849909fca9aa16574bd212fecb536da4b01c0e3950d533c90eebd4509c",
     });
   });
 

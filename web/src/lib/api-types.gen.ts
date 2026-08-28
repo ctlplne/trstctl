@@ -5235,6 +5235,12 @@ export interface Profile {
   version: number;
 }
 
+export interface ProfileApprovalResponse {
+  approval_id: string;
+  resource: string;
+  state: string;
+}
+
 export interface ProfileList {
   items: Profile[];
   next_cursor?: string;
@@ -5243,6 +5249,31 @@ export interface ProfileList {
 export interface ProfileRequest {
   name: string;
   spec: CertificateProfileSpec;
+}
+
+export interface ProfileRestorePreview {
+  active_version: number;
+  capability: "certificate_profile_recovery";
+  changes: string[];
+  name: string;
+  next_version: number;
+  operation: "restore_as_new_version";
+  preview_external_effects: string[];
+  preview_writes: string[];
+  ready: boolean;
+  reason: string;
+  request_fingerprint: string;
+  required_permission: string;
+  risks: string[];
+  source_spec: CertificateProfileSpec;
+  source_spec_digest: string;
+  source_version: number;
+  verification_steps: string[];
+}
+
+export interface ProfileRestoreRequest {
+  expected_active_version: number;
+  reason: string;
 }
 
 export interface ProtocolProfileStatus {

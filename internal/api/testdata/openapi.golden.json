@@ -20854,6 +20854,26 @@
         ],
         "type": "object"
       },
+      "ProfileApprovalResponse": {
+        "properties": {
+          "approval_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "resource": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "approval_id",
+          "state",
+          "resource"
+        ],
+        "type": "object"
+      },
       "ProfileList": {
         "properties": {
           "items": {
@@ -20883,6 +20903,119 @@
         "required": [
           "name",
           "spec"
+        ],
+        "type": "object"
+      },
+      "ProfileRestorePreview": {
+        "properties": {
+          "active_version": {
+            "type": "integer"
+          },
+          "capability": {
+            "enum": [
+              "certificate_profile_recovery"
+            ],
+            "type": "string"
+          },
+          "changes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "next_version": {
+            "type": "integer"
+          },
+          "operation": {
+            "enum": [
+              "restore_as_new_version"
+            ],
+            "type": "string"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "request_fingerprint": {
+            "type": "string"
+          },
+          "required_permission": {
+            "type": "string"
+          },
+          "risks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "source_spec": {
+            "$ref": "#/components/schemas/CertificateProfileSpec"
+          },
+          "source_spec_digest": {
+            "type": "string"
+          },
+          "source_version": {
+            "type": "integer"
+          },
+          "verification_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "operation",
+          "ready",
+          "name",
+          "source_version",
+          "active_version",
+          "next_version",
+          "reason",
+          "source_spec_digest",
+          "request_fingerprint",
+          "required_permission",
+          "changes",
+          "risks",
+          "verification_steps",
+          "preview_writes",
+          "preview_external_effects",
+          "source_spec"
+        ],
+        "type": "object"
+      },
+      "ProfileRestoreRequest": {
+        "properties": {
+          "expected_active_version": {
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "expected_active_version",
+          "reason"
         ],
         "type": "object"
       },
@@ -45209,6 +45342,16 @@
             },
             "description": "success"
           },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileApprovalResponse"
+                }
+              }
+            },
+            "description": "profile change queued for dual-control approval"
+          },
           "4XX": {
             "content": {
               "application/problem+json": {
@@ -45307,6 +45450,179 @@
         ],
         "summary": "Get a certificate-profile version",
         "x-trstctl-permission": "profiles:read"
+      }
+    },
+    "/api/v1/profiles/{name}/versions/{version}/restore": {
+      "post": {
+        "operationId": "restoreProfileVersion",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "certificate profile name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "positive certificate profile version",
+            "in": "path",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileRestoreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Profile"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileApprovalResponse"
+                }
+              }
+            },
+            "description": "profile recovery queued for dual-control approval"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Restore a historical certificate profile as a new active version",
+        "x-trstctl-permission": "profiles:write"
+      }
+    },
+    "/api/v1/profiles/{name}/versions/{version}/restore/preview": {
+      "post": {
+        "operationId": "previewProfileRestore",
+        "parameters": [
+          {
+            "description": "certificate profile name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "positive certificate profile version",
+            "in": "path",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileRestoreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileRestorePreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Preview restoring a historical certificate-profile version",
+        "x-trstctl-permission": "profiles:write"
       }
     },
     "/api/v1/remediation/owner-actions": {

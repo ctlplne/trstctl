@@ -1830,12 +1830,15 @@ type AgentOffboarded struct {
 // cannot rebuild certificate_profiles. Version 2 carries the full read-model row so
 // profiles are a pure projection of the event log.
 type ProfileVersioned struct {
-	ID        string          `json:"id"`
-	Name      string          `json:"name"`
-	Version   int             `json:"version"`
-	Spec      json.RawMessage `json:"spec"`
-	Active    bool            `json:"active"`
-	CreatedBy string          `json:"created_by"`
+	ID                    string          `json:"id"`
+	Name                  string          `json:"name"`
+	Version               int             `json:"version"`
+	Spec                  json.RawMessage `json:"spec"`
+	Active                bool            `json:"active"`
+	CreatedBy             string          `json:"created_by"`
+	RestoredFromVersion   int             `json:"restored_from_version,omitempty"`
+	RestoreReason         string          `json:"restore_reason,omitempty"`
+	ExpectedActiveVersion int             `json:"expected_active_version,omitempty"`
 }
 
 // DiscoverySourceUpserted is the payload of discovery.source.upserted.

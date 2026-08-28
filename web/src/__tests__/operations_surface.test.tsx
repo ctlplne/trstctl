@@ -14,6 +14,8 @@ const { apiMock } = vi.hoisted(() => ({
     profiles: vi.fn(),
     getProfileVersion: vi.fn(),
     createProfile: vi.fn(),
+    previewProfileRestore: vi.fn(),
+    restoreProfileVersion: vi.fn(),
     auditEvents: vi.fn(),
     exportAudit: vi.fn(),
     graph: vi.fn(),
@@ -297,6 +299,74 @@ describe("operational console surface", () => {
     expect(await screen.findByText(/Comparing selected v1 to v2/i)).toBeInTheDocument();
     expect(screen.getByText("max_validity")).toBeInTheDocument();
     expect(screen.getAllByText("Changed").length).toBeGreaterThan(0);
+  });
+
+  it("previews a historical profile recovery before creating one new active version", async () => {
+    const versionOne = {
+      id: "p1",
+      name: "server",
+      version: 1,
+      active: false,
+      created_by: "ra",
+      spec: { allowed_key_algorithms: ["ECDSA"], max_validity: "24h", allowed_protocols: ["api", "acme"] },
+    };
+    const versionTwo = {
+      id: "p2",
+      name: "server",
+      version: 2,
+      active: true,
+      created_by: "ra",
+      spec: { allowed_key_algorithms: ["ECDSA"], max_validity: "1h", allowed_protocols: ["api"] },
+    };
+    const versionThree = { ...versionOne, id: "p3", version: 3, active: true };
+    apiMock.profiles.mockResolvedValue([versionOne, versionTwo]);
+    apiMock.getProfileVersion.mockImplementation((_name: string, version: number) => Promise.resolve(version === 1 ? versionOne : versionTwo));
+    apiMock.previewProfileRestore.mockResolvedValue({
+      capability: "certificate_profile_recovery",
+      operation: "restore_as_new_version",
+      ready: true,
+      name: "server",
+      source_version: 1,
+      active_version: 2,
+      next_version: 3,
+      reason: "Recover the known-good web TLS rule",
+      source_spec_digest: "sha256:known-good",
+      request_fingerprint: "sha256:reviewed-request",
+      required_permission: "profiles:write",
+      changes: ["Create version 3 from version 1"],
+      risks: ["New issuance will use the restored rule"],
+      verification_steps: ["Confirm version 3 is active"],
+      preview_writes: [],
+      preview_external_effects: [],
+      source_spec: versionOne.spec,
+    });
+    apiMock.restoreProfileVersion.mockResolvedValue(versionThree);
+    const user = userEvent.setup();
+
+    renderAt("/profiles");
+    await user.click(await screen.findByRole("button", { name: "View server version 1" }));
+    await user.click(screen.getByRole("button", { name: /Diff version/i }));
+    await user.type(await screen.findByLabelText("Why is recovery needed?"), "Recover the known-good web TLS rule");
+    await user.click(screen.getByRole("button", { name: "Review recovery" }));
+
+    await waitFor(() =>
+      expect(apiMock.previewProfileRestore).toHaveBeenCalledWith("server", 1, {
+        expected_active_version: 2,
+        reason: "Recover the known-good web TLS rule",
+      }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: "Review rule recovery" });
+    expect(within(dialog).getByText("Nothing has changed yet")).toBeInTheDocument();
+    expect(apiMock.restoreProfileVersion).not.toHaveBeenCalled();
+
+    await user.click(within(dialog).getByRole("button", { name: "Restore as new version" }));
+    await waitFor(() =>
+      expect(apiMock.restoreProfileVersion).toHaveBeenCalledWith("server", 1, {
+        expected_active_version: 2,
+        reason: "Recover the known-good web TLS rule",
+      }),
+    );
+    expect(await screen.findByText(/Version 3 is now active/i)).toBeInTheDocument();
   });
 
   it("routes to audit events and exports signed evidence", async () => {

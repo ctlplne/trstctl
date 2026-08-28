@@ -1523,7 +1523,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use certificate profiles and registration-authority model while tenant, policy, and security authority remain on the server.",
       "tool": "certificates",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/profiles",
       "navigationEntrypoints": [
         "tool navigation",
@@ -1535,7 +1535,7 @@ export const canonicalCapabilities = [
       "dependencies": [],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -1576,8 +1576,13 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/Profiles.tsx",
+            "internal/api/profiles.go",
+            "internal/server/profile_restore_served_test.go",
+            "internal/orchestrator/profile_restore_approval_test.go"
+          ]
         },
         "verify": {
           "status": "complete",
@@ -1591,16 +1596,20 @@ export const canonicalCapabilities = [
             "OpenAPI operationId: createProfile",
             "OpenAPI operationId: listProfiles",
             "OpenAPI operationId: getProfileVersion",
+            "OpenAPI operationId: previewProfileRestore",
+            "OpenAPI operationId: restoreProfileVersion",
             "CLI command: profiles create",
             "CLI command: profiles list",
-            "CLI command: profiles get-version"
+            "CLI command: profiles get-version",
+            "CLI command: profiles restore-preview",
+            "CLI command: profiles restore"
           ]
         }
       },
       "owner": "pki",
       "targetCheckpoint": "frontend-convergence",
       "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "freshness": "2026-08-28"
     }
   },
   {

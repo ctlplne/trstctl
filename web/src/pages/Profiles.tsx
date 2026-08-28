@@ -1,11 +1,13 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { Eye, GitCompare, Plus } from "lucide-react";
-import { api, type Profile } from "@/lib/api";
+import { Eye, GitCompare, Plus, RotateCcw, X } from "lucide-react";
+import { api, type Profile, type ProfileRestorePreview } from "@/lib/api";
 // This page renders errors in the fallback-prefixed shape ("Could not load
 // profiles: <detail>").
 import { apiProblemContext as apiProblemMessage } from "@/lib/apiProblem";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { CredentialChip } from "@/components/CredentialChip";
+import { Dialog } from "@/components/Dialog";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -177,7 +179,16 @@ export function Profiles() {
 
       {detailLoading && <LoadingState>{translateNow("source.loading.profile.version.dc6b63b7c9")}</LoadingState>}
       {detailError && <ErrorState title={translateNow("source.profile.version.unavailable.ec6a0646c4")}>{detailError}</ErrorState>}
-      {selected && <ProfileVersionDetail profile={selected} listedProfiles={items ?? []} />}
+      {selected && (
+        <ProfileVersionDetail
+          profile={selected}
+          listedProfiles={items ?? []}
+          onRecovered={(restored) => {
+            setSelected(restored);
+            void load();
+          }}
+        />
+      )}
     </section>
   );
 }
@@ -435,16 +446,39 @@ function CheckboxSet({
   );
 }
 
-function ProfileVersionDetail({ profile, listedProfiles }: { profile: Profile; listedProfiles: Profile[] }) {
+function ProfileVersionDetail({
+  profile,
+  listedProfiles,
+  onRecovered,
+}: {
+  profile: Profile;
+  listedProfiles: Profile[];
+  onRecovered: (profile: Profile) => void;
+}) {
   const [compareVersion, setCompareVersion] = useState(defaultCompareVersion(profile, listedProfiles));
   const [compare, setCompare] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [restoreReason, setRestoreReason] = useState("");
+  const [restorePreview, setRestorePreview] = useState<ProfileRestorePreview | null>(null);
+  const [restoreBusy, setRestoreBusy] = useState(false);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
+  const [restoreNotice, setRestoreNotice] = useState<string | null>(null);
   const diffRows = compare ? diffProfileSpecs(profile.spec ?? {}, compare.spec ?? {}) : [];
+  const activeProfile = listedProfiles.find((candidate) => candidate.name === profile.name && candidate.active) ?? (profile.active ? profile : null);
+  const recoverySource =
+    activeProfile && !profile.active && profile.version !== activeProfile.version
+      ? profile
+      : compare && activeProfile && !compare.active && compare.version !== activeProfile.version
+        ? compare
+        : null;
 
   useEffect(() => {
     setCompare(null);
     setError(null);
+    setRestoreReason("");
+    setRestorePreview(null);
+    setRestoreError(null);
     setCompareVersion(defaultCompareVersion(profile, listedProfiles));
   }, [profile, listedProfiles]);
 
@@ -463,6 +497,55 @@ function ProfileVersionDetail({ profile, listedProfiles }: { profile: Profile; l
       setError(apiProblemMessage(err, "Could not load comparison version"));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function reviewRestore() {
+    if (!recoverySource || !activeProfile) return;
+    const reason = restoreReason.trim();
+    if (!reason) {
+      setRestoreError(translateNow("profiles.restore.reasonRequired"));
+      return;
+    }
+    setRestoreBusy(true);
+    setRestoreError(null);
+    setRestoreNotice(null);
+    try {
+      const preview = await api.previewProfileRestore(recoverySource.name, recoverySource.version, {
+        expected_active_version: activeProfile.version,
+        reason,
+      });
+      if (!preview.ready || preview.preview_writes.length > 0 || preview.preview_external_effects.length > 0) {
+        throw new Error(translateNow("profiles.restore.previewUnsafe"));
+      }
+      setRestorePreview(preview);
+    } catch (err) {
+      setRestoreError(apiProblemMessage(err, translateNow("profiles.restore.previewFailed")));
+    } finally {
+      setRestoreBusy(false);
+    }
+  }
+
+  async function confirmRestore() {
+    if (!restorePreview) return;
+    setRestoreBusy(true);
+    setRestoreError(null);
+    try {
+      const result = await api.restoreProfileVersion(restorePreview.name, restorePreview.source_version, {
+        expected_active_version: restorePreview.active_version,
+        reason: restorePreview.reason,
+      });
+      setRestorePreview(null);
+      if ("approval_id" in result) {
+        setRestoreNotice(translateNow("profiles.restore.awaitingApproval", { value: result.approval_id }));
+        return;
+      }
+      setRestoreNotice(translateNow("profiles.restore.completed", { value: result.version }));
+      onRecovered(result);
+    } catch (err) {
+      setRestoreError(apiProblemMessage(err, translateNow("profiles.restore.failed")));
+    } finally {
+      setRestoreBusy(false);
     }
   }
 
@@ -539,10 +622,175 @@ function ProfileVersionDetail({ profile, listedProfiles }: { profile: Profile; l
                   </table>
                 </div>
               )}
+              {recoverySource && activeProfile ? (
+                <section className="mt-4 grid gap-3 border-t border-border pt-4" aria-labelledby="profile-recovery-heading">
+                  <div>
+                    <h4 id="profile-recovery-heading" className="text-sm font-semibold">
+                      {translateNow("profiles.restore.heading")}
+                    </h4>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {translateNow("profiles.restore.description", { source: recoverySource.version, active: activeProfile.version })}
+                    </p>
+                  </div>
+                  <label className="space-y-1 text-sm font-medium">
+                    <span>{translateNow("profiles.restore.reasonLabel")}</span>
+                    <Textarea
+                      value={restoreReason}
+                      onChange={(event) => setRestoreReason(event.target.value)}
+                      placeholder={translateNow("profiles.restore.reasonPlaceholder")}
+                      maxLength={1000}
+                      rows={3}
+                    />
+                  </label>
+                  <div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      loading={restoreBusy && !restorePreview}
+                      disabled={restoreBusy}
+                      onClick={() => void reviewRestore()}
+                    >
+                      <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                      {translateNow("profiles.restore.reviewAction")}
+                    </Button>
+                  </div>
+                </section>
+              ) : null}
             </div>
           )}
         </section>
       </div>
+      {restoreNotice ? (
+        <p className="rounded-control border border-status-success/35 bg-status-success/5 p-3 text-sm" role="status">
+          {restoreNotice}
+        </p>
+      ) : null}
+      {restoreError && !restorePreview ? <ErrorState title={translateNow("profiles.restore.unavailable")}>{restoreError}</ErrorState> : null}
+      {restorePreview ? (
+        <ProfileRestoreDialog
+          preview={restorePreview}
+          busy={restoreBusy}
+          error={restoreError}
+          onClose={() => {
+            if (!restoreBusy) {
+              setRestorePreview(null);
+              setRestoreError(null);
+            }
+          }}
+          onConfirm={() => void confirmRestore()}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+function ProfileRestoreDialog({
+  preview,
+  busy,
+  error,
+  onClose,
+  onConfirm,
+}: {
+  preview: ProfileRestorePreview;
+  busy: boolean;
+  error: string | null;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const titleId = "profile-restore-review-heading";
+  const descriptionId = "profile-restore-review-description";
+  return (
+    <Dialog
+      open
+      onClose={busy ? () => undefined : onClose}
+      titleId={titleId}
+      descriptionId={descriptionId}
+      closeOnBackdropClick={!busy}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      overlayClassName="absolute inset-0 bg-black/55"
+      panelClassName="relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-panel border border-border bg-card shadow-elevation2"
+    >
+      <header className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
+        <div className="min-w-0">
+          <h2 id={titleId} className="text-title font-semibold">
+            {translateNow("profiles.restore.reviewTitle")}
+          </h2>
+          <p id={descriptionId} className="mt-1 text-sm text-muted-foreground">
+            {translateNow("profiles.restore.reviewDescription", { source: preview.source_version, next: preview.next_version })}
+          </p>
+        </div>
+        <Button type="button" variant="ghost" size="icon" disabled={busy} onClick={onClose} aria-label={translateNow("profiles.restore.closeReview")}>
+          <X className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </header>
+
+      <div className="grid gap-5 p-5 text-sm">
+        <section
+          className="rounded-control border border-status-success/35 bg-status-success/5 p-4"
+          aria-label={translateNow("profiles.restore.effectFreeLabel")}
+        >
+          <p className="font-semibold text-foreground">{translateNow("profiles.restore.effectFree")}</p>
+          <p className="mt-1 text-muted-foreground">{translateNow("profiles.restore.effectFreeDetail")}</p>
+        </section>
+
+        <dl className="grid gap-3 sm:grid-cols-2">
+          <ProfileRestoreValue label={translateNow("profiles.restore.sourceVersion")} value={`v${preview.source_version}`} />
+          <ProfileRestoreValue label={translateNow("profiles.restore.activeVersion")} value={`v${preview.active_version}`} />
+          <ProfileRestoreValue label={translateNow("profiles.restore.nextVersion")} value={`v${preview.next_version}`} />
+          <ProfileRestoreValue label={translateNow("profiles.restore.permission")} value={preview.required_permission} />
+          <ProfileRestoreValue label={translateNow("profiles.restore.reasonLabel")} value={preview.reason} wide />
+          <div className="grid gap-1 sm:col-span-2">
+            <dt className="text-caption text-muted-foreground">{translateNow("profiles.restore.fingerprint")}</dt>
+            <dd>
+              <CredentialChip value={preview.request_fingerprint} label={translateNow("profiles.restore.fingerprint")} head={12} tail={8} />
+            </dd>
+          </div>
+        </dl>
+
+        <ProfileRestoreList title={translateNow("profiles.restore.changes")} items={preview.changes} />
+        <ProfileRestoreList title={translateNow("profiles.restore.risks")} items={preview.risks} />
+        <ProfileRestoreList title={translateNow("profiles.restore.verify")} items={preview.verification_steps} />
+
+        {error ? (
+          <p className="rounded-control border border-destructive/35 bg-destructive/5 p-3 text-destructive" role="alert">
+            {error}
+          </p>
+        ) : null}
+        <footer className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
+          <Button type="button" variant="outline" disabled={busy} onClick={onClose}>
+            {translateNow("profiles.restore.cancel")}
+          </Button>
+          <Button type="button" loading={busy} disabled={!preview.ready || busy} onClick={onConfirm}>
+            <RotateCcw className="h-4 w-4" aria-hidden="true" />
+            {translateNow("profiles.restore.confirm")}
+          </Button>
+        </footer>
+      </div>
+    </Dialog>
+  );
+}
+
+function ProfileRestoreValue({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) {
+  return (
+    <div className={`grid gap-1 ${wide ? "sm:col-span-2" : ""}`}>
+      <dt className="text-caption text-muted-foreground">{label}</dt>
+      <dd className="font-medium">{value}</dd>
+    </div>
+  );
+}
+
+function ProfileRestoreList({ title, items }: { title: string; items: string[] }) {
+  return (
+    <section className="grid gap-2">
+      <h3 className="text-sm font-semibold">{title}</h3>
+      <ul className="grid gap-2 text-muted-foreground">
+        {items.map((item) => (
+          <li key={item} className="flex gap-2">
+            <span aria-hidden="true">•</span>
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

@@ -191,8 +191,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// signer-backed mutation later consumes.
 	// F48's effect-free CA rotation preview raises it to 387 and proves both
 	// authorities pass the mutation's eligibility rules before confirmation.
-	if len(out) != 387 {
-		t.Fatalf("OpenAPI operationIds = %d, want 387", len(out))
+	// F53's effect-free profile recovery preview and append-only restore raise it
+	// to 389 and expose the full recovery boundary to API clients.
+	if len(out) != 389 {
+		t.Fatalf("OpenAPI operationIds = %d, want 389", len(out))
 	}
 	return out
 }

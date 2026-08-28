@@ -337,7 +337,10 @@ import type {
   PQCMigrationFindingDispositionRequest,
   PendingApprovalRequest as GenPendingApprovalRequest,
   Profile as GenProfile,
+  ProfileApprovalResponse,
   ProfileRequest,
+  ProfileRestorePreview,
+  ProfileRestoreRequest,
   ProtocolProfileStatus,
   RCARequest,
   RemediationPlaybook,
@@ -663,6 +666,7 @@ export type SecretApprovalRequest = GenSecretApprovalRequest;
 export type SecretApprovalAction = GenSecretApprovalRequest["action"];
 export type AuditEvent = GenAuditEvent;
 export type Profile = GenProfile;
+export type ProfileMutationResult = Profile | ProfileApprovalResponse;
 export type IssueCertificateInput = {
   name: string;
   ownerId?: string;
@@ -902,6 +906,9 @@ export type {
   PolicyVersionList,
   PolicyVersionRequest,
   ProtocolProfileStatus,
+  ProfileApprovalResponse,
+  ProfileRestorePreview,
+  ProfileRestoreRequest,
   PrivacyArchiveErasureAttestation,
   PrivacyArchiveErasureAttestationList,
   PrivacyArchiveErasureAttestationRequest,
@@ -1710,7 +1717,9 @@ export interface Api {
   contextualRiskPriorities(): Promise<ContextualRiskPriorities>;
   profiles(): Promise<Profile[]>;
   getProfileVersion(name: string, version: number): Promise<Profile>;
-  createProfile(input: ProfileRequest): Promise<Profile>;
+  createProfile(input: ProfileRequest): Promise<ProfileMutationResult>;
+  previewProfileRestore(name: string, version: number, input: ProfileRestoreRequest): Promise<ProfileRestorePreview>;
+  restoreProfileVersion(name: string, version: number, input: ProfileRestoreRequest): Promise<ProfileMutationResult>;
   previewCACeremony(input: CACeremonyStartRequest): Promise<CACeremonyPlanPreview>;
   createCACeremony(input: CACeremonyStartRequest): Promise<CAKeyCeremony>;
   approveCACeremony(id: string): Promise<CAKeyCeremony>;
@@ -2208,7 +2217,11 @@ const liveApi: Api = {
   contextualRiskPriorities: () => req<ContextualRiskPriorities>("/api/v1/risk/contextual-priorities"),
   profiles: () => req<{ items: Profile[] }>("/api/v1/profiles").then((r) => r.items ?? []),
   getProfileVersion: (name, version) => req<Profile>(`/api/v1/profiles/${encodeURIComponent(name)}/versions/${version}`),
-  createProfile: (input) => mutate<Profile>("POST", "/api/v1/profiles", input),
+  createProfile: (input) => mutate<ProfileMutationResult>("POST", "/api/v1/profiles", input),
+  previewProfileRestore: (name, version, input) =>
+    postRead<ProfileRestorePreview>(`/api/v1/profiles/${encodeURIComponent(name)}/versions/${version}/restore/preview`, input),
+  restoreProfileVersion: (name, version, input) =>
+    mutate<ProfileMutationResult>("POST", `/api/v1/profiles/${encodeURIComponent(name)}/versions/${version}/restore`, input),
   previewCACeremony: (input) => postRead<CACeremonyPlanPreview>("/api/v1/ca/ceremonies/preview", input),
   createCACeremony: (input) => mutate<CAKeyCeremony>("POST", "/api/v1/ca/ceremonies", input),
   approveCACeremony: (id) => mutate<CAKeyCeremony>("POST", `/api/v1/ca/ceremonies/${encodeURIComponent(id)}/approvals`),

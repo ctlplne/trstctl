@@ -325,6 +325,20 @@ minting a second certificate.
 The built-in `ra-officer` can read owners, author/read profiles, and request
 certificates, but still cannot write identities or hold `certs:issue`.
 
+Profile recovery is served as an append-only operation. `POST
+/api/v1/profiles/{name}/versions/{version}/restore/preview` returns an effect-free
+receipt for copying a known-good historical spec into the next version. The receipt
+pins the current active version, semantic spec digest, reason, request fingerprint,
+issuance risks, and proof steps; it emits no event and performs no external call.
+`POST /api/v1/profiles/{name}/versions/{version}/restore` rechecks that active-version
+fence under the projection lock, creates one new event-sourced active version, and
+leaves every historical row untouched. Reusing the idempotency key returns the same
+result. A newer concurrent version fails closed with `409`, and profiles governed by
+`requires_approval` retain non-requester dual control. The console exposes the same
+flow after a version diff; the CLI commands are `profiles restore-preview` and
+`profiles restore`. See the [profile-authoring guide](../guides/profile-authoring.md)
+for a complete example.
+
 ### Telling clients when to renew: ARI (F46)
 
 If thousands of clients renew at the same fixed "30 days before expiry," they
@@ -564,7 +578,9 @@ external CA registry API, each of which calls the one issuance path with an
 - **CLI groups:** `profiles`, `issuers`, `external-cas`, `certificates`, and
   `acme ari posture`.
 - **Served routes:** `POST|GET /api/v1/profiles`,
-  `GET /api/v1/profiles/{name}/versions/{version}`, `POST /api/v1/certificates`,
+  `GET /api/v1/profiles/{name}/versions/{version}`, the effect-free
+  `POST /api/v1/profiles/{name}/versions/{version}/restore/preview`, append-only
+  `POST /api/v1/profiles/{name}/versions/{version}/restore`, `POST /api/v1/certificates`,
   `GET /api/v1/external-cas`, `POST /api/v1/external-cas/{id}/issue`,
   `GET /api/v1/acme/ari/posture` (`lifecycle:read`),
   `POST /api/v1/ca/authorities/{id}/rotate`,

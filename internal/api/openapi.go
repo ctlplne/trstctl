@@ -4533,6 +4533,32 @@ func componentSchemas() map[string]*Schema {
 	profileReq := object(map[string]*Schema{
 		"name": str(), "spec": ref("CertificateProfileSpec"),
 	}, "name", "spec")
+	profileApproval := object(map[string]*Schema{
+		"approval_id": uuid(), "state": str(), "resource": str(),
+	}, "approval_id", "state", "resource")
+	profileRestoreReq := object(map[string]*Schema{
+		"expected_active_version": {Type: "integer"},
+		"reason":                  {Type: "string", MinLength: 1, MaxLength: 1000},
+	}, "expected_active_version", "reason")
+	profileRestorePreview := object(map[string]*Schema{
+		"capability":               {Type: "string", Enum: []string{"certificate_profile_recovery"}},
+		"operation":                {Type: "string", Enum: []string{"restore_as_new_version"}},
+		"ready":                    {Type: "boolean"},
+		"name":                     str(),
+		"source_version":           {Type: "integer"},
+		"active_version":           {Type: "integer"},
+		"next_version":             {Type: "integer"},
+		"reason":                   str(),
+		"source_spec_digest":       str(),
+		"request_fingerprint":      str(),
+		"required_permission":      str(),
+		"changes":                  {Type: "array", Items: str()},
+		"risks":                    {Type: "array", Items: str()},
+		"verification_steps":       {Type: "array", Items: str()},
+		"preview_writes":           {Type: "array", Items: str()},
+		"preview_external_effects": {Type: "array", Items: str()},
+		"source_spec":              ref("CertificateProfileSpec"),
+	}, "capability", "operation", "ready", "name", "source_version", "active_version", "next_version", "reason", "source_spec_digest", "request_fingerprint", "required_permission", "changes", "risks", "verification_steps", "preview_writes", "preview_external_effects", "source_spec")
 
 	// Served secrets/identity surface (GAP-006). The metadata view never carries a
 	// value; the value/share/key views are the only places a secret leaves the
@@ -5600,6 +5626,9 @@ func componentSchemas() map[string]*Schema {
 		"Profile":                                  profile,
 		"ProfileRequest":                           profileReq,
 		"ProfileList":                              list("Profile"),
+		"ProfileApprovalResponse":                  profileApproval,
+		"ProfileRestoreRequest":                    profileRestoreReq,
+		"ProfileRestorePreview":                    profileRestorePreview,
 		"CertificateProfileSpec":                   certificateProfileSpec,
 		"ACMEDeviceAttestationPolicy":              acmeDeviceAttestationPolicy,
 		"Issuer":                                   issuer,

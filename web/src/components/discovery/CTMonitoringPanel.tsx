@@ -5,15 +5,7 @@ import { StatTile } from "@/components/charts";
 import { useCan } from "@/components/rbac";
 import { Button } from "@/components/ui/button";
 import { useTranslation, type I18nContextValue } from "@/i18n/I18nProvider";
-import {
-  api,
-  ApiError,
-  type CTMonitoring,
-  type DiscoveryFinding,
-  type DiscoveryPlanPreview,
-  type DiscoveryRun,
-  type DiscoverySourceRequest,
-} from "@/lib/api";
+import { api, ApiError, type CTMonitoring, type DiscoveryFinding, type DiscoveryPlanPreview, type DiscoveryRun, type DiscoverySourceRequest } from "@/lib/api";
 
 // Certificate Transparency monitoring, as a headline discovery capability (C5).
 //
@@ -347,16 +339,19 @@ export function CTMonitoringPanel({ refreshToken = 0, pollIntervalMs = 1000, onR
         <div className="mt-4 grid gap-2 rounded-card border border-risk-critical/35 bg-risk-critical/5 p-3">
           <div>
             <h3 className="text-sm font-semibold">{t("discovery.ct.retryTitle")}</h3>
-            <p className="mt-1 break-words text-xs text-muted-foreground">
-              {t("discovery.ct.failedRun", { id: failedRun.id, status: failedRun.status })}
-            </p>
+            <p className="mt-1 break-words text-xs text-muted-foreground">{t("discovery.ct.failedRun", { id: failedRun.id, status: failedRun.status })}</p>
             {failedRun.error ? <p className="mt-1 break-words text-xs text-risk-critical">{failedRun.error}</p> : null}
           </div>
           {!currentRetryPreview ? (
-            <Button type="button" size="sm" variant="outline" className="w-fit" disabled={reviewingRetry || !monitoring?.source?.id} onClick={() => void reviewRetry()}>
-              {reviewingRetry
-                ? t("discovery.ct.reviewingRetry")
-                : t("discovery.ct.reviewRetry", { id: failedRun.id })}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="w-fit"
+              disabled={reviewingRetry || !monitoring?.source?.id}
+              onClick={() => void reviewRetry()}
+            >
+              {reviewingRetry ? t("discovery.ct.reviewingRetry") : t("discovery.ct.reviewRetry", { id: failedRun.id })}
             </Button>
           ) : (
             <div className="grid gap-2 rounded-control border border-border bg-background/70 p-3 text-xs">
@@ -368,9 +363,7 @@ export function CTMonitoringPanel({ refreshToken = 0, pollIntervalMs = 1000, onR
                 })}
               </p>
               <Button type="button" size="sm" className="w-fit" disabled={retrying} onClick={() => void retryRun()}>
-                {retrying
-                  ? t("discovery.ct.retrying")
-                  : t("discovery.ct.retry", { id: failedRun.id })}
+                {retrying ? t("discovery.ct.retrying") : t("discovery.ct.retry", { id: failedRun.id })}
               </Button>
             </div>
           )}
@@ -421,7 +414,9 @@ export function CTMonitoringPanel({ refreshToken = 0, pollIntervalMs = 1000, onR
               </p>
               <ul className="grid gap-1 font-mono text-2xs">
                 {(currentPreview.normalized_targets ?? []).map((target) => (
-                  <li key={target} className="break-all">{target}</li>
+                  <li key={target} className="break-all">
+                    {target}
+                  </li>
                 ))}
               </ul>
             </div>

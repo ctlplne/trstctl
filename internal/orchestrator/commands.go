@@ -31,6 +31,13 @@ import (
 var (
 	connectorRightSizeIdentityNamespace = uuid.MustParse("64ad96b4-b750-5e90-b55b-baf67c779a4a")
 	errPrivacyErasureEventFound         = errors.New("orchestrator: privacy erasure event found")
+	// ErrProfileRestoreStale is returned when the active profile changed after
+	// an operator reviewed a restore preview. The mutation fails closed instead
+	// of copying an old rule over a newer decision.
+	ErrProfileRestoreStale = errors.New("orchestrator: certificate profile active version changed after review")
+	// ErrProfileRestoreAlreadyActive prevents recovery from manufacturing a new
+	// version when the selected source is already the active rule.
+	ErrProfileRestoreAlreadyActive = errors.New("orchestrator: certificate profile version is already active")
 )
 
 // ConnectorRightSizeIdentity is every stable identity derived from the tenant
@@ -117,9 +124,42 @@ func FleetReissuanceBatchIdempotencyKey(runID string, batchIndex int) string {
 }
 
 type approvalProfileEditRequest struct {
-	Request approval.Request `json:"request"`
-	Name    string           `json:"name"`
-	Spec    json.RawMessage  `json:"spec"`
+	Request               approval.Request `json:"request"`
+	Name                  string           `json:"name"`
+	Spec                  json.RawMessage  `json:"spec"`
+	RestoredFromVersion   int              `json:"restored_from_version,omitempty"`
+	RestoreReason         string           `json:"restore_reason,omitempty"`
+	ExpectedActiveVersion int              `json:"expected_active_version,omitempty"`
+}
+
+// ProfileRestorePlan is an effect-free receipt for copying a known-good
+// historical certificate-profile spec into one new active version. Empty
+// PreviewWrites and PreviewExternalEffects are explicit proof that review did
+// not change state or contact another system.
+type ProfileRestorePlan struct {
+	Capability             string          `json:"capability"`
+	Operation              string          `json:"operation"`
+	Ready                  bool            `json:"ready"`
+	Name                   string          `json:"name"`
+	SourceVersion          int             `json:"source_version"`
+	ActiveVersion          int             `json:"active_version"`
+	NextVersion            int             `json:"next_version"`
+	Reason                 string          `json:"reason"`
+	SourceSpecDigest       string          `json:"source_spec_digest"`
+	RequestFingerprint     string          `json:"request_fingerprint"`
+	RequiredPermission     string          `json:"required_permission"`
+	Changes                []string        `json:"changes"`
+	Risks                  []string        `json:"risks"`
+	VerificationSteps      []string        `json:"verification_steps"`
+	PreviewWrites          []string        `json:"preview_writes"`
+	PreviewExternalEffects []string        `json:"preview_external_effects"`
+	SourceSpec             json.RawMessage `json:"source_spec"`
+}
+
+type profileVersionOptions struct {
+	RestoredFromVersion   int
+	RestoreReason         string
+	ExpectedActiveVersion int
 }
 
 // AuthzDecision records the governed authorization decision for a sensitive
@@ -233,7 +273,7 @@ func (o *Orchestrator) CreateProfile(ctx context.Context, tenantID, name string,
 		return store.ProfileRecord{}, err
 	}
 	if gated {
-		req, err := o.requestProfileEditApproval(ctx, tenantID, name, spec)
+		req, err := o.requestProfileEditApproval(ctx, tenantID, name, spec, profileVersionOptions{})
 		if err != nil {
 			return store.ProfileRecord{}, err
 		}
@@ -243,12 +283,28 @@ func (o *Orchestrator) CreateProfile(ctx context.Context, tenantID, name string,
 }
 
 func (o *Orchestrator) createProfileVersion(ctx context.Context, tenantID, name string, spec json.RawMessage) (store.ProfileRecord, error) {
+	return o.createProfileVersionWithOptions(ctx, tenantID, name, spec, profileVersionOptions{})
+}
+
+func (o *Orchestrator) createProfileVersionWithOptions(ctx context.Context, tenantID, name string, spec json.RawMessage, opts profileVersionOptions) (store.ProfileRecord, error) {
 	actor := ""
 	if a, ok := events.ActorFromContext(ctx); ok {
 		actor = a.Subject
 	}
 	var rec store.ProfileRecord
 	err := o.store.WithProjectionLock(ctx, func(ctx context.Context) error {
+		if opts.ExpectedActiveVersion > 0 {
+			active, err := o.store.GetActiveProfile(ctx, tenantID, name)
+			if err != nil {
+				return err
+			}
+			if active.Version != opts.ExpectedActiveVersion {
+				return ErrProfileRestoreStale
+			}
+			if active.Version == opts.RestoredFromVersion {
+				return ErrProfileRestoreAlreadyActive
+			}
+		}
 		version, err := o.store.NextProfileVersion(ctx, tenantID, name)
 		if err != nil {
 			return err
@@ -264,6 +320,9 @@ func (o *Orchestrator) createProfileVersion(ctx context.Context, tenantID, name 
 		payload, err := json.Marshal(projections.ProfileVersioned{
 			ID: rec.ID, Name: rec.Name, Version: rec.Version, Spec: rec.Spec,
 			Active: rec.Active, CreatedBy: rec.CreatedBy,
+			RestoredFromVersion:   opts.RestoredFromVersion,
+			RestoreReason:         opts.RestoreReason,
+			ExpectedActiveVersion: opts.ExpectedActiveVersion,
 		})
 		if err != nil {
 			return err
@@ -273,12 +332,106 @@ func (o *Orchestrator) createProfileVersion(ctx context.Context, tenantID, name 
 			return err
 		}
 		rec.CreatedAt = ev.Time
+		// Return the projected PostgreSQL jsonb representation, not the caller's
+		// byte ordering. ProfileSpecDigest is intentionally defined over the
+		// stored canonical bytes so create, preview, approval, and recovery all
+		// show the same digest for the same version.
+		projected, err := o.store.GetProfileVersion(ctx, tenantID, name, rec.Version)
+		if err != nil {
+			return err
+		}
+		rec = projected
 		return nil
 	})
 	if err != nil {
 		return store.ProfileRecord{}, err
 	}
 	return rec, nil
+}
+
+// PlanProfileRestore validates and describes an exact recovery without emitting
+// an event or changing a projection. The returned source spec is certificate
+// policy metadata, not credential or private-key material.
+func (o *Orchestrator) PlanProfileRestore(ctx context.Context, tenantID, name string, sourceVersion, expectedActiveVersion int, reason string) (ProfileRestorePlan, error) {
+	name = strings.TrimSpace(name)
+	reason = strings.TrimSpace(reason)
+	if name == "" || sourceVersion < 1 || expectedActiveVersion < 1 || reason == "" {
+		return ProfileRestorePlan{}, fmt.Errorf("orchestrator: profile name, positive source/active versions, and recovery reason are required")
+	}
+	source, err := o.store.GetProfileVersion(ctx, tenantID, name, sourceVersion)
+	if err != nil {
+		return ProfileRestorePlan{}, err
+	}
+	if err := profile.ValidateSpec(source.Spec); err != nil {
+		return ProfileRestorePlan{}, fmt.Errorf("orchestrator: historical profile spec is invalid: %w", err)
+	}
+	active, err := o.store.GetActiveProfile(ctx, tenantID, name)
+	if err != nil {
+		return ProfileRestorePlan{}, err
+	}
+	if active.Version != expectedActiveVersion {
+		return ProfileRestorePlan{}, ErrProfileRestoreStale
+	}
+	if active.Version == sourceVersion {
+		return ProfileRestorePlan{}, ErrProfileRestoreAlreadyActive
+	}
+	nextVersion, err := o.store.NextProfileVersion(ctx, tenantID, name)
+	if err != nil {
+		return ProfileRestorePlan{}, err
+	}
+	digest := store.ProfileSpecDigest(source.Spec)
+	fingerprintInput, err := json.Marshal(struct {
+		Capability            string `json:"capability"`
+		TenantID              string `json:"tenant_id"`
+		Name                  string `json:"name"`
+		SourceVersion         int    `json:"source_version"`
+		ExpectedActiveVersion int    `json:"expected_active_version"`
+		Reason                string `json:"reason"`
+		SourceSpecDigest      string `json:"source_spec_digest"`
+	}{
+		Capability: "certificate_profile_recovery", TenantID: tenantID, Name: name,
+		SourceVersion: sourceVersion, ExpectedActiveVersion: expectedActiveVersion,
+		Reason: reason, SourceSpecDigest: digest,
+	})
+	if err != nil {
+		return ProfileRestorePlan{}, err
+	}
+	return ProfileRestorePlan{
+		Capability: "certificate_profile_recovery", Operation: "restore_as_new_version", Ready: true,
+		Name: name, SourceVersion: sourceVersion, ActiveVersion: active.Version, NextVersion: nextVersion,
+		Reason: reason, SourceSpecDigest: digest,
+		RequestFingerprint: "sha256:" + crypto.SHA256Hex(fingerprintInput), RequiredPermission: "profiles:write",
+		Changes:           []string{fmt.Sprintf("Create profile %s version %d from reviewed historical version %d", name, nextVersion, sourceVersion), fmt.Sprintf("Make version %d active and retain version %d as immutable history", nextVersion, active.Version)},
+		Risks:             []string{"New issuance uses the restored rule after confirmation; certificates already issued keep their original profile-version evidence", "A concurrent profile change makes this receipt stale and the mutation fails closed"},
+		VerificationSteps: []string{fmt.Sprintf("Confirm version %d is active and its spec digest is %s", nextVersion, digest), "Confirm prior versions remain readable and inactive", "Issue a test certificate and verify it records the restored profile version"},
+		PreviewWrites:     []string{}, PreviewExternalEffects: []string{},
+		SourceSpec: append(json.RawMessage(nil), source.Spec...),
+	}, nil
+}
+
+// RestoreProfileVersion copies a reviewed historical spec into one new active
+// event-sourced version. It never mutates or reactivates the historical row.
+func (o *Orchestrator) RestoreProfileVersion(ctx context.Context, tenantID, name string, sourceVersion, expectedActiveVersion int, reason string) (store.ProfileRecord, error) {
+	plan, err := o.PlanProfileRestore(ctx, tenantID, name, sourceVersion, expectedActiveVersion, reason)
+	if err != nil {
+		return store.ProfileRecord{}, err
+	}
+	opts := profileVersionOptions{
+		RestoredFromVersion: plan.SourceVersion, RestoreReason: plan.Reason,
+		ExpectedActiveVersion: plan.ActiveVersion,
+	}
+	gated, err := o.profileEditRequiresApproval(ctx, tenantID, plan.Name, plan.SourceSpec)
+	if err != nil {
+		return store.ProfileRecord{}, err
+	}
+	if gated {
+		req, err := o.requestProfileEditApproval(ctx, tenantID, plan.Name, plan.SourceSpec, opts)
+		if err != nil {
+			return store.ProfileRecord{}, err
+		}
+		return store.ProfileRecord{}, &ProfileEditPendingError{Request: req}
+	}
+	return o.createProfileVersionWithOptions(ctx, tenantID, plan.Name, plan.SourceSpec, opts)
 }
 
 // ProfileApprovalRequirement resolves the active certificate profile bound to an
@@ -387,7 +540,7 @@ func profileSpecRequiresApproval(spec json.RawMessage) (bool, error) {
 	return probe.RequiresApproval, nil
 }
 
-func (o *Orchestrator) requestProfileEditApproval(ctx context.Context, tenantID, name string, spec json.RawMessage) (approval.Request, error) {
+func (o *Orchestrator) requestProfileEditApproval(ctx context.Context, tenantID, name string, spec json.RawMessage, opts profileVersionOptions) (approval.Request, error) {
 	actor, ok := events.ActorFromContext(ctx)
 	if !ok || actor.Subject == "" {
 		return approval.Request{}, fmt.Errorf("orchestrator: profile edit approval requires an authenticated requester")
@@ -400,9 +553,10 @@ func (o *Orchestrator) requestProfileEditApproval(ctx context.Context, tenantID,
 		CreatedAt: now, ExpiresAt: now.Add(24 * time.Hour),
 	}
 	entry := approvalProfileEditRequest{
-		Request: req,
-		Name:    name,
-		Spec:    append(json.RawMessage(nil), spec...),
+		Request: req, Name: name, Spec: append(json.RawMessage(nil), spec...),
+		RestoredFromVersion:   opts.RestoredFromVersion,
+		RestoreReason:         opts.RestoreReason,
+		ExpectedActiveVersion: opts.ExpectedActiveVersion,
 	}
 	payload, err := json.Marshal(entry)
 	if err != nil {
@@ -474,7 +628,11 @@ func (o *Orchestrator) ApproveProfileEdit(ctx context.Context, tenantID, request
 		return approval.Request{}, err
 	}
 	entry.Request.State = approval.StateApproved
-	rec, err := o.createProfileVersion(ctx, tenantID, entry.Name, entry.Spec)
+	rec, err := o.createProfileVersionWithOptions(ctx, tenantID, entry.Name, entry.Spec, profileVersionOptions{
+		RestoredFromVersion:   entry.RestoredFromVersion,
+		RestoreReason:         entry.RestoreReason,
+		ExpectedActiveVersion: entry.ExpectedActiveVersion,
+	})
 	if err != nil {
 		o.profileEditMu.Lock()
 		o.profileEditApprovals[key] = entry

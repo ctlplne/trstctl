@@ -7325,6 +7325,16 @@ Profile = TypedDict(
     total=False,
 )
 
+ProfileApprovalResponse = TypedDict(
+    'ProfileApprovalResponse',
+    {
+        'approval_id': str,
+        'resource': str,
+        'state': str,
+    },
+    total=False,
+)
+
 ProfileList = TypedDict(
     'ProfileList',
     {
@@ -7339,6 +7349,39 @@ ProfileRequest = TypedDict(
     {
         'name': str,
         'spec': dict[str, Any],
+    },
+    total=False,
+)
+
+ProfileRestorePreview = TypedDict(
+    'ProfileRestorePreview',
+    {
+        'active_version': int,
+        'capability': str,
+        'changes': list[str],
+        'name': str,
+        'next_version': int,
+        'operation': str,
+        'preview_external_effects': list[str],
+        'preview_writes': list[str],
+        'ready': bool,
+        'reason': str,
+        'request_fingerprint': str,
+        'required_permission': str,
+        'risks': list[str],
+        'source_spec': dict[str, Any],
+        'source_spec_digest': str,
+        'source_version': int,
+        'verification_steps': list[str],
+    },
+    total=False,
+)
+
+ProfileRestoreRequest = TypedDict(
+    'ProfileRestoreRequest',
+    {
+        'expected_active_version': int,
+        'reason': str,
     },
     total=False,
 )

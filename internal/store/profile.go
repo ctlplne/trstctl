@@ -3,8 +3,10 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -27,9 +29,24 @@ type ProfileRecord struct {
 }
 
 // ProfileSpecDigest is the stable digest used by approval evidence and lifecycle
-// commands. Profile specs are read from PostgreSQL jsonb first, so the bytes are
-// the same canonical representation during authorization, dispatch, and rebuild.
+// commands. It canonicalizes valid JSON before hashing because PostgreSQL jsonb
+// and the idempotency response cache may serialize object keys differently. The
+// same rule therefore keeps one digest across HTTP, projection, replay, and
+// approval. Invalid JSON retains a deterministic raw-byte digest so this helper
+// remains total; served profile writes reject invalid specs before calling it.
 func ProfileSpecDigest(spec json.RawMessage) string {
+	decoder := json.NewDecoder(bytes.NewReader(spec))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err == nil {
+		var trailing any
+		if err := decoder.Decode(&trailing); err != io.EOF {
+			return "sha256:" + crypto.SHA256Hex(spec)
+		}
+		if canonical, marshalErr := json.Marshal(value); marshalErr == nil {
+			return "sha256:" + crypto.SHA256Hex(canonical)
+		}
+	}
 	return "sha256:" + crypto.SHA256Hex(spec)
 }
 

@@ -215,8 +215,12 @@ ML-DSA/SLH-DSA hybrid PQC), minimum RSA/ECDSA strength, allowed EKUs, maximum
 validity, allowed DNS suffixes, and which enrollment protocols may use the profile.
 Build one with the guided form or a raw JSON editor, preview the resulting spec, and
 browse prior versions — issuance keeps the version it evaluated against, and a diff
-view compares any two versions field by field. Backed by `/api/v1/profiles` and
-`/api/v1/profiles/{name}/versions/{version}`.
+view compares any two versions field by field. From a historical comparison, **Review
+recovery** asks why the earlier rule is needed and opens an effect-free receipt. Only
+the confirmation copies that rule into a new active version; history is never edited,
+and a concurrent newer version makes the confirmation fail closed. Backed by
+`/api/v1/profiles`, `/api/v1/profiles/{name}/versions/{version}`, and the paired
+`.../restore/preview` and `.../restore` routes.
 
 ### Find unmanaged credentials (`/discovery`)
 

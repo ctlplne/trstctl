@@ -4210,31 +4210,40 @@
             "priority": 5,
             "served_state": "served",
             "backend_status": "served",
-            "current_frontend_mapping": "operate: Profiles page serves a guided and JSON profile workflow, including explicit default-off TPM device-attest-01 roots, identifiers, algorithms, freshness, enabled/disabled status, and fail-closed validation errors",
-            "target_gui_mapping": "Profile builder with schema-aware form, JSON editor, validation preview, version diff, active state, RA policy binding, and served-path impact preview.",
-            "acceptance_test": "Vitest covers valid profile create, invalid JSON, server validation error, version display, TPM device-attest-01 config/status/failure, and identity issuance using selected profile.",
+            "current_frontend_mapping": "operate and recover: Profiles serves guided/JSON authoring, version history and diff, TPM device-attest-01 policy, plus an effect-free historical recovery review that creates one new active version or enters dual control",
+            "target_gui_mapping": "Delivered: schema-aware builder, JSON editor, validation preview, version diff, active state, RA policy binding, and reviewed append-only recovery with an active-version concurrency fence.",
+            "acceptance_test": "TestServedProfileRestoreIsReviewedVersionedAndReplaySafe proves effect-free preview, append-only restore, idempotent retry, stale-version refusal, history retention, and event provenance; Vitest proves preview-before-confirm console behavior.",
             "source_docs": [
                 "docs/features/issuance-and-cas.md",
                 "docs/guides/profile-authoring.md"
             ],
             "source_backend": [
-                "/api/v1/profiles"
+                "internal/api/profiles.go",
+                "internal/orchestrator/commands.go",
+                "internal/store/profile.go",
+                "internal/server/profile_restore_served_test.go"
             ],
             "source_frontend": [
-                "web/src/pages/Profiles.tsx"
+                "web/src/pages/Profiles.tsx",
+                "web/src/lib/api.ts",
+                "web/src/__tests__/operations_surface.test.tsx"
             ],
             "status": "closed",
             "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
             "api_surface": [
                 "createProfile",
                 "listProfiles",
-                "getProfileVersion"
+                "getProfileVersion",
+                "previewProfileRestore",
+                "restoreProfileVersion"
             ],
             "api_na": "",
             "cli_surface": [
                 "profiles create",
                 "profiles list",
-                "profiles get-version"
+                "profiles get-version",
+                "profiles restore-preview",
+                "profiles restore"
             ],
             "cli_na": "",
             "facet_evidence": {
@@ -4249,8 +4258,8 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: operate: Profiles page serves a guided and JSON profile workflow, including explicit default-off TPM device-attest-01 roots, identifiers, algorithms, freshness, enabled/disabled status, and fail-closed validation errors",
-                        "target_gui_mapping: Profile builder with schema-aware form, JSON editor, validation preview, version diff, active state, RA policy binding, and served-path impact preview."
+                        "current_frontend_mapping: operate and recover: Profiles serves guided/JSON authoring, version history and diff, TPM device-attest-01 policy, plus an effect-free historical recovery review that creates one new active version or enters dual control",
+                        "target_gui_mapping: Delivered: schema-aware builder, JSON editor, validation preview, version diff, active state, RA policy binding, and reviewed append-only recovery with an active-version concurrency fence."
                     ],
                     "refs": [
                         "web/src/lib/navigation.ts",
@@ -4262,7 +4271,9 @@
                     "evidence": [
                         "CLI command: profiles create",
                         "CLI command: profiles list",
-                        "CLI command: profiles get-version"
+                        "CLI command: profiles get-version",
+                        "CLI command: profiles restore-preview",
+                        "CLI command: profiles restore"
                     ],
                     "refs": [
                         "internal/cli/command.go",
@@ -4273,7 +4284,9 @@
                     "evidence": [
                         "OpenAPI operationId: createProfile",
                         "OpenAPI operationId: listProfiles",
-                        "OpenAPI operationId: getProfileVersion"
+                        "OpenAPI operationId: getProfileVersion",
+                        "OpenAPI operationId: previewProfileRestore",
+                        "OpenAPI operationId: restoreProfileVersion"
                     ],
                     "refs": [
                         "internal/api/testdata/openapi.golden.json",
@@ -4282,15 +4295,18 @@
                 },
                 "test": {
                     "evidence": [
-                        "acceptance_test: Vitest covers valid profile create, invalid JSON, server validation error, version display, TPM device-attest-01 config/status/failure, and identity issuance using selected profile.",
+                        "acceptance_test: TestServedProfileRestoreIsReviewedVersionedAndReplaySafe proves effect-free preview, append-only restore, idempotent retry, stale-version refusal, history retention, and event provenance; Vitest proves preview-before-confirm console behavior.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
                         "Route parity and feature coverage tests keep feature evidence tied to registered customer routes.",
-                        "TestProfileGatedIssuanceAndAudit is a named acceptance test executed by the CI make test package set."
+                        "TestProfileGatedIssuanceAndAudit, TestServedProfileRestoreIsReviewedVersionedAndReplaySafe, and TestProfileRestorePreservesDualControlAndFailsClosedAfterApprovalDrift are named acceptance tests executed by the CI make test package set."
                     ],
                     "refs": [
                         "internal/featureparity/feature_facet_coverage_test.go",
                         "internal/projections/profile_e2e_test.go",
+                        "internal/server/profile_restore_served_test.go",
+                        "internal/orchestrator/profile_restore_approval_test.go",
                         "web/src/__tests__/feature_coverage.test.tsx",
+                        "web/src/__tests__/operations_surface.test.tsx",
                         "web/src/__tests__/route_parity.test.ts"
                     ]
                 },
@@ -4306,7 +4322,7 @@
                 },
                 "rbac": {
                     "evidence": [
-                        "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: createProfile, listProfiles, getProfileVersion",
+                        "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: createProfile, listProfiles, getProfileVersion, previewProfileRestore, restoreProfileVersion",
                         "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
                     ],
                     "refs": [
@@ -4319,7 +4335,7 @@
                 },
                 "audit": {
                     "evidence": [
-                        "mutating served surface requires audit/event evidence: createProfile, listProfiles, getProfileVersion",
+                        "mutating served surface requires audit/event evidence: createProfile, listProfiles, getProfileVersion, previewProfileRestore, restoreProfileVersion",
                         "served mutations route through handlers/orchestrator paths that emit event/audit evidence or expose signed audit search/export."
                     ],
                     "refs": [
@@ -4363,7 +4379,7 @@
                 "purpose": "Lets an operator understand and safely use certificate profiles and registration-authority model while tenant, policy, and security authority remain on the server.",
                 "tool": "certificates",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/profiles",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -4375,7 +4391,7 @@
                 "dependencies": [],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -4416,8 +4432,13 @@
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/Profiles.tsx",
+                            "internal/api/profiles.go",
+                            "internal/server/profile_restore_served_test.go",
+                            "internal/orchestrator/profile_restore_approval_test.go"
+                        ]
                     },
                     "verify": {
                         "status": "complete",
@@ -4431,16 +4452,20 @@
                             "OpenAPI operationId: createProfile",
                             "OpenAPI operationId: listProfiles",
                             "OpenAPI operationId: getProfileVersion",
+                            "OpenAPI operationId: previewProfileRestore",
+                            "OpenAPI operationId: restoreProfileVersion",
                             "CLI command: profiles create",
                             "CLI command: profiles list",
-                            "CLI command: profiles get-version"
+                            "CLI command: profiles get-version",
+                            "CLI command: profiles restore-preview",
+                            "CLI command: profiles restore"
                         ]
                     }
                 },
                 "owner": "pki",
                 "target_checkpoint": "frontend-convergence",
                 "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "freshness": "2026-08-28"
             }
         },
         {

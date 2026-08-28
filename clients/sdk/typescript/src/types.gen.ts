@@ -4420,6 +4420,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/profiles/{name}/versions/{version}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore a historical certificate profile as a new active version */
+        post: operations["restoreProfileVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/profiles/{name}/versions/{version}/restore/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview restoring a historical certificate-profile version */
+        post: operations["previewProfileRestore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/remediation/owner-actions": {
         parameters: {
             query?: never;
@@ -11141,6 +11175,12 @@ export interface components {
             spec?: components["schemas"]["CertificateProfileSpec"];
             version: number;
         };
+        ProfileApprovalResponse: {
+            /** Format: uuid */
+            approval_id: string;
+            resource: string;
+            state: string;
+        };
         ProfileList: {
             items: components["schemas"]["Profile"][];
             next_cursor?: string;
@@ -11148,6 +11188,31 @@ export interface components {
         ProfileRequest: {
             name: string;
             spec: components["schemas"]["CertificateProfileSpec"];
+        };
+        ProfileRestorePreview: {
+            active_version: number;
+            /** @enum {string} */
+            capability: "certificate_profile_recovery";
+            changes: string[];
+            name: string;
+            next_version: number;
+            /** @enum {string} */
+            operation: "restore_as_new_version";
+            preview_external_effects: string[];
+            preview_writes: string[];
+            ready: boolean;
+            reason: string;
+            request_fingerprint: string;
+            required_permission: string;
+            risks: string[];
+            source_spec: components["schemas"]["CertificateProfileSpec"];
+            source_spec_digest: string;
+            source_version: number;
+            verification_steps: string[];
+        };
+        ProfileRestoreRequest: {
+            expected_active_version: number;
+            reason: string;
         };
         ProtocolProfileStatus: {
             active: boolean;
@@ -25527,6 +25592,15 @@ export interface operations {
                     "application/json": components["schemas"]["Profile"];
                 };
             };
+            /** @description profile change queued for dual-control approval */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileApprovalResponse"];
+                };
+            };
             /** @description client error */
             "4XX": {
                 headers: {
@@ -25568,6 +25642,112 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Profile"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    restoreProfileVersion: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description certificate profile name */
+                name: string;
+                /** @description positive certificate profile version */
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileRestoreRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Profile"];
+                };
+            };
+            /** @description profile recovery queued for dual-control approval */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileApprovalResponse"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewProfileRestore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description certificate profile name */
+                name: string;
+                /** @description positive certificate profile version */
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileRestoreRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileRestorePreview"];
                 };
             };
             /** @description client error */

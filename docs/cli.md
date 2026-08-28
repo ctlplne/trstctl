@@ -191,7 +191,7 @@ exhaustive subcommand list:
 | `platform`                         | Running build, uptime, signer topology, and spine reachability (`system`)                                                                                    |
 | `policy`                           | Author, list, activate, and roll back lifecycle policy versions; dry-run a candidate module (`versions create/list/activate/rollback` · `dry-run`)           |
 | `privacy`                          | Subject erasure, retention runs, archive-erasure attestations, export, personal-data catalog (`erasures` · `retention` · `archives` · `export` · `catalog`)  |
-| `profiles`                         | Certificate profile versions (`create` · `list` · `get-version`)                                                                                             |
+| `profiles`                         | Certificate profile versions and append-only recovery (`create` · `list` · `get-version` · `restore-preview` · `restore`)                                    |
 | `remediation`                      | Automated remediation playbooks/runs and owner-driven self-remediation actions (`playbooks` · `playbooks run` · `playbook-runs list/get` · `owner-actions list/accept`) |
 | `revocation`                       | Published CRLs, signed relay endpoint health, rogue-certificate findings, CT-log submission (`crls` · `health` · `rogue-certificates` · `ct-submit`)                               |
 | `risk`                             | Rank credentials by risk score, with blast-radius-aware prioritization (`credentials` · `contextual-priorities`)                                             |

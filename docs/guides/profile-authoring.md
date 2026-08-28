@@ -96,6 +96,46 @@ trstctl-cli profiles get-version web-server 1
 A re-create of the same `name` publishes a new version and activates it; the previous
 version stays resolvable by number.
 
+## Recovering a known-good version
+
+Recovery is append-only. trstctl never edits an old row or flips an old version back
+to active. Instead, it copies the reviewed historical spec into one new active
+version. That keeps the full story readable: the bad version still exists for audit,
+the recovered version says exactly where it came from, and certificates already
+issued keep the profile-version evidence they originally used.
+
+First create an effect-free review. The body pins the active version you saw and
+records why recovery is needed:
+
+```bash
+cat > profile-restore.json <<'JSON'
+{
+  "expected_active_version": 2,
+  "reason": "Recover the last known-good 24-hour web TLS rule"
+}
+JSON
+
+trstctl-cli profiles restore-preview web-server 1 -f profile-restore.json
+```
+
+The preview reports the historical source, current active version, new version,
+semantic spec digest, request fingerprint, risks, and verification steps. It writes
+no event, creates no approval, changes no rule, and contacts no external system.
+After checking that receipt, submit the same body:
+
+```bash
+trstctl-cli profiles restore web-server 1 \
+  --idempotency-key profile-recovery-2026-08-28 \
+  -f profile-restore.json
+```
+
+The server rechecks `expected_active_version` while holding the projection lock. If
+another operator created a newer version after the preview, recovery returns `409`
+and creates nothing; preview again instead of rolling over the newer decision. The
+same idempotency key returns the original result and cannot create another version.
+If either the current or historical rule requires approval, recovery is parked for
+a different operator under the existing profile dual-control gate.
+
 ## What a profile rejects
 
 An issuance bound to `web-server` above is rejected, with the reason, when it asks for a

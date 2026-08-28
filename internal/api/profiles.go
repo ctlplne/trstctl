@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/profile"
@@ -36,6 +37,11 @@ type profileApprovalResponse struct {
 	ApprovalID string `json:"approval_id"`
 	State      string `json:"state"`
 	Resource   string `json:"resource"`
+}
+
+type profileRestoreRequest struct {
+	ExpectedActiveVersion int    `json:"expected_active_version"`
+	Reason                string `json:"reason"`
 }
 
 func toProfileResponse(r store.ProfileRecord) profileResponse {
@@ -107,4 +113,96 @@ func (a *API) getProfileVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.writeJSON(w, http.StatusOK, toProfileResponse(rec))
+}
+
+func decodeProfileRestoreRequest(r *http.Request) (profileRestoreRequest, error) {
+	var req profileRestoreRequest
+	if err := decodeJSON(r, &req); err != nil {
+		return profileRestoreRequest{}, errWithStatus(http.StatusBadRequest, err)
+	}
+	if req.ExpectedActiveVersion < 1 {
+		return profileRestoreRequest{}, errStatus(http.StatusBadRequest, "expected_active_version must be a positive integer")
+	}
+	req.Reason = strings.TrimSpace(req.Reason)
+	if len(req.Reason) == 0 {
+		return profileRestoreRequest{}, errStatus(http.StatusBadRequest, "reason is required")
+	}
+	if len(req.Reason) > 1000 {
+		return profileRestoreRequest{}, errStatus(http.StatusBadRequest, "reason must be 1000 characters or fewer")
+	}
+	return req, nil
+}
+
+func profileVersionFromPath(r *http.Request) (int, error) {
+	version, err := strconv.Atoi(r.PathValue("version"))
+	if err != nil || version < 1 {
+		return 0, errStatus(http.StatusBadRequest, "version must be a positive integer")
+	}
+	return version, nil
+}
+
+func profileRestoreAPIError(err error) error {
+	switch {
+	case errors.Is(err, orchestrator.ErrProfileRestoreStale):
+		return errStatus(http.StatusConflict, "The active rule changed after this recovery was reviewed. Preview it again before restoring.")
+	case errors.Is(err, orchestrator.ErrProfileRestoreAlreadyActive):
+		return errStatus(http.StatusConflict, "The selected rule version is already active; no recovery change is needed.")
+	default:
+		return err
+	}
+}
+
+// previewProfileRestore is intentionally a POST-shaped read because the exact
+// proposal is in the request body. It emits no event and contacts no external
+// system; the mutation rechecks the active-version fence at confirmation time.
+func (a *API) previewProfileRestore(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	version, err := profileVersionFromPath(r)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	req, err := decodeProfileRestoreRequest(r)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	plan, err := a.orch.PlanProfileRestore(r.Context(), tenantID, r.PathValue("name"), version, req.ExpectedActiveVersion, req.Reason)
+	if err != nil {
+		a.writeError(w, profileRestoreAPIError(err))
+		return
+	}
+	a.writeJSON(w, http.StatusOK, plan)
+}
+
+//trstctl:mutation
+func (a *API) restoreProfileVersion(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		version, err := profileVersionFromPath(r)
+		if err != nil {
+			return 0, nil, err
+		}
+		req, err := decodeProfileRestoreRequest(r)
+		if err != nil {
+			return 0, nil, err
+		}
+		rec, err := a.orch.RestoreProfileVersion(ctx, tenantID, r.PathValue("name"), version, req.ExpectedActiveVersion, req.Reason)
+		if err != nil {
+			var pending *orchestrator.ProfileEditPendingError
+			if errors.As(err, &pending) {
+				return http.StatusAccepted, profileApprovalResponse{
+					ApprovalID: pending.Request.ID,
+					State:      string(pending.Request.State),
+					Resource:   pending.Request.Resource,
+				}, nil
+			}
+			return 0, nil, profileRestoreAPIError(err)
+		}
+		return http.StatusCreated, toProfileResponse(rec), nil
+	})
 }

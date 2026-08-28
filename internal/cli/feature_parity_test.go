@@ -224,8 +224,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// consume the same tenant-bound, effect-free ACME plan.
 	// F48's ceremony and rotation previews raise it to 399 so headless operators
 	// get the same effect-free CA trust-change receipts as the console.
-	if len(out) != 399 {
-		t.Fatalf("CLI commands = %d, want 399", len(out))
+	// F53's profile restore preview and append-only recovery raise it to 401.
+	if len(out) != 401 {
+		t.Fatalf("CLI commands = %d, want 401", len(out))
 	}
 	return out
 }
