@@ -1615,11 +1615,64 @@ CAAuthorityRotationIssuer = TypedDict(
     total=False,
 )
 
+CAAuthorityRotationPlanPreview = TypedDict(
+    'CAAuthorityRotationPlanPreview',
+    {
+        'capability': str,
+        'changes': list[str],
+        'operation': str,
+        'predecessor': dict[str, Any],
+        'preview_external_effects': list[str],
+        'preview_writes': list[str],
+        'ready': bool,
+        'reason': str,
+        'request_fingerprint': str,
+        'required_permission': str,
+        'risks': list[str],
+        'successor': dict[str, Any],
+        'verification_steps': list[str],
+    },
+    total=False,
+)
+
 CAAuthorityRotationRequest = TypedDict(
     'CAAuthorityRotationRequest',
     {
         'reason': str,
         'successor_id': str,
+    },
+    total=False,
+)
+
+CACeremonyPlanAuthority = TypedDict(
+    'CACeremonyPlanAuthority',
+    {
+        'common_name': str,
+        'id': str,
+        'kind': str,
+        'status': str,
+    },
+    total=False,
+)
+
+CACeremonyPlanPreview = TypedDict(
+    'CACeremonyPlanPreview',
+    {
+        'approval_threshold': int,
+        'authority': dict[str, Any],
+        'capability': str,
+        'changes': list[str],
+        'normalized_spec': dict[str, Any],
+        'operation': str,
+        'parent': dict[str, Any],
+        'preview_external_effects': list[str],
+        'preview_writes': list[str],
+        'ready': bool,
+        'request_fingerprint': str,
+        'required_permission': str,
+        'risks': list[str],
+        'sensitive_inputs': list[str],
+        'verification_steps': list[str],
     },
     total=False,
 )

@@ -186,8 +186,13 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// F5's effect-free ACME operator plan raises it to 385 and joins the mounted
 	// responder, tenant binding, issuing profile, EAB admission, activation gate,
 	// and recovery guidance before the console offers an execution step.
-	if len(out) != 385 {
-		t.Fatalf("OpenAPI operationIds = %d, want 385", len(out))
+	// F48's effect-free CA ceremony preview raises it to 386 and binds the
+	// console's trust-change review to the same exact ceremony request the
+	// signer-backed mutation later consumes.
+	// F48's effect-free CA rotation preview raises it to 387 and proves both
+	// authorities pass the mutation's eligibility rules before confirmation.
+	if len(out) != 387 {
+		t.Fatalf("OpenAPI operationIds = %d, want 387", len(out))
 	}
 	return out
 }

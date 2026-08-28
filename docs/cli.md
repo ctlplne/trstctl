@@ -153,8 +153,8 @@ exhaustive subcommand list:
 | `audit`                            | Query/export the signed audit log, pin public verification keys, verify every saved format offline, and configure native collector feeds (`events` · `export` · `verification-keys` · `verify` · `feeds set` · `feeds list`)                                  |
 | `breakglass`                       | Ceremony-gated online break-glass issuance, rotation, cross-signing, and offline-bundle reconciliation (`issue-ceremony` · `issue` · `rotation-ceremony` · `rotate` · `cross-sign-ceremony` · `cross-sign` · `reconcile`) |
 | `broker agent-identities`          | Issue a policy-gated AI/MCP agent identity (`issue`)                                                                                                         |
-| `ca ceremonies`                    | Start, inspect, and approve m-of-n CA key ceremonies (`start` · `get` · `approve`)                                                                           |
-| `ca authorities`                   | Private CA authority lifecycle — create/import roots and intermediates, rotate, rekey, cross-sign, issue leaf certs (`list` · `create-root` · `import-offline-root` · `import-existing` · `create-intermediate` · `rotate` · `rekey` · `cross-sign` · `issue`) |
+| `ca ceremonies`                    | Effect-free review, start, inspect, and approve m-of-n CA key ceremonies (`preview` · `start` · `get` · `approve`)                                                                           |
+| `ca authorities`                   | Private CA authority lifecycle — create/import roots and intermediates, preview/activate rotation, rekey, cross-sign, issue leaf certs (`list` · `create-root` · `import-offline-root` · `import-existing` · `create-intermediate` · `rotate-preview` · `rotate` · `rekey` · `cross-sign` · `issue`) |
 | `ca discovery`                     | List public and private CA discovery inventory (`list`)                                                                                                      |
 | `cbom`                             | Cryptographic bill of materials: scan TLS endpoints/configs, list assets (`scan` · `assets`)                                                                 |
 | `pqc campaigns`                    | Core PQC migration ownership and evidence workflow (`create` · `list` · `get` · `update` · `readiness` · `disposition` · `close` · `evidence`)               |
@@ -445,6 +445,9 @@ trstctl-cli scale ha-issuance
 cat > root-ceremony.json <<'JSON'
 {"operation":"create_root","threshold":2,"spec":{"common_name":"Example Root CA","ttl_seconds":315360000,"signature_algorithm":"ECDSA-P256","max_path_len":1,"permitted_dns_domains":["example.internal"]}}
 JSON
+# Preview is effect-free: it validates and fingerprints this exact body without
+# creating a ceremony, key, certificate, event, or external request.
+trstctl-cli ca ceremonies preview -f root-ceremony.json
 trstctl-cli ca ceremonies start -f root-ceremony.json
 # Run each approval with a distinct custodian token.
 trstctl-cli ca ceremonies approve <ceremony-id>
@@ -504,6 +507,14 @@ cat > spire-intermediate.json <<'JSON'
 {"csr_pem":"-----BEGIN CERTIFICATE REQUEST-----\n...\n-----END CERTIFICATE REQUEST-----\n","spec":{"common_name":"SPIRE Server CA","ttl_seconds":3600,"max_path_len":0,"permitted_dns_domains":["example.org"]}}
 JSON
 trstctl-cli --idempotency-key spire-upstream-root-1 ca authorities issue-intermediate-csr <ca-authority-id> -f spire-intermediate.json
+
+# Review a zero-downtime rotation first. The preview applies the same eligibility
+# rules but changes neither CA; use the exact same body for activation.
+cat > ca-rotation.json <<'JSON'
+{"successor_id":"<successor-ca-authority-id>","reason":"planned overlap"}
+JSON
+trstctl-cli ca authorities rotate-preview <predecessor-ca-authority-id> -f ca-rotation.json
+trstctl-cli ca authorities rotate <predecessor-ca-authority-id> -f ca-rotation.json
 
 # Re-key a signer-backed CA authority after a purpose-bound ceremony.
 cat > ca-rekey-ceremony.json <<'JSON'

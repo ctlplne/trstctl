@@ -4480,6 +4480,89 @@
         ],
         "type": "object"
       },
+      "CAAuthorityRotationPlanPreview": {
+        "properties": {
+          "capability": {
+            "enum": [
+              "F48"
+            ],
+            "type": "string"
+          },
+          "changes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "operation": {
+            "enum": [
+              "rotate_ca"
+            ],
+            "type": "string"
+          },
+          "predecessor": {
+            "$ref": "#/components/schemas/CACeremonyPlanAuthority"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "request_fingerprint": {
+            "type": "string"
+          },
+          "required_permission": {
+            "enum": [
+              "issuers:write"
+            ],
+            "type": "string"
+          },
+          "risks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "successor": {
+            "$ref": "#/components/schemas/CACeremonyPlanAuthority"
+          },
+          "verification_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "operation",
+          "ready",
+          "request_fingerprint",
+          "required_permission",
+          "reason",
+          "predecessor",
+          "successor",
+          "changes",
+          "risks",
+          "verification_steps",
+          "preview_writes",
+          "preview_external_effects"
+        ],
+        "type": "object"
+      },
       "CAAuthorityRotationRequest": {
         "properties": {
           "reason": {
@@ -4492,6 +4575,128 @@
         },
         "required": [
           "successor_id"
+        ],
+        "type": "object"
+      },
+      "CACeremonyPlanAuthority": {
+        "properties": {
+          "common_name": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "common_name",
+          "kind",
+          "status"
+        ],
+        "type": "object"
+      },
+      "CACeremonyPlanPreview": {
+        "properties": {
+          "approval_threshold": {
+            "type": "integer"
+          },
+          "authority": {
+            "$ref": "#/components/schemas/CACeremonyPlanAuthority"
+          },
+          "capability": {
+            "enum": [
+              "F48"
+            ],
+            "type": "string"
+          },
+          "changes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "normalized_spec": {
+            "$ref": "#/components/schemas/CASpec"
+          },
+          "operation": {
+            "enum": [
+              "create_root",
+              "import_offline_root",
+              "import_existing_ca",
+              "create_intermediate",
+              "create_offline_intermediate",
+              "issue_intermediate_csr",
+              "rekey_ca",
+              "cross_sign_ca",
+              "import_offline_cross_sign",
+              "rekey_offline_root"
+            ],
+            "type": "string"
+          },
+          "parent": {
+            "$ref": "#/components/schemas/CACeremonyPlanAuthority"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "request_fingerprint": {
+            "type": "string"
+          },
+          "required_permission": {
+            "type": "string"
+          },
+          "risks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "sensitive_inputs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "verification_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "operation",
+          "ready",
+          "request_fingerprint",
+          "approval_threshold",
+          "required_permission",
+          "normalized_spec",
+          "changes",
+          "risks",
+          "verification_steps",
+          "sensitive_inputs",
+          "preview_writes",
+          "preview_external_effects"
         ],
         "type": "object"
       },
@@ -31239,6 +31444,74 @@
         "x-trstctl-permission": "issuers:write"
       }
     },
+    "/api/v1/ca/authorities/{id}/rotate/preview": {
+      "post": {
+        "operationId": "previewCAAuthorityRotation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CAAuthorityRotationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CAAuthorityRotationPlanPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Validate and explain a CA rotation without changing authority state",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
     "/api/v1/ca/ceremonies": {
       "post": {
         "operationId": "createCACeremony",
@@ -31304,6 +31577,63 @@
           }
         ],
         "summary": "Start an m-of-n CA key ceremony",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/ca/ceremonies/preview": {
+      "post": {
+        "operationId": "previewCACeremony",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CACeremonyStartRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CACeremonyPlanPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Validate and explain an exact CA key ceremony without writing state, creating keys, or contacting an authority",
         "x-trstctl-permission": "issuers:write"
       }
     },

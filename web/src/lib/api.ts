@@ -102,7 +102,9 @@ import type {
   CAAuthorityList,
   CAAuthorityRekeyRequest,
   CAAuthorityRotation,
+  CAAuthorityRotationPlanPreview,
   CAAuthorityRotationRequest,
+  CACeremonyPlanPreview,
   CACeremonyStartRequest,
   CACreateIntermediateRequest,
   CACreateOfflineIntermediateCSRRequest,
@@ -722,7 +724,9 @@ export type {
   CAAuthority,
   CAAuthorityList,
   CAAuthorityRotation,
+  CAAuthorityRotationPlanPreview,
   CAAuthorityRotationRequest,
+  CACeremonyPlanPreview,
   CACeremonyStartRequest,
   CACreateIntermediateRequest,
   CACreateOfflineIntermediateCSRRequest,
@@ -1707,12 +1711,14 @@ export interface Api {
   profiles(): Promise<Profile[]>;
   getProfileVersion(name: string, version: number): Promise<Profile>;
   createProfile(input: ProfileRequest): Promise<Profile>;
+  previewCACeremony(input: CACeremonyStartRequest): Promise<CACeremonyPlanPreview>;
   createCACeremony(input: CACeremonyStartRequest): Promise<CAKeyCeremony>;
   approveCACeremony(id: string): Promise<CAKeyCeremony>;
   importOfflineRootCA(input: CAImportOfflineRootRequest): Promise<CAAuthority>;
   importExistingCA(input: CAImportExistingRequest): Promise<CAAuthority>;
   createOfflineIntermediateCSR(id: string, input: CACreateOfflineIntermediateCSRRequest): Promise<CAIntermediateCSR>;
   importOfflineIntermediateCA(id: string, input: CAImportOfflineIntermediateRequest): Promise<CAAuthority>;
+  previewCAAuthorityRotation(id: string, input: CAAuthorityRotationRequest): Promise<CAAuthorityRotationPlanPreview>;
   rotateCAAuthority(id: string, input: CAAuthorityRotationRequest): Promise<CAAuthorityRotation>;
   rekeyCAAuthority(id: string, input: CAAuthorityRekeyRequest): Promise<CAAuthorityRotation>;
   generateManagedKey(input: ManagedKeyGenerateRequest): Promise<ManagedKey>;
@@ -2203,6 +2209,7 @@ const liveApi: Api = {
   profiles: () => req<{ items: Profile[] }>("/api/v1/profiles").then((r) => r.items ?? []),
   getProfileVersion: (name, version) => req<Profile>(`/api/v1/profiles/${encodeURIComponent(name)}/versions/${version}`),
   createProfile: (input) => mutate<Profile>("POST", "/api/v1/profiles", input),
+  previewCACeremony: (input) => postRead<CACeremonyPlanPreview>("/api/v1/ca/ceremonies/preview", input),
   createCACeremony: (input) => mutate<CAKeyCeremony>("POST", "/api/v1/ca/ceremonies", input),
   approveCACeremony: (id) => mutate<CAKeyCeremony>("POST", `/api/v1/ca/ceremonies/${encodeURIComponent(id)}/approvals`),
   importOfflineRootCA: (input) => mutate<CAAuthority>("POST", "/api/v1/ca/authorities/offline-roots", input),
@@ -2210,6 +2217,7 @@ const liveApi: Api = {
   createOfflineIntermediateCSR: (id, input) =>
     mutate<CAIntermediateCSR>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/offline-intermediates/csr`, input),
   importOfflineIntermediateCA: (id, input) => mutate<CAAuthority>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/offline-intermediates`, input),
+  previewCAAuthorityRotation: (id, input) => postRead<CAAuthorityRotationPlanPreview>(`/api/v1/ca/authorities/${encodeURIComponent(id)}/rotate/preview`, input),
   rotateCAAuthority: (id, input) => mutate<CAAuthorityRotation>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/rotate`, input),
   rekeyCAAuthority: (id, input) => mutate<CAAuthorityRotation>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/rekey`, input),
   generateManagedKey: (input) => mutate<ManagedKey>("POST", "/api/v1/managed-keys", input),

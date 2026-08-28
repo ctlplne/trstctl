@@ -5228,6 +5228,95 @@ export const messages = {
     defaultMessage: "Add authority",
     description: "Primary action that opens the certificate authority workspace.",
   },
+  "caHierarchy.preview.title": {
+    defaultMessage: "Review CA ceremony",
+    description: "Heading for the server-owned effect-free review shown before a CA key ceremony is created.",
+  },
+  "caHierarchy.preview.description": {
+    defaultMessage: "Check the exact trust change, quorum, risks, and proof steps before creating the approval record.",
+    description: "Technical ELI5 explanation of the CA ceremony review step.",
+  },
+  "caHierarchy.preview.close": { defaultMessage: "Close ceremony review", description: "Accessible label for closing the CA ceremony review dialog." },
+  "caHierarchy.preview.effectFreeLabel": { defaultMessage: "Effect-free preview", description: "Accessible label for the no-side-effect CA review receipt." },
+  "caHierarchy.preview.effectFree": { defaultMessage: "Nothing has changed yet", description: "Verdict heading confirming the CA preview made no changes." },
+  "caHierarchy.preview.effectFreeDetail": {
+    defaultMessage: "No ceremony, key, certificate, or external request has been created.",
+    description: "Exact boundaries proving the CA preview is effect-free.",
+  },
+  "caHierarchy.preview.operation": { defaultMessage: "Operation", description: "Label for the reviewed CA ceremony operation." },
+  "caHierarchy.preview.approvals": { defaultMessage: "Approval rule", description: "Label for the reviewed CA ceremony quorum." },
+  "caHierarchy.preview.approvalCount": {
+    defaultMessage: "{count} distinct approvals",
+    description: "Number of distinct custodians required by a CA ceremony.",
+  },
+  "caHierarchy.preview.permission": {
+    defaultMessage: "Required permission",
+    description: "Label for the server permission required to start the reviewed ceremony.",
+  },
+  "caHierarchy.preview.commonName": { defaultMessage: "CA common name", description: "Label for the reviewed CA profile common name." },
+  "caHierarchy.preview.authority": { defaultMessage: "Existing authority", description: "Label for the tenant-scoped authority referenced by the ceremony." },
+  "caHierarchy.preview.fingerprint": { defaultMessage: "Request fingerprint", description: "Label for the exact non-secret CA ceremony request digest." },
+  "caHierarchy.preview.changes": { defaultMessage: "What this prepares", description: "Heading for the later CA change authorized by the ceremony." },
+  "caHierarchy.preview.risks": { defaultMessage: "What could affect trust", description: "Heading for CA trust risks the operator must understand." },
+  "caHierarchy.preview.verify": { defaultMessage: "How to prove it worked", description: "Heading for durable CA ceremony and execution verification steps." },
+  "caHierarchy.preview.protectedInputs": {
+    defaultMessage: "Protected inputs",
+    description: "Heading for sensitive input field names omitted from the preview.",
+  },
+  "caHierarchy.preview.protectedInputsDetail": {
+    defaultMessage: "The server validated these fields, but their values are intentionally absent from this receipt.",
+    description: "Explains why certificate and signer input values are redacted from the CA review.",
+  },
+  "caHierarchy.preview.cancel": { defaultMessage: "Go back", description: "Secondary action that closes the CA review without creating a ceremony." },
+  "caHierarchy.preview.confirm": {
+    defaultMessage: "Start reviewed ceremony",
+    description: "Primary action that submits the exact reviewed CA ceremony request.",
+  },
+  "caHierarchy.preview.unsafe": {
+    defaultMessage: "The server did not prove an effect-free, ready plan. Nothing was started.",
+    description: "Fail-closed message when a CA preview claims writes, external effects, or is not ready.",
+  },
+  "caHierarchy.preview.failed": {
+    defaultMessage: "Could not review this CA ceremony",
+    description: "Fallback error when the effect-free CA preview cannot load.",
+  },
+  "caHierarchy.preview.startFailed": {
+    defaultMessage: "Could not start the reviewed CA ceremony",
+    description: "Fallback error when exact reviewed ceremony creation fails.",
+  },
+  "caHierarchy.rotationPreview.title": {
+    defaultMessage: "Review CA rotation",
+    description: "Heading for the server-owned effect-free review shown before activating a CA successor.",
+  },
+  "caHierarchy.rotationPreview.description": {
+    defaultMessage: "Check the exact predecessor, successor, trust risks, and proof steps before changing the live issue path.",
+    description: "Technical ELI5 explanation of the CA rotation review step.",
+  },
+  "caHierarchy.rotationPreview.close": { defaultMessage: "Close rotation review", description: "Accessible label for closing the CA rotation review dialog." },
+  "caHierarchy.rotationPreview.effectFreeDetail": {
+    defaultMessage: "No authority status, issue path, key, certificate, event, or external system has changed.",
+    description: "Exact boundaries proving the CA rotation preview is effect-free.",
+  },
+  "caHierarchy.rotationPreview.predecessor": { defaultMessage: "Current issuing CA", description: "Label for the reviewed predecessor CA." },
+  "caHierarchy.rotationPreview.successor": { defaultMessage: "Next issuing CA", description: "Label for the reviewed successor CA." },
+  "caHierarchy.rotationPreview.reason": { defaultMessage: "Reason", description: "Label for the reviewed CA rotation reason." },
+  "caHierarchy.rotationPreview.noReason": { defaultMessage: "No reason supplied", description: "Fallback when a CA rotation has no operator reason." },
+  "caHierarchy.rotationPreview.changes": {
+    defaultMessage: "What confirmation changes",
+    description: "Heading for the exact authority routing changes made by CA rotation.",
+  },
+  "caHierarchy.rotationPreview.confirm": {
+    defaultMessage: "Activate reviewed rotation",
+    description: "Primary action that submits the exact reviewed CA rotation request.",
+  },
+  "caHierarchy.rotationPreview.failed": {
+    defaultMessage: "Could not review this CA rotation",
+    description: "Fallback error when the effect-free CA rotation preview cannot load.",
+  },
+  "caHierarchy.rotationPreview.activateFailed": {
+    defaultMessage: "Could not activate the reviewed CA rotation",
+    description: "Fallback error when exact reviewed CA rotation activation fails.",
+  },
   "caHierarchy.discovery.heading": {
     defaultMessage: "CA discovery inventory",
     description: "Heading for the CA hierarchy direct-CA discovery inventory panel.",

@@ -15,12 +15,14 @@ const { apiMock } = vi.hoisted(() => ({
     caDiscoveryInventory: vi.fn(),
     externalCAs: vi.fn(),
     issuerCapabilities: vi.fn(),
+    previewCACeremony: vi.fn(),
     createCACeremony: vi.fn(),
     approveCACeremony: vi.fn(),
     importOfflineRootCA: vi.fn(),
     importExistingCA: vi.fn(),
     createOfflineIntermediateCSR: vi.fn(),
     importOfflineIntermediateCA: vi.fn(),
+    previewCAAuthorityRotation: vi.fn(),
     rotateCAAuthority: vi.fn(),
     rekeyCAAuthority: vi.fn(),
     generateManagedKey: vi.fn(),
@@ -227,6 +229,36 @@ describe("CA hierarchy and custody surface", () => {
         authority_count: 2,
       },
     });
+    apiMock.previewCACeremony.mockImplementation(async (input: { operation: string; threshold: number; spec: Record<string, unknown> }) => ({
+      capability: "F48",
+      operation: input.operation,
+      ready: true,
+      request_fingerprint: `review-${input.operation}`,
+      approval_threshold: input.threshold,
+      required_permission: "issuers:write",
+      normalized_spec: input.spec,
+      changes: ["Prepare the reviewed CA trust change without creating a ceremony or key."],
+      risks: ["A completed ceremony can authorize a later trust or signing-authority change."],
+      verification_steps: ["Verify distinct approvals and the immutable ceremony event before execution."],
+      sensitive_inputs: input.operation === "import_existing_ca" ? ["certificate_pem", "signer_handle"] : [],
+      preview_writes: [],
+      preview_external_effects: [],
+    }));
+    apiMock.previewCAAuthorityRotation.mockImplementation(async (predecessorID: string, input: { successor_id: string; reason?: string }) => ({
+      capability: "F48",
+      operation: "rotate_ca",
+      ready: true,
+      request_fingerprint: "rotation-review-fingerprint",
+      required_permission: "issuers:write",
+      reason: input.reason ?? "",
+      predecessor: { id: predecessorID, common_name: "Imported Existing CA", kind: "intermediate", status: "active" },
+      successor: { id: input.successor_id, common_name: "Imported Existing CA v2", kind: "intermediate", status: "active" },
+      changes: ["Route the stable issue URL to the reviewed successor CA."],
+      risks: ["Clients must trust the successor chain."],
+      verification_steps: ["Issue a test certificate through the stable URL."],
+      preview_writes: [],
+      preview_external_effects: [],
+    }));
     apiMock.createCACeremony.mockImplementation(async (input: { operation: string }) => {
       const base = {
         tenant_id: "tenant-1",
@@ -494,6 +526,19 @@ describe("CA hierarchy and custody surface", () => {
     await user.click(screen.getByRole("button", { name: "Activate CA rotation" }));
 
     await waitFor(() =>
+      expect(apiMock.previewCAAuthorityRotation).toHaveBeenCalledWith("ca-existing-imported", {
+        successor_id: "ca-existing-successor",
+        reason: "planned overlap",
+      }),
+    );
+    expect(apiMock.rotateCAAuthority).not.toHaveBeenCalled();
+    expect(await screen.findByRole("heading", { name: "Review CA rotation" })).toBeInTheDocument();
+    expect(screen.getByText("Imported Existing CA · active")).toBeInTheDocument();
+    expect(screen.getByText("Imported Existing CA v2 · active")).toBeInTheDocument();
+    expect(screen.getByTitle("rotation-review-fingerprint")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Activate reviewed rotation" }));
+
+    await waitFor(() =>
       expect(apiMock.rotateCAAuthority).toHaveBeenCalledWith("ca-existing-imported", {
         successor_id: "ca-existing-successor",
         reason: "planned overlap",
@@ -512,6 +557,7 @@ describe("CA hierarchy and custody surface", () => {
     await screen.findByRole("heading", { name: "CA renewal and re-key" });
     await user.selectOptions(screen.getByLabelText("CA authority"), "ca-existing-imported");
     await user.click(screen.getByRole("button", { name: "Start re-key ceremony" }));
+    await user.click(within(await screen.findByRole("dialog", { name: "Review CA ceremony" })).getByRole("button", { name: "Start reviewed ceremony" }));
 
     await waitFor(() =>
       expect(apiMock.createCACeremony).toHaveBeenCalledWith({
@@ -546,6 +592,21 @@ describe("CA hierarchy and custody surface", () => {
     renderCAHierarchy();
 
     await user.click(await screen.findByRole("button", { name: "Start root ceremony" }));
+
+    await waitFor(() =>
+      expect(apiMock.previewCACeremony).toHaveBeenCalledWith({
+        operation: "create_root",
+        threshold: 2,
+        spec: expect.objectContaining({ common_name: "Trust Root CA", signature_algorithm: "ECDSA-P256" }),
+      }),
+    );
+    expect(apiMock.createCACeremony).not.toHaveBeenCalled();
+    const review = await screen.findByRole("dialog", { name: "Review CA ceremony" });
+    expect(within(review).getByText("No ceremony, key, certificate, or external request has been created.")).toBeInTheDocument();
+    expect(within(review).getByText("2 distinct approvals")).toBeInTheDocument();
+    expect(within(review).getByText("review-create_root")).toBeInTheDocument();
+
+    await user.click(within(review).getByRole("button", { name: "Start reviewed ceremony" }));
 
     await waitFor(() =>
       expect(apiMock.createCACeremony).toHaveBeenCalledWith({
@@ -598,6 +659,7 @@ describe("CA hierarchy and custody surface", () => {
     const rootPEM = "-----BEGIN CERTIFICATE-----\nROOT\n-----END CERTIFICATE-----";
     await user.type(await screen.findByLabelText("Offline root certificate PEM"), rootPEM);
     await user.click(screen.getByRole("button", { name: "Start offline-root ceremony" }));
+    await user.click(within(await screen.findByRole("dialog", { name: "Review CA ceremony" })).getByRole("button", { name: "Start reviewed ceremony" }));
 
     await waitFor(() =>
       expect(apiMock.createCACeremony).toHaveBeenCalledWith({
@@ -617,6 +679,7 @@ describe("CA hierarchy and custody surface", () => {
     expect(screen.getByDisplayValue("ca-offline-root")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Start intermediate ceremony" }));
+    await user.click(within(await screen.findByRole("dialog", { name: "Review CA ceremony" })).getByRole("button", { name: "Start reviewed ceremony" }));
     await waitFor(() =>
       expect(apiMock.createCACeremony).toHaveBeenCalledWith({
         operation: "create_offline_intermediate",
@@ -662,6 +725,7 @@ describe("CA hierarchy and custody surface", () => {
     await user.type(screen.getByLabelText("Signer handle"), "customer-existing-ca");
     await user.type(screen.getByLabelText("Existing CA chain PEM"), chainPEM);
     await user.click(screen.getByRole("button", { name: "Start existing-CA ceremony" }));
+    await user.click(within(await screen.findByRole("dialog", { name: "Review CA ceremony" })).getByRole("button", { name: "Start reviewed ceremony" }));
 
     await waitFor(() =>
       expect(apiMock.createCACeremony).toHaveBeenCalledWith({

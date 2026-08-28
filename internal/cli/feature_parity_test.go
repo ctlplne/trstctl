@@ -222,8 +222,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// the same effect-free owner/profile/CSR admission answer as the console.
 	// F5's `acme readiness` raises it to 397 so browser and headless operators
 	// consume the same tenant-bound, effect-free ACME plan.
-	if len(out) != 397 {
-		t.Fatalf("CLI commands = %d, want 397", len(out))
+	// F48's ceremony and rotation previews raise it to 399 so headless operators
+	// get the same effect-free CA trust-change receipts as the console.
+	if len(out) != 399 {
+		t.Fatalf("CLI commands = %d, want 399", len(out))
 	}
 	return out
 }

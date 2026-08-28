@@ -405,6 +405,26 @@ func componentSchemas() map[string]*Schema {
 		"id": uuid(), "tenant_id": uuid(), "purpose": str(), "threshold": {Type: "integer"},
 		"status": str(), "approvals": {Type: "integer"}, "opener": str(), "created_at": timestamp(),
 	}, "id", "tenant_id", "purpose", "threshold", "status", "approvals", "created_at")
+	caCeremonyPlanAuthority := object(map[string]*Schema{
+		"id": uuid(), "common_name": str(), "kind": str(), "status": str(),
+	}, "id", "common_name", "kind", "status")
+	caCeremonyPlanPreview := object(map[string]*Schema{
+		"capability":               {Type: "string", Enum: []string{"F48"}},
+		"operation":                caCeremonyStartReq.Properties["operation"],
+		"ready":                    {Type: "boolean"},
+		"request_fingerprint":      str(),
+		"approval_threshold":       {Type: "integer"},
+		"required_permission":      str(),
+		"normalized_spec":          ref("CASpec"),
+		"parent":                   ref("CACeremonyPlanAuthority"),
+		"authority":                ref("CACeremonyPlanAuthority"),
+		"changes":                  {Type: "array", Items: str()},
+		"risks":                    {Type: "array", Items: str()},
+		"verification_steps":       {Type: "array", Items: str()},
+		"sensitive_inputs":         {Type: "array", Items: str()},
+		"preview_writes":           {Type: "array", Items: str()},
+		"preview_external_effects": {Type: "array", Items: str()},
+	}, "capability", "operation", "ready", "request_fingerprint", "approval_threshold", "required_permission", "normalized_spec", "changes", "risks", "verification_steps", "sensitive_inputs", "preview_writes", "preview_external_effects")
 	caCreateRootReq := object(map[string]*Schema{
 		"ceremony_id": uuid(), "spec": ref("CASpec"),
 	}, "ceremony_id", "spec")
@@ -678,6 +698,21 @@ func componentSchemas() map[string]*Schema {
 		"active_issue_path": str(),
 		"overlap_issuers":   {Type: "array", Items: ref("CAAuthorityRotationIssuer")},
 	}, "predecessor", "successor", "issue_path", "active_issue_path", "overlap_issuers")
+	caAuthorityRotationPlanPreview := object(map[string]*Schema{
+		"capability":               {Type: "string", Enum: []string{"F48"}},
+		"operation":                {Type: "string", Enum: []string{"rotate_ca"}},
+		"ready":                    {Type: "boolean"},
+		"request_fingerprint":      str(),
+		"required_permission":      {Type: "string", Enum: []string{"issuers:write"}},
+		"reason":                   str(),
+		"predecessor":              ref("CACeremonyPlanAuthority"),
+		"successor":                ref("CACeremonyPlanAuthority"),
+		"changes":                  {Type: "array", Items: str()},
+		"risks":                    {Type: "array", Items: str()},
+		"verification_steps":       {Type: "array", Items: str()},
+		"preview_writes":           {Type: "array", Items: str()},
+		"preview_external_effects": {Type: "array", Items: str()},
+	}, "capability", "operation", "ready", "request_fingerprint", "required_permission", "reason", "predecessor", "successor", "changes", "risks", "verification_steps", "preview_writes", "preview_external_effects")
 	caCrossSign := object(map[string]*Schema{
 		"issuer_authority_id": uuid(), "target_sha256": str(), "certificate_pem": str(),
 		"ceremony_id": uuid(), "imported": {Type: "boolean"},
@@ -5574,6 +5609,8 @@ func componentSchemas() map[string]*Schema {
 		"CASpec":                                   caSpec,
 		"CACeremonyStartRequest":                   caCeremonyStartReq,
 		"CAKeyCeremony":                            caCeremony,
+		"CACeremonyPlanAuthority":                  caCeremonyPlanAuthority,
+		"CACeremonyPlanPreview":                    caCeremonyPlanPreview,
 		"CACreateRootRequest":                      caCreateRootReq,
 		"CAImportOfflineRootRequest":               caImportOfflineRootReq,
 		"CAImportExistingRequest":                  caImportExistingReq,
@@ -5589,6 +5626,7 @@ func componentSchemas() map[string]*Schema {
 		"CAOfflineRootRekeyRequest":                caOfflineRootRekeyReq,
 		"CAAuthorityRotationIssuer":                caAuthorityRotationIssuer,
 		"CAAuthorityRotation":                      caAuthorityRotation,
+		"CAAuthorityRotationPlanPreview":           caAuthorityRotationPlanPreview,
 		"CACrossSign":                              caCrossSign,
 		"CAOfflineRootRekey":                       caOfflineRootRekey,
 		"CAAuthority":                              caAuthority,

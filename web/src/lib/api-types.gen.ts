@@ -1137,9 +1137,50 @@ export interface CAAuthorityRotationIssuer {
   status: string;
 }
 
+export interface CAAuthorityRotationPlanPreview {
+  capability: "F48";
+  changes: string[];
+  operation: "rotate_ca";
+  predecessor: CACeremonyPlanAuthority;
+  preview_external_effects: string[];
+  preview_writes: string[];
+  ready: boolean;
+  reason: string;
+  request_fingerprint: string;
+  required_permission: "issuers:write";
+  risks: string[];
+  successor: CACeremonyPlanAuthority;
+  verification_steps: string[];
+}
+
 export interface CAAuthorityRotationRequest {
   reason?: string;
   successor_id: string;
+}
+
+export interface CACeremonyPlanAuthority {
+  common_name: string;
+  id: string;
+  kind: string;
+  status: string;
+}
+
+export interface CACeremonyPlanPreview {
+  approval_threshold: number;
+  authority?: CACeremonyPlanAuthority;
+  capability: "F48";
+  changes: string[];
+  normalized_spec: CASpec;
+  operation: "create_root" | "import_offline_root" | "import_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root";
+  parent?: CACeremonyPlanAuthority;
+  preview_external_effects: string[];
+  preview_writes: string[];
+  ready: boolean;
+  request_fingerprint: string;
+  required_permission: string;
+  risks: string[];
+  sensitive_inputs: string[];
+  verification_steps: string[];
 }
 
 export interface CACeremonyStartRequest {

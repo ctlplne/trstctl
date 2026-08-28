@@ -3828,6 +3828,7 @@
             "status": "closed",
             "notes": "Closed by route-level feature-map evidence; CLM-02 adds served signer-backed CA hierarchy APIs, COMPETE-009 adds the served offline-root workflow, COMPETE-010 adds existing signer-backed CA chain import, COMPETE-018 adds the served CA discovery inventory for public/private upstreams plus imported hierarchy authorities, COMPETE-051 adds served CAP-CA-03 zero-downtime CA rotation activation, COMPETE-052 adds served CAP-CA-06 signer-backed CA renewal/re-key, and AUD-40 adds executable CA migration waves with signed trust/live gates and automatic rollback. Test evidence: internal/server/migration_run_served_test.go drives the entire migration through authenticated API, real PostgreSQL/JetStream, an out-of-process signer, and an exact enrolled host agent; internal/server/ca_hierarchy_served_test.go drives server.Build over bearer auth, a real signer process, m-of-n ceremony approvals, online root/intermediate creation, existing CA chain import, offline-root import, offline intermediate CSR/import, hierarchy leaf issuance, rotation from predecessor issue URL to successor signer, and re-key from predecessor issue URL to a fresh signer-backed successor; internal/server/external_ca_served_test.go proves /api/v1/ca/discovery normalizes public and private direct CAs without PEM/key disclosure.",
             "api_surface": [
+                "previewCACeremony",
                 "createCACeremony",
                 "getCACeremony",
                 "approveCACeremony",
@@ -3841,6 +3842,7 @@
                 "importOfflineIntermediateCA",
                 "issueIntermediateCAFromCSR",
                 "issueHierarchyLeaf",
+                "previewCAAuthorityRotation",
                 "rotateCAAuthority",
                 "rekeyCAAuthority",
                 "crossSignCAAuthority",
@@ -3862,6 +3864,7 @@
             ],
             "api_na": "",
             "cli_surface": [
+                "ca ceremonies preview",
                 "ca ceremonies start",
                 "ca ceremonies get",
                 "ca ceremonies approve",
@@ -3874,6 +3877,7 @@
                 "ca authorities offline-intermediate-csr",
                 "ca authorities import-offline-intermediate",
                 "ca authorities issue-intermediate-csr",
+                "ca authorities rotate-preview",
                 "ca authorities rotate",
                 "ca authorities rekey",
                 "ca authorities issue",
@@ -3903,6 +3907,7 @@
                         "Existing CA import verifies a public root/intermediate chain against a signer-held key handle before making it an issuing authority.",
                         "Offline-root import stores a public root with no signer handle, while offline intermediate CSR/import binds the signed certificate back to the signer-held public key.",
                         "POST /api/v1/ca/authorities/{id}/rotate activates an already-created signer-backed successor, marks the predecessor superseded, records replaces_id, and preserves the predecessor issue URL as a stable rotation endpoint.",
+                        "POST /api/v1/ca/ceremonies/preview and POST /api/v1/ca/authorities/{id}/rotate/preview validate exact ceremony and rotation requests, return non-secret fingerprints plus risks and proof steps, and explicitly write no event, authority, key, or external state.",
                         "POST /api/v1/ca/authorities/{id}/rekey consumes a rotation-purpose ceremony, creates a fresh signer-backed CA certificate/key for the same authority policy, records replaces_id, and preserves the predecessor issue URL as a stable renewal endpoint.",
                         "/api/v1/ca/discovery normalizes configured public upstream CAs, private upstream CAs, and imported CA hierarchy authorities into a read-only inventory with no certificate PEM or private key material.",
                         "AUD-40: /api/v1/migrations/runs freezes one reviewed signer-backed authority, exact public trust anchor, target revision, agent, predecessor, and verification endpoint; signed trust receipts license successor issuance and signed live receipts license wave advancement, while any failed cohort queues newest-first inverse actions.",
@@ -3924,9 +3929,9 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: CAHierarchy at /ca-hierarchy exposes public/private CA discovery inventory, ceremonies, existing signer-backed CA import, offline-root import, offline intermediate CSR/import, managed-key custody, issuer catalog, signer-backed leaf issuance, zero-downtime CA rotation activation, and signer-backed CA renewal/re-key; Migration at /migration reviews exact-authority manifests and operates durable trust-before-leaf waves with per-wave verification and rollback",
+                        "current_frontend_mapping: CAHierarchy at /ca-hierarchy exposes public/private CA discovery inventory, effect-free ceremony and rotation review receipts, ceremonies, existing signer-backed CA import, offline-root import, offline intermediate CSR/import, managed-key custody, issuer catalog, signer-backed leaf issuance, zero-downtime CA rotation activation, and signer-backed CA renewal/re-key; Migration at /migration reviews exact-authority manifests and operates durable trust-before-leaf waves with per-wave verification and rollback",
                         "target_gui_mapping: CA hierarchy UI for roots, offline roots, intermediates, ceremonies, quorum, cross-signing, rotation, expiry, and trust distribution.",
-                        "web/src/__tests__/ca_hierarchy.test.tsx drives the CA discovery inventory, existing signer-backed CA import, CA rotation activation, CA re-key, and offline-root workflow controls through the typed API client.",
+                        "web/src/__tests__/ca_hierarchy.test.tsx proves ceremony and rotation mutations are withheld until their exact effect-free server receipts are confirmed, then drives CA discovery inventory, existing signer-backed CA import, rotation activation, CA re-key, and offline-root controls through the typed API client.",
                         "web/src/__tests__/migration.test.tsx drives reviewed manifest start, durable run display, per-wave gate progress, pause/resume, and rollback through the typed API client."
                     ],
                     "refs": [
@@ -3940,7 +3945,7 @@
                 },
                 "cli": {
                     "evidence": [
-                        "CLI parity exposes the CA ceremony and CA authority commands, including import-existing, import-offline-root, offline-intermediate-csr, import-offline-intermediate, issue-intermediate-csr for SPIRE/upstream-authority CSRs, rotate, and rekey.",
+                        "CLI parity exposes effect-free ca ceremonies preview and ca authorities rotate-preview plus the CA ceremony and authority mutations, including import-existing, import-offline-root, offline-intermediate-csr, import-offline-intermediate, issue-intermediate-csr for SPIRE/upstream-authority CSRs, rotate, and rekey.",
                         "CLI parity exposes ca discovery list for the read-only public/private CA discovery inventory.",
                         "AUD-40 CLI parity exposes migrations start/list/show/pause/resume/rollback for every durable run control."
                     ],
@@ -3952,7 +3957,7 @@
                 },
                 "api": {
                     "evidence": [
-                        "api_surface: createCACeremony, getCACeremony, approveCACeremony, listCADiscoveryInventory, listCAAuthorities, createRootCA, importOfflineRootCA, importExistingCA, createIntermediateCA, createOfflineIntermediateCSR, importOfflineIntermediateCA, issueIntermediateCAFromCSR, issueHierarchyLeaf, rotateCAAuthority, rekeyCAAuthority, startMigrationRun, listMigrationRuns, getMigrationRun, pauseMigrationRun, resumeMigrationRun, and rollbackMigrationRun are in the served OpenAPI route registry.",
+                        "api_surface: previewCACeremony, createCACeremony, getCACeremony, approveCACeremony, listCADiscoveryInventory, listCAAuthorities, createRootCA, importOfflineRootCA, importExistingCA, createIntermediateCA, createOfflineIntermediateCSR, importOfflineIntermediateCA, issueIntermediateCAFromCSR, issueHierarchyLeaf, previewCAAuthorityRotation, rotateCAAuthority, rekeyCAAuthority, startMigrationRun, listMigrationRuns, getMigrationRun, pauseMigrationRun, resumeMigrationRun, and rollbackMigrationRun are in the served OpenAPI route registry.",
                         "OpenAPI schemas define the CA hierarchy contracts plus MigrationRunStartRequest, MigrationRun, MigrationRunList, and MigrationRunActionRequest."
                     ],
                     "refs": [
@@ -3971,6 +3976,7 @@
                         "internal/server/ca_hierarchy_served_test.go verifies existing CA import rejects the wrong signer handle, rejects before quorum, imports a chain bound to the reviewed signer handle, and issues a leaf from the imported authority.",
                         "internal/server/ca_hierarchy_served_test.go verifies offline-root import before quorum fails, the imported root has no signer handle, root hot-path leaf issuance fails closed, offline intermediate CSR/import succeeds, and the served leaf verifies against the imported intermediate.",
                         "internal/server/ca_hierarchy_served_test.go verifies zero-downtime CA rotation activation marks the predecessor superseded, records the successor replaces_id, keeps the predecessor issue URL live, and proves both predecessor and successor URLs issue certificates chained to the successor.",
+                        "internal/server/ca_hierarchy_served_test.go proves ceremony and rotation previews are exact and effect-free: authority, ceremony, signer, and event state remain unchanged, while invalid inputs fail before a receipt is returned.",
                         "internal/server/ca_hierarchy_served_test.go verifies CA re-key consumes an m-of-n ceremony, marks the predecessor superseded, records the fresh successor replaces_id, changes signer handle/certificate material, keeps the predecessor issue URL live, and proves both predecessor and successor URLs issue certificates chained to the fresh successor.",
                         "TestServedMigrationTrustBeforeLeafAndRollbackAUD40 verifies exact-agent trust installation and readback before exact-authority issuance, signed live verification before advancement, pause/resume idempotency, replay recovery, tenant isolation, manual rollback, and automatic rollback after a signed failed live gate.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
@@ -3998,9 +4004,9 @@
                 },
                 "rbac": {
                     "evidence": [
-                        "CA hierarchy route registry maps ceremony/authority/discovery reads to issuers:read, ceremony/root/import/intermediate/rotation/re-key mutations to issuers:write, and leaf/external-intermediate CSR issuance to certs:issue.",
+                        "CA hierarchy route registry maps ceremony/rotation previews and ceremony/root/import/intermediate/rotation/re-key mutations to issuers:write, hierarchy reads to issuers:read, and leaf/external-intermediate CSR issuance to certs:issue.",
                         "feature authz manifest maps the CA hierarchy and migration api_surface operations to their route permissions; migration start/resume additionally require certs:issue because they can release successor issuance, while trust-only operators may pause or roll back.",
-                        "rotateCAAuthority performs an extra decoded successor authority scope check before mutating so a predecessor-scoped token cannot choose an unauthorized successor."
+                        "previewCAAuthorityRotation and rotateCAAuthority perform the same extra decoded successor authority scope check so a predecessor-scoped token cannot review or choose an unauthorized successor."
                     ],
                     "refs": [
                         "internal/api/api.go",
@@ -4048,7 +4054,7 @@
                 "purpose": "Lets an operator understand and safely use private/enterprise ca hierarchy management while tenant, policy, and security authority remain on the server.",
                 "tool": "certificates",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/ca-hierarchy",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -4060,7 +4066,7 @@
                 "dependencies": [],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -4082,8 +4088,14 @@
                         ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: previewCACeremony",
+                            "OpenAPI operationId: previewCAAuthorityRotation",
+                            "internal/server/ca_hierarchy_served_test.go",
+                            "web/src/pages/cahierarchy/CAHierarchyCeremonyParts.tsx",
+                            "web/src/__tests__/ca_hierarchy.test.tsx"
+                        ]
                     },
                     "execute": {
                         "status": "complete",
@@ -4114,6 +4126,7 @@
                     "automate": {
                         "status": "complete",
                         "evidence": [
+                            "OpenAPI operationId: previewCACeremony",
                             "OpenAPI operationId: createCACeremony",
                             "OpenAPI operationId: getCACeremony",
                             "OpenAPI operationId: approveCACeremony",
@@ -4127,6 +4140,7 @@
                             "OpenAPI operationId: importOfflineIntermediateCA",
                             "OpenAPI operationId: issueIntermediateCAFromCSR",
                             "OpenAPI operationId: issueHierarchyLeaf",
+                            "OpenAPI operationId: previewCAAuthorityRotation",
                             "OpenAPI operationId: rotateCAAuthority",
                             "OpenAPI operationId: rekeyCAAuthority",
                             "OpenAPI operationId: crossSignCAAuthority",
@@ -4145,6 +4159,7 @@
                             "OpenAPI operationId: pauseMigrationRun",
                             "OpenAPI operationId: resumeMigrationRun",
                             "OpenAPI operationId: rollbackMigrationRun",
+                            "CLI command: ca ceremonies preview",
                             "CLI command: ca ceremonies start",
                             "CLI command: ca ceremonies get",
                             "CLI command: ca ceremonies approve",
@@ -4157,6 +4172,7 @@
                             "CLI command: ca authorities offline-intermediate-csr",
                             "CLI command: ca authorities import-offline-intermediate",
                             "CLI command: ca authorities issue-intermediate-csr",
+                            "CLI command: ca authorities rotate-preview",
                             "CLI command: ca authorities rotate",
                             "CLI command: ca authorities rekey",
                             "CLI command: ca authorities issue",
@@ -4182,7 +4198,7 @@
                 "owner": "pki",
                 "target_checkpoint": "frontend-convergence",
                 "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "freshness": "2026-08-28"
             }
         },
         {

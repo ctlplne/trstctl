@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -59,6 +60,127 @@ func (s *Server) buildCAHierarchyService(d Deps) api.CAHierarchyService {
 		store: d.Store, log: d.Log, signer: d.Signer, signAuthz: s.signAuthz,
 		leafProfile: d.LeafProfile, signers: map[string]*signing.RemoteSigner{},
 	}
+}
+
+func (h *caHierarchyService) PreviewCeremony(ctx context.Context, tenantID string, req api.CACeremonyStartRequest) (api.CACeremonyPlanPreview, error) {
+	if req.Threshold < 1 {
+		return api.CACeremonyPlanPreview{}, fmt.Errorf("%w: threshold must be at least 1", api.ErrCAHierarchyInvalid)
+	}
+	purpose, err := hierarchyPurposeFromStartRequest(req)
+	if err != nil {
+		return api.CACeremonyPlanPreview{}, err
+	}
+	fingerprintPayload, err := json.Marshal(struct {
+		Purpose   string `json:"purpose"`
+		Threshold int    `json:"threshold"`
+	}{Purpose: purpose, Threshold: req.Threshold})
+	if err != nil {
+		return api.CACeremonyPlanPreview{}, err
+	}
+	preview := api.CACeremonyPlanPreview{
+		Capability:             "F48",
+		Operation:              req.Operation,
+		Ready:                  true,
+		RequestFingerprint:     crypto.SHA256Hex(fingerprintPayload),
+		ApprovalThreshold:      req.Threshold,
+		RequiredPermission:     "issuers:write",
+		NormalizedSpec:         req.Spec,
+		Changes:                ceremonyPreviewChanges(req.Operation),
+		Risks:                  ceremonyPreviewRisks(req.Operation),
+		VerificationSteps:      ceremonyPreviewVerification(req.Operation),
+		SensitiveInputs:        ceremonySensitiveInputs(req),
+		PreviewWrites:          []string{},
+		PreviewExternalEffects: []string{},
+	}
+	if req.ParentID != "" {
+		parent, loadErr := h.store.GetCAAuthority(ctx, tenantID, strings.TrimSpace(req.ParentID))
+		if loadErr != nil {
+			return api.CACeremonyPlanPreview{}, loadErr
+		}
+		preview.Parent = caCeremonyPlanAuthority(parent)
+	}
+	if req.AuthorityID != "" {
+		authority, loadErr := h.store.GetCAAuthority(ctx, tenantID, strings.TrimSpace(req.AuthorityID))
+		if loadErr != nil {
+			return api.CACeremonyPlanPreview{}, loadErr
+		}
+		preview.Authority = caCeremonyPlanAuthority(authority)
+	}
+	return preview, nil
+}
+
+func caCeremonyPlanAuthority(authority store.CAAuthority) *api.CACeremonyPlanAuthority {
+	return &api.CACeremonyPlanAuthority{
+		ID: authority.ID, CommonName: authority.CommonName, Kind: authority.Kind, Status: authority.Status,
+	}
+}
+
+func ceremonySensitiveInputs(req api.CACeremonyStartRequest) []string {
+	inputs := make([]string, 0, 6)
+	for field, present := range map[string]bool{
+		"certificate_pem":               strings.TrimSpace(req.CertificatePEM) != "",
+		"csr_pem":                       strings.TrimSpace(req.CSRPem) != "",
+		"signer_handle":                 strings.TrimSpace(req.SignerHandle) != "",
+		"target_certificate_pem":        strings.TrimSpace(req.TargetCertificatePEM) != "",
+		"cross_certificate_pem":         strings.TrimSpace(req.CrossCertificatePEM) != "",
+		"reverse_cross_certificate_pem": strings.TrimSpace(req.ReverseCrossCertificatePEM) != "",
+	} {
+		if present {
+			inputs = append(inputs, field)
+		}
+	}
+	slices.Sort(inputs)
+	return inputs
+}
+
+func ceremonyPreviewChanges(operation string) []string {
+	switch operation {
+	case "create_root":
+		return []string{"Prepare an m-of-n ceremony for a new signer-backed root CA. No key or authority is created by this preview."}
+	case "import_offline_root":
+		return []string{"Prepare an m-of-n ceremony to trust the supplied public offline-root certificate. The offline private key stays outside trstctl."}
+	case "import_existing_ca":
+		return []string{"Prepare an m-of-n ceremony to bind the supplied public CA chain to an existing signer-held key handle."}
+	case "create_intermediate":
+		return []string{"Prepare an m-of-n ceremony for a new signer-backed intermediate under the reviewed parent authority."}
+	case "create_offline_intermediate":
+		return []string{"Prepare an m-of-n ceremony for a signer-held intermediate CSR that an offline parent will sign."}
+	case "issue_intermediate_csr":
+		return []string{"Prepare an m-of-n ceremony to sign the reviewed external intermediate CSR with the reviewed parent authority."}
+	case "rekey_ca":
+		return []string{"Prepare an m-of-n ceremony to replace the reviewed authority key while retaining an auditable predecessor-to-successor lineage."}
+	case "cross_sign_ca":
+		return []string{"Prepare an m-of-n ceremony to cross-sign the reviewed public CA certificate with the reviewed signer-backed authority."}
+	case "import_offline_cross_sign":
+		return []string{"Prepare an m-of-n ceremony to verify and import the supplied public cross-certificate from the reviewed offline root."}
+	case "rekey_offline_root":
+		return []string{"Prepare an m-of-n ceremony to activate the supplied offline-root successor and its bidirectional public cross-signatures."}
+	default:
+		return []string{"Prepare the reviewed CA hierarchy ceremony without creating a ceremony, key, certificate, or external request during preview."}
+	}
+}
+
+func ceremonyPreviewRisks(operation string) []string {
+	risks := []string{
+		"A completed ceremony can authorize a later change to certificate trust or signing authority.",
+		"The server will require distinct custodian approvals and revalidate the exact ceremony purpose before execution.",
+	}
+	if strings.Contains(operation, "offline") {
+		risks = append(risks, "Only public certificate material is accepted; private-key material is rejected at the server boundary.")
+	}
+	return risks
+}
+
+func ceremonyPreviewVerification(operation string) []string {
+	steps := []string{
+		"Confirm the operation, authority identity, CA profile, and required approval threshold match the intended change.",
+		"After the ceremony starts, verify each distinct approval and the immutable ceremony event before executing the CA change.",
+		"After execution, verify authority status, chain, expiry, signer custody, and the matching immutable audit event.",
+	}
+	if operation == "rekey_ca" || operation == "rekey_offline_root" || operation == "cross_sign_ca" || operation == "import_offline_cross_sign" {
+		steps = append(steps, "Verify both predecessor and successor trust paths before retiring any old trust material.")
+	}
+	return steps
 }
 
 // issueLeafForExactAuthority mints through the active signer-backed authority
@@ -698,6 +820,61 @@ func (h *caHierarchyService) RotateAuthority(ctx context.Context, tenantID, caID
 		return api.CAAuthorityRotation{}, caHierarchyConflict(err)
 	}
 	return authorityRotationResponse(predecessor, successor), nil
+}
+
+func (h *caHierarchyService) PreviewRotation(ctx context.Context, tenantID, caID string, req api.CAAuthorityRotationRequest) (api.CAAuthorityRotationPlanPreview, error) {
+	successorID := strings.TrimSpace(req.SuccessorID)
+	if caID == "" || successorID == "" {
+		return api.CAAuthorityRotationPlanPreview{}, fmt.Errorf("%w: predecessor and successor_id are required", api.ErrCAHierarchyInvalid)
+	}
+	if caID == successorID {
+		return api.CAAuthorityRotationPlanPreview{}, fmt.Errorf("%w: successor_id must be a different CA authority", api.ErrCAHierarchyInvalid)
+	}
+	predecessor, err := h.store.GetCAAuthority(ctx, tenantID, caID)
+	if err != nil {
+		return api.CAAuthorityRotationPlanPreview{}, err
+	}
+	successor, err := h.store.GetCAAuthority(ctx, tenantID, successorID)
+	if err != nil {
+		return api.CAAuthorityRotationPlanPreview{}, err
+	}
+	if err := validateAuthorityRotation(predecessor, successor); err != nil {
+		return api.CAAuthorityRotationPlanPreview{}, err
+	}
+	reason := strings.TrimSpace(req.Reason)
+	fingerprintPayload, err := json.Marshal(struct {
+		PredecessorID string `json:"predecessor_id"`
+		SuccessorID   string `json:"successor_id"`
+		Reason        string `json:"reason"`
+	}{PredecessorID: predecessor.ID, SuccessorID: successor.ID, Reason: reason})
+	if err != nil {
+		return api.CAAuthorityRotationPlanPreview{}, err
+	}
+	return api.CAAuthorityRotationPlanPreview{
+		Capability:         "F48",
+		Operation:          "rotate_ca",
+		Ready:              true,
+		RequestFingerprint: crypto.SHA256Hex(fingerprintPayload),
+		RequiredPermission: "issuers:write",
+		Reason:             reason,
+		Predecessor:        *caCeremonyPlanAuthority(predecessor),
+		Successor:          *caCeremonyPlanAuthority(successor),
+		Changes: []string{
+			"Route the predecessor's stable issue URL to the reviewed successor CA.",
+			"Mark the predecessor superseded while retaining both authorities for the overlap period.",
+		},
+		Risks: []string{
+			"New issuance will use the successor immediately after confirmation.",
+			"Clients that do not trust the successor chain can fail until their trust stores are updated.",
+		},
+		VerificationSteps: []string{
+			"Issue a test certificate through the predecessor's stable URL and verify the successor signed it.",
+			"Confirm both predecessor and successor chains remain trusted during the overlap window.",
+			"Review the immutable ca.authority.rotated event and active issue path.",
+		},
+		PreviewWrites:          []string{},
+		PreviewExternalEffects: []string{},
+	}, nil
 }
 
 func (h *caHierarchyService) RekeyAuthority(ctx context.Context, tenantID, caID string, req api.CAAuthorityRekeyRequest) (api.CAAuthorityRotation, error) {

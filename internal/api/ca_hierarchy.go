@@ -25,6 +25,7 @@ var (
 // implementation lives in internal/server so it can bind to the isolated signer;
 // the API owns only the JSON contract and RBAC/idempotency wrapper.
 type CAHierarchyService interface {
+	PreviewCeremony(ctx context.Context, tenantID string, req CACeremonyStartRequest) (CACeremonyPlanPreview, error)
 	StartCeremony(ctx context.Context, tenantID string, req CACeremonyStartRequest) (CAKeyCeremony, error)
 	GetCeremony(ctx context.Context, tenantID, id string) (CAKeyCeremony, error)
 	ApproveCeremony(ctx context.Context, tenantID, id string) (CAKeyCeremony, error)
@@ -37,6 +38,7 @@ type CAHierarchyService interface {
 	ImportOfflineIntermediate(ctx context.Context, tenantID, caID string, req CAImportOfflineIntermediateRequest) (CAAuthority, error)
 	IssueIntermediateCSR(ctx context.Context, tenantID, caID string, req CAIssueIntermediateRequest) (CAIssuedIntermediate, error)
 	IssueLeaf(ctx context.Context, tenantID, caID string, req CAIssueLeafRequest) (CAIssuedLeaf, error)
+	PreviewRotation(ctx context.Context, tenantID, caID string, req CAAuthorityRotationRequest) (CAAuthorityRotationPlanPreview, error)
 	RotateAuthority(ctx context.Context, tenantID, caID string, req CAAuthorityRotationRequest) (CAAuthorityRotation, error)
 	RekeyAuthority(ctx context.Context, tenantID, caID string, req CAAuthorityRekeyRequest) (CAAuthorityRotation, error)
 	CrossSignAuthority(ctx context.Context, tenantID, caID string, req CACrossSignRequest) (CACrossSign, error)
@@ -72,6 +74,38 @@ type CACeremonyStartRequest struct {
 	SignerHandle               string `json:"signer_handle,omitempty"`
 	Threshold                  int    `json:"threshold"`
 	Spec                       CASpec `json:"spec"`
+}
+
+// CACeremonyPlanAuthority is the non-secret identity of one existing authority
+// referenced by an effect-free ceremony review. Certificate PEM and signer
+// handles deliberately never cross this preview boundary.
+type CACeremonyPlanAuthority struct {
+	ID         string `json:"id"`
+	CommonName string `json:"common_name"`
+	Kind       string `json:"kind"`
+	Status     string `json:"status"`
+}
+
+// CACeremonyPlanPreview is the server-owned answer to "what exactly will this
+// CA ceremony prepare?" It is intentionally not durable state: successful
+// preview writes no event, opens no ceremony, creates no signer handle, and
+// contacts no external authority. The mutation still rechecks every condition.
+type CACeremonyPlanPreview struct {
+	Capability             string                   `json:"capability"`
+	Operation              string                   `json:"operation"`
+	Ready                  bool                     `json:"ready"`
+	RequestFingerprint     string                   `json:"request_fingerprint"`
+	ApprovalThreshold      int                      `json:"approval_threshold"`
+	RequiredPermission     string                   `json:"required_permission"`
+	NormalizedSpec         CASpec                   `json:"normalized_spec"`
+	Parent                 *CACeremonyPlanAuthority `json:"parent,omitempty"`
+	Authority              *CACeremonyPlanAuthority `json:"authority,omitempty"`
+	Changes                []string                 `json:"changes"`
+	Risks                  []string                 `json:"risks"`
+	VerificationSteps      []string                 `json:"verification_steps"`
+	SensitiveInputs        []string                 `json:"sensitive_inputs"`
+	PreviewWrites          []string                 `json:"preview_writes"`
+	PreviewExternalEffects []string                 `json:"preview_external_effects"`
 }
 
 type CACreateRootRequest struct {
@@ -117,6 +151,26 @@ type CAIssueLeafRequest struct {
 type CAAuthorityRotationRequest struct {
 	SuccessorID string `json:"successor_id"`
 	Reason      string `json:"reason,omitempty"`
+}
+
+// CAAuthorityRotationPlanPreview is the effect-free answer to "what will this
+// rotation change?" It deliberately contains only public authority identity,
+// never certificate PEM or signer handles. The mutation rechecks the same
+// eligibility rules while holding both authority rows for update.
+type CAAuthorityRotationPlanPreview struct {
+	Capability             string                  `json:"capability"`
+	Operation              string                  `json:"operation"`
+	Ready                  bool                    `json:"ready"`
+	RequestFingerprint     string                  `json:"request_fingerprint"`
+	RequiredPermission     string                  `json:"required_permission"`
+	Reason                 string                  `json:"reason"`
+	Predecessor            CACeremonyPlanAuthority `json:"predecessor"`
+	Successor              CACeremonyPlanAuthority `json:"successor"`
+	Changes                []string                `json:"changes"`
+	Risks                  []string                `json:"risks"`
+	VerificationSteps      []string                `json:"verification_steps"`
+	PreviewWrites          []string                `json:"preview_writes"`
+	PreviewExternalEffects []string                `json:"preview_external_effects"`
 }
 
 type CAAuthorityRekeyRequest struct {
@@ -238,6 +292,61 @@ type CAIssuedIntermediate struct {
 	CertificatePEM string    `json:"certificate_pem"`
 	Serial         string    `json:"serial"`
 	NotAfter       time.Time `json:"not_after"`
+}
+
+func (a *API) previewCACeremony(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	if a.caHierarchy == nil {
+		a.writeError(w, ErrCAHierarchyUnavailable)
+		return
+	}
+	var req CACeremonyStartRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	preview, err := a.caHierarchy.PreviewCeremony(r.Context(), tenantID, req)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, preview)
+}
+
+func (a *API) previewCAAuthorityRotation(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	if a.caHierarchy == nil {
+		a.writeError(w, ErrCAHierarchyUnavailable)
+		return
+	}
+	var req CAAuthorityRotationRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	req.SuccessorID = strings.TrimSpace(req.SuccessorID)
+	if req.SuccessorID == "" {
+		a.writeError(w, errStatus(http.StatusUnprocessableEntity, "successor_id is required"))
+		return
+	}
+	if err := authorizeCARotationSuccessor(r.Context(), tenantID, req.SuccessorID); err != nil {
+		a.writeError(w, err)
+		return
+	}
+	preview, err := a.caHierarchy.PreviewRotation(r.Context(), tenantID, r.PathValue("id"), req)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, preview)
 }
 
 //trstctl:mutation

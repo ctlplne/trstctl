@@ -50,6 +50,16 @@ collects approvals the same way**: each custodian calls
 cannot approve their own ceremony); every approval is auditable and emits
 `ca.ceremony.approved`.
 
+Before `StartCeremony`, send the exact proposed request to
+`POST /api/v1/ca/ceremonies/preview`. This is an effect-free validation step: it
+creates no ceremony, key, certificate, event, idempotency record, or external
+request. The response gives the normalized public CA spec, tenant-scoped public
+authority identity, approval threshold, risks, verification steps, and a request
+fingerprint. Certificate PEM, CSR PEM, and signer-handle values are never echoed;
+only the names of protected fields appear. Submit the same reviewed body to the
+mutation only after the preview reports `ready=true` with empty `preview_writes`
+and `preview_external_effects`. The mutation independently rechecks everything.
+
 CA-mutating calls (`CreateRoot`, `Rotate`, `CrossSignAuthority`, and the rest) are
 **gated on purpose-bound quorum**: each locks the pending ceremony, checks quorum
 and exact purpose, and marks it completed in the same transaction as the
@@ -64,7 +74,9 @@ The ceremony and its approvals are tenant-scoped rows under row-level security:
 
 1. **Convene the custodians.** Choose *n* trusted custodians and a threshold *m*
    (e.g. 3-of-5); see [custodian hygiene](#custodian-hygiene) below for sizing.
-2. **Open the ceremony** for the reviewed root or intermediate spec:
+2. **Preview, then open the ceremony** for the reviewed root or intermediate
+   spec. First send the body below to `POST /api/v1/ca/ceremonies/preview`.
+   Confirm its effect-free receipt, then send the exact same body to
    `POST /api/v1/ca/ceremonies` with bearer auth carrying `issuers:write` and an
    `Idempotency-Key` header.
 
@@ -202,20 +214,25 @@ ceremony rules, then activate it behind the predecessor's stable issue URL.
 1. Create or import the successor CA with the same kind, parent, path-length,
    DNS, and EKU constraints as the predecessor, using whichever ceremony
    procedure above applies.
-2. Activate the overlap window with
-   `POST /api/v1/ca/authorities/{predecessor-id}/rotate` (JSON body:
-   `successor_id`). The server marks the predecessor `superseded`, records
+2. Preview the exact overlap change with
+   `POST /api/v1/ca/authorities/{predecessor-id}/rotate/preview` (JSON body:
+   `successor_id` and an optional `reason`). It applies the same tenant-scoped
+   predecessor/successor eligibility rules as activation, returns only public CA
+   identity plus risks and proof steps, and writes no authority or event state.
+3. After the receipt names the intended authorities and reports no preview
+   effects, send the same body to
+   `POST /api/v1/ca/authorities/{predecessor-id}/rotate`. The server marks the predecessor `superseded`, records
    `replaces_id`, emits `ca.authority.rotated`, and keeps the predecessor issue
    URL live while routing new issuance to the successor.
-3. Verify both issue URLs: the predecessor URL still answers but its chain now
+4. Verify both issue URLs: the predecessor URL still answers but its chain now
    verifies to the successor, and the successor URL issues directly.
-4. If your hierarchy requires cross-signing the new CA, open a separate
+5. If your hierarchy requires cross-signing the new CA, open a separate
    `cross-sign:<ca-id>:<sha256-of-target-cert-der>` ceremony and collect its *m*
    approvals as above. Submit the ceremony id and target certificate to
    `POST /api/v1/ca/authorities/{issuer-id}/cross-sign`, refused until quorum and
    exact target-certificate match. Verify the returned certificate independently
    against the issuer before distributing the new chain.
-5. Retire the old key per your policy (and per the
+6. Retire the old key per your policy (and per the
    [incident-response runbook](incident-response.md) if the rotation is
    compromise-driven).
 

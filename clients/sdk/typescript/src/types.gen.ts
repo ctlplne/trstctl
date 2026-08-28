@@ -1202,6 +1202,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ca/authorities/{id}/rotate/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate and explain a CA rotation without changing authority state */
+        post: operations["previewCAAuthorityRotation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ca/ceremonies": {
         parameters: {
             query?: never;
@@ -1213,6 +1230,23 @@ export interface paths {
         put?: never;
         /** Start an m-of-n CA key ceremony */
         post: operations["createCACeremony"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ca/ceremonies/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate and explain an exact CA key ceremony without writing state, creating keys, or contacting an authority */
+        post: operations["previewCACeremony"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6813,10 +6847,54 @@ export interface components {
             role: string;
             status: string;
         };
+        CAAuthorityRotationPlanPreview: {
+            /** @enum {string} */
+            capability: "F48";
+            changes: string[];
+            /** @enum {string} */
+            operation: "rotate_ca";
+            predecessor: components["schemas"]["CACeremonyPlanAuthority"];
+            preview_external_effects: string[];
+            preview_writes: string[];
+            ready: boolean;
+            reason: string;
+            request_fingerprint: string;
+            /** @enum {string} */
+            required_permission: "issuers:write";
+            risks: string[];
+            successor: components["schemas"]["CACeremonyPlanAuthority"];
+            verification_steps: string[];
+        };
         CAAuthorityRotationRequest: {
             reason?: string;
             /** Format: uuid */
             successor_id: string;
+        };
+        CACeremonyPlanAuthority: {
+            common_name: string;
+            /** Format: uuid */
+            id: string;
+            kind: string;
+            status: string;
+        };
+        CACeremonyPlanPreview: {
+            approval_threshold: number;
+            authority?: components["schemas"]["CACeremonyPlanAuthority"];
+            /** @enum {string} */
+            capability: "F48";
+            changes: string[];
+            normalized_spec: components["schemas"]["CASpec"];
+            /** @enum {string} */
+            operation: "create_root" | "import_offline_root" | "import_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root";
+            parent?: components["schemas"]["CACeremonyPlanAuthority"];
+            preview_external_effects: string[];
+            preview_writes: string[];
+            ready: boolean;
+            request_fingerprint: string;
+            required_permission: string;
+            risks: string[];
+            sensitive_inputs: string[];
+            verification_steps: string[];
         };
         CACeremonyStartRequest: {
             /** Format: uuid */
@@ -15944,6 +16022,50 @@ export interface operations {
             };
         };
     };
+    previewCAAuthorityRotation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CAAuthorityRotationRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CAAuthorityRotationPlanPreview"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     createCACeremony: {
         parameters: {
             query?: never;
@@ -15967,6 +16089,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CAKeyCeremony"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewCACeremony: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CACeremonyStartRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CACeremonyPlanPreview"];
                 };
             };
             /** @description client error */

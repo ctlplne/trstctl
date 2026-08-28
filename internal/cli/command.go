@@ -95,6 +95,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"issuers", "capabilities"}, Method: "GET", Path: "/api/v1/issuers/capabilities", Summary: "Show what each issuer kind can do: discover, issue, renew, revoke, key handling, validation"},
 	{Name: []string{"issuers", "get"}, Method: "GET", Path: "/api/v1/issuers/{id}", Summary: "Get an issuer"},
 
+	{Name: []string{"ca", "ceremonies", "preview"}, Method: "POST", Path: "/api/v1/ca/ceremonies/preview", Body: bodyFile, Summary: "Review an exact CA key ceremony without writing state or creating a key"},
 	{Name: []string{"ca", "ceremonies", "start"}, Method: "POST", Path: "/api/v1/ca/ceremonies", Body: bodyFile, Summary: "Start an m-of-n CA key ceremony"},
 	{Name: []string{"ca", "ceremonies", "get"}, Method: "GET", Path: "/api/v1/ca/ceremonies/{id}", Summary: "Get a CA key ceremony"},
 	{Name: []string{"ca", "ceremonies", "approve"}, Method: "POST", Path: "/api/v1/ca/ceremonies/{id}/approvals", Body: bodyNone, Summary: "Approve a CA key ceremony"},
@@ -107,6 +108,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"ca", "authorities", "offline-intermediate-csr"}, Method: "POST", Path: "/api/v1/ca/authorities/{id}/offline-intermediates/csr", Body: bodyFile, Summary: "Create a signer-backed intermediate CSR for an offline root"},
 	{Name: []string{"ca", "authorities", "import-offline-intermediate"}, Method: "POST", Path: "/api/v1/ca/authorities/{id}/offline-intermediates", Body: bodyFile, Summary: "Import an offline-root-signed intermediate CA certificate"},
 	{Name: []string{"ca", "authorities", "issue-intermediate-csr"}, Method: "POST", Path: "/api/v1/ca/authorities/{id}/intermediates/csr", Body: bodyFile, Summary: "Sign an external intermediate CA CSR from a private CA authority"},
+	{Name: []string{"ca", "authorities", "rotate-preview"}, Method: "POST", Path: "/api/v1/ca/authorities/{id}/rotate/preview", Body: bodyFile, Summary: "Review an exact zero-downtime CA rotation without changing authority state"},
 	{Name: []string{"ca", "authorities", "rotate"}, Method: "POST", Path: "/api/v1/ca/authorities/{id}/rotate", Body: bodyFile, Summary: "Activate zero-downtime CA rotation to a signer-backed successor"},
 	{Name: []string{"ca", "authorities", "rekey"}, Method: "POST", Path: "/api/v1/ca/authorities/{id}/rekey", Body: bodyFile, Summary: "Re-key a signer-backed private CA authority after ceremony quorum"},
 	{Name: []string{"ca", "authorities", "cross-sign"}, Method: "POST", Path: "/api/v1/ca/authorities/{id}/cross-sign", Body: bodyFile, Summary: "Cross-sign a CA certificate with a signer-backed authority"},

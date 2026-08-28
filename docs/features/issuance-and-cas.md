@@ -156,11 +156,23 @@ closed before the CA mutation commits — stopping one compromised admin account
 minting a rogue root or intermediate, and stopping one valid ceremony from being
 replayed against a different CA request.
 
-The served hierarchy API lives at `/api/v1/ca/ceremonies`, `/api/v1/ca/authorities`,
+The console and CLI do not ask an operator to approve a blind change. The
+effect-free `POST /api/v1/ca/ceremonies/preview` route validates the exact ceremony
+body and returns a non-secret receipt before any approval record or signer action
+exists. For zero-downtime rollover,
+`POST /api/v1/ca/authorities/{id}/rotate/preview` applies the activation eligibility
+rules to the exact predecessor and successor, then explains the routing changes,
+trust risks, and proof steps without changing either CA. Both previews return an
+exact request fingerprint and explicit empty write/external-effect lists; the later
+mutation rechecks authorization and state under lock instead of trusting the preview.
+
+The served hierarchy API lives at `/api/v1/ca/ceremonies/preview`,
+`/api/v1/ca/ceremonies`, `/api/v1/ca/authorities`,
 `/api/v1/ca/authorities/offline-roots`, `/api/v1/ca/authorities/imported`,
 `/api/v1/ca/authorities/{id}/offline-intermediates/csr`,
 `/api/v1/ca/authorities/{id}/offline-intermediates`, and
 `/api/v1/ca/authorities/{id}/issue`, with zero-downtime successor activation at
+`/api/v1/ca/authorities/{id}/rotate/preview` and
 `/api/v1/ca/authorities/{id}/rotate`, signer-backed renewal/re-key at
 `/api/v1/ca/authorities/{id}/rekey`, cross-signing at
 `/api/v1/ca/authorities/{id}/cross-sign`, offline-root successor/cross-certificate

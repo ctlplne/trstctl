@@ -1222,8 +1222,11 @@ describe("i18n boundary", () => {
       // effects, prerequisite recovery, and deterministic retry. Negations and
       // security meaning were reviewed in both catalogs. Machine-authored es/de
       // — FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "e6022b272976f526e8c5382aacff5ff2841604be377365afc919d8c09768551f",
-      "de-DE": "218445559b09e9bacbe2d48023bf501e89c82d72b705e2662724d385934a55f2",
+      // F48 review re-pin: twelve reviewed keys name the effect-free CA
+      // rotation receipt, predecessor/successor, risks, and exact confirmation.
+      // Machine-authored es/de - FLAGGED FOR HUMAN TRANSLATION REVIEW.
+      "es-ES": "d947c5314b0cd27f6281307c46cd382419a675a80193be25910b0a1e7cf0edef",
+      "de-DE": "a5a2531908f52809f3e0edb3720cbd19797803f32a1d3caef63ce9d6a2e09332",
     });
   });
 

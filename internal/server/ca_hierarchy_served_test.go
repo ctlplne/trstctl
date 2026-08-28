@@ -20,6 +20,90 @@ import (
 	"trstctl.com/trstctl/internal/signing"
 )
 
+func TestServedCACeremonyPreviewIsExactEffectFreeAndSecretFree(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	operatorToken := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "ca-preview-operator", []string{
+		"issuers:write", "issuers:read", "certs:issue",
+	})
+	rootSpec := map[string]any{
+		"common_name":           "reviewed trust root",
+		"max_path_len":          1,
+		"ttl_seconds":           int64((365 * 24 * time.Hour).Seconds()),
+		"permitted_dns_domains": []string{"preview.example.test"},
+		"extended_key_usages":   []string{"serverAuth"},
+		"signature_algorithm":   "ecdsa-p256",
+	}
+	beforeAuthorities, err := h.store.ListCAAuthorities(context.Background(), h.tenant)
+	if err != nil {
+		t.Fatalf("ListCAAuthorities before preview: %v", err)
+	}
+	beforeEvents := servedEventCount(t, h, "ca.ceremony.started")
+
+	code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/ceremonies/preview", operatorToken, "", map[string]any{
+		"operation": "create_root",
+		"threshold": 2,
+		"spec":      rootSpec,
+	})
+	if code != http.StatusOK {
+		t.Fatalf("preview CA ceremony = %d body=%s; want 200", code, body)
+	}
+	var preview struct {
+		Capability             string         `json:"capability"`
+		Operation              string         `json:"operation"`
+		Ready                  bool           `json:"ready"`
+		RequestFingerprint     string         `json:"request_fingerprint"`
+		ApprovalThreshold      int            `json:"approval_threshold"`
+		NormalizedSpec         map[string]any `json:"normalized_spec"`
+		Changes                []string       `json:"changes"`
+		Risks                  []string       `json:"risks"`
+		VerificationSteps      []string       `json:"verification_steps"`
+		PreviewWrites          []string       `json:"preview_writes"`
+		PreviewExternalEffects []string       `json:"preview_external_effects"`
+		SensitiveInputs        []string       `json:"sensitive_inputs"`
+	}
+	if err := json.Unmarshal(body, &preview); err != nil {
+		t.Fatalf("decode CA ceremony preview: %v body=%s", err, body)
+	}
+	if preview.Capability != "F48" || preview.Operation != "create_root" || !preview.Ready || preview.RequestFingerprint == "" {
+		t.Fatalf("CA ceremony preview identity = %+v", preview)
+	}
+	if preview.ApprovalThreshold != 2 || preview.NormalizedSpec["common_name"] != "reviewed trust root" {
+		t.Fatalf("CA ceremony preview normalized request = %+v", preview)
+	}
+	if len(preview.Changes) == 0 || len(preview.Risks) == 0 || len(preview.VerificationSteps) == 0 {
+		t.Fatalf("CA ceremony preview omits operator guidance: %+v", preview)
+	}
+	if preview.PreviewWrites == nil || len(preview.PreviewWrites) != 0 || preview.PreviewExternalEffects == nil || len(preview.PreviewExternalEffects) != 0 {
+		t.Fatalf("CA ceremony preview is not explicitly effect-free: writes=%v external=%v", preview.PreviewWrites, preview.PreviewExternalEffects)
+	}
+	afterAuthorities, err := h.store.ListCAAuthorities(context.Background(), h.tenant)
+	if err != nil {
+		t.Fatalf("ListCAAuthorities after preview: %v", err)
+	}
+	if len(afterAuthorities) != len(beforeAuthorities) || servedEventCount(t, h, "ca.ceremony.started") != beforeEvents {
+		t.Fatalf("preview changed durable state: authorities %d -> %d ceremony events %d -> %d",
+			len(beforeAuthorities), len(afterAuthorities), beforeEvents, servedEventCount(t, h, "ca.ceremony.started"))
+	}
+
+	opaqueSignerReference := "signer-handle-must-not-leak"
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/ceremonies/preview", operatorToken, "", map[string]any{
+		"operation":       "import_existing_ca",
+		"threshold":       2,
+		"certificate_pem": "not-a-certificate",
+		"signer_handle":   opaqueSignerReference,
+		"spec":            rootSpec,
+	})
+	if code != http.StatusUnprocessableEntity {
+		t.Fatalf("invalid certificate preview = %d body=%s; want 422 field-semantic refusal", code, body)
+	}
+	if strings.Contains(string(body), opaqueSignerReference) {
+		t.Fatalf("preview error leaked signer handle: %s", body)
+	}
+	if servedEventCount(t, h, "ca.ceremony.started") != beforeEvents {
+		t.Fatal("rejected preview wrote a ceremony event")
+	}
+}
+
 func TestCAAuthorityCreateAppendFailureDoesNotCommit(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{})
 	operatorToken := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "ca-operator", []string{
@@ -420,8 +504,47 @@ func TestServedCARotationWithoutDowntimeCAPCA03(t *testing.T) {
 	if err := crypto.VerifyLeafSignedByCA(caCertDER(t, []byte(before.CertificatePEM)), caCertDER(t, []byte(oldCA.CertificatePEM))); err != nil {
 		t.Fatalf("pre-rotation leaf did not chain to predecessor: %v", err)
 	}
+	beforeRotationEvents := servedEventCount(t, h, "ca.authority.rotated")
+	code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/authorities/"+oldCA.ID+"/rotate/preview", operator, "", map[string]any{
+		"successor_id": successorCA.ID,
+		"reason":       "CAP-CA-03 zero-downtime overlap",
+	})
+	if code != http.StatusOK {
+		t.Fatalf("preview CA rotation = %d body=%s; want 200", code, body)
+	}
+	var rotationPreview struct {
+		Capability             string            `json:"capability"`
+		Operation              string            `json:"operation"`
+		Ready                  bool              `json:"ready"`
+		RequestFingerprint     string            `json:"request_fingerprint"`
+		Predecessor            servedCAAuthority `json:"predecessor"`
+		Successor              servedCAAuthority `json:"successor"`
+		PreviewWrites          []string          `json:"preview_writes"`
+		PreviewExternalEffects []string          `json:"preview_external_effects"`
+	}
+	if err := json.Unmarshal(body, &rotationPreview); err != nil {
+		t.Fatalf("decode CA rotation preview: %v body=%s", err, body)
+	}
+	if rotationPreview.Capability != "F48" || rotationPreview.Operation != "rotate_ca" || !rotationPreview.Ready || rotationPreview.RequestFingerprint == "" ||
+		rotationPreview.Predecessor.ID != oldCA.ID || rotationPreview.Successor.ID != successorCA.ID {
+		t.Fatalf("CA rotation preview identity = %+v", rotationPreview)
+	}
+	if rotationPreview.PreviewWrites == nil || len(rotationPreview.PreviewWrites) != 0 || rotationPreview.PreviewExternalEffects == nil || len(rotationPreview.PreviewExternalEffects) != 0 {
+		t.Fatalf("CA rotation preview is not explicitly effect-free: writes=%v external=%v", rotationPreview.PreviewWrites, rotationPreview.PreviewExternalEffects)
+	}
+	unchangedOld, err := h.store.GetCAAuthority(context.Background(), h.tenant, oldCA.ID)
+	if err != nil {
+		t.Fatalf("load predecessor after preview: %v", err)
+	}
+	unchangedSuccessor, err := h.store.GetCAAuthority(context.Background(), h.tenant, successorCA.ID)
+	if err != nil {
+		t.Fatalf("load successor after preview: %v", err)
+	}
+	if unchangedOld.Status != "active" || unchangedSuccessor.Status != "active" || servedEventCount(t, h, "ca.authority.rotated") != beforeRotationEvents {
+		t.Fatalf("rotation preview changed state: predecessor=%q successor=%q events=%d->%d", unchangedOld.Status, unchangedSuccessor.Status, beforeRotationEvents, servedEventCount(t, h, "ca.authority.rotated"))
+	}
 
-	code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/authorities/"+oldCA.ID+"/rotate", operator, "rotation-activate-cap-ca-03", map[string]any{
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/authorities/"+oldCA.ID+"/rotate", operator, "rotation-activate-cap-ca-03", map[string]any{
 		"successor_id": successorCA.ID,
 		"reason":       "CAP-CA-03 zero-downtime overlap",
 	})

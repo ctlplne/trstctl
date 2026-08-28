@@ -30,12 +30,16 @@ import { useToast } from "@/components/ToastProvider";
 import { Button } from "@/components/ui/button";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { CAHorizonBadge, CAHorizonRenewBy, CALineageTree } from "./cahierarchy/CAHierarchyPageParts";
+import { CACeremonyReviewDialog, CARotationReviewDialog, CeremonyDetailDialog, CeremonyPanel } from "./cahierarchy/CAHierarchyCeremonyParts";
 import {
   api,
   ApiError,
   type CADiscovery,
   type CAAuthority,
   type CAAuthorityRotation,
+  type CAAuthorityRotationPlanPreview,
+  type CAAuthorityRotationRequest,
+  type CACeremonyPlanPreview,
   type CACeremonyStartRequest,
   type CAIntermediateCSR,
   type CAIssuedIntermediate,
@@ -68,6 +72,17 @@ type ExternalCAIssueResult = {
   certificate?: ExternalCAIssuedCertificate;
 };
 type CAWorkspaceTab = "overview" | "authorities" | "lifecycle" | "imports" | "custody";
+type CeremonyReviewState = {
+  onCreated: (ceremony: CAKeyCeremony) => void;
+  onError: (message: string) => void;
+  preview: CACeremonyPlanPreview;
+  request: CACeremonyStartRequest;
+};
+type RotationReviewState = {
+  predecessorID: string;
+  preview: CAAuthorityRotationPlanPreview;
+  request: CAAuthorityRotationRequest;
+};
 
 const caWorkspaceTabIDs: readonly CAWorkspaceTab[] = ["overview", "authorities", "lifecycle", "imports", "custody"];
 
@@ -374,6 +389,8 @@ export function CAHierarchy() {
   const [rotationResult, setRotationResult] = useState<CAAuthorityRotation | null>(null);
   const [rotationBusy, setRotationBusy] = useState(false);
   const [rotationError, setRotationError] = useState<string | null>(null);
+  const [rotationReview, setRotationReview] = useState<RotationReviewState | null>(null);
+  const [rotationReviewError, setRotationReviewError] = useState<string | null>(null);
   const [rekeyAuthorityID, setRekeyAuthorityID] = useState("");
   const [rekeyCeremonyID, setRekeyCeremonyID] = useState("");
   const [rekeyTTLDays, setRekeyTTLDays] = useState("825");
@@ -393,6 +410,9 @@ export function CAHierarchy() {
   const [leafTarget, setLeafTarget] = useState<CAAuthority | null>(null);
   const [signTarget, setSignTarget] = useState<CAAuthority | null>(null);
   const [ceremonyDetail, setCeremonyDetail] = useState<CAKeyCeremony | null>(null);
+  const [ceremonyReview, setCeremonyReview] = useState<CeremonyReviewState | null>(null);
+  const [ceremonyReviewBusy, setCeremonyReviewBusy] = useState(false);
+  const [ceremonyReviewError, setCeremonyReviewError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -501,16 +521,47 @@ export function CAHierarchy() {
     }
   }
 
-  async function startRootCeremony() {
-    setCeremonyBusy(true);
-    setCeremonyError(null);
+  async function openCeremonyReview(
+    request: CACeremonyStartRequest,
+    onCreated: (ceremony: CAKeyCeremony) => void,
+    onError: (message: string) => void,
+    setBusy: (busy: boolean) => void,
+  ) {
+    setBusy(true);
+    onError("");
+    setCeremonyReviewError(null);
     try {
-      setCeremony(await api.createCACeremony(rootCeremonyRequest));
+      const preview = await api.previewCACeremony(request);
+      if (!preview.ready || preview.preview_writes.length > 0 || preview.preview_external_effects.length > 0) {
+        throw new Error(t("caHierarchy.preview.unsafe"));
+      }
+      setCeremonyReview({ onCreated, onError, preview, request });
     } catch (err) {
-      setCeremonyError(errorText(err, "Could not start ceremony"));
+      onError(errorText(err, t("caHierarchy.preview.failed")));
     } finally {
-      setCeremonyBusy(false);
+      setBusy(false);
     }
+  }
+
+  async function confirmCeremonyReview() {
+    if (!ceremonyReview) return;
+    setCeremonyReviewBusy(true);
+    setCeremonyReviewError(null);
+    try {
+      const next = await api.createCACeremony(ceremonyReview.request);
+      ceremonyReview.onCreated(next);
+      setCeremonyReview(null);
+    } catch (err) {
+      const message = errorText(err, t("caHierarchy.preview.startFailed"));
+      ceremonyReview.onError(message);
+      setCeremonyReviewError(message);
+    } finally {
+      setCeremonyReviewBusy(false);
+    }
+  }
+
+  async function startRootCeremony() {
+    await openCeremonyReview(rootCeremonyRequest, setCeremony, (message) => setCeremonyError(message || null), setCeremonyBusy);
   }
 
   async function approveCeremony(id: string) {
@@ -600,23 +651,21 @@ export function CAHierarchy() {
   }
 
   async function startOfflineRootCeremony() {
-    setOfflineBusy(true);
-    setOfflineError(null);
-    try {
-      const certPEM = offlineRootForm.certificatePEM.trim();
-      const next = await api.createCACeremony({
-        operation: "import_offline_root",
-        threshold: 2,
-        certificate_pem: certPEM,
-        spec: offlineFormSpec(offlineRootForm),
-      });
-      setOfflineRootCeremonyID(next.id);
-      setCeremony(next);
-    } catch (err) {
-      setOfflineError(errorText(err, "Could not start offline-root ceremony"));
-    } finally {
-      setOfflineBusy(false);
-    }
+    const request: CACeremonyStartRequest = {
+      operation: "import_offline_root",
+      threshold: 2,
+      certificate_pem: offlineRootForm.certificatePEM.trim(),
+      spec: offlineFormSpec(offlineRootForm),
+    };
+    await openCeremonyReview(
+      request,
+      (next) => {
+        setOfflineRootCeremonyID(next.id);
+        setCeremony(next);
+      },
+      (message) => setOfflineError(message || null),
+      setOfflineBusy,
+    );
   }
 
   async function importOfflineRoot() {
@@ -638,23 +687,21 @@ export function CAHierarchy() {
   }
 
   async function startOfflineIntermediateCeremony() {
-    setOfflineBusy(true);
-    setOfflineError(null);
-    try {
-      const parentID = offlineIntermediateForm.parentID.trim();
-      const next = await api.createCACeremony({
-        operation: "create_offline_intermediate",
-        threshold: 2,
-        parent_id: parentID,
-        spec: offlineFormSpec(offlineIntermediateForm),
-      });
-      setOfflineIntermediateCeremonyID(next.id);
-      setCeremony(next);
-    } catch (err) {
-      setOfflineError(errorText(err, "Could not start offline-intermediate ceremony"));
-    } finally {
-      setOfflineBusy(false);
-    }
+    const request: CACeremonyStartRequest = {
+      operation: "create_offline_intermediate",
+      threshold: 2,
+      parent_id: offlineIntermediateForm.parentID.trim(),
+      spec: offlineFormSpec(offlineIntermediateForm),
+    };
+    await openCeremonyReview(
+      request,
+      (next) => {
+        setOfflineIntermediateCeremonyID(next.id);
+        setCeremony(next);
+      },
+      (message) => setOfflineError(message || null),
+      setOfflineBusy,
+    );
   }
 
   async function createOfflineIntermediateCSR() {
@@ -693,23 +740,22 @@ export function CAHierarchy() {
   }
 
   async function startExistingCACeremony() {
-    setExistingCABusy(true);
-    setExistingCAError(null);
-    try {
-      const next = await api.createCACeremony({
-        operation: "import_existing_ca",
-        threshold: 2,
-        certificate_pem: existingCAForm.certificatePEM.trim(),
-        signer_handle: existingCAForm.signerHandle.trim(),
-        spec: offlineFormSpec(existingCAForm),
-      });
-      setExistingCACeremonyID(next.id);
-      setCeremony(next);
-    } catch (err) {
-      setExistingCAError(errorText(err, "Could not start existing-CA import ceremony"));
-    } finally {
-      setExistingCABusy(false);
-    }
+    const request: CACeremonyStartRequest = {
+      operation: "import_existing_ca",
+      threshold: 2,
+      certificate_pem: existingCAForm.certificatePEM.trim(),
+      signer_handle: existingCAForm.signerHandle.trim(),
+      spec: offlineFormSpec(existingCAForm),
+    };
+    await openCeremonyReview(
+      request,
+      (next) => {
+        setExistingCACeremonyID(next.id);
+        setCeremony(next);
+      },
+      (message) => setExistingCAError(message || null),
+      setExistingCABusy,
+    );
   }
 
   async function importExistingCA() {
@@ -734,42 +780,61 @@ export function CAHierarchy() {
   async function activateCARotation() {
     setRotationBusy(true);
     setRotationError(null);
+    setRotationReviewError(null);
     try {
       const predecessorID = rotationPredecessorID.trim();
-      const next = await api.rotateCAAuthority(predecessorID, {
+      const request: CAAuthorityRotationRequest = {
         successor_id: rotationSuccessorID.trim(),
         reason: rotationReason.trim() || undefined,
-      });
+      };
+      const preview = await api.previewCAAuthorityRotation(predecessorID, request);
+      if (!preview.ready || preview.preview_writes.length > 0 || preview.preview_external_effects.length > 0) {
+        throw new Error(t("caHierarchy.preview.unsafe"));
+      }
+      setRotationReview({ predecessorID, preview, request });
+    } catch (err) {
+      setRotationError(errorText(err, t("caHierarchy.rotationPreview.failed")));
+    } finally {
+      setRotationBusy(false);
+    }
+  }
+
+  async function confirmCARotation() {
+    if (!rotationReview) return;
+    setRotationBusy(true);
+    setRotationReviewError(null);
+    try {
+      const next = await api.rotateCAAuthority(rotationReview.predecessorID, rotationReview.request);
       setRotationResult(next);
+      setRotationReview(null);
       await load();
     } catch (err) {
-      setRotationError(errorText(err, "Could not activate CA rotation"));
+      setRotationReviewError(errorText(err, t("caHierarchy.rotationPreview.activateFailed")));
     } finally {
       setRotationBusy(false);
     }
   }
 
   async function startCARekeyCeremony() {
-    setRekeyBusy(true);
-    setRekeyError(null);
-    try {
-      const authorityID = rekeyAuthorityID.trim();
-      const selected = (caDiscovery?.items ?? []).find((item) => item.source_id === authorityID);
-      const next = await api.createCACeremony({
-        operation: "rekey_ca",
-        authority_id: authorityID,
-        threshold: 2,
-        spec: {
-          common_name: selected?.name ?? "Re-key existing CA",
-        },
-      });
-      setRekeyCeremonyID(next.id);
-      setCeremony(next);
-    } catch (err) {
-      setRekeyError(errorText(err, "Could not start CA re-key ceremony"));
-    } finally {
-      setRekeyBusy(false);
-    }
+    const authorityID = rekeyAuthorityID.trim();
+    const selected = (caDiscovery?.items ?? []).find((item) => item.source_id === authorityID);
+    const request: CACeremonyStartRequest = {
+      operation: "rekey_ca",
+      authority_id: authorityID,
+      threshold: 2,
+      spec: {
+        common_name: selected?.name ?? "Re-key existing CA",
+      },
+    };
+    await openCeremonyReview(
+      request,
+      (next) => {
+        setRekeyCeremonyID(next.id);
+        setCeremony(next);
+      },
+      (message) => setRekeyError(message || null),
+      setRekeyBusy,
+    );
   }
 
   async function activateCARekey() {
@@ -1149,6 +1214,32 @@ export function CAHierarchy() {
             setAuthorityDetail(null);
             setSignTarget(authorityDetail);
           }}
+        />
+      )}
+      {ceremonyReview && (
+        <CACeremonyReviewDialog
+          busy={ceremonyReviewBusy}
+          error={ceremonyReviewError}
+          preview={ceremonyReview.preview}
+          onClose={() => {
+            if (ceremonyReviewBusy) return;
+            setCeremonyReview(null);
+            setCeremonyReviewError(null);
+          }}
+          onConfirm={() => void confirmCeremonyReview()}
+        />
+      )}
+      {rotationReview && (
+        <CARotationReviewDialog
+          busy={rotationBusy}
+          error={rotationReviewError}
+          preview={rotationReview.preview}
+          onClose={() => {
+            if (rotationBusy) return;
+            setRotationReview(null);
+            setRotationReviewError(null);
+          }}
+          onConfirm={() => void confirmCARotation()}
         />
       )}
       {ceremonyDetail && <CeremonyDetailDialog ceremony={ceremonyDetail} onClose={() => setCeremonyDetail(null)} />}
@@ -2008,105 +2099,6 @@ function OfflineSpecFields({
         onChange={(value) => onChange({ ttlDays: value })}
       />
     </div>
-  );
-}
-
-function CeremonyPanel({
-  busy,
-  ceremony,
-  onApprove,
-  onView,
-}: {
-  busy: boolean;
-  ceremony: CAKeyCeremony;
-  onApprove: (id: string) => void;
-  onView: (id: string) => void;
-}) {
-  const { t } = useTranslation();
-  const complete = ceremony.approvals >= ceremony.threshold || ceremony.status === "approved";
-  return (
-    <section aria-labelledby="active-ceremony-heading" className="ui-panel p-comfortable text-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 id="active-ceremony-heading" className="text-title font-semibold">
-            {translateNow("source.active.ceremony.282727eb03")}
-          </h3>
-          <p className="mt-1 font-mono text-xs">{ceremony.id}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={busy || complete}
-            onClick={() => onApprove(ceremony.id)}
-            aria-label={translateNow("source.approve.ceremony.value1.36200975a5", { value1: ceremony.id })}
-          >
-            {translateNow("source.approve.6007acbe30")}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={busy}
-            onClick={() => onView(ceremony.id)}
-            aria-label={translateNow("source.view.ceremony.value1.4ed0eab2e0", { value1: ceremony.id })}
-          >
-            {t("parity.view_69bd4e")}
-          </Button>
-        </div>
-      </div>
-      <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <KeyValue label="Purpose" value={ceremony.purpose} mono />
-        <KeyValue label="Approvals" value={`${ceremony.approvals} / ${ceremony.threshold} approvals`} />
-        <KeyValue label="Status" value={ceremony.status} />
-        <KeyValue label="Opened by" value={ceremony.opener || "-"} />
-      </dl>
-    </section>
-  );
-}
-
-function CeremonyDetailDialog({ ceremony, onClose }: { ceremony: CAKeyCeremony; onClose: () => void }) {
-  const { t } = useTranslation();
-  const titleId = "ceremony-detail-heading";
-  return (
-    <Dialog
-      open
-      onClose={onClose}
-      titleId={titleId}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      overlayClassName="absolute inset-0 bg-black/55"
-      panelClassName="relative max-h-[calc(100vh-2rem)] w-full max-w-xl overflow-y-auto rounded-panel border border-border bg-card shadow-elevation2"
-    >
-      <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
-        <div className="min-w-0">
-          <h2 id={titleId} className="text-title font-semibold">
-            {t("parity.ceremonyDetail_9cb326")}
-          </h2>
-          <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{ceremony.id}</p>
-        </div>
-        <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label={t("parity.closeCeremonyDetail_92fb97")}>
-          <X className="h-4 w-4" aria-hidden="true" />
-        </Button>
-      </header>
-      <div className="grid gap-4 p-5 text-sm">
-        <div className="flex flex-wrap items-center gap-2">
-          <StatusBadge vocabulary="lifecycle" value={ceremony.status} />
-          <span className="text-body font-medium">
-            {translateNow("source.value1.of.value2.approvals.cb7e517061", { value1: ceremony.approvals, value2: ceremony.threshold })}
-          </span>
-        </div>
-        <dl className="grid gap-3 sm:grid-cols-2">
-          <KeyValue label="Purpose" value={ceremony.purpose} mono />
-          <KeyValue label="Opened by" value={ceremony.opener || "-"} />
-          <KeyValue label="Created" value={ceremony.created_at} />
-          <KeyValue label="Threshold" value={`${ceremony.threshold} approvals required`} />
-        </dl>
-        <footer className="flex justify-end border-t border-border pt-4">
-          <Button type="button" variant="outline" onClick={onClose}>
-            {translateNow("source.close.7d9eb7acb1")}
-          </Button>
-        </footer>
-      </div>
-    </Dialog>
   );
 }
 

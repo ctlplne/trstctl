@@ -1366,7 +1366,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use private/enterprise ca hierarchy management while tenant, policy, and security authority remain on the server.",
       "tool": "certificates",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/ca-hierarchy",
       "navigationEntrypoints": [
         "tool navigation",
@@ -1378,7 +1378,7 @@ export const canonicalCapabilities = [
       "dependencies": [],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -1400,8 +1400,14 @@ export const canonicalCapabilities = [
           ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: previewCACeremony",
+            "OpenAPI operationId: previewCAAuthorityRotation",
+            "internal/server/ca_hierarchy_served_test.go",
+            "web/src/pages/cahierarchy/CAHierarchyCeremonyParts.tsx",
+            "web/src/__tests__/ca_hierarchy.test.tsx"
+          ]
         },
         "execute": {
           "status": "complete",
@@ -1432,6 +1438,7 @@ export const canonicalCapabilities = [
         "automate": {
           "status": "complete",
           "evidence": [
+            "OpenAPI operationId: previewCACeremony",
             "OpenAPI operationId: createCACeremony",
             "OpenAPI operationId: getCACeremony",
             "OpenAPI operationId: approveCACeremony",
@@ -1445,6 +1452,7 @@ export const canonicalCapabilities = [
             "OpenAPI operationId: importOfflineIntermediateCA",
             "OpenAPI operationId: issueIntermediateCAFromCSR",
             "OpenAPI operationId: issueHierarchyLeaf",
+            "OpenAPI operationId: previewCAAuthorityRotation",
             "OpenAPI operationId: rotateCAAuthority",
             "OpenAPI operationId: rekeyCAAuthority",
             "OpenAPI operationId: crossSignCAAuthority",
@@ -1463,6 +1471,7 @@ export const canonicalCapabilities = [
             "OpenAPI operationId: pauseMigrationRun",
             "OpenAPI operationId: resumeMigrationRun",
             "OpenAPI operationId: rollbackMigrationRun",
+            "CLI command: ca ceremonies preview",
             "CLI command: ca ceremonies start",
             "CLI command: ca ceremonies get",
             "CLI command: ca ceremonies approve",
@@ -1475,6 +1484,7 @@ export const canonicalCapabilities = [
             "CLI command: ca authorities offline-intermediate-csr",
             "CLI command: ca authorities import-offline-intermediate",
             "CLI command: ca authorities issue-intermediate-csr",
+            "CLI command: ca authorities rotate-preview",
             "CLI command: ca authorities rotate",
             "CLI command: ca authorities rekey",
             "CLI command: ca authorities issue",
@@ -1500,7 +1510,7 @@ export const canonicalCapabilities = [
       "owner": "pki",
       "targetCheckpoint": "frontend-convergence",
       "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "freshness": "2026-08-28"
     }
   },
   {

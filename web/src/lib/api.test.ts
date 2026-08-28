@@ -520,6 +520,8 @@ describe("exported API surface census", () => {
       "/api/v1/migrations/assess",
       "/api/v1/agents/enrollment-tokens/preview",
       "/api/v1/issuance-requests/preview",
+      "/api/v1/ca/ceremonies/preview",
+      "/api/v1/ca/authorities/item%2Fid/rotate/preview",
       "/api/v1/ai/query",
       "/api/v1/ai/rca",
       "/api/v1/graph/query",

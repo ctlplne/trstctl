@@ -66,6 +66,7 @@ var servedEvidenceBindings = []EvidenceBinding{
 	evidence("BulkRevokeItem", "status", workflowPredicate, "internal/api/bulk_revoke.go:API.bulkRevoke"),
 	evidence("BulkRevokeRequest", "status", workflowPredicate, "internal/api/bulk_revoke.go:API.bulkRevoke"),
 	evidence("CAAuthority", "status", eventProjectionPredicate, "internal/api/ca_hierarchy.go:API.listCAAuthorities"),
+	evidence("CACeremonyPlanAuthority", "status", eventProjectionPredicate, "internal/server/ca_hierarchy.go:caCeremonyPlanAuthority"),
 	evidence("CAAuthorityRotationIssuer", "status", eventProjectionPredicate, "internal/api/ca_hierarchy.go:API.rotateCAAuthority"),
 	evidence("CADiscoveryItem", "status", observationPredicate, "internal/api/ca_discovery.go:API.listCADiscoveryInventory"),
 	evidence("CAKeyCeremony", "status", eventProjectionPredicate, "internal/api/ca_hierarchy.go:API.createCACeremony"),

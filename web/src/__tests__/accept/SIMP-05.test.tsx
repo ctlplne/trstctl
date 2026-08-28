@@ -10,6 +10,7 @@ import { CAHierarchy } from "@/pages/CAHierarchy";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     issuers: vi.fn(),
+    previewCACeremony: vi.fn(),
     createCACeremony: vi.fn(),
     approveCACeremony: vi.fn(),
     generateManagedKey: vi.fn(),
@@ -48,6 +49,21 @@ describe("SIMP-05 CA hierarchy ceremony and custody wiring", () => {
         public_key: "-----BEGIN PUBLIC KEY-----ROOT-----END PUBLIC KEY-----",
       },
     ]);
+    apiMock.previewCACeremony.mockImplementation(async (input: { operation: string; threshold: number; spec: Record<string, unknown> }) => ({
+      capability: "F48",
+      operation: input.operation,
+      ready: true,
+      request_fingerprint: "simp-05-root-preview",
+      approval_threshold: input.threshold,
+      required_permission: "issuers:write",
+      normalized_spec: input.spec,
+      changes: ["Prepare a reviewed root CA ceremony."],
+      risks: ["A completed ceremony can authorize a new trust anchor."],
+      verification_steps: ["Verify distinct approvals before creating the root."],
+      sensitive_inputs: [],
+      preview_writes: [],
+      preview_external_effects: [],
+    }));
     apiMock.createCACeremony.mockResolvedValue({
       id: "ceremony-root-1",
       tenant_id: "tenant-1",
@@ -86,6 +102,10 @@ describe("SIMP-05 CA hierarchy ceremony and custody wiring", () => {
 
     expect((await screen.findAllByText("Root CA")).length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: "Start root ceremony" }));
+    await waitFor(() => expect(apiMock.previewCACeremony).toHaveBeenCalled());
+    expect(apiMock.createCACeremony).not.toHaveBeenCalled();
+    expect(await screen.findByRole("heading", { name: "Review CA ceremony" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Start reviewed ceremony" }));
 
     await waitFor(() =>
       expect(apiMock.createCACeremony).toHaveBeenCalledWith({
