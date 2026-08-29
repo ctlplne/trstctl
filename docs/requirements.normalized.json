@@ -339,7 +339,7 @@
         "docs/features/acme-and-dns.md"
       ],
       "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
+      "ga_scope_reason": "Residual GA breadth remains conditional on authoritative DNS and a configured provider; broader public-provider integrations remain outside the GA denominator."
     },
     {
       "requirement_id": "F72",
