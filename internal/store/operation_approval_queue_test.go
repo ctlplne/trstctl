@@ -70,7 +70,10 @@ func TestOperationApprovalQueueStatusAndFilterUseOneDatabaseSnapshot(t *testing.
 	now := time.Now().UTC()
 	request := operationApprovalRequest("77000000-0000-4000-8000-000000000203", tenantA)
 	request.CreatedAt = now.Add(-time.Hour)
-	request.ExpiresAt = now.Add(2 * time.Second)
+	// Race-enabled full-suite runs can leave this goroutine unscheduled for more
+	// than two seconds on constrained CI hosts. Give the transaction enough time
+	// to start before expiry; the test still waits past the exact deadline below.
+	request.ExpiresAt = now.Add(10 * time.Second)
 	if err := applyOperationApprovalRequest(ctx, s, request); err != nil {
 		t.Fatal(err)
 	}
@@ -102,14 +105,28 @@ func TestOperationApprovalQueueStatusAndFilterUseOneDatabaseSnapshot(t *testing.
 		resultCh <- result{rows: rows, err: err}
 	}()
 
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for {
+		select {
+		case early := <-resultCh:
+			if early.err != nil {
+				t.Fatalf("approval queue SELECT failed before reaching the lock: %v", early.err)
+			}
+			t.Fatalf("approval queue SELECT returned before reaching the held table lock: %+v", early.rows)
+		default:
+		}
 		var waiting int
-		if err := s.SystemPool().QueryRow(ctx, `
-			SELECT count(*) FROM pg_stat_activity
-			 WHERE datname = current_database()
-			   AND wait_event_type = 'Lock'
-			   AND query LIKE '%FROM operation_approval_requests r%'`).Scan(&waiting); err != nil {
+		// Observe the relation lock directly instead of matching pg_stat_activity's
+		// driver- and server-version-dependent query text. Use the blocker
+		// transaction's own connection so a small system pool cannot starve this
+		// observation while the blocker holds its slot.
+		if err := blocker.QueryRow(ctx, `
+			SELECT count(*)
+			  FROM pg_locks l
+			  JOIN pg_class c ON c.oid = l.relation
+			 WHERE c.relname = 'operation_approval_requests'
+			   AND l.mode = 'AccessShareLock'
+			   AND NOT l.granted`).Scan(&waiting); err != nil {
 			t.Fatal(err)
 		}
 		if waiting > 0 {

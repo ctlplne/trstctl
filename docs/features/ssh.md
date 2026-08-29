@@ -57,7 +57,10 @@ critical options plus known OpenSSH session extensions. Host certificates reject
 critical options and extensions. Both paths accept one public key and never accept or
 return its private key. Status and revocation remain available at
 `GET /api/v1/ssh/status` and `POST /api/v1/ssh/certificates/revoke`; revocation appends
-an immutable `ssh.cert.revoked` event before publishing the updated KRL snapshot.
+an immutable, tenant-scoped `ssh.cert.revoked` event before publishing the updated KRL
+snapshot. On every control-plane start, trstctl rebuilds the KRL from those events before
+serving SSH. A malformed matching event stops startup instead of publishing a partial or
+empty revocation list.
 
 ### SSH deployment & trust configuration (F44)
 

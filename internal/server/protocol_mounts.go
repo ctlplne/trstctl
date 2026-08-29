@@ -931,11 +931,18 @@ func (s *Server) buildSSHCA(ctx context.Context, tenantID string, pool *bulkhead
 	// ISSUE authority rather than EST's REQUEST authority: an SSH user
 	// certificate names its own principals, so minting one is an issuance
 	// decision, not a request for someone else to approve.
-	return newSSHProtocol(ca, tenantID, servedEnrollAuth{
+	protocol, err := newSSHProtocol(ca, tenantID, servedEnrollAuth{
 		store:    s.store,
 		tenantID: tenantID,
 		perm:     authz.CertsIssue,
 	})
+	if err != nil {
+		return nil, err
+	}
+	if err := protocol.restoreRevocations(ctx, s.log); err != nil {
+		return nil, err
+	}
+	return protocol, nil
 }
 
 // sshCASigner returns a signer-backed DigestSigner for the SSH CA key, generated in

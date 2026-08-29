@@ -5,11 +5,14 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync/atomic"
 	"time"
 
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/protocols/bodylimit"
 	"trstctl.com/trstctl/internal/protocols/est"
 	"trstctl.com/trstctl/internal/protocols/spiffe"
@@ -226,6 +229,39 @@ func (p *sshProtocol) Revoke(serial uint64, keyID string) {
 		p.krl.RevokeKeyID(keyID)
 	}
 	p.krlVersion.Add(1)
+}
+
+// restoreRevocations rebuilds the served in-memory KRL from its tenant's
+// immutable events before the HTTP surface is exposed. The event log remains
+// the source of truth (AN-2); without this replay, every control-plane restart
+// would briefly publish an empty KRL and could let a revoked certificate work
+// again. Malformed matching history fails startup closed instead of serving a
+// partial revocation view.
+func (p *sshProtocol) restoreRevocations(ctx context.Context, log *events.Log) error {
+	if p == nil || p.krl == nil {
+		return errors.New("server: SSH protocol is unavailable during revocation replay")
+	}
+	if log == nil {
+		return errors.New("server: SSH revocation replay requires the event log")
+	}
+	if err := log.Replay(ctx, 0, func(event events.Event) error {
+		if event.Type != eventSSHCertRevoked || event.TenantID != p.tenantID {
+			return nil
+		}
+		var req sshRevokeRequest
+		if err := json.Unmarshal(event.Data, &req); err != nil {
+			return fmt.Errorf("decode ssh.cert.revoked event %d: %w", event.Sequence, err)
+		}
+		req.KeyID = strings.TrimSpace(req.KeyID)
+		if req.Serial == 0 && req.KeyID == "" {
+			return fmt.Errorf("decode ssh.cert.revoked event %d: serial or key_id is required", event.Sequence)
+		}
+		p.Revoke(req.Serial, req.KeyID)
+		return nil
+	}); err != nil {
+		return fmt.Errorf("server: replay SSH revocations: %w", err)
+	}
+	return nil
 }
 
 func (p *sshProtocol) KRLVersion() uint64 { return p.krlVersion.Load() }
