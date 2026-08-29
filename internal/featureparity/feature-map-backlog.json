@@ -8015,9 +8015,9 @@
             "priority": 26,
             "served_state": "conditional",
             "backend_status": "conditional: served bootstrap and verified-mTLS renewal endpoints plus agent steady-state channel renewal",
-            "current_frontend_mapping": "Agents and Wizard expose one-time bootstrap-token setup, install commands, agent version/status, and served endpoint-discovery capability evidence.",
-            "target_gui_mapping": "Embedded enrollment UI for bootstrap tokens, install commands, renewal capability status, agent version, and endpoint-discovery evidence.",
-            "acceptance_test": "Served tests bootstrap with a one-time token, reject token replay, renew through POST /enroll/renewal only with a verified current client certificate, reject missing or expired renewal peers, and UI tests cover token one-time visibility.",
+            "current_frontend_mapping": "Workloads & Machines → Agents provides one guided configure → effect-free preview → one-time mint → observe → revoke/offboard lifecycle. The preview publishes the exact public address, TLS name, renewal path, and verified-mTLS authentication boundary before any secret exists.",
+            "target_gui_mapping": "Keep the complete embedded enrollment lifecycle in Agents: select identity and signed role, review exact bootstrap and renewal readiness, mint once, observe certificate-bound fleet evidence, and recover through replacement, revocation, or offboarding.",
+            "acceptance_test": "Preview creates no token, changes no agent state, and calls no signer; preview and direct mint both fail closed when the public connection or verified-mTLS renewal lifecycle is unavailable; served tests bootstrap once, reject token replay, renew only with the current verified client certificate, reject missing/untrusted/expired peers, and UI tests cover one-time visibility plus recovery guidance.",
             "source_docs": [
                 "docs/features/enrollment-protocols.md"
             ],
@@ -8033,9 +8033,10 @@
                 "web/src/pages/Wizard.tsx"
             ],
             "status": "closed",
-            "notes": "TRACE-009 closed by mounting POST /enroll/renewal on the served enrollment surface with verified client-certificate authentication, missing/expired-peer rejection, and deterministic served idempotency when the API has the idempotency store. Test evidence: internal/api/enroll_routes_test.go covers bootstrap, renewal auth failure, expired-peer failure, and successful verified renewal; internal/projections/enroll_e2e_test.go covers assembled-server bootstrap-to-renewal; internal/server/agentchannel_served_test.go covers signer-custodied agent-channel renewal and idempotent retry; web tests cover token one-time visibility and route evidence.",
+            "notes": "TRACE-009 remains closed. F54 now binds the console, CLI, and API to one server-owned lifecycle readiness oracle: no enrollment token is minted unless the public connection and signer-backed verified-mTLS renewal path are ready. Test evidence covers effect-free preview, mutation fail-closed behavior, single-use bootstrap, signer-custodied HTTP/gRPC renewal, idempotent retry, missing/untrusted/expired peer rejection, one-time token visibility, plan invalidation, and explicit recovery guidance.",
             "api_surface": [
                 "listAgents",
+                "previewEnrollmentToken",
                 "createEnrollmentToken",
                 "revokeAgentCertificate",
                 "offboardAgent"
@@ -8043,6 +8044,7 @@
             "api_na": "",
             "cli_surface": [
                 "agents list",
+                "agents enroll-token-preview",
                 "agents enroll-token",
                 "agents revoke-cert",
                 "agents offboard"
@@ -8060,18 +8062,21 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: Agents and Wizard expose one-time bootstrap-token setup, install commands, agent version/status, and served endpoint-discovery capability evidence.",
-                        "target_gui_mapping: Embedded enrollment UI for bootstrap tokens, install commands, renewal capability status, agent version, and endpoint-discovery evidence."
+                        "current_frontend_mapping: Workloads & Machines → Agents provides one guided configure → effect-free preview → one-time mint → observe → revoke/offboard lifecycle.",
+                        "The preview displays exact address, TLS name, renewal readiness/path/authentication, required permission, the no-token boundary, blockers, and safe recovery before mutation."
                     ],
                     "refs": [
                         "web/src/lib/navigation.ts",
                         "web/src/App.tsx",
+                        "web/src/pages/Agents.tsx",
+                        "web/src/__tests__/agents.test.tsx",
                         "web/src/pages/Wizard.tsx"
                     ]
                 },
                 "cli": {
                     "evidence": [
                         "CLI command: agents list",
+                        "CLI command: agents enroll-token-preview",
                         "CLI command: agents enroll-token",
                         "CLI command: agents revoke-cert",
                         "CLI command: agents offboard"
@@ -8084,6 +8089,7 @@
                 "api": {
                     "evidence": [
                         "OpenAPI operationId: listAgents",
+                        "OpenAPI operationId: previewEnrollmentToken",
                         "OpenAPI operationId: createEnrollmentToken",
                         "OpenAPI operationId: revokeAgentCertificate",
                         "OpenAPI operationId: offboardAgent"
@@ -8097,13 +8103,15 @@
                 },
                 "test": {
                     "evidence": [
-                        "acceptance_test: Served tests bootstrap with a one-time token, reject token replay, renew through POST /enroll/renewal only with a verified current client certificate, reject missing or expired renewal peers, and UI tests cover token one-time visibility.",
+                        "acceptance_test: Preview is effect-free; preview and direct mutation share fail-closed connection and renewal blockers; bootstrap is one-time; renewal requires the current verified certificate; UI proves one-time visibility, blocker explanation, plan invalidation, and recovery.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
                         "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
                     ],
                     "refs": [
+                        "internal/projections/agents_api_test.go",
                         "internal/api/enroll_routes_test.go",
                         "internal/projections/enroll_e2e_test.go",
+                        "internal/server/agent_http_renewal_served_test.go",
                         "internal/server/agentchannel_served_test.go",
                         "internal/featureparity/feature_facet_coverage_test.go",
                         "web/src/__tests__/route_parity.test.ts",
@@ -8120,7 +8128,7 @@
                 },
                 "rbac": {
                     "evidence": [
-                        "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listAgents, createEnrollmentToken, revokeAgentCertificate, offboardAgent",
+                        "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listAgents, previewEnrollmentToken, createEnrollmentToken, revokeAgentCertificate, offboardAgent",
                         "POST /enroll/bootstrap uses the one-time bootstrap token as its credential boundary; POST /enroll/renewal uses the verified agent client certificate and stays outside the bearer-token OpenAPI surface.",
                         "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
                     ],
@@ -8177,10 +8185,10 @@
             "ga_served_scope": "out_of_ga",
             "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator.",
             "contract": {
-                "purpose": "Lets an operator understand and safely use embedded / iot enrollment agent while tenant, policy, and security authority remain on the server.",
-                "tool": "certificates",
+                "purpose": "Lets an operator safely enroll, renew, observe, replace, revoke, and offboard an embedded or IoT machine without moving tenant, policy, signer, or private-key authority into the browser.",
+                "tool": "workloads_machines",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/agents",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -8190,11 +8198,13 @@
                 "permission_authority": "internal/api route registry and feature authorization manifest",
                 "edition": "core",
                 "dependencies": [
-                    "Configuration, deployment, or edition prerequisite is named by the served capability evidence."
+                    "agent_channel.enabled is true for this deployment",
+                    "a public agent address and TLS server name are configured",
+                    "the isolated signer has the agent CA and the dedicated verified-mTLS renewal listener is attached"
                 ],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -8209,12 +8219,20 @@
                         ]
                     },
                     "configure": {
-                        "status": "missing",
-                        "reason": "No structured evidence proves an operator can configure every required prerequisite from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/Agents.tsx",
+                            "web/src/__tests__/agents.test.tsx"
+                        ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/api/agents.go",
+                            "internal/projections/agents_api_test.go",
+                            "web/src/pages/Agents.tsx",
+                            "web/src/__tests__/agents.test.tsx"
+                        ]
                     },
                     "execute": {
                         "status": "complete",
@@ -8230,33 +8248,43 @@
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/Agents.tsx",
+                            "web/src/__tests__/agents.test.tsx",
+                            "internal/api/agents.go",
+                            "internal/api/enroll_routes_test.go"
+                        ]
                     },
                     "verify": {
                         "status": "complete",
                         "evidence": [
-                            "internal/api/enroll_routes_test.go"
+                            "internal/projections/agents_api_test.go",
+                            "internal/api/enroll_routes_test.go",
+                            "internal/server/agent_http_renewal_served_test.go",
+                            "internal/server/agentchannel_served_test.go"
                         ]
                     },
                     "automate": {
                         "status": "complete",
                         "evidence": [
                             "OpenAPI operationId: listAgents",
+                            "OpenAPI operationId: previewEnrollmentToken",
                             "OpenAPI operationId: createEnrollmentToken",
                             "OpenAPI operationId: revokeAgentCertificate",
                             "OpenAPI operationId: offboardAgent",
                             "CLI command: agents list",
+                            "CLI command: agents enroll-token-preview",
                             "CLI command: agents enroll-token",
                             "CLI command: agents revoke-cert",
                             "CLI command: agents offboard"
                         ]
                     }
                 },
-                "owner": "pki",
+                "owner": "workloads",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "baf5ae53af350517f50a9b7c69c89a3cb4ce1b13",
+                "freshness": "2026-08-28"
             }
         },
         {

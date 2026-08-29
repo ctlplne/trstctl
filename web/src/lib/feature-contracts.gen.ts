@@ -2818,10 +2818,10 @@ export const canonicalCapabilities = [
     "phase": "P1",
     "priority": 26,
     "contract": {
-      "purpose": "Lets an operator understand and safely use embedded / iot enrollment agent while tenant, policy, and security authority remain on the server.",
-      "tool": "certificates",
+      "purpose": "Lets an operator safely enroll, renew, observe, replace, revoke, and offboard an embedded or IoT machine without moving tenant, policy, signer, or private-key authority into the browser.",
+      "tool": "workloads_machines",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/agents",
       "navigationEntrypoints": [
         "tool navigation",
@@ -2831,11 +2831,13 @@ export const canonicalCapabilities = [
       "permissionAuthority": "internal/api route registry and feature authorization manifest",
       "edition": "core",
       "dependencies": [
-        "Configuration, deployment, or edition prerequisite is named by the served capability evidence."
+        "agent_channel.enabled is true for this deployment",
+        "a public agent address and TLS server name are configured",
+        "the isolated signer has the agent CA and the dedicated verified-mTLS renewal listener is attached"
       ],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -2850,12 +2852,20 @@ export const canonicalCapabilities = [
           ]
         },
         "configure": {
-          "status": "missing",
-          "reason": "No structured evidence proves an operator can configure every required prerequisite from this console journey."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/Agents.tsx",
+            "web/src/__tests__/agents.test.tsx"
+          ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "internal/api/agents.go",
+            "internal/projections/agents_api_test.go",
+            "web/src/pages/Agents.tsx",
+            "web/src/__tests__/agents.test.tsx"
+          ]
         },
         "execute": {
           "status": "complete",
@@ -2871,33 +2881,43 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/Agents.tsx",
+            "web/src/__tests__/agents.test.tsx",
+            "internal/api/agents.go",
+            "internal/api/enroll_routes_test.go"
+          ]
         },
         "verify": {
           "status": "complete",
           "evidence": [
-            "internal/api/enroll_routes_test.go"
+            "internal/projections/agents_api_test.go",
+            "internal/api/enroll_routes_test.go",
+            "internal/server/agent_http_renewal_served_test.go",
+            "internal/server/agentchannel_served_test.go"
           ]
         },
         "automate": {
           "status": "complete",
           "evidence": [
             "OpenAPI operationId: listAgents",
+            "OpenAPI operationId: previewEnrollmentToken",
             "OpenAPI operationId: createEnrollmentToken",
             "OpenAPI operationId: revokeAgentCertificate",
             "OpenAPI operationId: offboardAgent",
             "CLI command: agents list",
+            "CLI command: agents enroll-token-preview",
             "CLI command: agents enroll-token",
             "CLI command: agents revoke-cert",
             "CLI command: agents offboard"
           ]
         }
       },
-      "owner": "pki",
+      "owner": "workloads",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "baf5ae53af350517f50a9b7c69c89a3cb4ce1b13",
+      "freshness": "2026-08-28"
     }
   },
   {

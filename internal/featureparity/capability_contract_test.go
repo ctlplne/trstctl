@@ -164,3 +164,57 @@ func TestCanonicalCandidateSHAIsExact(t *testing.T) {
 		t.Fatal("test SHA fixture is invalid")
 	}
 }
+
+func TestEmbeddedEnrollmentIsACompleteWorkloadsLifecycle(t *testing.T) {
+	catalog, err := Load()
+	if err != nil {
+		t.Fatalf("load feature parity catalog: %v", err)
+	}
+	var found *Item
+	for i := range catalog.Items {
+		if catalog.Items[i].FeatureID == "F54" {
+			found = &catalog.Items[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatal("F54 is missing from the canonical capability catalog")
+	}
+	contract := found.Contract
+	if contract.Tool != ToolWorkloadsMachines {
+		t.Fatalf("F54 tool = %q, want %q", contract.Tool, ToolWorkloadsMachines)
+	}
+	if contract.Maturity != MaturityCompleteVerticalSlice || contract.ReleaseBlocking {
+		t.Fatalf("F54 maturity/release_blocking = %q/%t, want complete_vertical_slice/false", contract.Maturity, contract.ReleaseBlocking)
+	}
+	for name, stage := range map[string]StageRecord{
+		"configure": contract.Stages.Configure,
+		"preview":   contract.Stages.Preview,
+		"recover":   contract.Stages.Recover,
+		"verify":    contract.Stages.Verify,
+		"automate":  contract.Stages.Automate,
+	} {
+		if stage.Status != StageComplete || len(stage.Evidence) == 0 {
+			t.Errorf("F54 %s stage = %q with %d evidence items, want complete with evidence", name, stage.Status, len(stage.Evidence))
+		}
+	}
+	for _, want := range []string{"previewEnrollmentToken", "createEnrollmentToken"} {
+		if !containsExactString(found.APISurface, want) {
+			t.Errorf("F54 api_surface is missing %q", want)
+		}
+	}
+	for _, want := range []string{"agents enroll-token-preview", "agents enroll-token"} {
+		if !containsExactString(found.CLISurface, want) {
+			t.Errorf("F54 cli_surface is missing %q", want)
+		}
+	}
+}
+
+func containsExactString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}

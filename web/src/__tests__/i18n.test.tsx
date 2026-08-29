@@ -1269,8 +1269,13 @@ describe("i18n boundary", () => {
       // real-client handoff. Names such as CMP, PKIMessage, CSR, and RA remain
       // byte-identical. Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION
       // REVIEW before release.
-      "es-ES": "e6236bb0a6e121912c7bbbf78811c902afa3cb49b93fab89014ad9c66d8d044e",
-      "de-DE": "d729e57c834549b3810fe9a0e93116631bcaa0d373acfa85339f75ed783bdc4f",
+      // F54 enrollment re-pin: seven reviewed keys name renewal readiness,
+      // the dedicated path and current-certificate mTLS boundary, plus the
+      // exact replacement/revoke/offboard recovery. The unavailable state and
+      // unrecoverable-token warning must preserve their negation. Machine-
+      // authored es/de translations — FLAG FOR HUMAN TRANSLATION REVIEW.
+      "es-ES": "19152e231da25403438134847336bc238a7e904dace30ab3bec70a0512f80de5",
+      "de-DE": "7a8cc1072a83eb121358de55eb26f5eb8d35bc43aa94da450162b608ad32ab1a",
     });
   });
 
