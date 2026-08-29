@@ -18,6 +18,7 @@ const { apiMock } = vi.hoisted(() => ({
     retryDiscoveryRun: vi.fn(),
     listCBOMAssets: vi.fn(),
     cryptoReadiness: vi.fn(),
+    previewCBOMScan: vi.fn(),
     startCBOMScan: vi.fn(),
     editions: vi.fn(),
     planPQCMigration: vi.fn(),
@@ -397,6 +398,7 @@ describe("posture collector disclosures", () => {
       ],
     });
     apiMock.startCBOMScan.mockReset();
+    apiMock.previewCBOMScan.mockReset();
     apiMock.editions.mockReset().mockResolvedValue({
       tier: "community",
       state: "community",
@@ -585,9 +587,9 @@ describe("posture collector disclosures", () => {
     await user.click(screen.getByText("Algorithm inventory and scan evidence", { exact: true }));
 
     expect(screen.getByRole("heading", { name: "CBOM and cryptographic observability" })).toBeInTheDocument();
-    expect(screen.getByLabelText("TLS endpoints")).toBeInTheDocument();
-    expect(screen.getByLabelText("Host config paths")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Run CBOM scan" })).toBeInTheDocument();
+    expect(screen.getByLabelText("TLS services")).toBeInTheDocument();
+    expect(screen.getByLabelText("Host configuration files")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Review scan plan" })).toBeInTheDocument();
     expect(screen.getByText(/RSA-2048, EC-256, and TLS 1.2/)).toBeInTheDocument();
     expect(screen.getByText(/3DES\/DES\/RC4\/NULL\/EXPORT\/MD5/)).toBeInTheDocument();
 

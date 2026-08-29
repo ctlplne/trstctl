@@ -156,7 +156,7 @@ exhaustive subcommand list:
 | `ca ceremonies`                    | Effect-free review, start, inspect, and approve m-of-n CA key ceremonies (`preview` · `start` · `get` · `approve`)                                                                           |
 | `ca authorities`                   | Private CA authority lifecycle — create/import roots and intermediates, preview/activate rotation, rekey, cross-sign, issue leaf certs (`list` · `create-root` · `import-offline-root` · `import-existing` · `create-intermediate` · `rotate-preview` · `rotate` · `rekey` · `cross-sign` · `issue`) |
 | `ca discovery`                     | List public and private CA discovery inventory (`list`)                                                                                                      |
-| `cbom`                             | Cryptographic bill of materials: scan TLS endpoints/configs, list assets (`scan` · `assets`)                                                                 |
+| `cbom`                             | Cryptographic bill of materials: effect-free plan review, bounded scan, inventory (`preview` · `scan` · `assets`)                                             |
 | `pqc campaigns`                    | Core PQC migration ownership and evidence workflow (`create` · `list` · `get` · `update` · `readiness` · `disposition` · `close` · `evidence`)               |
 | `certificates`                     | Certificate inventory: ingest, list, get, health, bulk-revoke (`ingest` · `list` · `get` · `health` · `bulk-revoke`)                                         |
 | `code-signing`                     | Sign artifact digests with a managed key or a keyless Sigstore/Fulcio identity (`identities` · `sign` · `keyless`)                                                          |
@@ -611,10 +611,13 @@ JSON
 trstctl-cli --idempotency-key weekly-soc2 compliance report-schedules create -f compliance-schedule.json
 trstctl-cli compliance report-schedules list
 
-# Scan TLS endpoints/config files into the cryptographic bill of materials.
+# Review the exact normalized targets and read/write ceilings without touching them.
 cat > cbom-scan.json <<'JSON'
-{"tls_endpoints":["payments.internal.example:443"],"host_configs":["/etc/nginx/sites-enabled/payments.conf"]}
+{"tls_endpoints":["https://payments.internal.example"],"host_configs":["/etc/nginx/sites-enabled/payments.conf"]}
 JSON
+trstctl-cli cbom preview -f cbom-scan.json
+
+# Run only after reviewing the plan. Preview sends no Idempotency-Key; scan does.
 trstctl-cli cbom scan -f cbom-scan.json
 trstctl-cli cbom assets
 

@@ -11,6 +11,7 @@ const { apiMock } = vi.hoisted(() => ({
     discoveryRuns: vi.fn(),
     discoveryFindings: vi.fn(),
     listCBOMAssets: vi.fn(),
+    previewCBOMScan: vi.fn(),
     startCBOMScan: vi.fn(),
   },
 }));
@@ -48,6 +49,29 @@ beforeEach(() => {
       },
     ],
   });
+  apiMock.previewCBOMScan.mockReset().mockResolvedValue({
+    capability: "F52",
+    ready: true,
+    effect_free: true,
+    normalized_request: { tls_endpoints: ["legacy.example.com:443"] },
+    source_count: 1,
+    tls_connection_limit: 1,
+    host_read_selector_count: 0,
+    host_file_read_limit: 0,
+    host_file_byte_limit: 0,
+    finding_write_limit: 2,
+    worker_limit: 4,
+    queue_depth: 64,
+    per_endpoint_timeout_seconds: 10,
+    outside_calls: ["Open one TLS connection."],
+    host_reads: [],
+    durable_writes: ["Append at most two observations."],
+    signer_calls: 0,
+    outbox_calls: 0,
+    blockers: [],
+    recovery_steps: ["Correct an unreachable target and retry."],
+    safety_notes: ["Preview is effect-free."],
+  });
   apiMock.startCBOMScan.mockReset().mockResolvedValue({
     migration_progress: progress,
     report: { failed: 0, findings: 1, out_of_policy: 1, quantum_vulnerable: 1, sources: 1, weak: 1 },
@@ -69,7 +93,9 @@ describe("U5-2 CBOM inventory explorer", () => {
     expect(await screen.findByRole("heading", { name: "CBOM and cryptographic observability" })).toBeInTheDocument();
     // The weak asset is rendered from served inventory (appears in both the CBOM and readiness tables).
     expect(screen.getAllByText("legacy mesh edge").length).toBeGreaterThan(0);
-    await user.click(screen.getByRole("button", { name: "Run CBOM scan" }));
+    await user.type(screen.getByLabelText("TLS services"), "legacy.example.com");
+    await user.click(screen.getByRole("button", { name: "Review scan plan" }));
+    await user.click(await screen.findByRole("button", { name: "Run this reviewed plan" }));
     await waitFor(() => expect(apiMock.startCBOMScan).toHaveBeenCalled());
   });
 });

@@ -266,8 +266,11 @@ rollback.
 
 The complete expert machinery remains on this page under three named disclosures:
 
-- **Algorithm inventory and scan evidence** contains the CBOM scan trigger, policy
-  floor, algorithm rollup, exact asset rows, recommendations, and scan results.
+- **Algorithm inventory and scan evidence** contains a three-step CBOM workflow:
+  choose TLS/file scope, review the server-normalized effect-free plan and exact safety
+  limits, then run and inspect durable results. Partial failures keep successful
+  observations and show repair-and-retry guidance. The section also contains the policy
+  floor, algorithm rollup, exact asset rows, and recommendations.
 - **Compatibility, PQC policy, and upgrade planning** contains graph-bound readiness,
   attributed owners, dependency paths, core PQC campaigns, and licensed migration.
 - **Certificate, AD CS, authority, and drift evidence** contains CT monitoring,
@@ -277,7 +280,7 @@ The complete expert machinery remains on this page under three named disclosures
 The readiness rows use the same digest-bound graph evidence as Risk. Missing graph
 placement renders as `Unknown`, never ready, and later topology drift refuses stale
 evidence mutation. See [Lifecycle & PQC → PQC](features/lifecycle-and-pqc.md). Backed
-by `/api/v1/cbom/assets`, `/api/v1/cbom/scans`,
+by `/api/v1/cbom/assets`, `/api/v1/cbom/scans/preview`, `/api/v1/cbom/scans`,
 `/api/v1/graph/crypto-readiness`, `/api/v1/graph/crypto-readiness/actions`,
 `/api/v1/graph/crypto-readiness/export`, `/api/v1/pqc/campaigns`,
 `/api/v1/pqc/migrations`, `/api/v1/discovery/ct-monitoring`, and

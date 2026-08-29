@@ -9,6 +9,7 @@ package tlssource
 
 import (
 	"context"
+	"errors"
 
 	"trstctl.com/trstctl/internal/cbom"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
@@ -57,9 +58,11 @@ func (s *Source) Name() string { return "tls-endpoints" }
 // leaf-certificate key. An unreachable endpoint is skipped, never fatal.
 func (s *Source) Scan(ctx context.Context) ([]cbom.Finding, error) {
 	var out []cbom.Finding
+	failures := 0
 	for _, addr := range s.addrs {
 		res, err := s.prober(ctx, addr)
 		if err != nil {
+			failures++
 			continue
 		}
 		out = append(out, cbom.Finding{
@@ -78,6 +81,9 @@ func (s *Source) Scan(ctx context.Context) ([]cbom.Finding, error) {
 				})
 			}
 		}
+	}
+	if failures > 0 {
+		return out, &cbom.PartialScanError{Failures: failures, Err: errors.New("one or more CBOM TLS endpoints could not complete a bounded handshake")}
 	}
 	return out, nil
 }

@@ -196,12 +196,24 @@ blast-radius and [compliance](policy-and-governance.md) reporting and the
 non-fatal per source, tenant-isolated at the database layer, and keeps TLS/cert parsing
 behind the single crypto path.
 
-**Status: served.** `POST /api/v1/cbom/scans` (`discovery:write`, accepts an
-`Idempotency-Key`) runs the scanner in the serving binary and records each observation
-as an immutable `cbom.asset.observed` event before the read model projects it. `GET
-/api/v1/cbom/assets` (`risk:read`) returns the tenant-scoped inventory plus migration
-progress. CBOM work has its own bulkhead, so a wide TLS/config sweep rejects fast
-instead of starving the regular API or enrollment lanes.
+**Status: served.** `POST /api/v1/cbom/scans/preview` (`discovery:write`) is an
+effect-free review of the same plan execution uses. It trims, sorts, and deduplicates
+the inputs; turns friendly HTTPS origins and bare hosts into exact `host:port` targets;
+and returns the connection, file-read, worker, queue, timeout, and durable-write
+ceilings. It makes no connection, file read, event append, projection write, signer
+call, or outbox call.
+
+`POST /api/v1/cbom/scans` (`discovery:write`, accepts an `Idempotency-Key`) rebuilds
+that plan, then runs it in the serving binary. One request accepts at most 64 TLS
+targets and 64 absolute file/glob selectors. TLS discovery performs one handshake per
+target with a ten-second timeout and sends no application data. Host discovery reads
+at most 256 matching files and 1 MiB per file, returns no file contents, and the scan
+can append/project no more than 1,024 findings per source. Every successful observation
+is first recorded as an immutable `cbom.asset.observed` event. Partial input failures
+remain visible in `report.failed` without discarding successful observations. `GET
+/api/v1/cbom/assets` (`risk:read`) returns the durable tenant-scoped inventory and
+migration progress. The four-worker, 64-slot CBOM bulkhead prevents a wide sweep from
+starving API or enrollment work.
 
 Each returned asset includes the discovered algorithm, source, policy result, PQC
 posture, and a migration target:
@@ -336,6 +348,18 @@ trstctl-cli discovery drift-remediation decide "$FINDING_ID" --body drift-decisi
 CBOM scan:
 
 ```sh
+# First review the exact normalized scope and safety ceilings. This POST is read-only:
+# do not send an Idempotency-Key.
+curl -sS \
+  -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+  -H "Content-Type: application/json" \
+  -X POST https://trstctl.example.com/api/v1/cbom/scans/preview \
+  -d '{
+    "tls_endpoints": ["https://payments.internal.example"],
+    "host_configs": ["/etc/nginx/sites-enabled/payments.conf"]
+  }'
+
+# Run the reviewed scope. Execution requires an Idempotency-Key.
 curl -sS \
   -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   -H "Content-Type: application/json" \
@@ -389,8 +413,9 @@ point it at (TLS endpoints + config files). See
   routes `POST /api/v1/discovery/plans/preview` and `GET
   /api/v1/discovery/sources/{id}/preflight`; immutable recovery route `POST
   /api/v1/discovery/runs/{id}/retry`.
-- **CBOM API:** `POST /api/v1/cbom/scans` (`discovery:write`, `Idempotency-Key`
-  required); `GET /api/v1/cbom/assets` (`risk:read`).
+- **CBOM API:** `POST /api/v1/cbom/scans/preview` (`discovery:write`, effect-free),
+  `POST /api/v1/cbom/scans` (`discovery:write`, `Idempotency-Key` required), and
+  `GET /api/v1/cbom/assets` (`risk:read`).
 - **CBOM policy floor:** RSA-2048, EC-256, TLS 1.2; bans 3DES/DES/RC4/NULL/EXPORT/MD5.
 - **CBOM event/read model:** `cbom.asset.observed` projects into `crypto_assets`;
   rebuilds/snapshots replay the same inventory.

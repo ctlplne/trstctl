@@ -1415,6 +1415,30 @@ export interface CBOMScan {
   report: CBOMReport;
 }
 
+export interface CBOMScanPreview {
+  blockers: string[];
+  capability: string;
+  durable_writes: string[];
+  effect_free: boolean;
+  finding_write_limit: number;
+  host_file_byte_limit: number;
+  host_file_read_limit: number;
+  host_read_selector_count: number;
+  host_reads: string[];
+  normalized_request: CBOMScanRequest;
+  outbox_calls: number;
+  outside_calls: string[];
+  per_endpoint_timeout_seconds: number;
+  queue_depth: number;
+  ready: boolean;
+  recovery_steps: string[];
+  safety_notes: string[];
+  signer_calls: number;
+  source_count: number;
+  tls_connection_limit: number;
+  worker_limit: number;
+}
+
 export interface CBOMScanRequest {
   host_configs?: string[];
   tls_endpoints?: string[];

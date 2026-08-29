@@ -229,8 +229,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// headless audit collector-feed preview raises it to 403; the secret-free
 	// managed-key custody read and effect-free preview raise it to 405. F55's
 	// F56's effect-free create, update, and rotation previews raise it to 409.
-	if len(out) != 409 {
-		t.Fatalf("CLI commands = %d, want 409", len(out))
+	// F52's effect-free CBOM review command raises it to 410.
+	if len(out) != 410 {
+		t.Fatalf("CLI commands = %d, want 410", len(out))
 	}
 	return out
 }

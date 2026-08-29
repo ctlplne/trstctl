@@ -201,8 +201,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// 394 and maps to the existing CMP server row without replacing the stock
 	// client p10cr interoperability proof. F56's three effect-free MDM policy
 	// and rotation previews raise it to 397 and map to the existing F56 row.
-	if len(out) != 397 {
-		t.Fatalf("OpenAPI operationIds = %d, want 397", len(out))
+	// F52's effect-free CBOM scan preview raises it to 398 and maps to the
+	// existing cryptographic-observability row.
+	if len(out) != 398 {
+		t.Fatalf("OpenAPI operationIds = %d, want 398", len(out))
 	}
 	return out
 }

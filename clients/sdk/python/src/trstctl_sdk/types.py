@@ -2021,6 +2021,34 @@ CBOMScan = TypedDict(
     total=False,
 )
 
+CBOMScanPreview = TypedDict(
+    'CBOMScanPreview',
+    {
+        'blockers': list[str],
+        'capability': str,
+        'durable_writes': list[str],
+        'effect_free': bool,
+        'finding_write_limit': int,
+        'host_file_byte_limit': int,
+        'host_file_read_limit': int,
+        'host_read_selector_count': int,
+        'host_reads': list[str],
+        'normalized_request': dict[str, Any],
+        'outbox_calls': int,
+        'outside_calls': list[str],
+        'per_endpoint_timeout_seconds': int,
+        'queue_depth': int,
+        'ready': bool,
+        'recovery_steps': list[str],
+        'safety_notes': list[str],
+        'signer_calls': int,
+        'source_count': int,
+        'tls_connection_limit': int,
+        'worker_limit': int,
+    },
+    total=False,
+)
+
 CBOMScanRequest = TypedDict(
     'CBOMScanRequest',
     {

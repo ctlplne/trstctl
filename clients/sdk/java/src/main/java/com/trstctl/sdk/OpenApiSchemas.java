@@ -164,6 +164,7 @@ public final class OpenApiSchemas {
       "CBOMMigrationProgress",
       "CBOMReport",
       "CBOMScan",
+      "CBOMScanPreview",
       "CBOMScanRequest",
       "CMDBReconcileSchedule",
       "CMPQualification",

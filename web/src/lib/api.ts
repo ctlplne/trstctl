@@ -124,6 +124,7 @@ import type {
   CBOMInventory,
   CBOMMigrationProgress,
   CBOMScan,
+  CBOMScanPreview,
   CBOMScanRequest,
   Certificate as GenCertificate,
   CertificateHealthDashboard as GenCertificateHealthDashboard,
@@ -758,6 +759,7 @@ export type {
   CBOMInventory,
   CBOMMigrationProgress,
   CBOMScan,
+  CBOMScanPreview,
   CBOMScanRequest,
   CloudSecretManagerIntegration,
   CodeSigningIdentity,
@@ -2156,6 +2158,7 @@ export interface Api {
   mcpTools(): Promise<MCPToolList>;
   callMCPTool(tool: string, input: MCPToolCall): Promise<MCPToolResult>;
   listCBOMAssets(): Promise<CBOMInventory>;
+  previewCBOMScan(input: CBOMScanRequest): Promise<CBOMScanPreview>;
   startCBOMScan(input: CBOMScanRequest): Promise<CBOMScan>;
   pqcCampaigns(options?: { limit?: number; cursor?: string }): Promise<PQCMigrationCampaignList>;
   pqcCampaign(id: string): Promise<PQCMigrationCampaign>;
@@ -2679,6 +2682,7 @@ const liveApi: Api = {
   mcpTools: () => req<MCPToolList>("/api/v1/mcp/tools"),
   callMCPTool: (tool, input) => postRead<MCPToolResult>(`/api/v1/mcp/tools/${encodeURIComponent(tool)}`, input),
   listCBOMAssets: () => req<CBOMInventory>("/api/v1/cbom/assets"),
+  previewCBOMScan: (input) => postRead<CBOMScanPreview>("/api/v1/cbom/scans/preview", input),
   startCBOMScan: (input) => mutate<CBOMScan>("POST", "/api/v1/cbom/scans", input),
   pqcCampaigns: (options) => req<PQCMigrationCampaignList>(`/api/v1/pqc/campaigns${pageQueryString(options)}`),
   pqcCampaign: (id) => req<PQCMigrationCampaign>(`/api/v1/pqc/campaigns/${encodeURIComponent(id)}`),

@@ -560,6 +560,9 @@ describe("exported API surface census", () => {
       "/api/v1/agents/enrollment-tokens/preview",
       "/api/v1/issuance-requests/preview",
       "/api/v1/identities/item%2Fid/transitions/preview",
+      // F52: normalize and bound the exact CBOM request without connecting,
+      // reading a host file, appending an event, or projecting an asset.
+      "/api/v1/cbom/scans/preview",
       // F56: the MDM policy and challenge-rotation planners run the same
       // readiness logic as execution but make no write, outside, or signer call.
       "/api/v1/mdm/scep/policies/preview",

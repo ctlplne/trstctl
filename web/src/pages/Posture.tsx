@@ -1,4 +1,4 @@
-import type { FormEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Bell, CheckCircle2, FileWarning, Radar, SearchCheck, ShieldAlert, XCircle } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -33,6 +33,7 @@ import { useApiQuery } from "@/lib/query";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import { PQCCampaigns } from "@/pages/posture/PQCCampaigns";
 import { DriftRecoveryWorkflow } from "@/pages/posture/DriftRecoveryWorkflow";
+import { CBOMScanWorkflow } from "@/pages/posture/CBOMScanWorkflow";
 
 const emptyCBOMProgress: CBOMMigrationProgress = {
   total_assets: 0,
@@ -60,7 +61,6 @@ export function Posture() {
   const [cbomInventory, setCBOMInventory] = useState<CBOMInventory>({ items: [], migration_progress: emptyCBOMProgress });
   const [lastCBOMScan, setLastCBOMScan] = useState<CBOMScan | null>(null);
   const [cbomLoading, setCBOMLoading] = useState(true);
-  const [cbomScanning, setCBOMScanning] = useState(false);
   const [cbomError, setCBOMError] = useState<string | null>(null);
   const [supportingOpen, setSupportingOpen] = useState(false);
   const [inventoryOpen, setInventoryOpen] = useState(false);
@@ -161,31 +161,6 @@ export function Posture() {
       cancelled = true;
     };
   }, []);
-
-  async function handleCBOMScan(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const formData = new FormData(form);
-    const tlsEndpoints = linesFromField(formData.get("tls_endpoints"));
-    const hostConfigs = linesFromField(formData.get("host_configs"));
-
-    setCBOMScanning(true);
-    setCBOMError(null);
-    try {
-      const scan = await api.startCBOMScan({
-        ...(tlsEndpoints.length > 0 ? { tls_endpoints: tlsEndpoints } : {}),
-        ...(hostConfigs.length > 0 ? { host_configs: hostConfigs } : {}),
-      });
-      const inventory = await api.listCBOMAssets();
-      setLastCBOMScan(scan);
-      setCBOMInventory(inventory);
-      form.reset();
-    } catch (error) {
-      setCBOMError(error instanceof Error ? error.message : "Unable to run CBOM scan");
-    } finally {
-      setCBOMScanning(false);
-    }
-  }
 
   const cbomProgress = cbomInventory.migration_progress ?? lastCBOMScan?.migration_progress ?? emptyCBOMProgress;
   const upgradeAssets = cbomInventory.items.filter((asset) => asset.out_of_policy || asset.quantum_vulnerable);
@@ -357,35 +332,14 @@ export function Posture() {
               <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.the.cbom.scanner.inventories.algorithms.ke.94de5272b7")}</p>
             </div>
           </div>
-          <form className="grid gap-3 rounded-panel border border-border p-comfortable" onSubmit={handleCBOMScan}>
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="grid gap-1 text-sm font-medium" htmlFor="cbom-tls-endpoints">
-                {translateNow("source.tls.endpoints.c928457ec8")}
-                <textarea
-                  id="cbom-tls-endpoints"
-                  className="ui-input min-h-20 font-mono text-xs"
-                  name="tls_endpoints"
-                  placeholder={translateNow("source.https.api.example.com.443.74d0333a40")}
-                />
-              </label>
-              <label className="grid gap-1 text-sm font-medium" htmlFor="cbom-host-configs">
-                {translateNow("source.host.config.paths.8b2c6c7bdd")}
-                <textarea
-                  id="cbom-host-configs"
-                  className="ui-input min-h-20 font-mono text-xs"
-                  name="host_configs"
-                  placeholder={translateNow("source.etc.ssh.sshd.config.83ca950c7a")}
-                />
-              </label>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <Button type="submit" disabled={cbomScanning}>
-                {cbomScanning ? translateNow("source.running.scan.34932df63a") : translateNow("source.run.cbom.scan.ca786ed005")}
-              </Button>
-              <p className="text-sm text-muted-foreground">{translateNow("source.the.request.sends.endpoint.and.host.config.057e53f9e9")}</p>
-            </div>
-            {cbomError ? <p className="text-sm font-medium text-destructive">{cbomError}</p> : null}
-          </form>
+          <CBOMScanWorkflow
+            onCompleted={(scan, inventory) => {
+              setLastCBOMScan(scan);
+              setCBOMInventory(inventory);
+              setCBOMError(null);
+            }}
+          />
+          {cbomError ? <ErrorState title={t("posture.cbom.inventoryLoadFailed")}>{cbomError}</ErrorState> : null}
 
           <dl className="grid gap-3 md:grid-cols-2">
             <Metric label="Total assets" value={String(cbomProgress.total_assets)} />
@@ -548,18 +502,6 @@ function DecisionCount({ value, label, tone = "neutral" }: { value: number; labe
       <p className="mt-1 text-sm text-muted-foreground">{label}</p>
     </div>
   );
-}
-
-function linesFromField(value: FormDataEntryValue | null): string[] {
-  if (typeof value !== "string") return [];
-  return linesFromText(value);
-}
-
-function linesFromText(value: string): string[] {
-  return value
-    .split(/[\n,]+/)
-    .map((line) => line.trim())
-    .filter(Boolean);
 }
 
 type DriftDecision = DriftRemediationDecisionRequest["decision"];

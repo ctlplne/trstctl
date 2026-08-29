@@ -53,15 +53,30 @@ func TestScanReportsProtocolAndKey(t *testing.T) {
 	}
 }
 
-func TestScanSkipsUnreachable(t *testing.T) {
+func TestScanReportsUnreachableWithoutFindings(t *testing.T) {
 	prober := func(context.Context, string) (tlsprobe.Result, error) {
 		return tlsprobe.Result{}, errors.New("connection refused")
 	}
 	findings, err := tlssource.New([]string{"down:443"}, tlssource.WithProber(prober)).Scan(context.Background())
-	if err != nil {
-		t.Fatalf("an unreachable endpoint must not error: %v", err)
+	var partial *cbom.PartialScanError
+	if !errors.As(err, &partial) || partial.Failures != 1 {
+		t.Fatalf("unreachable endpoint error = %v, want one visible partial failure", err)
 	}
 	if len(findings) != 0 {
 		t.Errorf("expected no findings, got %d", len(findings))
+	}
+}
+
+func TestScanKeepsReachableFindingBesideUnreachableInput(t *testing.T) {
+	prober := func(_ context.Context, addr string) (tlsprobe.Result, error) {
+		if addr == "down:443" {
+			return tlsprobe.Result{}, errors.New("connection refused")
+		}
+		return tlsprobe.Result{TLSVersion: 0x0304}, nil
+	}
+	findings, err := tlssource.New([]string{"up:443", "down:443"}, tlssource.WithProber(prober)).Scan(context.Background())
+	var partial *cbom.PartialScanError
+	if !errors.As(err, &partial) || partial.Failures != 1 || len(findings) != 1 || findings[0].Location != "up:443" {
+		t.Fatalf("mixed TLS scan findings=%+v err=%v, want reachable evidence plus one visible failure", findings, err)
 	}
 }

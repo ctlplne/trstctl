@@ -18,6 +18,23 @@ type Source interface {
 	Scan(ctx context.Context) ([]Finding, error)
 }
 
+// PartialScanError reports input-level failures while preserving successful
+// findings from the same source. This keeps a mixed run useful without turning
+// an unreachable endpoint or unreadable file into silent success.
+type PartialScanError struct {
+	Failures int
+	Err      error
+}
+
+func (e *PartialScanError) Error() string {
+	if e == nil || e.Err == nil {
+		return "CBOM source partially failed"
+	}
+	return e.Err.Error()
+}
+
+func (e *PartialScanError) Unwrap() error { return e.Err }
+
 // Sink receives classified findings for the CBOM.
 type Sink interface {
 	Record(ctx context.Context, f Finding) error
@@ -60,11 +77,17 @@ type Report struct {
 }
 
 type scanConfig struct {
-	policy  Policy
-	workers int
-	queue   int
-	backoff time.Duration
+	policy               Policy
+	workers              int
+	queue                int
+	backoff              time.Duration
+	maxFindingsPerSource int
 }
+
+// DefaultMaxFindingsPerSource is the hard write-amplification ceiling for one
+// source. A source may inspect many declarations, but a single request can never
+// turn into an unbounded number of event/projection writes.
+const DefaultMaxFindingsPerSource = 1024
 
 // Option configures a Scanner.
 type Option func(*scanConfig)
@@ -99,26 +122,40 @@ func WithBackoff(d time.Duration) Option {
 	}
 }
 
+// WithMaxFindingsPerSource bounds classified records emitted by each source.
+func WithMaxFindingsPerSource(n int) Option {
+	return func(c *scanConfig) {
+		if n > 0 {
+			c.maxFindingsPerSource = n
+		}
+	}
+}
+
 // Scanner runs sources on a bounded pool (AN-7), classifies each finding against
 // the policy, and records it to the sink.
 type Scanner struct {
-	sink    Sink
-	policy  Policy
-	pool    *bulkhead.Pool
-	backoff time.Duration
+	sink                 Sink
+	policy               Policy
+	pool                 *bulkhead.Pool
+	backoff              time.Duration
+	maxFindingsPerSource int
 }
 
 // NewScanner builds a Scanner recording to sink.
 func NewScanner(sink Sink, opts ...Option) *Scanner {
-	cfg := scanConfig{policy: DefaultPolicy(), workers: 4, queue: 64, backoff: 5 * time.Millisecond}
+	cfg := scanConfig{
+		policy: DefaultPolicy(), workers: 4, queue: 64, backoff: 5 * time.Millisecond,
+		maxFindingsPerSource: DefaultMaxFindingsPerSource,
+	}
 	for _, o := range opts {
 		o(&cfg)
 	}
 	return &Scanner{
-		sink:    sink,
-		policy:  cfg.policy,
-		pool:    bulkhead.New(bulkhead.Config{Name: "cbom-scan", Workers: cfg.workers, Queue: cfg.queue}),
-		backoff: cfg.backoff,
+		sink:                 sink,
+		policy:               cfg.policy,
+		pool:                 bulkhead.New(bulkhead.Config{Name: "cbom-scan", Workers: cfg.workers, Queue: cfg.queue}),
+		backoff:              cfg.backoff,
+		maxFindingsPerSource: cfg.maxFindingsPerSource,
 	}
 }
 
@@ -142,8 +179,19 @@ func (s *Scanner) Scan(ctx context.Context, sources []Source) Report {
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
-				rep.Failed++
-				return
+				var partial *PartialScanError
+				if errors.As(err, &partial) && partial.Failures > 0 {
+					rep.Failed += partial.Failures
+				} else {
+					rep.Failed++
+				}
+				if len(findings) == 0 {
+					return
+				}
+			}
+			if len(findings) > s.maxFindingsPerSource {
+				findings = findings[:s.maxFindingsPerSource]
+				rep.Failed++ // visible evidence that the source hit its safety ceiling
 			}
 			for _, f := range findings {
 				f = f.Classified(s.policy)

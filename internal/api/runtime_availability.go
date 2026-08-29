@@ -88,7 +88,7 @@ func (a *API) runtimeRouteAvailability(r route) (bool, string) {
 	case "aiQuery", "aiRCA", "listMCPTools", "callMCPTool":
 		return runtimeDependency(a.ai != nil,
 			"The optional AI query service is turned off. Runtime status remains available without enabling model access.")
-	case "startCBOMScan", "listCBOMAssets":
+	case "previewCBOMScan", "startCBOMScan", "listCBOMAssets":
 		return runtimeDependency(a.cbom != nil,
 			"The cryptographic inventory scanner is not configured in this deployment.")
 	case "getComplianceEvidencePack":

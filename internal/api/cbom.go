@@ -4,7 +4,15 @@ package api
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"net"
 	"net/http"
+	"net/url"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/cbom"
@@ -15,6 +23,7 @@ import (
 // cryptographic facts (TLS negotiation, certificate public keys, host config) and
 // records observations through the event log before the read model is updated.
 type CBOMService interface {
+	Preview(ctx context.Context, tenantID string, req CBOMScanRequest) (CBOMScanPreview, error)
 	Scan(ctx context.Context, tenantID string, req CBOMScanRequest) (CBOMScanResponse, error)
 	Inventory(ctx context.Context, tenantID string) (CBOMInventoryResponse, error)
 }
@@ -29,6 +38,132 @@ func WithCBOM(svc CBOMService) Option {
 type CBOMScanRequest struct {
 	TLSEndpoints []string `json:"tls_endpoints"`
 	HostConfigs  []string `json:"host_configs"`
+}
+
+const (
+	// CBOMMaxTLSEndpoints and CBOMMaxHostConfigs keep one operator request
+	// reviewable and prevent discovery work from monopolizing the control plane.
+	CBOMMaxTLSEndpoints = 64
+	CBOMMaxHostConfigs  = 64
+	cbomMaxInputLength  = 2048
+)
+
+// CBOMScanPreview is the effect-free plan for the exact request Scan will use.
+// Limits are numbers (not vague prose) so both people and automation can review
+// the blast radius before any network or file read starts.
+type CBOMScanPreview struct {
+	Capability                string          `json:"capability"`
+	Ready                     bool            `json:"ready"`
+	EffectFree                bool            `json:"effect_free"`
+	NormalizedRequest         CBOMScanRequest `json:"normalized_request"`
+	SourceCount               int             `json:"source_count"`
+	TLSConnectionLimit        int             `json:"tls_connection_limit"`
+	HostReadSelectorCount     int             `json:"host_read_selector_count"`
+	HostFileReadLimit         int             `json:"host_file_read_limit"`
+	HostFileByteLimit         int64           `json:"host_file_byte_limit"`
+	FindingWriteLimit         int             `json:"finding_write_limit"`
+	WorkerLimit               int             `json:"worker_limit"`
+	QueueDepth                int             `json:"queue_depth"`
+	PerEndpointTimeoutSeconds int             `json:"per_endpoint_timeout_seconds"`
+	OutsideCalls              []string        `json:"outside_calls"`
+	HostReads                 []string        `json:"host_reads"`
+	DurableWrites             []string        `json:"durable_writes"`
+	SignerCalls               int             `json:"signer_calls"`
+	OutboxCalls               int             `json:"outbox_calls"`
+	Blockers                  []string        `json:"blockers"`
+	RecoverySteps             []string        `json:"recovery_steps"`
+	SafetyNotes               []string        `json:"safety_notes"`
+}
+
+// NormalizeCBOMScanRequest applies the same acceptance rules to preview and
+// execution. It accepts friendly HTTPS URLs or bare hosts, converts them to the
+// host:port form the probe uses, and returns a stable deduplicated plan.
+func NormalizeCBOMScanRequest(req CBOMScanRequest) (CBOMScanRequest, error) {
+	if len(req.TLSEndpoints) > CBOMMaxTLSEndpoints {
+		return CBOMScanRequest{}, fmt.Errorf("CBOM scan accepts at most %d TLS endpoints per run", CBOMMaxTLSEndpoints)
+	}
+	if len(req.HostConfigs) > CBOMMaxHostConfigs {
+		return CBOMScanRequest{}, fmt.Errorf("CBOM scan accepts at most %d host config selectors per run", CBOMMaxHostConfigs)
+	}
+	tlsEndpoints := make([]string, 0, len(req.TLSEndpoints))
+	for _, raw := range req.TLSEndpoints {
+		endpoint, err := normalizeCBOMTLSEndpoint(raw)
+		if err != nil {
+			return CBOMScanRequest{}, err
+		}
+		if endpoint != "" {
+			tlsEndpoints = append(tlsEndpoints, endpoint)
+		}
+	}
+	hostConfigs := make([]string, 0, len(req.HostConfigs))
+	for _, raw := range req.HostConfigs {
+		value := strings.TrimSpace(raw)
+		if value == "" {
+			continue
+		}
+		if len(value) > cbomMaxInputLength || strings.ContainsRune(value, '\x00') {
+			return CBOMScanRequest{}, errors.New("CBOM host config selector is too long or contains a null byte")
+		}
+		cleaned := filepath.Clean(value)
+		if !filepath.IsAbs(cleaned) {
+			return CBOMScanRequest{}, fmt.Errorf("CBOM host config selector %q must be an absolute path or absolute glob", value)
+		}
+		hostConfigs = append(hostConfigs, cleaned)
+	}
+	tlsEndpoints = uniqueSortedStrings(tlsEndpoints)
+	hostConfigs = uniqueSortedStrings(hostConfigs)
+	if len(tlsEndpoints) == 0 && len(hostConfigs) == 0 {
+		return CBOMScanRequest{}, errors.New("CBOM scan requires at least one TLS endpoint or host config")
+	}
+	return CBOMScanRequest{TLSEndpoints: tlsEndpoints, HostConfigs: hostConfigs}, nil
+}
+
+func normalizeCBOMTLSEndpoint(raw string) (string, error) {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return "", nil
+	}
+	if len(value) > cbomMaxInputLength || strings.ContainsRune(value, '\x00') || strings.ContainsAny(value, "\r\n\t ") {
+		return "", errors.New("CBOM TLS endpoint is too long or contains whitespace or a null byte")
+	}
+	if strings.Contains(value, "://") {
+		parsed, err := url.Parse(value)
+		if err != nil || !strings.EqualFold(parsed.Scheme, "https") || parsed.Hostname() == "" || parsed.User != nil ||
+			(parsed.Path != "" && parsed.Path != "/") || parsed.RawQuery != "" || parsed.Fragment != "" {
+			return "", fmt.Errorf("CBOM TLS endpoint %q must be an HTTPS origin with no path, query, fragment, or credentials", value)
+		}
+		value = parsed.Host
+	}
+	host, port, err := net.SplitHostPort(value)
+	if err != nil {
+		if ip := net.ParseIP(strings.Trim(value, "[]")); ip != nil {
+			host, port = ip.String(), "443"
+		} else if !strings.Contains(value, ":") {
+			host, port = value, "443"
+		} else {
+			return "", fmt.Errorf("CBOM TLS endpoint %q must be a host, host:port, IPv6 address, or HTTPS origin", value)
+		}
+	}
+	host = strings.ToLower(strings.TrimSpace(host))
+	if host == "" || strings.ContainsAny(host, "/?#@") {
+		return "", fmt.Errorf("CBOM TLS endpoint %q has an invalid host", value)
+	}
+	portNumber, err := strconv.Atoi(port)
+	if err != nil || portNumber < 1 || portNumber > 65535 {
+		return "", fmt.Errorf("CBOM TLS endpoint %q has an invalid port", value)
+	}
+	return net.JoinHostPort(host, strconv.Itoa(portNumber)), nil
+}
+
+func uniqueSortedStrings(values []string) []string {
+	sort.Strings(values)
+	out := values[:0]
+	for _, value := range values {
+		if len(out) == 0 || out[len(out)-1] != value {
+			out = append(out, value)
+		}
+	}
+	return out
 }
 
 // CBOMReport is the scan summary returned by the served worker.
@@ -100,6 +235,29 @@ func CBOMInventoryFromAssets(assets []store.CryptoAsset) CBOMInventoryResponse {
 	return CBOMInventoryResponse{Items: items, MigrationProgress: cbom.ProgressFor(findings)}
 }
 
+func (a *API) previewCBOMScan(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	if a.cbom == nil {
+		a.writeError(w, errStatus(http.StatusServiceUnavailable, "CBOM scanning is not configured"))
+		return
+	}
+	var req CBOMScanRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	preview, err := a.cbom.Preview(r.Context(), tenantID, req)
+	if err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	a.writeJSON(w, http.StatusOK, preview)
+}
+
 //trstctl:mutation
 func (a *API) startCBOMScan(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
@@ -111,13 +269,17 @@ func (a *API) startCBOMScan(w http.ResponseWriter, r *http.Request) {
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
-		if len(req.TLSEndpoints) == 0 && len(req.HostConfigs) == 0 {
-			return 0, nil, errStatus(http.StatusBadRequest, "CBOM scan requires at least one TLS endpoint or host config")
+		preview, err := a.cbom.Preview(ctx, tenantID, req)
+		if err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		if !preview.Ready {
+			return 0, nil, errStatus(http.StatusServiceUnavailable, strings.Join(preview.Blockers, " "))
 		}
 		start := time.Now()
 		var opErr error
 		defer func() { a.observeFeature("cbom", "scan", start, opErr) }()
-		resp, err := a.cbom.Scan(ctx, tenantID, req)
+		resp, err := a.cbom.Scan(ctx, tenantID, preview.NormalizedRequest)
 		if err != nil {
 			opErr = err
 			return 0, nil, err

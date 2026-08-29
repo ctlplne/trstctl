@@ -3141,9 +3141,9 @@
             "priority": 51,
             "served_state": "served",
             "backend_status": "served-cbom-scan-and-inventory",
-            "current_frontend_mapping": "served CBOM scan/inventory and standalone core PQC migration campaigns are operated from /posture; campaigns remain useful without a licence while the Enterprise engine is an optional execution handoff",
+            "current_frontend_mapping": "served three-step CBOM scope/review/scan/recovery workflow and standalone core PQC migration campaigns are operated from /posture; the effect-free server plan normalizes exact targets and states read/write ceilings before execution, while campaigns remain useful without a licence and the Enterprise engine is an optional execution handoff",
             "target_gui_mapping": "CBOM UI showing algorithms, key sizes, TLS versions, weak crypto, PQC posture, source host/service, and policy violations.",
-            "acceptance_test": "internal/server/cbom_served_test.go proves scan/inventory; internal/server/pqc_migration_campaign_served_test.go proves tenant-scoped manual campaign closure and offline-verifiable signed evidence.",
+            "acceptance_test": "internal/server/cbom_served_test.go proves effect-free preview, invalid-scope refusal, normalized bounded execution, real TLS/host inspection, event-backed inventory, and migration posture; web/src/__tests__/accept/WIRE-03.test.tsx proves review-first execution plus preview/execution recovery; internal/server/pqc_migration_campaign_served_test.go proves tenant-scoped manual campaign closure and offline-verifiable signed evidence.",
             "source_docs": [
                 "docs/features/observability-and-risk.md"
             ],
@@ -3158,11 +3158,13 @@
             ],
             "source_frontend": [
                 "web/src/pages/Posture.tsx",
+                "web/src/pages/posture/CBOMScanWorkflow.tsx",
                 "web/src/pages/posture/PQCCampaigns.tsx"
             ],
             "status": "closed",
             "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
             "api_surface": [
+                "previewCBOMScan",
                 "startCBOMScan",
                 "listCBOMAssets",
                 "startPQCMigrationCampaign",
@@ -3176,6 +3178,7 @@
             ],
             "api_na": "",
             "cli_surface": [
+                "cbom preview",
                 "cbom scan",
                 "cbom assets",
                 "pqc campaigns create",
@@ -3191,8 +3194,8 @@
             "facet_evidence": {
                 "served": {
                     "evidence": [
-                        "server.Build wires api.WithCBOM, mounting POST /api/v1/cbom/scans and GET /api/v1/cbom/assets on the served handler.",
-                        "internal/server/cbom.go invokes tlssource/hostsource through cbom.Scanner and persists observations after cbom.asset.observed is appended.",
+                        "server.Build wires api.WithCBOM, mounting effect-free POST /api/v1/cbom/scans/preview, bounded POST /api/v1/cbom/scans, and GET /api/v1/cbom/assets on the served handler.",
+                        "internal/server/cbom.go uses one normalized plan for preview and execution, invokes tlssource/hostsource through a four-worker/64-queue cbom.Scanner, caps per-source findings, and persists observations only after cbom.asset.observed is appended.",
                         "Core campaign routes stay mounted without a licence and track manual or external remediation through signed closure; automated execution is explicitly unavailable by edition.",
                         "served_state=served",
                         "backend_status=served-cbom-scan-and-inventory"
@@ -3209,16 +3212,18 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: /posture serves campaign creation, list/detail, readiness, per-finding disposition, closure, and signed evidence in Community.",
+                        "current_frontend_mapping: /posture serves choose/review/scan/result CBOM steps with normalized targets, effect/read/write ceilings, partial-failure recovery, and durable inventory readback; it also serves campaign creation, list/detail, readiness, per-finding disposition, closure, and signed evidence in Community.",
                         "target_gui_mapping: CBOM UI showing algorithms, key sizes, TLS versions, weak crypto, PQC posture, source host/service, and policy violations."
                     ],
                     "refs": [
                         "web/src/pages/Posture.tsx",
+                        "web/src/pages/posture/CBOMScanWorkflow.tsx",
                         "web/src/pages/posture/PQCCampaigns.tsx"
                     ]
                 },
                 "cli": {
                     "evidence": [
+                        "cli_surface: cbom preview posts the same body to the effect-free plan endpoint without an Idempotency-Key.",
                         "cli_surface: cbom scan posts a CBOM scan request body with an Idempotency-Key.",
                         "cli_surface: cbom assets reads the served CBOM inventory and migration_progress.",
                         "cli_surface: pqc campaigns exposes all eight core campaign operations; mutations carry Idempotency-Key and close requires --force."
@@ -3231,7 +3236,7 @@
                 },
                 "api": {
                     "evidence": [
-                        "api_surface: startCBOMScan and listCBOMAssets are in the served OpenAPI route registry.",
+                        "api_surface: previewCBOMScan, startCBOMScan, and listCBOMAssets are in the served OpenAPI route registry and generated clients.",
                         "api_surface: eight core PQC campaign operations are in the served OpenAPI contract and regenerated SDKs.",
                         "Responses state automated execution is unavailable while leaving the complete campaign workflow usable."
                     ],
@@ -3244,7 +3249,8 @@
                 },
                 "test": {
                     "evidence": [
-                        "acceptance_test: internal/server/cbom_served_test.go scans a real TLS endpoint plus host config and verifies stored CBOM assets, FIPS targets, migration percentage, and cbom.asset.observed.",
+                        "acceptance_test: internal/server/cbom_served_test.go proves preview leaves the event head and crypto_assets unchanged, refuses an invalid URL path without writes, then scans a real TLS endpoint plus bounded host config and verifies stored CBOM assets, migration targets, progress, and cbom.asset.observed.",
+                        "web/src/__tests__/accept/WIRE-03.test.tsx proves exact-plan review, normalized execution, inventory readback, fail-closed invalid preview, execution retry, and recovery guidance.",
                         "TestPQCMigrationCampaignServedManualClosureSignedEvidence verifies manual remediation, readiness, closure gating, signed finding/evidence digests, and public-JWKS offline verification.",
                         "TestPQCMigrationCampaignTenantIsolation rejects a campaign built from another tenant's CBOM finding.",
                         "web/src/__tests__/pqc_campaigns.test.tsx covers list/create/readiness/disposition/close/export/error and axe.",
@@ -3256,6 +3262,7 @@
                         "internal/featureparity/feature_facet_coverage_test.go",
                         "internal/server/cbom_served_test.go",
                         "internal/server/pqc_migration_campaign_served_test.go",
+                        "web/src/__tests__/accept/WIRE-03.test.tsx",
                         "web/src/__tests__/pqc_campaigns.test.tsx",
                         "web/src/__tests__/feature_coverage.test.tsx",
                         "web/src/__tests__/route_parity.test.ts"
@@ -3263,7 +3270,7 @@
                 },
                 "docs": {
                     "evidence": [
-                        "Core campaign ownership, edition boundary, API/CLI/UI, event model, closure gate, and signed proof are documented."
+                        "CBOM preview/execution limits, partial-failure recovery, API/CLI/UI workflow, core campaign ownership, edition boundary, event model, closure gate, and signed proof are documented."
                     ],
                     "refs": [
                         "docs/features/observability-and-risk.md",
@@ -3273,7 +3280,7 @@
                 },
                 "rbac": {
                     "evidence": [
-                        "POST /api/v1/cbom/scans requires discovery:write; GET /api/v1/cbom/assets requires risk:read.",
+                        "Effect-free POST /api/v1/cbom/scans/preview and mutating POST /api/v1/cbom/scans require discovery:write; GET /api/v1/cbom/assets requires risk:read.",
                         "PQC campaign reads/evidence require risk:read; all campaign mutations require discovery:write.",
                         "Feature authz manifest tests bind both operations to OpenAPI security and route permissions."
                     ],
@@ -3307,10 +3314,11 @@
                 },
                 "a11y": {
                     "evidence": [
-                        "feature-specific a11y receipt: the registered /posture route is covered globally and pqc_campaigns.test.tsx runs axe over the standalone campaign workflow."
+                        "The CBOM workflow uses Field/Textarea wiring, StepShell keyboard/progress behavior, semantic plan/result regions, and keyboard-reachable recovery actions; the registered /posture route is covered globally and pqc_campaigns.test.tsx runs axe over the standalone campaign workflow."
                     ],
                     "refs": [
                         "web/src/__tests__/feature_a11y_receipts.test.tsx",
+                        "web/src/pages/posture/CBOMScanWorkflow.tsx",
                         "web/src/__tests__/pqc_campaigns.test.tsx",
                         "web/src/lib/navigation.ts",
                         "web/src/App.tsx"
@@ -3318,7 +3326,7 @@
                 },
                 "i18n": {
                     "evidence": [
-                        "Campaign UI strings are typed messages with en-US, es-ES, and de-DE catalogs; npm run i18n:check enforces extraction parity."
+                        "CBOM workflow and campaign UI strings are typed messages with en-US, es-ES, and de-DE catalogs; npm run i18n:check enforces extraction parity."
                     ],
                     "refs": [
                         "web/scripts/extract-i18n-messages.mjs",
@@ -3334,7 +3342,7 @@
                 "purpose": "Lets an operator understand and safely use cbom and cryptographic observability while tenant, policy, and security authority remain on the server.",
                 "tool": "software_trust",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/posture",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -3346,7 +3354,7 @@
                 "dependencies": [],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -3363,16 +3371,25 @@
                     "configure": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/pages/Posture.tsx"
+                            "web/src/pages/Posture.tsx",
+                            "web/src/pages/posture/CBOMScanWorkflow.tsx"
                         ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: previewCBOMScan",
+                            "web/src/pages/posture/CBOMScanWorkflow.tsx",
+                            "internal/server/cbom_served_test.go"
+                        ]
                     },
                     "execute": {
-                        "status": "missing",
-                        "reason": "No complete console execution path is proved for this capability."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/posture/CBOMScanWorkflow.tsx",
+                            "web/src/__tests__/accept/WIRE-03.test.tsx",
+                            "internal/server/cbom_served_test.go"
+                        ]
                     },
                     "observe": {
                         "status": "complete",
@@ -3381,8 +3398,12 @@
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/posture/CBOMScanWorkflow.tsx",
+                            "web/src/__tests__/accept/WIRE-03.test.tsx",
+                            "internal/cbom/scan_test.go"
+                        ]
                     },
                     "verify": {
                         "status": "complete",
@@ -3393,6 +3414,7 @@
                     "automate": {
                         "status": "complete",
                         "evidence": [
+                            "OpenAPI operationId: previewCBOMScan",
                             "OpenAPI operationId: startCBOMScan",
                             "OpenAPI operationId: listCBOMAssets",
                             "OpenAPI operationId: startPQCMigrationCampaign",
@@ -3403,6 +3425,7 @@
                             "OpenAPI operationId: dispositionPQCMigrationFinding",
                             "OpenAPI operationId: closePQCMigrationCampaign",
                             "OpenAPI operationId: getPQCMigrationCampaignEvidence",
+                            "CLI command: cbom preview",
                             "CLI command: cbom scan",
                             "CLI command: cbom assets",
                             "CLI command: pqc campaigns create",
@@ -3418,8 +3441,8 @@
                 },
                 "owner": "software-trust",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "289897bd4a80b75ac8b6ce2b7e5c232a4f733d5c",
+                "freshness": "2026-08-29"
             }
         },
         {

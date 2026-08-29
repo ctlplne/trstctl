@@ -1627,6 +1627,25 @@ func TestCBOMScanCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	}
 }
 
+func TestCBOMPreviewCommandIsEffectFreeRead(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, 200, `{"capability":"F52","ready":true,"effect_free":true}`, &cap)
+	body := `{"tls_endpoints":["payments.internal:443"]}`
+	code, _, _ := run(t, []string{"cbom", "preview", "-f", "-"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, body)
+	if code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+	if cap.Method != "POST" || cap.Path != "/api/v1/cbom/scans/preview" {
+		t.Errorf("request = %s %s", cap.Method, cap.Path)
+	}
+	if strings.TrimSpace(string(cap.Body)) != body {
+		t.Errorf("body = %q, want %q", cap.Body, body)
+	}
+	if cap.Header.Get("Idempotency-Key") != "" {
+		t.Error("effect-free CBOM preview must not present itself as a mutation")
+	}
+}
+
 func TestCBOMAssetsCommandReadsInventory(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 200, `{"items":[],"migration_progress":{"total":0,"post_quantum_ready":0,"quantum_vulnerable":0,"percent_ready":100}}`, &cap)

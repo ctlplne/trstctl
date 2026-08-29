@@ -21,7 +21,10 @@ import (
 	"time"
 )
 
-const defaultTimeout = 10 * time.Second
+// DefaultTimeout is the maximum time one non-invasive TLS inventory handshake
+// may occupy a worker. It is exported so plan previews can state the exact bound
+// the probe enforces instead of duplicating a number in user-facing code.
+const DefaultTimeout = 10 * time.Second
 
 // Result is the outcome of a probe.
 type Result struct {
@@ -77,7 +80,7 @@ func WithServerName(name string) Option {
 // host part of addr is sent as SNI. It returns an error if the address is
 // malformed, the dial or handshake fails, or no certificate is presented.
 func Probe(ctx context.Context, addr string, opts ...Option) (Result, error) {
-	cfg := config{timeout: defaultTimeout, dialer: &net.Dialer{}}
+	cfg := config{timeout: DefaultTimeout, dialer: &net.Dialer{}}
 	for _, o := range opts {
 		o(&cfg)
 	}

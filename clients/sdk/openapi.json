@@ -5550,6 +5550,115 @@
         ],
         "type": "object"
       },
+      "CBOMScanPreview": {
+        "properties": {
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "durable_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "finding_write_limit": {
+            "type": "integer"
+          },
+          "host_file_byte_limit": {
+            "type": "integer"
+          },
+          "host_file_read_limit": {
+            "type": "integer"
+          },
+          "host_read_selector_count": {
+            "type": "integer"
+          },
+          "host_reads": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "normalized_request": {
+            "$ref": "#/components/schemas/CBOMScanRequest"
+          },
+          "outbox_calls": {
+            "type": "integer"
+          },
+          "outside_calls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "per_endpoint_timeout_seconds": {
+            "type": "integer"
+          },
+          "queue_depth": {
+            "type": "integer"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "recovery_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "safety_notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "signer_calls": {
+            "type": "integer"
+          },
+          "source_count": {
+            "type": "integer"
+          },
+          "tls_connection_limit": {
+            "type": "integer"
+          },
+          "worker_limit": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "capability",
+          "ready",
+          "effect_free",
+          "normalized_request",
+          "source_count",
+          "tls_connection_limit",
+          "host_read_selector_count",
+          "host_file_read_limit",
+          "host_file_byte_limit",
+          "finding_write_limit",
+          "worker_limit",
+          "queue_depth",
+          "per_endpoint_timeout_seconds",
+          "outside_calls",
+          "host_reads",
+          "durable_writes",
+          "signer_calls",
+          "outbox_calls",
+          "blockers",
+          "recovery_steps",
+          "safety_notes"
+        ],
+        "type": "object"
+      },
       "CBOMScanRequest": {
         "properties": {
           "host_configs": {
@@ -33098,7 +33207,64 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Scan TLS endpoints and host crypto config into the CBOM inventory",
+        "summary": "Run the same bounded CBOM plan over TLS endpoints and host crypto config",
+        "x-trstctl-permission": "discovery:write"
+      }
+    },
+    "/api/v1/cbom/scans/preview": {
+      "post": {
+        "operationId": "previewCBOMScan",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CBOMScanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CBOMScanPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Normalize and explain an exact CBOM scan without connecting, reading files, or writing state",
         "x-trstctl-permission": "discovery:write"
       }
     },

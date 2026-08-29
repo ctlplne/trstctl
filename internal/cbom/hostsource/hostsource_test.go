@@ -4,6 +4,7 @@ package hostsource_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -57,12 +58,26 @@ func TestScanFlagsWeakProtocolAndCipher(t *testing.T) {
 	}
 }
 
-func TestScanSkipsMissingFiles(t *testing.T) {
+func TestScanReportsMissingFilesWithoutFindings(t *testing.T) {
 	findings, err := hostsource.New("/nonexistent/*.conf").Scan(context.Background())
-	if err != nil {
-		t.Fatalf("missing files must not error: %v", err)
+	var partial *cbom.PartialScanError
+	if !errors.As(err, &partial) || partial.Failures != 1 {
+		t.Fatalf("missing selector error = %v, want one visible partial failure", err)
 	}
 	if len(findings) != 0 {
 		t.Errorf("expected no findings, got %d", len(findings))
+	}
+}
+
+func TestScanRejectsOversizedFileWithinBoundedRead(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "oversized.conf")
+	data := make([]byte, hostsource.DefaultMaxFileBytes+1)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	findings, err := hostsource.New(path).Scan(context.Background())
+	var partial *cbom.PartialScanError
+	if !errors.As(err, &partial) || partial.Failures != 1 || len(findings) != 0 {
+		t.Fatalf("oversized scan findings=%d err=%v, want one visible bounded-read failure", len(findings), err)
 	}
 }

@@ -1381,8 +1381,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Scan TLS endpoints and host crypto config into the CBOM inventory */
+        /** Run the same bounded CBOM plan over TLS endpoints and host crypto config */
         post: operations["startCBOMScan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cbom/scans/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Normalize and explain an exact CBOM scan without connecting, reading files, or writing state */
+        post: operations["previewCBOMScan"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7300,6 +7317,29 @@ export interface components {
         CBOMScan: {
             migration_progress: components["schemas"]["CBOMMigrationProgress"];
             report: components["schemas"]["CBOMReport"];
+        };
+        CBOMScanPreview: {
+            blockers: string[];
+            capability: string;
+            durable_writes: string[];
+            effect_free: boolean;
+            finding_write_limit: number;
+            host_file_byte_limit: number;
+            host_file_read_limit: number;
+            host_read_selector_count: number;
+            host_reads: string[];
+            normalized_request: components["schemas"]["CBOMScanRequest"];
+            outbox_calls: number;
+            outside_calls: string[];
+            per_endpoint_timeout_seconds: number;
+            queue_depth: number;
+            ready: boolean;
+            recovery_steps: string[];
+            safety_notes: string[];
+            signer_calls: number;
+            source_count: number;
+            tls_connection_limit: number;
+            worker_limit: number;
         };
         CBOMScanRequest: {
             host_configs?: string[];
@@ -16847,6 +16887,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CBOMScan"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewCBOMScan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CBOMScanRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBOMScanPreview"];
                 };
             };
             /** @description client error */

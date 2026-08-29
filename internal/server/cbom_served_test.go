@@ -65,8 +65,66 @@ func TestServedCBOMScanPopulatesMigrationInventory(t *testing.T) {
 
 	h := newServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:write", "risk:read")
+	beforePreview, err := h.log.LastSequence(t.Context())
+	if err != nil {
+		t.Fatalf("read event head before preview: %v", err)
+	}
 
-	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/cbom/scans", tok, "licensed-crypto-cbom-scan", map[string]any{
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/cbom/scans/preview", tok, map[string]any{
+		"tls_endpoints": []string{tlsSrv.URL, u.Host},
+		"host_configs":  []string{conf, conf},
+	})
+	if status != http.StatusOK {
+		t.Fatalf("preview CBOM scan: status %d body %s", status, body)
+	}
+	var preview struct {
+		Capability        string `json:"capability"`
+		Ready             bool   `json:"ready"`
+		EffectFree        bool   `json:"effect_free"`
+		NormalizedRequest struct {
+			TLSEndpoints []string `json:"tls_endpoints"`
+			HostConfigs  []string `json:"host_configs"`
+		} `json:"normalized_request"`
+		TLSConnectionLimit int      `json:"tls_connection_limit"`
+		HostFileReadLimit  int      `json:"host_file_read_limit"`
+		HostFileByteLimit  int64    `json:"host_file_byte_limit"`
+		FindingWriteLimit  int      `json:"finding_write_limit"`
+		WorkerLimit        int      `json:"worker_limit"`
+		QueueDepth         int      `json:"queue_depth"`
+		SignerCalls        int      `json:"signer_calls"`
+		OutboxCalls        int      `json:"outbox_calls"`
+		RecoverySteps      []string `json:"recovery_steps"`
+	}
+	if err := json.Unmarshal(body, &preview); err != nil {
+		t.Fatalf("decode CBOM preview: %v (%s)", err, body)
+	}
+	if preview.Capability != "F52" || !preview.Ready || !preview.EffectFree ||
+		len(preview.NormalizedRequest.TLSEndpoints) != 1 || preview.NormalizedRequest.TLSEndpoints[0] != u.Host ||
+		len(preview.NormalizedRequest.HostConfigs) != 1 || preview.NormalizedRequest.HostConfigs[0] != conf ||
+		preview.TLSConnectionLimit != 1 || preview.HostFileReadLimit != 256 || preview.HostFileByteLimit != 1<<20 ||
+		preview.FindingWriteLimit != 1026 || preview.WorkerLimit != 4 || preview.QueueDepth != 64 ||
+		preview.SignerCalls != 0 || preview.OutboxCalls != 0 || len(preview.RecoverySteps) < 3 {
+		t.Fatalf("CBOM preview does not state the exact safe plan: %+v body=%s", preview, body)
+	}
+	if afterPreview, lastErr := h.log.LastSequence(t.Context()); lastErr != nil || afterPreview != beforePreview {
+		t.Fatalf("preview event head=(%d,%v), want unchanged %d", afterPreview, lastErr, beforePreview)
+	}
+	assetsBefore, err := h.store.ListCryptoAssets(t.Context(), h.tenant)
+	if err != nil || len(assetsBefore) != 0 {
+		t.Fatalf("preview crypto assets=(%d,%v), want no writes", len(assetsBefore), err)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/cbom/scans/preview", tok, map[string]any{
+		"tls_endpoints": []string{"https://example.com/private/path"},
+	})
+	if status != http.StatusBadRequest {
+		t.Fatalf("invalid-scope preview: status %d body %s", status, body)
+	}
+	if afterInvalid, lastErr := h.log.LastSequence(t.Context()); lastErr != nil || afterInvalid != beforePreview {
+		t.Fatalf("invalid preview event head=(%d,%v), want unchanged %d", afterInvalid, lastErr, beforePreview)
+	}
+
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/cbom/scans", tok, "licensed-crypto-cbom-scan", map[string]any{
 		"tls_endpoints": []string{u.Host},
 		"host_configs":  []string{conf},
 	})

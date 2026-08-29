@@ -13,6 +13,7 @@ import (
 	"trstctl.com/trstctl/internal/cbom"
 	"trstctl.com/trstctl/internal/cbom/hostsource"
 	"trstctl.com/trstctl/internal/cbom/tlssource"
+	"trstctl.com/trstctl/internal/crypto/tlsprobe"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -27,19 +28,89 @@ func (s *Server) buildCBOMService(d Deps) api.CBOMService {
 	return &cbomService{store: d.Store, log: d.Log}
 }
 
+const (
+	cbomWorkerLimit = 4
+	cbomQueueDepth  = 64
+)
+
+func (s *cbomService) Preview(_ context.Context, _ string, req api.CBOMScanRequest) (api.CBOMScanPreview, error) {
+	return s.plan(req)
+}
+
+func (s *cbomService) plan(req api.CBOMScanRequest) (api.CBOMScanPreview, error) {
+	normalized, err := api.NormalizeCBOMScanRequest(req)
+	if err != nil {
+		return api.CBOMScanPreview{}, err
+	}
+	sourceCount := 0
+	findingWriteLimit := 0
+	outsideCalls := []string{}
+	hostReads := []string{}
+	hostFileReadLimit := 0
+	hostFileByteLimit := int64(0)
+	if len(normalized.TLSEndpoints) > 0 {
+		sourceCount++
+		findingWriteLimit += min(len(normalized.TLSEndpoints)*2, cbom.DefaultMaxFindingsPerSource)
+		outsideCalls = append(outsideCalls,
+			fmt.Sprintf("Open at most %d TLS connections: one handshake to each normalized endpoint, with no application request or payload.", len(normalized.TLSEndpoints)))
+	}
+	if len(normalized.HostConfigs) > 0 {
+		sourceCount++
+		findingWriteLimit += cbom.DefaultMaxFindingsPerSource
+		hostFileReadLimit = hostsource.DefaultMaxFiles
+		hostFileByteLimit = hostsource.DefaultMaxFileBytes
+		hostReads = append(hostReads,
+			fmt.Sprintf("Resolve %d declared absolute path or glob selector(s), then read at most %d matching files and %d bytes per file.", len(normalized.HostConfigs), hostFileReadLimit, hostFileByteLimit))
+	}
+	blockers := []string{}
+	if s.store == nil || s.log == nil {
+		blockers = append(blockers, "The tenant-scoped CBOM store and immutable event log must be attached before a scan can run.")
+	}
+	return api.CBOMScanPreview{
+		Capability: "F52", Ready: len(blockers) == 0, EffectFree: true,
+		NormalizedRequest: normalized, SourceCount: sourceCount,
+		TLSConnectionLimit:    len(normalized.TLSEndpoints),
+		HostReadSelectorCount: len(normalized.HostConfigs),
+		HostFileReadLimit:     hostFileReadLimit, HostFileByteLimit: hostFileByteLimit,
+		FindingWriteLimit: findingWriteLimit, WorkerLimit: cbomWorkerLimit,
+		QueueDepth: cbomQueueDepth, PerEndpointTimeoutSeconds: int(tlsprobe.DefaultTimeout.Seconds()),
+		OutsideCalls: outsideCalls, HostReads: hostReads,
+		DurableWrites: []string{
+			fmt.Sprintf("Append and project at most %d tenant-scoped cbom.asset.observed records; unreachable, unreadable, oversized, or capped inputs remain visible in the failed count.", findingWriteLimit),
+		},
+		SignerCalls: 0, OutboxCalls: 0, Blockers: blockers,
+		RecoverySteps: []string{
+			"If a target is unreachable, correct its host or port, confirm this control plane can reach it, then preview and retry only that target.",
+			"If a host path is unreadable or too broad, narrow the absolute path or glob and grant read-only access; never grant write access for CBOM discovery.",
+			"A partial scan keeps every successfully observed asset. Review the failed count, repair the inputs, and rerun; stable asset identities safely converge instead of multiplying rows.",
+		},
+		SafetyNotes: []string{
+			"Preview performs no network connection, file read, event append, projection write, signer call, or outbox delivery.",
+			"TLS discovery completes a handshake only and sends no HTTP or other application-layer request.",
+			"Host discovery reads only explicitly declared absolute paths or globs and parses public protocol and cipher declarations; it never returns file contents.",
+		},
+	}, nil
+}
+
 func (s *cbomService) Scan(ctx context.Context, tenantID string, req api.CBOMScanRequest) (api.CBOMScanResponse, error) {
-	if len(req.TLSEndpoints) == 0 && len(req.HostConfigs) == 0 {
-		return api.CBOMScanResponse{}, errors.New("server: CBOM scan requires at least one TLS endpoint or host config")
+	plan, err := s.plan(req)
+	if err != nil {
+		return api.CBOMScanResponse{}, err
+	}
+	if !plan.Ready {
+		return api.CBOMScanResponse{}, errors.New("server: CBOM scan dependencies are not ready")
 	}
 	sources := make([]cbom.Source, 0, 2)
-	if len(req.TLSEndpoints) > 0 {
-		sources = append(sources, tlssource.New(req.TLSEndpoints))
+	if len(plan.NormalizedRequest.TLSEndpoints) > 0 {
+		sources = append(sources, tlssource.New(plan.NormalizedRequest.TLSEndpoints))
 	}
-	if len(req.HostConfigs) > 0 {
-		sources = append(sources, hostsource.New(req.HostConfigs...))
+	if len(plan.NormalizedRequest.HostConfigs) > 0 {
+		sources = append(sources, hostsource.New(plan.NormalizedRequest.HostConfigs...))
 	}
 	sink := &eventedCBOMSink{store: s.store, log: s.log, tenantID: tenantID}
-	scanner := cbom.NewScanner(sink, cbom.WithWorkers(4), cbom.WithQueue(64))
+	scanner := cbom.NewScanner(sink,
+		cbom.WithWorkers(cbomWorkerLimit), cbom.WithQueue(cbomQueueDepth),
+		cbom.WithMaxFindingsPerSource(cbom.DefaultMaxFindingsPerSource))
 	defer scanner.Close()
 	rep := scanner.Scan(ctx, sources)
 	inv, err := s.Inventory(ctx, tenantID)

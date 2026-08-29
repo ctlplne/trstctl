@@ -104,6 +104,40 @@ func TestScannerCountsSourceFailures(t *testing.T) {
 	}
 }
 
+func TestScannerKeepsPartialFindingsAndCountsInputFailures(t *testing.T) {
+	sink := cbom.NewMemorySink()
+	sc := cbom.NewScanner(sink)
+	defer sc.Close()
+
+	rep := sc.Scan(context.Background(), []cbom.Source{
+		&fakeSource{
+			name:     "mixed",
+			findings: []cbom.Finding{{Kind: cbom.AssetTLSEndpoint, Protocol: "TLSv1.2"}},
+			err:      &cbom.PartialScanError{Failures: 2, Err: errors.New("two endpoints unreachable")},
+		},
+	})
+	if rep.Findings != 1 || rep.Failed != 2 || len(sink.All()) != 1 {
+		t.Fatalf("partial report = %+v sink=%+v, want one kept finding and two failures", rep, sink.All())
+	}
+}
+
+func TestScannerCapsWritesPerSource(t *testing.T) {
+	sink := cbom.NewMemorySink()
+	sc := cbom.NewScanner(sink, cbom.WithMaxFindingsPerSource(2))
+	defer sc.Close()
+
+	rep := sc.Scan(context.Background(), []cbom.Source{
+		&fakeSource{name: "large", findings: []cbom.Finding{
+			{Kind: cbom.AssetTLSEndpoint, Protocol: "TLSv1.2"},
+			{Kind: cbom.AssetTLSEndpoint, Protocol: "TLSv1.3"},
+			{Kind: cbom.AssetTLSEndpoint, Protocol: "TLSv1.0"},
+		}},
+	})
+	if rep.Findings != 2 || rep.Failed != 1 || len(sink.All()) != 2 {
+		t.Fatalf("capped report = %+v sink=%+v, want two writes and one visible cap failure", rep, sink.All())
+	}
+}
+
 func TestScannerContinuesAfterFindingRecordFailure(t *testing.T) {
 	sink := &failOnceSink{}
 	sc := cbom.NewScanner(sink)

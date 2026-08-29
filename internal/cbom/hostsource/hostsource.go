@@ -9,8 +9,11 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"trstctl.com/trstctl/internal/cbom"
@@ -20,6 +23,14 @@ import (
 type Source struct {
 	paths []string
 }
+
+const (
+	// DefaultMaxFiles caps glob expansion and DefaultMaxFileBytes caps every
+	// individual read. Both limits apply to all callers, including older ones
+	// that use New directly.
+	DefaultMaxFiles     = 256
+	DefaultMaxFileBytes = int64(1 << 20)
+)
 
 // New returns a host-config source over the given file paths or globs.
 func New(paths ...string) *Source { return &Source{paths: paths} }
@@ -34,19 +45,44 @@ var cipherDirectives = map[string]bool{"ssl_ciphers": true, "sslciphersuite": tr
 // Missing or unreadable files are skipped.
 func (s *Source) Scan(_ context.Context) ([]cbom.Finding, error) {
 	var out []cbom.Finding
-	for _, path := range expandGlobs(s.paths) {
-		data, err := os.ReadFile(path) // #nosec G304 -- declared host-config path from the discovery source's own config (CWE-22)
+	paths, failures := expandGlobs(s.paths, DefaultMaxFiles)
+	for _, path := range paths {
+		data, err := readBounded(path, DefaultMaxFileBytes)
 		if err != nil {
+			failures++
 			continue
 		}
 		out = append(out, parseConfig(path, data)...)
 	}
+	if failures > 0 {
+		return out, &cbom.PartialScanError{Failures: failures, Err: errors.New("one or more CBOM host config selectors could not be read within safety limits")}
+	}
 	return out, nil
+}
+
+func readBounded(path string, maxBytes int64) ([]byte, error) {
+	file, err := os.Open(path) // #nosec G304 -- an authorized, previewed discovery selector; the read is size-bounded below (CWE-22)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = file.Close() }()
+	data, err := io.ReadAll(io.LimitReader(file, maxBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > maxBytes {
+		return nil, errors.New("host config exceeds CBOM read limit")
+	}
+	return data, nil
 }
 
 func parseConfig(path string, data []byte) []cbom.Finding {
 	var out []cbom.Finding
 	sc := bufio.NewScanner(bytes.NewReader(data))
+	// readBounded already limits the entire file to 1 MiB. Let Scanner accept a
+	// line up to that same ceiling so a long but valid cipher declaration cannot
+	// stop parsing early at bufio.Scanner's much smaller default token limit.
+	sc.Buffer(make([]byte, 64*1024), int(DefaultMaxFileBytes))
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -106,14 +142,32 @@ func normalizeProtocol(p string) string {
 	}
 }
 
-func expandGlobs(paths []string) []string {
-	var out []string
+func expandGlobs(paths []string, maxFiles int) ([]string, int) {
+	seen := make(map[string]struct{})
+	out := make([]string, 0, len(paths))
+	failures := 0
 	for _, p := range paths {
 		matches, err := filepath.Glob(p)
 		if err != nil {
+			failures++
 			continue
 		}
-		out = append(out, matches...)
+		if len(matches) == 0 {
+			failures++
+			continue
+		}
+		sort.Strings(matches)
+		for _, match := range matches {
+			if _, ok := seen[match]; ok {
+				continue
+			}
+			if len(out) == maxFiles {
+				failures++
+				return out, failures
+			}
+			seen[match] = struct{}{}
+			out = append(out, match)
+		}
 	}
-	return out
+	return out, failures
 }

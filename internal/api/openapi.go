@@ -4571,6 +4571,21 @@ func componentSchemas() map[string]*Schema {
 		"tls_endpoints": {Type: "array", Items: str()},
 		"host_configs":  {Type: "array", Items: str()},
 	})
+	cbomScanPreview := object(map[string]*Schema{
+		"capability": {Type: "string"}, "ready": {Type: "boolean"}, "effect_free": {Type: "boolean"},
+		"normalized_request": ref("CBOMScanRequest"), "source_count": {Type: "integer"},
+		"tls_connection_limit": {Type: "integer"}, "host_read_selector_count": {Type: "integer"},
+		"host_file_read_limit": {Type: "integer"}, "host_file_byte_limit": {Type: "integer"},
+		"finding_write_limit": {Type: "integer"}, "worker_limit": {Type: "integer"},
+		"queue_depth": {Type: "integer"}, "per_endpoint_timeout_seconds": {Type: "integer"},
+		"outside_calls": {Type: "array", Items: str()}, "host_reads": {Type: "array", Items: str()},
+		"durable_writes": {Type: "array", Items: str()}, "signer_calls": {Type: "integer"},
+		"outbox_calls": {Type: "integer"}, "blockers": {Type: "array", Items: str()},
+		"recovery_steps": {Type: "array", Items: str()}, "safety_notes": {Type: "array", Items: str()},
+	}, "capability", "ready", "effect_free", "normalized_request", "source_count", "tls_connection_limit",
+		"host_read_selector_count", "host_file_read_limit", "host_file_byte_limit", "finding_write_limit",
+		"worker_limit", "queue_depth", "per_endpoint_timeout_seconds", "outside_calls", "host_reads",
+		"durable_writes", "signer_calls", "outbox_calls", "blockers", "recovery_steps", "safety_notes")
 	cbomReport := object(map[string]*Schema{
 		"sources":            {Type: "integer"},
 		"findings":           {Type: "integer"},
@@ -5375,6 +5390,7 @@ func componentSchemas() map[string]*Schema {
 		"ContextualRiskPriority":                   contextualRiskPriority,
 		"ContextualRiskPriorities":                 contextualRiskPriorities,
 		"CBOMScanRequest":                          cbomScanReq,
+		"CBOMScanPreview":                          cbomScanPreview,
 		"CBOMReport":                               cbomReport,
 		"CBOMMigrationProgress":                    cbomMigrationProgress,
 		"CBOMAsset":                                cbomAsset,

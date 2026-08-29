@@ -437,7 +437,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"acme", "eab", "disable"}, Method: "POST", Path: "/api/v1/acme/eab-credentials/{kid}/disable", Body: bodyNone, Summary: "Disable an ACME external account binding credential"},
 	{Name: []string{"acme", "eab", "enable"}, Method: "POST", Path: "/api/v1/acme/eab-credentials/{kid}/enable", Body: bodyNone, Summary: "Re-enable a disabled ACME external account binding credential"},
 
-	{Name: []string{"cbom", "scan"}, Method: "POST", Path: "/api/v1/cbom/scans", Body: bodyFile, Summary: "Scan TLS endpoints and host configs into the CBOM"},
+	{Name: []string{"cbom", "preview"}, Method: "POST", Path: "/api/v1/cbom/scans/preview", Body: bodyFile, ReadOnly: true, Summary: "Normalize and review a CBOM scan without connecting, reading files, or writing state"},
+	{Name: []string{"cbom", "scan"}, Method: "POST", Path: "/api/v1/cbom/scans", Body: bodyFile, Summary: "Run the reviewed bounded CBOM scan"},
 	{Name: []string{"cbom", "assets"}, Method: "GET", Path: "/api/v1/cbom/assets", Summary: "List CBOM assets and crypto migration posture"},
 	{Name: []string{"pqc", "campaigns", "create"}, Method: "POST", Path: "/api/v1/pqc/campaigns", Body: bodyFile, Summary: "Start a core PQC migration tracking campaign"},
 	{Name: []string{"pqc", "campaigns", "list"}, Method: "GET", Path: "/api/v1/pqc/campaigns", Query: []string{"limit", "cursor"}, Summary: "List core PQC migration tracking campaigns"},
