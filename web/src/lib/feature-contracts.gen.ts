@@ -2247,7 +2247,7 @@ export const canonicalCapabilities = [
       },
       "owner": "pki",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "40253b2dee41b5c789101dfa5dc3abc004d42351",
+      "candidateSHA": "6123a89504029a739cd0bd6fde85c27346637a4b",
       "freshness": "2026-08-29"
     }
   },

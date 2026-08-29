@@ -6227,7 +6227,8 @@
                         "Provider config create/update/delete append acme.dns01.provider_config.upserted or acme.dns01.provider_config.deleted events before projection.",
                         "Preflight appends acme.dns01.preflighted with config_id, domain, record_name, selected_method, ready, and failed_checks metadata.",
                         "Order-time signed DNS-provider plugin publish/cleanup appends acme.dns01.plugin.presented and acme.dns01.plugin.cleaned tenant events without credential refs or TXT values, alongside the acme.dns01.record.presented/cleaned outbox delivery metadata.",
-                        "Plugin qualification retains sanitized run evidence and plugin publish/cleanup audit events while cleanup retry reuses server-held recovery authority."
+                        "Plugin qualification retains sanitized run evidence and plugin publish/cleanup audit events while cleanup retry reuses server-held recovery authority.",
+                        "Production's closed privacy vocabulary admits the four signed-plugin audit event schemas, pseudonymizes record-name subject data, rejects undeclared raw-error fields, and makes an audit append failure fail the outbox delivery instead of silently reporting an unaudited effect as green."
                     ],
                     "refs": [
                         "internal/api/acme_dns01.go",
@@ -6235,7 +6236,10 @@
                         "internal/eventledger/ledger.go",
                         "internal/server/plugins.go",
                         "internal/server/acme_dns01_automation.go",
-                        "internal/server/protocols_served_test.go"
+                        "internal/server/protocols_served_test.go",
+                        "internal/events/privacy_event_catalog.go",
+                        "internal/events/privacy_event_catalog_shapes.go",
+                        "internal/events/privacy_erasure_test.go"
                     ]
                 },
                 "telemetry": {
@@ -6376,7 +6380,7 @@
                 },
                 "owner": "pki",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "40253b2dee41b5c789101dfa5dc3abc004d42351",
+                "candidate_sha": "6123a89504029a739cd0bd6fde85c27346637a4b",
                 "freshness": "2026-08-29"
             }
         },
