@@ -1279,8 +1279,12 @@ describe("i18n boundary", () => {
       // recovery. The zero-effect and no-secret claims must keep their
       // negation. Machine-authored es/de translations — FLAG FOR HUMAN
       // TRANSLATION REVIEW before release.
-      "es-ES": "a1b381b8d03cb64a804bde8579b8c1414243d808cacbea4293bc68f10ec0656e",
-      "de-DE": "79e3c50eaf6c2b212b1c58b9e1cf92d9fd1b290a9dfc7411a7b50e076e5ad91b",
+      // F52 CBOM re-pin: translated scope, effect-free plan, exact limits,
+      // partial-failure recovery, and durable inventory proof. Technical
+      // identifiers and the zero-effect boundary remain unchanged. Machine-
+      // authored es/de translations — FLAG FOR HUMAN TRANSLATION REVIEW.
+      "es-ES": "4af8839e19271a3ed945762c273a3b3992cae28a7f03ac0bfe808b280b979828",
+      "de-DE": "961120f324bb680afe314d54edd39c715ca525e23ba37692c20713de32a2846e",
     });
   });
 

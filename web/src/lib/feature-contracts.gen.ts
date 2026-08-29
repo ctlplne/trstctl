@@ -1152,7 +1152,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use cbom and cryptographic observability while tenant, policy, and security authority remain on the server.",
       "tool": "software_trust",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/posture",
       "navigationEntrypoints": [
         "tool navigation",
@@ -1164,7 +1164,7 @@ export const canonicalCapabilities = [
       "dependencies": [],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -1181,16 +1181,25 @@ export const canonicalCapabilities = [
         "configure": {
           "status": "complete",
           "evidence": [
-            "web/src/pages/Posture.tsx"
+            "web/src/pages/Posture.tsx",
+            "web/src/pages/posture/CBOMScanWorkflow.tsx"
           ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: previewCBOMScan",
+            "web/src/pages/posture/CBOMScanWorkflow.tsx",
+            "internal/server/cbom_served_test.go"
+          ]
         },
         "execute": {
-          "status": "missing",
-          "reason": "No complete console execution path is proved for this capability."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/posture/CBOMScanWorkflow.tsx",
+            "web/src/__tests__/accept/WIRE-03.test.tsx",
+            "internal/server/cbom_served_test.go"
+          ]
         },
         "observe": {
           "status": "complete",
@@ -1199,8 +1208,12 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/posture/CBOMScanWorkflow.tsx",
+            "web/src/__tests__/accept/WIRE-03.test.tsx",
+            "internal/cbom/scan_test.go"
+          ]
         },
         "verify": {
           "status": "complete",
@@ -1211,6 +1224,7 @@ export const canonicalCapabilities = [
         "automate": {
           "status": "complete",
           "evidence": [
+            "OpenAPI operationId: previewCBOMScan",
             "OpenAPI operationId: startCBOMScan",
             "OpenAPI operationId: listCBOMAssets",
             "OpenAPI operationId: startPQCMigrationCampaign",
@@ -1221,6 +1235,7 @@ export const canonicalCapabilities = [
             "OpenAPI operationId: dispositionPQCMigrationFinding",
             "OpenAPI operationId: closePQCMigrationCampaign",
             "OpenAPI operationId: getPQCMigrationCampaignEvidence",
+            "CLI command: cbom preview",
             "CLI command: cbom scan",
             "CLI command: cbom assets",
             "CLI command: pqc campaigns create",
@@ -1236,8 +1251,8 @@ export const canonicalCapabilities = [
       },
       "owner": "software-trust",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "9623b07fe17419064daa054b06ee32b890590a76",
+      "freshness": "2026-08-29"
     }
   },
   {
