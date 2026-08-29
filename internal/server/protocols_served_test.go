@@ -413,6 +413,142 @@ func TestServedACMEDNS01ProviderConfigAndPreflightTRACE003(t *testing.T) {
 	}
 }
 
+// TestServedACMEDNS01ProviderConfigDuplicateNameDoesNotPoisonEventTail is the
+// live-g81 regression: a duplicate tenant/name used to append an event first,
+// fail the unique read-model write second, and leave the projection tail stuck
+// retrying that deterministic failure forever. A rejected command must append
+// nothing, and the next valid command must still project normally.
+func TestServedACMEDNS01ProviderConfigDuplicateNameDoesNotPoisonEventTail(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, func(*Deps) {})
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write")
+	configBody := func(name, zone string) map[string]any {
+		return map[string]any{
+			"name":            name,
+			"provider":        "webhook",
+			"zone":            zone,
+			"credential_refs": map[string]any{},
+			"config":          map[string]any{"endpoint": "http://127.0.0.1:18082"},
+			"allowed_methods": []string{"dns-01"},
+		}
+	}
+
+	status, firstBody := secretsReqKey(t, h, http.MethodPost, "/api/v1/acme/dns-01/provider-configs", tok, "dns-name-first", configBody("shared-name", "one.example.test"))
+	if status != http.StatusCreated {
+		t.Fatalf("create first DNS provider config: status=%d body=%s", status, firstBody)
+	}
+	var first struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(firstBody, &first); err != nil || first.ID == "" {
+		t.Fatalf("decode first DNS provider config: err=%v body=%s", err, firstBody)
+	}
+	eventsAfterFirst := servedEventCount(t, h, projections.EventACMEDNS01ProviderConfigUpserted)
+
+	status, duplicateBody := secretsReqKey(t, h, http.MethodPost, "/api/v1/acme/dns-01/provider-configs", tok, "dns-name-duplicate", configBody("shared-name", "two.example.test"))
+	if status != http.StatusConflict || !bytes.Contains(duplicateBody, []byte("name is already in use")) {
+		t.Fatalf("duplicate DNS provider name must return a clear 409: status=%d body=%s", status, duplicateBody)
+	}
+	if got := servedEventCount(t, h, projections.EventACMEDNS01ProviderConfigUpserted); got != eventsAfterFirst {
+		t.Fatalf("rejected duplicate appended %d provider events, want unchanged %d", got, eventsAfterFirst)
+	}
+
+	status, secondBody := secretsReqKey(t, h, http.MethodPost, "/api/v1/acme/dns-01/provider-configs", tok, "dns-name-second", configBody("second-name", "two.example.test"))
+	if status != http.StatusCreated {
+		t.Fatalf("valid command after duplicate rejection did not project: status=%d body=%s", status, secondBody)
+	}
+	var second struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(secondBody, &second); err != nil || second.ID == "" {
+		t.Fatalf("decode second DNS provider config: err=%v body=%s", err, secondBody)
+	}
+	eventsAfterSecond := servedEventCount(t, h, projections.EventACMEDNS01ProviderConfigUpserted)
+	if eventsAfterSecond != eventsAfterFirst+1 {
+		t.Fatalf("valid command after duplicate emitted events=%d, want %d", eventsAfterSecond, eventsAfterFirst+1)
+	}
+
+	status, conflictUpdate := secretsReqKey(t, h, http.MethodPut, "/api/v1/acme/dns-01/provider-configs/"+second.ID, tok, "dns-name-update-conflict", configBody("shared-name", "two.example.test"))
+	if status != http.StatusConflict || !bytes.Contains(conflictUpdate, []byte("name is already in use")) {
+		t.Fatalf("conflicting DNS provider rename must return a clear 409: status=%d body=%s", status, conflictUpdate)
+	}
+	if got := servedEventCount(t, h, projections.EventACMEDNS01ProviderConfigUpserted); got != eventsAfterSecond {
+		t.Fatalf("rejected rename appended %d provider events, want unchanged %d", got, eventsAfterSecond)
+	}
+
+	status, listBody := secretsReq(t, h, http.MethodGet, "/api/v1/acme/dns-01/provider-configs", tok, nil)
+	if status != http.StatusOK || !bytes.Contains(listBody, []byte(first.ID)) || !bytes.Contains(listBody, []byte(second.ID)) {
+		t.Fatalf("provider read model was not healthy after conflict refusals: status=%d body=%s", status, listBody)
+	}
+
+	// Simulate the exact event an older release could already have persisted.
+	// Upgrading must consume that event without changing the first writer or
+	// stranding the next valid event behind it.
+	legacyPayload, err := json.Marshal(projections.ACMEDNS01ProviderConfigUpserted{
+		ID: "69000000-0000-0000-0000-000000000081", Name: "shared-name",
+		Provider: "webhook", Zone: "legacy.example.test", Config: json.RawMessage(`{"endpoint":"http://127.0.0.1:18082"}`),
+		AllowedMethods: []string{"dns-01"},
+	})
+	if err != nil {
+		t.Fatalf("marshal legacy duplicate provider event: %v", err)
+	}
+	legacy, err := h.log.Append(t.Context(), events.Event{
+		Type: projections.EventACMEDNS01ProviderConfigUpserted, TenantID: h.tenant, Data: legacyPayload,
+	})
+	if err != nil {
+		t.Fatalf("append legacy duplicate provider event: %v", err)
+	}
+	trailingID := "69000000-0000-0000-0000-000000000082"
+	trailingPayload, err := json.Marshal(projections.ACMEDNS01ProviderConfigUpserted{
+		ID: trailingID, Name: "after-legacy-conflict", Provider: "webhook",
+		Zone: "after.example.test", Config: json.RawMessage(`{"endpoint":"http://127.0.0.1:18082"}`),
+		AllowedMethods: []string{"dns-01"},
+	})
+	if err != nil {
+		t.Fatalf("marshal trailing provider event: %v", err)
+	}
+	trailing, err := h.log.Append(t.Context(), events.Event{
+		Type: projections.EventACMEDNS01ProviderConfigUpserted, TenantID: h.tenant, Data: trailingPayload,
+	})
+	if err != nil {
+		t.Fatalf("append trailing provider event: %v", err)
+	}
+	if legacy.Sequence >= trailing.Sequence {
+		t.Fatalf("legacy/trailing event order = %d/%d, want strictly ordered", legacy.Sequence, trailing.Sequence)
+	}
+
+	tailCtx, cancelTail := context.WithCancel(t.Context())
+	tailDone := make(chan struct{})
+	go func() {
+		defer close(tailDone)
+		h.srv.RunProjectionTail(tailCtx)
+	}()
+	defer func() {
+		cancelTail()
+		select {
+		case <-tailDone:
+		case <-time.After(5 * time.Second):
+			t.Error("projection tail did not stop after cancellation")
+		}
+	}()
+
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		health, healthErr := h.store.ProjectionTailHealth(t.Context())
+		_, trailingErr := h.store.GetACMEDNS01ProviderConfig(t.Context(), h.tenant, trailingID)
+		if healthErr == nil && trailingErr == nil && health.AppliedSequence >= trailing.Sequence && health.FailedSequence == 0 {
+			if _, duplicateErr := h.store.GetACMEDNS01ProviderConfig(t.Context(), h.tenant, "69000000-0000-0000-0000-000000000081"); !errors.Is(duplicateErr, store.ErrACMEDNS01ProviderConfigNotFound) {
+				t.Fatalf("legacy duplicate event materialized a second row: %v", duplicateErr)
+			}
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	health, healthErr := h.store.ProjectionTailHealth(t.Context())
+	_, trailingErr := h.store.GetACMEDNS01ProviderConfig(t.Context(), h.tenant, trailingID)
+	t.Fatalf("projection tail did not recover past legacy DNS provider conflict: health=%+v health_err=%v trailing_err=%v want_applied>=%d",
+		health, healthErr, trailingErr, trailing.Sequence)
+}
+
 // TestServedACMEDNS01OrderPublishesAndCleansUpThroughOutboxTRACE012 proves the
 // TRACE-012 closure on the running control-plane surface: a stock ACME client
 // accepts dns-01 without pre-publishing the TXT itself, and the served ACME order

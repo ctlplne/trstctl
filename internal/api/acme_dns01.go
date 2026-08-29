@@ -354,7 +354,23 @@ func (a *API) emitACMEDNS01ProviderConfig(ctx context.Context, tenantID, id stri
 	if err != nil {
 		return err
 	}
-	return a.appendAndProjectACMEDNS01(ctx, tenantID, projections.EventACMEDNS01ProviderConfigUpserted, payload)
+	if a.store == nil {
+		return errStatus(http.StatusServiceUnavailable, "ACME DNS-01 provider configuration is not configured")
+	}
+	// A tenant/name conflict is a command rejection, not a valid event. Hold the
+	// deployment-wide projection lock across validation, append, and inline
+	// projection so two replicas cannot both observe the name as free and append
+	// a deterministic read-model failure that poisons the event tail.
+	err = a.store.WithProjectionLock(ctx, func(lockCtx context.Context) error {
+		if err := a.store.EnsureACMEDNS01ProviderConfigNameAvailable(lockCtx, tenantID, id, req.Name); err != nil {
+			return err
+		}
+		return a.appendAndProjectACMEDNS01(lockCtx, tenantID, projections.EventACMEDNS01ProviderConfigUpserted, payload)
+	})
+	if errors.Is(err, store.ErrACMEDNS01ProviderConfigNameConflict) {
+		return errStatus(http.StatusConflict, "ACME DNS-01 provider config name is already in use")
+	}
+	return err
 }
 
 func (a *API) appendAndProjectACMEDNS01(ctx context.Context, tenantID, eventType string, payload []byte) error {
@@ -609,11 +625,14 @@ func stringIn(needle string, haystack []string) bool {
 }
 
 func (a *API) writeACMEDNS01Error(w http.ResponseWriter, err error) {
-	if errors.Is(err, store.ErrACMEDNS01ProviderConfigNotFound) {
+	switch {
+	case errors.Is(err, store.ErrACMEDNS01ProviderConfigNotFound):
 		a.writeError(w, errStatus(http.StatusNotFound, "ACME DNS-01 provider config not found"))
-		return
+	case errors.Is(err, store.ErrACMEDNS01ProviderConfigNameConflict):
+		a.writeError(w, errStatus(http.StatusConflict, "ACME DNS-01 provider config name is already in use"))
+	default:
+		a.writeError(w, err)
 	}
-	a.writeError(w, err)
 }
 
 // Upstream authorization staleness (epic B7).

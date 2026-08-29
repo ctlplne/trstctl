@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sort"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -14,6 +15,12 @@ import (
 // ErrACMEDNS01ProviderConfigNotFound is returned when a tenant-scoped ACME DNS-01
 // provider config cannot be found.
 var ErrACMEDNS01ProviderConfigNotFound = errors.New("store: acme dns-01 provider config not found")
+
+// ErrACMEDNS01ProviderConfigNameConflict means another config in the same
+// tenant already owns the human-readable name. Callers must reject the command
+// before appending its event; letting PostgreSQL discover this only while
+// projecting would leave an impossible event blocking every later projection.
+var ErrACMEDNS01ProviderConfigNameConflict = errors.New("store: acme dns-01 provider config name is already in use")
 
 // ACMEDNS01ProviderConfig is the tenant-owned DNS-01 provider configuration read
 // model. It stores only provider metadata and secret references; provider tokens
@@ -59,7 +66,39 @@ func (s *Store) ApplyACMEDNS01ProviderConfigUpsertedTx(ctx context.Context, tx p
 	if c.UpdatedAt.IsZero() {
 		c.UpdatedAt = c.CreatedAt
 	}
-	_, err := tx.Exec(ctx,
+	// The request path now rejects duplicate tenant/name commands before it
+	// appends an event. Older releases appended first and discovered the unique
+	// name conflict only here, leaving one impossible event to block the entire
+	// ordered projection tail forever. Lock the aggregate and tenant/name in a
+	// stable order so concurrent replay converges. If a legacy event gives a
+	// different ID an already-owned name, preserve the first projected row and
+	// consume the later invalid event as a deterministic no-op. This is a replay
+	// recovery rule only; EnsureACMEDNS01ProviderConfigNameAvailable remains the
+	// command-side guard that prevents new conflicting events.
+	lockKeys := []string{
+		"acme-dns01-provider-config:id:" + c.ID,
+		"acme-dns01-provider-config:name:" + c.TenantID + ":" + c.Name,
+	}
+	sort.Strings(lockKeys)
+	for _, lockKey := range lockKeys {
+		if _, err := tx.Exec(ctx,
+			`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, lockKey); err != nil {
+			return err
+		}
+	}
+	var nameOwnerID string
+	err := tx.QueryRow(ctx,
+		`SELECT id::text
+		   FROM acme_dns01_provider_configs
+		  WHERE tenant_id = $1 AND name = $2`,
+		c.TenantID, c.Name).Scan(&nameOwnerID)
+	if err == nil && nameOwnerID != c.ID {
+		return nil
+	}
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	_, err = tx.Exec(ctx,
 		`INSERT INTO acme_dns01_provider_configs
 		        (id, tenant_id, name, provider, zone, challenge_domain, delegation_target,
 		         credential_refs, config, caa_issuer_domain, allowed_methods, allow_wildcards,
@@ -111,6 +150,28 @@ func (s *Store) GetACMEDNS01ProviderConfig(ctx context.Context, tenantID, id str
 		return ACMEDNS01ProviderConfig{}, ErrACMEDNS01ProviderConfigNotFound
 	}
 	return out, err
+}
+
+// EnsureACMEDNS01ProviderConfigNameAvailable checks the tenant/name uniqueness
+// invariant for a proposed config ID. The API calls it while holding the shared
+// projection advisory lock, serializing the read -> event append -> projection
+// sequence across control-plane replicas. The same ID may retain its own name.
+func (s *Store) EnsureACMEDNS01ProviderConfigNameAvailable(ctx context.Context, tenantID, id, name string) error {
+	var conflictingID string
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT id::text
+			   FROM acme_dns01_provider_configs
+			  WHERE tenant_id = $1 AND name = $2 AND id <> $3
+			  LIMIT 1`, tenantID, name, id).Scan(&conflictingID)
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return ErrACMEDNS01ProviderConfigNameConflict
 }
 
 // ListACMEDNS01ProviderConfigs lists tenant-scoped DNS-01 provider configs.
