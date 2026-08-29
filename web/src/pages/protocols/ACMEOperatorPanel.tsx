@@ -71,7 +71,12 @@ export function ACMEOperatorPanel() {
   }
 
   return (
-    <section aria-labelledby="acme-operator-plan-heading" aria-label={t("protocols.acmePlan.region")} className="ui-panel grid gap-4 p-comfortable">
+    <section
+      id="acme-operator-panel"
+      aria-labelledby="acme-operator-plan-heading"
+      aria-label={t("protocols.acmePlan.region")}
+      className="ui-panel grid scroll-mt-24 gap-4 p-comfortable"
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 max-w-3xl">
           <h2 id="acme-operator-plan-heading" className="text-title font-semibold">

@@ -54,7 +54,12 @@ export function ESTOperatorPanel() {
   }
 
   return (
-    <section aria-labelledby="est-operator-heading" aria-label={t("protocols.estCheck.region")} className="ui-panel grid min-w-0 gap-4 p-comfortable">
+    <section
+      id="est-operator-panel"
+      aria-labelledby="est-operator-heading"
+      aria-label={t("protocols.estCheck.region")}
+      className="ui-panel grid min-w-0 scroll-mt-24 gap-4 p-comfortable"
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 max-w-3xl">
           <h2 id="est-operator-heading" className="text-title font-semibold">

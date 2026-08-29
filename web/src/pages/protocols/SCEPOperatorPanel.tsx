@@ -55,7 +55,13 @@ export function SCEPOperatorPanel() {
   }
 
   return (
-    <Card role="region" aria-labelledby="scep-operator-heading" aria-label={t("protocols.scepCheck.region")} className="min-w-0">
+    <Card
+      id="scep-operator-panel"
+      role="region"
+      aria-labelledby="scep-operator-heading"
+      aria-label={t("protocols.scepCheck.region")}
+      className="min-w-0 scroll-mt-24"
+    >
       <CardHeader className="flex-row flex-wrap items-start justify-between gap-3 space-y-0">
         <div className="min-w-0 max-w-3xl">
           <CardTitle id="scep-operator-heading">{t("protocols.scepCheck.heading")}</CardTitle>

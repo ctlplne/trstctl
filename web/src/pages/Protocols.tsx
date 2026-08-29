@@ -353,7 +353,12 @@ export function Protocols() {
   function openProtocolOperations(protocolId: string) {
     setOperationsOpen(true);
     window.setTimeout(() => {
-      document.getElementById(`protocol-row-${protocolId}`)?.scrollIntoView({ block: "center" });
+      // ACME, EST, SCEP, and CMP have purpose-built operator workspaces. Land
+      // on the requested method instead of making the operator hunt through
+      // every earlier protocol panel. Methods without a workspace still fall
+      // back to their exact register row.
+      const target = document.getElementById(`${protocolId}-operator-panel`) ?? document.getElementById(`protocol-row-${protocolId}`);
+      target?.scrollIntoView({ block: "start" });
     }, 0);
   }
 

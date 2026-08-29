@@ -65,7 +65,13 @@ export function CMPOperatorPanel({ diagnostics }: { diagnostics: EnrollmentDiagn
   }
 
   return (
-    <Card role="region" aria-labelledby="cmp-operator-heading" aria-label={t("protocols.cmpCheck.region")} className="min-w-0">
+    <Card
+      id="cmp-operator-panel"
+      role="region"
+      aria-labelledby="cmp-operator-heading"
+      aria-label={t("protocols.cmpCheck.region")}
+      className="min-w-0 scroll-mt-24"
+    >
       <CardHeader className="flex-row flex-wrap items-start justify-between gap-3 space-y-0">
         <div className="min-w-0 max-w-3xl">
           <CardTitle id="cmp-operator-heading">{t("protocols.cmpCheck.heading")}</CardTitle>

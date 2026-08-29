@@ -502,6 +502,20 @@ describe("protocol surface", () => {
     expect(within(operations).getByRole("heading", { name: "Protocol responder status" })).toBeInTheDocument();
   });
 
+  it("lands View setup on the requested operator workspace", async () => {
+    mountProtocols(null, false);
+    await screen.findByRole("heading", { name: "Choose how each machine asks" });
+    const cmpPanel = screen.getByRole("region", { name: "CMP readiness check" });
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(cmpPanel, "scrollIntoView", { configurable: true, value: scrollIntoView });
+
+    fireEvent.click(screen.getAllByRole("button", { name: "View setup" })[3]);
+
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ block: "start" }));
+    expect(screen.getByTestId("protocol-operational-details")).toHaveAttribute("open");
+    expect(cmpPanel).toHaveAttribute("id", "cmp-operator-panel");
+  });
+
   it("keeps wide protocol tables inside the page at narrow viewports (AUD-125)", async () => {
     await renderProtocols();
 
