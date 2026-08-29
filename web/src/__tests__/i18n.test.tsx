@@ -1290,8 +1290,11 @@ describe("i18n boundary", () => {
       // removed after the unused-message oracle proved no rendered surface
       // references them. Machine-authored es/de translations — FLAGGED FOR
       // HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "b20b4188f307ee5f85864d48d2ce95fe6078650682225991bc310d36a4fb6da9",
-      "de-DE": "06d77dbf2f7011d00d6e88f8062b4aba4ba33b71685f2ee450ac5896e82b6b65",
+      // F25 re-pin: dedicated temporary-credential workflow plus exact
+      // preview, approval, recovery, and private-key boundary. Machine-
+      // authored es/de translations — FLAGGED FOR HUMAN TRANSLATION REVIEW.
+      "es-ES": "89515394a1176cb46ea8c63655e20ba14caab017b7923ecfdd4f392620b17170",
+      "de-DE": "4f64463c6bcef8f616234d60e96a27265cd6564d2e0baea89b884cbc32e7673f",
     });
   });
 

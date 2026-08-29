@@ -41,6 +41,7 @@ var (
 // attestation verifier, approval state, outbox enqueue, signer-backed CA, and
 // event-sourced certificate record.
 type EphemeralIssuerService interface {
+	PreviewEphemeralCredential(ctx context.Context, tenantID, requester string, req EphemeralCredentialRequest) (EphemeralCredentialPreview, error)
 	IssueEphemeralCredential(ctx context.Context, tenantID, idempotencyKey, requester string, req EphemeralCredentialRequest) (EphemeralCredential, error)
 	ValidateEphemeralApprovalRequest(ctx context.Context, tenantID, requestID, intentDigest string) error
 	ApproveEphemeralCredential(ctx context.Context, tenantID, requestID, intentDigest, approver string) (EphemeralApproval, error)
@@ -84,6 +85,48 @@ type EphemeralCredential struct {
 	Attestation       attest.Attestation `json:"attestation"`
 }
 
+// EphemeralCredentialPreview is the effect-free answer to "what exactly will
+// happen if I submit this JIT credential request?" It deliberately returns only
+// digests and operational metadata: raw attestation evidence and public-key
+// bytes never enter the response or retained evidence.
+type EphemeralCredentialPreview struct {
+	Capability                string   `json:"capability"`
+	Ready                     bool     `json:"ready"`
+	EffectFree                bool     `json:"effect_free"`
+	RequestID                 string   `json:"request_id"`
+	Method                    string   `json:"method"`
+	Requester                 string   `json:"requester"`
+	TrustDomain               string   `json:"trust_domain"`
+	SupportedMethods          []string `json:"supported_methods"`
+	RequestedTTLSeconds       int64    `json:"requested_ttl_seconds"`
+	EffectiveTTLSeconds       int64    `json:"effective_ttl_seconds"`
+	DefaultTTLSeconds         int64    `json:"default_ttl_seconds"`
+	MaxTTLSeconds             int64    `json:"max_ttl_seconds"`
+	TTLDefaulted              bool     `json:"ttl_defaulted"`
+	TTLClamped                bool     `json:"ttl_clamped"`
+	ApprovalRequired          bool     `json:"approval_required"`
+	RequiredApprovals         int      `json:"required_approvals"`
+	ApprovalTTLSeconds        int64    `json:"approval_ttl_seconds"`
+	RequestPermission         string   `json:"request_permission"`
+	ApprovalPermission        string   `json:"approval_permission"`
+	AttestationVerification   string   `json:"attestation_verification"`
+	PayloadSHA256             string   `json:"payload_sha256"`
+	PublicKeySHA256           string   `json:"public_key_sha256"`
+	PreviewWrites             []string `json:"preview_writes"`
+	PreviewExternalEffects    []string `json:"preview_external_effects"`
+	PreviewSignerCalls        []string `json:"preview_signer_calls"`
+	SubmissionWrites          []string `json:"submission_writes"`
+	SubmissionExternalEffects []string `json:"submission_external_effects"`
+	SubmissionSignerCalls     []string `json:"submission_signer_calls"`
+	IssuanceWrites            []string `json:"issuance_writes"`
+	IssuanceExternalEffects   []string `json:"issuance_external_effects"`
+	IssuanceSignerCalls       []string `json:"issuance_signer_calls"`
+	Steps                     []string `json:"steps"`
+	Blockers                  []string `json:"blockers"`
+	RecoverySteps             []string `json:"recovery_steps"`
+	DataHandling              []string `json:"data_handling"`
+}
+
 type ephemeralApprovalJSON struct {
 	Action       string `json:"action"`
 	RequestID    string `json:"request_id"`
@@ -106,6 +149,68 @@ type ephemeralAPIKeyJSON struct {
 	Subject    string   `json:"subject"`
 	Scopes     []string `json:"scopes"`
 	TTLSeconds int64    `json:"ttl_seconds"`
+}
+
+func ephemeralCredentialRequestFromJSON(wire ephemeralCredentialJSON) (EphemeralCredentialRequest, error) {
+	requestID := strings.TrimSpace(wire.RequestID)
+	method := strings.TrimSpace(wire.Method)
+	if requestID == "" {
+		return EphemeralCredentialRequest{}, errStatus(http.StatusBadRequest, "request_id is required")
+	}
+	if method == "" {
+		return EphemeralCredentialRequest{}, errStatus(http.StatusBadRequest, "method is required")
+	}
+	payload, err := base64.StdEncoding.DecodeString(wire.PayloadBase64)
+	if err != nil || len(payload) == 0 {
+		return EphemeralCredentialRequest{}, errStatus(http.StatusBadRequest, "payload_base64 must be non-empty standard base64")
+	}
+	block, _ := pem.Decode([]byte(wire.PublicKeyPEM))
+	if block == nil || block.Type != "PUBLIC KEY" || len(block.Bytes) == 0 {
+		secret.Wipe(payload)
+		return EphemeralCredentialRequest{}, errStatus(http.StatusBadRequest, "public_key_pem must contain one PUBLIC KEY PEM block")
+	}
+	return EphemeralCredentialRequest{
+		RequestID: requestID, Method: method, Payload: payload,
+		PublicKeyDER: append([]byte(nil), block.Bytes...), TTLSeconds: wire.TTLSeconds,
+	}, nil
+}
+
+// previewEphemeralCredential returns the exact, effect-free plan for an
+// approval-gated JIT issuance. The attestation proof is structurally parsed and
+// hashed here, but verification is deliberately deferred to execution so a
+// preview can never consume a nonce or call an external verifier.
+func (a *API) previewEphemeralCredential(w http.ResponseWriter, r *http.Request) {
+	if a.ephemeral == nil {
+		a.writeError(w, ErrEphemeralUnavailable)
+		return
+	}
+	var wire ephemeralCredentialJSON
+	if err := decodeJSON(r, &wire); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	command, err := ephemeralCredentialRequestFromJSON(wire)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	defer secret.Wipe(command.Payload)
+	principal, _ := r.Context().Value(principalCtxKey).(authz.Principal)
+	if principal.Subject == "" {
+		a.writeError(w, errStatus(http.StatusUnauthorized, "an authenticated requester is required"))
+		return
+	}
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	preview, err := a.ephemeral.PreviewEphemeralCredential(r.Context(), tenantID, principal.Subject, command)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, preview)
 }
 
 // issueEphemeralAPIKey mints a short-TTL bearer token for machine workflows. It
@@ -178,35 +283,16 @@ func (a *API) issueEphemeralCredential(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
 		return
 	}
-	requestID := strings.TrimSpace(wire.RequestID)
-	method := strings.TrimSpace(wire.Method)
-	if requestID == "" {
-		a.writeError(w, errStatus(http.StatusBadRequest, "request_id is required"))
+	command, err := ephemeralCredentialRequestFromJSON(wire)
+	if err != nil {
+		a.writeError(w, err)
 		return
 	}
-	if method == "" {
-		a.writeError(w, errStatus(http.StatusBadRequest, "method is required"))
-		return
-	}
-	payload, err := base64.StdEncoding.DecodeString(wire.PayloadBase64)
-	if err != nil || len(payload) == 0 {
-		a.writeError(w, errStatus(http.StatusBadRequest, "payload_base64 must be non-empty standard base64"))
-		return
-	}
-	defer secret.Wipe(payload)
-	block, _ := pem.Decode([]byte(wire.PublicKeyPEM))
-	if block == nil || block.Type != "PUBLIC KEY" || len(block.Bytes) == 0 {
-		a.writeError(w, errStatus(http.StatusBadRequest, "public_key_pem must contain one PUBLIC KEY PEM block"))
-		return
-	}
+	defer secret.Wipe(command.Payload)
 	principal, _ := r.Context().Value(principalCtxKey).(authz.Principal)
 	if principal.Subject == "" {
 		a.writeError(w, errStatus(http.StatusUnauthorized, "an authenticated requester is required"))
 		return
-	}
-	command := EphemeralCredentialRequest{
-		RequestID: requestID, Method: method, Payload: payload,
-		PublicKeyDER: append([]byte(nil), block.Bytes...), TTLSeconds: wire.TTLSeconds,
 	}
 	binding, err := ephemeralIssueRequestBinding(idempotencyKey, principal.Subject, command)
 	if err != nil {

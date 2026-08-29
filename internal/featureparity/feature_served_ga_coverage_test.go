@@ -378,8 +378,10 @@ func TestTRACE023SPIFFERowRemainsConditionalUntilEnabled(t *testing.T) {
 // remediation for TRACE-024. The approval-gated ephemeral/JIT credential REST and
 // CLI workflow belongs in the GA denominator; the richer dedicated issuance UI
 // remains visible as a roadmap residual and must not be hidden inside a
-// conditional F25 row.
-func TestTRACE024EphemeralCredentialRowSplitsServedGAFromRoadmapResidual(t *testing.T) {
+// conditional F25 row. The former UI residual is now closed by an exact,
+// effect-free preview and a dedicated Workloads workflow; keep both tied to the
+// served issuance spine so catalog status cannot outrun the product again.
+func TestTRACE024EphemeralCredentialRowClosesDedicatedWorkflowResidual(t *testing.T) {
 	catalog, err := Load()
 	if err != nil {
 		t.Fatalf("load feature parity catalog: %v", err)
@@ -432,11 +434,25 @@ func TestTRACE024EphemeralCredentialRowSplitsServedGAFromRoadmapResidual(t *test
 		}
 	}
 
-	residual := strings.ToLower(strings.Join([]string{f25.TargetMapping, f25.AcceptanceTest}, "\n"))
-	for _, want := range []string{"roadmap residual", "dedicated issuance ui"} {
-		if !strings.Contains(residual, want) {
-			t.Errorf("TRACE-024: F25 must explicitly park the unsatisfied dedicated issuance UI as a roadmap residual; missing %q in %q", want, residual)
+	completed := strings.ToLower(strings.Join([]string{
+		f25.CurrentMapping,
+		f25.TargetMapping,
+		f25.AcceptanceTest,
+		strings.Join(f25.FacetEvidence.UI.Evidence, "\n"),
+	}, "\n"))
+	for _, want := range []string{"dedicated", "effect-free", "preview", "different approver", "recovery", "private-key"} {
+		if !strings.Contains(completed, want) {
+			t.Errorf("TRACE-024: completed F25 workflow evidence must name %q, got %q", want, completed)
 		}
+	}
+	if strings.Contains(completed, "roadmap residual") {
+		t.Errorf("TRACE-024: closed F25 workflow still claims a roadmap residual: %q", completed)
+	}
+	if f25.Contract.Maturity != MaturityCompleteVerticalSlice {
+		t.Errorf("TRACE-024: F25 maturity = %q, want %q", f25.Contract.Maturity, MaturityCompleteVerticalSlice)
+	}
+	if f25.Contract.Stages.Preview.Status != "complete" {
+		t.Errorf("TRACE-024: F25 preview stage = %q, want complete", f25.Contract.Stages.Preview.Status)
 	}
 }
 

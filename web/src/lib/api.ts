@@ -203,6 +203,7 @@ import type {
   EphemeralApproval,
   EphemeralApprovalRequest,
   EphemeralCredential,
+  EphemeralCredentialPreview,
   EphemeralCredentialRequest,
   ExternalCA as GenExternalCA,
   ExternalCAIssuedCertificate,
@@ -820,6 +821,7 @@ export type {
   EphemeralApproval,
   EphemeralApprovalRequest,
   EphemeralCredential,
+  EphemeralCredentialPreview,
   EphemeralCredentialRequest,
   ExternalCAIssuedCertificate,
   ExternalCAIssueRequest,
@@ -2156,6 +2158,7 @@ export interface Api {
   agentJobPosture(): Promise<AgentJobPosture>;
   bulkheadStats(): Promise<BulkheadStats>;
   connectorDelivery(id: string): Promise<ConnectorDelivery>;
+  previewEphemeralCredential(input: EphemeralCredentialRequest): Promise<EphemeralCredentialPreview>;
   requestEphemeralCredential(input: EphemeralCredentialRequest): Promise<EphemeralCredential>;
   approveEphemeralCredential(id: string, input: EphemeralApprovalRequest): Promise<EphemeralApproval>;
   issuer(id: string): Promise<Issuer>;
@@ -2678,14 +2681,14 @@ const liveApi: Api = {
   agentJobPosture: () => req<AgentJobPosture>("/api/v1/operations/jobs"),
   bulkheadStats: () => req<BulkheadStats>("/api/v1/operations/bulkheads"),
   connectorDelivery: (id) => req<ConnectorDelivery>(`/api/v1/connectors/deliveries/${encodeURIComponent(id)}`),
+  previewEphemeralCredential: (input) => postRead<EphemeralCredentialPreview>("/api/v1/ephemeral/preview", input),
   requestEphemeralCredential: (input) => mutate<EphemeralCredential>("POST", "/api/v1/ephemeral", input),
   approveEphemeralCredential: (id, input) => mutate<EphemeralApproval>("POST", `/api/v1/ephemeral/${encodeURIComponent(id)}/approvals`, input),
   issuer: (id) => req<Issuer>(`/api/v1/issuers/${encodeURIComponent(id)}`),
   rotationRun: (id) => req<RotationRun>(`/api/v1/lifecycle/rotation-runs/${encodeURIComponent(id)}`),
   mdmSCEPPolicy: (id) => req<MDMSCEPPolicy>(`/api/v1/mdm/scep/policies/${encodeURIComponent(id)}`),
   previewMDMSCEPPolicy: (input) => postRead<MDMSCEPPolicyPreview>("/api/v1/mdm/scep/policies/preview", input),
-  previewMDMSCEPPolicyUpdate: (id, input) =>
-    postRead<MDMSCEPPolicyPreview>(`/api/v1/mdm/scep/policies/${encodeURIComponent(id)}/preview`, input),
+  previewMDMSCEPPolicyUpdate: (id, input) => postRead<MDMSCEPPolicyPreview>(`/api/v1/mdm/scep/policies/${encodeURIComponent(id)}/preview`, input),
   createMDMSCEPPolicy: (input) => mutate<MDMSCEPPolicy>("POST", "/api/v1/mdm/scep/policies", input),
   updateMDMSCEPPolicy: (id, input) => mutate<MDMSCEPPolicy>("PUT", `/api/v1/mdm/scep/policies/${encodeURIComponent(id)}`, input),
   deleteMDMSCEPPolicy: (id) => mutate<void>("DELETE", `/api/v1/mdm/scep/policies/${encodeURIComponent(id)}`),

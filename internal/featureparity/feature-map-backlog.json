@@ -8915,29 +8915,34 @@
             "phase": "P2",
             "priority": 62,
             "served_state": "served",
-            "backend_status": "served approval-gated ephemeral/JIT issuance workflow: POST /api/v1/ephemeral verifies attestation before opening approval, writes approval-request/outbox in one tenant transaction, blocks self-approval, mints a short-TTL signer-backed credential only after distinct approval, supports idempotent pending/issued replays, emits ephemeral.issued and certificate.recorded, and expires by TTL",
-            "current_frontend_mapping": "operate: Workloads at /workloads serves dynamic and ephemeral credential issuance with provider role, TTL policy, lease metadata, renew/revoke controls, expiry state, and copy-once credential handling.",
-            "target_gui_mapping": "Roadmap residual: dedicated issuance UI for raw proof collection, approval controls, requester, attestation evidence, issued credential class, lease expiry, and revoke-now action beyond the served REST/CLI workflow.",
-            "acceptance_test": "Served GA acceptance is TestServedEphemeralJITIssuesAfterAttestationAndApproval plus OpenAPI/CLI parity for /api/v1/ephemeral and /api/v1/ephemeral/{id}/approvals, where {id} is the genuine approval_request_id and the body repeats it with the matching intent_digest; roadmap residual is the dedicated issuance UI that collects raw proof material and renders approval controls beyond the served Workloads disclosure.",
+            "backend_status": "served production-wired approval-gated ephemeral/JIT issuance workflow: effect-free POST /api/v1/ephemeral/preview returns exact digests, policy-normalized TTL, approval boundary, writes, signer call, blockers, and recovery without verifying proof or changing state; runtime config is disabled by default and fails closed when incomplete; enabled tenants use their own active public attester trust sources rather than process-global proof trust; POST /api/v1/ephemeral verifies attestation before opening approval, writes approval-request/outbox in one tenant transaction, blocks self-approval, mints a short-TTL signer-backed credential only after distinct approval, supports idempotent pending/issued replays, emits ephemeral.issued and certificate.recorded, and expires by TTL",
+            "current_frontend_mapping": "operate: Workloads at /workloads now includes a dedicated three-step temporary-certificate wizard: collect proof and public key, bind review to the exact effect-free server preview, submit for a different approver, open the approval queue, recover the same request after approval, disclose the public certificate deliberately, and keep proof/private-key bytes out of rendered evidence.",
+            "target_gui_mapping": "Delivered: the dedicated Workloads issuance workflow explains exact proof digests, supported attestors, normalized TTL, dual-control authority, submission and signer effects, pending approval, safe retry, issued-certificate expiry, and the private-key boundary in ELI5 language.",
+            "acceptance_test": "TestServedEphemeralPreviewIsExactEffectFreeAndFailClosed proves preview makes zero database, event, outbox, or signer changes and leaks no proof/key body; TestServedEphemeralUsesTenantOwnedKubernetesTrustSource proves preview and issuance resolve tenant-scoped public proof trust and fail closed without it; ephemeral_wired_test.go and workload_identity_env_test.go prove production runtime mapping, disabled-by-default behavior, and safe config validation; TestServedEphemeralJITIssuesAfterAttestationAndApproval proves the live approval-gated issuance and recovery spine; ephemeral_credential_workflow.test.tsx proves exact-plan review, blocker gating, distinct-approver wait, approval-queue handoff, and issued-certificate recovery; OpenAPI/CLI parity covers preview, issue, and approval.",
             "source_docs": [
                 "docs/features/workload-identity.md"
             ],
             "source_backend": [
                 "internal/ephemeral",
                 "internal/server/ephemeral.go",
-                "internal/api/ephemeral.go"
+                "internal/api/ephemeral.go",
+                "internal/config/config.go",
+                "internal/server/run.go"
             ],
             "source_frontend": [
-                "web/src/pages/Workloads.tsx"
+                "web/src/pages/Workloads.tsx",
+                "web/src/pages/workloads/EphemeralCredentialWorkflow.tsx"
             ],
             "status": "closed",
             "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
             "api_surface": [
+                "previewEphemeralCredential",
                 "issueEphemeralCredential",
                 "approveEphemeralCredential"
             ],
             "api_na": "",
             "cli_surface": [
+                "ephemeral preview",
                 "ephemeral issue",
                 "ephemeral approve"
             ],
@@ -8946,13 +8951,20 @@
                 "served": {
                     "evidence": [
                         "POST /api/v1/ephemeral verifies attestation before opening approval, writes approval-request/outbox in one tenant transaction, and mints a short-TTL credential only after distinct approval while preserving idempotent pending/issued replays and emitting ephemeral.issued plus certificate.recorded.",
+                        "Production runtime configuration is disabled by default, validates every trust-domain/TTL/approval boundary, and maps into the assembled server only after a complete fail-closed configuration is present.",
+                        "Preview and issuance resolve active tenant-owned public workload-attester trust sources for the requested method; absent, disabled, revoked, or invalid trust fails closed and process-global trust is not required in production.",
                         "served_state=served",
-                        "backend_status=served approval-gated ephemeral/JIT issuance workflow: POST /api/v1/ephemeral verifies attestation before opening approval, writes approval-request/outbox in one tenant transaction, blocks self-approval, mints a short-TTL signer-backed credential only after distinct approval, supports idempotent pending/issued replays, emits ephemeral.issued and certificate.recorded, and expires by TTL"
+                        "backend_status=served production-wired approval-gated ephemeral/JIT issuance workflow with effect-free preview, fail-closed configuration, tenant-owned attester trust, distinct approval, idempotent recovery, isolated signing, immutable events, and TTL expiry"
                     ],
                     "refs": [
                         "internal/server/ephemeral.go",
                         "internal/api/ephemeral.go",
-                        "internal/server/ephemeral_served_test.go"
+                        "internal/config/config.go",
+                        "internal/server/run.go",
+                        "deploy/demo/docker-compose.yml",
+                        "internal/server/ephemeral_served_test.go",
+                        "internal/server/ephemeral_wired_test.go",
+                        "internal/config/workload_identity_env_test.go"
                     ],
                     "commands": [
                         "make test"
@@ -8960,17 +8972,20 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: operate: Workloads at /workloads serves dynamic and ephemeral credential issuance with provider role, TTL policy, lease metadata, renew/revoke controls, expiry state, and copy-once credential handling.",
-                        "target_gui_mapping: Roadmap residual: dedicated issuance UI for raw proof collection, approval controls, requester, attestation evidence, issued credential class, lease expiry, and revoke-now action beyond the served REST/CLI workflow."
+                        "Workloads serves a dedicated three-step temporary-certificate wizard whose execution control is bound to the exact previewed request.",
+                        "The review visualizes only SHA-256 proof/key digests, effective TTL, approval authority, writes, external effects, the one signer call, blockers, data handling, and recovery steps.",
+                        "Pending issuance links to the distinct approval queue and retries the exact request; issued output discloses only the public certificate and states that private-key bytes never enter trstctl."
                     ],
                     "refs": [
                         "web/src/pages/Workloads.tsx",
+                        "web/src/pages/workloads/EphemeralCredentialWorkflow.tsx",
                         "web/src/lib/navigation.ts",
                         "web/src/App.tsx"
                     ]
                 },
                 "cli": {
                     "evidence": [
+                        "CLI command: ephemeral preview",
                         "CLI command: ephemeral issue",
                         "CLI command: ephemeral approve"
                     ],
@@ -8982,6 +8997,7 @@
                 },
                 "api": {
                     "evidence": [
+                        "OpenAPI operationId: previewEphemeralCredential",
                         "OpenAPI operationId: issueEphemeralCredential",
                         "OpenAPI operationId: approveEphemeralCredential"
                     ],
@@ -8994,20 +9010,27 @@
                 },
                 "test": {
                     "evidence": [
-                        "acceptance_test: Served GA acceptance is TestServedEphemeralJITIssuesAfterAttestationAndApproval plus OpenAPI/CLI parity for /api/v1/ephemeral and /api/v1/ephemeral/{id}/approvals, where {id} is the genuine approval_request_id and the body repeats it with the matching intent_digest; roadmap residual is the dedicated issuance UI that collects raw proof material and renders approval controls beyond the served Workloads disclosure.",
-                        "TRACE-024 guard: TestTRACE024EphemeralCredentialRowSplitsServedGAFromRoadmapResidual keeps F25 in the served GA denominator only when the served approval-gated JIT workflow and explicit dedicated issuance UI roadmap residual are both present.",
+                        "acceptance_test: effect-free preview, tenant-owned Kubernetes proof trust, production config wiring, live approval-gated issuance/recovery, dedicated UI, and OpenAPI/CLI parity are all executable oracles.",
+                        "TRACE-024 guard: TestTRACE024EphemeralCredentialRowClosesDedicatedWorkflowResidual requires the effect-free preview and dedicated Workloads workflow before F25 can remain complete.",
+                        "TestServedEphemeralPreviewIsExactEffectFreeAndFailClosed proves the preview is structurally exact, policy-normalized, fail-closed, secret-safe, and effect-free.",
+                        "TestServedEphemeralUsesTenantOwnedKubernetesTrustSource proves real signed Kubernetes SAT verification is sourced from tenant-owned public trust and drives preview, approval, and issuance.",
+                        "ephemeral_wired_test.go and workload_identity_env_test.go prove runtime assembly, off-by-default behavior, environment overlay, and malformed-policy rejection.",
                         "TestServedEphemeralJITIssuesAfterAttestationAndApproval drives the assembled HTTP API, idempotent pending/issued replays, outbox intent, approval, event emission, and TTL expiry.",
+                        "ephemeral_credential_workflow.test.tsx proves review-before-execute, server blocker gating, dual-control wait, and exact-request recovery in the customer UI.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
                         "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
                     ],
                     "refs": [
                         "internal/server/ephemeral_served_test.go",
+                        "internal/server/ephemeral_wired_test.go",
+                        "internal/config/workload_identity_env_test.go",
                         "internal/api/openapi_golden_test.go",
                         "internal/cli/cli_test.go",
                         "internal/featureparity/feature_facet_coverage_test.go",
                         "internal/featureparity/feature_served_ga_coverage_test.go",
                         "web/src/__tests__/route_parity.test.ts",
-                        "web/src/__tests__/feature_coverage.test.tsx"
+                        "web/src/__tests__/feature_coverage.test.tsx",
+                        "web/src/__tests__/ephemeral_credential_workflow.test.tsx"
                     ]
                 },
                 "docs": {
@@ -9020,7 +9043,7 @@
                 },
                 "rbac": {
                     "evidence": [
-                        "feature authz manifest maps issueEphemeralCredential to certs:request and approveEphemeralCredential to certs:issue.",
+                        "feature authz manifest maps previewEphemeralCredential and issueEphemeralCredential to certs:request and approveEphemeralCredential to certs:issue.",
                         "protocol authz manifest maps spiffe route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
                         "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded ephemeral/JIT operations."
                     ],
@@ -9057,10 +9080,12 @@
                 },
                 "a11y": {
                     "evidence": [
+                        "The dedicated StepShell workflow uses native labeled inputs, semantic progress, keyboard navigation, aria-live result state, deliberate certificate disclosure, and shared error/loading primitives.",
                         "feature-specific a11y receipt: Ephemeral credential issuance is mapped to route-backed GUI workflow evidence and exercised by web/src/__tests__/feature_a11y_receipts.test.tsx, which renders the registered route surface, runs axe, and verifies keyboard focus reaches the workflow."
                     ],
                     "refs": [
                         "web/src/__tests__/feature_a11y_receipts.test.tsx",
+                        "web/src/pages/workloads/EphemeralCredentialWorkflow.tsx",
                         "web/src/lib/navigation.ts",
                         "web/src/pages/Workloads.tsx",
                         "web/src/App.tsx"
@@ -9068,9 +9093,13 @@
                 },
                 "i18n": {
                     "evidence": [
+                        "All dedicated workflow copy is keyed in the typed English catalog, translated in the Spanish and German catalogs, and compiled into runtime catalogs by npm run gen:i18n-runtime.",
                         "visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
                     ],
                     "refs": [
+                        "web/src/i18n/messages.ts",
+                        "web/src/i18n/catalog.es-ES.ts",
+                        "web/src/i18n/catalog.de-DE.ts",
                         "web/scripts/extract-i18n-messages.mjs",
                         "web/src/i18n/extractedMessages.gen.ts",
                         "web/src/__tests__/i18n.test.tsx"
@@ -9083,7 +9112,7 @@
                 "purpose": "Lets an operator understand and safely use ephemeral credential issuance while tenant, policy, and security authority remain on the server.",
                 "tool": "workloads_machines",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/workloads",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -9095,7 +9124,7 @@
                 "dependencies": [],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -9112,44 +9141,57 @@
                     "configure": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/pages/Workloads.tsx"
+                            "web/src/pages/Workloads.tsx",
+                            "internal/config/config.go",
+                            "internal/server/run.go",
+                            "deploy/demo/docker-compose.yml"
                         ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: previewEphemeralCredential",
+                            "web/src/pages/workloads/EphemeralCredentialWorkflow.tsx",
+                            "internal/server/ephemeral_served_test.go"
+                        ]
                     },
                     "execute": {
                         "status": "complete",
                         "evidence": [
                             "web/src/pages/Workloads.tsx",
+                            "web/src/pages/workloads/EphemeralCredentialWorkflow.tsx",
                             "internal/server/ephemeral_served_test.go"
                         ]
                     },
                     "observe": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/pages/Workloads.tsx"
+                            "web/src/pages/Workloads.tsx",
+                            "web/src/pages/workloads/EphemeralCredentialWorkflow.tsx"
                         ]
                     },
                     "recover": {
                         "status": "complete",
                         "evidence": [
                             "web/src/pages/Workloads.tsx",
+                            "web/src/pages/workloads/EphemeralCredentialWorkflow.tsx",
                             "internal/server/ephemeral_served_test.go"
                         ]
                     },
                     "verify": {
                         "status": "complete",
                         "evidence": [
-                            "internal/server/ephemeral_served_test.go"
+                            "internal/server/ephemeral_served_test.go",
+                            "web/src/__tests__/ephemeral_credential_workflow.test.tsx"
                         ]
                     },
                     "automate": {
                         "status": "complete",
                         "evidence": [
+                            "OpenAPI operationId: previewEphemeralCredential",
                             "OpenAPI operationId: issueEphemeralCredential",
                             "OpenAPI operationId: approveEphemeralCredential",
+                            "CLI command: ephemeral preview",
                             "CLI command: ephemeral issue",
                             "CLI command: ephemeral approve"
                         ]

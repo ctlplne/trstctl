@@ -2994,6 +2994,44 @@ export interface EphemeralCredential {
   subject: string;
 }
 
+export interface EphemeralCredentialPreview {
+  approval_permission: string;
+  approval_required: boolean;
+  approval_ttl_seconds: number;
+  attestation_verification: string;
+  blockers: string[];
+  capability: string;
+  data_handling: string[];
+  default_ttl_seconds: number;
+  effect_free: boolean;
+  effective_ttl_seconds: number;
+  issuance_external_effects: string[];
+  issuance_signer_calls: string[];
+  issuance_writes: string[];
+  max_ttl_seconds: number;
+  method: string;
+  payload_sha256: string;
+  preview_external_effects: string[];
+  preview_signer_calls: string[];
+  preview_writes: string[];
+  public_key_sha256: string;
+  ready: boolean;
+  recovery_steps: string[];
+  request_id: string;
+  request_permission: string;
+  requested_ttl_seconds: number;
+  requester: string;
+  required_approvals: number;
+  steps: string[];
+  submission_external_effects: string[];
+  submission_signer_calls: string[];
+  submission_writes: string[];
+  supported_methods: string[];
+  trust_domain: string;
+  ttl_clamped: boolean;
+  ttl_defaulted: boolean;
+}
+
 export interface EphemeralCredentialRequest {
   method: string;
   payload_base64: string;

@@ -549,12 +549,33 @@ func managedKeyCustodyFromConfig(cfg config.ManagedKeys) api.ManagedKeyCustodyCo
 	return api.ManagedKeyCustodyConfiguration{Enabled: cfg.Enabled, Provider: cfg.Provider}
 }
 
-func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log *events.Log, signer runSigner, sec runSecrets, logger *slog.Logger, egressGuard *egress.Guard, suppliedAuditKey ...*jose.SigningKey) (_ Deps, err error) {
+func ownershipAttestationCadenceFromConfig(cfg config.Lifecycle) (time.Duration, error) {
+	cadence, err := cfg.OwnershipAttestationCadenceDuration()
+	if err != nil {
+		return 0, fmt.Errorf("lifecycle ownership attestation cadence: %w", err)
+	}
+	return cadence, nil
+}
+
+type runSecurityGuardDeps struct {
+	auditKey    *jose.SigningKey
+	rateLimiter api.RateLimiter
+}
+
+func buildRunSecurityGuardDeps(ctx context.Context, cfg *config.Config, st *store.Store, signer runSigner, suppliedAuditKey []*jose.SigningKey) (runSecurityGuardDeps, error) {
 	auditKey, err := loadRunAuditSigningKey(ctx, signer.signer, suppliedAuditKey)
 	if err != nil {
-		return Deps{}, err
+		return runSecurityGuardDeps{}, err
 	}
 	rateLimiter, err := buildRateLimiter(cfg, st)
+	if err != nil {
+		return runSecurityGuardDeps{}, err
+	}
+	return runSecurityGuardDeps{auditKey: auditKey, rateLimiter: rateLimiter}, nil
+}
+
+func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log *events.Log, signer runSigner, sec runSecrets, logger *slog.Logger, egressGuard *egress.Guard, suppliedAuditKey ...*jose.SigningKey) (_ Deps, err error) {
+	securityGuards, err := buildRunSecurityGuardDeps(ctx, cfg, st, signer, suppliedAuditKey)
 	if err != nil {
 		return Deps{}, err
 	}
@@ -570,12 +591,12 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, err
 	}
-	ownershipAttestationCadence, err := cfg.Lifecycle.OwnershipAttestationCadenceDuration()
+	ownershipAttestationCadence, err := ownershipAttestationCadenceFromConfig(cfg.Lifecycle)
 	if err != nil {
-		return Deps{}, fmt.Errorf("lifecycle ownership attestation cadence: %w", err)
+		return Deps{}, err
 	}
 	resultProtector, resultMigrator, tenantKeyDomains, tenantCrypto, err := runTenantCustodyFromConfig(
-		cfg.Secrets, st, log, sec.kek, auditKey,
+		cfg.Secrets, st, log, sec.kek, securityGuards.auditKey,
 	)
 	if err != nil {
 		return Deps{}, err
@@ -632,7 +653,10 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		// seven served routes were permanently unavailable with no operator
 		// switch. One line because they are one decision — the surfaces that
 		// mint or broker access, each opted into deliberately.
-		AttestedIssuance: attestedIssuanceFromConfig(cfg.AttestedIssuance), AgentBroker: agentBrokerFromConfig(cfg.AgentBroker), PAM: pamFromConfig(cfg.PAM),
+		AttestedIssuance:          attestedIssuanceFromConfig(cfg.AttestedIssuance),
+		EphemeralIssuance:         ephemeralIssuanceFromConfig(cfg.EphemeralIssuance),
+		AgentBroker:               agentBrokerFromConfig(cfg.AgentBroker),
+		PAM:                       pamFromConfig(cfg.PAM),
 		OutboundEnvCredentialRefs: append([]string(nil), cfg.OutboundEnvCredentialRefs...),
 		TelemetryReporter:         outbound.telemetryReporter,
 		APIOptions:                []api.Option{kubernetesCSRPostureFromConfig(st), kubernetesTrustBundlePostureFromConfig(st)},
@@ -643,7 +667,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		BreakglassIssuer: breakglassRuntime, BreakglassCeremonies: breakglassRuntime,
 		BreakglassRotation: breakglassRuntime, BreakglassReconciler: breakglassRuntime,
 		RequireApproval: cfg.CA.Policy.RequireApproval, RequiredApprovals: cfg.CA.Policy.RequiredApprovals,
-		AuditSigningKey: auditKey, AuditRetention: retention, AuditArchiveDir: cfg.Audit.ArchiveDir,
+		AuditSigningKey: securityGuards.auditKey, AuditRetention: retention, AuditArchiveDir: cfg.Audit.ArchiveDir,
 		PrivacyRetentionEnabled: privacyRetentionEnabled, PrivacyRetentionInterval: privacyRetentionInterval,
 		PrivacyRetentionPolicy:       privacyRetentionPolicy,
 		LifecycleRenewBefore:         renewBefore,
@@ -661,7 +685,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		TenantDynamicSecretProviders: outbound.dynamicSecretProviders,
 		TenantSecretSyncTargets:      outbound.secretSyncTargets,
 		CloudTokenMinter:             outbound.cloudTokenMinter,
-		Logger:                       logger, RateLimiter: rateLimiter,
+		Logger:                       logger, RateLimiter: securityGuards.rateLimiter,
 		OTLPExporter:    outbound.otlpExporter,
 		Bulkhead:        bulkhead.NewSet(cfg.Bulkheads.Configs()...),
 		SecurityHeaders: SecurityHeaders{TLS: cfg.Server.TLS.Mode != config.TLSDisabled, AllowedOrigins: cfg.Server.CORSAllowedOrigins},

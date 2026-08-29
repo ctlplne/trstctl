@@ -204,8 +204,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// F52's effect-free CBOM scan preview raises it to 398 and maps to the
 	// existing cryptographic-observability row.
 	// F24's effect-free SPIFFE Workload API qualification raises it to 399.
-	if len(out) != 399 {
-		t.Fatalf("OpenAPI operationIds = %d, want 399", len(out))
+	// F25's exact, effect-free JIT credential preview raises it to 400.
+	if len(out) != 400 {
+		t.Fatalf("OpenAPI operationIds = %d, want 400", len(out))
 	}
 	return out
 }

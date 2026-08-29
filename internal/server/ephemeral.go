@@ -9,12 +9,14 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/custody"
@@ -100,9 +102,9 @@ func newEphemeralIssuerService(d ephemeralIssuerDeps) (*ephemeralIssuerService, 
 		}
 		methods[a.Method()] = struct{}{}
 	}
-	if len(methods) == 0 {
-		return nil, errors.New("server: ephemeral issuance enabled without attestors")
-	}
+	// An empty process-level set is valid: production tenants supply public
+	// verification material through their tenant-scoped attester trust sources.
+	// Requests still fail closed unless the selected tenant has an enabled source.
 	if cfg.DefaultTTL <= 0 {
 		cfg.DefaultTTL = defaultEphemeralCredentialTTL
 	}
@@ -148,6 +150,13 @@ func (s *Server) IssueEphemeralCredential(ctx context.Context, tenantID, idempot
 	return s.ephemeralIssuer.IssueEphemeralCredential(ctx, tenantID, idempotencyKey, requester, req)
 }
 
+func (s *Server) PreviewEphemeralCredential(ctx context.Context, tenantID, requester string, req api.EphemeralCredentialRequest) (api.EphemeralCredentialPreview, error) {
+	if s.ephemeralIssuer == nil {
+		return api.EphemeralCredentialPreview{}, api.ErrEphemeralUnavailable
+	}
+	return s.ephemeralIssuer.PreviewEphemeralCredential(ctx, tenantID, requester, req)
+}
+
 func (s *Server) ApproveEphemeralCredential(ctx context.Context, tenantID, requestID, intentDigest, approver string) (api.EphemeralApproval, error) {
 	if s.ephemeralIssuer == nil {
 		return api.EphemeralApproval{}, api.ErrEphemeralUnavailable
@@ -166,9 +175,16 @@ func (s *ephemeralIssuerService) IssueEphemeralCredential(ctx context.Context, t
 	if err := s.validate(tenantID, idempotencyKey, requester, req); err != nil {
 		return api.EphemeralCredential{}, err
 	}
+	attestors, err := s.attestorsForMethod(ctx, tenantID, strings.TrimSpace(req.Method))
+	if err != nil {
+		return api.EphemeralCredential{}, fmt.Errorf("%w: resolve attestation trust: %v", api.ErrEphemeralInvalid, err)
+	}
+	if len(attestors) == 0 {
+		return api.EphemeralCredential{}, fmt.Errorf("%w: attestation method %q is not configured for this tenant", api.ErrEphemeralInvalid, strings.TrimSpace(req.Method))
+	}
 	verifier, err := attest.NewVerifier(attest.Config{
 		TenantID:  tenantID,
-		Attestors: s.attestors,
+		Attestors: attestors,
 		Audit:     s.audit,
 	})
 	if err != nil {
@@ -267,6 +283,92 @@ func (s *ephemeralIssuerService) IssueEphemeralCredential(ctx context.Context, t
 	return s.issueApprovedEphemeralCredential(
 		ctx, tenantID, req, verifier, approvalRequest, approvalUse, requestBinding, issueKey,
 	)
+}
+
+// PreviewEphemeralCredential describes the exact command without verifying the
+// attestation, touching durable state, calling the signer, or enqueueing an
+// external effect. Attestation verification stays execution-only because some
+// verifiers consume one-time evidence.
+func (s *ephemeralIssuerService) PreviewEphemeralCredential(ctx context.Context, tenantID, requester string, req api.EphemeralCredentialRequest) (api.EphemeralCredentialPreview, error) {
+	methods, err := s.availableMethods(ctx, tenantID)
+	if err != nil {
+		return api.EphemeralCredentialPreview{}, fmt.Errorf("%w: resolve attestation trust: %v", api.ErrEphemeralInvalid, err)
+	}
+
+	effectiveTTL := s.ttl(req.TTLSeconds)
+	blockers := []string{}
+	if err := s.validateCommand(tenantID, requester, req); err != nil {
+		blockers = append(blockers, strings.TrimPrefix(err.Error(), api.ErrEphemeralInvalid.Error()+": "))
+	}
+	methodConfigured := false
+	for _, method := range methods {
+		if method == strings.TrimSpace(req.Method) {
+			methodConfigured = true
+			break
+		}
+	}
+	if !methodConfigured {
+		blockers = append(blockers, fmt.Sprintf("attestation method %q is not configured for this tenant", strings.TrimSpace(req.Method)))
+	}
+	return api.EphemeralCredentialPreview{
+		Capability:              "ephemeral_credential_issuance",
+		Ready:                   len(blockers) == 0,
+		EffectFree:              true,
+		RequestID:               strings.TrimSpace(req.RequestID),
+		Method:                  strings.TrimSpace(req.Method),
+		Requester:               strings.TrimSpace(requester),
+		TrustDomain:             s.trustDomain,
+		SupportedMethods:        methods,
+		RequestedTTLSeconds:     req.TTLSeconds,
+		EffectiveTTLSeconds:     int64(effectiveTTL / time.Second),
+		DefaultTTLSeconds:       int64(s.defaultTTL / time.Second),
+		MaxTTLSeconds:           int64(s.maxTTL / time.Second),
+		TTLDefaulted:            req.TTLSeconds <= 0,
+		TTLClamped:              req.TTLSeconds > int64(s.maxTTL/time.Second),
+		ApprovalRequired:        true,
+		RequiredApprovals:       s.requiredApprovals,
+		ApprovalTTLSeconds:      int64(s.approvalTTL / time.Second),
+		RequestPermission:       "certs:request",
+		ApprovalPermission:      "certs:issue",
+		AttestationVerification: "execution_only",
+		PayloadSHA256:           crypto.SHA256Hex(req.Payload),
+		PublicKeySHA256:         crypto.SHA256Hex(req.PublicKeyDER),
+		PreviewWrites:           []string{},
+		PreviewExternalEffects:  []string{},
+		PreviewSignerCalls:      []string{},
+		SubmissionWrites: []string{
+			"Verify the submitted attestation proof, then append or recover one immutable approval request bound to this exact command.",
+			"Project the pending approval state and record the idempotent submission result.",
+		},
+		SubmissionExternalEffects: []string{
+			"Enqueue the approval notification in the transactional outbox; an isolated worker delivers it at least once.",
+		},
+		SubmissionSignerCalls: []string{},
+		IssuanceWrites: []string{
+			"Consume one approved request and append one canonical certificate-issued event.",
+			"Project the short-lived certificate and record the idempotent issuance result.",
+		},
+		IssuanceExternalEffects: []string{},
+		IssuanceSignerCalls: []string{
+			"Ask the isolated signer to sign one X.509-SVID with the effective TTL after fresh attestation verification and approval validation.",
+		},
+		Steps: []string{
+			"Submit this exact request. trstctl verifies the proof, opens a bound approval request, and does not call the signer.",
+			"A different principal with certs:issue approves the exact intent digest before the approval window expires.",
+			"Resubmit the exact request with a fresh idempotency key. trstctl re-verifies the proof, signs once, and records the credential.",
+		},
+		Blockers: blockers,
+		RecoverySteps: []string{
+			"If submission is retried with the same idempotency key, trstctl returns the original pending result instead of opening another approval.",
+			"After approval, resubmit the exact request with a fresh idempotency key; retries recover the one canonical certificate.",
+			"If the approval expires or the proof changes, start a new request_id and review a new preview.",
+		},
+		DataHandling: []string{
+			"The preview returns SHA-256 digests only; it never returns the attestation proof or public-key bytes.",
+			"Attestation verification runs only during submission and issuance, so preview cannot consume one-time evidence.",
+			"The signer receives the public key only after a distinct approval is valid; private key material never enters trstctl.",
+		},
+	}, nil
 }
 
 // issueApprovedEphemeralCredential mints and records the certificate only after
@@ -481,11 +583,15 @@ func (s *ephemeralIssuerService) ValidateEphemeralApprovalRequest(ctx context.Co
 }
 
 func (s *ephemeralIssuerService) validate(tenantID, idempotencyKey, requester string, req api.EphemeralCredentialRequest) error {
-	if tenantID == "" {
-		return fmt.Errorf("%w: tenant is required", api.ErrEphemeralInvalid)
-	}
 	if idempotencyKey == "" {
 		return fmt.Errorf("%w: idempotency key is required", api.ErrEphemeralInvalid)
+	}
+	return s.validateCommand(tenantID, requester, req)
+}
+
+func (s *ephemeralIssuerService) validateCommand(tenantID, requester string, req api.EphemeralCredentialRequest) error {
+	if tenantID == "" {
+		return fmt.Errorf("%w: tenant is required", api.ErrEphemeralInvalid)
 	}
 	if strings.TrimSpace(requester) == "" {
 		return fmt.Errorf("%w: requester is required", api.ErrEphemeralInvalid)
@@ -496,14 +602,64 @@ func (s *ephemeralIssuerService) validate(tenantID, idempotencyKey, requester st
 	if len(req.PublicKeyDER) == 0 {
 		return fmt.Errorf("%w: public key is required", api.ErrEphemeralInvalid)
 	}
-	method := strings.TrimSpace(req.Method)
-	if _, ok := s.methods[method]; !ok {
-		return fmt.Errorf("%w: unknown attestation method %q", api.ErrEphemeralInvalid, method)
-	}
 	if len(req.Payload) == 0 {
 		return fmt.Errorf("%w: attestation payload is required", api.ErrEphemeralInvalid)
 	}
 	return nil
+}
+
+func (s *ephemeralIssuerService) availableMethods(ctx context.Context, tenantID string) ([]string, error) {
+	methods := make(map[string]struct{}, len(s.methods))
+	for method := range s.methods {
+		methods[method] = struct{}{}
+	}
+	sources, err := s.store.ListWorkloadAttesterTrustSources(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	for _, source := range sources {
+		if !source.Enabled || source.RevokedAt != nil {
+			continue
+		}
+		if _, err := attestorFromTrustSource(source); err != nil {
+			return nil, err
+		}
+		methods[source.Method] = struct{}{}
+	}
+	out := make([]string, 0, len(methods))
+	for method := range methods {
+		out = append(out, method)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+func (s *ephemeralIssuerService) attestorsForMethod(ctx context.Context, tenantID, method string) ([]attest.Attestor, error) {
+	var candidates []attest.Attestor
+	for _, a := range s.attestors {
+		if a != nil && a.Method() == method {
+			candidates = append(candidates, a)
+		}
+	}
+	sources, err := s.store.ListEnabledWorkloadAttesterTrustSources(ctx, tenantID, method)
+	if err != nil {
+		return nil, err
+	}
+	for _, source := range sources {
+		a, err := attestorFromTrustSource(source)
+		if err != nil {
+			return nil, err
+		}
+		candidates = append(candidates, a)
+	}
+	switch len(candidates) {
+	case 0:
+		return nil, nil
+	case 1:
+		return candidates, nil
+	default:
+		return []attest.Attestor{multiAttestor{method: method, attestors: candidates}}, nil
+	}
 }
 
 func (s *ephemeralIssuerService) ensureEphemeralApprovalRequest(ctx context.Context, tenantID, requester string, req api.EphemeralCredentialRequest, att attest.Attestation) (store.OperationApprovalRequest, error) {
@@ -589,4 +745,22 @@ func (s *ephemeralIssuerService) sign() ephemerallib.SignFunc {
 		}
 		return crypto.SignSVID(s.caCertDER, s.caSigner, pubDER, spiffeID, ttl)
 	}
+}
+
+func ephemeralIssuanceFromConfig(c config.EphemeralIssuance) EphemeralIssuanceConfig {
+	out := EphemeralIssuanceConfig{
+		Enabled:           c.Enabled,
+		TrustDomain:       strings.TrimSpace(c.TrustDomain),
+		RequiredApprovals: c.RequiredApprovals,
+	}
+	if d, err := time.ParseDuration(strings.TrimSpace(c.DefaultTTL)); err == nil {
+		out.DefaultTTL = d
+	}
+	if d, err := time.ParseDuration(strings.TrimSpace(c.MaxTTL)); err == nil {
+		out.MaxTTL = d
+	}
+	if d, err := time.ParseDuration(strings.TrimSpace(c.ApprovalTTL)); err == nil {
+		out.ApprovalTTL = d
+	}
+	return out
 }

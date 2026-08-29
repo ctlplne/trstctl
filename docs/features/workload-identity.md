@@ -164,7 +164,15 @@ credential — it returns the original.
 
 The direct X.509-SVID flavor is served when attested issuance is configured, at
 `POST /api/v1/workloads/attested-issuance`; the approval-gated JIT flavor is served
-when ephemeral issuance is configured, at `POST /api/v1/ephemeral`. The first call
+when ephemeral issuance is configured. Start with
+`POST /api/v1/ephemeral/preview`. This POST-shaped read returns the exact request and
+public-key SHA-256 digests, accepted proof methods, policy-normalized TTL, approval
+rule, durable writes, outside effects, one eventual signer call, blockers, and safe
+recovery steps. It does not verify the proof, write to PostgreSQL or the event log,
+enqueue outbox work, or contact the signer. Proof verification remains execution-only
+because some attestation evidence can be consumed once.
+
+After review, `POST /api/v1/ephemeral` executes the same request. The first call
 verifies the proof, opens a dual-control approval, and enqueues the notification
 intent in the same tenant transaction. Its response keeps the caller's workflow
 `request_id` separate from the genuine queue `approval_request_id` and returns the
@@ -175,6 +183,12 @@ the matching `intent_digest`. A fresh `Idempotency-Key` on
 `POST /api/v1/ephemeral` then mints the short-TTL credential. The response also
 carries `certificate_pem`, `credential_id`, `certificate_id`, `subject`,
 `not_after`, approval counts, and verified attestation metadata.
+
+The Workloads page exposes this as a three-step ELI5 workflow. It collects the proof
+and public key, binds the submit button to the exact server preview, sends the request
+for a different approver, links to the approval queue, and recovers the same request
+after approval. Review and retained browser state show digests and public metadata,
+not the proof. The matching private key always stays with the workload.
 
 ### Non-human identity lifecycle (F59)
 
@@ -305,14 +319,34 @@ that became the SPIFFE path (e.g. `spiffe://example.org/ns/default/sa/web`). Tru
 material rotates, revokes, and offboards via `.../rotate`, `.../revoke`, and
 `DELETE .../{id}`, each idempotent and recorded as an immutable event.
 
-Approval-gated ephemeral/JIT issuance needs `EphemeralIssuanceConfig` (attestors,
-trust domain, signer-backed issuing CA, approval TTL, approval threshold). The
-requester opens the approval, a distinct approver records it (never themselves), then
-the requester mints with a fresh idempotency key:
+Approval-gated ephemeral/JIT issuance is off by default. Enable the
+`ephemeral_issuance` block with a trust domain, credential TTL bounds, approval TTL,
+and approval threshold. Verification material is not global process config: each
+tenant enables its own public workload attester trust source through the Workloads
+page or `/api/v1/workloads/attester-trust-sources`. A tenant without a valid enabled
+source sees an exact preview blocker and cannot submit. The requester opens the
+approval, a distinct approver records it (never themselves), then the requester mints
+with a fresh idempotency key:
+
+```json
+{
+  "ephemeral_issuance": {
+    "enabled": true,
+    "trust_domain": "workloads.example.com",
+    "default_ttl": "5m",
+    "max_ttl": "30m",
+    "approval_ttl": "15m",
+    "required_approvals": 2
+  }
+}
+```
 
 ```sh
+trstctl-cli ephemeral preview -f jit-request.json
 trstctl-cli --idempotency-key jit-1-request ephemeral issue -f jit-request.json
-trstctl-cli --idempotency-key jit-1-approve ephemeral approve jit-1 -f approval.json
+# approval.json contains action, the returned approval_request_id as request_id,
+# and the returned intent_digest. The path argument is that same approval_request_id.
+trstctl-cli --idempotency-key jit-1-approve ephemeral approve <approval_request_id> -f approval.json
 trstctl-cli --idempotency-key jit-1-issue ephemeral issue -f jit-request.json
 ```
 
@@ -343,7 +377,7 @@ Replaying the same key returns the same response without minting twice.
 | NHI lifecycle routes (F59) | Served — `/api/v1/identities`, `/transitions` |
 | SPIFFE Workload API (F24) | Served — gRPC over a UDS (`protocols.spiffe.enabled`); `FetchX509SVID`, `FetchJWTSVID`, bundle fetches, and `ValidateJWTSVID` wired to the signer-backed path |
 | SPIRE upstream authority | Served and container-proven for X.509 — SPIRE loads `trstctl-spire-upstream-authority`, trstctl signs its intermediate CA CSR via `/api/v1/ca/authorities/{id}/intermediates/csr`, and the e2e verifies a minted SVID chain to the trstctl root |
-| Ephemeral issuance (F25) | Served — direct attested X.509-SVID mint at `POST /api/v1/workloads/attested-issuance` once a tenant trust source is enabled; approval-gated JIT mint at `POST /api/v1/ephemeral` plus `/api/v1/ephemeral/{id}/approvals`, where `{id}` is the genuine `approval_request_id` and the body repeats it with the matching `intent_digest` |
+| Ephemeral issuance (F25) | Served — direct attested X.509-SVID mint at `POST /api/v1/workloads/attested-issuance`; effect-free exact JIT review at `POST /api/v1/ephemeral/preview`; approval-gated mint at `POST /api/v1/ephemeral` plus `/api/v1/ephemeral/{id}/approvals`; and a dedicated review/approval/recovery workflow on Workloads |
 | Attestation chain (F30) | Served — tenant trust-source lifecycle at `/api/v1/workloads/attester-trust-sources`; the six-attester verifier gates `POST /api/v1/workloads/attested-issuance`; conformance covers each attester |
 | AI-agent broker (F61) | Served when configured — `POST /api/v1/broker/agent-identities` verifies proof, gates policy, mints a short-lived credential, and projects the graph grant |
 

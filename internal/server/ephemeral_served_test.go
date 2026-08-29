@@ -38,6 +38,123 @@ import (
 // attestation, the served path opens a dual-control approval request and enqueues
 // the notification intent through outbox, a distinct approver authorizes it, and
 // a fresh idempotent issue call returns a short-TTL signer-backed credential.
+func TestServedEphemeralPreviewIsExactEffectFreeAndFailClosed(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.EphemeralIssuance = EphemeralIssuanceConfig{
+			Enabled: true, TrustDomain: "served.test", DefaultTTL: 2 * time.Second,
+			MaxTTL: 5 * time.Second, ApprovalTTL: time.Minute, RequiredApprovals: 1,
+			Attestors: []attest.Attestor{servedEphemeralAttestor{}},
+		}
+	})
+	requester := seedScopedTokenSubject(t, h.store, h.tenant, "preview-requester", "certs:request", "certs:read")
+	publicKeyPEM := servedAttestedPublicKeyPEM(t)
+	body := map[string]any{
+		"request_id":     "jit-preview-7",
+		"method":         "stub_ephemeral",
+		"payload_base64": base64.StdEncoding.EncodeToString([]byte("genuine")),
+		"public_key_pem": publicKeyPEM,
+		"ttl_seconds":    99,
+	}
+	headBefore, err := h.log.LastSequence(t.Context())
+	if err != nil {
+		t.Fatalf("read event head before preview: %v", err)
+	}
+	stateBefore := ephemeralPreviewMutationState(t, h)
+	countedSigner := &countingEphemeralDigestSigner{DigestSigner: h.srv.ephemeralIssuer.caSigner}
+	h.srv.ephemeralIssuer.caSigner = countedSigner
+
+	status, raw := secretsReqKey(t, h, http.MethodPost, "/api/v1/ephemeral/preview", requester, "", body)
+	if status != http.StatusOK {
+		t.Fatalf("ephemeral preview status = %d, want 200; body=%s", status, raw)
+	}
+	var preview api.EphemeralCredentialPreview
+	if err := json.Unmarshal(raw, &preview); err != nil {
+		t.Fatalf("decode ephemeral preview: %v; body=%s", err, raw)
+	}
+	if !preview.Ready || !preview.EffectFree || preview.RequestID != "jit-preview-7" ||
+		preview.Method != "stub_ephemeral" || preview.Requester != "preview-requester" ||
+		preview.TrustDomain != "served.test" || preview.RequestedTTLSeconds != 99 ||
+		preview.EffectiveTTLSeconds != 5 || preview.MaxTTLSeconds != 5 || !preview.TTLClamped ||
+		preview.ApprovalTTLSeconds != 60 || preview.RequiredApprovals != 1 ||
+		preview.AttestationVerification != "execution_only" {
+		t.Fatalf("ephemeral preview = %+v", preview)
+	}
+	if len(preview.PayloadSHA256) != 64 || len(preview.PublicKeySHA256) != 64 ||
+		len(preview.PreviewWrites) != 0 || len(preview.PreviewExternalEffects) != 0 ||
+		len(preview.PreviewSignerCalls) != 0 || len(preview.SubmissionWrites) == 0 ||
+		len(preview.IssuanceWrites) == 0 || len(preview.Steps) != 3 ||
+		len(preview.RecoverySteps) == 0 || len(preview.Blockers) != 0 {
+		t.Fatalf("ephemeral preview contract is incomplete: %+v", preview)
+	}
+	if bytes.Contains(raw, []byte(body["payload_base64"].(string))) ||
+		bytes.Contains(raw, []byte("BEGIN PUBLIC KEY")) || bytes.Contains(raw, []byte("genuine")) {
+		t.Fatalf("ephemeral preview leaked submitted proof or public-key body: %s", raw)
+	}
+	if got := countedSigner.calls.Load(); got != 0 {
+		t.Fatalf("ephemeral preview signer calls = %d, want 0", got)
+	}
+	if headAfter, err := h.log.LastSequence(t.Context()); err != nil || headAfter != headBefore {
+		t.Fatalf("ephemeral preview event head = (%d, %v), want %d", headAfter, err, headBefore)
+	}
+	if stateAfter := ephemeralPreviewMutationState(t, h); stateAfter != stateBefore {
+		t.Fatalf("ephemeral preview changed durable state: before=%+v after=%+v", stateBefore, stateAfter)
+	}
+
+	body["method"] = "not_configured"
+	status, raw = secretsReqKey(t, h, http.MethodPost, "/api/v1/ephemeral/preview", requester, "", body)
+	if status != http.StatusOK {
+		t.Fatalf("unsupported-method preview status = %d, want 200; body=%s", status, raw)
+	}
+	if err := json.Unmarshal(raw, &preview); err != nil {
+		t.Fatalf("decode unsupported-method preview: %v", err)
+	}
+	if preview.Ready || len(preview.Blockers) != 1 || !strings.Contains(preview.Blockers[0], "not configured") {
+		t.Fatalf("unsupported method did not fail closed: %+v", preview)
+	}
+}
+
+func TestServedEphemeralUsesTenantOwnedKubernetesTrustSource(t *testing.T) {
+	fixture := servedDynamicK8sTrustFixture(t, "ephemeral-k8s-k1")
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.EphemeralIssuance = EphemeralIssuanceConfig{
+			Enabled: true, TrustDomain: "served.test", DefaultTTL: 2 * time.Minute,
+			MaxTTL: 5 * time.Minute, ApprovalTTL: time.Minute, RequiredApprovals: 1,
+		}
+	})
+	requester := seedScopedTokenSubject(t, h.store, h.tenant, "dynamic-requester", "certs:request", "certs:read")
+	approver := seedScopedTokenSubject(t, h.store, h.tenant, "dynamic-approver", "certs:issue", "certs:read")
+	status, raw := secretsReqKey(t, h, http.MethodPost, "/api/v1/workloads/attester-trust-sources",
+		approver, "ephemeral-trust-create", map[string]any{
+			"name": "ephemeral-k8s", "method": "k8s_sat",
+			"issuer": "https://kubernetes.default.svc", "audience": "trstctl", "jwks": fixture.JWKS,
+		})
+	if status != http.StatusCreated {
+		t.Fatalf("create tenant ephemeral trust source: status=%d body=%s", status, raw)
+	}
+	body := map[string]any{
+		"request_id": "dynamic-jit-1", "method": "k8s_sat",
+		"payload_base64": base64.StdEncoding.EncodeToString([]byte(fixture.SAT)),
+		"public_key_pem": servedAttestedPublicKeyPEM(t), "ttl_seconds": 120,
+	}
+	status, raw = secretsReqKey(t, h, http.MethodPost, "/api/v1/ephemeral/preview", requester, "", body)
+	if status != http.StatusOK {
+		t.Fatalf("preview tenant-trusted ephemeral request: status=%d body=%s", status, raw)
+	}
+	var preview api.EphemeralCredentialPreview
+	if err := json.Unmarshal(raw, &preview); err != nil {
+		t.Fatalf("decode dynamic ephemeral preview: %v", err)
+	}
+	if !preview.Ready || !slices.Contains(preview.SupportedMethods, "k8s_sat") || len(preview.Blockers) != 0 {
+		t.Fatalf("tenant trust source did not make exact preview ready: %+v", preview)
+	}
+	pending := servedEphemeralIssue(t, h, requester, "dynamic-jit-request", body, http.StatusAccepted)
+	servedEphemeralApprove(t, h, approver, "dynamic-jit-approve", pending.ApprovalRequestID, pending.IntentDigest, http.StatusOK)
+	issued := servedEphemeralIssue(t, h, requester, "dynamic-jit-issue", body, http.StatusCreated)
+	if issued.State != api.EphemeralStateIssued || issued.Subject != "ns/default/sa/web" || issued.Attestation.Method != "k8s_sat" {
+		t.Fatalf("tenant-trusted ephemeral issuance = %+v", issued)
+	}
+}
+
 func TestServedEphemeralJITIssuesAfterAttestationAndApproval(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.EphemeralIssuance = EphemeralIssuanceConfig{
@@ -517,6 +634,33 @@ type servedEphemeralApprovalResponse struct {
 	ApprovalCount     int    `json:"approval_count"`
 	RequiredApprovals int    `json:"required_approvals"`
 	Status            string `json:"status"`
+}
+
+type ephemeralPreviewDurableState struct {
+	Requests     int
+	Decisions    int
+	Idempotency  int
+	Outbox       int
+	Certificates int
+}
+
+func ephemeralPreviewMutationState(t *testing.T, h *servedHarness) ephemeralPreviewDurableState {
+	t.Helper()
+	var state ephemeralPreviewDurableState
+	err := h.store.WithTenant(context.Background(), h.tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(context.Background(), `
+			SELECT
+			  (SELECT count(*) FROM operation_approval_requests WHERE tenant_id = $1),
+			  (SELECT count(*) FROM operation_approval_decisions WHERE tenant_id = $1),
+			  (SELECT count(*) FROM idempotency_keys WHERE tenant_id = $1),
+			  (SELECT count(*) FROM outbox WHERE tenant_id = $1),
+			  (SELECT count(*) FROM certificates WHERE tenant_id = $1)
+		`, h.tenant).Scan(&state.Requests, &state.Decisions, &state.Idempotency, &state.Outbox, &state.Certificates)
+	})
+	if err != nil {
+		t.Fatalf("read ephemeral preview durable state: %v", err)
+	}
+	return state
 }
 
 func servedEphemeralIssue(t *testing.T, h *servedHarness, token, idemKey string, req map[string]any, want int) servedEphemeralResponse {

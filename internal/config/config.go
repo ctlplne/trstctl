@@ -97,6 +97,7 @@ type Config struct {
 	Breakglass                Breakglass               `json:"breakglass"`
 	Privacy                   Privacy                  `json:"privacy"`
 	AttestedIssuance          AttestedIssuance         `json:"attested_issuance"`
+	EphemeralIssuance         EphemeralIssuance        `json:"ephemeral_issuance"`
 	Provider                  Provider                 `json:"provider"`
 	Reconcile                 Reconcile                `json:"reconcile"`
 	AgentBroker               AgentBroker              `json:"agent_broker"`
@@ -1315,6 +1316,19 @@ type AttestedIssuance struct {
 	MaxTTL     string `json:"max_ttl,omitempty"`
 }
 
+// EphemeralIssuance turns on the approval-gated F25 workload-certificate
+// workflow. Trust decisions remain tenant-owned: enabled workload attester
+// trust sources supply public verification material, while this process-level
+// block only opts into minting and sets hard lifetime/approval bounds.
+type EphemeralIssuance struct {
+	Enabled           bool   `json:"enabled"`
+	TrustDomain       string `json:"trust_domain,omitempty"`
+	DefaultTTL        string `json:"default_ttl,omitempty"`
+	MaxTTL            string `json:"max_ttl,omitempty"`
+	ApprovalTTL       string `json:"approval_ttl,omitempty"`
+	RequiredApprovals int    `json:"required_approvals,omitempty"`
+}
+
 // AgentBroker turns on the brokered agent-identity mint (AUD-12).
 //
 // Same defect as AUD-10: Deps.AgentBroker was never assigned anywhere in
@@ -2381,6 +2395,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setBool(getenv, "TRSTCTL_CA_REQUIRE_FIPS", &c.CA.RequireFIPS)
 	applyAgentChannelEnv(getenv, &c.AgentChannel)
 	applyWorkloadIdentityEnv(getenv, &c.AttestedIssuance)
+	applyEphemeralIssuanceEnv(getenv, &c.EphemeralIssuance)
 	// Served issuance protocols (EXC-WIRE-02): per-protocol enable + tenant binding.
 	applyProtocolsEnv(getenv, &c.Protocols)
 	applyAuthEnv(getenv, &c.Auth)
@@ -2428,6 +2443,15 @@ func applyWorkloadIdentityEnv(getenv func(string) string, a *AttestedIssuance) {
 	setString(getenv, "TRSTCTL_ATTESTED_ISSUANCE_TRUST_DOMAIN", &a.TrustDomain)
 	setString(getenv, "TRSTCTL_ATTESTED_ISSUANCE_DEFAULT_TTL", &a.DefaultTTL)
 	setString(getenv, "TRSTCTL_ATTESTED_ISSUANCE_MAX_TTL", &a.MaxTTL)
+}
+
+func applyEphemeralIssuanceEnv(getenv func(string) string, e *EphemeralIssuance) {
+	setBool(getenv, "TRSTCTL_EPHEMERAL_ISSUANCE_ENABLED", &e.Enabled)
+	setString(getenv, "TRSTCTL_EPHEMERAL_ISSUANCE_TRUST_DOMAIN", &e.TrustDomain)
+	setString(getenv, "TRSTCTL_EPHEMERAL_ISSUANCE_DEFAULT_TTL", &e.DefaultTTL)
+	setString(getenv, "TRSTCTL_EPHEMERAL_ISSUANCE_MAX_TTL", &e.MaxTTL)
+	setString(getenv, "TRSTCTL_EPHEMERAL_ISSUANCE_APPROVAL_TTL", &e.ApprovalTTL)
+	setInt(getenv, "TRSTCTL_EPHEMERAL_ISSUANCE_REQUIRED_APPROVALS", &e.RequiredApprovals)
 }
 
 func applyLifecycleEnv(getenv func(string) string, lifecycle *Lifecycle) {
@@ -3538,6 +3562,7 @@ func validateSignerConfig(c *Config) []error {
 
 func validateServedSurfaces(c *Config) []error {
 	var errs []error
+	errs = append(errs, validateEphemeralIssuance(c.EphemeralIssuance)...)
 	// Served OIDC login (EXC-WIRE-01): when enabled it must be FULLY configured, so
 	// the binary never serves a half-wired login (fail closed). When disabled the
 	// block is ignored.
@@ -3601,6 +3626,37 @@ func validateServedSurfaces(c *Config) []error {
 				errs = append(errs, errors.New("agent_channel.public_address for a non-loopback host requires agent_channel.server_name so agents can verify the channel certificate"))
 			}
 		}
+	}
+	return errs
+}
+
+func validateEphemeralIssuance(e EphemeralIssuance) []error {
+	if !e.Enabled {
+		return nil
+	}
+	var errs []error
+	if strings.TrimSpace(e.TrustDomain) == "" {
+		errs = append(errs, errors.New("ephemeral_issuance.trust_domain is required when ephemeral issuance is enabled"))
+	}
+	parsePositive := func(name, raw string) time.Duration {
+		if strings.TrimSpace(raw) == "" {
+			return 0
+		}
+		d, err := time.ParseDuration(strings.TrimSpace(raw))
+		if err != nil || d <= 0 {
+			errs = append(errs, fmt.Errorf("ephemeral_issuance.%s %q must be a positive Go duration", name, raw))
+			return 0
+		}
+		return d
+	}
+	defaultTTL := parsePositive("default_ttl", e.DefaultTTL)
+	maxTTL := parsePositive("max_ttl", e.MaxTTL)
+	_ = parsePositive("approval_ttl", e.ApprovalTTL)
+	if defaultTTL > 0 && maxTTL > 0 && defaultTTL > maxTTL {
+		errs = append(errs, errors.New("ephemeral_issuance.default_ttl must not exceed max_ttl"))
+	}
+	if e.RequiredApprovals < 0 {
+		errs = append(errs, errors.New("ephemeral_issuance.required_approvals must not be negative; zero uses the secure default"))
 	}
 	return errs
 }

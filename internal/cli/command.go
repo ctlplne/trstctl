@@ -208,6 +208,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"ssh", "revoke"}, Method: "POST", Path: "/api/v1/ssh/certificates/revoke", Body: bodyFile, Summary: "Revoke an SSH certificate and publish KRL status"},
 	{Name: []string{"ssh", "retire-host"}, Method: "POST", Path: "/api/v1/ssh/hosts/retire", Body: bodyFile, Summary: "Record SSH host retirement evidence"},
 	{Name: []string{"broker", "agent-identities", "issue"}, Method: "POST", Path: "/api/v1/broker/agent-identities", Body: bodyFile, Summary: "Issue a policy-gated AI/MCP agent identity"},
+	{Name: []string{"ephemeral", "preview"}, Method: "POST", Path: "/api/v1/ephemeral/preview", Body: bodyFile, ReadOnly: true, Summary: "Preview an exact approval-gated JIT credential request without side effects"},
 	{Name: []string{"ephemeral", "issue"}, Method: "POST", Path: "/api/v1/ephemeral", Body: bodyFile, Summary: "Open or complete an approval-gated JIT credential request"},
 	{Name: []string{"ephemeral", "api-keys", "issue"}, Method: "POST", Path: "/api/v1/ephemeral/api-keys", Body: bodyFile, Summary: "Mint a short-TTL API key"},
 	{Name: []string{"ephemeral", "approve"}, Method: "POST", Path: "/api/v1/ephemeral/{id}/approvals", Body: bodyApprovalFile, Action: "issue", Summary: "Approve an exact immutable ephemeral JIT request"},

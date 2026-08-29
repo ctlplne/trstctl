@@ -48,7 +48,7 @@ func (a *API) runtimeRouteAvailability(r route) (bool, string) {
 	case "issueBrokerAgentIdentity":
 		return runtimeDependency(a.broker != nil,
 			"The short-lived agent identity broker is not configured in this deployment.")
-	case "issueEphemeralCredential", "approveEphemeralCredential":
+	case "previewEphemeralCredential", "issueEphemeralCredential", "approveEphemeralCredential":
 		return runtimeDependency(a.ephemeral != nil,
 			"Attestation-gated temporary credential issuance is not configured in this deployment.")
 	case "openPAMSession", "listPAMSessions", "getPAMSession":

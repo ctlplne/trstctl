@@ -559,6 +559,9 @@ describe("exported API surface census", () => {
       "/api/v1/migrations/assess",
       "/api/v1/agents/enrollment-tokens/preview",
       "/api/v1/issuance-requests/preview",
+      // F25: the temporary-credential review computes the exact bounded plan
+      // and proof digests without persisting, signing, or contacting a target.
+      "/api/v1/ephemeral/preview",
       "/api/v1/identities/item%2Fid/transitions/preview",
       // F52: normalize and bound the exact CBOM request without connecting,
       // reading a host file, appending an event, or projecting an asset.

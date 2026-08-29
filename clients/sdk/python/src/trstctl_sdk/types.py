@@ -4200,6 +4200,48 @@ EphemeralCredential = TypedDict(
     total=False,
 )
 
+EphemeralCredentialPreview = TypedDict(
+    'EphemeralCredentialPreview',
+    {
+        'approval_permission': str,
+        'approval_required': bool,
+        'approval_ttl_seconds': int,
+        'attestation_verification': str,
+        'blockers': list[str],
+        'capability': str,
+        'data_handling': list[str],
+        'default_ttl_seconds': int,
+        'effect_free': bool,
+        'effective_ttl_seconds': int,
+        'issuance_external_effects': list[str],
+        'issuance_signer_calls': list[str],
+        'issuance_writes': list[str],
+        'max_ttl_seconds': int,
+        'method': str,
+        'payload_sha256': str,
+        'preview_external_effects': list[str],
+        'preview_signer_calls': list[str],
+        'preview_writes': list[str],
+        'public_key_sha256': str,
+        'ready': bool,
+        'recovery_steps': list[str],
+        'request_id': str,
+        'request_permission': str,
+        'requested_ttl_seconds': int,
+        'requester': str,
+        'required_approvals': int,
+        'steps': list[str],
+        'submission_external_effects': list[str],
+        'submission_signer_calls': list[str],
+        'submission_writes': list[str],
+        'supported_methods': list[str],
+        'trust_domain': str,
+        'ttl_clamped': bool,
+        'ttl_defaulted': bool,
+    },
+    total=False,
+)
+
 EphemeralCredentialRequest = TypedDict(
     'EphemeralCredentialRequest',
     {

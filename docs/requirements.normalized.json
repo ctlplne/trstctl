@@ -482,10 +482,10 @@
       "requirement_text": "trstctl shall provide Ephemeral credential issuance.",
       "owner": "Workload identity",
       "priority": "P2",
-      "acceptance_criteria": "Served GA acceptance is TestServedEphemeralJITIssuesAfterAttestationAndApproval plus OpenAPI/CLI parity for /api/v1/ephemeral and /api/v1/ephemeral/{id}/approvals, where {id} is the genuine approval_request_id and the body repeats it with the matching intent_digest; roadmap residual is the dedicated issuance UI that collects raw proof material and renders approval controls beyond the served Workloads disclosure.",
+      "acceptance_criteria": "TestServedEphemeralPreviewIsExactEffectFreeAndFailClosed proves preview makes zero database, event, outbox, or signer changes and leaks no proof/key body; TestServedEphemeralJITIssuesAfterAttestationAndApproval proves the live approval-gated issuance and recovery spine; ephemeral_credential_workflow.test.tsx proves exact-plan review, blocker gating, distinct-approver wait, approval-queue handoff, and issued-certificate recovery; OpenAPI/CLI parity covers preview, issue, and approval.",
       "status": "served",
       "served_state": "served",
-      "backend_status": "served approval-gated ephemeral/JIT issuance workflow: POST /api/v1/ephemeral verifies attestation before opening approval, writes approval-request/outbox in one tenant transaction, blocks self-approval, mints a short-TTL signer-backed credential only after distinct approval, supports idempotent pending/issued replays, emits ephemeral.issued and certificate.recorded, and expires by TTL",
+      "backend_status": "served approval-gated ephemeral/JIT issuance workflow: effect-free POST /api/v1/ephemeral/preview returns exact digests, normalized TTL, approval boundary, writes, signer call, blockers, and recovery without verifying proof or changing state; POST /api/v1/ephemeral verifies attestation before opening approval, writes approval-request/outbox in one tenant transaction, blocks self-approval, mints a short-TTL signer-backed credential only after distinct approval, supports idempotent pending/issued replays, emits ephemeral.issued and certificate.recorded, and expires by TTL",
       "ga_served_scope": "in_ga",
       "ga_scope_reason": "",
       "source_docs": [

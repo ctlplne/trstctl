@@ -314,6 +314,7 @@ public final class OpenApiSchemas {
       "EphemeralApproval",
       "EphemeralApprovalRequest",
       "EphemeralCredential",
+      "EphemeralCredentialPreview",
       "EphemeralCredentialRequest",
       "ExternalCA",
       "ExternalCAIssueRequest",

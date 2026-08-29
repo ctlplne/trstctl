@@ -7,6 +7,7 @@ import { ScrollableTableRegion } from "@/components/ScrollableTableRegion";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Num } from "@/components/typography";
+import { EphemeralCredentialWorkflow } from "@/pages/workloads/EphemeralCredentialWorkflow";
 import {
   api,
   type Agent,
@@ -977,7 +978,6 @@ export function Workloads() {
               </table>
             </div>
             <UnavailableState title={t("workloads.leases.historyUnavailableTitle")}>{t("workloads.leases.historyUnavailableDescription")}</UnavailableState>
-            <UnavailableState title={t("workloads.leases.jitUnavailableTitle")}>{t("workloads.leases.jitUnavailableDescription")}</UnavailableState>
           </section>
         </div>
       </details>
@@ -1312,6 +1312,7 @@ export function Workloads() {
             </table>
           </ScrollableTableRegion>
         ) : null}
+        <EphemeralCredentialWorkflow />
         <UnavailableState title={translateNow("source.raw.attestation.evidence.stays.out.of.the.6ffaf184fc")}>
           {translateNow("source.submitted.proof.fields.are.cleared.after.i.b9215d2471")}
         </UnavailableState>

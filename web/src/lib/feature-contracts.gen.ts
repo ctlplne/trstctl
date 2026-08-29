@@ -3163,7 +3163,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use ephemeral credential issuance while tenant, policy, and security authority remain on the server.",
       "tool": "workloads_machines",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/workloads",
       "navigationEntrypoints": [
         "tool navigation",
@@ -3175,7 +3175,7 @@ export const canonicalCapabilities = [
       "dependencies": [],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -3192,44 +3192,57 @@ export const canonicalCapabilities = [
         "configure": {
           "status": "complete",
           "evidence": [
-            "web/src/pages/Workloads.tsx"
+            "web/src/pages/Workloads.tsx",
+            "internal/config/config.go",
+            "internal/server/run.go",
+            "deploy/demo/docker-compose.yml"
           ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: previewEphemeralCredential",
+            "web/src/pages/workloads/EphemeralCredentialWorkflow.tsx",
+            "internal/server/ephemeral_served_test.go"
+          ]
         },
         "execute": {
           "status": "complete",
           "evidence": [
             "web/src/pages/Workloads.tsx",
+            "web/src/pages/workloads/EphemeralCredentialWorkflow.tsx",
             "internal/server/ephemeral_served_test.go"
           ]
         },
         "observe": {
           "status": "complete",
           "evidence": [
-            "web/src/pages/Workloads.tsx"
+            "web/src/pages/Workloads.tsx",
+            "web/src/pages/workloads/EphemeralCredentialWorkflow.tsx"
           ]
         },
         "recover": {
           "status": "complete",
           "evidence": [
             "web/src/pages/Workloads.tsx",
+            "web/src/pages/workloads/EphemeralCredentialWorkflow.tsx",
             "internal/server/ephemeral_served_test.go"
           ]
         },
         "verify": {
           "status": "complete",
           "evidence": [
-            "internal/server/ephemeral_served_test.go"
+            "internal/server/ephemeral_served_test.go",
+            "web/src/__tests__/ephemeral_credential_workflow.test.tsx"
           ]
         },
         "automate": {
           "status": "complete",
           "evidence": [
+            "OpenAPI operationId: previewEphemeralCredential",
             "OpenAPI operationId: issueEphemeralCredential",
             "OpenAPI operationId: approveEphemeralCredential",
+            "CLI command: ephemeral preview",
             "CLI command: ephemeral issue",
             "CLI command: ephemeral approve"
           ]

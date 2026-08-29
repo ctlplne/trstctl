@@ -3738,9 +3738,12 @@ This is a deliberate, documented trust boundary, not an accident.
   in browser state; a tenant-wide broker history list remains a roadmap
   residual, so use REST/CLI automation and audit search for durable broker
   evidence.
-- Ephemeral / JIT issuance (REST): `POST /api/v1/ephemeral` is served when
-  ephemeral issuance is configured with attestors, approval TTL/threshold,
-  trust domain, and signer-backed issuing CA. A requester with
+- Ephemeral / JIT issuance: effect-free `POST /api/v1/ephemeral/preview` and
+  mutating `POST /api/v1/ephemeral` are served when
+  ephemeral issuance is enabled with approval TTL/threshold, trust domain, and
+  signer-backed issuing CA. Each tenant supplies public verification material
+  through an enabled workload attester trust source; no process-wide trust source
+  silently applies to every tenant. A requester with
   `certs:request` presents a proof and public key; trstctl verifies the
   proof, opens an approval request, and enqueues the approval notification
   intent in the same tenant transaction. A distinct approver with
@@ -3749,14 +3752,17 @@ This is a deliberate, documented trust boundary, not an accident.
   `approval_request_id` and the JSON body carries `action: issue`, the same UUID
   as `request_id`, and its matching `intent_digest`; the requester then calls
   `/api/v1/ephemeral` with a fresh `Idempotency-Key` to mint the short-TTL
-  credential. Ephemeral API keys are served separately at
+  credential. The Workloads page now provides the same exact-preview,
+  send-for-approval, approval-queue handoff, safe-retry, and public-certificate
+  collection workflow. It retains only digests and public metadata after issue;
+  the proof is cleared and private-key bytes never enter trstctl. Ephemeral API keys are served separately at
   `POST /api/v1/ephemeral/api-keys` and `trstctl-cli ephemeral api-keys
   issue`: callers provide `subject`, `scopes`, and `ttl_seconds`, the raw
   token is returned once, and the leaseworker emits `api_token.revoked` at
-  expiry. The React Workloads page still does not collect raw proof
-  material or render approval controls; use REST or
-  `trstctl-cli ephemeral issue/approve` / `trstctl-cli ephemeral api-keys
-  issue`.
+  expiry. Headless operators can use `trstctl-cli ephemeral preview`,
+  `ephemeral issue`, and `ephemeral approve`; the approval command requires the
+  genuine `approval_request_id` in both the path and body plus its matching
+  `intent_digest`.
 - Agent ↔ control-plane mTLS gRPC channel: the agent steady-state channel is
   served by the running binary when `agent_channel.enabled` (off by default
   — an upgrade does not silently open an agent port). The control plane

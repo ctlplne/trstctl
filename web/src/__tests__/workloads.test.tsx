@@ -171,8 +171,8 @@ describe("workload identity disclosure surface", () => {
     expect(screen.getByRole("button", { name: "Issue lease" })).toBeInTheDocument();
     expect(screen.getByText("No lease has been issued in this browser session.")).toBeInTheDocument();
     expect(screen.getByText("Lease history isn't in the console yet")).toBeInTheDocument();
-    expect(screen.getByText("Ephemeral JIT issuance uses external approval flows")).toBeInTheDocument();
-    expect(screen.getByText(/does not collect live proof payloads or approval actions/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Request a temporary workload certificate" })).toBeInTheDocument();
+    expect(screen.getByText(/review the exact no-change plan/i)).toBeInTheDocument();
     expect(screen.queryByText("15 minute default TTL, 5 minute renew window")).not.toBeInTheDocument();
     expect(screen.queryByText("JWT-SVID")).not.toBeInTheDocument();
     expect(screen.queryByText("PKI secret bundle")).not.toBeInTheDocument();

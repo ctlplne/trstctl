@@ -660,8 +660,12 @@ trstctl-cli --idempotency-key agent-7-issue-1 broker agent-identities issue -f b
 cat > ephemeral-jit.json <<'JSON'
 {"request_id":"jit-agent-7","method":"k8s_sat","payload_base64":"<proof-base64>","public_key_pem":"-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----\n","ttl_seconds":120}
 JSON
+trstctl-cli ephemeral preview -f ephemeral-jit.json
 trstctl-cli --idempotency-key jit-agent-7-request-1 ephemeral issue -f ephemeral-jit.json
-printf '{"action":"issue"}' | trstctl-cli --idempotency-key jit-agent-7-approve-1 ephemeral approve jit-agent-7 -f -
+cat > ephemeral-approval.json <<'JSON'
+{"action":"issue","request_id":"<approval_request_id>","intent_digest":"<intent_digest>"}
+JSON
+trstctl-cli --idempotency-key jit-agent-7-approve-1 ephemeral approve <approval_request_id> -f ephemeral-approval.json
 trstctl-cli --idempotency-key jit-agent-7-issue-1 ephemeral issue -f ephemeral-jit.json
 
 # Issue, renew, read, and revoke a dynamic secret lease from a configured provider.

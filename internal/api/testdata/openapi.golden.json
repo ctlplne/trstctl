@@ -12048,6 +12048,195 @@
         ],
         "type": "object"
       },
+      "EphemeralCredentialPreview": {
+        "properties": {
+          "approval_permission": {
+            "type": "string"
+          },
+          "approval_required": {
+            "type": "boolean"
+          },
+          "approval_ttl_seconds": {
+            "type": "integer"
+          },
+          "attestation_verification": {
+            "type": "string"
+          },
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "data_handling": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "default_ttl_seconds": {
+            "type": "integer"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "effective_ttl_seconds": {
+            "type": "integer"
+          },
+          "issuance_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "issuance_signer_calls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "issuance_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "max_ttl_seconds": {
+            "type": "integer"
+          },
+          "method": {
+            "type": "string"
+          },
+          "payload_sha256": {
+            "type": "string"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_signer_calls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "public_key_sha256": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "recovery_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "request_permission": {
+            "type": "string"
+          },
+          "requested_ttl_seconds": {
+            "type": "integer"
+          },
+          "requester": {
+            "type": "string"
+          },
+          "required_approvals": {
+            "type": "integer"
+          },
+          "steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "submission_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "submission_signer_calls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "submission_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "supported_methods": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "trust_domain": {
+            "type": "string"
+          },
+          "ttl_clamped": {
+            "type": "boolean"
+          },
+          "ttl_defaulted": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "capability",
+          "ready",
+          "effect_free",
+          "request_id",
+          "method",
+          "requester",
+          "trust_domain",
+          "supported_methods",
+          "requested_ttl_seconds",
+          "effective_ttl_seconds",
+          "default_ttl_seconds",
+          "max_ttl_seconds",
+          "ttl_defaulted",
+          "ttl_clamped",
+          "approval_required",
+          "required_approvals",
+          "approval_ttl_seconds",
+          "request_permission",
+          "approval_permission",
+          "attestation_verification",
+          "payload_sha256",
+          "public_key_sha256",
+          "preview_writes",
+          "preview_external_effects",
+          "preview_signer_calls",
+          "submission_writes",
+          "submission_external_effects",
+          "submission_signer_calls",
+          "issuance_writes",
+          "issuance_external_effects",
+          "issuance_signer_calls",
+          "steps",
+          "blockers",
+          "recovery_steps",
+          "data_handling"
+        ],
+        "type": "object"
+      },
       "EphemeralCredentialRequest": {
         "properties": {
           "method": {
@@ -37191,6 +37380,63 @@
         "summary": "Mint a short-TTL API key for machine workflows",
         "x-trstctl-permission": "access:write",
         "x-trstctl-sensitive-response": true
+      }
+    },
+    "/api/v1/ephemeral/preview": {
+      "post": {
+        "operationId": "previewEphemeralCredential",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EphemeralCredentialRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EphemeralCredentialPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Preview an exact attestation-gated JIT credential request without side effects",
+        "x-trstctl-permission": "certs:request"
       }
     },
     "/api/v1/ephemeral/{id}/approvals": {

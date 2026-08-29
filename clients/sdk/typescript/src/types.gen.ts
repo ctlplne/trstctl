@@ -2300,6 +2300,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ephemeral/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview an exact attestation-gated JIT credential request without side effects */
+        post: operations["previewEphemeralCredential"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ephemeral/{id}/approvals": {
         parameters: {
             query?: never;
@@ -8993,6 +9010,43 @@ export interface components {
             /** @enum {string} */
             state: "awaiting_approval" | "issued";
             subject: string;
+        };
+        EphemeralCredentialPreview: {
+            approval_permission: string;
+            approval_required: boolean;
+            approval_ttl_seconds: number;
+            attestation_verification: string;
+            blockers: string[];
+            capability: string;
+            data_handling: string[];
+            default_ttl_seconds: number;
+            effect_free: boolean;
+            effective_ttl_seconds: number;
+            issuance_external_effects: string[];
+            issuance_signer_calls: string[];
+            issuance_writes: string[];
+            max_ttl_seconds: number;
+            method: string;
+            payload_sha256: string;
+            preview_external_effects: string[];
+            preview_signer_calls: string[];
+            preview_writes: string[];
+            public_key_sha256: string;
+            ready: boolean;
+            recovery_steps: string[];
+            request_id: string;
+            request_permission: string;
+            requested_ttl_seconds: number;
+            requester: string;
+            required_approvals: number;
+            steps: string[];
+            submission_external_effects: string[];
+            submission_signer_calls: string[];
+            submission_writes: string[];
+            supported_methods: string[];
+            trust_domain: string;
+            ttl_clamped: boolean;
+            ttl_defaulted: boolean;
         };
         EphemeralCredentialRequest: {
             method: string;
@@ -19598,6 +19652,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EphemeralAPIKey"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewEphemeralCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EphemeralCredentialRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EphemeralCredentialPreview"];
                 };
             };
             /** @description client error */
