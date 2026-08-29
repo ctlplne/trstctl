@@ -13496,6 +13496,74 @@ export const messages = {
     defaultMessage: "None",
     description: "Empty exact-effect list.",
   },
+  "protocols.dns01.providerTrust.label": {
+    defaultMessage: "Provider trust and runtime admission",
+    description: "Accessible label for DNS provider trust facts.",
+  },
+  "protocols.dns01.providerTrust.verifiedPlugin": {
+    defaultMessage: "Verified signed plugin",
+    description: "Heading for an admitted signed DNS provider plugin.",
+  },
+  "protocols.dns01.providerTrust.builtInProvider": {
+    defaultMessage: "Built into this trstctl build",
+    description: "Heading for a built-in DNS provider.",
+  },
+  "protocols.dns01.providerTrust.pluginHelp": {
+    defaultMessage: "trstctl loaded this plugin only after its signature and DNS publish/cleanup contract passed startup checks.",
+    description: "ELI5 explanation of signed DNS plugin admission.",
+  },
+  "protocols.dns01.providerTrust.builtInHelp": {
+    defaultMessage: "This provider ships inside the running trstctl build and uses the same preview, outbox, DNS visibility, cleanup, and recovery controls.",
+    description: "ELI5 explanation of a built-in DNS provider.",
+  },
+  "protocols.dns01.providerTrust.unavailable": {
+    defaultMessage: "Provider is not available in this running control plane",
+    description: "Heading when a saved config refers to a provider missing from the runtime catalog.",
+  },
+  "protocols.dns01.providerTrust.unavailableHelp": {
+    defaultMessage: "Restore the signed plugin and its trusted key, or edit this config to use an available provider. trstctl will not silently activate a missing provider.",
+    description: "Recovery for a stale DNS provider config.",
+  },
+  "protocols.dns01.providerTrust.package": {
+    defaultMessage: "Running provider package",
+    description: "Label for the exact built-in package or signed WASM plugin identity.",
+  },
+  "protocols.dns01.providerTrust.signatureVerified": {
+    defaultMessage: "Ed25519 signature verified",
+    description: "Plain-language signed plugin provenance state.",
+  },
+  "protocols.dns01.providerTrust.coreBuild": {
+    defaultMessage: "Included in this trstctl build",
+    description: "Plain-language built-in provider provenance state.",
+  },
+  "protocols.dns01.providerTrust.pluginContractPassed": {
+    defaultMessage: "DNS publish and cleanup contract passed",
+    description: "Plain-language signed plugin conformance state.",
+  },
+  "protocols.dns01.providerTrust.builtInContractPassed": {
+    defaultMessage: "DNS publish, visibility, and cleanup contract passed",
+    description: "Plain-language built-in provider conformance state.",
+  },
+  "protocols.dns01.providerTrust.startupVerified": {
+    defaultMessage: "Startup admission passed",
+    description: "Plain-language plugin admission state.",
+  },
+  "protocols.dns01.providerTrust.builtInAdmission": {
+    defaultMessage: "Built-in provider admitted",
+    description: "Plain-language built-in provider admission state.",
+  },
+  "protocols.dns01.providerTrust.notReported": {
+    defaultMessage: "Not reported by this runtime",
+    description: "Fallback when a provider trust fact is absent.",
+  },
+  "protocols.dns01.providerTrust.grants": {
+    defaultMessage: "Allowed plugin capabilities",
+    description: "Heading for least-privilege plugin capability grants.",
+  },
+  "protocols.dns01.providerTrust.noGrants": {
+    defaultMessage: "No extra plugin capabilities are granted.",
+    description: "Empty capability-grant state.",
+  },
   "protocols.eab.accountsBound": {
     defaultMessage: "{count} accounts",
     description: "B4: how many ACME accounts this credential has admitted.",

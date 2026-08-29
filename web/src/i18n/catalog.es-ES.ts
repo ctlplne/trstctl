@@ -4112,6 +4112,26 @@ const esESCatalog = {
   "protocols.dns01.qualification.historyEmpty": "Todavía no se ha registrado ninguna prueba para esta configuración.",
   "protocols.dns01.qualification.historySummary": "Visibilidad DNS: {propagation} · limpieza: {cleanup}",
   "protocols.dns01.qualification.none": "Ninguno",
+  "protocols.dns01.providerTrust.label": "Confianza y admisión en ejecución del proveedor",
+  "protocols.dns01.providerTrust.verifiedPlugin": "Plugin firmado verificado",
+  "protocols.dns01.providerTrust.builtInProvider": "Incluido en esta compilación de trstctl",
+  "protocols.dns01.providerTrust.pluginHelp":
+    "trstctl cargó este plugin solo después de que su firma y su contrato DNS de publicación y limpieza superaran las comprobaciones de inicio.",
+  "protocols.dns01.providerTrust.builtInHelp":
+    "Este proveedor viene incluido en la compilación de trstctl en ejecución y usa los mismos controles de vista previa, outbox, visibilidad DNS, limpieza y recuperación.",
+  "protocols.dns01.providerTrust.unavailable": "El proveedor no está disponible en este plano de control en ejecución",
+  "protocols.dns01.providerTrust.unavailableHelp":
+    "Restaure el plugin firmado y su clave de confianza, o edite esta configuración para usar un proveedor disponible. trstctl no activará silenciosamente un proveedor ausente.",
+  "protocols.dns01.providerTrust.package": "Paquete del proveedor en ejecución",
+  "protocols.dns01.providerTrust.signatureVerified": "Firma Ed25519 verificada",
+  "protocols.dns01.providerTrust.coreBuild": "Incluido en esta compilación de trstctl",
+  "protocols.dns01.providerTrust.pluginContractPassed": "Contrato DNS de publicación y limpieza superado",
+  "protocols.dns01.providerTrust.builtInContractPassed": "Contrato DNS de publicación, visibilidad y limpieza superado",
+  "protocols.dns01.providerTrust.startupVerified": "Admisión de inicio superada",
+  "protocols.dns01.providerTrust.builtInAdmission": "Proveedor integrado admitido",
+  "protocols.dns01.providerTrust.notReported": "No informado por esta ejecución",
+  "protocols.dns01.providerTrust.grants": "Capacidades permitidas al plugin",
+  "protocols.dns01.providerTrust.noGrants": "No se permiten capacidades adicionales al plugin.",
   "protocols.eab.accountsBound": "{count} cuentas",
   "protocols.eab.description":
     "Cada credencial es una autorizaci\u00f3n, no solo una llave: una cuenta recuerda qu\u00e9 credencial la admiti\u00f3, y cada pedido bajo esa cuenta se comprueba contra el alcance de la credencial. Deshabilitar una detiene las nuevas cuentas y pedidos bajo ella y deja v\u00e1lidos los certificados ya emitidos.",

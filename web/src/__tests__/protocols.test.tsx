@@ -1565,18 +1565,36 @@ describe("protocol surface", () => {
     expect(apiMock.acmeDNS01Preflight).toHaveBeenCalledTimes(3);
   });
 
-  it("reviews, executes, observes, and recovers a real DNS-01 provider qualification without exposing secrets", async () => {
+  it("reviews, executes, observes, and recovers an admitted signed DNS plugin without exposing secrets", async () => {
     const user = userEvent.setup();
+    apiMock.acmeDNS01ProviderConfigs.mockResolvedValue({
+      items: [
+        {
+          id: "01900000-0000-7000-8000-000000000070",
+          tenant_id: "11111111-1111-1111-1111-111111111111",
+          name: "signed-reference-dns",
+          provider: "reference-dns",
+          zone: "example.test",
+          credential_refs: { bearer_token_ref: "secret://dns/reference/bearer-token" },
+          config: { endpoint: "https://dns-provider.invalid" },
+          allowed_methods: ["dns-01"],
+          allow_wildcards: true,
+          secret_handling: "credential_refs_only",
+          created_at: "2026-08-29T18:00:00Z",
+          updated_at: "2026-08-29T18:00:00Z",
+        },
+      ],
+    });
     const preview = {
       ready: true,
       effect_free: true,
-      config_id: "01900000-0000-7000-8000-000000000069",
-      config_name: "prod-cloudflare",
-      provider: "cloudflare",
+      config_id: "01900000-0000-7000-8000-000000000070",
+      config_name: "signed-reference-dns",
+      provider: "reference-dns",
       domain: "api.example.test",
       record_name: "_acme-challenge.api.example.test",
       wildcard: false,
-      credential_reference_fields: ["api_token_ref"],
+      credential_reference_fields: ["bearer_token_ref"],
       checks: [
         { id: "domain-policy", label: "Domain policy", passed: true, detail: "This config covers api.example.test.", recovery: "Choose a matching config." },
         { id: "cleanup", label: "Cleanup path", passed: true, detail: "Cleanup uses the same bounded outbox.", recovery: "Retry cleanup from history." },
@@ -1618,8 +1636,13 @@ describe("protocol surface", () => {
     apiMock.acmeDNS01QualificationRuns.mockResolvedValueOnce({ items: [] }).mockResolvedValue({ items: [recoveryRequired] });
 
     await renderProtocols();
-    await user.click(screen.getByRole("button", { name: "Test DNS-01 provider prod-cloudflare" }));
-    const dialog = screen.getByRole("dialog", { name: "Test DNS-01 provider: prod-cloudflare" });
+    await user.click(screen.getByRole("button", { name: "Test DNS-01 provider signed-reference-dns" }));
+    const dialog = screen.getByRole("dialog", { name: "Test DNS-01 provider: signed-reference-dns" });
+    expect(within(dialog).getByRole("heading", { name: "Verified signed plugin" })).toBeInTheDocument();
+    expect(within(dialog).getByText("Ed25519 signature verified")).toBeInTheDocument();
+    expect(within(dialog).getByText("DNS publish and cleanup contract passed")).toBeInTheDocument();
+    expect(within(dialog).getByText("fs.write")).toBeInTheDocument();
+    expect(within(dialog).getByText("signed-wasm:reference-dns")).toBeInTheDocument();
     await user.type(within(dialog).getByRole("textbox", { name: "Domain to test" }), "api.example.test");
     await user.click(within(dialog).getByRole("button", { name: "Review safe test" }));
 
@@ -1627,7 +1650,7 @@ describe("protocol surface", () => {
     expect(within(dialog).getByText("This review made no writes, outside calls, or signing calls.")).toBeInTheDocument();
     expect(within(dialog).getByText("Publish one random TXT probe.")).toBeInTheDocument();
     expect(within(dialog).getByText("Remove that exact TXT probe.")).toBeInTheDocument();
-    expect(within(dialog).getByText("api_token_ref")).toBeInTheDocument();
+    expect(within(dialog).getByText("bearer_token_ref")).toBeInTheDocument();
     expect(within(dialog).getByText(/Grant TXT edit access only/)).toBeInTheDocument();
     expect(within(dialog).queryByText("secret://dns/cloudflare/api-token")).not.toBeInTheDocument();
     expect(within(dialog).queryByRole("textbox", { name: /token|secret|txt value/i })).not.toBeInTheDocument();

@@ -4,7 +4,15 @@ import { Dialog } from "@/components/Dialog";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n/I18nProvider";
-import { api, ApiError, type ACMEDNS01ProviderConfig, type ACMEDNS01QualificationPreview, type ACMEDNS01QualificationRun } from "@/lib/api";
+import {
+  api,
+  ApiError,
+  type ACMEDNS01ProviderCatalogItem,
+  type ACMEDNS01ProviderConfig,
+  type ACMEDNS01QualificationPreview,
+  type ACMEDNS01QualificationRun,
+} from "@/lib/api";
+import { DNS01ProviderTrustPanel } from "@/pages/protocols/DNS01ProviderTrustPanel";
 
 function qualificationError(err: unknown): string {
   if (err instanceof ApiError) return err.body || err.message;
@@ -18,7 +26,15 @@ function replaceRun(items: ACMEDNS01QualificationRun[], next: ACMEDNS01Qualifica
 
 /** A real provider test, deliberately separate from the evidence-only preflight.
  * The server generates and retains the TXT probe and recovery payload. */
-export function DNS01QualificationDialog({ config, onClose }: { config: ACMEDNS01ProviderConfig; onClose: () => void }) {
+export function DNS01QualificationDialog({
+  config,
+  provider,
+  onClose,
+}: {
+  config: ACMEDNS01ProviderConfig;
+  provider?: ACMEDNS01ProviderCatalogItem;
+  onClose: () => void;
+}) {
   const { t } = useTranslation();
   const [domain, setDomain] = useState("");
   const [preview, setPreview] = useState<ACMEDNS01QualificationPreview | null>(null);
@@ -120,6 +136,8 @@ export function DNS01QualificationDialog({ config, onClose }: { config: ACMEDNS0
 
       <div className="grid gap-5 p-5">
         {error && <ErrorState title={t("protocols.dns01.qualification.errorTitle")}>{error}</ErrorState>}
+
+        <DNS01ProviderTrustPanel provider={provider} />
 
         <form className="grid gap-3" onSubmit={(event) => void review(event)}>
           <label className="grid gap-1 text-body font-medium">

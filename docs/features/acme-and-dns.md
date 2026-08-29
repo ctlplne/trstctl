@@ -220,6 +220,18 @@ during order-time publish and cleanup. If a plugin is unsigned, signed by an
 untrusted key, tampered, or missing the DNS entrypoints, startup fails closed before
 the provider is exposed.
 
+The console shows the exact running plugin package, Ed25519 provenance result, DNS
+publish/cleanup contract result, startup-admission state, and least-privilege
+capability grants beside both configuration and testing. A saved config whose plugin
+is no longer admitted is shown as unavailable with recovery instructions; trstctl
+does not silently substitute another provider. The same effect-free review, real TXT
+qualification, sanitized history, and cleanup retry described above work for signed
+plugins through the console and the `qualification preview`, `qualification run`,
+`qualification history`, and `qualification retry-cleanup` CLI commands. Execution
+still enters the production outbox worker, invokes the admitted plugin, publishes
+through its configured endpoint, verifies DNS visibility, and cleans up the exact
+probe.
+
 Each provider asks only for the narrow capability it needs (network dial to its zone
 API host, the least-privilege pattern from the [plugin SDK](extensibility-plugins.md)),
 its credentials are held in wipeable memory and never logged, and where a provider needs

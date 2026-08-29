@@ -23,6 +23,7 @@ import { SPIFFEOperatorPanel } from "@/pages/protocols/SPIFFEOperatorPanel";
 import { RevocationCachePanel } from "@/pages/protocols/RevocationCachePanel";
 import { DNS01PreflightDialog } from "@/pages/protocols/DNS01PreflightDialog";
 import { DNS01QualificationDialog } from "@/pages/protocols/DNS01QualificationDialog";
+import { DNS01ProviderTrustPanel } from "@/pages/protocols/DNS01ProviderTrustPanel";
 import { MDMSCEPPolicyDialog } from "@/pages/protocols/MDMSCEPPolicyDialog";
 import { enrollmentRelaySegments } from "@/pages/protocols/enrollmentRelaySegments";
 import {
@@ -1358,7 +1359,13 @@ export function Protocols() {
       {dnsCreateOpen && <DNS01ConfigDialog providers={dnsProviders} onClose={() => setDNSCreateOpen(false)} onSaved={handleDNSConfigSaved} />}
       {dnsDeleteConfig && <DNS01ConfigDeleteDialog config={dnsDeleteConfig} onClose={() => setDNSDeleteConfig(null)} onDeleted={handleDNSConfigDeleted} />}
       {dnsPreflightConfig && <DNS01PreflightDialog config={dnsPreflightConfig} onClose={() => setDNSPreflightConfig(null)} />}
-      {dnsQualificationConfig && <DNS01QualificationDialog config={dnsQualificationConfig} onClose={() => setDNSQualificationConfig(null)} />}
+      {dnsQualificationConfig && (
+        <DNS01QualificationDialog
+          config={dnsQualificationConfig}
+          provider={dnsProviders.find((candidate) => candidate.name === dnsQualificationConfig.provider)}
+          onClose={() => setDNSQualificationConfig(null)}
+        />
+      )}
     </section>
   );
 }
@@ -1669,6 +1676,7 @@ function DNS01ConfigDialog({
     config && !providers.some((candidate) => candidate.name === config.provider)
       ? [config.provider, ...providers.map((candidate) => candidate.name)]
       : providers.map((candidate) => candidate.name);
+  const selectedProvider = providers.find((candidate) => candidate.name === provider);
 
   function toggleMethod(method: ACMEChallengeMethod, checked: boolean) {
     setAllowedMethods((current) => {
@@ -1759,7 +1767,7 @@ function DNS01ConfigDialog({
             >
               {providerOptions.map((candidate) => (
                 <option key={candidate} value={candidate}>
-                  {candidate}
+                  {providers.find((item) => item.name === candidate)?.display_name ?? candidate} — {candidate}
                 </option>
               ))}
             </select>
@@ -1797,6 +1805,7 @@ function DNS01ConfigDialog({
             />
           </label>
         </div>
+        {provider && <DNS01ProviderTrustPanel provider={selectedProvider} />}
         <fieldset className="grid gap-2">
           <legend className="text-body font-medium">{t("parity.allowedMethods_ac5c6c")}</legend>
           <div className="flex flex-wrap gap-4">

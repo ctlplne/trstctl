@@ -1304,8 +1304,15 @@ describe("i18n boundary", () => {
       // publish/verify/cleanup, sanitized history, and cleanup-retry journey is
       // translated without translating protocol identifiers or the example
       // DNS name. Machine-authored es/de — FLAG FOR HUMAN REVIEW.
-      "es-ES": "57cf87cbbea153a4db3decad9c45d9cb11f6c5d91d612a0928ad29785e970965",
-      "de-DE": "b96f46b6b1cd7c1e3ebca5fb65eb268e75f999280de7361ea45cceb86340ccff",
+      // F70 signed-plugin qualification re-pin: seventeen keys explain the
+      // exact running package, Ed25519 provenance, startup admission, DNS
+      // publish/cleanup contract, capability grants, and the fail-honest
+      // unavailable-plugin recovery state. A missing plugin must remain
+      // unavailable in every locale; it must never read as admitted or built
+      // in. Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW
+      // BEFORE RELEASE.
+      "es-ES": "a5fe21c0d6eb595d550fc4cf95adb467c470b82e5c6b0bfd36e748a40060ae97",
+      "de-DE": "be2dabbf17f4e7f1f1e7d955dbe24dcf35f421bf9a48d4eb58044fd9e5aaf58e",
     });
   });
 

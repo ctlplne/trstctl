@@ -1207,6 +1207,12 @@ func TestServedACMEDNS01OrderActivatesSignedDNSProviderPluginTRACE013(t *testing
 	if status != http.StatusCreated {
 		t.Fatalf("create DNS plugin provider config: status %d body %s", status, body)
 	}
+	var pluginConfig struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &pluginConfig); err != nil || pluginConfig.ID == "" {
+		t.Fatalf("decode DNS plugin provider config: err=%v body=%s", err, body)
+	}
 
 	const domain = "plugin-dns01.trace013.test"
 	const keyAuth = "trace013-key-authorization"
@@ -1234,6 +1240,83 @@ func TestServedACMEDNS01OrderActivatesSignedDNSProviderPluginTRACE013(t *testing
 	}
 	if h.hasEvent(t, "acme.dns01.plugin.denied") || h.hasEvent(t, "acme.dns01.plugin.failed") {
 		t.Fatal("served DNS plugin recorded a denial/failure despite its configured grant")
+	}
+
+	// The console and CLI use this exact qualification workflow. Prove it does
+	// not fall back to a built-in provider when the config selects a plugin:
+	// preview remains effect-free, execution invokes the admitted plugin plus
+	// the production outbox/delegate path, and recovery reuses server-held state.
+	previewPath := "/api/v1/acme/dns-01/provider-configs/" + pluginConfig.ID + "/qualification/preview"
+	status, body = secretsReq(t, h, http.MethodPost, previewPath, tok, map[string]any{"domain": "qualification.trace013.test"})
+	if status != http.StatusOK {
+		t.Fatalf("preview signed DNS plugin qualification: status %d body %s", status, body)
+	}
+	var preview struct {
+		Ready          bool     `json:"ready"`
+		EffectFree     bool     `json:"effect_free"`
+		Provider       string   `json:"provider"`
+		PreviewWrites  []string `json:"preview_writes"`
+		PreviewEffects []string `json:"preview_external_effects"`
+		PreviewSigners []string `json:"preview_signer_calls"`
+		RecoverySteps  []string `json:"recovery_steps"`
+	}
+	if err := json.Unmarshal(body, &preview); err != nil {
+		t.Fatalf("decode signed DNS plugin qualification preview: %v body=%s", err, body)
+	}
+	if !preview.Ready || !preview.EffectFree || preview.Provider != "reference-dns" ||
+		len(preview.PreviewWrites) != 0 || len(preview.PreviewEffects) != 0 || len(preview.PreviewSigners) != 0 || len(preview.RecoverySteps) == 0 {
+		t.Fatalf("signed DNS plugin preview omitted effect-free identity/recovery proof: %+v", preview)
+	}
+
+	runPath := "/api/v1/acme/dns-01/provider-configs/" + pluginConfig.ID + "/qualification-runs"
+	status, body = secretsReqKey(t, h, http.MethodPost, runPath, tok, "f70-plugin-qualification-1", map[string]any{"domain": "qualification.trace013.test"})
+	if status != http.StatusCreated {
+		t.Fatalf("execute signed DNS plugin qualification: status %d body %s", status, body)
+	}
+	var run struct {
+		ID                string `json:"id"`
+		Provider          string `json:"provider"`
+		Status            string `json:"status"`
+		Stage             string `json:"stage"`
+		PropagationStatus string `json:"propagation_status"`
+		CleanupStatus     string `json:"cleanup_status"`
+	}
+	if err := json.Unmarshal(body, &run); err != nil {
+		t.Fatalf("decode signed DNS plugin qualification run: %v body=%s", err, body)
+	}
+	if run.ID == "" || run.Provider != "reference-dns" || run.Status != "passed" || run.Stage != "complete" ||
+		run.PropagationStatus != "passed" || run.CleanupStatus != "delivered" {
+		t.Fatalf("signed DNS plugin qualification did not prove publish/visibility/cleanup: %+v", run)
+	}
+
+	// Model the operator-visible terminal state after a publish may have
+	// succeeded. Retrying must invoke this same signed plugin and must not ask the
+	// browser to resend the credential reference or TXT value.
+	if err := h.store.WithTenant(context.Background(), h.tenant, func(tx pgx.Tx) error {
+		_, err := tx.Exec(context.Background(),
+			`UPDATE outbox
+			    SET status = 'failed', delivered_at = NULL,
+			        last_error = 'secret://signed-plugin-must-not-leak cleanup diagnostic'
+			  WHERE tenant_id = $1
+			    AND destination = 'acme.dns01.cleanup'
+			    AND convert_from(payload, 'UTF8')::jsonb ->> 'qualification_id' = $2`,
+			h.tenant, run.ID)
+		return err
+	}); err != nil {
+		t.Fatalf("model signed DNS plugin cleanup failure: %v", err)
+	}
+	historyPath := "/api/v1/acme/dns-01/provider-configs/" + pluginConfig.ID + "/qualification-runs"
+	status, body = secretsReq(t, h, http.MethodGet, historyPath, tok, nil)
+	if status != http.StatusOK || !bytes.Contains(body, []byte(`"status":"recovery_required"`)) || bytes.Contains(body, []byte("signed-plugin-must-not-leak")) {
+		t.Fatalf("signed DNS plugin history did not sanitize/reveal cleanup recovery: status=%d body=%s", status, body)
+	}
+	retryPath := "/api/v1/acme/dns-01/qualification-runs/" + run.ID + "/retry-cleanup"
+	status, body = secretsReqKey(t, h, http.MethodPost, retryPath, tok, "f70-plugin-cleanup-retry-1", nil)
+	if status != http.StatusOK || !bytes.Contains(body, []byte(`"status":"passed"`)) || !bytes.Contains(body, []byte(`"cleanup_status":"delivered"`)) {
+		t.Fatalf("retry signed DNS plugin qualification cleanup: status=%d body=%s", status, body)
+	}
+	if bytes.Contains(body, []byte("secret://")) || bytes.Contains(body, []byte("dns-plugin-token")) {
+		t.Fatalf("signed DNS plugin recovery leaked sensitive material: %s", body)
 	}
 }
 

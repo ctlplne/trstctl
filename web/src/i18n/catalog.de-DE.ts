@@ -4142,6 +4142,26 @@ const deDECatalog = {
   "protocols.dns01.qualification.historyEmpty": "Für diese Konfiguration wurde noch kein Anbietertest aufgezeichnet.",
   "protocols.dns01.qualification.historySummary": "DNS-Sichtbarkeit: {propagation} · Bereinigung: {cleanup}",
   "protocols.dns01.qualification.none": "Keine",
+  "protocols.dns01.providerTrust.label": "Vertrauen und Laufzeitzulassung des Anbieters",
+  "protocols.dns01.providerTrust.verifiedPlugin": "Verifiziertes signiertes Plugin",
+  "protocols.dns01.providerTrust.builtInProvider": "In diesen trstctl-Build integriert",
+  "protocols.dns01.providerTrust.pluginHelp":
+    "trstctl hat dieses Plugin erst geladen, nachdem seine Signatur und sein DNS-Vertrag für Veröffentlichung und Bereinigung die Startprüfungen bestanden hatten.",
+  "protocols.dns01.providerTrust.builtInHelp":
+    "Dieser Anbieter ist im laufenden trstctl-Build enthalten und verwendet dieselben Vorschau-, Outbox-, DNS-Sichtbarkeits-, Bereinigungs- und Wiederherstellungskontrollen.",
+  "protocols.dns01.providerTrust.unavailable": "Anbieter ist in dieser laufenden Steuerungsebene nicht verfügbar",
+  "protocols.dns01.providerTrust.unavailableHelp":
+    "Stellen Sie das signierte Plugin und seinen vertrauenswürdigen Schlüssel wieder her, oder bearbeiten Sie diese Konfiguration und wählen Sie einen verfügbaren Anbieter. trstctl aktiviert einen fehlenden Anbieter niemals stillschweigend.",
+  "protocols.dns01.providerTrust.package": "Laufendes Anbieterpaket",
+  "protocols.dns01.providerTrust.signatureVerified": "Ed25519-Signatur verifiziert",
+  "protocols.dns01.providerTrust.coreBuild": "In diesem trstctl-Build enthalten",
+  "protocols.dns01.providerTrust.pluginContractPassed": "DNS-Vertrag für Veröffentlichung und Bereinigung bestanden",
+  "protocols.dns01.providerTrust.builtInContractPassed": "DNS-Vertrag für Veröffentlichung, Sichtbarkeit und Bereinigung bestanden",
+  "protocols.dns01.providerTrust.startupVerified": "Startzulassung bestanden",
+  "protocols.dns01.providerTrust.builtInAdmission": "Integrierter Anbieter zugelassen",
+  "protocols.dns01.providerTrust.notReported": "Von dieser Laufzeit nicht gemeldet",
+  "protocols.dns01.providerTrust.grants": "Erlaubte Plugin-Fähigkeiten",
+  "protocols.dns01.providerTrust.noGrants": "Es sind keine zusätzlichen Plugin-Fähigkeiten erlaubt.",
   "protocols.eab.accountsBound": "{count} Konten",
   "protocols.eab.description":
     "Jede Berechtigung ist eine Autorisierung, nicht nur ein T\u00fcrschl\u00fcssel: Ein Konto merkt sich, welche Berechtigung es zugelassen hat, und jede Bestellung dieses Kontos wird gegen deren Geltungsbereich gepr\u00fcft. Das Deaktivieren stoppt neue Konten und Bestellungen; bereits ausgestellte Zertifikate bleiben g\u00fcltig.",
