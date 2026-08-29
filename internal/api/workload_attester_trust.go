@@ -82,12 +82,26 @@ func (a *API) createWorkloadAttesterTrustSource(w http.ResponseWriter, r *http.R
 		if err != nil {
 			return 0, nil, err
 		}
-		id := googleuuid.NewString()
+		if err := a.ensureWorkloadAttesterTrustSourceNameAvailable(ctx, tenantID, req.Name, ""); err != nil {
+			return 0, nil, err
+		}
+		tenantUUID, err := googleuuid.Parse(tenantID)
+		if err != nil {
+			return 0, nil, errStatus(http.StatusUnauthorized, "missing or invalid tenant")
+		}
+		// A logical name has one stable aggregate ID. This makes two concurrent
+		// creates converge on one event-sourced aggregate even if both pass the
+		// read-side availability check before either projection becomes visible.
+		id := googleuuid.NewSHA1(tenantUUID,
+			[]byte("trstctl:workload-attester-trust-source:"+strings.ToLower(req.Name))).String()
 		if err := a.emitWorkloadAttesterTrustSource(ctx, tenantID, id, req, 1); err != nil {
 			return 0, nil, err
 		}
 		rec, err := a.store.GetWorkloadAttesterTrustSource(ctx, tenantID, id)
 		if err != nil {
+			if errors.Is(err, store.ErrWorkloadAttesterTrustSourceNotFound) {
+				return 0, nil, workloadAttesterTrustSourceNameConflict(req.Name)
+			}
 			return 0, nil, err
 		}
 		return http.StatusCreated, toWorkloadAttesterTrustSourceResponse(rec), nil
@@ -135,6 +149,9 @@ func (a *API) updateWorkloadAttesterTrustSource(w http.ResponseWriter, r *http.R
 		if err != nil {
 			return 0, nil, err
 		}
+		if err := a.ensureWorkloadAttesterTrustSourceNameAvailable(ctx, tenantID, req.Name, id); err != nil {
+			return 0, nil, err
+		}
 		if err := a.emitWorkloadAttesterTrustSource(ctx, tenantID, id, req, existing.RotationVersion); err != nil {
 			return 0, nil, err
 		}
@@ -142,8 +159,30 @@ func (a *API) updateWorkloadAttesterTrustSource(w http.ResponseWriter, r *http.R
 		if err != nil {
 			return 0, nil, err
 		}
+		if !strings.EqualFold(rec.Name, req.Name) {
+			return 0, nil, workloadAttesterTrustSourceNameConflict(req.Name)
+		}
 		return http.StatusOK, toWorkloadAttesterTrustSourceResponse(rec), nil
 	})
+}
+
+func (a *API) ensureWorkloadAttesterTrustSourceNameAvailable(ctx context.Context, tenantID, name, allowedID string) error {
+	existing, err := a.store.GetWorkloadAttesterTrustSourceByName(ctx, tenantID, name)
+	if errors.Is(err, store.ErrWorkloadAttesterTrustSourceNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if existing.ID == allowedID {
+		return nil
+	}
+	return workloadAttesterTrustSourceNameConflict(name)
+}
+
+func workloadAttesterTrustSourceNameConflict(name string) error {
+	return errStatus(http.StatusConflict,
+		"A workload attester trust source named "+strings.TrimSpace(name)+" already exists for this tenant. Choose a different name or update the existing source.")
 }
 
 //trstctl:mutation

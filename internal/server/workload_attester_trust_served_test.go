@@ -126,8 +126,48 @@ func TestJOURNEY001WorkloadOwnerSelfServesAttestedOnboarding(t *testing.T) {
 	}
 }
 
+func TestWorkloadAttesterTrustSourceDuplicateNameFailsBeforeEventAppend(t *testing.T) {
+	fixture := servedDynamicK8sTrustFixture(t, "duplicate-name-k1")
+	h := newServedHarness(t, config.Protocols{}, func(*Deps) {})
+	token := seedScopedTokenSubject(t, h.store, h.tenant, "trust-admin@example.test", "certs:issue", "certs:read")
+	request := map[string]any{
+		"name": "Payments K8s", "method": "k8s_sat",
+		"issuer": "https://kubernetes.default.svc", "audience": "trstctl", "jwks": fixture.JWKS,
+	}
+	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/workloads/attester-trust-sources",
+		token, "duplicate-name-first", request)
+	if status != http.StatusCreated {
+		t.Fatalf("create first trust source: status=%d body=%s", status, body)
+	}
+	headBefore, err := h.log.LastSequence(t.Context())
+	if err != nil {
+		t.Fatalf("read event head before duplicate: %v", err)
+	}
+	request["name"] = "  payments k8s  "
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/workloads/attester-trust-sources",
+		token, "duplicate-name-second", request)
+	if status != http.StatusConflict || !strings.Contains(strings.ToLower(string(body)), "already exists") {
+		t.Fatalf("duplicate trust-source name = status %d body %s, want safe 409", status, body)
+	}
+	headAfter, err := h.log.LastSequence(t.Context())
+	if err != nil || headAfter != headBefore {
+		t.Fatalf("duplicate trust-source command appended an invalid event: before=%d after=%d err=%v", headBefore, headAfter, err)
+	}
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/workloads/attester-trust-sources", token, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list after duplicate rejection: status=%d body=%s", status, body)
+	}
+	var list struct {
+		Items []servedWorkloadTrustSourceResponse `json:"items"`
+	}
+	if err := json.Unmarshal(body, &list); err != nil || len(list.Items) != 1 {
+		t.Fatalf("duplicate rejection did not preserve exactly one source: items=%+v err=%v", list.Items, err)
+	}
+}
+
 type servedWorkloadTrustSourceResponse struct {
 	ID              string         `json:"id"`
+	Name            string         `json:"name"`
 	Method          string         `json:"method"`
 	Enabled         bool           `json:"enabled"`
 	RotationVersion int            `json:"rotation_version"`

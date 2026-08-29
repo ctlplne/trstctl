@@ -5,6 +5,7 @@ package ephemeral
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -87,6 +88,19 @@ func TestEphemeralIssuesAndHonorsTTL(t *testing.T) {
 	}
 	if rec.Count("ephemeral.issued") != 1 {
 		t.Error("issuance was not audited")
+	}
+	for _, record := range rec.Records() {
+		if record.Type != "ephemeral.issued" {
+			continue
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(record.Data, &payload); err != nil {
+			t.Fatalf("decode ephemeral.issued audit payload: %v", err)
+		}
+		recovered, present := payload["recovered"]
+		if !present || recovered != false {
+			t.Fatalf("new ephemeral issuance audit recovered marker = %v (present %t), want explicit false", recovered, present)
+		}
 	}
 }
 

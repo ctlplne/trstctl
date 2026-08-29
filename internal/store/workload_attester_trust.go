@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -61,16 +63,35 @@ func (s *Store) ApplyWorkloadAttesterTrustSourceUpsertedTx(ctx context.Context, 
 	if ts.UpdatedAt.IsZero() {
 		ts.UpdatedAt = ts.CreatedAt
 	}
-	// This legacy table has both a global id primary key and a redundant
-	// (tenant_id, id) unique constraint. PostgreSQL can choose either index first
-	// while the synchronous request projector races the durable tail projector;
-	// an ON CONFLICT target for one index can therefore still lose on the other.
-	// Serialize only this source ID, then let the global primary-key arbiter make
-	// same-tenant replay idempotent and the tenant WHERE clause fail collisions
-	// closed. The transaction-scoped lock is released on commit or rollback.
-	if _, err := tx.Exec(ctx,
-		`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
-		"workload-attester-trust-source:"+ts.ID); err != nil {
+	// This legacy table has both a global id primary key, a redundant (tenant_id,
+	// id) unique constraint, and a tenant/name unique index. PostgreSQL can choose
+	// different arbiters while the synchronous request projector races the durable
+	// tail projector, so lock both the aggregate ID and case-insensitive name.
+	// Sorting the lock keys prevents a rename/create race from deadlocking. Older
+	// releases could append two differently-IDed events for the same unique name;
+	// the first event remains authoritative and the later invalid event becomes a
+	// deterministic no-op instead of poisoning every future projection replay.
+	lockKeys := []string{
+		"workload-attester-trust-source:id:" + ts.ID,
+		"workload-attester-trust-source:name:" + ts.TenantID + ":" + strings.ToLower(strings.TrimSpace(ts.Name)),
+	}
+	sort.Strings(lockKeys)
+	for _, lockKey := range lockKeys {
+		if _, err := tx.Exec(ctx,
+			`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, lockKey); err != nil {
+			return err
+		}
+	}
+	var nameOwnerID string
+	err := tx.QueryRow(ctx,
+		`SELECT id::text
+		   FROM workload_attester_trust_sources
+		  WHERE tenant_id = $1 AND lower(name) = lower($2)`,
+		ts.TenantID, ts.Name).Scan(&nameOwnerID)
+	if err == nil && nameOwnerID != ts.ID {
+		return nil
+	}
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return err
 	}
 	tag, err := tx.Exec(ctx,
@@ -103,6 +124,26 @@ func (s *Store) ApplyWorkloadAttesterTrustSourceUpsertedTx(ctx context.Context, 
 		return ErrWorkloadAttesterTrustSourceTenantCollision
 	}
 	return nil
+}
+
+// GetWorkloadAttesterTrustSourceByName loads one case-insensitive tenant-owned
+// display name. It is the command-side guard that prevents an invalid duplicate
+// event from entering the immutable log during normal operation.
+func (s *Store) GetWorkloadAttesterTrustSourceByName(ctx context.Context, tenantID, name string) (WorkloadAttesterTrustSource, error) {
+	var out WorkloadAttesterTrustSource
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return scanWorkloadAttesterTrustSource(tx.QueryRow(ctx,
+			`SELECT id::text, tenant_id::text, name, method, issuer, audience, jwks,
+			        root_certs_pem, expected_nonce_base64, enabled, revoked_at, revoked_reason,
+			        rotation_version, last_rotated_at, created_at, updated_at
+			   FROM workload_attester_trust_sources
+			  WHERE tenant_id = $1 AND lower(name) = lower($2)`,
+			tenantID, strings.TrimSpace(name)), &out)
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return WorkloadAttesterTrustSource{}, ErrWorkloadAttesterTrustSourceNotFound
+	}
+	return out, err
 }
 
 // ApplyWorkloadAttesterTrustSourceRotatedTx projects a

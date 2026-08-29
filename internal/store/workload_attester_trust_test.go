@@ -69,3 +69,38 @@ func TestWorkloadAttesterProjectionReplayConvergesOnThePrimaryKey(t *testing.T) 
 		t.Fatalf("cross-tenant collision changed the original row: got=%+v err=%v", got, err)
 	}
 }
+
+func TestWorkloadAttesterProjectionQuarantinesLegacyDuplicateNameEvent(t *testing.T) {
+	s := newStore(t)
+	seedTwoTenants(t, s)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	apply := func(candidate store.WorkloadAttesterTrustSource) error {
+		return s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+			return s.ApplyWorkloadAttesterTrustSourceUpsertedTx(ctx, tx, candidate)
+		})
+	}
+	original := store.WorkloadAttesterTrustSource{
+		ID: "a8e0cded-3832-4112-8702-000000000101", TenantID: tenantA,
+		Name: "Payments K8s", Method: "k8s_sat", Issuer: "https://cluster-a.invalid",
+		Audience: "trstctl", JWKS: json.RawMessage(`{"keys":[]}`), Enabled: true,
+		RotationVersion: 1, CreatedAt: now, UpdatedAt: now,
+	}
+	if err := apply(original); err != nil {
+		t.Fatalf("project original trust source: %v", err)
+	}
+	legacyDuplicate := original
+	legacyDuplicate.ID = "a8e0cded-3832-4112-8702-000000000102"
+	legacyDuplicate.Name = "payments k8s"
+	legacyDuplicate.Issuer = "https://cluster-b.invalid"
+	if err := apply(legacyDuplicate); err != nil {
+		t.Fatalf("legacy duplicate-name event poisoned projection replay: %v", err)
+	}
+	if _, err := s.GetWorkloadAttesterTrustSource(ctx, tenantA, legacyDuplicate.ID); !errors.Is(err, store.ErrWorkloadAttesterTrustSourceNotFound) {
+		t.Fatalf("legacy duplicate-name event materialized a second row: %v", err)
+	}
+	got, err := s.GetWorkloadAttesterTrustSource(ctx, tenantA, original.ID)
+	if err != nil || got.Name != original.Name || got.Issuer != original.Issuer {
+		t.Fatalf("legacy duplicate-name event changed first-writer authority: got=%+v err=%v", got, err)
+	}
+}
