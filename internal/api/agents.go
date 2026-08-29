@@ -464,6 +464,10 @@ type agentEnrollmentConnection struct {
 	ServerName string
 }
 
+const agentEnrollmentRenewalPath = "/enroll/renewal"
+
+const agentEnrollmentRenewalAuthentication = "Current verified agent certificate over mTLS"
+
 func (r enrollmentTokenResponse) wipeSecrets() { r.Token.wipe() }
 
 // enrollmentTokenRequest optionally pins a one-time bootstrap token to the
@@ -481,16 +485,36 @@ type enrollmentTokenRequest struct {
 // one-time token exists. It deliberately contains connection and capability
 // metadata only: the secret token is created by the separate confirmed route.
 type enrollmentPlanPreview struct {
-	Ready               bool     `json:"ready"`
-	SideEffects         bool     `json:"side_effects"`
-	AllowedIdentity     string   `json:"allowed_identity,omitempty"`
-	Roles               []string `json:"roles"`
-	RequiredPermissions []string `json:"required_permissions"`
-	EnrollPath          string   `json:"enroll_path"`
-	AgentServer         string   `json:"agent_server"`
-	AgentServerName     string   `json:"agent_server_name"`
-	DataHandling        string   `json:"data_handling"`
-	BlockedReasons      []string `json:"blocked_reasons"`
+	Ready                 bool     `json:"ready"`
+	SideEffects           bool     `json:"side_effects"`
+	AllowedIdentity       string   `json:"allowed_identity,omitempty"`
+	Roles                 []string `json:"roles"`
+	RequiredPermissions   []string `json:"required_permissions"`
+	EnrollPath            string   `json:"enroll_path"`
+	AgentServer           string   `json:"agent_server"`
+	AgentServerName       string   `json:"agent_server_name"`
+	RenewalReady          bool     `json:"renewal_ready"`
+	RenewalPath           string   `json:"renewal_path"`
+	RenewalAuthentication string   `json:"renewal_authentication"`
+	DataHandling          string   `json:"data_handling"`
+	BlockedReasons        []string `json:"blocked_reasons"`
+}
+
+// agentEnrollmentBlockers is the one lifecycle-readiness decision shared by
+// preview and execution. It prevents the console/API disagreement where a plan
+// says an endpoint is usable but the mutating route mints a credential anyway.
+func (a *API) agentEnrollmentBlockers() []string {
+	blocked := make([]string, 0, 3)
+	if strings.TrimSpace(a.agentConnection.Server) == "" {
+		blocked = append(blocked, "Configure the public agent address before minting a token; the console will not invent a destination for a one-time credential.")
+	}
+	if strings.TrimSpace(a.agentConnection.ServerName) == "" {
+		blocked = append(blocked, "Configure the agent TLS server name before minting a token so the new agent can verify the control plane it reaches.")
+	}
+	if !a.agentRenewalReady {
+		blocked = append(blocked, "Enable the dedicated agent-channel renewal listener before minting a token; an enrolled machine needs current-certificate mTLS renewal before its first certificate expires.")
+	}
+	return blocked
 }
 
 // agentCertRevocationRequest identifies one public certificate selector to deny
@@ -536,28 +560,25 @@ func (a *API) previewEnrollmentToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	blocked := make([]string, 0, 2)
-	if strings.TrimSpace(a.agentConnection.Server) == "" {
-		blocked = append(blocked, "Configure the public agent address before minting a token; the console will not invent a destination for a one-time credential.")
-	}
-	if strings.TrimSpace(a.agentConnection.ServerName) == "" {
-		blocked = append(blocked, "Configure the agent TLS server name before minting a token so the new agent can verify the control plane it reaches.")
-	}
+	blocked := a.agentEnrollmentBlockers()
 	permissions := []string{string(authz.AgentsWrite)}
 	if slices.Contains(roles, mtls.AgentRoleNetwork) {
 		permissions = append(permissions, string(authz.AgentsGrantRelay))
 	}
 	a.writeJSON(w, http.StatusOK, enrollmentPlanPreview{
-		Ready:               len(blocked) == 0,
-		SideEffects:         false,
-		AllowedIdentity:     req.AllowedIdentity,
-		Roles:               effectiveAgentRoles(roles),
-		RequiredPermissions: permissions,
-		EnrollPath:          "/enroll/bootstrap",
-		AgentServer:         a.agentConnection.Server,
-		AgentServerName:     a.agentConnection.ServerName,
-		DataHandling:        "This preview contains the selected agent identity, certificate roles, and public connection metadata only. A one-time token is not minted or returned.",
-		BlockedReasons:      blocked,
+		Ready:                 len(blocked) == 0,
+		SideEffects:           false,
+		AllowedIdentity:       req.AllowedIdentity,
+		Roles:                 effectiveAgentRoles(roles),
+		RequiredPermissions:   permissions,
+		EnrollPath:            "/enroll/bootstrap",
+		AgentServer:           a.agentConnection.Server,
+		AgentServerName:       a.agentConnection.ServerName,
+		RenewalReady:          a.agentRenewalReady,
+		RenewalPath:           agentEnrollmentRenewalPath,
+		RenewalAuthentication: agentEnrollmentRenewalAuthentication,
+		DataHandling:          "This preview contains the selected agent identity, certificate roles, and public connection metadata only. A one-time token is not minted or returned.",
+		BlockedReasons:        blocked,
 	})
 }
 
@@ -578,6 +599,10 @@ func (a *API) createEnrollmentToken(w http.ResponseWriter, r *http.Request) {
 	req, roles, err := a.parseEnrollmentTokenGrant(r)
 	if err != nil {
 		a.writeError(w, err)
+		return
+	}
+	if blocked := a.agentEnrollmentBlockers(); len(blocked) > 0 {
+		a.writeError(w, errStatus(http.StatusServiceUnavailable, strings.Join(blocked, " ")))
 		return
 	}
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {

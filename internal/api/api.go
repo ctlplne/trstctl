@@ -80,6 +80,7 @@ type API struct {
 	scimTokens              map[string]scimToken
 	agentTokens             BootstrapTokenIssuer
 	agentConnection         agentEnrollmentConnection
+	agentRenewalReady       bool
 	agentHeartbeatInterval  time.Duration
 	agentEnroller           BootstrapEnroller
 	agentEnrollmentObserver func(result string)
@@ -192,6 +193,7 @@ type config struct {
 	scim                        *SCIMConfig
 	agentTokens                 BootstrapTokenIssuer
 	agentConnection             agentEnrollmentConnection
+	agentRenewalReady           bool
 	agentHeartbeatInterval      time.Duration
 	agentEnroller               BootstrapEnroller
 	agentEnrollmentObserver     func(result string)
@@ -478,6 +480,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		scimTokens:                  normalizeSCIM(cfg.scim),
 		agentTokens:                 cfg.agentTokens,
 		agentConnection:             cfg.agentConnection,
+		agentRenewalReady:           cfg.agentRenewalReady,
 		agentHeartbeatInterval:      cfg.agentHeartbeatInterval,
 		agentEnroller:               cfg.agentEnroller,
 		agentEnrollmentObserver:     cfg.agentEnrollmentObserver,

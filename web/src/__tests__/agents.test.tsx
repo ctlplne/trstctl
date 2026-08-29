@@ -44,6 +44,9 @@ describe("agent fleet surface", () => {
       enroll_path: "/enroll/bootstrap",
       agent_server: "localhost:19443",
       agent_server_name: "localhost",
+      renewal_ready: true,
+      renewal_path: "/enroll/renewal",
+      renewal_authentication: "Current verified agent certificate over mTLS",
       data_handling: "The preview contains configuration only. No one-time token exists yet.",
       blocked_reasons: [],
     });
@@ -305,6 +308,8 @@ describe("agent fleet surface", () => {
     await waitFor(() => expect(apiMock.previewEnrollmentPlan).toHaveBeenCalledWith({ allowed_identity: "edge-01", roles: ["host"] }));
     expect(apiMock.createEnrollmentToken).not.toHaveBeenCalled();
     expect(await screen.findByRole("region", { name: "Agent enrollment plan" })).toHaveTextContent("No one-time token exists yet");
+    expect(screen.getByRole("region", { name: "Agent enrollment plan" })).toHaveTextContent("/enroll/renewal");
+    expect(screen.getByRole("region", { name: "Agent enrollment plan" })).toHaveTextContent(/current verified agent certificate over mtls/i);
     fireEvent.click(screen.getByRole("button", { name: /mint one-time token/i }));
 
     await waitFor(() => expect(apiMock.createEnrollmentToken).toHaveBeenCalledTimes(1));
@@ -397,6 +402,35 @@ describe("agent fleet surface", () => {
     expect(await screen.findByText("enrollment planner unavailable")).toBeInTheDocument();
     expect(apiMock.createEnrollmentToken).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: /mint one-time token/i })).not.toBeInTheDocument();
+  });
+
+  it("explains and blocks a lifecycle whose verified-mTLS renewal listener is unavailable", async () => {
+    apiMock.previewEnrollmentPlan.mockResolvedValueOnce({
+      ready: false,
+      side_effects: false,
+      allowed_identity: "edge-no-renewal",
+      roles: ["host"],
+      required_permissions: ["agents:write"],
+      enroll_path: "/enroll/bootstrap",
+      agent_server: "localhost:19443",
+      agent_server_name: "localhost",
+      renewal_ready: false,
+      renewal_path: "/enroll/renewal",
+      renewal_authentication: "Current verified agent certificate over mTLS",
+      data_handling: "No one-time token exists yet.",
+      blocked_reasons: ["Enable the verified-mTLS renewal listener before minting a token."],
+    });
+    renderAgents();
+    await screen.findByRole("heading", { name: /1 of 3 active agents/i });
+    fireEvent.click(screen.getByRole("button", { name: "Add agent" }));
+    fireEvent.change(screen.getByLabelText(/agent identity/i), { target: { value: "edge-no-renewal" } });
+    fireEvent.click(screen.getByRole("button", { name: /review exact enrollment plan/i }));
+
+    const plan = await screen.findByRole("region", { name: "Agent enrollment plan" });
+    expect(plan).toHaveTextContent(/renewal is unavailable/i);
+    expect(plan).toHaveTextContent(/enable the verified-mtls renewal listener/i);
+    expect(screen.queryByRole("button", { name: /mint one-time token/i })).not.toBeInTheDocument();
+    expect(apiMock.createEnrollmentToken).not.toHaveBeenCalled();
   });
 
   it("invalidates the enrollment plan when identity or role changes", async () => {

@@ -555,6 +555,20 @@ export function Agents() {
                   <dt className="font-medium text-muted-foreground">{t("agents.enrollment.permissions")}</dt>
                   <dd className="break-words font-mono text-xs">{currentEnrollmentPlan.required_permissions.join(", ")}</dd>
                 </div>
+                <div>
+                  <dt className="font-medium text-muted-foreground">{t("agents.enrollment.renewalStatus")}</dt>
+                  <dd className={currentEnrollmentPlan.renewal_ready ? "text-status-success" : "text-status-warning"}>
+                    {currentEnrollmentPlan.renewal_ready ? t("agents.enrollment.renewalReady") : t("agents.enrollment.renewalUnavailable")}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-muted-foreground">{t("agents.enrollment.renewalPath")}</dt>
+                  <dd className="break-words font-mono text-xs">{currentEnrollmentPlan.renewal_path}</dd>
+                </div>
+                <div className="sm:col-span-2">
+                  <dt className="font-medium text-muted-foreground">{t("agents.enrollment.renewalAuthentication")}</dt>
+                  <dd>{currentEnrollmentPlan.renewal_authentication}</dd>
+                </div>
               </dl>
               <p className="text-muted-foreground">{currentEnrollmentPlan.data_handling}</p>
               <p className="font-medium text-status-success">{t("agents.enrollment.noEffects")}</p>
@@ -568,6 +582,10 @@ export function Agents() {
                   </ul>
                 </div>
               )}
+              <div className="border-t border-border pt-3">
+                <p className="font-medium">{t("agents.enrollment.recoveryHeading")}</p>
+                <p className="mt-1 text-muted-foreground">{t("agents.enrollment.recoveryBody")}</p>
+              </div>
             </section>
           )}
           {token && (

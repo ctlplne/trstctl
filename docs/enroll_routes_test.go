@@ -49,6 +49,7 @@ func TestACMEDeviceAttestationDocumentationMatchesServedProfileSeam(t *testing.T
 func TestEnrollRenewalDocumentedAsServed(t *testing.T) {
 	const apiSrc = "../internal/api/api.go"
 	api := read(t, apiSrc)
+	agents := read(t, "../internal/api/agents.go")
 	enroll := read(t, "../internal/api/enroll.go")
 	server := read(t, "../internal/server/server.go")
 	agentHTTPRenewal := read(t, "../internal/server/agenthttprenewal.go")
@@ -89,10 +90,26 @@ func TestEnrollRenewalDocumentedAsServed(t *testing.T) {
 		"dedicated agent-ca mtls https listener",
 		"agent_channel.http_renewal_addr",
 		"verified client certificate",
+		"review exact enrollment plan",
+		"effect-free",
+		"refuses this mutation too",
+		"lost, expired, or already-used token cannot be recovered",
+		"agents enroll-token-preview",
 		"served",
 	} {
 		if !strings.Contains(low, want) {
 			t.Errorf("enrollment-protocols.md must document served embedded enrollment renewal (missing %q)", want)
+		}
+	}
+	for _, want := range []string{
+		"agentEnrollmentBlockers",
+		"agentRenewalReady",
+		"renewal_ready",
+		"renewal_path",
+		"renewal_authentication",
+	} {
+		if !strings.Contains(agents, want) {
+			t.Errorf("the F54 shared preview/mutation renewal oracle no longer contains %q", want)
 		}
 	}
 }

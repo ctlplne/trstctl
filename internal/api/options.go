@@ -100,6 +100,16 @@ func WithAgentEnrollmentConnection(server, serverName string) Option {
 	}
 }
 
+// WithAgentEnrollmentRenewal publishes whether this exact running process has
+// attached the dedicated agent-CA mTLS renewal listener. A configured public
+// dial address alone is not lifecycle readiness: minting a first certificate
+// without a trusted rotation path would strand an agent when that certificate
+// expires. The server passes true only after the agent CA is available behind
+// the isolated signer and startup has selected the renewal surface.
+func WithAgentEnrollmentRenewal(ready bool) Option {
+	return func(c *config) { c.agentRenewalReady = ready }
+}
+
 // WithAgentHeartbeatInterval gives the REST read model the same next-beat
 // interval used by the served agent channel and fleet-health alert. Agent
 // presence is derived on the server from two missed intervals; the browser must

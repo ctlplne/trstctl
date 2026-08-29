@@ -11458,6 +11458,15 @@
           "ready": {
             "type": "boolean"
           },
+          "renewal_authentication": {
+            "type": "string"
+          },
+          "renewal_path": {
+            "type": "string"
+          },
+          "renewal_ready": {
+            "type": "boolean"
+          },
           "required_permissions": {
             "items": {
               "type": "string"
@@ -11486,6 +11495,9 @@
           "enroll_path",
           "agent_server",
           "agent_server_name",
+          "renewal_ready",
+          "renewal_path",
+          "renewal_authentication",
           "data_handling",
           "blocked_reasons"
         ],

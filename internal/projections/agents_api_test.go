@@ -59,6 +59,7 @@ func newAgentsAPI(t *testing.T, issuer api.BootstrapTokenIssuer) (*httptest.Serv
 		orchestrator.NewOrchestrator(log, s, orchestrator.NewOutbox(s)),
 		api.WithAgentEnrollment(issuer),
 		api.WithAgentEnrollmentConnection("agents.example.test:9443", "agents.example.test"),
+		api.WithAgentEnrollmentRenewal(true),
 	)
 	srv := httptest.NewServer(a)
 	t.Cleanup(srv.Close)
@@ -213,6 +214,12 @@ func TestPreviewEnrollmentPlanIsEffectFree(t *testing.T) {
 	if body["ready"] != true || body["side_effects"] != false {
 		t.Fatalf("preview readiness/effects = %v/%v, want true/false", body["ready"], body["side_effects"])
 	}
+	if body["renewal_ready"] != true || body["renewal_path"] != "/enroll/renewal" {
+		t.Fatalf("preview renewal lifecycle = %v / %v, want ready /enroll/renewal", body["renewal_ready"], body["renewal_path"])
+	}
+	if auth, _ := body["renewal_authentication"].(string); !strings.Contains(auth, "verified") || !strings.Contains(auth, "mTLS") {
+		t.Fatalf("preview renewal authentication = %q, want verified mTLS client certificate", auth)
+	}
 	if body["allowed_identity"] != "edge-01" || body["agent_server"] != "agents.example.test:9443" || body["agent_server_name"] != "agents.example.test" {
 		t.Fatalf("preview exact identity/connection = %v", body)
 	}
@@ -230,6 +237,44 @@ func TestPreviewEnrollmentPlanIsEffectFree(t *testing.T) {
 	}
 	if handling, _ := body["data_handling"].(string); !strings.Contains(handling, "one-time token") || !strings.Contains(handling, "not") {
 		t.Fatalf("preview data boundary = %q, want explicit no-token boundary", handling)
+	}
+}
+
+// TestEnrollmentMintFailsClosedWithoutRenewalLifecycle is the F54 safety gate:
+// publishing an agent dial address is not enough. A newly enrolled machine would
+// eventually strand itself if the current-certificate mTLS renewal listener were
+// absent, so preview and execution must share the same server-owned blocker.
+func TestEnrollmentMintFailsClosedWithoutRenewalLifecycle(t *testing.T) {
+	issuer := &stubTokenIssuer{}
+	s := newStore(t)
+	log := openLog(t)
+	a := api.New(
+		s,
+		orchestrator.NewIdempotency(s),
+		orchestrator.NewOrchestrator(log, s, orchestrator.NewOutbox(s)),
+		api.WithAgentEnrollment(issuer),
+		api.WithAgentEnrollmentConnection("agents.example.test:9443", "agents.example.test"),
+	)
+	srv := httptest.NewServer(a)
+	t.Cleanup(srv.Close)
+	token := mintToken(t, s, "agents:write")
+
+	previewCode, preview := doJSONBody(t, srv, http.MethodPost, "/api/v1/agents/enrollment-tokens/preview", token, "",
+		map[string]any{"allowed_identity": "edge-no-renewal", "roles": []string{"host"}})
+	if previewCode != http.StatusOK || preview["ready"] != false || preview["renewal_ready"] != false {
+		t.Fatalf("preview without renewal = %d / %v, want 200 blocked lifecycle", previewCode, preview)
+	}
+	blocked, _ := preview["blocked_reasons"].([]any)
+	if len(blocked) == 0 || !strings.Contains(blocked[0].(string), "renew") {
+		t.Fatalf("preview blockers = %v, want exact renewal remedy", blocked)
+	}
+
+	code, body := doJSON(t, srv, http.MethodPost, "/api/v1/agents/enrollment-tokens", token, "no-renewal-key")
+	if code != http.StatusServiceUnavailable {
+		t.Fatalf("mint without renewal lifecycle = %d / %v, want 503", code, body)
+	}
+	if issuer.calls != 0 {
+		t.Fatalf("blocked lifecycle minted %d tokens, want 0", issuer.calls)
 	}
 }
 

@@ -203,6 +203,29 @@ ever receiving the device's private key. The steady-state agent channel is also 
 when `agent_channel.enabled`, so larger agents can renew over mTLS gRPC while embedded
 clients use the HTTP renewal surface.
 
+#### Enroll one machine from the console
+
+Open **Workloads & Machines → Agents → Add agent**. The workflow is deliberately
+split into two steps:
+
+1. Choose the exact machine identity and certificate role, then select **Review exact
+   enrollment plan**. This preview is effect-free: it creates no token and contacts no
+   machine. It shows the public agent address, the TLS name the machine must verify,
+   `POST /enroll/renewal`, and that renewal requires the machine's current verified
+   certificate over mTLS.
+2. Select **Mint one-time token** only when the preview says the whole lifecycle is
+   ready. The server refuses this mutation too—not just the preview—if the public
+   address, TLS name, or verified-mTLS renewal listener is unavailable. The token is
+   shown once and is never saved in browser storage. The machine creates its private
+   key locally; trstctl receives only its CSR.
+
+If setup fails, dismiss the token, review the current plan again, and mint one
+replacement. A lost, expired, or already-used token cannot be recovered. If a machine
+that enrolled successfully is no longer trusted, revoke its current certificate or
+offboard it from **Agents** before enrolling a replacement. Headless operators use
+`trstctl agents enroll-token-preview` before `trstctl agents enroll-token`; the same
+server-owned blockers protect both console and direct API mutation.
+
 ### Intune / MDM enrollment (F56)
 
 When a mobile-device-management platform (Microsoft Intune, JAMF) pushes a SCEP

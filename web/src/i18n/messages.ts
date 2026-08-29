@@ -9987,6 +9987,26 @@ export const messages = {
   "agents.enrollment.connection": { defaultMessage: "Agent address", description: "Enrollment-preview public connection label." },
   "agents.enrollment.tlsName": { defaultMessage: "TLS name to verify", description: "Enrollment-preview TLS server-name label." },
   "agents.enrollment.permissions": { defaultMessage: "Permission needed to mint", description: "Enrollment-preview authority label." },
+  "agents.enrollment.renewalStatus": { defaultMessage: "Renewal safety", description: "Enrollment-preview current-certificate renewal status label." },
+  "agents.enrollment.renewalReady": {
+    defaultMessage: "Ready — renewal requires the current verified client certificate",
+    description: "Positive F54 renewal readiness statement.",
+  },
+  "agents.enrollment.renewalUnavailable": {
+    defaultMessage: "Renewal is unavailable — do not enroll this machine yet",
+    description: "Fail-closed F54 renewal readiness statement.",
+  },
+  "agents.enrollment.renewalPath": { defaultMessage: "Renewal path", description: "Dedicated embedded-agent HTTP renewal path label." },
+  "agents.enrollment.renewalAuthentication": {
+    defaultMessage: "Renewal authentication",
+    description: "Authentication boundary label for the embedded-agent renewal path.",
+  },
+  "agents.enrollment.recoveryHeading": { defaultMessage: "If enrollment fails", description: "Agent enrollment recovery heading." },
+  "agents.enrollment.recoveryBody": {
+    defaultMessage:
+      "A lost, expired, or already-used token cannot be recovered. Dismiss it, review the current plan, and mint one replacement. If an enrolled machine is no longer trusted, revoke its current certificate or offboard it from the fleet.",
+    description: "Exact safe recovery for one-time agent enrollment credentials.",
+  },
   "agents.enrollment.notConfigured": { defaultMessage: "Not configured", description: "Missing agent connection fallback." },
   "agents.enrollment.noEffects": {
     defaultMessage: "No token minted and no agent contacted.",

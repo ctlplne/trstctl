@@ -2858,6 +2858,9 @@ export interface EnrollmentPlanPreview {
   data_handling: string;
   enroll_path: string;
   ready: boolean;
+  renewal_authentication: string;
+  renewal_path: string;
+  renewal_ready: boolean;
   required_permissions: string[];
   roles: ("host" | "network")[];
   side_effects: boolean;
