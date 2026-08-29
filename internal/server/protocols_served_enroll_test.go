@@ -174,7 +174,7 @@ func TestServedMDMSCEPPolicyAndIntuneTelemetryTRACE004(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{
 		SCEP:                config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 		SCEPIntuneChallenge: intuneCfg,
-	}, withSecretsEnabled(t, nil))
+	}, withProtectedSecretsEnabled(t, nil))
 	registerServedTenant(t, h, "MDM SCEP telemetry tenant")
 	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write")
 

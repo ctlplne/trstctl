@@ -15,6 +15,11 @@ import (
 // policy does not exist.
 var ErrMDMSCEPPolicyNotFound = errors.New("store: mdm scep policy not found")
 
+// ErrMDMSCEPPolicyTenantCollision means a globally unique policy ID already
+// belongs to another tenant. Replaying the same tenant's immutable event is
+// safe; changing a foreign tenant's row is never allowed.
+var ErrMDMSCEPPolicyTenantCollision = errors.New("store: mdm scep policy id belongs to another tenant")
+
 // MDMSCEPPolicy is the tenant-owned read model for Intune/JAMF SCEP enrollment
 // policy guidance. It stores reference names and policy metadata, never raw
 // challenge values or provider credentials.
@@ -53,14 +58,24 @@ func (s *Store) ApplyMDMSCEPPolicyUpsertedTx(ctx context.Context, tx pgx.Tx, p M
 	if p.UpdatedAt.IsZero() {
 		p.UpdatedAt = p.CreatedAt
 	}
-	_, err := tx.Exec(ctx,
+	// The legacy table has a global id primary key plus a redundant
+	// (tenant_id, id) unique constraint. The request-time projector and durable
+	// event-tail projector may race on the same immutable event. Serialize this
+	// policy ID, then use the actual primary key as the conflict arbiter. The
+	// tenant predicate makes a cross-tenant UUID collision fail closed.
+	if _, err := tx.Exec(ctx,
+		`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+		"mdm-scep-policy:"+p.ID); err != nil {
+		return err
+	}
+	tag, err := tx.Exec(ctx,
 		`INSERT INTO mdm_scep_policies
 		    (id, tenant_id, name, provider, scep_profile, scep_endpoint, expected_audience,
 		     challenge_mode, trust_anchor_refs, profile_guidance, enabled, rotation_version,
 		     created_at, updated_at)
 		 VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb,
 		         $11, $12, $13, $14)
-		 ON CONFLICT (tenant_id, id) DO UPDATE SET
+		 ON CONFLICT (id) DO UPDATE SET
 		     name = EXCLUDED.name,
 		     provider = EXCLUDED.provider,
 		     scep_profile = EXCLUDED.scep_profile,
@@ -72,11 +87,18 @@ func (s *Store) ApplyMDMSCEPPolicyUpsertedTx(ctx context.Context, tx pgx.Tx, p M
 		     enabled = EXCLUDED.enabled,
 		     rotation_version = GREATEST(mdm_scep_policies.rotation_version, EXCLUDED.rotation_version),
 		     created_at = mdm_scep_policies.created_at,
-		     updated_at = EXCLUDED.updated_at`,
+		     updated_at = EXCLUDED.updated_at
+		 WHERE mdm_scep_policies.tenant_id = EXCLUDED.tenant_id`,
 		p.ID, p.TenantID, p.Name, p.Provider, p.SCEPProfile, p.SCEPEndpoint, p.ExpectedAudience,
 		p.ChallengeMode, p.TrustAnchorRefs, p.ProfileGuidance, p.Enabled, p.RotationVersion,
 		p.CreatedAt, p.UpdatedAt)
-	return err
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrMDMSCEPPolicyTenantCollision
+	}
+	return nil
 }
 
 // ApplyMDMSCEPPolicyDeletedTx projects an mdm.scep_policy.deleted event.
