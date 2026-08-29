@@ -2261,7 +2261,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use cname delegation for validation isolation while tenant, policy, and security authority remain on the server.",
       "tool": "certificates",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/protocols",
       "navigationEntrypoints": [
         "tool navigation",
@@ -2275,7 +2275,7 @@ export const canonicalCapabilities = [
       ],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -2303,8 +2303,13 @@ export const canonicalCapabilities = [
           ]
         },
         "execute": {
-          "status": "missing",
-          "reason": "No complete console execution path is proved for this capability."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/protocols/DNS01DelegationIsolationPanel.tsx",
+            "web/src/pages/protocols/DNS01QualificationDialog.tsx",
+            "internal/server/protocols_served_test.go",
+            "OpenAPI operationId: runACMEDNS01Qualification"
+          ]
         },
         "observe": {
           "status": "complete",
@@ -2313,8 +2318,14 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/protocols/DNS01DelegationIsolationPanel.tsx",
+            "web/src/pages/protocols/DNS01QualificationDialog.tsx",
+            "web/src/__tests__/protocols.test.tsx",
+            "internal/server/protocols_served_test.go",
+            "OpenAPI operationId: retryACMEDNS01QualificationCleanup"
+          ]
         },
         "verify": {
           "status": "complete",
@@ -2332,8 +2343,8 @@ export const canonicalCapabilities = [
       },
       "owner": "pki",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "49f1859a769590e5191818a05bc1472ac6ad3ffc",
+      "freshness": "2026-08-29"
     }
   },
   {

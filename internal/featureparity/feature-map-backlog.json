@@ -6393,8 +6393,8 @@
             "priority": 57,
             "served_state": "conditional",
             "backend_status": "conditional: served CNAME delegation helpers, provider-config delegation_target, DNS-01 preflight checks, and ACME order-time delegated publish/cleanup through the outbox with fail-closed CNAME verification",
-            "current_frontend_mapping": "Protocols at /protocols - served DNS-01 provider configs expose delegation target and preflight status inputs",
-            "target_gui_mapping": "Validation delegation UI with CNAME target suggestions, isolation status, preflight checks, and per-domain policy.",
+            "current_frontend_mapping": "Protocols at /protocols - provider configs expose delegation policy, the effect-free provider-test review draws the exact production challenge name to required CNAME to isolated write-target flow, and the real run distinguishes configured, unproved, failed, recovered, and live-proved isolation",
+            "target_gui_mapping": "Delivered: validation delegation UI with an exact per-domain CNAME instruction, isolation status, preflight checks, production-versus-validation-zone boundaries, real execution, durable history, and recovery.",
             "acceptance_test": "UI explains production DNS isolation and tests passing/failing delegation fixtures.",
             "source_docs": [
                 "docs/features/acme-and-dns.md"
@@ -6408,7 +6408,7 @@
                 "web/src/pages/Protocols.tsx"
             ],
             "status": "closed",
-            "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+            "notes": "TRACE-014 plus F71 qualification closure: the served order-time worker and real provider-test path both resolve the production _acme-challenge CNAME, require the exact configured validation target, fail before any provider write on absence/mismatch, then publish and clean only at the isolated target. The console makes that boundary visible as an exact per-domain three-step flow, keeps configured distinct from live-proved, shows direct-production-write configurations as caution, preserves durable history, and reuses bounded cleanup recovery. Test evidence: TestServedACMEDNS01OrderPublishesDelegatedCNAMEThroughOutboxTRACE014, the delegated passing/failing Protocols qualification test, feature facet coverage, route parity, and i18n/design-system guards.",
             "api_surface": [
                 "preflightACMEDNS01"
             ],
@@ -6440,10 +6440,13 @@
                 "ui": {
                     "evidence": [
                         "current_frontend_mapping: Protocols at /protocols - served DNS-01 provider configs expose delegation target and preflight status inputs",
-                        "Protocols at /protocols renders tenant DNS-01 provider configs with provider, zone/delegation target, CAA issuer, method policy, wildcard policy, and secret-reference field names only."
+                        "Protocols at /protocols renders tenant DNS-01 provider configs with provider, zone/delegation target, CAA issuer, method policy, wildcard policy, and secret-reference field names only.",
+                        "DNS01DelegationIsolationPanel draws the exact production challenge name, required CNAME, and isolated provider write target, gives the per-domain record to create, warns on direct production writes, and moves from pending or failed to proved only after the real served qualification succeeds."
                     ],
                     "refs": [
                         "web/src/pages/Protocols.tsx",
+                        "web/src/pages/protocols/DNS01DelegationIsolationPanel.tsx",
+                        "web/src/pages/protocols/DNS01QualificationDialog.tsx",
                         "web/src/__tests__/protocols.test.tsx"
                     ]
                 },
@@ -6471,6 +6474,7 @@
                         "acceptance_test: UI explains production DNS isolation and tests passing/failing delegation fixtures.",
                         "TestServedACMEDNS01ProviderConfigAndPreflightTRACE003 drives the assembled handler through provider-config create/list, inline-secret rejection, DNS-01 preflight, and ACME DNS-01 audit-event assertions.",
                         "TestServedACMEDNS01OrderPublishesDelegatedCNAMEThroughOutboxTRACE014 proves delegated order-time DNS-01 publish/cleanup writes only to the configured CNAME target and fails closed for a non-delegated production name.",
+                        "The Protocols qualification test proves configured/pending, missing-or-mismatched failure, exact repair guidance, and live-proved isolation states without exposing provider secrets.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
                         "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
                     ],
@@ -6546,12 +6550,12 @@
                 }
             },
             "ga_served_scope": "out_of_ga",
-            "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator.",
+            "ga_scope_reason": "Residual GA breadth remains conditional on authoritative DNS and a configured provider; broader public-provider integrations remain outside the GA denominator.",
             "contract": {
                 "purpose": "Lets an operator understand and safely use cname delegation for validation isolation while tenant, policy, and security authority remain on the server.",
                 "tool": "certificates",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/protocols",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -6565,7 +6569,7 @@
                 ],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -6593,8 +6597,13 @@
                         ]
                     },
                     "execute": {
-                        "status": "missing",
-                        "reason": "No complete console execution path is proved for this capability."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/protocols/DNS01DelegationIsolationPanel.tsx",
+                            "web/src/pages/protocols/DNS01QualificationDialog.tsx",
+                            "internal/server/protocols_served_test.go",
+                            "OpenAPI operationId: runACMEDNS01Qualification"
+                        ]
                     },
                     "observe": {
                         "status": "complete",
@@ -6603,8 +6612,14 @@
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/protocols/DNS01DelegationIsolationPanel.tsx",
+                            "web/src/pages/protocols/DNS01QualificationDialog.tsx",
+                            "web/src/__tests__/protocols.test.tsx",
+                            "internal/server/protocols_served_test.go",
+                            "OpenAPI operationId: retryACMEDNS01QualificationCleanup"
+                        ]
                     },
                     "verify": {
                         "status": "complete",
@@ -6622,8 +6637,8 @@
                 },
                 "owner": "pki",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "49f1859a769590e5191818a05bc1472ac6ad3ffc",
+                "freshness": "2026-08-29"
             }
         },
         {
