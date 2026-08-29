@@ -205,8 +205,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// existing cryptographic-observability row.
 	// F24's effect-free SPIFFE Workload API qualification raises it to 399.
 	// F25's exact, effect-free JIT credential preview raises it to 400.
-	if len(out) != 400 {
-		t.Fatalf("OpenAPI operationIds = %d, want 400", len(out))
+	// F43's exact, effect-free SSH host/user certificate preview and idempotent
+	// issue route raise it to 402.
+	if len(out) != 402 {
+		t.Fatalf("OpenAPI operationIds = %d, want 402", len(out))
 	}
 	return out
 }

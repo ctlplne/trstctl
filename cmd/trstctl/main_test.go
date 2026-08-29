@@ -225,6 +225,11 @@ func TestSSHCLIUsesServedJourneyAPI(t *testing.T) {
 			_, _ = io.WriteString(w, `{"served":true,"krl_version":0,"revoked_count":0}`)
 		case "/api/v1/ssh/fleet":
 			_, _ = io.WriteString(w, `{"hosts":[],"host_count":0,"key_count":0,"standing_key_count":0,"orphaned_key_count":0,"hosts_not_under_ca":0}`)
+		case "/api/v1/ssh/certificates/preview":
+			_, _ = io.WriteString(w, `{"ready":true,"effect_free":true,"certificate_type":"host","key_id":"edge-1"}`)
+		case "/api/v1/ssh/certificates":
+			w.WriteHeader(http.StatusCreated)
+			_, _ = io.WriteString(w, `{"certificate":"ssh-cert","certificate_type":"host","serial":8,"key_id":"edge-1"}`)
 		case "/api/v1/ssh/attested-user-certs":
 			_, _ = io.WriteString(w, `{"certificate":"ssh-cert","serial":7,"key_id":"kid","subject":"sa"}`)
 		case "/api/v1/ssh/certificates/revoke":
@@ -249,6 +254,12 @@ func TestSSHCLIUsesServedJourneyAPI(t *testing.T) {
 	if err := run(context.Background(), []string{"ssh", "fleet"}, env, &stdout, &stderr); err != nil {
 		t.Fatalf("ssh fleet: %v", err)
 	}
+	if err := run(context.Background(), []string{"ssh", "preview", "--type", "host", "--public-key", "ssh-ed25519 AAAA", "--key-id", "edge-1", "--principals", "edge-1.internal", "--ttl-seconds", "3600"}, env, &stdout, &stderr); err != nil {
+		t.Fatalf("ssh preview: %v", err)
+	}
+	if err := run(context.Background(), []string{"ssh", "issue", "--type", "host", "--public-key", "ssh-ed25519 AAAA", "--key-id", "edge-1", "--principals", "edge-1.internal", "--ttl-seconds", "3600"}, env, &stdout, &stderr); err != nil {
+		t.Fatalf("ssh issue: %v", err)
+	}
 	if err := run(context.Background(), []string{"ssh", "issue-attested-user", "--method", "k8s_sat", "--payload-base64", "cHJvb2Y=", "--public-key", "ssh-ed25519 AAAA", "--key-id", "kid", "--ttl-seconds", "600"}, env, &stdout, &stderr); err != nil {
 		t.Fatalf("ssh issue-attested-user: %v", err)
 	}
@@ -258,15 +269,15 @@ func TestSSHCLIUsesServedJourneyAPI(t *testing.T) {
 	if err := run(context.Background(), []string{"ssh", "retire-host", "--host", "edge-1", "--source", "source-1", "--run", "run-1", "--reason", "replaced"}, env, &stdout, &stderr); err != nil {
 		t.Fatalf("ssh retire-host: %v", err)
 	}
-	if len(seen) != 5 {
-		t.Fatalf("requests = %+v, want status, fleet, issue, revoke, retire", seen)
+	if len(seen) != 7 {
+		t.Fatalf("requests = %+v, want status, fleet, preview, direct issue, attested issue, revoke, retire", seen)
 	}
-	for _, got := range seen[:2] {
+	for _, got := range []requestSeen{seen[0], seen[1], seen[2]} {
 		if got.Idem != "" {
 			t.Fatalf("SSH read sent idempotency key: %+v", got)
 		}
 	}
-	for _, got := range seen[2:] {
+	for _, got := range seen[3:] {
 		if got.Auth != "Bearer tok" || got.Tenant != "11111111-1111-1111-1111-111111111111" || got.Idem == "" {
 			t.Fatalf("bad auth/tenant/idempotency headers: %+v", got)
 		}
@@ -274,14 +285,20 @@ func TestSSHCLIUsesServedJourneyAPI(t *testing.T) {
 	if seen[1].Path != "/api/v1/ssh/fleet" {
 		t.Fatalf("bad fleet request: %+v", seen[1])
 	}
-	if seen[2].Payload["method"] != "k8s_sat" || seen[2].Payload["payload_base64"] != "cHJvb2Y=" {
-		t.Fatalf("bad issue request: %+v", seen[2])
+	if seen[2].Path != "/api/v1/ssh/certificates/preview" || seen[2].Payload["certificate_type"] != "host" {
+		t.Fatalf("bad preview request: %+v", seen[2])
 	}
-	if seen[3].Payload["serial"].(float64) != 7 {
-		t.Fatalf("bad revoke request: %+v", seen[3])
+	if seen[3].Path != "/api/v1/ssh/certificates" || seen[3].Payload["key_id"] != "edge-1" {
+		t.Fatalf("bad direct issue request: %+v", seen[3])
 	}
-	if seen[4].Payload["host"] != "edge-1" || seen[4].Payload["run_id"] != "run-1" {
-		t.Fatalf("bad retire request: %+v", seen[4])
+	if seen[4].Payload["method"] != "k8s_sat" || seen[4].Payload["payload_base64"] != "cHJvb2Y=" {
+		t.Fatalf("bad attested issue request: %+v", seen[4])
+	}
+	if seen[5].Payload["serial"].(float64) != 7 {
+		t.Fatalf("bad revoke request: %+v", seen[5])
+	}
+	if seen[6].Payload["host"] != "edge-1" || seen[6].Payload["run_id"] != "run-1" {
+		t.Fatalf("bad retire request: %+v", seen[6])
 	}
 }
 

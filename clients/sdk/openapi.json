@@ -23858,6 +23858,255 @@
         ],
         "type": "object"
       },
+      "SSHCertificate": {
+        "properties": {
+          "authority_fingerprint": {
+            "type": "string"
+          },
+          "certificate": {
+            "type": "string"
+          },
+          "certificate_type": {
+            "enum": [
+              "host",
+              "user"
+            ],
+            "type": "string"
+          },
+          "critical_options": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "extensions": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "key_id": {
+            "type": "string"
+          },
+          "krl_version": {
+            "type": "integer"
+          },
+          "principals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "serial": {
+            "type": "integer"
+          },
+          "valid_before": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "certificate",
+          "certificate_type",
+          "serial",
+          "key_id",
+          "principals",
+          "valid_before",
+          "critical_options",
+          "extensions",
+          "authority_fingerprint",
+          "krl_version"
+        ],
+        "type": "object"
+      },
+      "SSHCertificatePreview": {
+        "properties": {
+          "authority_fingerprint": {
+            "type": "string"
+          },
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "certificate_type": {
+            "enum": [
+              "host",
+              "user"
+            ],
+            "type": "string"
+          },
+          "critical_options": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "effective_ttl_seconds": {
+            "type": "integer"
+          },
+          "extensions": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "issuance_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "issuance_signer_calls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "issuance_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "key_id": {
+            "type": "string"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_signer_calls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "principals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "public_key_fingerprint": {
+            "type": "string"
+          },
+          "public_key_type": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "recovery_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "requested_ttl_seconds": {
+            "type": "integer"
+          },
+          "secret_data_handling": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ttl_clamped": {
+            "type": "boolean"
+          },
+          "ttl_defaulted": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "capability",
+          "ready",
+          "effect_free",
+          "certificate_type",
+          "key_id",
+          "principals",
+          "requested_ttl_seconds",
+          "effective_ttl_seconds",
+          "ttl_defaulted",
+          "ttl_clamped",
+          "public_key_type",
+          "public_key_fingerprint",
+          "authority_fingerprint",
+          "critical_options",
+          "extensions",
+          "preview_writes",
+          "preview_external_effects",
+          "preview_signer_calls",
+          "issuance_writes",
+          "issuance_external_effects",
+          "issuance_signer_calls",
+          "blockers",
+          "recovery_steps",
+          "secret_data_handling"
+        ],
+        "type": "object"
+      },
+      "SSHCertificateRequest": {
+        "properties": {
+          "certificate_type": {
+            "enum": [
+              "host",
+              "user"
+            ],
+            "type": "string"
+          },
+          "critical_options": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "extensions": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "key_id": {
+            "type": "string"
+          },
+          "principals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "public_key": {
+            "type": "string"
+          },
+          "ttl_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "certificate_type",
+          "public_key",
+          "key_id",
+          "principals"
+        ],
+        "type": "object"
+      },
       "SSHFleetHost": {
         "properties": {
           "first_observed": {
@@ -51216,6 +51465,131 @@
           }
         ],
         "summary": "Issue an attestation-gated SSH user certificate",
+        "x-trstctl-permission": "certs:issue"
+      }
+    },
+    "/api/v1/ssh/certificates": {
+      "post": {
+        "operationId": "issueSSHCertificate",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SSHCertificateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SSHCertificate"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Issue a reviewed SSH host or user certificate through the isolated signer",
+        "x-trstctl-permission": "certs:issue"
+      }
+    },
+    "/api/v1/ssh/certificates/preview": {
+      "post": {
+        "operationId": "previewSSHCertificate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SSHCertificateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SSHCertificatePreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Review an exact SSH host or user certificate request without writes, network calls, or signer calls",
         "x-trstctl-permission": "certs:issue"
       }
     },

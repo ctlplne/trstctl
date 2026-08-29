@@ -123,7 +123,33 @@ mutation stays in the operator-confirmed agent path.
      --confirm
    ```
 
-4. Issue a short-lived user certificate tied to a verified identity, not handed to
+4. Review and issue a direct host certificate when provisioning a server. Preview is
+   mandatory in the console and available separately in the CLI so automation can prove
+   the exact lifetime, hostnames, public-key fingerprint, signer call, and revocation
+   path before making a change. Preview allocates no serial and makes no signer call.
+
+   ```sh
+   trstctl ssh preview \
+     --type host \
+     --public-key "$(cat /etc/ssh/ssh_host_ed25519_key.pub)" \
+     --key-id edge-1.internal \
+     --principals edge-1.internal,edge-1 \
+     --ttl-seconds 86400
+
+   trstctl ssh issue \
+     --type host \
+     --public-key "$(cat /etc/ssh/ssh_host_ed25519_key.pub)" \
+     --key-id edge-1.internal \
+     --principals edge-1.internal,edge-1 \
+     --ttl-seconds 86400
+   ```
+
+   -> the private host key never leaves the server; only its public `.pub` line enters
+   trstctl. The CLI supplies an idempotency key, so retrying the same issuance cannot
+   mint a second certificate. Use the direct user type only for an already-authorized
+   provisioning workflow; use the attested path below for just-in-time access.
+
+5. Issue a short-lived user certificate tied to a verified identity, not handed to
    anyone who asks. The attested issuer runs an attestation check first and only then
    derives the certificate's principals from the verified result, defaulting to a short
    TTL. Every issuance is an immutable `ssh.attested_cert.issued` event. See [SSH](../features/ssh.md).
@@ -144,7 +170,7 @@ mutation stays in the operator-confirmed agent path.
    trstctl. The attestation-gated issuer is served through the SSH workflow
    API, CLI, and UI.
 
-5. Pull a certificate back before it expires. Revoking it puts its serial on the SSH
+6. Pull a certificate back before it expires. Revoking it puts its serial on the SSH
    CA's key-revocation list, served in OpenSSH binary format at `/ssh/krl`, which a
    host's `sshd` consumes via its `RevokedKeys` directive. See [SSH](../features/ssh.md).
 

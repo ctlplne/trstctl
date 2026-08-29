@@ -5,6 +5,7 @@ package store_test
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -20,7 +21,8 @@ import (
 // concurrent INSERTs that also collide on the primary key.
 func TestDiscoverySourceProjectionConcurrentReplayUsesPrimaryKeyArbiter(t *testing.T) {
 	st := newStore(t)
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	t.Cleanup(cancel)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	source := store.DiscoverySource{
 		ID: "51515151-0000-4000-8000-000000000001", TenantID: tenantA,
@@ -31,6 +33,12 @@ func TestDiscoverySourceProjectionConcurrentReplayUsesPrimaryKeyArbiter(t *testi
 
 	firstProjected := make(chan struct{})
 	releaseFirst := make(chan struct{})
+	var releaseOnce sync.Once
+	release := func() { releaseOnce.Do(func() { close(releaseFirst) }) }
+	// A failed observation must not strand the first transaction while newStore's
+	// cleanup waits for the pool to close. Register this after newStore so LIFO
+	// cleanup releases the transaction before the pool is closed.
+	t.Cleanup(release)
 	firstErr := make(chan error, 1)
 	go func() {
 		firstErr <- st.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
@@ -38,11 +46,21 @@ func TestDiscoverySourceProjectionConcurrentReplayUsesPrimaryKeyArbiter(t *testi
 				return err
 			}
 			close(firstProjected)
-			<-releaseFirst
-			return nil
+			select {
+			case <-releaseFirst:
+				return nil
+			case <-ctx.Done():
+				return context.Cause(ctx)
+			}
 		})
 	}()
-	<-firstProjected
+	select {
+	case <-firstProjected:
+	case err := <-firstErr:
+		t.Fatalf("first projection before lock setup: %v", err)
+	case <-ctx.Done():
+		t.Fatalf("first projection setup: %v", context.Cause(ctx))
+	}
 
 	secondErr := make(chan error, 1)
 	go func() {
@@ -54,8 +72,13 @@ func TestDiscoverySourceProjectionConcurrentReplayUsesPrimaryKeyArbiter(t *testi
 	// Do not release the first transaction until PostgreSQL confirms that the
 	// competing INSERT has reached the unique-index lock. This deterministically
 	// reproduces the production inline/tail interleaving without timing sleeps.
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(15 * time.Second)
 	for {
+		select {
+		case err := <-secondErr:
+			t.Fatalf("competing projection completed before reaching the unique-index lock: %v", err)
+		default:
+		}
 		var waiting bool
 		if err := st.SystemPool().QueryRow(ctx,
 			`SELECT EXISTS (
@@ -75,7 +98,7 @@ func TestDiscoverySourceProjectionConcurrentReplayUsesPrimaryKeyArbiter(t *testi
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
-	close(releaseFirst)
+	release()
 
 	if err := <-firstErr; err != nil {
 		t.Fatalf("first projection: %v", err)

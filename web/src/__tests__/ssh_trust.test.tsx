@@ -10,6 +10,8 @@ const { apiMock } = vi.hoisted(() => ({
     sshStatus: vi.fn(),
     sshFleet: vi.fn(),
     recordSSHTrustRollout: vi.fn(),
+    previewSSHCertificate: vi.fn(),
+    issueSSHCertificate: vi.fn(),
     issueAttestedSSHUserCert: vi.fn(),
     revokeSSHCertificate: vi.fn(),
     retireSSHHost: vi.fn(),
@@ -72,6 +74,43 @@ describe("SSH trust served workflow surface", () => {
       status: "planned",
       confirmed: true,
       recorded_at: "2026-06-27T10:00:00Z",
+    });
+    apiMock.previewSSHCertificate.mockResolvedValue({
+      ready: true,
+      effect_free: true,
+      certificate_type: "host",
+      key_id: "edge-1.internal",
+      principals: ["edge-1.internal"],
+      requested_ttl_seconds: 90000,
+      effective_ttl_seconds: 86400,
+      ttl_defaulted: false,
+      ttl_clamped: true,
+      public_key_type: "ssh-ed25519",
+      public_key_fingerprint: "SHA256:subject",
+      authority_fingerprint: "SHA256:authority",
+      critical_options: {},
+      extensions: {},
+      preview_writes: [],
+      preview_external_effects: [],
+      preview_signer_calls: [],
+      issuance_writes: ["append ssh.cert.issued audit event"],
+      issuance_external_effects: [],
+      issuance_signer_calls: ["sign one SSH host certificate"],
+      blockers: [],
+      recovery_steps: ["Revoke by serial or key ID, then distribute the new KRL."],
+      secret_data_handling: ["Only a public SSH key is accepted; trstctl never receives the private key."],
+    });
+    apiMock.issueSSHCertificate.mockResolvedValue({
+      certificate: "ssh-ed25519-cert-v01@openssh.com AAAAHOST",
+      certificate_type: "host",
+      serial: 43,
+      key_id: "edge-1.internal",
+      principals: ["edge-1.internal"],
+      valid_before: "2026-06-28T10:00:00Z",
+      critical_options: {},
+      extensions: {},
+      authority_fingerprint: "SHA256:authority",
+      krl_version: 7,
     });
     apiMock.issueAttestedSSHUserCert.mockResolvedValue({
       certificate: "ssh-rsa-cert-v01@openssh.com AAAA",
@@ -152,6 +191,98 @@ describe("SSH trust served workflow surface", () => {
 
     expect(await screen.findByText("No agent-reported SSH key locations yet.")).toBeInTheDocument();
     expect(screen.queryByRole("table", { name: "SSH standing access inventory" })).not.toBeInTheDocument();
+  });
+
+  it("previews the exact host-certificate plan before issuing and hides raw material by default", async () => {
+    const user = userEvent.setup();
+    renderSSHTrust();
+
+    const chooser = (await screen.findByRole("heading", { name: "Choose what you want to do" })).closest("section") as HTMLElement;
+    await user.click(within(chooser).getByRole("button", { name: "Issue host or user certificate" }));
+    await user.type(screen.getByLabelText("SSH public key"), "ssh-ed25519 AAAATEST edge-1");
+    await user.clear(screen.getByLabelText("Certificate name"));
+    await user.type(screen.getByLabelText("Certificate name"), "edge-1.internal");
+    await user.clear(screen.getByLabelText("Allowed hostnames or users"));
+    await user.type(screen.getByLabelText("Allowed hostnames or users"), "edge-1.internal");
+    await user.clear(screen.getByLabelText("Lifetime in seconds"));
+    await user.type(screen.getByLabelText("Lifetime in seconds"), "90000");
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+
+    await waitFor(() =>
+      expect(apiMock.previewSSHCertificate).toHaveBeenCalledWith({
+        certificate_type: "host",
+        public_key: "ssh-ed25519 AAAATEST edge-1",
+        key_id: "edge-1.internal",
+        principals: ["edge-1.internal"],
+        ttl_seconds: 90000,
+        critical_options: {},
+        extensions: {},
+      }),
+    );
+    expect(await screen.findByRole("heading", { name: "Ready to issue" })).toBeInTheDocument();
+    expect(screen.getByText("24 hours")).toBeInTheDocument();
+    expect(screen.getByText("A 25-hour request will be limited to 24 hours.")).toBeInTheDocument();
+    expect(screen.getByText("No writes, network calls, or signer calls happened during this preview.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Issue SSH host certificate" }));
+    await waitFor(() => expect(apiMock.issueSSHCertificate).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole("heading", { name: "Host certificate issued" })).toBeInTheDocument();
+    expect(screen.getByText("Serial 43")).toBeInTheDocument();
+    expect(screen.queryByLabelText("SSH public key")).not.toBeInTheDocument();
+    expect(screen.queryByText("ssh-ed25519-cert-v01@openssh.com AAAAHOST")).not.toBeInTheDocument();
+
+    const disclosure = screen.getByText("Show public certificate").closest("details") as HTMLDetailsElement;
+    expect(disclosure).not.toHaveAttribute("open");
+    await user.click(within(disclosure).getByText("Show public certificate"));
+    expect(screen.getByText("ssh-ed25519-cert-v01@openssh.com AAAAHOST")).toBeInTheDocument();
+  });
+
+  it("reveals user-only restrictions and sends them in the exact preview", async () => {
+    apiMock.previewSSHCertificate.mockResolvedValueOnce({
+      ready: true,
+      effect_free: true,
+      certificate_type: "user",
+      key_id: "edge-1.internal",
+      principals: ["edge-1.internal"],
+      requested_ttl_seconds: 3600,
+      effective_ttl_seconds: 3600,
+      ttl_defaulted: false,
+      ttl_clamped: false,
+      public_key_type: "ssh-ed25519",
+      public_key_fingerprint: "SHA256:subject",
+      authority_fingerprint: "SHA256:authority",
+      critical_options: { "source-address": "10.0.0.0/24", "force-command": "/usr/local/bin/deploy" },
+      extensions: { "permit-X11-forwarding": "" },
+      preview_writes: [],
+      preview_external_effects: [],
+      preview_signer_calls: [],
+      issuance_writes: ["append audit event"],
+      issuance_external_effects: [],
+      issuance_signer_calls: ["sign one SSH user certificate"],
+      blockers: [],
+      recovery_steps: ["Revoke and distribute KRL."],
+      secret_data_handling: ["Public key only."],
+    });
+    const user = userEvent.setup();
+    renderSSHTrust();
+    const chooser = (await screen.findByRole("heading", { name: "Choose what you want to do" })).closest("section") as HTMLElement;
+    await user.click(within(chooser).getByRole("button", { name: "Issue host or user certificate" }));
+    await user.selectOptions(screen.getByLabelText("Certificate type"), "user");
+    await user.type(screen.getByLabelText("SSH public key"), "ssh-ed25519 AAAAUSER deployer");
+    await user.type(screen.getByLabelText("Allowed source addresses"), "10.0.0.0/24");
+    await user.type(screen.getByLabelText("Forced command"), "/usr/local/bin/deploy");
+    await user.type(screen.getByLabelText("Extra user permissions"), "permit-X11-forwarding");
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+
+    await waitFor(() =>
+      expect(apiMock.previewSSHCertificate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          certificate_type: "user",
+          critical_options: { "source-address": "10.0.0.0/24", "force-command": "/usr/local/bin/deploy" },
+          extensions: { "permit-X11-forwarding": "" },
+        }),
+      ),
+    );
   });
 
   it("explains when the SSH workflow is not enabled", async () => {

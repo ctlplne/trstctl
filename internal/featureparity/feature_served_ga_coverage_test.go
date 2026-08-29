@@ -589,12 +589,11 @@ func TestTRACE026AIAgentBrokerRowSplitsServedGAFromRoadmapResidual(t *testing.T)
 	}
 }
 
-// TestTRACE027SSHCertificateAuthorityRemainsConditionalUntilEnabled locks
-// the remediation for TRACE-027. The served SSH CA protocol, API, CLI, and console
-// workflow belongs in the GA denominator; the richer dedicated host-certificate CA
-// console remains visible as a roadmap residual and must not be hidden inside a
-// conditional F43 row.
-func TestTRACE027SSHCertificateAuthorityRemainsConditionalUntilEnabled(t *testing.T) {
+// TestTRACE027SSHCertificateAuthorityIncludesTheDirectConsole locks the completed
+// F43 vertical slice. Runtime attachment remains conditional on protocols.ssh,
+// while the product contract now includes exact preview and direct host/user
+// issuance instead of parking that console as an unimplemented residual.
+func TestTRACE027SSHCertificateAuthorityIncludesTheDirectConsole(t *testing.T) {
 	catalog, err := Load()
 	if err != nil {
 		t.Fatalf("load feature parity catalog: %v", err)
@@ -625,6 +624,7 @@ func TestTRACE027SSHCertificateAuthorityRemainsConditionalUntilEnabled(t *testin
 	for _, wantRef := range []string{
 		"internal/server/protocols_served_spiffe_ssh_test.go",
 		"internal/server/ssh_journey_served_test.go",
+		"internal/server/ssh_certificate_workflow_served_test.go",
 		"internal/server/protect_correct102_guard_test.go",
 		"internal/api/openapi_golden_test.go",
 		"internal/cli/cli_test.go",
@@ -636,17 +636,20 @@ func TestTRACE027SSHCertificateAuthorityRemainsConditionalUntilEnabled(t *testin
 	}
 
 	testEvidence := strings.ToLower(strings.Join(f43.FacetEvidence.Test.Evidence, "\n"))
-	for _, want := range []string{"trace-027", "testservedsshendtoend", "testservedsshatscalejourneyjourney002endtoend", "openssh binary krl", "revocation"} {
+	for _, want := range []string{"testservedsshcertificatepreviewandissuef43", "effect-free preview", "direct host issuance", "idempotent replay"} {
 		if !strings.Contains(testEvidence, want) {
 			t.Errorf("TRACE-027: F43 test evidence must mention %q, got %q", want, testEvidence)
 		}
 	}
 
-	residual := strings.ToLower(strings.Join([]string{f43.TargetMapping, f43.AcceptanceTest}, "\n"))
-	for _, want := range []string{"roadmap residual", "host-certificate ca console"} {
-		if !strings.Contains(residual, want) {
-			t.Errorf("TRACE-027: F43 must explicitly park the richer host-certificate CA console as a roadmap residual; missing %q in %q", want, residual)
+	delivered := strings.ToLower(strings.Join([]string{f43.CurrentMapping, f43.TargetMapping, f43.AcceptanceTest}, "\n"))
+	for _, want := range []string{"delivered", "direct host", "previewsshcertificate", "issuesshcertificate"} {
+		if !strings.Contains(delivered, want) {
+			t.Errorf("TRACE-027: F43 direct certificate console evidence is incomplete; missing %q in %q", want, delivered)
 		}
+	}
+	if f43.Contract.ReleaseBlocking || f43.Contract.Maturity != "complete_vertical_slice" {
+		t.Errorf("TRACE-027: F43 contract = release_blocking=%t maturity=%q, want false/complete_vertical_slice", f43.Contract.ReleaseBlocking, f43.Contract.Maturity)
 	}
 }
 

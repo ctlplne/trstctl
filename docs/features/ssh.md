@@ -43,10 +43,21 @@ expires.
 
 The operator workflow is served two ways: OpenSSH-compatible protocol endpoints
 (`/ssh/ca`, `/ssh/issue/user`, `/ssh/issue/host`, `/ssh/krl`) and a guarded product API
-(`GET /api/v1/ssh/status`, `POST /api/v1/ssh/certificates/revoke`) used by the CLI and
-console, reporting the authority key, KRL version, revoked-certificate count, and
-configured attestors. Revocation appends an immutable `ssh.cert.revoked` event before
-publishing the updated KRL snapshot.
+used by the CLI and console. `POST /api/v1/ssh/certificates/preview` validates and
+normalizes an exact host or user request without allocating a serial, writing an event,
+changing the KRL, making a network call, or calling the signer. It shows the requested
+and effective TTL (default 1 hour, hard maximum 24 hours), deduplicated principals,
+public-key and authority fingerprints, applied options/extensions, the one future signer
+call, and the revocation path. `POST /api/v1/ssh/certificates` revalidates the same
+contract and issues exactly one certificate behind an `Idempotency-Key`; a stable retry
+returns the first result instead of signing again.
+
+The direct user-certificate path allowlists only `source-address` and `force-command`
+critical options plus known OpenSSH session extensions. Host certificates reject all
+critical options and extensions. Both paths accept one public key and never accept or
+return its private key. Status and revocation remain available at
+`GET /api/v1/ssh/status` and `POST /api/v1/ssh/certificates/revoke`; revocation appends
+an immutable `ssh.cert.revoked` event before publishing the updated KRL snapshot.
 
 ### SSH deployment & trust configuration (F44)
 
@@ -134,6 +145,18 @@ against the trusted CA without any stored key.
 
 ```sh
 trstctl ssh status
+trstctl ssh preview \
+  --type host \
+  --public-key "$(cat /etc/ssh/ssh_host_ed25519_key.pub)" \
+  --key-id edge-1.internal \
+  --principals edge-1.internal,edge-1 \
+  --ttl-seconds 86400
+trstctl ssh issue \
+  --type host \
+  --public-key "$(cat /etc/ssh/ssh_host_ed25519_key.pub)" \
+  --key-id edge-1.internal \
+  --principals edge-1.internal,edge-1 \
+  --ttl-seconds 86400
 trstctl ssh trust-rollout \
   --hosts edge-1.internal \
   --ca-fingerprint SHA256:... \
@@ -168,8 +191,9 @@ trstctl ssh retire-host --host edge-1.internal --reason 'replaced'
 - **Serving status:** the SSH CA is served by the running control plane
   (`protocols.ssh.enabled`, default off): cert issuance at `/ssh/...`, the OpenSSH binary
   KRL at `/ssh/krl` (`sshd`'s `RevokedKeys` consumes it), and workflow API/CLI coverage
-  for status, trust rollout evidence, attested user cert issue, KRL revocation, and host
-  retirement. The CA key stays in the isolated signing service, never the API process,
+  for effect-free direct issuance preview, idempotent host/user issuance, status, trust
+  rollout evidence, attested user cert issue, KRL revocation, and host retirement. The CA
+  key stays in the isolated signing service, never the API process,
   with every step recorded as an immutable event and tenant data isolated at the database
   layer. SSH host-key discovery is also served via `ssh` discovery sources on the outbox
   worker; privileged trust rewrites still need the explicit agent-safe rollout workflow —
@@ -183,9 +207,11 @@ trstctl ssh retire-host --host edge-1.internal --reason 'replaced'
 
 - **CA operations:** `IssueUserCert`, `IssueHostCert`, `AuthorityKey` (for
   `TrustedUserCAKeys` / `@cert-authority`), `KRL.RevokeSerial`, `KRL.Distribute`.
-- **Served API/CLI:** `GET /api/v1/ssh/status`, `POST /api/v1/ssh/trust-rollouts`,
-  `POST /api/v1/ssh/attested-user-certs`, `POST /api/v1/ssh/certificates/revoke`,
-  `POST /api/v1/ssh/hosts/retire`; `trstctl ssh status|trust-rollout|issue-attested-user|revoke|retire-host`.
+- **Served API/CLI:** `POST /api/v1/ssh/certificates/preview`,
+  `POST /api/v1/ssh/certificates`, `GET /api/v1/ssh/status`,
+  `POST /api/v1/ssh/trust-rollouts`, `POST /api/v1/ssh/attested-user-certs`,
+  `POST /api/v1/ssh/certificates/revoke`, `POST /api/v1/ssh/hosts/retire`;
+  `trstctl ssh preview|issue|status|trust-rollout|issue-attested-user|revoke|retire-host`.
 - **Agent config:** `SSHDConfigPath`, `TrustedUserCAKeysPath`,
   `AllowUnconfirmedRemoval` (default false).
 - **Attested issuance:** `AttestedUserCertIssuer.Issue` (method+payload → cert).

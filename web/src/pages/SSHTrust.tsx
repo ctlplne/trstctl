@@ -17,6 +17,7 @@ import {
   type SSHTrustRolloutRequest,
 } from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
+import { SSHCertificateWorkflow } from "@/pages/ssh/SSHCertificateWorkflow";
 
 const rolloutStatuses: SSHTrustRolloutRequest["status"][] = ["planned", "validating", "health_passed", "rolled_back", "failed"];
 
@@ -82,7 +83,7 @@ function numericOrUndefined(input: string): number | undefined {
 
 export function SSHTrust() {
   const { t } = useTranslation();
-  const [activeTask, setActiveTask] = useState<"rollout" | "access" | "remove" | null>(null);
+  const [activeTask, setActiveTask] = useState<"certificate" | "rollout" | "access" | "remove" | null>(null);
   const [status, setStatus] = useState<SSHStatus | null>(null);
   const [fleet, setFleet] = useState<SSHFleetInventory | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -249,8 +250,8 @@ export function SSHTrust() {
         technicalDetails={t("sshTrust.page.details")}
         actions={
           status ? (
-            <Button type="button" onClick={() => setActiveTask("rollout")}>
-              {t("sshTrust.page.rolloutAction")}
+            <Button type="button" onClick={() => setActiveTask("certificate")}>
+              {t("sshTrust.certificate.taskAction")}
             </Button>
           ) : (
             <Link className={buttonVariants()} to="/protocols">
@@ -372,6 +373,12 @@ export function SSHTrust() {
             onTaskChange={(task) => setActiveTask(task as typeof activeTask)}
             tasks={[
               {
+                id: "certificate",
+                title: t("sshTrust.certificate.taskTitle"),
+                description: t("sshTrust.certificate.taskDescription"),
+                actionLabel: t("sshTrust.certificate.taskAction"),
+              },
+              {
                 id: "rollout",
                 title: t("sshTrust.tasks.rollout.title"),
                 description: t("sshTrust.tasks.rollout.description"),
@@ -391,6 +398,12 @@ export function SSHTrust() {
               },
             ]}
           />
+
+          {activeTask === "certificate" && (
+            <div id="task-panel-certificate" className="border-y border-border py-4">
+              <SSHCertificateWorkflow />
+            </div>
+          )}
 
           {activeTask === "rollout" && (
             <section id="task-panel-rollout" aria-labelledby="rollout-heading" className="grid gap-3 border-y border-border py-4">

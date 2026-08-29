@@ -6,12 +6,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/netip"
 	"sort"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/attest"
+	"trstctl.com/trstctl/internal/crypto/sshkeys"
 	"trstctl.com/trstctl/internal/events"
 	sshca "trstctl.com/trstctl/internal/protocols/ssh"
 )
@@ -20,6 +24,8 @@ const (
 	eventSSHTrustRolloutRecorded = "ssh.trust_rollout.recorded"
 	eventSSHCertRevoked          = "ssh.cert.revoked"
 	eventSSHHostRetired          = "ssh.host.retired"
+	defaultSSHCertificateTTL     = time.Hour
+	maxSSHCertificateTTL         = 24 * time.Hour
 )
 
 func (s *Server) SSHStatus(ctx context.Context, tenantID string) (api.SSHStatus, error) {
@@ -96,6 +102,306 @@ func (s *Server) RecordSSHTrustRollout(ctx context.Context, tenantID, idempotenc
 	}
 	out.ID = ev.ID
 	return out, nil
+}
+
+type normalizedSSHCertificate struct {
+	certificateType      string
+	publicKey            []byte
+	keyID                string
+	principals           []string
+	requestedTTLSeconds  int64
+	effectiveTTL         time.Duration
+	ttlDefaulted         bool
+	ttlClamped           bool
+	publicKeyType        string
+	publicKeyFingerprint string
+	authorityFingerprint string
+	criticalOptions      map[string]string
+	extensions           map[string]string
+}
+
+func (s *Server) PreviewSSHCertificate(ctx context.Context, tenantID string, req api.SSHCertificateRequest) (api.SSHCertificatePreview, error) {
+	_ = ctx // Normalization is intentionally local and effect-free.
+	plan, _, err := s.normalizeSSHCertificate(tenantID, req)
+	if err != nil {
+		return api.SSHCertificatePreview{}, err
+	}
+	return api.SSHCertificatePreview{
+		Capability:              "F43",
+		Ready:                   true,
+		EffectFree:              true,
+		CertificateType:         plan.certificateType,
+		KeyID:                   plan.keyID,
+		Principals:              append([]string(nil), plan.principals...),
+		RequestedTTLSeconds:     plan.requestedTTLSeconds,
+		EffectiveTTLSeconds:     int64(plan.effectiveTTL / time.Second),
+		TTLDefaulted:            plan.ttlDefaulted,
+		TTLClamped:              plan.ttlClamped,
+		PublicKeyType:           plan.publicKeyType,
+		PublicKeyFingerprint:    plan.publicKeyFingerprint,
+		AuthorityFingerprint:    plan.authorityFingerprint,
+		CriticalOptions:         cloneSSHStringMap(plan.criticalOptions),
+		Extensions:              cloneSSHStringMap(plan.extensions),
+		PreviewWrites:           []string{},
+		PreviewExternalEffects:  []string{},
+		PreviewSignerCalls:      []string{},
+		IssuanceWrites:          []string{"append one tenant-scoped ssh.cert.issued audit event"},
+		IssuanceExternalEffects: []string{},
+		IssuanceSignerCalls:     []string{"sign one SSH " + plan.certificateType + " certificate in the isolated signer"},
+		Blockers:                []string{},
+		RecoverySteps: []string{
+			"Revoke the certificate by serial or key ID.",
+			"Distribute the new /ssh/krl artifact to hosts that trust this authority.",
+			"Remove the authority from host trust only through a confirmed rollout with a tested rollback path.",
+		},
+		SecretDataHandling: []string{
+			"Only the public SSH key is accepted; trstctl never receives the matching private key.",
+			"The certificate is public material and is hidden behind a disclosure in the web console.",
+		},
+	}, nil
+}
+
+func (s *Server) IssueSSHCertificate(ctx context.Context, tenantID, idempotencyKey string, req api.SSHCertificateRequest) (api.SSHCertificate, error) {
+	if strings.TrimSpace(idempotencyKey) == "" {
+		return api.SSHCertificate{}, fmt.Errorf("%w: idempotency key is required", api.ErrSSHWorkflowInvalid)
+	}
+	plan, sp, err := s.normalizeSSHCertificate(tenantID, req)
+	if err != nil {
+		return api.SSHCertificate{}, err
+	}
+	profile := sshca.Profile{
+		Name:           "served-ssh-product",
+		MaxTTL:         maxSSHCertificateTTL,
+		AllowUserCerts: plan.certificateType == "user",
+		AllowHostCerts: plan.certificateType == "host",
+	}
+	issueRequest := sshca.IssueRequest{
+		SubjectPublicKey: append([]byte(nil), plan.publicKey...),
+		KeyID:            plan.keyID,
+		Principals:       append([]string(nil), plan.principals...),
+		TTL:              plan.effectiveTTL,
+		CriticalOptions:  cloneSSHStringMap(plan.criticalOptions),
+		Extensions:       cloneSSHStringMap(plan.extensions),
+	}
+	var issued sshca.Issued
+	if plan.certificateType == "host" {
+		issued, err = sp.CA().IssueHostCert(ctx, profile, issueRequest)
+	} else {
+		issued, err = sp.CA().IssueUserCert(ctx, profile, issueRequest)
+	}
+	if err != nil {
+		return api.SSHCertificate{}, fmt.Errorf("%w: %v", api.ErrSSHWorkflowRejected, err)
+	}
+	return api.SSHCertificate{
+		Certificate:          string(issued.Certificate),
+		CertificateType:      plan.certificateType,
+		Serial:               issued.Serial,
+		KeyID:                issued.KeyID,
+		Principals:           append([]string(nil), plan.principals...),
+		ValidBefore:          issued.ValidBefore.UTC().Format(time.RFC3339),
+		CriticalOptions:      cloneSSHStringMap(plan.criticalOptions),
+		Extensions:           cloneSSHStringMap(plan.extensions),
+		AuthorityFingerprint: plan.authorityFingerprint,
+		KRLVersion:           sp.KRLVersion(),
+	}, nil
+}
+
+func (s *Server) normalizeSSHCertificate(tenantID string, req api.SSHCertificateRequest) (normalizedSSHCertificate, *sshProtocol, error) {
+	sp, err := s.sshWorkflowProtocol(tenantID)
+	if err != nil {
+		return normalizedSSHCertificate{}, nil, err
+	}
+	typ := strings.ToLower(strings.TrimSpace(req.CertificateType))
+	if typ != "host" && typ != "user" {
+		return normalizedSSHCertificate{}, nil, fmt.Errorf("%w: certificate_type must be host or user", api.ErrSSHWorkflowInvalid)
+	}
+	publicKey := []byte(strings.TrimSpace(req.PublicKey))
+	if len(publicKey) == 0 {
+		return normalizedSSHCertificate{}, nil, fmt.Errorf("%w: public_key is required", api.ErrSSHWorkflowInvalid)
+	}
+	if len(publicKey) > 32<<10 {
+		return normalizedSSHCertificate{}, nil, fmt.Errorf("%w: public_key is too large", api.ErrSSHWorkflowInvalid)
+	}
+	keyInfo, err := sshkeys.ParsePublicKey(publicKey)
+	if err != nil {
+		return normalizedSSHCertificate{}, nil, fmt.Errorf("%w: public_key must be one valid OpenSSH public key", api.ErrSSHWorkflowInvalid)
+	}
+	keyID := strings.TrimSpace(req.KeyID)
+	if keyID == "" || len(keyID) > 256 {
+		return normalizedSSHCertificate{}, nil, fmt.Errorf("%w: key_id is required and must be at most 256 characters", api.ErrSSHWorkflowInvalid)
+	}
+	if !utf8.ValidString(keyID) || strings.IndexFunc(keyID, unicode.IsControl) >= 0 {
+		return normalizedSSHCertificate{}, nil, fmt.Errorf("%w: key_id must not contain control characters", api.ErrSSHWorkflowInvalid)
+	}
+	for _, rawPrincipal := range req.Principals {
+		principal := strings.TrimSpace(rawPrincipal)
+		if principal != "" && (!utf8.ValidString(principal) || strings.IndexFunc(principal, unicode.IsControl) >= 0) {
+			return normalizedSSHCertificate{}, nil, fmt.Errorf("%w: principals must not contain control characters", api.ErrSSHWorkflowInvalid)
+		}
+	}
+	principals := stableUniqueSSHStrings(req.Principals)
+	if len(principals) == 0 {
+		return normalizedSSHCertificate{}, nil, fmt.Errorf("%w: at least one principal is required", api.ErrSSHWorkflowInvalid)
+	}
+	if len(principals) > 64 {
+		return normalizedSSHCertificate{}, nil, fmt.Errorf("%w: at most 64 principals are allowed", api.ErrSSHWorkflowInvalid)
+	}
+	for _, principal := range principals {
+		if len(principal) > 256 {
+			return normalizedSSHCertificate{}, nil, fmt.Errorf("%w: each principal must be at most 256 characters", api.ErrSSHWorkflowInvalid)
+		}
+	}
+
+	requestedTTL := req.TTLSeconds
+	effectiveTTLSeconds := requestedTTL
+	ttlDefaulted := requestedTTL <= 0
+	if ttlDefaulted {
+		effectiveTTLSeconds = int64(defaultSSHCertificateTTL / time.Second)
+	}
+	ttlClamped := effectiveTTLSeconds > int64(maxSSHCertificateTTL/time.Second)
+	if ttlClamped {
+		effectiveTTLSeconds = int64(maxSSHCertificateTTL / time.Second)
+	}
+	effectiveTTL := time.Duration(effectiveTTLSeconds) * time.Second
+
+	critical, err := normalizeSSHOptionMap(typ, "critical option", req.CriticalOptions, map[string]bool{
+		"force-command":  true,
+		"source-address": true,
+	})
+	if err != nil {
+		return normalizedSSHCertificate{}, nil, err
+	}
+	if typ == "host" && len(critical) > 0 {
+		return normalizedSSHCertificate{}, nil, fmt.Errorf("%w: host certificates do not allow critical options", api.ErrSSHWorkflowInvalid)
+	}
+	if sourceAddress, ok := critical["source-address"]; ok {
+		normalized, err := normalizeSSHSourceAddresses(sourceAddress)
+		if err != nil {
+			return normalizedSSHCertificate{}, nil, err
+		}
+		critical["source-address"] = normalized
+	}
+	if forceCommand, ok := critical["force-command"]; ok && forceCommand == "" {
+		return normalizedSSHCertificate{}, nil, fmt.Errorf("%w: force-command cannot be empty", api.ErrSSHWorkflowInvalid)
+	}
+	defaultExtensions := map[string]string{}
+	if typ == "user" {
+		defaultExtensions = map[string]string{
+			"permit-agent-forwarding": "",
+			"permit-port-forwarding":  "",
+			"permit-pty":              "",
+			"permit-user-rc":          "",
+		}
+	}
+	extensions, err := normalizeSSHOptionMap(typ, "extension", req.Extensions, map[string]bool{
+		"permit-agent-forwarding": true,
+		"permit-port-forwarding":  true,
+		"permit-pty":              true,
+		"permit-user-rc":          true,
+		"permit-X11-forwarding":   true,
+	})
+	if err != nil {
+		return normalizedSSHCertificate{}, nil, err
+	}
+	if typ == "host" && len(extensions) > 0 {
+		return normalizedSSHCertificate{}, nil, fmt.Errorf("%w: host certificates do not allow extensions", api.ErrSSHWorkflowInvalid)
+	}
+	for key, value := range extensions {
+		if value != "" {
+			return normalizedSSHCertificate{}, nil, fmt.Errorf("%w: SSH extension %q must have an empty value", api.ErrSSHWorkflowInvalid, key)
+		}
+		defaultExtensions[key] = value
+	}
+
+	authorityKey, err := sp.AuthorityKey()
+	if err != nil {
+		return normalizedSSHCertificate{}, nil, fmt.Errorf("%w: authority key unavailable: %v", api.ErrSSHWorkflowUnavailable, err)
+	}
+	authorityInfo, err := sshkeys.ParsePublicKey(authorityKey)
+	if err != nil {
+		return normalizedSSHCertificate{}, nil, fmt.Errorf("%w: authority key is invalid", api.ErrSSHWorkflowUnavailable)
+	}
+	return normalizedSSHCertificate{
+		certificateType: typ, publicKey: publicKey, keyID: keyID, principals: principals,
+		requestedTTLSeconds: requestedTTL, effectiveTTL: effectiveTTL, ttlDefaulted: ttlDefaulted, ttlClamped: ttlClamped,
+		publicKeyType: keyInfo.Type, publicKeyFingerprint: keyInfo.FingerprintSHA256,
+		authorityFingerprint: authorityInfo.FingerprintSHA256,
+		criticalOptions:      critical, extensions: defaultExtensions,
+	}, sp, nil
+}
+
+func normalizeSSHOptionMap(certificateType, kind string, input map[string]string, allowed map[string]bool) (map[string]string, error) {
+	if len(input) > 16 {
+		return nil, fmt.Errorf("%w: at most 16 SSH %ss are allowed", api.ErrSSHWorkflowInvalid, kind)
+	}
+	out := make(map[string]string, len(input))
+	for rawKey, rawValue := range input {
+		key := strings.TrimSpace(rawKey)
+		value := strings.TrimSpace(rawValue)
+		if !allowed[key] {
+			return nil, fmt.Errorf("%w: %s %q is not allowed for %s certificates", api.ErrSSHWorkflowInvalid, kind, key, certificateType)
+		}
+		if len(value) > 1024 {
+			return nil, fmt.Errorf("%w: %s %q value is too large", api.ErrSSHWorkflowInvalid, kind, key)
+		}
+		out[key] = value
+	}
+	return out, nil
+}
+
+func stableUniqueSSHStrings(input []string) []string {
+	seen := make(map[string]struct{}, len(input))
+	out := make([]string, 0, len(input))
+	for _, value := range input {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if !utf8.ValidString(value) || strings.IndexFunc(value, unicode.IsControl) >= 0 {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func normalizeSSHSourceAddresses(input string) (string, error) {
+	rawValues := stableUniqueSSHStrings(strings.Split(input, ","))
+	if len(rawValues) == 0 {
+		return "", fmt.Errorf("%w: source-address must contain at least one IP address or CIDR", api.ErrSSHWorkflowInvalid)
+	}
+	values := make([]string, 0, len(rawValues))
+	seen := make(map[string]struct{}, len(rawValues))
+	for _, value := range rawValues {
+		normalized := ""
+		if prefix, err := netip.ParsePrefix(value); err == nil {
+			normalized = prefix.Masked().String()
+		} else if address, err := netip.ParseAddr(value); err == nil {
+			normalized = address.String()
+		} else {
+			return "", fmt.Errorf("%w: source-address %q must be an IP address or CIDR", api.ErrSSHWorkflowInvalid, value)
+		}
+		if _, exists := seen[normalized]; exists {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		values = append(values, normalized)
+	}
+	sort.Strings(values)
+	return strings.Join(values, ","), nil
+}
+
+func cloneSSHStringMap(input map[string]string) map[string]string {
+	out := make(map[string]string, len(input))
+	for key, value := range input {
+		out[key] = value
+	}
+	return out
 }
 
 func (s *Server) IssueAttestedSSHUserCert(ctx context.Context, tenantID, idempotencyKey string, req api.SSHAttestedUserCertRequest) (api.SSHAttestedUserCert, error) {

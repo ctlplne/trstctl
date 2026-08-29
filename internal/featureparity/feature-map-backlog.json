@@ -10043,10 +10043,10 @@
             "phase": "P1",
             "priority": 28,
             "served_state": "conditional",
-            "backend_status": "conditional: served SSH CA workflow: OpenSSH-compatible /ssh/ca, /ssh/issue/user, /ssh/issue/host, /ssh/revoke, and binary /ssh/krl endpoints issue through the signer-backed CA, emit ssh.cert.issued/ssh.cert.revoked evidence, and the product API/CLI expose status and revocation",
-            "current_frontend_mapping": "operate: SSHTrust at /ssh serves SSH CA authority status, attested user-certificate issuance, KRL revocation, public authority/KRL readback, and the /protocols probe link.",
-            "target_gui_mapping": "Roadmap residual: dedicated host-certificate CA console with direct host certificate request forms, TTL/principals/extension editors, KRL distribution automation, and revoke audit drilldown beyond the served OpenSSH endpoints and SSHTrust status/revocation workflow.",
-            "acceptance_test": "Served GA acceptance is TestServedSSHEndToEnd plus TestServedSSHAtScaleJourneyJOURNEY002EndToEnd and OpenAPI/CLI parity for getSSHStatus/revokeSSHCertificate; roadmap residual is the dedicated host-certificate CA console beyond the served OpenSSH protocol endpoints and SSHTrust status/revocation workflow.",
+            "backend_status": "conditional: served SSH CA workflow exposes OpenSSH-compatible /ssh/ca, /ssh/issue/user, /ssh/issue/host, /ssh/revoke, and binary /ssh/krl endpoints plus tenant product APIs for exact effect-free preview, idempotent direct host/user issuance, status, and revocation; issuance stays signer-backed and emits ssh.cert.issued while revocation emits ssh.cert.revoked evidence",
+            "current_frontend_mapping": "operate: SSHTrust at /ssh serves a three-step direct host/user certificate workflow bound to an exact effect-free preview, with TTL/principal/critical-option/extension controls, signer/effect disclosure, private-key boundary, deliberate public-certificate disclosure, KRL recovery guidance, plus attested access, revocation, and trust rollout.",
+            "target_gui_mapping": "Delivered: the dedicated SSH certificate console previews and issues direct host and user certificates with exact identity, effective TTL, principals, allowed options/extensions, fingerprints, signer effects, KRL recovery, and safe public-certificate handling.",
+            "acceptance_test": "TestServedSSHCertificatePreviewAndIssueF43 proves effect-free preview, stable normalization, 24-hour clamp disclosure, direct signer-backed host issuance, and idempotent replay; TestServedSSHCertificatePreviewRejectsUnsafeOptions proves fail-closed option policy; ssh_trust.test.tsx proves the three-step browser workflow; OpenAPI/CLI parity covers previewSSHCertificate and issueSSHCertificate.",
             "source_docs": [
                 "docs/features/ssh.md"
             ],
@@ -10057,15 +10057,20 @@
                 "/ssh/revoke",
                 "/ssh/krl",
                 "internal/api/protocol_profile.go",
-                "internal/server/protocol_eval.go"
+                "internal/server/protocol_eval.go",
+                "internal/api/ssh_workflow.go",
+                "internal/server/ssh_workflow.go"
             ],
             "source_frontend": [
                 "web/src/pages/SSHTrust.tsx",
+                "web/src/pages/ssh/SSHCertificateWorkflow.tsx",
                 "web/src/pages/Wizard.tsx"
             ],
             "status": "closed",
-            "notes": "Closed by route-level feature-map evidence; JOURNEY-002 adds served SSH status/revocation/KRL workflow handoff. Test evidence: internal/server/ssh_journey_served_test.go drives discovery through trust rollout, attested SSH issuance, KRL revocation, and host retirement; web/src/__tests__/ssh_trust.test.tsx covers the console workflow controls; feature coverage tests render the catalog and registered customer routes ledger.",
+            "notes": "Closed as a complete vertical slice by the direct product preview/issuance workflow. Served tests prove preview has no event or KRL side effect, issuance produces one real OpenSSH host certificate through the isolated signer, unsafe host options fail closed, and idempotent replay does not sign twice. Browser tests prove exact-plan review and privacy-safe result disclosure.",
             "api_surface": [
+                "previewSSHCertificate",
+                "issueSSHCertificate",
                 "getSSHStatus",
                 "revokeSSHCertificate",
                 "getProtocolProfile",
@@ -10073,6 +10078,8 @@
             ],
             "api_na": "",
             "cli_surface": [
+                "ssh preview",
+                "ssh issue",
                 "ssh status",
                 "ssh revoke",
                 "setup protocols status",
@@ -10083,9 +10090,9 @@
                 "served": {
                     "evidence": [
                         "internal/server/protocol_ssh.go mounts the served SSH CA protocol endpoints and emits an OpenSSH binary KRL for sshd RevokedKeys consumption.",
-                        "internal/api/ssh_workflow.go exposes the guarded product status/revocation workflow used by the CLI and console.",
+                        "internal/api/ssh_workflow.go exposes guarded preview, direct issuance, status, and revocation workflows used by the CLI and console.",
                         "served_state=conditional",
-                        "backend_status=conditional: served SSH CA workflow: OpenSSH-compatible /ssh/ca, /ssh/issue/user, /ssh/issue/host, /ssh/revoke, and binary /ssh/krl endpoints issue through the signer-backed CA, emit ssh.cert.issued/ssh.cert.revoked evidence, and the product API/CLI expose status and revocation"
+                        "backend_status=conditional: the served SSH CA includes effect-free product preview and idempotent direct host/user issuance through the isolated signer alongside OpenSSH protocol and binary KRL endpoints"
                     ],
                     "refs": [
                         "internal/server/protocol_ssh.go",
@@ -10099,18 +10106,19 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: operate: SSHTrust at /ssh serves SSH CA authority status, attested user-certificate issuance, KRL revocation, public authority/KRL readback, and the /protocols probe link.",
-                        "target_gui_mapping: Roadmap residual: dedicated host-certificate CA console with direct host certificate request forms, TTL/principals/extension editors, KRL distribution automation, and revoke audit drilldown beyond the served OpenSSH endpoints and SSHTrust status/revocation workflow."
+                        "current_frontend_mapping: SSHTrust serves a three-step direct host/user workflow with exact preview, TTL/principal/option editors, signer/effect proof, and recovery.",
+                        "target_gui_mapping: Delivered dedicated SSH certificate console with privacy-safe public-certificate disclosure."
                     ],
                     "refs": [
                         "web/src/pages/SSHTrust.tsx",
+                        "web/src/pages/ssh/SSHCertificateWorkflow.tsx",
                         "web/src/lib/navigation.ts",
                         "web/src/App.tsx"
                     ]
                 },
                 "cli": {
                     "evidence": [
-                        "CLI commands: ssh status, ssh revoke"
+                        "CLI commands: ssh preview, ssh issue, ssh status, ssh revoke"
                     ],
                     "refs": [
                         "internal/cli/command.go",
@@ -10120,7 +10128,7 @@
                 },
                 "api": {
                     "evidence": [
-                        "OpenAPI operationIds: getSSHStatus, revokeSSHCertificate, getProtocolProfile, activateProtocolProfile"
+                        "OpenAPI operationIds: previewSSHCertificate, issueSSHCertificate, getSSHStatus, revokeSSHCertificate, getProtocolProfile, activateProtocolProfile"
                     ],
                     "refs": [
                         "internal/api/api.go",
@@ -10131,7 +10139,7 @@
                 },
                 "test": {
                     "evidence": [
-                        "acceptance_test: Served GA acceptance is TestServedSSHEndToEnd plus TestServedSSHAtScaleJourneyJOURNEY002EndToEnd and OpenAPI/CLI parity for getSSHStatus/revokeSSHCertificate; roadmap residual is the dedicated host-certificate CA console beyond the served OpenSSH protocol endpoints and SSHTrust status/revocation workflow.",
+                        "acceptance_test: TestServedSSHCertificatePreviewAndIssueF43 proves effect-free preview, direct host issuance, and idempotent replay; TestServedSSHCertificatePreviewRejectsUnsafeOptions proves fail-closed option policy; browser and OpenAPI/CLI tests prove the product workflow.",
                         "TRACE-027 guard: TestTRACE027SSHCertificateAuthorityRowSplitsServedGAFromRoadmapResidual keeps F43 in the served GA denominator only when the OpenSSH endpoint/KRL evidence and explicit host-certificate CA console roadmap residual are both present.",
                         "TestServedSSHEndToEnd drives /ssh/issue/user, /ssh/ca, protocol revocation, and /ssh/krl through the assembled served handler and validates the OpenSSH binary KRL revocation path.",
                         "TestServedSSHAtScaleJourneyJOURNEY002EndToEnd drives the guarded product API workflow through status, attested issuance, revocation, and KRL readback.",
@@ -10143,6 +10151,7 @@
                     "refs": [
                         "internal/server/protocols_served_spiffe_ssh_test.go",
                         "internal/server/ssh_journey_served_test.go",
+                        "internal/server/ssh_certificate_workflow_served_test.go",
                         "internal/server/protect_correct102_guard_test.go",
                         "internal/api/openapi_golden_test.go",
                         "internal/cli/cli_test.go",
@@ -10163,7 +10172,7 @@
                 },
                 "rbac": {
                     "evidence": [
-                        "feature authz manifest maps getSSHStatus to certs:read, revokeSSHCertificate to certs:write, getProtocolProfile to issuers:read, and activateProtocolProfile to issuers:write.",
+                        "feature authz manifest maps previewSSHCertificate and issueSSHCertificate to certs:issue, getSSHStatus to certs:read, revokeSSHCertificate to certs:write, getProtocolProfile to issuers:read, and activateProtocolProfile to issuers:write.",
                         "protocol authz manifest maps ssh route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
                         "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for the guarded SSH workflow operations; public /ssh protocol paths keep their explicit protocol rationale."
                     ],
@@ -10229,7 +10238,7 @@
                 "purpose": "Lets an operator understand and safely use ssh certificate authority while tenant, policy, and security authority remain on the server.",
                 "tool": "workloads_machines",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/ssh",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -10243,7 +10252,7 @@
                 ],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -10264,8 +10273,12 @@
                         ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/ssh/SSHCertificateWorkflow.tsx",
+                            "internal/api/ssh_workflow.go",
+                            "internal/server/ssh_certificate_workflow_served_test.go"
+                        ]
                     },
                     "execute": {
                         "status": "complete",
@@ -10297,10 +10310,14 @@
                         "status": "complete",
                         "evidence": [
                             "OpenAPI operationId: getSSHStatus",
+                            "OpenAPI operationId: previewSSHCertificate",
+                            "OpenAPI operationId: issueSSHCertificate",
                             "OpenAPI operationId: revokeSSHCertificate",
                             "OpenAPI operationId: getProtocolProfile",
                             "OpenAPI operationId: activateProtocolProfile",
                             "CLI command: ssh status",
+                            "CLI command: ssh preview",
+                            "CLI command: ssh issue",
                             "CLI command: ssh revoke",
                             "CLI command: setup protocols status",
                             "CLI command: setup protocols activate"
@@ -10309,8 +10326,8 @@
                 },
                 "owner": "identity",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "42808fd48dbe7cfe1054bc2b8f2d5aa1a603a123",
+                "freshness": "2026-08-29"
             }
         },
         {

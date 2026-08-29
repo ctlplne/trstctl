@@ -3552,7 +3552,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use ssh certificate authority while tenant, policy, and security authority remain on the server.",
       "tool": "workloads_machines",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/ssh",
       "navigationEntrypoints": [
         "tool navigation",
@@ -3566,7 +3566,7 @@ export const canonicalCapabilities = [
       ],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -3587,8 +3587,12 @@ export const canonicalCapabilities = [
           ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/ssh/SSHCertificateWorkflow.tsx",
+            "internal/api/ssh_workflow.go",
+            "internal/server/ssh_certificate_workflow_served_test.go"
+          ]
         },
         "execute": {
           "status": "complete",
@@ -3620,10 +3624,14 @@ export const canonicalCapabilities = [
           "status": "complete",
           "evidence": [
             "OpenAPI operationId: getSSHStatus",
+            "OpenAPI operationId: previewSSHCertificate",
+            "OpenAPI operationId: issueSSHCertificate",
             "OpenAPI operationId: revokeSSHCertificate",
             "OpenAPI operationId: getProtocolProfile",
             "OpenAPI operationId: activateProtocolProfile",
             "CLI command: ssh status",
+            "CLI command: ssh preview",
+            "CLI command: ssh issue",
             "CLI command: ssh revoke",
             "CLI command: setup protocols status",
             "CLI command: setup protocols activate"
@@ -3632,8 +3640,8 @@ export const canonicalCapabilities = [
       },
       "owner": "identity",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "42808fd48dbe7cfe1054bc2b8f2d5aa1a603a123",
+      "freshness": "2026-08-29"
     }
   },
   {

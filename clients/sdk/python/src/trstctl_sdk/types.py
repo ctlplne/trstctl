@@ -8261,6 +8261,68 @@ SSHAttestedUserCertRequest = TypedDict(
     total=False,
 )
 
+SSHCertificate = TypedDict(
+    'SSHCertificate',
+    {
+        'authority_fingerprint': str,
+        'certificate': str,
+        'certificate_type': str,
+        'critical_options': dict[str, Any],
+        'extensions': dict[str, Any],
+        'key_id': str,
+        'krl_version': int,
+        'principals': list[str],
+        'serial': int,
+        'valid_before': str,
+    },
+    total=False,
+)
+
+SSHCertificatePreview = TypedDict(
+    'SSHCertificatePreview',
+    {
+        'authority_fingerprint': str,
+        'blockers': list[str],
+        'capability': str,
+        'certificate_type': str,
+        'critical_options': dict[str, Any],
+        'effect_free': bool,
+        'effective_ttl_seconds': int,
+        'extensions': dict[str, Any],
+        'issuance_external_effects': list[str],
+        'issuance_signer_calls': list[str],
+        'issuance_writes': list[str],
+        'key_id': str,
+        'preview_external_effects': list[str],
+        'preview_signer_calls': list[str],
+        'preview_writes': list[str],
+        'principals': list[str],
+        'public_key_fingerprint': str,
+        'public_key_type': str,
+        'ready': bool,
+        'recovery_steps': list[str],
+        'requested_ttl_seconds': int,
+        'secret_data_handling': list[str],
+        'ttl_clamped': bool,
+        'ttl_defaulted': bool,
+    },
+    total=False,
+)
+
+SSHCertificateRequest = TypedDict(
+    'SSHCertificateRequest',
+    {
+        'certificate_type': str,
+        'critical_options': dict[str, Any],
+        'extensions': dict[str, Any],
+        'key_id': str,
+        'principals': list[str],
+        'public_key': str,
+        'ttl_seconds': int,
+    },
+    total=False,
+)
+
 SSHFleetHost = TypedDict(
     'SSHFleetHost',
     {

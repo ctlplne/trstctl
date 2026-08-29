@@ -5943,6 +5943,56 @@ export interface SSHAttestedUserCertRequest {
   ttl_seconds?: number;
 }
 
+export interface SSHCertificate {
+  authority_fingerprint: string;
+  certificate: string;
+  certificate_type: "host" | "user";
+  critical_options: Record<string, unknown>;
+  extensions: Record<string, unknown>;
+  key_id: string;
+  krl_version: number;
+  principals: string[];
+  serial: number;
+  valid_before: string;
+}
+
+export interface SSHCertificatePreview {
+  authority_fingerprint: string;
+  blockers: string[];
+  capability: string;
+  certificate_type: "host" | "user";
+  critical_options: Record<string, unknown>;
+  effect_free: boolean;
+  effective_ttl_seconds: number;
+  extensions: Record<string, unknown>;
+  issuance_external_effects: string[];
+  issuance_signer_calls: string[];
+  issuance_writes: string[];
+  key_id: string;
+  preview_external_effects: string[];
+  preview_signer_calls: string[];
+  preview_writes: string[];
+  principals: string[];
+  public_key_fingerprint: string;
+  public_key_type: string;
+  ready: boolean;
+  recovery_steps: string[];
+  requested_ttl_seconds: number;
+  secret_data_handling: string[];
+  ttl_clamped: boolean;
+  ttl_defaulted: boolean;
+}
+
+export interface SSHCertificateRequest {
+  certificate_type: "host" | "user";
+  critical_options?: Record<string, unknown>;
+  extensions?: Record<string, unknown>;
+  key_id: string;
+  principals: string[];
+  public_key: string;
+  ttl_seconds?: number;
+}
+
 export interface SSHFleetHost {
   first_observed: string;
   key_types: string[];

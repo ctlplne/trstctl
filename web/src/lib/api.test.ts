@@ -562,6 +562,10 @@ describe("exported API surface census", () => {
       // F25: the temporary-credential review computes the exact bounded plan
       // and proof digests without persisting, signing, or contacting a target.
       "/api/v1/ephemeral/preview",
+      // F43: validates and normalizes one SSH public-key certificate request
+      // without allocating a serial, appending an event, changing the KRL, or
+      // calling the isolated signer.
+      "/api/v1/ssh/certificates/preview",
       "/api/v1/identities/item%2Fid/transitions/preview",
       // F52: normalize and bound the exact CBOM request without connecting,
       // reading a host file, appending an event, or projecting an asset.

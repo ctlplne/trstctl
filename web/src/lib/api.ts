@@ -401,6 +401,9 @@ import type {
   TenantKeyDomainStatus,
   SSHAttestedUserCert,
   SSHAttestedUserCertRequest,
+  SSHCertificate,
+  SSHCertificatePreview,
+  SSHCertificateRequest,
   SSHFleetInventory,
   SSHHostRetirement,
   SSHHostRetireRequest,
@@ -985,6 +988,9 @@ export type {
   TenantKeyDomainStatus,
   SSHAttestedUserCert,
   SSHAttestedUserCertRequest,
+  SSHCertificate,
+  SSHCertificatePreview,
+  SSHCertificateRequest,
   SSHFleetInventory,
   SSHHostRetirement,
   SSHHostRetireRequest,
@@ -2215,6 +2221,8 @@ export interface Api {
   sshStatus(): Promise<SSHStatus>;
   sshFleet(): Promise<SSHFleetInventory>;
   recordSSHTrustRollout(input: SSHTrustRolloutRequest): Promise<SSHTrustRollout>;
+  previewSSHCertificate(input: SSHCertificateRequest): Promise<SSHCertificatePreview>;
+  issueSSHCertificate(input: SSHCertificateRequest): Promise<SSHCertificate>;
   issueAttestedSSHUserCert(input: SSHAttestedUserCertRequest): Promise<SSHAttestedUserCert>;
   revokeSSHCertificate(input: SSHRevokeCertificateRequest): Promise<SSHStatus>;
   retireSSHHost(input: SSHHostRetireRequest): Promise<SSHHostRetirement>;
@@ -2749,6 +2757,8 @@ const liveApi: Api = {
   sshStatus: () => req<SSHStatus>("/api/v1/ssh/status"),
   sshFleet: () => req<SSHFleetInventory>("/api/v1/ssh/fleet"),
   recordSSHTrustRollout: (input) => mutate<SSHTrustRollout>("POST", "/api/v1/ssh/trust-rollouts", input),
+  previewSSHCertificate: (input) => postRead<SSHCertificatePreview>("/api/v1/ssh/certificates/preview", input),
+  issueSSHCertificate: (input) => mutate<SSHCertificate>("POST", "/api/v1/ssh/certificates", input),
   issueAttestedSSHUserCert: (input) => mutate<SSHAttestedUserCert>("POST", "/api/v1/ssh/attested-user-certs", input),
   revokeSSHCertificate: (input) => mutate<SSHStatus>("POST", "/api/v1/ssh/certificates/revoke", input),
   retireSSHHost: (input) => mutate<SSHHostRetirement>("POST", "/api/v1/ssh/hosts/retire", input),

@@ -1293,8 +1293,12 @@ describe("i18n boundary", () => {
       // F25 re-pin: dedicated temporary-credential workflow plus exact
       // preview, approval, recovery, and private-key boundary. Machine-
       // authored es/de translations — FLAGGED FOR HUMAN TRANSLATION REVIEW.
-      "es-ES": "89515394a1176cb46ea8c63655e20ba14caab017b7923ecfdd4f392620b17170",
-      "de-DE": "4f64463c6bcef8f616234d60e96a27265cd6564d2e0baea89b884cbc32e7673f",
+      // F43 direct SSH issuance re-pin: the three-step host/user workflow now
+      // names exact preview effects, TTL clamps, key boundaries, signer calls,
+      // certificate disclosure, and KRL recovery. Machine-authored es/de —
+      // FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "12f91df99b4de47bb9941f5ddf3268ca70fc0099c8d04a79d0208bf67dc38271",
+      "de-DE": "ae7787f2c9c689df4dc2c5d8877628f322b62e0d8cc9134d2e04085b098b4cdb",
     });
   });
 

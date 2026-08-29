@@ -50,7 +50,7 @@ not this file.
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-agent/bootstrap_token_test.go:96` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `cmd/trstctl/main_test.go:371` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `cmd/trstctl/main_test.go:388` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/demo/demo_test.go:78` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/deploycheck_test.go:1483` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/deploycheck_test.go:1485` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |

@@ -5552,6 +5552,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ssh/certificates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue a reviewed SSH host or user certificate through the isolated signer */
+        post: operations["issueSSHCertificate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ssh/certificates/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review an exact SSH host or user certificate request without writes, network calls, or signer calls */
+        post: operations["previewSSHCertificate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ssh/certificates/revoke": {
         parameters: {
             query?: never;
@@ -12088,6 +12122,69 @@ export interface components {
             principals?: string[];
             public_key: string;
             source_addresses?: string[];
+            ttl_seconds?: number;
+        };
+        SSHCertificate: {
+            authority_fingerprint: string;
+            certificate: string;
+            /** @enum {string} */
+            certificate_type: "host" | "user";
+            critical_options: {
+                [key: string]: string;
+            };
+            extensions: {
+                [key: string]: string;
+            };
+            key_id: string;
+            krl_version: number;
+            principals: string[];
+            serial: number;
+            /** Format: date-time */
+            valid_before: string;
+        };
+        SSHCertificatePreview: {
+            authority_fingerprint: string;
+            blockers: string[];
+            capability: string;
+            /** @enum {string} */
+            certificate_type: "host" | "user";
+            critical_options: {
+                [key: string]: string;
+            };
+            effect_free: boolean;
+            effective_ttl_seconds: number;
+            extensions: {
+                [key: string]: string;
+            };
+            issuance_external_effects: string[];
+            issuance_signer_calls: string[];
+            issuance_writes: string[];
+            key_id: string;
+            preview_external_effects: string[];
+            preview_signer_calls: string[];
+            preview_writes: string[];
+            principals: string[];
+            public_key_fingerprint: string;
+            public_key_type: string;
+            ready: boolean;
+            recovery_steps: string[];
+            requested_ttl_seconds: number;
+            secret_data_handling: string[];
+            ttl_clamped: boolean;
+            ttl_defaulted: boolean;
+        };
+        SSHCertificateRequest: {
+            /** @enum {string} */
+            certificate_type: "host" | "user";
+            critical_options?: {
+                [key: string]: string;
+            };
+            extensions?: {
+                [key: string]: string;
+            };
+            key_id: string;
+            principals: string[];
+            public_key: string;
             ttl_seconds?: number;
         };
         SSHFleetHost: {
@@ -29226,6 +29323,93 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SSHAttestedUserCert"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    issueSSHCertificate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SSHCertificateRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSHCertificate"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewSSHCertificate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SSHCertificateRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSHCertificatePreview"];
                 };
             };
             /** @description client error */

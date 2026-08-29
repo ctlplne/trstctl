@@ -15,7 +15,7 @@ import (
 
 func runSSH(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) error {
 	if len(args) < 1 {
-		return errors.New("usage: trstctl ssh <status|fleet|trust-rollout|issue-attested-user|revoke|retire-host>")
+		return errors.New("usage: trstctl ssh <status|fleet|trust-rollout|preview|issue|issue-attested-user|revoke|retire-host>")
 	}
 	cfg, err := connectorCLIConfigFromEnv(getenv)
 	if err != nil {
@@ -46,6 +46,48 @@ func runSSH(ctx context.Context, args []string, getenv func(string) string, stdo
 			"status": *status, "confirmed": *confirm,
 		}
 		return connectorCLIRequest(ctx, stdout, cfg, http.MethodPost, "/api/v1/ssh/trust-rollouts", body, true)
+	case "preview", "issue":
+		command := args[0]
+		fs := flag.NewFlagSet("trstctl ssh "+command, flag.ContinueOnError)
+		fs.SetOutput(stderr)
+		certificateType := fs.String("type", "host", "certificate type: host or user")
+		publicKey := fs.String("public-key", "", "subject SSH public key in authorized_keys form")
+		keyID := fs.String("key-id", "", "certificate name recorded in audit and KRL evidence")
+		principals := fs.String("principals", "", "comma-separated allowed hostnames or users")
+		ttl := fs.Int64("ttl-seconds", 0, "requested lifetime in seconds; defaults to 3600 and is capped at 86400")
+		sourceAddresses := fs.String("source-addresses", "", "user certificates only: comma-separated allowed source CIDRs")
+		forceCommand := fs.String("force-command", "", "user certificates only: command the SSH server must run")
+		extensions := fs.String("extensions", "", "user certificates only: comma-separated OpenSSH extension names")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		criticalOptions := map[string]string{}
+		if values := splitCSV(*sourceAddresses); len(values) > 0 {
+			criticalOptions["source-address"] = strings.Join(values, ",")
+		}
+		if value := strings.TrimSpace(*forceCommand); value != "" {
+			criticalOptions["force-command"] = value
+		}
+		extensionMap := map[string]string{}
+		for _, name := range splitCSV(*extensions) {
+			extensionMap[name] = ""
+		}
+		body := map[string]any{
+			"certificate_type": strings.TrimSpace(*certificateType),
+			"public_key":       strings.TrimSpace(*publicKey),
+			"key_id":           strings.TrimSpace(*keyID),
+			"principals":       splitCSV(*principals),
+			"ttl_seconds":      *ttl,
+			"critical_options": criticalOptions,
+			"extensions":       extensionMap,
+		}
+		path := "/api/v1/ssh/certificates"
+		mutation := true
+		if command == "preview" {
+			path += "/preview"
+			mutation = false
+		}
+		return connectorCLIRequest(ctx, stdout, cfg, http.MethodPost, path, body, mutation)
 	case "issue-attested-user":
 		fs := flag.NewFlagSet("trstctl ssh issue-attested-user", flag.ContinueOnError)
 		fs.SetOutput(stderr)
