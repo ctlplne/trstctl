@@ -3441,7 +3441,7 @@
                 },
                 "owner": "software-trust",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "289897bd4a80b75ac8b6ce2b7e5c232a4f733d5c",
+                "candidate_sha": "9623b07fe17419064daa054b06ee32b890590a76",
                 "freshness": "2026-08-29"
             }
         },
