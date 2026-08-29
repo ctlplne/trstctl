@@ -31,7 +31,17 @@ func TestAssembledServerEnrollsAgent(t *testing.T) {
 	prov, stop := startSignerChild(t)
 	defer stop()
 
-	asm, err := server.Build(context.Background(), server.Deps{Store: st, Log: log, Signer: prov})
+	// Enrollment now fails closed unless the same assembled server has a public
+	// TLS identity and a signer-backed steady-state renewal path. Configure those
+	// prerequisites here instead of testing bootstrap as a stranded one-shot.
+	asm, err := server.Build(context.Background(), server.Deps{
+		Store:                     st,
+		Log:                       log,
+		Signer:                    prov,
+		EnableAgentChannel:        true,
+		AgentChannelPublicAddress: "agent.trstctl.local:19443",
+		AgentChannelServerName:    "agent.trstctl.local",
+	})
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
