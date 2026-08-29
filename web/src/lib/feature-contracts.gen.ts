@@ -3040,8 +3040,8 @@ export const canonicalCapabilities = [
       },
       "owner": "pki",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "c6d6b6f5eff8ca5edc5a0832ea2174f3618f1abd",
-      "freshness": "2026-08-28"
+      "candidateSHA": "ae215a6441ceff8c345ed986f23838691d407546",
+      "freshness": "2026-08-29"
     }
   },
   {
