@@ -4607,6 +4607,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/protocols/spiffe/qualification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Check the tenant-bound SPIFFE Workload API without dialing the socket, requesting an SVID, calling the signer, or writing state */
+        post: operations["qualifySPIFFE"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/remediation/owner-actions": {
         parameters: {
             query?: never;
@@ -11965,6 +11982,34 @@ export interface components {
         RotationRunList: {
             items: components["schemas"]["RotationRun"][];
             next_cursor?: string;
+        };
+        SPIFFEQualification: {
+            blockers: string[];
+            /** Format: date-time */
+            checked_at: string;
+            checks: components["schemas"]["SPIFFEQualificationCheck"][];
+            client_boundary: string;
+            effect_free: boolean;
+            local_socket_deprecated: boolean;
+            preview_external_effects: string[];
+            preview_signer_calls: string[];
+            preview_writes: string[];
+            proof: string[];
+            ready: boolean;
+            registration_entry_count: number;
+            socket_mode: string;
+            socket_uri: string;
+            supported_operations: string[];
+            /** @enum {string} */
+            transport: "unix";
+            trust_domain: string;
+        };
+        SPIFFEQualificationCheck: {
+            detail: string;
+            id: string;
+            label: string;
+            passed: boolean;
+            recovery?: string;
         };
         SSHAttestedUserCert: {
             approver: string;
@@ -26486,6 +26531,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CMPQualification"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    qualifySPIFFE: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SPIFFEQualification"];
                 };
             };
             /** @description client error */

@@ -230,8 +230,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// managed-key custody read and effect-free preview raise it to 405. F55's
 	// F56's effect-free create, update, and rotation previews raise it to 409.
 	// F52's effect-free CBOM review command raises it to 410.
-	if len(out) != 410 {
-		t.Fatalf("CLI commands = %d, want 410", len(out))
+	// F24's effect-free SPIFFE Workload API qualification raises it to 411.
+	if len(out) != 411 {
+		t.Fatalf("CLI commands = %d, want 411", len(out))
 	}
 	return out
 }

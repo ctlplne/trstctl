@@ -66,53 +66,54 @@ type API struct {
 	// lastDrill returns the most recent restore drill, or nil if none has run
 	// (J2). Nil-returning rather than a zero value: "no drill has run" and "a
 	// drill ran and failed" must not render the same way.
-	lastDrill               func() *backup.DrillAttestation
-	restoreDrillKeys        *jose.JWKSet
-	roles                   *authz.Registry
-	principal               func(*http.Request) (authz.Principal, error)
-	audit                   *audit.Service
-	auditTimestamper        auditanchor.Timestamper
-	retirementChecklist     RetirementChecklistSource
-	auth                    *AuthConfig
-	providerPlaneAvailable  bool
-	oidcPreLogin            *oidcPreLoginStore
-	scim                    *SCIMConfig
-	scimTokens              map[string]scimToken
-	agentTokens             BootstrapTokenIssuer
-	agentConnection         agentEnrollmentConnection
-	agentRenewalReady       bool
-	agentHeartbeatInterval  time.Duration
-	agentEnroller           BootstrapEnroller
-	agentEnrollmentObserver func(result string)
-	rateLimiter             RateLimiter
-	specialAbuse            *specialRouteAbuseLimiter
-	gate                    MutationGate
-	abac                    ABACDenyEvaluator
-	abacEnvironment         map[string]string
-	abacNow                 func() time.Time
-	approvals               ApprovalRecorder
-	breakglass              BreakglassReconciler
-	breakglassIssuer        BreakglassIssuer
-	breakglassCeremonies    BreakglassCeremonyService
-	breakglassRotation      BreakglassRotationService
-	breakglassAdmin         *breakglass.AdminService
-	caHierarchy             CAHierarchyService
-	edgeDelegations         EdgeDelegationService
-	externalCAs             ExternalCAService
-	attestedIssuer          AttestedIssuerService
-	sshWorkflow             SSHWorkflowService
-	broker                  BrokerService
-	ephemeral               EphemeralIssuerService
-	pam                     PAMService
-	managedKeys             ManagedKeyService // served BYOK/HSM key lifecycle (CRYPTO-005); nil = not enabled
-	managedKeyCustody       ManagedKeyCustodyConfiguration
-	transit                 TransitService // served transit/EaaS key operations (KMS-01); nil = not enabled
-	vaultCompat             *vaultCompatState
-	protocolProfile         ProtocolProfileControl
-	cmpQualificationPosture CMPQualificationPosture
-	codeSigning             CodeSigningService
-	ctSubmission            CTSubmissionService
-	secrets                 *secretsService // served secrets/identity surface (GAP-006); nil = not enabled
+	lastDrill                  func() *backup.DrillAttestation
+	restoreDrillKeys           *jose.JWKSet
+	roles                      *authz.Registry
+	principal                  func(*http.Request) (authz.Principal, error)
+	audit                      *audit.Service
+	auditTimestamper           auditanchor.Timestamper
+	retirementChecklist        RetirementChecklistSource
+	auth                       *AuthConfig
+	providerPlaneAvailable     bool
+	oidcPreLogin               *oidcPreLoginStore
+	scim                       *SCIMConfig
+	scimTokens                 map[string]scimToken
+	agentTokens                BootstrapTokenIssuer
+	agentConnection            agentEnrollmentConnection
+	agentRenewalReady          bool
+	agentHeartbeatInterval     time.Duration
+	agentEnroller              BootstrapEnroller
+	agentEnrollmentObserver    func(result string)
+	rateLimiter                RateLimiter
+	specialAbuse               *specialRouteAbuseLimiter
+	gate                       MutationGate
+	abac                       ABACDenyEvaluator
+	abacEnvironment            map[string]string
+	abacNow                    func() time.Time
+	approvals                  ApprovalRecorder
+	breakglass                 BreakglassReconciler
+	breakglassIssuer           BreakglassIssuer
+	breakglassCeremonies       BreakglassCeremonyService
+	breakglassRotation         BreakglassRotationService
+	breakglassAdmin            *breakglass.AdminService
+	caHierarchy                CAHierarchyService
+	edgeDelegations            EdgeDelegationService
+	externalCAs                ExternalCAService
+	attestedIssuer             AttestedIssuerService
+	sshWorkflow                SSHWorkflowService
+	broker                     BrokerService
+	ephemeral                  EphemeralIssuerService
+	pam                        PAMService
+	managedKeys                ManagedKeyService // served BYOK/HSM key lifecycle (CRYPTO-005); nil = not enabled
+	managedKeyCustody          ManagedKeyCustodyConfiguration
+	transit                    TransitService // served transit/EaaS key operations (KMS-01); nil = not enabled
+	vaultCompat                *vaultCompatState
+	protocolProfile            ProtocolProfileControl
+	cmpQualificationPosture    CMPQualificationPosture
+	spiffeQualificationPosture SPIFFEQualificationPosture
+	codeSigning                CodeSigningService
+	ctSubmission               CTSubmissionService
+	secrets                    *secretsService // served secrets/identity surface (GAP-006); nil = not enabled
 	// applicationSecretReconcileRun serializes crash recovery across startup,
 	// readiness-triggered retries, and the periodic worker. The health map contains
 	// only bounded recovery-reason codes and counts: no secret names, values,
@@ -222,6 +223,7 @@ type config struct {
 	transit                     TransitService
 	protocolProfile             ProtocolProfileControl
 	cmpQualificationPosture     CMPQualificationPosture
+	spiffeQualificationPosture  SPIFFEQualificationPosture
 	codeSigning                 CodeSigningService
 	ctSubmission                CTSubmissionService
 	secrets                     *secretsService
@@ -510,6 +512,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		vaultCompat:                 newVaultCompatState(cfg.eventLog),
 		protocolProfile:             cfg.protocolProfile,
 		cmpQualificationPosture:     cfg.cmpQualificationPosture,
+		spiffeQualificationPosture:  cfg.spiffeQualificationPosture,
 		codeSigning:                 cfg.codeSigning,
 		ctSubmission:                cfg.ctSubmission,
 		secrets:                     cfg.secrets,
@@ -1010,6 +1013,7 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/setup/protocols", opID: "getProtocolProfile", summary: "Get the tenant-bound eval protocol profile status", handler: a.getProtocolProfile, resSchema: "ProtocolProfileStatus", successCode: "200", perm: authz.IssuersRead},
 		{method: "POST", path: "/api/v1/setup/protocols/activate", opID: "activateProtocolProfile", summary: "Activate the tenant-bound eval protocol profile", handler: a.activateProtocolProfile, resSchema: "ProtocolProfileStatus", successCode: "200", mutation: true, perm: authz.IssuersWrite},
 		{method: "POST", path: "/api/v1/protocols/cmp/qualification", opID: "qualifyCMP", summary: "Check the tenant-bound CMP endpoint without sending a PKIMessage, calling the signer, or writing state", handler: a.qualifyCMP, resSchema: "CMPQualification", successCode: "200", perm: authz.CertsRead},
+		{method: "POST", path: "/api/v1/protocols/spiffe/qualification", opID: "qualifySPIFFE", summary: "Check the tenant-bound SPIFFE Workload API without dialing the socket, requesting an SVID, calling the signer, or writing state", handler: a.qualifySPIFFE, resSchema: "SPIFFEQualification", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/issuers/{id}", opID: "getIssuer", summary: "Get an issuer", handler: a.getIssuer, pathParams: idPath, resSchema: "Issuer", successCode: "200", perm: authz.IssuersRead, scope: scopeIssuerPath("id")},
 		{method: "POST", path: "/api/v1/ca/ceremonies/preview", opID: "previewCACeremony", summary: "Validate and explain an exact CA key ceremony without writing state, creating keys, or contacting an authority", handler: a.previewCACeremony, reqSchema: "CACeremonyStartRequest", resSchema: "CACeremonyPlanPreview", successCode: "200", perm: authz.IssuersWrite},
 		{method: "POST", path: "/api/v1/ca/ceremonies", opID: "createCACeremony", summary: "Start an m-of-n CA key ceremony", handler: a.createCACeremony, reqSchema: "CACeremonyStartRequest", resSchema: "CAKeyCeremony", successCode: "201", mutation: true, perm: authz.IssuersWrite},

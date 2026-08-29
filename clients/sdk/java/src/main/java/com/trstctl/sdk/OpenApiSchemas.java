@@ -587,6 +587,8 @@ public final class OpenApiSchemas {
       "RoleList",
       "RotationRun",
       "RotationRunList",
+      "SPIFFEQualification",
+      "SPIFFEQualificationCheck",
       "SSHAttestedUserCert",
       "SSHAttestedUserCertRequest",
       "SSHFleetHost",

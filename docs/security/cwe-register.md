@@ -746,7 +746,7 @@ not this file.
 | `internal/api/headerauth_guard_test.go:34` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/api/headerauth_guard_test.go:39` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/ca/shellca/shellca.go:120` | the shell-CA backend exists to run the operator's configured signing command (CWE-78) |
-| `internal/cli/cli_test.go:1976` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/cli/cli_test.go:1994` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/connector/localops.go:260` | operator-configured local-ops action command; running it is the feature (CWE-78) |
 | `internal/crypto/kmswrap/external_kms.go:122` | operator-configured external KMS helper command (CWE-78) |
 | `internal/kms/pkcs11/softhsm_container_test.go:116` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
@@ -792,12 +792,12 @@ not this file.
 | `internal/server/pam_served_test.go:350` | fixed best-effort test cleanup bounded by a context deadline (CWE-78) |
 | `internal/server/pam_served_test.go:364` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_served_test.go:395` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/protocols_served_spiffe_ssh_test.go:286` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/protocols_served_spiffe_ssh_test.go:345` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/protocols_served_spiffe_ssh_test.go:373` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/protocols_served_spiffe_ssh_test.go:488` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/protocols_served_spiffe_ssh_test.go:540` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/protocols_served_spiffe_ssh_test.go:555` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/protocols_served_spiffe_ssh_test.go:311` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/protocols_served_spiffe_ssh_test.go:370` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/protocols_served_spiffe_ssh_test.go:398` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/protocols_served_spiffe_ssh_test.go:513` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/protocols_served_spiffe_ssh_test.go:565` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/protocols_served_spiffe_ssh_test.go:580` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/protocols_served_stock_clients_test.go:302` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/protocols_served_stock_clients_test.go:382` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/protocols_served_stock_clients_test.go:401` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -879,7 +879,7 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:103` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/secret_third_party_scan_served_test.go:154` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_rotation_served_test.go:2447` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:2187` | served CA certificate directory; the PEM is public material (CWE-276) |
+| `internal/server/server.go:2194` | served CA certificate directory; the PEM is public material (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:24` | the loose mode IS the attack fixture this test defends against (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:56` | the wide mode IS the precondition this test proves gets narrowed (CWE-276) |
 | `internal/tsa/http_test.go:103` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
@@ -1065,7 +1065,7 @@ not this file.
 | `internal/cli/audit_verify.go:103` | path is the explicit read-only local artifact selected by this CLI command (CWE-22). |
 | `internal/cli/cli.go:162` | the operator explicitly names the public trust-bundle path (CWE-22) |
 | `internal/cli/cli.go:485` | operator-passed local file argument on their own command line (CWE-22) |
-| `internal/cli/cli_test.go:1536` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/cli/cli_test.go:1554` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/cli/doctor/doctor_test.go:98` | test reads its own tempdir receipt (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/config/config.go:2264` | the config loader reading the operator's own config file (CWE-22) |
@@ -1170,8 +1170,8 @@ not this file.
 | `internal/server/protocol_mounts.go:665` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/protocol_mounts.go:772` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/protocol_mounts.go:837` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/protocol_mounts.go:1102` | operator-configured trust bundle path (CWE-22) |
-| `internal/server/protocols_served_spiffe_ssh_test.go:558` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/server/protocol_mounts.go:1105` | operator-configured trust bundle path (CWE-22) |
+| `internal/server/protocols_served_spiffe_ssh_test.go:583` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:228` | test reads its own tempdir fixture (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:232` | test reads its own tempdir fixture (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:326` | test reads its own fixture/tempdir path (CWE-22) |
@@ -1191,8 +1191,8 @@ not this file.
 | `internal/server/serve_test.go:80` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:81` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:125` | test-owned path under t.TempDir (CWE-22) |
-| `internal/server/server.go:2114` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/server.go:2191` | same operator-configured directory as the target certificate (CWE-22) |
+| `internal/server/server.go:2121` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/server.go:2198` | same operator-configured directory as the target certificate (CWE-22) |
 | `internal/signing/design_test.go:30` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/design_test.go:136` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/gated_destruction_journal.go:226` | exact signer-owned journal path. |
@@ -1329,7 +1329,7 @@ not this file.
 | `internal/ca/profilelint/profilelint_test.go:241` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/ca/profilelint/profilelint_test.go:254` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/cbom/hostsource/hostsource_test.go:23` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/cli/cli_test.go:2006` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/cli/cli_test.go:2024` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/cli/secret_scan_local.go:137` | a git hook must be executable; 0755 is the working minimum (CWE-276) |
 | `internal/connector/localops_test.go:87` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/crypto/external_kms_test.go:88` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -1356,11 +1356,11 @@ not this file.
 | `internal/server/host_agent_remote_served_test.go:572` | public CA fixture (CWE-276) |
 | `internal/server/pam_served_test.go:287` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/pam_served_test.go:299` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/protocols_served_spiffe_ssh_test.go:484` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/protocols_served_spiffe_ssh_test.go:537` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/protocols_served_spiffe_ssh_test.go:509` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/protocols_served_spiffe_ssh_test.go:562` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/protocols_served_stock_clients_test.go:574` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_scan_served_test.go:36` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:2197` | served CA certificate PEM is public material (CWE-276) |
+| `internal/server/server.go:2204` | served CA certificate PEM is public material (CWE-276) |
 | `internal/server/signer_authorization_test.go:132` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/ssh_journey_served_test.go:204` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |

@@ -203,8 +203,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// and rotation previews raise it to 397 and map to the existing F56 row.
 	// F52's effect-free CBOM scan preview raises it to 398 and maps to the
 	// existing cryptographic-observability row.
-	if len(out) != 398 {
-		t.Fatalf("OpenAPI operationIds = %d, want 398", len(out))
+	// F24's effect-free SPIFFE Workload API qualification raises it to 399.
+	if len(out) != 399 {
+		t.Fatalf("OpenAPI operationIds = %d, want 399", len(out))
 	}
 	return out
 }

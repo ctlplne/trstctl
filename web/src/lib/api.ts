@@ -1199,6 +1199,34 @@ export interface CMPQualification {
   blockers: string[];
 }
 
+export interface SPIFFEQualificationCheck {
+  id: string;
+  label: string;
+  passed: boolean;
+  detail: string;
+  recovery?: string;
+}
+
+export interface SPIFFEQualification {
+  checked_at: string;
+  ready: boolean;
+  effect_free: boolean;
+  trust_domain: string;
+  socket_uri: string;
+  transport: "unix";
+  socket_mode: string;
+  registration_entry_count: number;
+  local_socket_deprecated: boolean;
+  supported_operations: string[];
+  checks: SPIFFEQualificationCheck[];
+  preview_writes: string[];
+  preview_external_effects: string[];
+  preview_signer_calls: string[];
+  proof: string[];
+  blockers: string[];
+  client_boundary: string;
+}
+
 export type EditionTier = "community" | "enterprise" | "provider";
 export type EditionState = "community" | "active" | "grace" | "read_only";
 export type FeatureMode = "enabled" | "read_only" | "off";
@@ -2194,6 +2222,8 @@ export interface Api {
   scepQualification(): Promise<SCEPQualificationResult>;
   /** F55: server-owned, tenant-scoped CMP gate qualification with no PKIMessage, signer call, external call, or write. */
   cmpQualification(): Promise<CMPQualification>;
+  /** F24: server-owned SPIFFE UDS posture without dialing the socket, requesting an SVID, calling the signer, or writing. */
+  spiffeQualification(): Promise<SPIFFEQualification>;
   mdmSCEPStatus(): Promise<MDMSCEPStatus>;
   mdmSCEPPolicies(): Promise<MDMSCEPPolicyList>;
   secretPage(options?: { limit?: number; cursor?: string }): Promise<SecretMetaList>;
@@ -2727,6 +2757,7 @@ const liveApi: Api = {
   estQualification,
   scepQualification,
   cmpQualification: () => postRead<CMPQualification>("/api/v1/protocols/cmp/qualification"),
+  spiffeQualification: () => postRead<SPIFFEQualification>("/api/v1/protocols/spiffe/qualification"),
   secretPage: (options) => {
     const qs = new URLSearchParams();
     if (options?.limit != null) qs.set("limit", String(options.limit));

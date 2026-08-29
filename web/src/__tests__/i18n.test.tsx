@@ -1283,8 +1283,15 @@ describe("i18n boundary", () => {
       // partial-failure recovery, and durable inventory proof. Technical
       // identifiers and the zero-effect boundary remain unchanged. Machine-
       // authored es/de translations — FLAG FOR HUMAN TRANSLATION REVIEW.
-      "es-ES": "4af8839e19271a3ed945762c273a3b3992cae28a7f03ac0bfe808b280b979828",
-      "de-DE": "961120f324bb680afe314d54edd39c715ca525e23ba37692c20713de32a2846e",
+      // F24 SPIFFE re-pin: translated trust-domain, owner-only UDS, isolated
+      // signer, bounded-capacity, host migration, effect-free review, and
+      // repair-and-rerun copy. SPIFFE, X.509, JWT, UDS, and Unix remain product
+      // or protocol nouns. Seven superseded CBOM source-extraction keys were
+      // removed after the unused-message oracle proved no rendered surface
+      // references them. Machine-authored es/de translations — FLAGGED FOR
+      // HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "b20b4188f307ee5f85864d48d2ce95fe6078650682225991bc310d36a4fb6da9",
+      "de-DE": "06d77dbf2f7011d00d6e88f8062b4aba4ba33b71685f2ee450ac5896e82b6b65",
     });
   });
 

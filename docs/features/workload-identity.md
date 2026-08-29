@@ -80,6 +80,32 @@ JWT-SVIDs use the signer-backed JWT handle and validate against the served JWT b
 The Workload-API gRPC/protobuf contract is vendored verbatim from go-spiffe, so the
 wire format is byte-identical.
 
+#### Check the running path before connecting a workload
+
+Open **How machines request credentials** and find **SPIFFE workload identity
+readiness**. The console automatically asks the running control plane for a safe,
+tenant-scoped review of the exact trust domain, Unix socket, owner-only socket mode,
+registration-rule count, isolated issuing path, activation gate, and bounded worker
+capacity. It does not dial the socket, request an SVID, call the signer, or write
+state. Each failed gate names the repair that keeps the system fail-closed.
+
+Headless operators can run the same check:
+
+```sh
+trstctl protocols spiffe qualify
+```
+
+That command calls `POST /api/v1/protocols/spiffe/qualification` as an authenticated
+read-only request. A green result proves the running server is ready for a workload
+client; it does not claim that a workload has fetched an identity. Final wire proof
+still uses a stock go-spiffe or spiffe-helper client against the reported
+`unix://...` path.
+
+The control-plane-local socket is a compatibility path. For normal deployments,
+run `trstctl-agent` on each host, bind registration entries to that node, and mount
+only the host-local Workload API socket into workloads. This limits a compromised
+host to identities assigned to that host instead of widening it to the trust domain.
+
 ### SPIRE upstream authority — keep SPIRE, anchor it in trstctl
 
 If you already run [SPIRE](../glossary.md), trstctl can sit above it as the upstream

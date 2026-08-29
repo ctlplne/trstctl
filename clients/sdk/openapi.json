@@ -23439,6 +23439,132 @@
         ],
         "type": "object"
       },
+      "SPIFFEQualification": {
+        "properties": {
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "checked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/SPIFFEQualificationCheck"
+            },
+            "type": "array"
+          },
+          "client_boundary": {
+            "type": "string"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "local_socket_deprecated": {
+            "type": "boolean"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_signer_calls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "proof": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "registration_entry_count": {
+            "type": "integer"
+          },
+          "socket_mode": {
+            "type": "string"
+          },
+          "socket_uri": {
+            "type": "string"
+          },
+          "supported_operations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "transport": {
+            "enum": [
+              "unix"
+            ],
+            "type": "string"
+          },
+          "trust_domain": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "checked_at",
+          "ready",
+          "effect_free",
+          "trust_domain",
+          "socket_uri",
+          "transport",
+          "socket_mode",
+          "registration_entry_count",
+          "local_socket_deprecated",
+          "supported_operations",
+          "checks",
+          "preview_writes",
+          "preview_external_effects",
+          "preview_signer_calls",
+          "proof",
+          "blockers",
+          "client_boundary"
+        ],
+        "type": "object"
+      },
+      "SPIFFEQualificationCheck": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "passed": {
+            "type": "boolean"
+          },
+          "recovery": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "passed",
+          "detail"
+        ],
+        "type": "object"
+      },
       "SSHAttestedUserCert": {
         "properties": {
           "approver": {
@@ -47130,6 +47256,53 @@
           }
         ],
         "summary": "Check the tenant-bound CMP endpoint without sending a PKIMessage, calling the signer, or writing state",
+        "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/protocols/spiffe/qualification": {
+      "post": {
+        "operationId": "qualifySPIFFE",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SPIFFEQualification"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Check the tenant-bound SPIFFE Workload API without dialing the socket, requesting an SVID, calling the signer, or writing state",
         "x-trstctl-permission": "certs:read"
       }
     },

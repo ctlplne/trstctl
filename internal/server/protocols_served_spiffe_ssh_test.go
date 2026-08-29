@@ -22,6 +22,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/protocols/spiffe"
@@ -176,6 +177,30 @@ func TestServedSPIFFEGoSpiffeClient(t *testing.T) {
 	}
 	if result.BundleAuthorities == 0 {
 		t.Fatal("go-spiffe context did not include the served.test trust bundle")
+	}
+
+	// The operator surface proves the exact served socket and security posture
+	// without minting another SVID or exposing any credential material.
+	readToken := seedAPITokenWithScopes(t, h.store, servedTestTenant, []string{"certs:read"})
+	qualifyReq, _ := http.NewRequest(http.MethodPost, h.ts.URL+"/api/v1/protocols/spiffe/qualification", nil)
+	qualifyReq.Header.Set("Authorization", "Bearer "+readToken)
+	qualifyResp, err := h.ts.Client().Do(qualifyReq)
+	if err != nil {
+		t.Fatalf("SPIFFE qualification: %v", err)
+	}
+	qualifyBody, _ := readAllClose(qualifyResp)
+	if qualifyResp.StatusCode != http.StatusOK {
+		t.Fatalf("SPIFFE qualification status %d: %s", qualifyResp.StatusCode, qualifyBody)
+	}
+	var qualification api.SPIFFEQualification
+	if err := json.Unmarshal(qualifyBody, &qualification); err != nil {
+		t.Fatalf("decode SPIFFE qualification: %v body=%s", err, qualifyBody)
+	}
+	if !qualification.Ready || !qualification.EffectFree || qualification.TrustDomain != "served.test" || qualification.SocketURI != "unix://"+socket {
+		t.Fatalf("SPIFFE qualification=%+v, want ready effect-free exact live posture", qualification)
+	}
+	if qualification.RegistrationEntryCount != 1 || qualification.SocketMode == "" || !qualification.LocalSocketDeprecated {
+		t.Fatalf("SPIFFE qualification runtime facts=%+v, want one entry and secured control-plane socket", qualification)
 	}
 	if !h.hasEvent(t, "spiffe.svid.issued") {
 		t.Error("no spiffe.svid.issued event after go-spiffe FetchX509Context")

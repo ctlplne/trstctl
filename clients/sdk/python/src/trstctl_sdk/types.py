@@ -8150,6 +8150,42 @@ RotationRunList = TypedDict(
     total=False,
 )
 
+SPIFFEQualification = TypedDict(
+    'SPIFFEQualification',
+    {
+        'blockers': list[str],
+        'checked_at': str,
+        'checks': list[dict[str, Any]],
+        'client_boundary': str,
+        'effect_free': bool,
+        'local_socket_deprecated': bool,
+        'preview_external_effects': list[str],
+        'preview_signer_calls': list[str],
+        'preview_writes': list[str],
+        'proof': list[str],
+        'ready': bool,
+        'registration_entry_count': int,
+        'socket_mode': str,
+        'socket_uri': str,
+        'supported_operations': list[str],
+        'transport': str,
+        'trust_domain': str,
+    },
+    total=False,
+)
+
+SPIFFEQualificationCheck = TypedDict(
+    'SPIFFEQualificationCheck',
+    {
+        'detail': str,
+        'id': str,
+        'label': str,
+        'passed': bool,
+        'recovery': str,
+    },
+    total=False,
+)
+
 SSHAttestedUserCert = TypedDict(
     'SSHAttestedUserCert',
     {

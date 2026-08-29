@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { MDMDevicesPanel } from "@/components/MDMDevicesPanel";
 import { Copy, X } from "lucide-react";
 import { Dialog } from "@/components/Dialog";
@@ -19,6 +19,7 @@ import { ACMEOperatorPanel } from "@/pages/protocols/ACMEOperatorPanel";
 import { ESTOperatorPanel } from "@/pages/protocols/ESTOperatorPanel";
 import { SCEPOperatorPanel } from "@/pages/protocols/SCEPOperatorPanel";
 import { CMPOperatorPanel } from "@/pages/protocols/CMPOperatorPanel";
+import { SPIFFEOperatorPanel } from "@/pages/protocols/SPIFFEOperatorPanel";
 import { RevocationCachePanel } from "@/pages/protocols/RevocationCachePanel";
 import { DNS01PreflightDialog } from "@/pages/protocols/DNS01PreflightDialog";
 import { MDMSCEPPolicyDialog } from "@/pages/protocols/MDMSCEPPolicyDialog";
@@ -37,6 +38,7 @@ import {
   type MDMSCEPChallengeRotationPreview,
   type MDMSCEPStatus,
   type ProtocolRuntimeStatus,
+  type SPIFFEQualification,
 } from "@/lib/api";
 
 interface ProtocolSnippet {
@@ -350,6 +352,21 @@ export function Protocols() {
     const status = statusByProtocol.get(protocol.id);
     return !status?.enabled || !status.served;
   });
+
+  const recordSPIFFEQualification = useCallback((result: SPIFFEQualification) => {
+    setProtocolStatuses((current) => [
+      ...current.filter((status) => status.protocol !== "spiffe"),
+      {
+        protocol: "spiffe",
+        endpoint: result.socket_uri,
+        enabled: result.checks.find((check) => check.id === "configured")?.passed ?? false,
+        served: result.ready,
+        status_code: 0,
+        detail: result.ready ? translateNow("protocols.spiffeCheck.ready") : translateNow("protocols.spiffeCheck.blocked"),
+      },
+    ]);
+    setStatusCheckedAt(result.checked_at);
+  }, []);
 
   function openProtocolOperations(protocolId: string) {
     setOperationsOpen(true);
@@ -807,6 +824,7 @@ export function Protocols() {
           <ESTOperatorPanel />
           <SCEPOperatorPanel />
           <CMPOperatorPanel diagnostics={diagnostics?.items ?? []} />
+          <SPIFFEOperatorPanel onResult={recordSPIFFEQualification} />
 
           <section aria-labelledby="protocol-status-heading" className="border-y border-border py-4">
             <h2 id="protocol-status-heading" className="text-title font-semibold">

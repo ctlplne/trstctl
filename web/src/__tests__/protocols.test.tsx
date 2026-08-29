@@ -14,6 +14,7 @@ const { apiMock } = vi.hoisted(() => ({
     estQualification: vi.fn(),
     scepQualification: vi.fn(),
     cmpQualification: vi.fn(),
+    spiffeQualification: vi.fn(),
     acmeOperatorPlan: vi.fn(),
     activateProtocolProfile: vi.fn(),
     acmeARIPosture: vi.fn(),
@@ -124,6 +125,7 @@ describe("protocol surface", () => {
     apiMock.estQualification.mockReset();
     apiMock.scepQualification.mockReset();
     apiMock.cmpQualification.mockReset();
+    apiMock.spiffeQualification.mockReset();
     apiMock.acmeOperatorPlan.mockReset();
     apiMock.activateProtocolProfile.mockReset();
     apiMock.acmeARIPosture.mockReset();
@@ -235,6 +237,35 @@ describe("protocol surface", () => {
       preview_signer_calls: [],
       proof: ["In-memory only.", "No request material.", "No effects."],
       blockers: [],
+    });
+    apiMock.spiffeQualification.mockResolvedValue({
+      checked_at: "2026-08-29T12:00:00Z",
+      ready: true,
+      effect_free: true,
+      trust_domain: "workloads.example.test",
+      socket_uri: "unix:///run/trstctl-spiffe/workload.sock",
+      transport: "unix",
+      socket_mode: "Srwx------",
+      registration_entry_count: 1,
+      local_socket_deprecated: true,
+      supported_operations: ["FetchX509SVID", "FetchX509Bundles", "FetchJWTSVID", "FetchJWTBundles", "ValidateJWTSVID"],
+      checks: [
+        { id: "configured", label: "SPIFFE enabled", passed: true, detail: "SPIFFE is enabled in startup configuration." },
+        { id: "workload-api-built", label: "Workload API built", passed: true, detail: "The running control plane assembled the SPIFFE Workload API." },
+        { id: "activation", label: "Protocol profile active", passed: true, detail: "The configured protocol profile allows the Workload API to serve." },
+        { id: "tenant-binding", label: "Tenant binding", passed: true, detail: "The Workload API is bound to this authenticated tenant." },
+        { id: "socket-listening", label: "Unix socket listening", passed: true, detail: "The configured path is a live Unix domain socket." },
+        { id: "socket-permissions", label: "Socket owner-only", passed: true, detail: "The socket denies group and other access." },
+        { id: "registration-policy", label: "Registration policy attached", passed: true, detail: "At least one registration entry can bind an approved workload to a SPIFFE ID." },
+        { id: "issuing-path", label: "Isolated issuing path", passed: true, detail: "X.509 and JWT issuance route through the isolated signer boundary." },
+        { id: "bounded-capacity", label: "Bounded workload capacity", passed: true, detail: "Workload requests use the bounded protocol worker pool." },
+      ],
+      preview_writes: [],
+      preview_external_effects: [],
+      preview_signer_calls: [],
+      proof: ["Server posture only.", "No workload call.", "No effects."],
+      blockers: [],
+      client_boundary: "Workloads fetch short-lived credentials from their local Unix socket; operators review readiness here without receiving workload key material.",
     });
     apiMock.activateProtocolProfile.mockResolvedValue({ profile: "eval", active: true, protocols: ["acme"] });
     apiMock.acmeUpstreamAuthorizations.mockResolvedValue({ items: [], never_validated_count: 0, guidance: "" });
@@ -1335,12 +1366,59 @@ describe("protocol surface", () => {
     expect(command).not.toMatch(/BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY|password=|secret=/i);
   });
 
+  it("automatically proves SPIFFE UDS readiness and keeps recovery effect-free", async () => {
+    const user = userEvent.setup();
+    await renderProtocols();
+
+    const panel = screen.getByRole("region", { name: "SPIFFE workload identity readiness" });
+    await waitFor(() => expect(apiMock.spiffeQualification).toHaveBeenCalledTimes(1));
+    expect(await within(panel).findAllByText("SPIFFE is ready for a workload client")).toHaveLength(1);
+    expect(within(panel).getByText("workloads.example.test")).toBeInTheDocument();
+    expect(within(panel).getByText("unix:///run/trstctl-spiffe/workload.sock")).toBeInTheDocument();
+    expect(within(panel).getByText("1 active rule(s)")).toBeInTheDocument();
+    expect(within(panel).getByText("5 supported operations")).toBeInTheDocument();
+    expect(within(panel).getByText(/0 writes · 0 outside calls · 0 signer calls · 0 identities minted/i)).toBeInTheDocument();
+    expect(within(panel).getByText(/control-plane socket is a compatibility path/i)).toBeInTheDocument();
+
+    apiMock.spiffeQualification.mockResolvedValueOnce({
+      checked_at: "2026-08-29T12:01:00Z",
+      ready: false,
+      effect_free: true,
+      trust_domain: "workloads.example.test",
+      socket_uri: "unix:///run/trstctl-spiffe/workload.sock",
+      transport: "unix",
+      socket_mode: "",
+      registration_entry_count: 1,
+      local_socket_deprecated: true,
+      supported_operations: ["FetchX509SVID", "FetchX509Bundles", "FetchJWTSVID", "FetchJWTBundles", "ValidateJWTSVID"],
+      checks: [
+        {
+          id: "socket-listening",
+          label: "Unix socket listening",
+          passed: false,
+          detail: "This gate is not ready in the running process.",
+          recovery: "Repair the socket directory, mount, permissions, or server lifecycle, then confirm the exact path again.",
+        },
+      ],
+      preview_writes: [],
+      preview_external_effects: [],
+      preview_signer_calls: [],
+      proof: ["Server posture only.", "No workload call.", "No effects."],
+      blockers: ["Unix socket listening: repair the socket."],
+      client_boundary: "Workloads fetch short-lived credentials from their local Unix socket.",
+    });
+    await user.click(within(panel).getByRole("button", { name: "Run again" }));
+
+    expect(await within(panel).findAllByText("SPIFFE needs attention")).toHaveLength(1);
+    expect(within(panel).getByText(/Repair the socket directory, mount, permissions/i)).toBeInTheDocument();
+  });
+
   it("renders SPIFFE, SSH CA, and TSA setup without exposing private key material", async () => {
     const writeText = installClipboardSpy();
     await renderProtocols();
 
     expect(screen.getAllByText("Workload API socket issuing X.509-SVID and JWT-SVID credentials").length).toBeGreaterThan(0);
-    expect(screen.getByText("Trust domain")).toBeInTheDocument();
+    expect(screen.getAllByText("Trust domain").length).toBeGreaterThan(0);
     expect(screen.getByText("unix:///tmp/trstctl-spiffe-workload.sock")).toBeInTheDocument();
     expect(screen.getByText("Workload API socket configured.")).toBeInTheDocument();
     expect(screen.getByText(/X.509-SVID and JWT-SVID support/i)).toBeInTheDocument();

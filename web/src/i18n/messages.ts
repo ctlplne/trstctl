@@ -7139,6 +7139,46 @@ export const messages = {
   "protocols.cmpCheck.failedTitle": { defaultMessage: "CMP check could not run", description: "CMP qualification transport error heading." },
   "protocols.cmpCheck.failedBody": { defaultMessage: "The CMP check failed before returning evidence.", description: "Fallback CMP qualification error." },
   "protocols.cmpCheck.invalidResult": { defaultMessage: "The CMP check returned incomplete evidence.", description: "CMP qualification schema guard error." },
+  "protocols.spiffeCheck.region": { defaultMessage: "SPIFFE workload identity readiness", description: "Accessible label for the safe SPIFFE operator workflow." },
+  "protocols.spiffeCheck.heading": { defaultMessage: "SPIFFE workload identity readiness", description: "Heading for the safe SPIFFE operator workflow." },
+  "protocols.spiffeCheck.description": {
+    defaultMessage: "See whether workloads can safely fetch short-lived identities from this running server before you connect an application.",
+    description: "ELI5 explanation of the SPIFFE qualification workflow.",
+  },
+  "protocols.spiffeCheck.previewHeading": { defaultMessage: "What this check will inspect", description: "SPIFFE qualification preview heading." },
+  "protocols.spiffeCheck.safePreview": {
+    defaultMessage: "Safety boundary: this reads server and Unix socket readiness only. It does not connect as a workload, mint an identity, call the signer, or write anything.",
+    description: "Explicit no-effect boundary for SPIFFE qualification.",
+  },
+  "protocols.spiffeCheck.identityPreview": { defaultMessage: "Trust domain and tenant", description: "SPIFFE preview step for identity scope." },
+  "protocols.spiffeCheck.identityPreviewDetail": { defaultMessage: "Confirm that this workload identity domain belongs to the signed-in tenant.", description: "SPIFFE identity-scope preview detail." },
+  "protocols.spiffeCheck.socketPreview": { defaultMessage: "Local socket boundary", description: "SPIFFE preview step for socket posture." },
+  "protocols.spiffeCheck.socketPreviewDetail": { defaultMessage: "Confirm that the exact path is a live Unix socket and denies group and other access.", description: "SPIFFE socket preview detail." },
+  "protocols.spiffeCheck.issuePreview": { defaultMessage: "Registration and isolated signer", description: "SPIFFE preview step for issuance posture." },
+  "protocols.spiffeCheck.issuePreviewDetail": { defaultMessage: "Confirm that an explicit workload rule and the isolated X.509/JWT issuing path are attached.", description: "SPIFFE issuance preview detail." },
+  "protocols.spiffeCheck.capacityPreview": { defaultMessage: "Bounded capacity", description: "SPIFFE preview step for bulkhead posture." },
+  "protocols.spiffeCheck.capacityPreviewDetail": { defaultMessage: "Confirm that workload requests cannot starve the control-plane API.", description: "SPIFFE capacity preview detail." },
+  "protocols.spiffeCheck.ready": { defaultMessage: "SPIFFE is ready for a workload client", description: "Successful SPIFFE qualification state." },
+  "protocols.spiffeCheck.blocked": { defaultMessage: "SPIFFE needs attention", description: "Blocked SPIFFE qualification state." },
+  "protocols.spiffeCheck.trustDomain": { defaultMessage: "Trust domain", description: "SPIFFE trust-domain label." },
+  "protocols.spiffeCheck.socket": { defaultMessage: "Workload socket", description: "SPIFFE socket URI label." },
+  "protocols.spiffeCheck.entries": { defaultMessage: "Registration rules", description: "SPIFFE registration-entry count label." },
+  "protocols.spiffeCheck.entryCount": { defaultMessage: "{count} active rule(s)", description: "SPIFFE registration-entry count." },
+  "protocols.spiffeCheck.operations": { defaultMessage: "Workload operations", description: "SPIFFE supported-operation count label." },
+  "protocols.spiffeCheck.operationCount": { defaultMessage: "{count} supported operations", description: "SPIFFE supported-operation count." },
+  "protocols.spiffeCheck.resultsLabel": { defaultMessage: "SPIFFE readiness gate results", description: "Accessible label for SPIFFE results." },
+  "protocols.spiffeCheck.passed": { defaultMessage: "Passed", description: "One SPIFFE qualification gate passed." },
+  "protocols.spiffeCheck.failed": { defaultMessage: "Blocked", description: "One SPIFFE qualification gate failed closed." },
+  "protocols.spiffeCheck.migrationHeading": { defaultMessage: "Move workload delivery to each host", description: "SPIFFE control-plane socket deprecation heading." },
+  "protocols.spiffeCheck.migrationBody": { defaultMessage: "This control-plane socket is a compatibility path. Run the trstctl agent on each host and mount only that host's socket into its workloads.", description: "SPIFFE host-socket migration guidance." },
+  "protocols.spiffeCheck.effectProof": { defaultMessage: "0 writes · 0 outside calls · 0 signer calls · 0 identities minted. A stock workload client remains the final wire proof.", description: "SPIFFE qualification no-effect proof." },
+  "protocols.spiffeCheck.run": { defaultMessage: "Run safe SPIFFE check", description: "Run the effect-free SPIFFE qualification." },
+  "protocols.spiffeCheck.running": { defaultMessage: "Checking SPIFFE…", description: "Busy label during SPIFFE qualification." },
+  "protocols.spiffeCheck.runAgain": { defaultMessage: "Run again", description: "Repeat SPIFFE qualification after repair." },
+  "protocols.spiffeCheck.clientBoundary": { defaultMessage: "A real workload creates and keeps its private key locally, then fetches its short-lived identity through its host's Unix socket.", description: "Boundary between SPIFFE qualification and workload credential delivery." },
+  "protocols.spiffeCheck.failedTitle": { defaultMessage: "SPIFFE check could not run", description: "SPIFFE qualification transport error heading." },
+  "protocols.spiffeCheck.failedBody": { defaultMessage: "The SPIFFE check failed before returning evidence.", description: "Fallback SPIFFE qualification error." },
+  "protocols.spiffeCheck.invalidResult": { defaultMessage: "The SPIFFE check returned incomplete evidence.", description: "SPIFFE qualification schema guard error." },
   "protocols.guide.heading": {
     defaultMessage: "Choose how each machine asks",
     description: "Plain-language heading for the protocol method guide.",
@@ -18485,10 +18525,6 @@ export const messages = {
     defaultMessage: "Escalation",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
   },
-  "source.etc.ssh.sshd.config.83ca950c7a": {
-    defaultMessage: "/etc/ssh/sshd_config",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Posture.tsx.",
-  },
   "source.event.detail.097e77abc2": {
     defaultMessage: "Event detail",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Audit.tsx.",
@@ -18769,10 +18805,6 @@ export const messages = {
     defaultMessage: "Host",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/SSHTrust.tsx.",
   },
-  "source.host.config.paths.8b2c6c7bdd": {
-    defaultMessage: "Host config paths",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Posture.tsx.",
-  },
   "source.host.retirement.4f92fcc0ea": {
     defaultMessage: "Host retirement",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/SSHTrust.tsx.",
@@ -18792,10 +18824,6 @@ export const messages = {
   "source.http.post.482b52eb11": {
     defaultMessage: "HTTP POST",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Protocols.tsx.",
-  },
-  "source.https.api.example.com.443.74d0333a40": {
-    defaultMessage: "https://api.example.com:443",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Posture.tsx.",
   },
   "source.https.example.service.now.com.1d3417de64": {
     defaultMessage: "https://example.service-now.com",
@@ -21992,11 +22020,6 @@ export const messages = {
       "The register checks the same-origin protocol responder paths the control plane mounts. A protocol is shown as off only when its responder path is missing or unavailable.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Protocols.tsx.",
   },
-  "source.the.request.sends.endpoint.and.host.config.057e53f9e9": {
-    defaultMessage:
-      "The request sends endpoint and host-config locators only. Inventory rows are loaded from the tenant-scoped CBOM asset endpoint after the scan.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Posture.tsx.",
-  },
   "source.this.json.is.sent.to.the.profile.workflow.37a80f1c5b": {
     defaultMessage: "This exact JSON is stored as the versioned issuance profile. The server validates it before the rule can issue anything.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Profiles.tsx.",
@@ -22066,10 +22089,6 @@ export const messages = {
   "source.time.to.expiry.b1bf11183a": {
     defaultMessage: "time to expiry",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Dashboard.tsx.",
-  },
-  "source.tls.endpoints.c928457ec8": {
-    defaultMessage: "TLS endpoints",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Posture.tsx.",
   },
   "source.to.663ea1bfff": {
     defaultMessage: "to",
@@ -22843,10 +22862,6 @@ export const messages = {
     defaultMessage: "Rotation run {value1}",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Operations.tsx:611.",
   },
-  "source.run.cbom.scan.ca786ed005": {
-    defaultMessage: "Run CBOM scan",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Posture.tsx:403.",
-  },
   "source.run.preflight.3cd0b7ebda": {
     defaultMessage: "Run preflight",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Protocols.tsx:1476.",
@@ -22854,10 +22869,6 @@ export const messages = {
   "source.running.46c541363b": {
     defaultMessage: "Running…",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/components/bulk/actions.tsx:41.",
-  },
-  "source.running.scan.34932df63a": {
-    defaultMessage: "Running scan",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Posture.tsx:403.",
   },
   "source.select.value1.187be5793a": {
     defaultMessage: "Select {value1}",

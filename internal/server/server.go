@@ -1269,7 +1269,7 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 		defaults = append(defaults, api.WithExternalCAs(externalCAs))
 	}
 	defaults = append(defaults, api.WithManagedKeyCustody(d.ManagedKeyCustody))
-	s.appendCMPQualificationOption(d, &defaults)
+	s.appendProtocolQualificationOptions(d, &defaults)
 	if mk, err := buildManagedKeyService(d, idem, s.outbox, orch); err != nil {
 		return nil, nil, fmt.Errorf("server: configure managed-key lifecycle: %w", err)
 	} else if mk != nil {
@@ -1295,6 +1295,13 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	a := api.New(d.Store, idem, orch, append(defaults, d.APIOptions...)...)
 	s.api = a
 	return a, auditSvc, nil
+}
+
+// appendProtocolQualificationOptions keeps the protocol readiness sources in
+// one named startup stage instead of growing configureAPI for every protocol.
+func (s *Server) appendProtocolQualificationOptions(d Deps, options *[]api.Option) {
+	s.appendCMPQualificationOption(d, options)
+	s.appendSPIFFEQualificationOption(d, options)
 }
 
 // baseAPIOptions is the always-on half of the served API surface: the options

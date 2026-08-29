@@ -259,8 +259,12 @@ func (p *sshProtocol) KRLBytes() []byte { return p.krl.DistributeKRL(p.krlVersio
 // path. It is served over the socket by Server.RunSPIFFE (a gRPC service, not on the
 // HTTP mux).
 type spiffeProtocol struct {
-	server *spiffe.WorkloadAPIServer
-	socket string
+	server                 *spiffe.WorkloadAPIServer
+	socket                 string
+	tenantID               string
+	registrationEntryCount int
+	bulkheadReady          bool
+	running                atomic.Bool
 	// wl is the underlying issuance server, kept so the agent channel can reach
 	// it for node-scoped fetches (epic B3). The Workload API server above wraps
 	// the same value for the control plane's own socket; the agent path needs
@@ -281,6 +285,8 @@ func (s *Server) RunSPIFFE(ctx context.Context) {
 		return
 	}
 	sp := s.protocols.spiffe
+	sp.running.Store(true)
+	defer sp.running.Store(false)
 	if err := spiffe.ServeWorkloadAPI(ctx, sp.socket, sp.server); err != nil && ctx.Err() == nil {
 		s.logger.Warn("spiffe workload API server stopped", "error", err.Error())
 	}

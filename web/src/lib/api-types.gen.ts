@@ -5852,6 +5852,34 @@ export interface RotationRunList {
   next_cursor?: string;
 }
 
+export interface SPIFFEQualification {
+  blockers: string[];
+  checked_at: string;
+  checks: SPIFFEQualificationCheck[];
+  client_boundary: string;
+  effect_free: boolean;
+  local_socket_deprecated: boolean;
+  preview_external_effects: string[];
+  preview_signer_calls: string[];
+  preview_writes: string[];
+  proof: string[];
+  ready: boolean;
+  registration_entry_count: number;
+  socket_mode: string;
+  socket_uri: string;
+  supported_operations: string[];
+  transport: "unix";
+  trust_domain: string;
+}
+
+export interface SPIFFEQualificationCheck {
+  detail: string;
+  id: string;
+  label: string;
+  passed: boolean;
+  recovery?: string;
+}
+
 export interface SSHAttestedUserCert {
   approver: string;
   attestation: Attestation;

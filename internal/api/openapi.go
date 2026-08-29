@@ -399,6 +399,21 @@ func componentSchemas() map[string]*Schema {
 		"preview_signer_calls":      {Type: "array", Items: str()},
 		"proof":                     {Type: "array", Items: str()}, "blockers": {Type: "array", Items: str()},
 	}, "checked_at", "ready", "effect_free", "endpoint", "profile", "binding_mode", "client_trust_anchor_count", "checks", "preview_writes", "preview_external_effects", "preview_signer_calls", "proof", "blockers")
+	spiffeQualificationCheck := object(map[string]*Schema{
+		"id": str(), "label": str(), "passed": {Type: "boolean"}, "detail": str(), "recovery": str(),
+	}, "id", "label", "passed", "detail")
+	spiffeQualification := object(map[string]*Schema{
+		"checked_at": timestamp(), "ready": {Type: "boolean"}, "effect_free": {Type: "boolean"},
+		"trust_domain": str(), "socket_uri": str(), "transport": {Type: "string", Enum: []string{"unix"}}, "socket_mode": str(),
+		"registration_entry_count": {Type: "integer"}, "local_socket_deprecated": {Type: "boolean"},
+		"supported_operations":     {Type: "array", Items: str()},
+		"checks":                   {Type: "array", Items: ref("SPIFFEQualificationCheck")},
+		"preview_writes":           {Type: "array", Items: str()},
+		"preview_external_effects": {Type: "array", Items: str()},
+		"preview_signer_calls":     {Type: "array", Items: str()},
+		"proof":                    {Type: "array", Items: str()}, "blockers": {Type: "array", Items: str()},
+		"client_boundary": str(),
+	}, "checked_at", "ready", "effect_free", "trust_domain", "socket_uri", "transport", "socket_mode", "registration_entry_count", "local_socket_deprecated", "supported_operations", "checks", "preview_writes", "preview_external_effects", "preview_signer_calls", "proof", "blockers", "client_boundary")
 
 	caSpec := object(map[string]*Schema{
 		"common_name":           str(),
@@ -5789,6 +5804,8 @@ func componentSchemas() map[string]*Schema {
 		"ProtocolProfileStatus":                    protocolProfileStatus,
 		"CMPQualificationCheck":                    cmpQualificationCheck,
 		"CMPQualification":                         cmpQualification,
+		"SPIFFEQualificationCheck":                 spiffeQualificationCheck,
+		"SPIFFEQualification":                      spiffeQualification,
 		"CASpec":                                   caSpec,
 		"CACeremonyStartRequest":                   caCeremonyStartReq,
 		"CAKeyCeremony":                            caCeremony,

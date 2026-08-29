@@ -577,6 +577,9 @@ describe("exported API surface census", () => {
       // F55: this POST reads assembled in-memory CMP posture. It carries no
       // body and performs no enrollment, write, signer call, or network call.
       "/api/v1/protocols/cmp/qualification",
+      // F24: server-owned UDS metadata only; no workload request, signer call,
+      // database read, event append, external call, or credential material.
+      "/api/v1/protocols/spiffe/qualification",
       "/api/v1/ai/query",
       "/api/v1/ai/rca",
       "/api/v1/graph/query",

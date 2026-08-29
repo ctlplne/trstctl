@@ -8659,9 +8659,9 @@
             "priority": 27,
             "served_state": "conditional",
             "backend_status": "conditional: served RunSPIFFE UDS Workload API workflow: server runs SPIFFE when protocols.spiffe.enabled and a trust domain plus issuing signer exist; real Workload API clients call FetchX509SVID, FetchX509Bundles, FetchJWTSVID, FetchJWTBundles, and ValidateJWTSVID, receive signer-backed X.509-SVID/JWT-SVID material, validate bundles with go-spiffe, emit spiffe.svid.issued audit events, and fail closed without the signer/trust-domain gate",
-            "current_frontend_mapping": "operate: Protocols at /protocols serves SPIFFE Workload API workflow evidence with trust-domain/socket requirements, selector guidance, X.509-SVID and JWT-SVID support, live responder status, and copy-safe client snippets.",
-            "target_gui_mapping": "Roadmap residual: dedicated SPIFFE admin console for trust domain, socket path, selectors, SVID issuance status, JWT/X509 support, JWT bundle validation, and richer client integration controls beyond the served Protocols workflow.",
-            "acceptance_test": "Served GA acceptance is TestServedSPIFFEWorkloadAPIEndToEnd plus TestServedSPIFFEGoSpiffeClient and TestServedSPIFFEGoSpiffeJWTClient on the assembled RunSPIFFE UDS; roadmap residual is the dedicated SPIFFE admin console beyond the served Protocols workflow.",
+            "current_frontend_mapping": "operate: Protocols at /protocols serves a purpose-built SPIFFE operator workflow that automatically reads the exact tenant-bound trust domain, UDS path and owner-only mode, activation, registration count, isolated issuing path, supported X.509/JWT operations, bounded capacity, host-socket migration guidance, and gate-specific recovery without dialing the socket or receiving credential material.",
+            "target_gui_mapping": "Roadmap residual: an optional advanced SPIFFE admin console for per-registration CRUD, selector drill-down, and fleet migration visualization beyond this complete qualify/connect/observe/recover workflow; it is not required to configure, qualify, fetch with a stock client, verify, repair, retry, or automate SPIFFE.",
+            "acceptance_test": "Served GA acceptance is TestServedSPIFFEWorkloadAPIEndToEnd, TestServedSPIFFEGoSpiffeClient, and TestServedSPIFFEGoSpiffeJWTClient on the assembled RunSPIFFE UDS; TestSPIFFEQualificationIsTenantScopedEffectFreeAndExact proves the safe operator read; CLI/API parity and web/src/__tests__/protocols.test.tsx prove automatic preview, readiness, recovery, retry, and transport isolation.",
             "source_docs": [
                 "docs/features/workload-identity.md"
             ],
@@ -8669,14 +8669,19 @@
                 "internal/protocols/spiffe"
             ],
             "source_frontend": [
-                "web/src/pages/Protocols.tsx"
+                "web/src/pages/Protocols.tsx",
+                "web/src/pages/protocols/SPIFFEOperatorPanel.tsx"
             ],
             "status": "closed",
             "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-            "api_surface": [],
-            "api_na": "N/A: served through protocol-specific endpoints/configuration, not the /api/v1 OpenAPI contract.",
-            "cli_surface": [],
-            "cli_na": "N/A: served through protocol-specific endpoints/configuration, not the trstctl CLI command table.",
+            "api_surface": [
+                "qualifySPIFFE"
+            ],
+            "api_na": "",
+            "cli_surface": [
+                "protocols spiffe qualify"
+            ],
+            "cli_na": "",
             "facet_evidence": {
                 "served": {
                     "evidence": [
@@ -8689,24 +8694,40 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: operate: Protocols at /protocols serves SPIFFE Workload API workflow evidence with trust-domain/socket requirements, selector guidance, X.509-SVID and JWT-SVID support, live responder status, and copy-safe client snippets.",
-                        "target_gui_mapping: SPIFFE admin UI showing trust domain, socket path, selectors, SVID issuance status, JWT/X509 support, JWT bundle validation, and client integration snippets."
+                        "current_frontend_mapping: Protocols at /protocols serves the purpose-built SPIFFE readiness, client-boundary, host migration, and recovery workflow.",
+                        "target_gui_mapping: an optional advanced SPIFFE admin console for per-registration CRUD and fleet migration visualization beyond the complete operator workflow."
                     ],
                     "refs": [
                         "web/src/pages/Protocols.tsx",
+                        "web/src/pages/protocols/SPIFFEOperatorPanel.tsx",
                         "web/src/lib/navigation.ts",
                         "web/src/App.tsx"
                     ]
                 },
                 "cli": {
-                    "na": "N/A: served through protocol-specific endpoints/configuration, not the trstctl CLI command table."
+                    "evidence": [
+                        "CLI command: protocols spiffe qualify",
+                        "The read-only command sends no body or Idempotency-Key and returns the same bounded posture as the console."
+                    ],
+                    "refs": [
+                        "internal/cli/command.go",
+                        "internal/cli/cli_test.go"
+                    ]
                 },
                 "api": {
-                    "na": "N/A: served through protocol-specific endpoints/configuration, not the /api/v1 OpenAPI contract."
+                    "evidence": [
+                        "OpenAPI operationId: qualifySPIFFE",
+                        "POST /api/v1/protocols/spiffe/qualification is authenticated with certs:read, tenant-scoped, and explicitly effect-free."
+                    ],
+                    "refs": [
+                        "internal/api/spiffe_qualification.go",
+                        "internal/api/spiffe_qualification_test.go",
+                        "internal/api/openapi.go"
+                    ]
                 },
                 "test": {
                     "evidence": [
-                        "acceptance_test: Served GA acceptance is TestServedSPIFFEWorkloadAPIEndToEnd plus TestServedSPIFFEGoSpiffeClient and TestServedSPIFFEGoSpiffeJWTClient on the assembled RunSPIFFE UDS; roadmap residual is the dedicated SPIFFE admin console beyond the served Protocols workflow.",
+                        "acceptance_test: served stock-client wire proofs plus tenant-scoped effect-free API, CLI parity, and browser preview/recovery coverage.",
                         "TRACE-023 guard: TestTRACE023SPIFFERowSplitsServedGAFromRoadmapResidual keeps F24 in the served GA denominator only when the served Workload API workflow and explicit admin-console roadmap residual are both present.",
                         "TestServedSPIFFEWorkloadAPIEndToEnd drives the served RunSPIFFE UDS with the SPIFFE Workload API proto, fetches an X.509-SVID, validates the SPIFFE URI SAN and trust bundle, proves signer-backed issuance, checks spiffe.svid.issued audit evidence, and rejects clients missing the mandatory security header.",
                         "TestServedSPIFFEGoSpiffeClient proves a stock go-spiffe X.509 client fetches and validates the served SVID and trust bundle.",
@@ -8719,6 +8740,8 @@
                     "refs": [
                         "internal/featureparity/feature_facet_coverage_test.go",
                         "internal/server/protocols_served_spiffe_ssh_test.go",
+                        "internal/api/spiffe_qualification_test.go",
+                        "internal/cli/cli_test.go",
                         "internal/server/protect_correct102_guard_test.go",
                         "internal/server/protocol_authz_test.go",
                         "internal/featureparity/feature_served_ga_coverage_test.go",
@@ -8736,10 +8759,14 @@
                 },
                 "rbac": {
                     "evidence": [
-                        "protocol authz manifest maps spiffe route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
-                        "spiffe is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+                        "protocol authz manifest maps SPIFFE RPC patterns to an explicit workload credential rationale, tenant mapping, principal mapping, and admin enablement authority.",
+                        "The API feature authz manifest maps qualifySPIFFE to certs:read; the route resolves tenant identity only from authenticated context and cannot mint or return an SVID."
                     ],
                     "refs": [
+                        "internal/featureparity/authz_manifest.go",
+                        "internal/api/feature_authz_test.go",
+                        "internal/api/api.go",
+                        "internal/api/spiffe_qualification_test.go",
                         "internal/server/protocol_authz.go",
                         "internal/server/protocol_authz_test.go",
                         "internal/server/protocols_served_spiffe_ssh_test.go"
@@ -8771,6 +8798,7 @@
                         "web/src/__tests__/feature_a11y_receipts.test.tsx",
                         "web/src/lib/navigation.ts",
                         "web/src/pages/Protocols.tsx",
+                        "web/src/pages/protocols/SPIFFEOperatorPanel.tsx",
                         "web/src/App.tsx"
                     ]
                 },
@@ -8795,7 +8823,7 @@
                 "purpose": "Lets an operator understand and safely use spiffe workload api while tenant, policy, and security authority remain on the server.",
                 "tool": "workloads_machines",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/protocols",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -8809,7 +8837,7 @@
                 ],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -8830,12 +8858,20 @@
                         ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/protocols/SPIFFEOperatorPanel.tsx",
+                            "internal/api/spiffe_qualification.go",
+                            "internal/api/spiffe_qualification_test.go"
+                        ]
                     },
                     "execute": {
-                        "status": "missing",
-                        "reason": "No complete console execution path is proved for this capability."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/protocols/SPIFFEOperatorPanel.tsx",
+                            "internal/server/protocols_served_spiffe_ssh_test.go",
+                            "internal/server/agent_workload_api_gospiffe_test.go"
+                        ]
                     },
                     "observe": {
                         "status": "complete",
@@ -8844,8 +8880,12 @@
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/protocols/SPIFFEOperatorPanel.tsx",
+                            "web/src/__tests__/protocols.test.tsx",
+                            "internal/api/spiffe_qualification_test.go"
+                        ]
                     },
                     "verify": {
                         "status": "complete",
@@ -8854,8 +8894,11 @@
                         ]
                     },
                     "automate": {
-                        "status": "not_applicable",
-                        "reason": "The catalog declares no supported API or CLI automation surface for this capability."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/api/spiffe_qualification.go",
+                            "internal/cli/command.go"
+                        ]
                     }
                 },
                 "owner": "identity",

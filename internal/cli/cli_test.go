@@ -108,6 +108,24 @@ func TestCMPQualificationUsesAuthenticatedReadOnlyPOST(t *testing.T) {
 	}
 }
 
+func TestSPIFFEQualificationUsesAuthenticatedReadOnlyPOST(t *testing.T) {
+	var captured capture
+	srv := mockServer(t, http.StatusOK,
+		`{"checked_at":"2026-08-29T12:00:00Z","ready":true,"effect_free":true,"trust_domain":"workloads.example.test","socket_uri":"unix:///run/trstctl-spiffe/workload.sock","transport":"unix","registration_entry_count":1,"local_socket_deprecated":true,"supported_operations":[],"checks":[],"preview_writes":[],"preview_external_effects":[],"preview_signer_calls":[],"proof":[],"blockers":[],"client_boundary":"workloads fetch credentials from their local socket"}`,
+		&captured)
+	env := cli.Env{Server: srv.URL, Token: strings.Join([]string{"spiffe", "read", "token"}, "-"), Tenant: "tenant-a", HTTPClient: srv.Client()}
+
+	code, stdout, stderr := run(t, []string{"protocols", "spiffe", "qualify"}, env, "")
+	if code != 0 || !strings.Contains(stdout, `"effect_free": true`) || stderr != "" {
+		t.Fatalf("protocols spiffe qualify = exit %d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if captured.Method != http.MethodPost || captured.Path != "/api/v1/protocols/spiffe/qualification" ||
+		captured.Header.Get("Idempotency-Key") != "" || len(captured.Body) != 0 {
+		t.Fatalf("SPIFFE qualification request = %s %s key=%q body=%s", captured.Method, captured.Path,
+			captured.Header.Get("Idempotency-Key"), captured.Body)
+	}
+}
+
 func TestDiscoverySegmentCreateEnablesHeadlessSourceWorkflowAUD118(t *testing.T) {
 	segmentBody := `{"name":"edge-prod","ranges":["10.24.0.0/16"],"staleness_hours":24,"excluded":false}`
 	sourceBody := `{"kind":"network","name":"edge-tls","config":{"segment":"edge-prod","targets":["10.24.1.10:443"]}}`

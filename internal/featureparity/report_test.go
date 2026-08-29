@@ -41,8 +41,8 @@ func TestRenderControlPanelUsesCanonicalCatalogOnly(t *testing.T) {
 		"trstctl frontend parity control panel",
 		// F52 now joins F54 and F56 with a server-owned effect-free preview,
 		// bounded execution, durable readback, and explicit recovery.
-		"35 release blockers",
-		"34 complete vertical slices",
+		"34 release blockers",
+		"35 complete vertical slices",
 		"Filter capabilities",
 		"data-tool=\"secrets\"",
 		"F66",

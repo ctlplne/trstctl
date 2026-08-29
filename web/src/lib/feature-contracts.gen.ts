@@ -3069,7 +3069,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use spiffe workload api while tenant, policy, and security authority remain on the server.",
       "tool": "workloads_machines",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/protocols",
       "navigationEntrypoints": [
         "tool navigation",
@@ -3083,7 +3083,7 @@ export const canonicalCapabilities = [
       ],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -3104,12 +3104,20 @@ export const canonicalCapabilities = [
           ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/protocols/SPIFFEOperatorPanel.tsx",
+            "internal/api/spiffe_qualification.go",
+            "internal/api/spiffe_qualification_test.go"
+          ]
         },
         "execute": {
-          "status": "missing",
-          "reason": "No complete console execution path is proved for this capability."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/protocols/SPIFFEOperatorPanel.tsx",
+            "internal/server/protocols_served_spiffe_ssh_test.go",
+            "internal/server/agent_workload_api_gospiffe_test.go"
+          ]
         },
         "observe": {
           "status": "complete",
@@ -3118,8 +3126,12 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/protocols/SPIFFEOperatorPanel.tsx",
+            "web/src/__tests__/protocols.test.tsx",
+            "internal/api/spiffe_qualification_test.go"
+          ]
         },
         "verify": {
           "status": "complete",
@@ -3128,8 +3140,11 @@ export const canonicalCapabilities = [
           ]
         },
         "automate": {
-          "status": "not_applicable",
-          "reason": "The catalog declares no supported API or CLI automation surface for this capability."
+          "status": "complete",
+          "evidence": [
+            "internal/api/spiffe_qualification.go",
+            "internal/cli/command.go"
+          ]
         }
       },
       "owner": "identity",
