@@ -87,7 +87,14 @@ func TestServedIssueTransitionBindsOutboxToRequestIdempotencyKey(t *testing.T) {
 // exact request with the same Idempotency-Key. A correct replay returns the cached
 // response and does not append a second tenant event.
 func TestServedMutationIdempotencyReplayMatrix(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
+	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
+		// Agent bootstrap is now a complete-lifecycle mutation: it must not
+		// mint unless this served composition also has a public TLS identity
+		// and signer-backed verified-mTLS renewal path.
+		d.EnableAgentChannel = true
+		d.AgentChannelPublicAddress = "agent.trstctl.local:19443"
+		d.AgentChannelServerName = "agent.trstctl.local"
+	})
 	registerServedTenant(t, h, "served mutation replay tenant")
 	token := seedScopedToken(t, h.store, h.tenant,
 		"owners:write",
