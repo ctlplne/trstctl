@@ -10067,7 +10067,7 @@
                 "web/src/pages/Wizard.tsx"
             ],
             "status": "closed",
-            "notes": "Closed as a complete vertical slice by the direct product preview/issuance workflow. Served tests prove preview has no event or KRL side effect, issuance produces one real OpenSSH host certificate through the isolated signer, unsafe host options fail closed, and idempotent replay does not sign twice. Browser tests prove exact-plan review and privacy-safe result disclosure.",
+            "notes": "Closed as a complete vertical slice by the direct product preview/issuance workflow. Served tests prove preview has no event or KRL side effect, issuance produces one real OpenSSH host certificate through the isolated signer, unsafe host options fail closed, idempotent replay does not sign twice, and tenant-scoped revocation events rebuild the OpenSSH KRL after restart. Browser tests prove exact-plan review and privacy-safe result disclosure.",
             "api_surface": [
                 "previewSSHCertificate",
                 "issueSSHCertificate",
@@ -10143,6 +10143,7 @@
                         "TRACE-027 guard: TestTRACE027SSHCertificateAuthorityRowSplitsServedGAFromRoadmapResidual keeps F43 in the served GA denominator only when the OpenSSH endpoint/KRL evidence and explicit host-certificate CA console roadmap residual are both present.",
                         "TestServedSSHEndToEnd drives /ssh/issue/user, /ssh/ca, protocol revocation, and /ssh/krl through the assembled served handler and validates the OpenSSH binary KRL revocation path.",
                         "TestServedSSHAtScaleJourneyJOURNEY002EndToEnd drives the guarded product API workflow through status, attested issuance, revocation, and KRL readback.",
+                        "TestSSHProtocolRestoresTenantRevocationsFromEventLog proves restart recovery rebuilds only the bound tenant's KRL; TestSSHProtocolFailsClosedOnMalformedRevocationHistory prevents an incomplete KRL from being served after damaged history.",
                         "internal/server/ssh_journey_served_test.go drives the served SSH workflow through revocation and confirms /ssh/krl is OpenSSH binary format.",
                         "web/src/__tests__/ssh_trust.test.tsx covers the status and revoke controls without exposing private-key material.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
@@ -10152,6 +10153,7 @@
                         "internal/server/protocols_served_spiffe_ssh_test.go",
                         "internal/server/ssh_journey_served_test.go",
                         "internal/server/ssh_certificate_workflow_served_test.go",
+                        "internal/server/protocol_ssh_recovery_test.go",
                         "internal/server/protect_correct102_guard_test.go",
                         "internal/api/openapi_golden_test.go",
                         "internal/cli/cli_test.go",
@@ -10297,13 +10299,15 @@
                         "status": "complete",
                         "evidence": [
                             "web/src/pages/SSHTrust.tsx",
-                            "internal/server/protocols_served_spiffe_ssh_test.go"
+                            "internal/server/protocols_served_spiffe_ssh_test.go",
+                            "internal/server/protocol_ssh_recovery_test.go"
                         ]
                     },
                     "verify": {
                         "status": "complete",
                         "evidence": [
-                            "internal/server/protocols_served_spiffe_ssh_test.go"
+                            "internal/server/protocols_served_spiffe_ssh_test.go",
+                            "internal/server/protocol_ssh_recovery_test.go"
                         ]
                     },
                     "automate": {
@@ -10326,7 +10330,7 @@
                 },
                 "owner": "identity",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "5c8ed33717e07ce0d38ad3e0afbc26adabe644ee",
+                "candidate_sha": "5f47e43e38beca87f97e80e7725aebe57617befb",
                 "freshness": "2026-08-29"
             }
         },

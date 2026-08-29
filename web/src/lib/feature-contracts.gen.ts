@@ -3611,13 +3611,15 @@ export const canonicalCapabilities = [
           "status": "complete",
           "evidence": [
             "web/src/pages/SSHTrust.tsx",
-            "internal/server/protocols_served_spiffe_ssh_test.go"
+            "internal/server/protocols_served_spiffe_ssh_test.go",
+            "internal/server/protocol_ssh_recovery_test.go"
           ]
         },
         "verify": {
           "status": "complete",
           "evidence": [
-            "internal/server/protocols_served_spiffe_ssh_test.go"
+            "internal/server/protocols_served_spiffe_ssh_test.go",
+            "internal/server/protocol_ssh_recovery_test.go"
           ]
         },
         "automate": {
@@ -3640,7 +3642,7 @@ export const canonicalCapabilities = [
       },
       "owner": "identity",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "5c8ed33717e07ce0d38ad3e0afbc26adabe644ee",
+      "candidateSHA": "5f47e43e38beca87f97e80e7725aebe57617befb",
       "freshness": "2026-08-29"
     }
   },
