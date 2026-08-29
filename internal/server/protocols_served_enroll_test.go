@@ -197,6 +197,35 @@ func TestServedMDMSCEPPolicyAndIntuneTelemetryTRACE004(t *testing.T) {
 			"root_ca_ref": "secret://mdm/intune/root-ca",
 		},
 	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/mdm/scep/policies/preview", tok, create)
+	if status != http.StatusOK {
+		t.Fatalf("preview MDM SCEP policy: status %d body %s", status, body)
+	}
+	var preview struct {
+		Capability               string   `json:"capability"`
+		Ready                    bool     `json:"ready"`
+		EffectFree               bool     `json:"effect_free"`
+		Operation                string   `json:"operation"`
+		Provider                 string   `json:"provider"`
+		ChallengeMode            string   `json:"challenge_mode"`
+		TrustAnchorReferenceKeys []string `json:"trust_anchor_reference_keys"`
+		DurableWrites            []string `json:"durable_writes"`
+		OutsideCalls             []string `json:"outside_calls"`
+		SignerCalls              int      `json:"signer_calls"`
+		RecoverySteps            []string `json:"recovery_steps"`
+	}
+	if err := json.Unmarshal(body, &preview); err != nil {
+		t.Fatalf("decode MDM SCEP preview: %v body=%s", err, body)
+	}
+	if preview.Capability != "F56" || !preview.Ready || !preview.EffectFree || preview.Operation != "create" ||
+		preview.Provider != "intune" || preview.ChallengeMode != "intune-jws" ||
+		len(preview.TrustAnchorReferenceKeys) != 1 || preview.TrustAnchorReferenceKeys[0] != "root_ca_ref" ||
+		len(preview.DurableWrites) == 0 || len(preview.OutsideCalls) != 0 || preview.SignerCalls != 0 || len(preview.RecoverySteps) == 0 {
+		t.Fatalf("MDM SCEP preview lost exact effect/recovery facts: %+v", preview)
+	}
+	if policies, err := h.store.ListMDMSCEPPolicies(t.Context(), h.tenant); err != nil || len(policies) != 0 || h.hasEvent(t, projections.EventMDMSCEPPolicyUpserted) {
+		t.Fatalf("effect-free preview changed policy state: policies=%d event=%v err=%v", len(policies), h.hasEvent(t, projections.EventMDMSCEPPolicyUpserted), err)
+	}
 	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/mdm/scep/policies", tok, create)
 	if status != http.StatusCreated {
 		t.Fatalf("create MDM SCEP policy: status %d body %s", status, body)
@@ -221,6 +250,27 @@ func TestServedMDMSCEPPolicyAndIntuneTelemetryTRACE004(t *testing.T) {
 		t.Fatalf("created MDM SCEP policy omitted Intune profile guidance: %+v", created.ProfileGuidance)
 	}
 
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/mdm/scep/policies/"+created.ID+"/preview", tok, create)
+	if status != http.StatusOK {
+		t.Fatalf("preview MDM SCEP policy update: status %d body %s", status, body)
+	}
+	preview = struct {
+		Capability               string   `json:"capability"`
+		Ready                    bool     `json:"ready"`
+		EffectFree               bool     `json:"effect_free"`
+		Operation                string   `json:"operation"`
+		Provider                 string   `json:"provider"`
+		ChallengeMode            string   `json:"challenge_mode"`
+		TrustAnchorReferenceKeys []string `json:"trust_anchor_reference_keys"`
+		DurableWrites            []string `json:"durable_writes"`
+		OutsideCalls             []string `json:"outside_calls"`
+		SignerCalls              int      `json:"signer_calls"`
+		RecoverySteps            []string `json:"recovery_steps"`
+	}{}
+	if err := json.Unmarshal(body, &preview); err != nil || preview.Operation != "update" || !preview.Ready || !preview.EffectFree {
+		t.Fatalf("update preview = %+v err=%v body=%s", preview, err, body)
+	}
+
 	bad := map[string]any{
 		"name":          "bad-intune",
 		"provider":      "intune",
@@ -230,9 +280,40 @@ func TestServedMDMSCEPPolicyAndIntuneTelemetryTRACE004(t *testing.T) {
 			"root_ca": "raw-token",
 		},
 	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/mdm/scep/policies/preview", tok, bad)
+	if status != http.StatusBadRequest || !bytes.Contains(body, []byte("reference fields")) {
+		t.Fatalf("broken preview oracle did not reject inline MDM trust material: status %d body %s", status, body)
+	}
+	if policies, err := h.store.ListMDMSCEPPolicies(t.Context(), h.tenant); err != nil || len(policies) != 1 {
+		t.Fatalf("broken preview oracle changed policy state: policies=%d err=%v", len(policies), err)
+	}
 	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/mdm/scep/policies", tok, bad)
 	if status != http.StatusBadRequest {
 		t.Fatalf("inline MDM SCEP trust material should be rejected: status %d body %s", status, body)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/mdm/scep/policies/"+created.ID+"/rotate-challenge/preview", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("preview MDM SCEP challenge rotation: status %d body %s", status, body)
+	}
+	var rotationPreview struct {
+		Capability     string   `json:"capability"`
+		Ready          bool     `json:"ready"`
+		EffectFree     bool     `json:"effect_free"`
+		CurrentVersion int      `json:"current_version"`
+		NextVersion    int      `json:"next_version"`
+		DurableWrites  []string `json:"durable_writes"`
+		OutsideCalls   []string `json:"outside_calls"`
+		RecoverySteps  []string `json:"recovery_steps"`
+	}
+	if err := json.Unmarshal(body, &rotationPreview); err != nil || rotationPreview.Capability != "F56" || !rotationPreview.Ready ||
+		!rotationPreview.EffectFree || rotationPreview.CurrentVersion != 1 || rotationPreview.NextVersion != 2 ||
+		len(rotationPreview.DurableWrites) == 0 || len(rotationPreview.OutsideCalls) != 0 || len(rotationPreview.RecoverySteps) == 0 {
+		t.Fatalf("rotation preview lost exact effect/recovery facts: %+v err=%v", rotationPreview, err)
+	}
+	storedBeforeRotation, err := h.store.GetMDMSCEPPolicy(t.Context(), h.tenant, created.ID)
+	if err != nil || storedBeforeRotation.RotationVersion != 1 || h.hasEvent(t, projections.EventMDMSCEPChallengeRotated) {
+		t.Fatalf("rotation preview changed state: policy=%+v event=%v err=%v", storedBeforeRotation, h.hasEvent(t, projections.EventMDMSCEPChallengeRotated), err)
 	}
 
 	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/mdm/scep/policies/"+created.ID+"/rotate-challenge", tok, nil)

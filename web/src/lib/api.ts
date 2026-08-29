@@ -256,7 +256,9 @@ import type {
   MCPToolCall,
   MCPToolList,
   MCPToolResult,
+  MDMSCEPChallengeRotationPreview,
   MDMSCEPChallengeRotated,
+  MDMSCEPPolicyPreview,
   MDMSCEPPolicyList,
   MDMSCEPStatus,
   Member,
@@ -686,8 +688,10 @@ export type IssueCertificateInput = {
 };
 export type {
   SecretRotationScheduleRun,
+  MDMSCEPChallengeRotationPreview,
   MDMSCEPPolicyRequest,
   MDMSCEPPolicy,
+  MDMSCEPPolicyPreview,
   AccessChangeDecisionRequest,
   AccessChangeRequest,
   AccessChangeRequestCreateRequest,
@@ -2127,8 +2131,12 @@ export interface Api {
   issuer(id: string): Promise<Issuer>;
   rotationRun(id: string): Promise<RotationRun>;
   mdmSCEPPolicy(id: string): Promise<MDMSCEPPolicy>;
+  previewMDMSCEPPolicy(input: MDMSCEPPolicyRequest): Promise<MDMSCEPPolicyPreview>;
+  previewMDMSCEPPolicyUpdate(id: string, input: MDMSCEPPolicyRequest): Promise<MDMSCEPPolicyPreview>;
+  createMDMSCEPPolicy(input: MDMSCEPPolicyRequest): Promise<MDMSCEPPolicy>;
   updateMDMSCEPPolicy(id: string, input: MDMSCEPPolicyRequest): Promise<MDMSCEPPolicy>;
   deleteMDMSCEPPolicy(id: string): Promise<void>;
+  previewMDMSCEPChallengeRotation(id: string): Promise<MDMSCEPChallengeRotationPreview>;
   rotateMDMSCEPChallenge(id: string): Promise<MDMSCEPChallengeRotated>;
   notification(id: string): Promise<Notification>;
   owner(id: string): Promise<Owner>;
@@ -2642,8 +2650,14 @@ const liveApi: Api = {
   issuer: (id) => req<Issuer>(`/api/v1/issuers/${encodeURIComponent(id)}`),
   rotationRun: (id) => req<RotationRun>(`/api/v1/lifecycle/rotation-runs/${encodeURIComponent(id)}`),
   mdmSCEPPolicy: (id) => req<MDMSCEPPolicy>(`/api/v1/mdm/scep/policies/${encodeURIComponent(id)}`),
+  previewMDMSCEPPolicy: (input) => postRead<MDMSCEPPolicyPreview>("/api/v1/mdm/scep/policies/preview", input),
+  previewMDMSCEPPolicyUpdate: (id, input) =>
+    postRead<MDMSCEPPolicyPreview>(`/api/v1/mdm/scep/policies/${encodeURIComponent(id)}/preview`, input),
+  createMDMSCEPPolicy: (input) => mutate<MDMSCEPPolicy>("POST", "/api/v1/mdm/scep/policies", input),
   updateMDMSCEPPolicy: (id, input) => mutate<MDMSCEPPolicy>("PUT", `/api/v1/mdm/scep/policies/${encodeURIComponent(id)}`, input),
   deleteMDMSCEPPolicy: (id) => mutate<void>("DELETE", `/api/v1/mdm/scep/policies/${encodeURIComponent(id)}`),
+  previewMDMSCEPChallengeRotation: (id) =>
+    postRead<MDMSCEPChallengeRotationPreview>(`/api/v1/mdm/scep/policies/${encodeURIComponent(id)}/rotate-challenge/preview`),
   rotateMDMSCEPChallenge: (id) => mutate<MDMSCEPChallengeRotated>("POST", `/api/v1/mdm/scep/policies/${encodeURIComponent(id)}/rotate-challenge`),
   notification: (id) => req<Notification>(`/api/v1/notifications/${encodeURIComponent(id)}`),
   owner: (id) => req<Owner>(`/api/v1/owners/${encodeURIComponent(id)}`),

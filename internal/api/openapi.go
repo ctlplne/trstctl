@@ -2749,6 +2749,22 @@ func componentSchemas() map[string]*Schema {
 	mdmSCEPPolicyList := object(map[string]*Schema{
 		"items": {Type: "array", Items: ref("MDMSCEPPolicy")},
 	}, "items")
+	mdmSCEPPolicyPreview := object(map[string]*Schema{
+		"capability": str(), "ready": {Type: "boolean"}, "effect_free": {Type: "boolean"},
+		"operation": {Type: "string", Enum: []string{"create", "update"}}, "policy_id": uuid(),
+		"name": str(), "provider": {Type: "string", Enum: []string{"intune", "jamf"}},
+		"scep_profile": str(), "scep_endpoint": str(), "expected_audience": str(),
+		"challenge_mode":              {Type: "string", Enum: []string{"intune-jws", "hmac-dynamic"}},
+		"enabled":                     {Type: "boolean"},
+		"trust_anchor_reference_keys": {Type: "array", Items: str()},
+		"profile_guidance":            {Type: "object"},
+		"durable_writes":              {Type: "array", Items: str()},
+		"outside_calls":               {Type: "array", Items: str()},
+		"signer_calls":                {Type: "integer"},
+		"blockers":                    {Type: "array", Items: str()},
+		"recovery_steps":              {Type: "array", Items: str()},
+		"secret_data_handling":        str(),
+	}, "capability", "ready", "effect_free", "operation", "name", "provider", "scep_profile", "scep_endpoint", "challenge_mode", "enabled", "trust_anchor_reference_keys", "profile_guidance", "durable_writes", "outside_calls", "signer_calls", "blockers", "recovery_steps", "secret_data_handling")
 	mdmSCEPTelemetry := object(map[string]*Schema{
 		"allowed": {Type: "integer"}, "denied": {Type: "integer"}, "replay_rejected": {Type: "integer"},
 		"last_failure_reason": str(), "last_transaction_id": str(), "last_event_timestamp": timestamp(),
@@ -2760,6 +2776,17 @@ func componentSchemas() map[string]*Schema {
 	mdmSCEPChallengeRotated := object(map[string]*Schema{
 		"policy": ref("MDMSCEPPolicy"),
 	}, "policy")
+	mdmSCEPChallengeRotationPreview := object(map[string]*Schema{
+		"capability": str(), "ready": {Type: "boolean"}, "effect_free": {Type: "boolean"},
+		"policy_id": uuid(), "policy_name": str(),
+		"current_version": {Type: "integer"}, "next_version": {Type: "integer"},
+		"durable_writes":       {Type: "array", Items: str()},
+		"outside_calls":        {Type: "array", Items: str()},
+		"signer_calls":         {Type: "integer"},
+		"blockers":             {Type: "array", Items: str()},
+		"recovery_steps":       {Type: "array", Items: str()},
+		"secret_data_handling": str(),
+	}, "capability", "ready", "effect_free", "policy_id", "policy_name", "current_version", "next_version", "durable_writes", "outside_calls", "signer_calls", "blockers", "recovery_steps", "secret_data_handling")
 	deploymentTargetReq := object(map[string]*Schema{
 		"name": str(), "connector": str(), "config": {Type: "object"},
 	}, "name", "connector")
@@ -5471,9 +5498,11 @@ func componentSchemas() map[string]*Schema {
 		"MDMSCEPPolicyRequest":                     mdmSCEPPolicyReq,
 		"MDMSCEPPolicy":                            mdmSCEPPolicy,
 		"MDMSCEPPolicyList":                        mdmSCEPPolicyList,
+		"MDMSCEPPolicyPreview":                     mdmSCEPPolicyPreview,
 		"MDMSCEPTelemetry":                         mdmSCEPTelemetry,
 		"MDMSCEPStatus":                            mdmSCEPStatus,
 		"MDMSCEPChallengeRotated":                  mdmSCEPChallengeRotated,
+		"MDMSCEPChallengeRotationPreview":          mdmSCEPChallengeRotationPreview,
 		"DRArtifactFailure":                        drArtifactFailure,
 		"DRDrill":                                  drDrill,
 		"DRPosture":                                drPosture,

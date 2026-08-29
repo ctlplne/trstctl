@@ -560,15 +560,20 @@ describe("exported API surface census", () => {
       "/api/v1/agents/enrollment-tokens/preview",
       "/api/v1/issuance-requests/preview",
       "/api/v1/identities/item%2Fid/transitions/preview",
+      // F56: the MDM policy and challenge-rotation planners run the same
+      // readiness logic as execution but make no write, outside, or signer call.
+      "/api/v1/mdm/scep/policies/preview",
+      "/api/v1/mdm/scep/policies/item%2Fid/preview",
+      "/api/v1/mdm/scep/policies/item%2Fid/rotate-challenge/preview",
       // F9: audit feed preview shares the execution validator but performs no
       // write, idempotency insert, outbox enqueue, credential read, or egress.
       "/api/v1/audit/feeds/item%2Fid/preview",
       "/api/v1/ca/ceremonies/preview",
       "/api/v1/ca/authorities/item%2Fid/rotate/preview",
       "/api/v1/managed-keys/preview",
-	  // F55: this POST reads assembled in-memory CMP posture. It carries no
-	  // body and performs no enrollment, write, signer call, or network call.
-	  "/api/v1/protocols/cmp/qualification",
+      // F55: this POST reads assembled in-memory CMP posture. It carries no
+      // body and performs no enrollment, write, signer call, or network call.
+      "/api/v1/protocols/cmp/qualification",
       "/api/v1/ai/query",
       "/api/v1/ai/rca",
       "/api/v1/graph/query",

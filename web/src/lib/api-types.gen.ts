@@ -3649,6 +3649,22 @@ export interface MDMSCEPChallengeRotated {
   policy: MDMSCEPPolicy;
 }
 
+export interface MDMSCEPChallengeRotationPreview {
+  blockers: string[];
+  capability: string;
+  current_version: number;
+  durable_writes: string[];
+  effect_free: boolean;
+  next_version: number;
+  outside_calls: string[];
+  policy_id: string;
+  policy_name: string;
+  ready: boolean;
+  recovery_steps: string[];
+  secret_data_handling: string;
+  signer_calls: number;
+}
+
 export interface MDMSCEPPolicy {
   challenge_mode: string;
   created_at: string;
@@ -3669,6 +3685,29 @@ export interface MDMSCEPPolicy {
 
 export interface MDMSCEPPolicyList {
   items: MDMSCEPPolicy[];
+}
+
+export interface MDMSCEPPolicyPreview {
+  blockers: string[];
+  capability: string;
+  challenge_mode: "intune-jws" | "hmac-dynamic";
+  durable_writes: string[];
+  effect_free: boolean;
+  enabled: boolean;
+  expected_audience?: string;
+  name: string;
+  operation: "create" | "update";
+  outside_calls: string[];
+  policy_id?: string;
+  profile_guidance: Record<string, unknown>;
+  provider: "intune" | "jamf";
+  ready: boolean;
+  recovery_steps: string[];
+  scep_endpoint: string;
+  scep_profile: string;
+  secret_data_handling: string;
+  signer_calls: number;
+  trust_anchor_reference_keys: string[];
 }
 
 export interface MDMSCEPPolicyRequest {

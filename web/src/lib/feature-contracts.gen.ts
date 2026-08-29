@@ -2930,7 +2930,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use intune / mdm enrollment integration while tenant, policy, and security authority remain on the server.",
       "tool": "certificates",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/protocols",
       "navigationEntrypoints": [
         "tool navigation",
@@ -2944,7 +2944,7 @@ export const canonicalCapabilities = [
       ],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -2961,12 +2961,19 @@ export const canonicalCapabilities = [
         "configure": {
           "status": "complete",
           "evidence": [
-            "web/src/pages/Protocols.tsx"
+            "web/src/pages/Protocols.tsx",
+            "web/src/pages/protocols/MDMSCEPPolicyDialog.tsx"
           ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: previewMDMSCEPPolicy",
+            "OpenAPI operationId: previewMDMSCEPPolicyUpdate",
+            "OpenAPI operationId: previewMDMSCEPChallengeRotation",
+            "web/src/pages/protocols/MDMSCEPPolicyDialog.tsx",
+            "internal/server/protocols_served_enroll_test.go"
+          ]
         },
         "execute": {
           "status": "complete",
@@ -2982,8 +2989,14 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/Protocols.tsx",
+            "web/src/pages/protocols/MDMSCEPPolicyDialog.tsx",
+            "web/src/components/MDMDevicesPanel.tsx",
+            "web/src/__tests__/protocols.test.tsx",
+            "web/src/__tests__/mdm_devices_panel.test.tsx"
+          ]
         },
         "verify": {
           "status": "complete",
@@ -2995,22 +3008,28 @@ export const canonicalCapabilities = [
           "status": "complete",
           "evidence": [
             "OpenAPI operationId: getMDMSCEPStatus",
+            "OpenAPI operationId: previewMDMSCEPPolicy",
+            "OpenAPI operationId: previewMDMSCEPPolicyUpdate",
             "OpenAPI operationId: createMDMSCEPPolicy",
             "OpenAPI operationId: listMDMSCEPPolicies",
             "OpenAPI operationId: getMDMSCEPPolicy",
             "OpenAPI operationId: updateMDMSCEPPolicy",
             "OpenAPI operationId: deleteMDMSCEPPolicy",
+            "OpenAPI operationId: previewMDMSCEPChallengeRotation",
             "OpenAPI operationId: rotateMDMSCEPChallenge",
             "OpenAPI operationId: listMDMDevices",
             "OpenAPI operationId: getMDMDeviceTrace",
             "OpenAPI operationId: putMDMPollSchedule",
             "OpenAPI operationId: listMDMPollSchedules",
             "CLI command: mdm scep status",
+            "CLI command: mdm scep policies preview-create",
+            "CLI command: mdm scep policies preview-update",
             "CLI command: mdm scep policies create",
             "CLI command: mdm scep policies list",
             "CLI command: mdm scep policies get",
             "CLI command: mdm scep policies update",
             "CLI command: mdm scep policies delete",
+            "CLI command: mdm scep policies preview-rotation",
             "CLI command: mdm scep policies rotate-challenge",
             "CLI command: mdm devices",
             "CLI command: mdm trace",
@@ -3021,8 +3040,8 @@ export const canonicalCapabilities = [
       },
       "owner": "pki",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "c6d6b6f5eff8ca5edc5a0832ea2174f3618f1abd",
+      "freshness": "2026-08-28"
     }
   },
   {

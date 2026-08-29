@@ -1274,8 +1274,13 @@ describe("i18n boundary", () => {
       // exact replacement/revoke/offboard recovery. The unavailable state and
       // unrecoverable-token warning must preserve their negation. Machine-
       // authored es/de translations — FLAG FOR HUMAN TRANSLATION REVIEW.
-      "es-ES": "19152e231da25403438134847336bc238a7e904dace30ab3bec70a0512f80de5",
-      "de-DE": "7a8cc1072a83eb121358de55eb26f5eb8d35bc43aa94da450162b608ad32ab1a",
+      // F56 MDM policy re-pin: translated first-policy setup, exact effect-free
+      // preview, reference-name-only boundary, challenge rotation, and retry
+      // recovery. The zero-effect and no-secret claims must keep their
+      // negation. Machine-authored es/de translations — FLAG FOR HUMAN
+      // TRANSLATION REVIEW before release.
+      "es-ES": "a1b381b8d03cb64a804bde8579b8c1414243d808cacbea4293bc68f10ec0656e",
+      "de-DE": "79e3c50eaf6c2b212b1c58b9e1cf92d9fd1b290a9dfc7411a7b50e076e5ad91b",
     });
   });
 

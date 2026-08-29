@@ -198,10 +198,11 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// F26's secret-free custody plan and effect-free generation preview raise it
 	// to 393 and map to the existing HSM integration row.
 	// F55's authenticated, effect-free CMP runtime qualification raises it to
-	// 394 and maps to the existing CMP server row; it never replaces the stock
-	// client p10cr interoperability proof.
-	if len(out) != 394 {
-		t.Fatalf("OpenAPI operationIds = %d, want 394", len(out))
+	// 394 and maps to the existing CMP server row without replacing the stock
+	// client p10cr interoperability proof. F56's three effect-free MDM policy
+	// and rotation previews raise it to 397 and map to the existing F56 row.
+	if len(out) != 397 {
+		t.Fatalf("OpenAPI operationIds = %d, want 397", len(out))
 	}
 	return out
 }

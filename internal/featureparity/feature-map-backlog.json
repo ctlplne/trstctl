@@ -8295,10 +8295,10 @@
             "phase": "P2",
             "priority": 61,
             "served_state": "conditional",
-            "backend_status": "conditional: served API/CLI/UI policy management, challenge rotation evidence, live policy-backed Intune validation, immutable per-attempt SCEP evidence, scheduled/relay Intune and Jamf certificate readback, exact device/certificate correlation, and requested-issued-installed-renewing traces",
-            "current_frontend_mapping": "Protocols at /protocols - MDM SCEP policy and telemetry plus an Intune/Jamf device list whose rows open the evidence-backed enrollment trace and failure remediation",
-            "target_gui_mapping": "MDM enrollment UI showing SCEP challenge policy, Intune profile guidance, challenge rotation, and enrollment failures.",
-            "acceptance_test": "UI makes MDM status conditional, tests challenge-required/missing/disabled states, and opens Intune/Jamf device traces showing immutable success, retained failure, and offline-renewal remediation.",
+            "backend_status": "complete vertical slice: served API/CLI/UI policy create and edit, effect-free policy and challenge-rotation previews, guarded mutations, challenge rotation evidence, live policy-backed Intune validation, immutable per-attempt SCEP evidence, scheduled/relay Intune and Jamf certificate readback, exact device/certificate correlation, and requested-issued-installed-renewing traces",
+            "current_frontend_mapping": "complete: Protocols at /protocols provides a first-policy create/edit StepShell, renders the exact effect-free server plan without secret values, gates save and rotation on readiness, exposes retryable recovery, shows policy/telemetry truth, and opens Intune/Jamf device evidence and remediation traces",
+            "target_gui_mapping": "Roadmap residual: optional dedicated MDM workspace for fleet-scale profile distribution beyond the complete enrollment-policy vertical slice in Protocols.",
+            "acceptance_test": "UI creates the first policy, edits an existing policy, renders only reference names from the effect-free preview, disables unsafe execution, safely retries failed rotation, and opens Intune/Jamf traces with immutable success, retained failure, and offline-renewal remediation; served integration proves all previews make zero durable writes, outside calls, and signer calls.",
             "source_docs": [
                 "docs/features/enrollment-protocols.md"
             ],
@@ -8313,17 +8313,21 @@
             ],
             "source_frontend": [
                 "web/src/pages/Protocols.tsx",
+                "web/src/pages/protocols/MDMSCEPPolicyDialog.tsx",
                 "web/src/components/MDMDevicesPanel.tsx"
             ],
             "status": "closed",
-            "notes": "Closed by TRACE-010 plus AUD-50 remediation: served policy/status/rotation/telemetry surfaces exist across API, CLI, and Protocols UI; enabled policies resolve secret:// trust_anchor_refs at challenge-validation time. The production SCEP handler emits immutable request and terminal issuance facts. Control-plane and relay pollers read Intune CertificatesByRAPolicy or Jamf CERTIFICATES evidence, and the shared correlator requires the exact signer-minted certificate serial before claiming installation. The device console opens the requested-issued-installed-renewing trace with retained challenge failures and offline-renewal guidance. Static protocols.scep.intune_challenge anchors remain a bootstrap/fallback path.",
+            "notes": "Closed as a complete vertical slice by TRACE-010, AUD-50, and F56 preview/recovery remediation: served policy/status/rotation/telemetry surfaces exist across API, CLI, and Protocols UI; create/update and rotation use the same readiness planner as their effect-free previews; the first-policy wizard renders reference names but never secret values. Enabled policies resolve secret:// trust_anchor_refs at challenge-validation time. The production SCEP handler emits immutable request and terminal issuance facts. Control-plane and relay pollers read Intune CertificatesByRAPolicy or Jamf CERTIFICATES evidence, and the shared correlator requires the exact signer-minted certificate serial before claiming installation. The device console opens the requested-issued-installed-renewing trace with retained challenge failures and offline-renewal guidance. Static protocols.scep.intune_challenge anchors remain a bootstrap/fallback path.",
             "api_surface": [
                 "getMDMSCEPStatus",
+                "previewMDMSCEPPolicy",
+                "previewMDMSCEPPolicyUpdate",
                 "createMDMSCEPPolicy",
                 "listMDMSCEPPolicies",
                 "getMDMSCEPPolicy",
                 "updateMDMSCEPPolicy",
                 "deleteMDMSCEPPolicy",
+                "previewMDMSCEPChallengeRotation",
                 "rotateMDMSCEPChallenge",
                 "listMDMDevices",
                 "getMDMDeviceTrace",
@@ -8333,11 +8337,14 @@
             "api_na": "",
             "cli_surface": [
                 "mdm scep status",
+                "mdm scep policies preview-create",
+                "mdm scep policies preview-update",
                 "mdm scep policies create",
                 "mdm scep policies list",
                 "mdm scep policies get",
                 "mdm scep policies update",
                 "mdm scep policies delete",
+                "mdm scep policies preview-rotation",
                 "mdm scep policies rotate-challenge",
                 "mdm devices",
                 "mdm trace",
@@ -8349,10 +8356,11 @@
                 "served": {
                     "evidence": [
                         "MDM SCEP policy CRUD and challenge rotation append mdm.scep_policy.* and mdm.scep_challenge.rotated events, project into mdm_scep_policies, and serve status telemetry without storing raw challenge secrets.",
+                        "Policy create/update and challenge rotation have effect-free preview endpoints; mutations run the identical readiness planner before any event, projection, outbox, signer, or outside effect.",
                         "buildServedSCEP wires buildSCEPChallengeValidator into the served SCEP handler; TRACE-010 stores an Intune trust anchor through /api/v1/secrets/store, references it from MDM policy CRUD, and proves the already-running /scep endpoint accepts the policy-backed Intune challenge without static protocols.scep.intune_challenge anchors.",
                         "The served SCEP writer appends exact device/transaction request and terminal issuance evidence; Intune and Jamf pollers consume certificate-specific provider evidence, and assembled journeys reject registration/correlation identifiers and wrong certificate serials as success.",
                         "served_state=conditional",
-                        "backend_status=conditional: served API/CLI/UI policy management, challenge rotation evidence, live policy-backed Intune validation, immutable per-attempt SCEP evidence, scheduled/relay Intune and Jamf certificate readback, exact device/certificate correlation, and requested-issued-installed-renewing traces"
+                        "backend_status=complete vertical slice: setup remains conditionally served because an operator must configure MDM trust, while the full configure-preview-execute-observe-recover-verify workflow is implemented"
                     ],
                     "refs": [
                         "internal/api/mdm_scep.go",
@@ -8372,11 +8380,12 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: Protocols at /protocols - MDM SCEP policy and telemetry plus an Intune/Jamf device list whose rows open the evidence-backed enrollment trace and failure remediation",
-                        "target_gui_mapping: MDM enrollment UI showing SCEP challenge policy, Intune profile guidance, challenge rotation, and enrollment failures."
+                        "current_frontend_mapping: complete: Protocols at /protocols provides a first-policy create/edit StepShell, renders the exact effect-free server plan without secret values, gates save and rotation on readiness, exposes retryable recovery, shows policy/telemetry truth, and opens Intune/Jamf device evidence and remediation traces",
+                        "target_gui_mapping: Roadmap residual: optional dedicated MDM workspace for fleet-scale profile distribution beyond the complete enrollment-policy vertical slice in Protocols."
                     ],
                     "refs": [
                         "web/src/pages/Protocols.tsx",
+                        "web/src/pages/protocols/MDMSCEPPolicyDialog.tsx",
                         "web/src/components/MDMDevicesPanel.tsx",
                         "web/src/__tests__/mdm_devices_panel.test.tsx",
                         "web/src/__tests__/protocols.test.tsx",
@@ -8385,7 +8394,7 @@
                 },
                 "cli": {
                     "evidence": [
-                        "trstctl mdm scep status and policy commands call the served MDM SCEP API; mdm devices, trace, and poll-schedule commands expose the evidence-backed correlation workflow."
+                        "trstctl mdm scep policies preview-create, preview-update, and preview-rotation call the effect-free served plans; create/update/rotate execute the guarded mutations; mdm devices, trace, and poll-schedule commands expose the evidence-backed correlation workflow."
                     ],
                     "refs": [
                         "internal/cli/command.go",
@@ -8394,7 +8403,7 @@
                 },
                 "api": {
                     "evidence": [
-                        "OpenAPI exposes MDM SCEP status/policy operations plus MDM device list, per-device trace, and poll-schedule operations; mutation routes require idempotency."
+                        "OpenAPI exposes effect-free create/update/rotation previews, guarded MDM SCEP status/policy mutations, device list, per-device trace, and poll-schedule operations; preview routes are read-only and mutation routes require idempotency."
                     ],
                     "refs": [
                         "internal/api/api.go",
@@ -8405,7 +8414,8 @@
                 },
                 "test": {
                     "evidence": [
-                        "acceptance_test: UI makes MDM status conditional, tests challenge-required/missing/disabled states, and opens Intune/Jamf device traces showing immutable success, retained failure, and offline-renewal remediation.",
+                        "acceptance_test: UI creates the first policy, edits existing policy, renders only reference names from an effect-free preview, gates execution, retries a failed rotation, and opens Intune/Jamf device traces showing immutable success, retained failure, and offline-renewal remediation.",
+                        "Served integration proves create/update/rotation previews return exact plans while causing zero policy rows, events, outside calls, and signer calls.",
                         "Served integration test creates an MDM SCEP policy, rotates its challenge version, rejects missing SCEP challenge material, accepts a valid Intune challenge, and reads challenge telemetry from the status API.",
                         "TRACE-010 served integration test creates a trust-anchor secret, references it from an enabled MDM SCEP policy, validates through the live /scep endpoint, and observes served_scep_intune_validator_policy_driven status.",
                         "AUD-50 assembled tests drive Intune and Jamf pollers through certificate-specific readback, prove exact serial success and wrong/revoked failure, retain pre-issuance challenge failure, and expose offline renewal as unknown with remediation; browser tests open and render those traces.",
@@ -8503,7 +8513,7 @@
                 "purpose": "Lets an operator understand and safely use intune / mdm enrollment integration while tenant, policy, and security authority remain on the server.",
                 "tool": "certificates",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/protocols",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -8517,7 +8527,7 @@
                 ],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -8534,12 +8544,19 @@
                     "configure": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/pages/Protocols.tsx"
+                            "web/src/pages/Protocols.tsx",
+                            "web/src/pages/protocols/MDMSCEPPolicyDialog.tsx"
                         ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: previewMDMSCEPPolicy",
+                            "OpenAPI operationId: previewMDMSCEPPolicyUpdate",
+                            "OpenAPI operationId: previewMDMSCEPChallengeRotation",
+                            "web/src/pages/protocols/MDMSCEPPolicyDialog.tsx",
+                            "internal/server/protocols_served_enroll_test.go"
+                        ]
                     },
                     "execute": {
                         "status": "complete",
@@ -8555,8 +8572,14 @@
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/Protocols.tsx",
+                            "web/src/pages/protocols/MDMSCEPPolicyDialog.tsx",
+                            "web/src/components/MDMDevicesPanel.tsx",
+                            "web/src/__tests__/protocols.test.tsx",
+                            "web/src/__tests__/mdm_devices_panel.test.tsx"
+                        ]
                     },
                     "verify": {
                         "status": "complete",
@@ -8568,22 +8591,28 @@
                         "status": "complete",
                         "evidence": [
                             "OpenAPI operationId: getMDMSCEPStatus",
+                            "OpenAPI operationId: previewMDMSCEPPolicy",
+                            "OpenAPI operationId: previewMDMSCEPPolicyUpdate",
                             "OpenAPI operationId: createMDMSCEPPolicy",
                             "OpenAPI operationId: listMDMSCEPPolicies",
                             "OpenAPI operationId: getMDMSCEPPolicy",
                             "OpenAPI operationId: updateMDMSCEPPolicy",
                             "OpenAPI operationId: deleteMDMSCEPPolicy",
+                            "OpenAPI operationId: previewMDMSCEPChallengeRotation",
                             "OpenAPI operationId: rotateMDMSCEPChallenge",
                             "OpenAPI operationId: listMDMDevices",
                             "OpenAPI operationId: getMDMDeviceTrace",
                             "OpenAPI operationId: putMDMPollSchedule",
                             "OpenAPI operationId: listMDMPollSchedules",
                             "CLI command: mdm scep status",
+                            "CLI command: mdm scep policies preview-create",
+                            "CLI command: mdm scep policies preview-update",
                             "CLI command: mdm scep policies create",
                             "CLI command: mdm scep policies list",
                             "CLI command: mdm scep policies get",
                             "CLI command: mdm scep policies update",
                             "CLI command: mdm scep policies delete",
+                            "CLI command: mdm scep policies preview-rotation",
                             "CLI command: mdm scep policies rotate-challenge",
                             "CLI command: mdm devices",
                             "CLI command: mdm trace",
@@ -8594,8 +8623,8 @@
                 },
                 "owner": "pki",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "c6d6b6f5eff8ca5edc5a0832ea2174f3618f1abd",
+                "freshness": "2026-08-28"
             }
         },
         {

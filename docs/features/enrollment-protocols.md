@@ -242,15 +242,43 @@ trust anchors, checks tenant and CSR subject/SAN binding, and consumes the nonce
 through a single-use replay cache for the token TTL, so a captured challenge can't be
 replayed. The gate wires into the served SCEP server's challenge hook.
 
-Operators manage MDM SCEP policy records through the served control plane:
-`POST/GET/PUT/DELETE /api/v1/mdm/scep/policies`, `POST
-/api/v1/mdm/scep/policies/{id}/rotate-challenge`, `GET /api/v1/mdm/scep/status`, and
-the matching `trstctl mdm scep ...` commands, keeping profile guidance, challenge mode,
-trust-anchor references, rotation version, and telemetry visible in API, CLI, and the
-UI without storing raw MDM secrets. At runtime the validator resolves enabled policy
+The **Protocols → Intune / MDM SCEP policies** section handles the first policy as
+well as later edits. Its three short steps ask: which MDM and certificate profile,
+how the device proves it came from that MDM, and what the server will do. The last
+step is not a browser estimate. It calls the effect-free server preview and shows
+the normalized provider, profile, challenge check, reference **names**, planned
+durable writes, blockers, and recovery steps. It never renders reference values,
+certificates, keys, tokens, or other secret material. Save stays disabled unless the
+server says the same plan used by the mutation is ready and effect-free.
+
+Automation has the same safety rail. Preview a create with `POST
+/api/v1/mdm/scep/policies/preview`, an update with `POST
+/api/v1/mdm/scep/policies/{id}/preview`, and a challenge rotation with `POST
+/api/v1/mdm/scep/policies/{id}/rotate-challenge/preview`. Those calls make zero
+policy writes, event writes, outside calls, and signer calls. The matching CLI
+commands are `trstctl mdm scep policies preview-create --file policy.json`,
+`preview-update --id POLICY_ID --file policy.json`, and `preview-rotation --id
+POLICY_ID`. Execute only after reviewing the plan with the existing `create`,
+`update`, or `rotate-challenge` command. Mutations still require an idempotency key
+and run the identical readiness planner again, so a caller cannot bypass the gate.
+
+The other served operations are `POST/GET/PUT/DELETE
+/api/v1/mdm/scep/policies`, `GET /api/v1/mdm/scep/status`, and their matching
+`trstctl mdm scep ...` commands. They keep profile guidance, challenge mode,
+trust-anchor references, rotation version, and telemetry visible without storing
+raw MDM secrets. At runtime the validator resolves enabled policy
 `trust_anchor_refs` from the served secret store (`secret://...`) per decision, so
 anchor changes take effect without restarting the handler; the static
 `protocols.scep.intune_challenge` anchors remain a bootstrap/fallback path.
+
+If policy setup is blocked, fix the named prerequisite and run the preview again;
+no partial policy exists to clean up. If a save is interrupted, retry with the same
+idempotency key. If challenge rotation fails, the current challenge version remains
+the only active version; keep the dialog open, review the refreshed plan, and retry.
+After rotation, use the device trace to distinguish a challenge refusal from an
+offline device. Repair the named refusal, or bring an offline device online and
+trigger an MDM check-in. Do not weaken challenge, tenant, CSR, or replay validation
+to make enrollment appear green.
 
 The device-correlation surface is evidence-backed end to end. The SCEP handler
 records an immutable request fact before challenge validation and a terminal

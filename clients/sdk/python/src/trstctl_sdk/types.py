@@ -5111,6 +5111,26 @@ MDMSCEPChallengeRotated = TypedDict(
     total=False,
 )
 
+MDMSCEPChallengeRotationPreview = TypedDict(
+    'MDMSCEPChallengeRotationPreview',
+    {
+        'blockers': list[str],
+        'capability': str,
+        'current_version': int,
+        'durable_writes': list[str],
+        'effect_free': bool,
+        'next_version': int,
+        'outside_calls': list[str],
+        'policy_id': str,
+        'policy_name': str,
+        'ready': bool,
+        'recovery_steps': list[str],
+        'secret_data_handling': str,
+        'signer_calls': int,
+    },
+    total=False,
+)
+
 MDMSCEPPolicy = TypedDict(
     'MDMSCEPPolicy',
     {
@@ -5137,6 +5157,33 @@ MDMSCEPPolicyList = TypedDict(
     'MDMSCEPPolicyList',
     {
         'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+MDMSCEPPolicyPreview = TypedDict(
+    'MDMSCEPPolicyPreview',
+    {
+        'blockers': list[str],
+        'capability': str,
+        'challenge_mode': str,
+        'durable_writes': list[str],
+        'effect_free': bool,
+        'enabled': bool,
+        'expected_audience': str,
+        'name': str,
+        'operation': str,
+        'outside_calls': list[str],
+        'policy_id': str,
+        'profile_guidance': dict[str, Any],
+        'provider': str,
+        'ready': bool,
+        'recovery_steps': list[str],
+        'scep_endpoint': str,
+        'scep_profile': str,
+        'secret_data_handling': str,
+        'signer_calls': int,
+        'trust_anchor_reference_keys': list[str],
     },
     total=False,
 )

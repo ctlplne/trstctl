@@ -14665,6 +14665,78 @@
         ],
         "type": "object"
       },
+      "MDMSCEPChallengeRotationPreview": {
+        "properties": {
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "current_version": {
+            "type": "integer"
+          },
+          "durable_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "next_version": {
+            "type": "integer"
+          },
+          "outside_calls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "policy_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "policy_name": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "recovery_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "secret_data_handling": {
+            "type": "string"
+          },
+          "signer_calls": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "capability",
+          "ready",
+          "effect_free",
+          "policy_id",
+          "policy_name",
+          "current_version",
+          "next_version",
+          "durable_writes",
+          "outside_calls",
+          "signer_calls",
+          "blockers",
+          "recovery_steps",
+          "secret_data_handling"
+        ],
+        "type": "object"
+      },
       "MDMSCEPPolicy": {
         "properties": {
           "challenge_mode": {
@@ -14746,6 +14818,119 @@
         },
         "required": [
           "items"
+        ],
+        "type": "object"
+      },
+      "MDMSCEPPolicyPreview": {
+        "properties": {
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "challenge_mode": {
+            "enum": [
+              "intune-jws",
+              "hmac-dynamic"
+            ],
+            "type": "string"
+          },
+          "durable_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "expected_audience": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "operation": {
+            "enum": [
+              "create",
+              "update"
+            ],
+            "type": "string"
+          },
+          "outside_calls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "policy_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "profile_guidance": {
+            "type": "object"
+          },
+          "provider": {
+            "enum": [
+              "intune",
+              "jamf"
+            ],
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "recovery_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "scep_endpoint": {
+            "type": "string"
+          },
+          "scep_profile": {
+            "type": "string"
+          },
+          "secret_data_handling": {
+            "type": "string"
+          },
+          "signer_calls": {
+            "type": "integer"
+          },
+          "trust_anchor_reference_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "ready",
+          "effect_free",
+          "operation",
+          "name",
+          "provider",
+          "scep_profile",
+          "scep_endpoint",
+          "challenge_mode",
+          "enabled",
+          "trust_anchor_reference_keys",
+          "profile_guidance",
+          "durable_writes",
+          "outside_calls",
+          "signer_calls",
+          "blockers",
+          "recovery_steps",
+          "secret_data_handling"
         ],
         "type": "object"
       },
@@ -41106,6 +41291,63 @@
         "x-trstctl-permission": "issuers:write"
       }
     },
+    "/api/v1/mdm/scep/policies/preview": {
+      "post": {
+        "operationId": "previewMDMSCEPPolicy",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MDMSCEPPolicyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MDMSCEPPolicyPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Review an exact MDM SCEP policy without writing state, contacting the MDM, or calling the signer",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
     "/api/v1/mdm/scep/policies/{id}": {
       "delete": {
         "operationId": "deleteMDMSCEPPolicy",
@@ -41297,6 +41539,74 @@
         "x-trstctl-permission": "issuers:write"
       }
     },
+    "/api/v1/mdm/scep/policies/{id}/preview": {
+      "post": {
+        "operationId": "previewMDMSCEPPolicyUpdate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MDMSCEPPolicyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MDMSCEPPolicyPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Review replacing an exact MDM SCEP policy without writing state, contacting the MDM, or calling the signer",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
     "/api/v1/mdm/scep/policies/{id}/rotate-challenge": {
       "post": {
         "operationId": "rotateMDMSCEPChallenge",
@@ -41361,6 +41671,64 @@
           }
         ],
         "summary": "Record MDM SCEP challenge rotation evidence",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/mdm/scep/policies/{id}/rotate-challenge/preview": {
+      "post": {
+        "operationId": "previewMDMSCEPChallengeRotation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MDMSCEPChallengeRotationPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Review an exact MDM SCEP challenge rotation without writing state or generating challenge material",
         "x-trstctl-permission": "issuers:write"
       }
     },

@@ -3329,6 +3329,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/mdm/scep/policies/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review an exact MDM SCEP policy without writing state, contacting the MDM, or calling the signer */
+        post: operations["previewMDMSCEPPolicy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/mdm/scep/policies/{id}": {
         parameters: {
             query?: never;
@@ -3348,6 +3365,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/mdm/scep/policies/{id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review replacing an exact MDM SCEP policy without writing state, contacting the MDM, or calling the signer */
+        post: operations["previewMDMSCEPPolicyUpdate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/mdm/scep/policies/{id}/rotate-challenge": {
         parameters: {
             query?: never;
@@ -3359,6 +3393,23 @@ export interface paths {
         put?: never;
         /** Record MDM SCEP challenge rotation evidence */
         post: operations["rotateMDMSCEPChallenge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mdm/scep/policies/{id}/rotate-challenge/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review an exact MDM SCEP challenge rotation without writing state or generating challenge material */
+        post: operations["previewMDMSCEPChallengeRotation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9583,6 +9634,22 @@ export interface components {
         MDMSCEPChallengeRotated: {
             policy: components["schemas"]["MDMSCEPPolicy"];
         };
+        MDMSCEPChallengeRotationPreview: {
+            blockers: string[];
+            capability: string;
+            current_version: number;
+            durable_writes: string[];
+            effect_free: boolean;
+            next_version: number;
+            outside_calls: string[];
+            /** Format: uuid */
+            policy_id: string;
+            policy_name: string;
+            ready: boolean;
+            recovery_steps: string[];
+            secret_data_handling: string;
+            signer_calls: number;
+        };
         MDMSCEPPolicy: {
             challenge_mode: string;
             /** Format: date-time */
@@ -9607,6 +9674,32 @@ export interface components {
         };
         MDMSCEPPolicyList: {
             items: components["schemas"]["MDMSCEPPolicy"][];
+        };
+        MDMSCEPPolicyPreview: {
+            blockers: string[];
+            capability: string;
+            /** @enum {string} */
+            challenge_mode: "intune-jws" | "hmac-dynamic";
+            durable_writes: string[];
+            effect_free: boolean;
+            enabled: boolean;
+            expected_audience?: string;
+            name: string;
+            /** @enum {string} */
+            operation: "create" | "update";
+            outside_calls: string[];
+            /** Format: uuid */
+            policy_id?: string;
+            profile_guidance: Record<string, never>;
+            /** @enum {string} */
+            provider: "intune" | "jamf";
+            ready: boolean;
+            recovery_steps: string[];
+            scep_endpoint: string;
+            scep_profile: string;
+            secret_data_handling: string;
+            signer_calls: number;
+            trust_anchor_reference_keys: string[];
         };
         MDMSCEPPolicyRequest: {
             /** @enum {string} */
@@ -22392,6 +22485,48 @@ export interface operations {
             };
         };
     };
+    previewMDMSCEPPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MDMSCEPPolicyRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MDMSCEPPolicyPreview"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     getMDMSCEPPolicy: {
         parameters: {
             query?: never;
@@ -22520,6 +22655,50 @@ export interface operations {
             };
         };
     };
+    previewMDMSCEPPolicyUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MDMSCEPPolicyRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MDMSCEPPolicyPreview"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     rotateMDMSCEPChallenge: {
         parameters: {
             query?: never;
@@ -22541,6 +22720,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MDMSCEPChallengeRotated"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewMDMSCEPChallengeRotation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MDMSCEPChallengeRotationPreview"];
                 };
             };
             /** @description client error */

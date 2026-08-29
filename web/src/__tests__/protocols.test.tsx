@@ -20,7 +20,11 @@ const { apiMock } = vi.hoisted(() => ({
     acmeDNS01Providers: vi.fn(),
     acmeDNS01ProviderConfigs: vi.fn(),
     mdmSCEPStatus: vi.fn(),
+    previewMDMSCEPPolicy: vi.fn(),
+    previewMDMSCEPPolicyUpdate: vi.fn(),
+    createMDMSCEPPolicy: vi.fn(),
     updateMDMSCEPPolicy: vi.fn(),
+    previewMDMSCEPChallengeRotation: vi.fn(),
     rotateMDMSCEPChallenge: vi.fn(),
     deleteMDMSCEPPolicy: vi.fn(),
     updateACMEDNS01ProviderConfig: vi.fn(),
@@ -126,7 +130,11 @@ describe("protocol surface", () => {
     apiMock.acmeDNS01Providers.mockReset();
     apiMock.acmeDNS01ProviderConfigs.mockReset();
     apiMock.mdmSCEPStatus.mockReset();
+    apiMock.previewMDMSCEPPolicy.mockReset();
+    apiMock.previewMDMSCEPPolicyUpdate.mockReset();
+    apiMock.createMDMSCEPPolicy.mockReset();
     apiMock.updateMDMSCEPPolicy.mockReset();
+    apiMock.previewMDMSCEPChallengeRotation.mockReset();
     apiMock.rotateMDMSCEPChallenge.mockReset();
     apiMock.deleteMDMSCEPPolicy.mockReset();
     apiMock.updateACMEDNS01ProviderConfig.mockReset();
@@ -477,6 +485,55 @@ describe("protocol surface", () => {
       created_at: "2026-06-26T14:00:00Z",
       updated_at: "2026-06-26T14:04:00Z",
     }));
+    const policyPreview = (input: Record<string, unknown>, operation: "create" | "update", policyID?: string) => ({
+      capability: "F56",
+      ready: true,
+      effect_free: true,
+      operation,
+      ...(policyID ? { policy_id: policyID } : {}),
+      name: input.name,
+      provider: input.provider,
+      scep_endpoint: input.scep_endpoint,
+      scep_profile: input.scep_profile,
+      challenge_mode: input.challenge_mode,
+      enabled: input.enabled,
+      ...(input.expected_audience ? { expected_audience: input.expected_audience } : {}),
+      trust_anchor_reference_keys: Object.keys((input.trust_anchor_refs as Record<string, unknown>) ?? {}).sort(),
+      profile_guidance: input.profile_guidance ?? {},
+      durable_writes: ["mdm_scep_policies upsert", "mdm.scep_policy.upserted event"],
+      outside_calls: [],
+      signer_calls: 0,
+      blockers: [],
+      recovery_steps: ["Fix the named blocker and check the plan again.", "Retry the same save with the same idempotency key."],
+      secret_data_handling: "Only reference field names are returned. Secret values are never accepted or rendered.",
+    });
+    apiMock.previewMDMSCEPPolicy.mockImplementation(async (input) => policyPreview(input, "create"));
+    apiMock.previewMDMSCEPPolicyUpdate.mockImplementation(async (id, input) => policyPreview(input, "update", id));
+    apiMock.createMDMSCEPPolicy.mockImplementation(async (input) => ({
+      ...input,
+      id: "01900000-0000-7000-8000-000000000057",
+      tenant_id: "11111111-1111-1111-1111-111111111111",
+      trust_anchor_refs: input.trust_anchor_refs ?? {},
+      profile_guidance: input.profile_guidance ?? {},
+      rotation_version: 1,
+      created_at: "2026-06-26T14:06:00Z",
+      updated_at: "2026-06-26T14:06:00Z",
+    }));
+    apiMock.previewMDMSCEPChallengeRotation.mockResolvedValue({
+      capability: "F56",
+      ready: true,
+      effect_free: true,
+      policy_id: "01900000-0000-7000-8000-000000000056",
+      policy_name: "intune-mobile",
+      current_version: 2,
+      next_version: 3,
+      durable_writes: ["mdm_scep_policies rotation version", "mdm.scep_challenge.rotated event"],
+      outside_calls: [],
+      signer_calls: 0,
+      blockers: [],
+      recovery_steps: ["Keep the current challenge active until this rotation commits.", "Retry safely if the request is interrupted."],
+      secret_data_handling: "New challenge material is generated and stored behind the secret reference boundary; no secret value is returned.",
+    });
     apiMock.deleteMDMSCEPPolicy.mockResolvedValue(undefined);
     apiMock.updateACMEDNS01ProviderConfig.mockImplementation(async (_id, input) => ({
       ...(await apiMock.acmeDNS01ProviderConfigs.mock.results[0]?.value)?.items?.[0],
@@ -1447,34 +1504,43 @@ describe("protocol surface", () => {
     expect(screen.getAllByText("prod-cloudflare-next").length).toBeGreaterThan(0);
   });
 
-  it("validates and saves MDM SCEP policy references through the served mutation", async () => {
+  it("previews and saves an edited MDM SCEP policy without rendering secret reference values", async () => {
     const user = userEvent.setup();
     await renderProtocols();
 
     await user.click(screen.getByRole("button", { name: "Edit SCEP policy intune-mobile" }));
-    const dialog = screen.getByRole("dialog", { name: "Edit SCEP policy intune-mobile" });
-    const anchors = within(dialog).getByRole("textbox", { name: "Trust anchor references JSON (optional)" });
-    const guidance = within(dialog).getByRole("textbox", { name: "Profile guidance JSON (optional)" });
+    const dialog = screen.getByRole("dialog", { name: "Edit MDM enrollment policy" });
+    await user.selectOptions(within(dialog).getByRole("combobox", { name: "MDM provider" }), "jamf");
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Allow enrollment after this policy is saved" }));
+    await user.click(within(dialog).getByRole("button", { name: "Next" }));
+    const anchors = within(dialog).getByRole("textbox", { name: "Trust reference names (JSON)" });
+    const guidance = within(dialog).getByRole("textbox", { name: "MDM profile guidance (JSON)" });
 
     fireEvent.change(anchors, { target: { value: "{" } });
-    await user.click(within(dialog).getByRole("button", { name: "Save policy" }));
-    expect(await within(dialog).findByText(/Trust anchor references must be valid JSON/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Check the plan" }));
+    expect(await within(dialog).findByText("Enter one JSON object, such as {}.")).toBeInTheDocument();
 
     fireEvent.change(anchors, { target: { value: '{"root_ca_ref":"secret://mdm/intune/root-ca-next"}' } });
     fireEvent.change(guidance, { target: { value: "[]" } });
-    await user.click(within(dialog).getByRole("button", { name: "Save policy" }));
-    expect(await within(dialog).findByText("Profile guidance must be a JSON object.")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Check the plan" }));
+    expect((await within(dialog).findAllByText("Enter one JSON object, such as {}.")).length).toBeGreaterThan(0);
 
     fireEvent.change(guidance, { target: { value: '{"challenge_source":"hmac-dynamic"}' } });
-    await user.selectOptions(within(dialog).getByRole("combobox", { name: "Provider" }), "intune");
-    await user.selectOptions(within(dialog).getByRole("combobox", { name: "Provider" }), "jamf");
-    await user.selectOptions(within(dialog).getByRole("combobox", { name: "Challenge mode" }), "");
-    await user.selectOptions(within(dialog).getByRole("combobox", { name: "Challenge mode" }), "hmac-dynamic");
+    await user.selectOptions(within(dialog).getByRole("combobox", { name: "Challenge check" }), "hmac-dynamic");
     fireEvent.change(within(dialog).getByRole("textbox", { name: "Expected audience (optional)" }), { target: { value: "" } });
-    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Enabled" }));
+    await user.click(within(dialog).getByRole("button", { name: "Check the plan" }));
+
+    expect(await within(dialog).findByText("Ready to save")).toBeInTheDocument();
+    expect(within(dialog).getByText("This check made no writes, outside calls, or signing calls.")).toBeInTheDocument();
+    expect(within(dialog).getByText("root_ca_ref")).toBeInTheDocument();
+    expect(within(dialog).queryByText("secret://mdm/intune/root-ca-next")).not.toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "Save policy" }));
 
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: /Edit SCEP policy/ })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Edit MDM enrollment policy" })).not.toBeInTheDocument());
+    expect(apiMock.previewMDMSCEPPolicyUpdate).toHaveBeenCalledWith(
+      "01900000-0000-7000-8000-000000000056",
+      expect.objectContaining({ provider: "jamf", challenge_mode: "hmac-dynamic", enabled: false }),
+    );
     expect(apiMock.updateMDMSCEPPolicy).toHaveBeenCalledWith(
       "01900000-0000-7000-8000-000000000056",
       expect.objectContaining({
@@ -1487,6 +1553,29 @@ describe("protocol surface", () => {
     );
   });
 
+  it("creates the first MDM SCEP policy through the same effect-free review", async () => {
+    const user = userEvent.setup();
+    const status = await apiMock.mdmSCEPStatus();
+    apiMock.mdmSCEPStatus.mockClear();
+    apiMock.mdmSCEPStatus.mockResolvedValueOnce({ ...status, policies: [] });
+    await renderProtocols();
+
+    expect(screen.getByText("No MDM SCEP policy configured")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Add MDM policy" }));
+    const dialog = screen.getByRole("dialog", { name: "Create MDM enrollment policy" });
+    await user.type(within(dialog).getByRole("textbox", { name: "Policy name" }), "intune-first");
+    await user.type(within(dialog).getByRole("textbox", { name: "Certificate profile" }), "mobile-scep");
+    await user.click(within(dialog).getByRole("button", { name: "Next" }));
+    await user.click(within(dialog).getByRole("button", { name: "Check the plan" }));
+
+    expect(await within(dialog).findByText("Ready to save")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Create policy" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Create MDM enrollment policy" })).not.toBeInTheDocument());
+    expect(apiMock.previewMDMSCEPPolicy).toHaveBeenCalledWith(expect.objectContaining({ name: "intune-first", provider: "intune" }));
+    expect(apiMock.createMDMSCEPPolicy).toHaveBeenCalledWith(expect.objectContaining({ name: "intune-first", scep_profile: "mobile-scep" }));
+    expect(screen.getAllByText("intune-first").length).toBeGreaterThan(0);
+  });
+
   it("rotates and deletes SCEP policy evidence and deletes DNS config only after exact-name confirmation", async () => {
     const user = userEvent.setup();
     await renderProtocols();
@@ -1497,6 +1586,9 @@ describe("protocol surface", () => {
 
     await user.click(screen.getByRole("button", { name: "Rotate challenge for intune-mobile" }));
     let dialog = screen.getByRole("dialog", { name: "Rotate SCEP challenge for intune-mobile?" });
+    expect(await within(dialog).findByText("Rotation version 2 will become version 3.")).toBeInTheDocument();
+    expect(within(dialog).getByText(/This check made no writes/)).toBeInTheDocument();
+    expect(within(dialog).getByText("Retry safely if the request is interrupted.")).toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "Rotate challenge" }));
     expect(await within(dialog).findByText("rotation worker offline")).toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "Rotate challenge" }));

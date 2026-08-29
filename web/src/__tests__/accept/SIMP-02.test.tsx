@@ -160,6 +160,10 @@ describe("SIMP-02 lean protocol setup", () => {
     expect(source).not.toMatch(/ariSignals|dnsProviderDisclosures|cnameFixtures|caaFixtures|validationMethodFixtures|mdmFixtures/);
     expect(source).not.toMatch(/FixtureTable|UnavailableState|DnsProviderDisclosure|ValidationFixture|AriSignal/);
     expect(source).not.toMatch(/ACME Renewal Information|ACME DNS validation|Intune \/ MDM enrollment|DNS provider and plugin disclosure/);
-    expect(source).not.toMatch(/coming soon|fixture|preview/i);
+    expect(source).not.toMatch(/coming soon|fixture/i);
+    // A real server preview is an operator safety control, not a reference-only
+    // fixture. Keep blocking local preview/sample row arrays that could fake a
+    // working protocol while allowing typed API preview state and dialogs.
+    expect(source).not.toMatch(/\b(?:const|let)\s+\w*(?:preview|sample)\w*\s*=\s*\[/i);
   });
 });

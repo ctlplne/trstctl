@@ -21,6 +21,7 @@ import { SCEPOperatorPanel } from "@/pages/protocols/SCEPOperatorPanel";
 import { CMPOperatorPanel } from "@/pages/protocols/CMPOperatorPanel";
 import { RevocationCachePanel } from "@/pages/protocols/RevocationCachePanel";
 import { DNS01PreflightDialog } from "@/pages/protocols/DNS01PreflightDialog";
+import { MDMSCEPPolicyDialog } from "@/pages/protocols/MDMSCEPPolicyDialog";
 import { enrollmentRelaySegments } from "@/pages/protocols/enrollmentRelaySegments";
 import {
   api,
@@ -33,7 +34,7 @@ import {
   type EnrollmentDiagnosticList,
   type EnrollmentDiagnostic,
   type MDMSCEPPolicy,
-  type MDMSCEPPolicyRequest,
+  type MDMSCEPChallengeRotationPreview,
   type MDMSCEPStatus,
   type ProtocolRuntimeStatus,
 } from "@/lib/api";
@@ -253,7 +254,7 @@ export function Protocols() {
   const [statusError, setStatusError] = useState<string | null>(null);
   const { toast } = useToast();
   const canProveEnrollmentFixed = useCan("certs:issue");
-  const [scepEditPolicy, setSCEPEditPolicy] = useState<MDMSCEPPolicy | null>(null);
+  const [scepPolicyEditor, setSCEPPolicyEditor] = useState<{ policy?: MDMSCEPPolicy } | null>(null);
   const [scepDeletePolicy, setSCEPDeletePolicy] = useState<MDMSCEPPolicy | null>(null);
   const [scepRotatePolicy, setSCEPRotatePolicy] = useState<MDMSCEPPolicy | null>(null);
   const [dnsEditConfig, setDNSEditConfig] = useState<ACMEDNS01ProviderConfig | null>(null);
@@ -372,13 +373,20 @@ export function Protocols() {
 
   function replaceSCEPPolicy(updated: MDMSCEPPolicy) {
     setMDMSCEPStatus((current) =>
-      current ? { ...current, policies: current.policies.map((policy) => (policy.id === updated.id ? updated : policy)) } : current,
+      current
+        ? {
+            ...current,
+            policies: current.policies.some((policy) => policy.id === updated.id)
+              ? current.policies.map((policy) => (policy.id === updated.id ? updated : policy))
+              : [...current.policies, updated],
+          }
+        : current,
     );
   }
 
   function handleSCEPPolicySaved(updated: MDMSCEPPolicy) {
     replaceSCEPPolicy(updated);
-    setSCEPEditPolicy(null);
+    setSCEPPolicyEditor(null);
     toast({ kind: "success", title: t("parity.scepPolicyUpdated_3a2953"), description: updated.name });
   }
 
@@ -1120,9 +1128,15 @@ export function Protocols() {
           </section>
 
           <section aria-labelledby="mdm-scep-heading">
-            <h2 id="mdm-scep-heading" className="mb-3 text-title font-semibold">
-              {t("protocols.mdm.heading")}
-            </h2>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 id="mdm-scep-heading" className="text-title font-semibold">{t("protocols.mdm.heading")}</h2>
+                <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{t("protocols.mdm.sectionHelp")}</p>
+              </div>
+              <Button type="button" size="sm" onClick={() => setSCEPPolicyEditor({})}>
+                {t("protocols.mdm.addPolicy")}
+              </Button>
+            </div>
             <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_18rem]">
               <ScrollableTableRegion className="ui-panel" label={t("protocols.mdm.caption")}>
                 <table className="ui-table min-w-[72rem]">
@@ -1175,7 +1189,7 @@ export function Protocols() {
                                 type="button"
                                 size="sm"
                                 variant="outline"
-                                onClick={() => setSCEPEditPolicy(policy)}
+                                onClick={() => setSCEPPolicyEditor({ policy })}
                                 aria-label={translateNow("source.edit.scep.policy.value1.883c2507e1", { value1: policy.name })}
                               >
                                 {t("parity.edit_530164")}
@@ -1289,7 +1303,9 @@ export function Protocols() {
         </div>
       </details>
 
-      {scepEditPolicy && <MDMSCEPPolicyEditDialog policy={scepEditPolicy} onClose={() => setSCEPEditPolicy(null)} onSaved={handleSCEPPolicySaved} />}
+      {scepPolicyEditor && (
+        <MDMSCEPPolicyDialog policy={scepPolicyEditor.policy} onClose={() => setSCEPPolicyEditor(null)} onSaved={handleSCEPPolicySaved} />
+      )}
       {scepRotatePolicy && (
         <MDMSCEPRotateChallengeDialog policy={scepRotatePolicy} onClose={() => setSCEPRotatePolicy(null)} onRotated={handleSCEPChallengeRotated} />
       )}
@@ -1386,181 +1402,6 @@ function parseOptionalJSONRecord(value: string, label: string): Record<string, u
   return parsed as Record<string, unknown>;
 }
 
-function MDMSCEPPolicyEditDialog({ onClose, onSaved, policy }: { policy: MDMSCEPPolicy; onClose: () => void; onSaved: (updated: MDMSCEPPolicy) => void }) {
-  const { t } = useTranslation();
-  const [name, setName] = useState(policy.name);
-  const [provider, setProvider] = useState<MDMSCEPPolicyRequest["provider"]>(policy.provider === "jamf" ? "jamf" : "intune");
-  const [scepEndpoint, setSCEPEndpoint] = useState(policy.scep_endpoint);
-  const [scepProfile, setSCEPProfile] = useState(policy.scep_profile);
-  const [challengeMode, setChallengeMode] = useState<"" | NonNullable<MDMSCEPPolicyRequest["challenge_mode"]>>(
-    policy.challenge_mode === "intune-jws" || policy.challenge_mode === "hmac-dynamic" ? policy.challenge_mode : "",
-  );
-  const [enabled, setEnabled] = useState(policy.enabled);
-  const [expectedAudience, setExpectedAudience] = useState(policy.expected_audience ?? "");
-  const [trustAnchorRefsJSON, setTrustAnchorRefsJSON] = useState(() => stringifyRecord(policy.trust_anchor_refs));
-  const [profileGuidanceJSON, setProfileGuidanceJSON] = useState(() => stringifyRecord(policy.profile_guidance));
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const nameRef = useRef<HTMLInputElement>(null);
-  const titleId = "scep-policy-edit-heading";
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const trustAnchorRefs = parseOptionalJSONRecord(trustAnchorRefsJSON, "Trust anchor references");
-    if (typeof trustAnchorRefs === "string") {
-      setError(trustAnchorRefs);
-      return;
-    }
-    const profileGuidance = parseOptionalJSONRecord(profileGuidanceJSON, "Profile guidance");
-    if (typeof profileGuidance === "string") {
-      setError(profileGuidance);
-      return;
-    }
-    const input: MDMSCEPPolicyRequest = {
-      name: name.trim(),
-      provider,
-      scep_endpoint: scepEndpoint.trim(),
-      scep_profile: scepProfile.trim(),
-      enabled,
-    };
-    if (challengeMode) input.challenge_mode = challengeMode;
-    const audience = expectedAudience.trim();
-    if (audience) input.expected_audience = audience;
-    if (trustAnchorRefs) input.trust_anchor_refs = trustAnchorRefs;
-    if (profileGuidance) input.profile_guidance = profileGuidance;
-    setBusy(true);
-    setError(null);
-    try {
-      onSaved(await api.updateMDMSCEPPolicy(policy.id, input));
-    } catch (err) {
-      setError(protocolStatusError(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Dialog
-      open
-      onClose={onClose}
-      titleId={titleId}
-      initialFocusRef={nameRef}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      overlayClassName="absolute inset-0 bg-black/55"
-      panelClassName="relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-panel border border-border bg-card shadow-elevation2"
-    >
-      <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
-        <div className="min-w-0">
-          <h2 id={titleId} className="truncate text-title font-semibold">
-            {translateNow("source.edit.scep.policy.5719a7d8ab")} {policy.name}
-          </h2>
-          <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{policy.id}</p>
-        </div>
-        <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label={t("parity.closeScepPolicyForm_ae9570")}>
-          <X className="h-4 w-4" aria-hidden="true" />
-        </Button>
-      </header>
-      <form className="grid gap-4 p-5" onSubmit={(event) => void submit(event)}>
-        {error && <ErrorState title={t("parity.scepPolicyUpdateFailed_f92dc7")}>{error}</ErrorState>}
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="grid gap-1 text-body font-medium">
-            {t("parity.policyName_101bf6")}
-            <input
-              ref={nameRef}
-              required
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
-            />
-          </label>
-          <label className="grid gap-1 text-body font-medium">
-            {translateNow("source.provider.472590ae97")}
-            <select
-              value={provider}
-              onChange={(event) => setProvider(event.target.value === "jamf" ? "jamf" : "intune")}
-              className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
-            >
-              <option value="intune">{t("parity.intune_2c4886")}</option>
-              <option value="jamf">{t("parity.jamf_489375")}</option>
-            </select>
-          </label>
-          <label className="grid gap-1 text-body font-medium">
-            {t("parity.scepEndpoint_f4bb21")}
-            <input
-              required
-              value={scepEndpoint}
-              onChange={(event) => setSCEPEndpoint(event.target.value)}
-              className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
-            />
-          </label>
-          <label className="grid gap-1 text-body font-medium">
-            {t("parity.scepProfile_315862")}
-            <input
-              required
-              value={scepProfile}
-              onChange={(event) => setSCEPProfile(event.target.value)}
-              className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
-            />
-          </label>
-          <label className="grid gap-1 text-body font-medium">
-            {t("parity.challengeMode_1c8fbd")}
-            <select
-              value={challengeMode}
-              onChange={(event) => {
-                const next = event.target.value;
-                setChallengeMode(next === "intune-jws" || next === "hmac-dynamic" ? next : "");
-              }}
-              className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
-            >
-              <option value="">{t("parity.providerDefault_f75bf4")}</option>
-              <option value="intune-jws">{t("parity.intuneJws_b47f57")}</option>
-              <option value="hmac-dynamic">{t("parity.hmacDynamic_cb11c5")}</option>
-            </select>
-          </label>
-          <label className="grid gap-1 text-body font-medium">
-            {t("parity.expectedAudienceOptional_51c8b7")}
-            <input
-              value={expectedAudience}
-              onChange={(event) => setExpectedAudience(event.target.value)}
-              className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
-            />
-          </label>
-        </div>
-        <label className="flex items-center gap-2 text-body font-medium">
-          <input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} />
-          {translateNow("source.enabled.92c1cdfdf4")}
-        </label>
-        <label className="grid gap-1 text-body font-medium">
-          {t("parity.trustAnchorReferencesJsonOptional_f5ea80")}
-          <textarea
-            rows={4}
-            value={trustAnchorRefsJSON}
-            onChange={(event) => setTrustAnchorRefsJSON(event.target.value)}
-            className="min-h-24 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs"
-          />
-        </label>
-        <label className="grid gap-1 text-body font-medium">
-          {t("parity.profileGuidanceJsonOptional_fd4738")}
-          <textarea
-            rows={4}
-            value={profileGuidanceJSON}
-            onChange={(event) => setProfileGuidanceJSON(event.target.value)}
-            className="min-h-24 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs"
-          />
-        </label>
-        <footer className="flex justify-end gap-2 border-t border-border pt-4">
-          <Button type="button" variant="outline" onClick={onClose}>
-            {translateNow("source.cancel.19766ed6cc")}
-          </Button>
-          <Button type="submit" disabled={busy || name.trim() === "" || scepEndpoint.trim() === "" || scepProfile.trim() === ""}>
-            {t("parity.savePolicy_77d67c")}
-          </Button>
-        </footer>
-      </form>
-    </Dialog>
-  );
-}
-
 function MDMSCEPRotateChallengeDialog({
   onClose,
   onRotated,
@@ -1571,9 +1412,31 @@ function MDMSCEPRotateChallengeDialog({
   onRotated: (policy: MDMSCEPPolicy) => void;
 }) {
   const { t } = useTranslation();
+  const [preview, setPreview] = useState<MDMSCEPChallengeRotationPreview | null>(null);
+  const [previewing, setPreviewing] = useState(true);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
+
+  async function loadPreview() {
+    setPreviewing(true);
+    setPreviewError(null);
+    try {
+      setPreview(await api.previewMDMSCEPChallengeRotation(policy.id));
+    } catch (err) {
+      setPreview(null);
+      setPreviewError(protocolStatusError(err));
+    } finally {
+      setPreviewing(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadPreview();
+    // The policy id is the stable server object whose rotation plan is being reviewed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [policy.id]);
 
   async function confirmRotate() {
     setBusy(true);
@@ -1608,9 +1471,40 @@ function MDMSCEPRotateChallengeDialog({
       <p className="mt-2 text-caption text-muted-foreground">
         {translateNow("source.current.rotation.version.ede128c23f")} {policy.rotation_version}
       </p>
+      {previewing && <LoadingState>{t("protocols.mdm.rotation.previewing")}</LoadingState>}
+      {previewError && (
+        <ErrorState title={t("protocols.mdm.rotation.previewFailed")}>
+          <p>{previewError}</p>
+          <Button className="mt-3" type="button" size="sm" variant="outline" onClick={() => void loadPreview()}>
+            {t("protocols.mdm.form.retryPreview")}
+          </Button>
+        </ErrorState>
+      )}
+      {preview && (
+        <section aria-label={t("protocols.mdm.rotation.previewLabel")} className="mt-3 grid gap-3 rounded-control border border-border bg-muted/25 p-3">
+          <p className="font-medium">
+            {t("protocols.mdm.rotation.versionPlan", { current: preview.current_version, next: preview.next_version })}
+          </p>
+          <p className="text-caption text-muted-foreground">
+            {preview.effect_free ? t("protocols.mdm.form.effectFree") : t("protocols.mdm.form.effectWarning")} · {preview.outside_calls.length} {t("protocols.mdm.form.outsideCalls")} · {preview.signer_calls} {t("protocols.mdm.form.signerCalls")}
+          </p>
+          {preview.blockers.length > 0 && (
+            <ul className="list-disc space-y-1 ps-5 text-sm text-risk-warning">
+              {preview.blockers.map((item) => <li key={item}>{item}</li>)}
+            </ul>
+          )}
+          <div>
+            <p className="text-sm font-semibold">{t("protocols.mdm.form.recovery")}</p>
+            <ol className="mt-1 list-decimal space-y-1 ps-5 text-sm text-muted-foreground">
+              {preview.recovery_steps.map((item) => <li key={item}>{item}</li>)}
+            </ol>
+          </div>
+          <p className="text-caption text-muted-foreground">{preview.secret_data_handling}</p>
+        </section>
+      )}
       {error && <ErrorState title={t("parity.challengeRotationFailed_c4b11e")}>{error}</ErrorState>}
       <div className="mt-3 flex gap-2">
-        <Button ref={confirmRef} type="button" size="sm" disabled={busy} onClick={() => void confirmRotate()}>
+        <Button ref={confirmRef} type="button" size="sm" disabled={busy || previewing || !preview?.ready || !preview.effect_free} onClick={() => void confirmRotate()}>
           {t("parity.rotateChallenge_99fc02")}
         </Button>
         <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onClose}>

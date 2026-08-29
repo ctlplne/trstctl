@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sort"
 	"strings"
 
 	googleuuid "github.com/google/uuid"
@@ -70,6 +71,146 @@ type mdmSCEPChallengeRotatedResponse struct {
 	Policy mdmSCEPPolicyResponse `json:"policy"`
 }
 
+type mdmSCEPPolicyPreviewResponse struct {
+	Capability               string          `json:"capability"`
+	Ready                    bool            `json:"ready"`
+	EffectFree               bool            `json:"effect_free"`
+	Operation                string          `json:"operation"`
+	PolicyID                 string          `json:"policy_id,omitempty"`
+	Name                     string          `json:"name"`
+	Provider                 string          `json:"provider"`
+	SCEPProfile              string          `json:"scep_profile"`
+	SCEPEndpoint             string          `json:"scep_endpoint"`
+	ExpectedAudience         string          `json:"expected_audience,omitempty"`
+	ChallengeMode            string          `json:"challenge_mode"`
+	Enabled                  bool            `json:"enabled"`
+	TrustAnchorReferenceKeys []string        `json:"trust_anchor_reference_keys"`
+	ProfileGuidance          json.RawMessage `json:"profile_guidance"`
+	DurableWrites            []string        `json:"durable_writes"`
+	OutsideCalls             []string        `json:"outside_calls"`
+	SignerCalls              int             `json:"signer_calls"`
+	Blockers                 []string        `json:"blockers"`
+	RecoverySteps            []string        `json:"recovery_steps"`
+	SecretDataHandling       string          `json:"secret_data_handling"`
+}
+
+type mdmSCEPChallengeRotationPreviewResponse struct {
+	Capability         string   `json:"capability"`
+	Ready              bool     `json:"ready"`
+	EffectFree         bool     `json:"effect_free"`
+	PolicyID           string   `json:"policy_id"`
+	PolicyName         string   `json:"policy_name"`
+	CurrentVersion     int      `json:"current_version"`
+	NextVersion        int      `json:"next_version"`
+	DurableWrites      []string `json:"durable_writes"`
+	OutsideCalls       []string `json:"outside_calls"`
+	SignerCalls        int      `json:"signer_calls"`
+	Blockers           []string `json:"blockers"`
+	RecoverySteps      []string `json:"recovery_steps"`
+	SecretDataHandling string   `json:"secret_data_handling"`
+}
+
+func (a *API) previewMDMSCEPPolicy(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	req, err := decodeMDMSCEPPolicyRequest(r)
+	if err != nil {
+		a.writeMDMSCEPError(w, err)
+		return
+	}
+	operation := "create"
+	policyID := strings.TrimSpace(r.PathValue("id"))
+	if policyID != "" {
+		operation = "update"
+		if a.store == nil {
+			a.writeMDMSCEPError(w, errStatus(http.StatusServiceUnavailable, "MDM SCEP policy storage is not configured"))
+			return
+		}
+		if _, err := a.store.GetMDMSCEPPolicy(r.Context(), tenantID, policyID); err != nil {
+			a.writeMDMSCEPError(w, err)
+			return
+		}
+	}
+	a.writeJSON(w, http.StatusOK, a.mdmSCEPPolicyPlan(req, operation, policyID))
+}
+
+func (a *API) mdmSCEPPolicyPlan(req mdmSCEPPolicyRequest, operation, policyID string) mdmSCEPPolicyPreviewResponse {
+	blockers := []string{}
+	if a.store == nil || a.log == nil {
+		blockers = append(blockers, "The event log and tenant-scoped policy store must be attached before this policy can be saved.")
+	}
+	refs := map[string]string{}
+	_ = json.Unmarshal(req.TrustAnchorRefs, &refs)
+	refKeys := make([]string, 0, len(refs))
+	for key := range refs {
+		refKeys = append(refKeys, key)
+	}
+	sort.Strings(refKeys)
+	writes := []string{
+		"Append one immutable mdm.scep_policy.upserted event for this tenant.",
+		"Project that event into the tenant-scoped MDM SCEP policy read model.",
+	}
+	return mdmSCEPPolicyPreviewResponse{
+		Capability: "F56", Ready: len(blockers) == 0, EffectFree: true,
+		Operation: operation, PolicyID: policyID, Name: req.Name, Provider: req.Provider,
+		SCEPProfile: req.SCEPProfile, SCEPEndpoint: req.SCEPEndpoint,
+		ExpectedAudience: req.ExpectedAudience, ChallengeMode: req.ChallengeMode,
+		Enabled: req.Enabled != nil && *req.Enabled, TrustAnchorReferenceKeys: refKeys,
+		ProfileGuidance: req.ProfileGuidance, DurableWrites: writes,
+		OutsideCalls: []string{}, SignerCalls: 0, Blockers: blockers,
+		RecoverySteps: []string{
+			"If challenge validation fails, keep the gate enabled and fix the audience or trust-anchor reference; do not bypass the challenge.",
+			"Review this exact policy again, save the repaired policy, then rotate its challenge version.",
+			"Push or refresh the MDM profile and confirm requested, issued, installed, and renewing evidence in the device trace.",
+		},
+		SecretDataHandling: "Only reference field names are returned. Secret reference values, challenge material, certificates, and private keys are never returned by this preview.",
+	}
+}
+
+func (a *API) previewMDMSCEPChallengeRotation(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	if a.store == nil {
+		a.writeMDMSCEPError(w, errStatus(http.StatusServiceUnavailable, "MDM SCEP policy storage is not configured"))
+		return
+	}
+	policy, err := a.store.GetMDMSCEPPolicy(r.Context(), tenantID, r.PathValue("id"))
+	if err != nil {
+		a.writeMDMSCEPError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, a.mdmSCEPChallengeRotationPlan(policy))
+}
+
+func (a *API) mdmSCEPChallengeRotationPlan(policy store.MDMSCEPPolicy) mdmSCEPChallengeRotationPreviewResponse {
+	blockers := []string{}
+	if a.store == nil || a.log == nil {
+		blockers = append(blockers, "The event log and tenant-scoped policy store must be attached before challenge rotation can be recorded.")
+	}
+	return mdmSCEPChallengeRotationPreviewResponse{
+		Capability: "F56", Ready: len(blockers) == 0, EffectFree: true,
+		PolicyID: policy.ID, PolicyName: policy.Name,
+		CurrentVersion: policy.RotationVersion, NextVersion: policy.RotationVersion + 1,
+		DurableWrites: []string{
+			"Append one immutable mdm.scep_challenge.rotated event for this tenant.",
+			"Project the next rotation version and timestamp into the existing policy.",
+		},
+		OutsideCalls: []string{}, SignerCalls: 0, Blockers: blockers,
+		RecoverySteps: []string{
+			"Keep the existing challenge gate strict while repairing the MDM profile, trust anchor, audience, or clock settings.",
+			"Rotate once, push or refresh the MDM profile, and retry enrollment with newly issued challenge material.",
+			"Use the device trace to prove requested, issued, installed, and renewing evidence; a missing observation stays unknown.",
+		},
+		SecretDataHandling: "No challenge value is generated or returned by preview. Rotation records version evidence only; raw challenge material stays outside the response.",
+	}
+}
+
 //trstctl:mutation
 func (a *API) createMDMSCEPPolicy(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
@@ -77,6 +218,10 @@ func (a *API) createMDMSCEPPolicy(w http.ResponseWriter, r *http.Request) {
 		req, err := decodeMDMSCEPPolicyRequest(r)
 		if err != nil {
 			return 0, nil, err
+		}
+		plan := a.mdmSCEPPolicyPlan(req, "create", "")
+		if !plan.Ready {
+			return 0, nil, errStatus(http.StatusServiceUnavailable, strings.Join(plan.Blockers, " "))
 		}
 		id := googleuuid.NewString()
 		if err := a.emitMDMSCEPPolicy(ctx, tenantID, id, req, 1); err != nil {
@@ -131,6 +276,10 @@ func (a *API) updateMDMSCEPPolicy(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err
 		}
+		plan := a.mdmSCEPPolicyPlan(req, "update", id)
+		if !plan.Ready {
+			return 0, nil, errStatus(http.StatusServiceUnavailable, strings.Join(plan.Blockers, " "))
+		}
 		if err := a.emitMDMSCEPPolicy(ctx, tenantID, id, req, existing.RotationVersion); err != nil {
 			return 0, nil, err
 		}
@@ -169,6 +318,10 @@ func (a *API) rotateMDMSCEPChallenge(w http.ResponseWriter, r *http.Request) {
 		existing, err := a.store.GetMDMSCEPPolicy(ctx, tenantID, id)
 		if err != nil {
 			return 0, nil, err
+		}
+		plan := a.mdmSCEPChallengeRotationPlan(existing)
+		if !plan.Ready {
+			return 0, nil, errStatus(http.StatusServiceUnavailable, strings.Join(plan.Blockers, " "))
 		}
 		nextVersion := existing.RotationVersion + 1
 		payload, err := json.Marshal(projections.MDMSCEPChallengeRotated{ID: id, RotationVersion: nextVersion})
