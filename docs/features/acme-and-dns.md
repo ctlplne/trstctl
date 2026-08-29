@@ -232,6 +232,14 @@ still enters the production outbox worker, invokes the admitted plugin, publishe
 through its configured endpoint, verifies DNS visibility, and cleans up the exact
 probe.
 
+The signed-plugin wrapper also appends `acme.dns01.plugin.presented` and
+`acme.dns01.plugin.cleaned` to the tenant's tamper-evident audit stream. Denials and
+delegate failures use the matching `.denied` / `.failed` event types with a closed
+diagnostic code, never a raw provider error. Production's privacy-policy gate treats
+the DNS record name as pseudonymizable subject data and rejects undeclared payload
+fields. If the audit append itself fails, the outbox delivery fails visibly instead
+of reporting an unaudited plugin effect as green.
+
 Each provider asks only for the narrow capability it needs (network dial to its zone
 API host, the least-privilege pattern from the [plugin SDK](extensibility-plugins.md)),
 its credentials are held in wipeable memory and never logged, and where a provider needs

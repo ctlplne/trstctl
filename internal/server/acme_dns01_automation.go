@@ -37,6 +37,14 @@ const (
 	destinationACMEDNS01Present = "acme.dns01.present"
 	destinationACMEDNS01Cleanup = "acme.dns01.cleanup"
 
+	eventACMEDNS01PluginPresented = "acme.dns01.plugin.presented"
+	eventACMEDNS01PluginCleaned   = "acme.dns01.plugin.cleaned"
+	eventACMEDNS01PluginDenied    = "acme.dns01.plugin.denied"
+	eventACMEDNS01PluginFailed    = "acme.dns01.plugin.failed"
+
+	dnsPluginDetailInvocationDenied = "invocation_denied"
+	dnsPluginDetailDelegateFailed   = "delegate_failed"
+
 	acmeDNS01OutboxPollInterval = 20 * time.Millisecond
 	acmeDNS01OutboxWait         = 30 * time.Second
 )
@@ -773,33 +781,38 @@ var _ acme.DNSProvider = (*dns01PluginProvider)(nil)
 
 func (p *dns01PluginProvider) PresentTXT(ctx context.Context, name, value string) error {
 	if err := p.plugins.InvokeDNS(ctx, p.provider, dnsPluginPresentEntrypoint); err != nil {
-		p.appendEvent(ctx, "acme.dns01.plugin.denied", name, err.Error())
-		return err
+		return errors.Join(err, p.appendEvent(ctx, eventACMEDNS01PluginDenied, name, dnsPluginDetailInvocationDenied))
 	}
 	if err := p.delegate.PresentTXT(ctx, name, value); err != nil {
-		p.appendEvent(ctx, "acme.dns01.plugin.failed", name, err.Error())
-		return err
+		return errors.Join(err, p.appendEvent(ctx, eventACMEDNS01PluginFailed, name, dnsPluginDetailDelegateFailed))
 	}
-	p.appendEvent(ctx, "acme.dns01.plugin.presented", name, "")
-	return nil
+	return p.appendEvent(ctx, eventACMEDNS01PluginPresented, name, "")
 }
 
 func (p *dns01PluginProvider) CleanupTXT(ctx context.Context, name, value string) error {
 	if err := p.plugins.InvokeDNS(ctx, p.provider, dnsPluginCleanupEntrypoint); err != nil {
-		p.appendEvent(ctx, "acme.dns01.plugin.denied", name, err.Error())
-		return err
+		return errors.Join(err, p.appendEvent(ctx, eventACMEDNS01PluginDenied, name, dnsPluginDetailInvocationDenied))
 	}
 	if err := p.delegate.CleanupTXT(ctx, name, value); err != nil {
-		p.appendEvent(ctx, "acme.dns01.plugin.failed", name, err.Error())
-		return err
+		return errors.Join(err, p.appendEvent(ctx, eventACMEDNS01PluginFailed, name, dnsPluginDetailDelegateFailed))
 	}
-	p.appendEvent(ctx, "acme.dns01.plugin.cleaned", name, "")
-	return nil
+	return p.appendEvent(ctx, eventACMEDNS01PluginCleaned, name, "")
 }
 
-func (p *dns01PluginProvider) appendEvent(ctx context.Context, eventType, recordName, detail string) {
+func (p *dns01PluginProvider) appendEvent(ctx context.Context, eventType, recordName, detail string) error {
 	if p.log == nil {
-		return
+		return nil
+	}
+	switch eventType {
+	case eventACMEDNS01PluginPresented, eventACMEDNS01PluginCleaned,
+		eventACMEDNS01PluginDenied, eventACMEDNS01PluginFailed:
+	default:
+		return fmt.Errorf("server: unsupported DNS plugin audit event type %q", eventType)
+	}
+	switch detail {
+	case "", dnsPluginDetailInvocationDenied, dnsPluginDetailDelegateFailed:
+	default:
+		return fmt.Errorf("server: unsupported DNS plugin audit diagnostic %q", detail)
 	}
 	data, err := json.Marshal(struct {
 		Provider   string `json:"provider"`
@@ -807,9 +820,12 @@ func (p *dns01PluginProvider) appendEvent(ctx context.Context, eventType, record
 		Detail     string `json:"detail,omitempty"`
 	}{Provider: p.provider, RecordName: recordName, Detail: detail})
 	if err != nil {
-		return
+		return fmt.Errorf("server: marshal DNS plugin audit event: %w", err)
 	}
-	_, _ = p.log.Append(ctx, events.Event{Type: eventType, TenantID: p.tenantID, Data: data})
+	if _, err := p.log.Append(ctx, events.Event{Type: eventType, TenantID: p.tenantID, Data: data}); err != nil {
+		return fmt.Errorf("server: append DNS plugin audit event %q: %w", eventType, err)
+	}
+	return nil
 }
 
 func decodeACMEDNS01ProviderConfig(raw json.RawMessage, out any) error {

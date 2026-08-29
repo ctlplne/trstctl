@@ -474,6 +474,39 @@ func TestCoreProductionPrivacyCatalogCoversCertificateExpiring(t *testing.T) {
 	}
 }
 
+func TestCoreProductionPrivacyCatalogCoversSignedDNSPluginAuditEvents(t *testing.T) {
+	t.Parallel()
+	const subject = "_acme-challenge.customer.example"
+	for _, eventType := range []string{
+		"acme.dns01.plugin.presented",
+		"acme.dns01.plugin.cleaned",
+		"acme.dns01.plugin.denied",
+		"acme.dns01.plugin.failed",
+	} {
+		t.Run(eventType, func(t *testing.T) {
+			payload := []byte(`{"provider":"reference-dns","record_name":"` + subject + `","detail":"delegate_failed"}`)
+			if err := validateRegisteredPrivacyEventPayload(payload, eventType, DefaultSchemaVersion); err != nil {
+				t.Fatalf("live signed-plugin audit payload rejected by the production privacy gate: %v", err)
+			}
+			if err := validateRegisteredPrivacyEventPayload(
+				[]byte(`{"provider":"reference-dns","record_name":"`+subject+`","detail":"delegate_failed","raw_error":"secret://must-not-pass"}`),
+				eventType, DefaultSchemaVersion,
+			); err == nil {
+				t.Fatal("closed signed-plugin audit shape accepted an undeclared raw error")
+			}
+			rewritten, changed, err := applyRegisteredPrivacyEventPolicy(
+				payload, "11111111-1111-4111-8111-111111111111", subject, eventType, DefaultSchemaVersion,
+			)
+			if err != nil {
+				t.Fatalf("apply signed-plugin privacy policy: %v", err)
+			}
+			if !changed || bytes.Contains(rewritten, []byte(subject)) {
+				t.Fatalf("record-name subject was not pseudonymized: changed=%t payload=%s", changed, rewritten)
+			}
+		})
+	}
+}
+
 func TestCTSubmissionQueuedPrivacyPolicyRewritesNestedProducerIdentityFields(t *testing.T) {
 	const subject = "operator@example.test"
 	raw := []byte(`{

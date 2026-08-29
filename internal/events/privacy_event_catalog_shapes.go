@@ -177,6 +177,10 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 	case "acme.challenge.validated":
 		return shape(`{"challenge_id":"","authz_id":"","order_id":"","challenge_status":"","authz_status":"","order_status":"","attested_key_sha256":""}`,
 			catalogPrivacyShapeOptions{Optional: []string{"/order_status", "/attested_key_sha256"}}), true
+	case "acme.dns01.plugin.presented", "acme.dns01.plugin.cleaned",
+		"acme.dns01.plugin.denied", "acme.dns01.plugin.failed":
+		return shape(`{"provider":"","record_name":"","detail":""}`,
+			catalogPrivacyShapeOptions{Optional: []string{"/detail"}}), true
 	case "acme.eab.order_denied":
 		return shape(`{"account_url":"","eab_key_id":"","identifiers":[""],"reason":""}`,
 			catalogPrivacyShapeOptions{Optional: []string{"/identifiers"}}), true

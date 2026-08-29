@@ -26,6 +26,7 @@ import (
 	xacme "golang.org/x/crypto/acme"
 
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/acmekey"
@@ -1317,6 +1318,36 @@ func TestServedACMEDNS01OrderActivatesSignedDNSProviderPluginTRACE013(t *testing
 	}
 	if bytes.Contains(body, []byte("secret://")) || bytes.Contains(body, []byte("dns-plugin-token")) {
 		t.Fatalf("signed DNS plugin recovery leaked sensitive material: %s", body)
+	}
+}
+
+func TestSignedDNSPluginAuditEventsSurviveProductionPrivacyGateF70(t *testing.T) {
+	log, err := events.Open(t.Context(), config.NATS{
+		Mode: config.NATSEmbedded, StoreDir: t.TempDir(),
+	}, events.WithRequiredPrivacyEventPolicies())
+	if err != nil {
+		t.Fatalf("open production-policy event log: %v", err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	provider := &dns01PluginProvider{
+		log: log, tenantID: servedTestTenant, provider: "reference-dns",
+	}
+	for _, eventType := range []string{
+		eventACMEDNS01PluginPresented,
+		eventACMEDNS01PluginCleaned,
+		eventACMEDNS01PluginDenied,
+		eventACMEDNS01PluginFailed,
+	} {
+		if err := provider.appendEvent(t.Context(), eventType, "_acme-challenge.customer.example", "delegate_failed"); err != nil {
+			t.Fatalf("append %s through production privacy gate: %v", eventType, err)
+		}
+	}
+	records, err := audit.NewService(log, nil).Search(t.Context(), audit.Query{TenantID: servedTestTenant})
+	if err != nil {
+		t.Fatalf("search signed-plugin audit events: %v", err)
+	}
+	if len(records) != 4 {
+		t.Fatalf("signed-plugin audit records = %d, want 4", len(records))
 	}
 }
 
