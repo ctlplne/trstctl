@@ -43,7 +43,8 @@ export function ManagedKeyCustodyWorkspace() {
   useEffect(() => {
     let active = true;
     setLoading(true);
-    const custodyRead = typeof api.managedKeyCustody === "function" ? api.managedKeyCustody() : Promise.reject(new Error("managed-key custody planning is unavailable"));
+    const custodyRead =
+      typeof api.managedKeyCustody === "function" ? api.managedKeyCustody() : Promise.reject(new Error("managed-key custody planning is unavailable"));
     custodyRead
       .then((next) => {
         if (!active) return;
@@ -354,7 +355,7 @@ function CustodyPreview({ preview, error }: { preview: ManagedKeyGenerationPrevi
       </Card>
 
       {preview.blockers.length ? (
-        <ErrorState title={t("caHierarchy.custody.blocked") }>
+        <ErrorState title={t("caHierarchy.custody.blocked")}>
           <ul className="list-disc space-y-1 ps-5">
             {preview.blockers.map((blocker) => (
               <li key={blocker}>{blocker}</li>
@@ -396,7 +397,9 @@ function CustodyGeneration({
             <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-status-success" aria-hidden="true" />
             <div>
               <CardTitle>{t("caHierarchy.custody.reviewedReady")}</CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">{t("caHierarchy.custody.reviewedReadyDetail", { provider: preview.provider_label, algorithm: preview.algorithm })}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {t("caHierarchy.custody.reviewedReadyDetail", { provider: preview.provider_label, algorithm: preview.algorithm })}
+              </p>
             </div>
           </div>
         </CardHeader>
@@ -407,7 +410,11 @@ function CustodyGeneration({
         </CardContent>
       </Card>
       {error ? <ErrorState title={t("caHierarchy.custody.actionFailedTitle")}>{error}</ErrorState> : null}
-      {managedKey ? <ManagedKeyPanel managedKey={managedKey} busy={busy} onAction={onAction} /> : <EmptyState title={t("caHierarchy.custody.noKey")}>{t("caHierarchy.custody.noKeyDetail")}</EmptyState>}
+      {managedKey ? (
+        <ManagedKeyPanel managedKey={managedKey} busy={busy} onAction={onAction} />
+      ) : (
+        <EmptyState title={t("caHierarchy.custody.noKey")}>{t("caHierarchy.custody.noKeyDetail")}</EmptyState>
+      )}
     </div>
   );
 }
@@ -429,7 +436,9 @@ function ManagedKeyPanel({
           <h3 id="managed-key-heading" className="text-title font-semibold">
             {t("caHierarchy.custody.managedKey")}
           </h3>
-          <p className="mt-1"><CredentialChip value={managedKey.key_id} label={t("caHierarchy.custody.keyID")} /></p>
+          <p className="mt-1">
+            <CredentialChip value={managedKey.key_id} label={t("caHierarchy.custody.keyID")} />
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           {(["rotate", "revoke", "zeroize"] as const).map((action) => (
@@ -451,7 +460,10 @@ function ManagedKeyPanel({
         <Fact label={t("caHierarchy.custody.algorithm")} value={managedKey.algorithm} />
         <Fact label={t("caHierarchy.custody.version")} value={t("caHierarchy.custody.versionValue", { version: managedKey.version })} />
         <Fact label={t("caHierarchy.custody.state")} value={managedKey.state} />
-        <Fact label={t("caHierarchy.custody.publicDER")} value={managedKey.public_der ? t("caHierarchy.custody.bytes", { count: managedKey.public_der.length }) : "-"} />
+        <Fact
+          label={t("caHierarchy.custody.publicDER")}
+          value={managedKey.public_der ? t("caHierarchy.custody.bytes", { count: managedKey.public_der.length }) : "-"}
+        />
         <Fact label={t("caHierarchy.custody.extractable")} value={managedKey.extractable ? t("platform.idempotency.yes") : t("platform.idempotency.no")} />
       </dl>
     </section>
@@ -461,13 +473,19 @@ function ManagedKeyPanel({
 function ReviewList({ title, items }: { title: string; items: string[] }) {
   return (
     <Card>
-      <CardHeader><CardTitle>{title}</CardTitle></CardHeader>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
       <CardContent>
         {items.length ? (
           <ul className="list-disc space-y-2 ps-5 text-sm text-muted-foreground">
-            {items.map((item) => <li key={item}>{item}</li>)}
+            {items.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
           </ul>
-        ) : <p className="text-sm text-muted-foreground">—</p>}
+        ) : (
+          <p className="text-sm text-muted-foreground">—</p>
+        )}
       </CardContent>
     </Card>
   );

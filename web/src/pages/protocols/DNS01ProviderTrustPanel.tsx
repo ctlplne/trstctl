@@ -9,10 +9,7 @@ export function DNS01ProviderTrustPanel({ provider }: { provider?: ACMEDNS01Prov
 
   if (!provider) {
     return (
-      <section
-        aria-label={t("protocols.dns01.providerTrust.label")}
-        className="rounded-control border border-status-warning/30 bg-status-warning/10 p-4"
-      >
+      <section aria-label={t("protocols.dns01.providerTrust.label")} className="rounded-control border border-status-warning/30 bg-status-warning/10 p-4">
         <div className="flex items-start gap-3">
           <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-status-warning" aria-hidden="true" />
           <div>
@@ -49,9 +46,7 @@ export function DNS01ProviderTrustPanel({ provider }: { provider?: ACMEDNS01Prov
       <div className="flex items-start gap-3">
         <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-status-success" aria-hidden="true" />
         <div>
-          <h3 className="font-semibold">
-            {isPlugin ? t("protocols.dns01.providerTrust.verifiedPlugin") : t("protocols.dns01.providerTrust.builtInProvider")}
-          </h3>
+          <h3 className="font-semibold">{isPlugin ? t("protocols.dns01.providerTrust.verifiedPlugin") : t("protocols.dns01.providerTrust.builtInProvider")}</h3>
           <p className="mt-1 text-sm text-muted-foreground">
             {isPlugin ? t("protocols.dns01.providerTrust.pluginHelp") : t("protocols.dns01.providerTrust.builtInHelp")}
           </p>

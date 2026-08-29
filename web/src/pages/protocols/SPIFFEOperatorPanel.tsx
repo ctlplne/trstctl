@@ -71,7 +71,13 @@ export function SPIFFEOperatorPanel({ onResult }: { onResult?: (result: SPIFFEQu
   }, [runCheck]);
 
   return (
-    <Card id="spiffe-operator-panel" role="region" aria-labelledby="spiffe-operator-heading" aria-label={t("protocols.spiffeCheck.region")} className="min-w-0 scroll-mt-24">
+    <Card
+      id="spiffe-operator-panel"
+      role="region"
+      aria-labelledby="spiffe-operator-heading"
+      aria-label={t("protocols.spiffeCheck.region")}
+      className="min-w-0 scroll-mt-24"
+    >
       <CardHeader className="flex-row flex-wrap items-start justify-between gap-3 space-y-0">
         <div className="min-w-0 max-w-3xl">
           <CardTitle id="spiffe-operator-heading">{t("protocols.spiffeCheck.heading")}</CardTitle>
@@ -95,7 +101,9 @@ export function SPIFFEOperatorPanel({ onResult }: { onResult?: (result: SPIFFEQu
           <ol className="grid gap-2 md:grid-cols-2">
             {previewChecks.map(([id, titleKey, detailKey], index) => (
               <li key={id} className="grid min-w-0 grid-cols-[1.5rem_minmax(0,1fr)] gap-1 border-s-2 border-border ps-3">
-                <span className="text-caption font-medium text-muted-foreground" aria-hidden="true">{index + 1}</span>
+                <span className="text-caption font-medium text-muted-foreground" aria-hidden="true">
+                  {index + 1}
+                </span>
                 <div className="min-w-0">
                   <p className="text-sm font-medium">{t(titleKey)}</p>
                   <p className="mt-1 text-caption text-muted-foreground">{t(detailKey)}</p>
@@ -113,8 +121,14 @@ export function SPIFFEOperatorPanel({ onResult }: { onResult?: (result: SPIFFEQu
             <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <RuntimeFact label={t("protocols.spiffeCheck.trustDomain")} value={result.trust_domain} />
               <RuntimeFact label={t("protocols.spiffeCheck.socket")} value={result.socket_uri} />
-              <RuntimeFact label={t("protocols.spiffeCheck.entries")} value={t("protocols.spiffeCheck.entryCount", { count: result.registration_entry_count })} />
-              <RuntimeFact label={t("protocols.spiffeCheck.operations")} value={t("protocols.spiffeCheck.operationCount", { count: result.supported_operations.length })} />
+              <RuntimeFact
+                label={t("protocols.spiffeCheck.entries")}
+                value={t("protocols.spiffeCheck.entryCount", { count: result.registration_entry_count })}
+              />
+              <RuntimeFact
+                label={t("protocols.spiffeCheck.operations")}
+                value={t("protocols.spiffeCheck.operationCount", { count: result.supported_operations.length })}
+              />
             </dl>
 
             <ul className="grid gap-2" aria-label={t("protocols.spiffeCheck.resultsLabel")}>
@@ -125,7 +139,11 @@ export function SPIFFEOperatorPanel({ onResult }: { onResult?: (result: SPIFFEQu
                     <p className="mt-1 text-caption text-muted-foreground">{check.detail}</p>
                     {!check.passed && check.recovery ? <p className="mt-1 text-sm text-status-warning">{check.recovery}</p> : null}
                   </div>
-                  <StatusBadge value={check.passed ? "passed" : "failed"} label={check.passed ? t("protocols.spiffeCheck.passed") : t("protocols.spiffeCheck.failed")} tone={check.passed ? "success" : "critical"} />
+                  <StatusBadge
+                    value={check.passed ? "passed" : "failed"}
+                    label={check.passed ? t("protocols.spiffeCheck.passed") : t("protocols.spiffeCheck.failed")}
+                    tone={check.passed ? "success" : "critical"}
+                  />
                 </li>
               ))}
             </ul>

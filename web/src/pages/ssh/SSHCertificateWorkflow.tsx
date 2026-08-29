@@ -173,12 +173,7 @@ export function SSHCertificateWorkflow() {
             <Field label={t("sshTrust.certificate.keyID")} description={t("sshTrust.certificate.keyIDHelp")} required>
               {(control) => <Input {...control} value={keyID} onChange={(event) => change(setKeyID, event.target.value)} autoComplete="off" />}
             </Field>
-            <Field
-              label={t("sshTrust.certificate.publicKey")}
-              description={t("sshTrust.certificate.publicKeyHelp")}
-              className="md:col-span-2"
-              required
-            >
+            <Field label={t("sshTrust.certificate.publicKey")} description={t("sshTrust.certificate.publicKeyHelp")} className="md:col-span-2" required>
               {(control) => (
                 <Textarea
                   {...control}
@@ -192,7 +187,12 @@ export function SSHCertificateWorkflow() {
             </Field>
             <Field label={t("sshTrust.certificate.principals")} description={t("sshTrust.certificate.principalsHelp")} required>
               {(control) => (
-                <Textarea {...control} value={principals} onChange={(event) => change(setPrincipals, event.target.value)} className="min-h-20 font-mono text-xs" />
+                <Textarea
+                  {...control}
+                  value={principals}
+                  onChange={(event) => change(setPrincipals, event.target.value)}
+                  className="min-h-20 font-mono text-xs"
+                />
               )}
             </Field>
             <Field label={t("sshTrust.certificate.ttl")} description={t("sshTrust.certificate.ttlHelp")}>
@@ -211,15 +211,18 @@ export function SSHCertificateWorkflow() {
                   )}
                 </Field>
                 <Field label={t("sshTrust.certificate.forceCommand")} description={t("sshTrust.certificate.forceCommandHelp")}>
-                  {(control) => <Input {...control} value={forceCommand} onChange={(event) => change(setForceCommand, event.target.value)} className="font-mono text-xs" />}
-                </Field>
-                <Field
-                  label={t("sshTrust.certificate.extensions")}
-                  description={t("sshTrust.certificate.extensionsHelp")}
-                  className="md:col-span-2"
-                >
                   {(control) => (
-                    <Textarea {...control} value={extensions} onChange={(event) => change(setExtensions, event.target.value)} className="min-h-20 font-mono text-xs" />
+                    <Input {...control} value={forceCommand} onChange={(event) => change(setForceCommand, event.target.value)} className="font-mono text-xs" />
+                  )}
+                </Field>
+                <Field label={t("sshTrust.certificate.extensions")} description={t("sshTrust.certificate.extensionsHelp")} className="md:col-span-2">
+                  {(control) => (
+                    <Textarea
+                      {...control}
+                      value={extensions}
+                      onChange={(event) => change(setExtensions, event.target.value)}
+                      className="min-h-20 font-mono text-xs"
+                    />
                   )}
                 </Field>
               </>
@@ -271,7 +274,9 @@ export function SSHCertificateWorkflow() {
             <p className="border-s-2 border-status-warning ps-3 text-sm text-muted-foreground">{t("sshTrust.certificate.deliveryBoundary")}</p>
             <details className="text-sm" onToggle={(event) => setCertificateOpen(event.currentTarget.open)}>
               <summary className="cursor-pointer font-medium text-foreground">{t("sshTrust.certificate.showCertificate")}</summary>
-              {certificateOpen ? <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-all rounded-control bg-muted p-3 font-mono text-xs">{issued.certificate}</pre> : null}
+              {certificateOpen ? (
+                <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-all rounded-control bg-muted p-3 font-mono text-xs">{issued.certificate}</pre>
+              ) : null}
             </details>
             <div>
               <Button type="button" variant="outline" onClick={reset}>
@@ -316,8 +321,15 @@ function SSHCertificatePlan({ plan }: { plan: SSHCertificatePreview }) {
         <Fact label={t("sshTrust.certificate.authorityFingerprint")} value={plan.authority_fingerprint} mono />
       </dl>
       <div className="grid gap-3 lg:grid-cols-2">
-        <PlanList title={t("sshTrust.certificate.previewEffects")} items={[...plan.preview_writes, ...plan.preview_external_effects, ...plan.preview_signer_calls]} empty={t("sshTrust.certificate.none")} />
-        <PlanList title={t("sshTrust.certificate.issueEffects")} items={[...plan.issuance_writes, ...plan.issuance_external_effects, ...plan.issuance_signer_calls]} />
+        <PlanList
+          title={t("sshTrust.certificate.previewEffects")}
+          items={[...plan.preview_writes, ...plan.preview_external_effects, ...plan.preview_signer_calls]}
+          empty={t("sshTrust.certificate.none")}
+        />
+        <PlanList
+          title={t("sshTrust.certificate.issueEffects")}
+          items={[...plan.issuance_writes, ...plan.issuance_external_effects, ...plan.issuance_signer_calls]}
+        />
       </div>
       <PlanList title={t("sshTrust.certificate.recovery")} items={plan.recovery_steps} />
       <PlanList title={t("sshTrust.certificate.dataHandling")} items={plan.secret_data_handling} />
@@ -352,13 +364,13 @@ function PlanList({ title, items, empty }: { title: string; items: string[]; emp
 }
 
 function durationLabel(t: I18nContextValue["t"], seconds: number): string {
-  if (seconds > 0 && seconds%3600 === 0) return t("sshTrust.certificate.hours", { count: seconds / 3600 });
-  if (seconds > 0 && seconds%60 === 0) return t("sshTrust.certificate.minutes", { count: seconds / 60 });
+  if (seconds > 0 && seconds % 3600 === 0) return t("sshTrust.certificate.hours", { count: seconds / 3600 });
+  if (seconds > 0 && seconds % 60 === 0) return t("sshTrust.certificate.minutes", { count: seconds / 60 });
   return t("sshTrust.certificate.seconds", { count: seconds });
 }
 
 function durationAdjective(t: I18nContextValue["t"], seconds: number): string {
-  if (seconds > 0 && seconds%3600 === 0) return t("sshTrust.certificate.hourAdjective", { count: seconds / 3600 });
-  if (seconds > 0 && seconds%60 === 0) return t("sshTrust.certificate.minuteAdjective", { count: seconds / 60 });
+  if (seconds > 0 && seconds % 3600 === 0) return t("sshTrust.certificate.hourAdjective", { count: seconds / 3600 });
+  if (seconds > 0 && seconds % 60 === 0) return t("sshTrust.certificate.minuteAdjective", { count: seconds / 60 });
   return t("sshTrust.certificate.secondAdjective", { count: seconds });
 }

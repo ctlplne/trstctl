@@ -13521,7 +13521,8 @@ export const messages = {
     description: "Heading when a saved config refers to a provider missing from the runtime catalog.",
   },
   "protocols.dns01.providerTrust.unavailableHelp": {
-    defaultMessage: "Restore the signed plugin and its trusted key, or edit this config to use an available provider. trstctl will not silently activate a missing provider.",
+    defaultMessage:
+      "Restore the signed plugin and its trusted key, or edit this config to use an available provider. trstctl will not silently activate a missing provider.",
     description: "Recovery for a stale DNS provider config.",
   },
   "protocols.dns01.providerTrust.package": {

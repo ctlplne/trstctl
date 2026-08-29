@@ -306,12 +306,96 @@ describe("CA hierarchy and custody surface", () => {
       security_boundary: "Private keys stay in the selected provider. Provider credentials are file references read only by the isolated signer.",
       blockers: [],
       providers: [
-        { id: "aws", label: "AWS KMS", custody: "AWS keeps the private key.", requirements: [{ key: "region", label: "AWS region", kind: "value", required: true, environment_variable: "TRSTCTL_MANAGED_KEYS_AWS_REGION", description: "Region containing the key." }] },
-        { id: "azure-key-vault", label: "Azure Key Vault / Managed HSM", custody: "Azure keeps the private key.", requirements: [{ key: "vault_url", label: "Vault URL", kind: "value", required: true, environment_variable: "TRSTCTL_MANAGED_KEYS_AZURE_VAULT_URL", description: "Approved vault URL." }] },
-        { id: "gcp-kms", label: "Google Cloud KMS", custody: "Google keeps the private key.", requirements: [{ key: "parent", label: "Key ring resource", kind: "value", required: true, environment_variable: "TRSTCTL_MANAGED_KEYS_GCP_PARENT", description: "Full key ring parent." }] },
-        { id: "pkcs11", label: "PKCS#11 HSM", custody: "The HSM keeps the private key.", requirements: [{ key: "module_path", label: "PKCS#11 module", kind: "value", required: true, environment_variable: "TRSTCTL_MANAGED_KEYS_PKCS11_MODULE_PATH", description: "Signer-only module path." }] },
-        { id: "tpm2", label: "TPM 2.0", custody: "The TPM keeps the private key.", requirements: [{ key: "path", label: "TPM device or socket", kind: "value", required: true, environment_variable: "TRSTCTL_MANAGED_KEYS_TPM2_PATH", description: "TPM resource path." }] },
-        { id: "yubihsm2", label: "YubiHSM 2", custody: "YubiHSM keeps the private key.", requirements: [{ key: "user_pin_file", label: "Authentication file", kind: "secret_file", required: true, environment_variable: "TRSTCTL_MANAGED_KEYS_YUBIHSM2_USER_PIN_FILE", description: "Signer-only mode-0600 file." }] },
+        {
+          id: "aws",
+          label: "AWS KMS",
+          custody: "AWS keeps the private key.",
+          requirements: [
+            {
+              key: "region",
+              label: "AWS region",
+              kind: "value",
+              required: true,
+              environment_variable: "TRSTCTL_MANAGED_KEYS_AWS_REGION",
+              description: "Region containing the key.",
+            },
+          ],
+        },
+        {
+          id: "azure-key-vault",
+          label: "Azure Key Vault / Managed HSM",
+          custody: "Azure keeps the private key.",
+          requirements: [
+            {
+              key: "vault_url",
+              label: "Vault URL",
+              kind: "value",
+              required: true,
+              environment_variable: "TRSTCTL_MANAGED_KEYS_AZURE_VAULT_URL",
+              description: "Approved vault URL.",
+            },
+          ],
+        },
+        {
+          id: "gcp-kms",
+          label: "Google Cloud KMS",
+          custody: "Google keeps the private key.",
+          requirements: [
+            {
+              key: "parent",
+              label: "Key ring resource",
+              kind: "value",
+              required: true,
+              environment_variable: "TRSTCTL_MANAGED_KEYS_GCP_PARENT",
+              description: "Full key ring parent.",
+            },
+          ],
+        },
+        {
+          id: "pkcs11",
+          label: "PKCS#11 HSM",
+          custody: "The HSM keeps the private key.",
+          requirements: [
+            {
+              key: "module_path",
+              label: "PKCS#11 module",
+              kind: "value",
+              required: true,
+              environment_variable: "TRSTCTL_MANAGED_KEYS_PKCS11_MODULE_PATH",
+              description: "Signer-only module path.",
+            },
+          ],
+        },
+        {
+          id: "tpm2",
+          label: "TPM 2.0",
+          custody: "The TPM keeps the private key.",
+          requirements: [
+            {
+              key: "path",
+              label: "TPM device or socket",
+              kind: "value",
+              required: true,
+              environment_variable: "TRSTCTL_MANAGED_KEYS_TPM2_PATH",
+              description: "TPM resource path.",
+            },
+          ],
+        },
+        {
+          id: "yubihsm2",
+          label: "YubiHSM 2",
+          custody: "YubiHSM keeps the private key.",
+          requirements: [
+            {
+              key: "user_pin_file",
+              label: "Authentication file",
+              kind: "secret_file",
+              required: true,
+              environment_variable: "TRSTCTL_MANAGED_KEYS_YUBIHSM2_USER_PIN_FILE",
+              description: "Signer-only mode-0600 file.",
+            },
+          ],
+        },
       ],
     });
     apiMock.previewManagedKeyGeneration.mockResolvedValue({
@@ -326,7 +410,16 @@ describe("CA hierarchy and custody surface", () => {
       private_key_location: "Google Cloud KMS",
       required_permission: "keys:write",
       approval_required: false,
-      requirements: [{ key: "parent", label: "Key ring resource", kind: "value", required: true, environment_variable: "TRSTCTL_MANAGED_KEYS_GCP_PARENT", description: "Full key ring parent." }],
+      requirements: [
+        {
+          key: "parent",
+          label: "Key ring resource",
+          kind: "value",
+          required: true,
+          environment_variable: "TRSTCTL_MANAGED_KEYS_GCP_PARENT",
+          description: "Full key ring parent.",
+        },
+      ],
       preview_writes: [],
       preview_external_effects: [],
       execution_writes: ["One tenant-scoped byok.key.generated event and its managed-key projection."],

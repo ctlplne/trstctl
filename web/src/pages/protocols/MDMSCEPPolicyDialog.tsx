@@ -78,15 +78,7 @@ function requestFrom(values: PolicyForm): MDMSCEPPolicyRequest {
   };
 }
 
-export function MDMSCEPPolicyDialog({
-  onClose,
-  onSaved,
-  policy,
-}: {
-  onClose: () => void;
-  onSaved: (saved: MDMSCEPPolicy) => void;
-  policy?: MDMSCEPPolicy;
-}) {
+export function MDMSCEPPolicyDialog({ onClose, onSaved, policy }: { onClose: () => void; onSaved: (saved: MDMSCEPPolicy) => void; policy?: MDMSCEPPolicy }) {
   const { t } = useTranslation();
   const [step, setStep] = useState(0);
   const [preview, setPreview] = useState<MDMSCEPPolicyPreview | null>(null);
@@ -176,7 +168,9 @@ export function MDMSCEPPolicyDialog({
     >
       <header className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
         <div>
-          <h2 id={titleId} className="text-title font-semibold">{operation}</h2>
+          <h2 id={titleId} className="text-title font-semibold">
+            {operation}
+          </h2>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{t("protocols.mdm.form.intro")}</p>
         </div>
         <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label={t("protocols.mdm.form.close")}>
@@ -207,10 +201,20 @@ export function MDMSCEPPolicyDialog({
                   </Select>
                 )}
               </Field>
-              <Field label={t("protocols.mdm.form.endpoint")} description={t("protocols.mdm.form.endpointHelp")} error={form.formState.errors.scepEndpoint?.message} required>
+              <Field
+                label={t("protocols.mdm.form.endpoint")}
+                description={t("protocols.mdm.form.endpointHelp")}
+                error={form.formState.errors.scepEndpoint?.message}
+                required
+              >
                 {(control) => <Input {...control} {...form.register("scepEndpoint")} autoComplete="off" />}
               </Field>
-              <Field label={t("protocols.mdm.form.profile")} description={t("protocols.mdm.form.profileHelp")} error={form.formState.errors.scepProfile?.message} required>
+              <Field
+                label={t("protocols.mdm.form.profile")}
+                description={t("protocols.mdm.form.profileHelp")}
+                error={form.formState.errors.scepProfile?.message}
+                required
+              >
                 {(control) => <Input {...control} {...form.register("scepProfile")} autoComplete="off" />}
               </Field>
               <label className="flex items-center gap-2 text-body font-medium sm:col-span-2">
@@ -282,7 +286,10 @@ export function MDMSCEPPolicyDialog({
                     <PreviewFact label={t("protocols.mdm.form.writes")} value={String(preview.durable_writes.length)} />
                     <PreviewFact label={t("protocols.mdm.form.outsideCalls")} value={String(preview.outside_calls.length)} />
                     <PreviewFact label={t("protocols.mdm.form.signerCalls")} value={String(preview.signer_calls)} />
-                    <PreviewFact label={t("protocols.mdm.form.referenceKeys")} value={preview.trust_anchor_reference_keys.join(", ") || t("protocols.mdm.form.none")} />
+                    <PreviewFact
+                      label={t("protocols.mdm.form.referenceKeys")}
+                      value={preview.trust_anchor_reference_keys.join(", ") || t("protocols.mdm.form.none")}
+                    />
                   </dl>
                   {preview.blockers.length > 0 && <PreviewList title={t("protocols.mdm.form.blockers")} items={preview.blockers} warning />}
                   <PreviewList title={t("protocols.mdm.form.recovery")} items={preview.recovery_steps} />
@@ -291,7 +298,9 @@ export function MDMSCEPPolicyDialog({
               )}
               {saveError && <ErrorState title={t("protocols.mdm.form.saveFailed")}>{saveError}</ErrorState>}
               <div className="flex flex-wrap justify-end gap-2">
-                <Button type="button" variant="outline" onClick={onClose} disabled={saving}>{t("protocols.mdm.form.cancel")}</Button>
+                <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+                  {t("protocols.mdm.form.cancel")}
+                </Button>
                 <Button type="submit" disabled={!preview?.ready || !preview.effect_free || saving || previewing}>
                   {saving ? t("protocols.mdm.form.saving") : policy ? t("protocols.mdm.form.saveChanges") : t("protocols.mdm.form.createAction")}
                 </Button>
@@ -319,7 +328,9 @@ function PreviewList({ items, title, warning = false }: { items: string[]; title
     <section className={warning ? "rounded-control border border-risk-warning/40 bg-risk-warning/10 p-3" : "border-s-2 border-border ps-3"}>
       <h4 className="text-sm font-semibold">{title}</h4>
       <ol className="mt-1 list-decimal space-y-1 ps-5 text-sm text-muted-foreground">
-        {items.map((item) => <li key={item}>{item}</li>)}
+        {items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
       </ol>
     </section>
   );

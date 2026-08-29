@@ -11,11 +11,7 @@ import { apiProblemMessage } from "@/lib/apiProblem";
 
 type ReviewedPlan = { key: string; value: CBOMScanPreview };
 
-export function CBOMScanWorkflow({
-  onCompleted,
-}: {
-  onCompleted: (scan: CBOMScan, inventory: CBOMInventory) => void;
-}) {
+export function CBOMScanWorkflow({ onCompleted }: { onCompleted: (scan: CBOMScan, inventory: CBOMInventory) => void }) {
   const { t } = useTranslation();
   const [step, setStep] = useState(0);
   const [tlsText, setTLSText] = useState("");
@@ -120,10 +116,7 @@ export function CBOMScanWorkflow({
     >
       {step === 0 ? (
         <div className="grid gap-4 md:grid-cols-2">
-          <Field
-            label={t("posture.cbom.workflow.tlsLabel")}
-            description={t("posture.cbom.workflow.tlsHelp")}
-          >
+          <Field label={t("posture.cbom.workflow.tlsLabel")} description={t("posture.cbom.workflow.tlsHelp")}>
             {(control) => (
               <Textarea
                 {...control}
@@ -135,10 +128,7 @@ export function CBOMScanWorkflow({
               />
             )}
           </Field>
-          <Field
-            label={t("posture.cbom.workflow.hostLabel")}
-            description={t("posture.cbom.workflow.hostHelp")}
-          >
+          <Field label={t("posture.cbom.workflow.hostLabel")} description={t("posture.cbom.workflow.hostHelp")}>
             {(control) => (
               <Textarea
                 {...control}
@@ -254,7 +244,11 @@ function PlanFact({ icon, label, value }: { icon?: ReactNode; label: string; val
   return (
     <div className="min-w-0 border-s-2 border-border ps-3">
       <dt className="flex items-center gap-1.5 text-caption text-muted-foreground">
-        {icon ? <span className="[&>svg]:h-3.5 [&>svg]:w-3.5" aria-hidden="true">{icon}</span> : null}
+        {icon ? (
+          <span className="[&>svg]:h-3.5 [&>svg]:w-3.5" aria-hidden="true">
+            {icon}
+          </span>
+        ) : null}
         {label}
       </dt>
       <dd className="mt-0.5 break-words font-medium">{value}</dd>
@@ -268,7 +262,11 @@ function TargetList({ items, title }: { items: string[]; title: string }) {
     <section className="border-s-2 border-border ps-3">
       <h4 className="text-sm font-semibold">{title}</h4>
       <ul className="mt-1 space-y-1 font-mono text-xs text-muted-foreground">
-        {items.map((item) => <li className="break-all" key={item}>{item}</li>)}
+        {items.map((item) => (
+          <li className="break-all" key={item}>
+            {item}
+          </li>
+        ))}
       </ul>
     </section>
   );
@@ -280,7 +278,9 @@ function PlanList({ items, title, warning = false }: { items: string[]; title: s
     <section className={warning ? "rounded-control border border-status-warning/40 bg-status-warning/10 p-3" : "border-s-2 border-border ps-3"}>
       <h4 className="text-sm font-semibold">{title}</h4>
       <ol className="mt-1 list-decimal space-y-1 ps-5 text-sm text-muted-foreground">
-        {items.map((item) => <li key={item}>{item}</li>)}
+        {items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
       </ol>
     </section>
   );
