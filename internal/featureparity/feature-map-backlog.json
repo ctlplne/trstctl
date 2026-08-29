@@ -6081,9 +6081,9 @@
             "priority": 56,
             "served_state": "conditional",
             "backend_status": "conditional: served signed DNS-provider plugin admission/conformance provenance, provider catalog disclosure, tenant provider-config CRUD, and ACME order-time DNS-01 activation through the outbox",
-            "current_frontend_mapping": "Protocols at /protocols - served DNS provider catalog and tenant provider configs with built-in/plugin kind, conformance, admission, provenance, capability-grant, provider-package, and secret-reference disclosure",
+            "current_frontend_mapping": "Protocols at /protocols - served DNS provider catalog and tenant provider configs with built-in/plugin identity, plain-language conformance/admission/provenance, capability grants, exact provider package, effect-free qualification preview, real publish/visibility/cleanup execution, durable history, and cleanup recovery",
             "target_gui_mapping": "DNS provider plugin registry with provider capabilities, conformance result, grant summary, provenance, and admission state.",
-            "acceptance_test": "UI distinguishes built-in providers from signed plugin providers and activation is blocked unless DNS plugin conformance/provenance passes startup admission.",
+            "acceptance_test": "UI distinguishes built-in providers from signed plugin providers, explains exact startup trust and capability grants, drives preview/publish/visibility/cleanup/recovery for an admitted plugin, and activation remains blocked unless DNS plugin conformance/provenance passes startup admission.",
             "source_docs": [
                 "docs/features/acme-and-dns.md"
             ],
@@ -6095,10 +6095,12 @@
                 "internal/server/acme_dns01_automation.go"
             ],
             "source_frontend": [
-                "web/src/pages/Protocols.tsx"
+                "web/src/pages/Protocols.tsx",
+                "web/src/pages/protocols/DNS01ProviderTrustPanel.tsx",
+                "web/src/pages/protocols/DNS01QualificationDialog.tsx"
             ],
             "status": "closed",
-            "notes": "TRACE-013 closure: signed DNS-provider plugins loaded from plugins.dns_dir are admitted only after Ed25519 provenance verification and DNS present/cleanup contract checks, appear in the served provider catalog, can be selected by tenant provider configs, and are activated from the ACME DNS-01 outbox worker before order-time publish/cleanup. Test evidence: TestServedACMEDNS01OrderActivatesSignedDNSProviderPluginTRACE013, TestServedDNSProviderPluginRequiresDNSContract, web Protocols rendering, feature facet coverage, route parity, and OpenAPI golden tests.",
+            "notes": "TRACE-013 plus F70 qualification closure: signed DNS-provider plugins loaded from plugins.dns_dir are admitted only after Ed25519 provenance verification and DNS present/cleanup contract checks, appear in the served provider catalog, can be selected by tenant provider configs, and are activated from the ACME DNS-01 outbox worker. The console now explains exact trust/grant facts and drives the same effect-free preview, real TXT publish/visibility/cleanup, durable history, and cleanup retry as built-in providers. Test evidence: TestServedACMEDNS01OrderActivatesSignedDNSProviderPluginTRACE013, TestServedDNSProviderPluginRequiresDNSContract, the signed-plugin Protocols qualification test, feature facet coverage, route parity, and OpenAPI golden tests.",
             "api_surface": [
                 "listACMEDNS01Providers",
                 "createACMEDNS01ProviderConfig",
@@ -6106,7 +6108,11 @@
                 "getACMEDNS01ProviderConfig",
                 "updateACMEDNS01ProviderConfig",
                 "deleteACMEDNS01ProviderConfig",
-                "preflightACMEDNS01"
+                "preflightACMEDNS01",
+                "previewACMEDNS01Qualification",
+                "runACMEDNS01Qualification",
+                "listACMEDNS01QualificationRuns",
+                "retryACMEDNS01QualificationCleanup"
             ],
             "api_na": "",
             "cli_surface": [
@@ -6116,7 +6122,11 @@
                 "acme dns-01 provider-configs get",
                 "acme dns-01 provider-configs update",
                 "acme dns-01 provider-configs delete",
-                "acme dns-01 preflight"
+                "acme dns-01 preflight",
+                "acme dns-01 provider-configs qualification preview",
+                "acme dns-01 provider-configs qualification run",
+                "acme dns-01 provider-configs qualification history",
+                "acme dns-01 qualification retry-cleanup"
             ],
             "cli_na": "",
             "facet_evidence": {
@@ -6125,6 +6135,7 @@
                         "GET /api/v1/acme/dns-01/providers returns built-in and signed DNS-provider plugin rows with provider kind, admission state, provenance, conformance, capability grant, provider package, and credential-reference-only fields.",
                         "POST/GET/PUT/DELETE /api/v1/acme/dns-01/provider-configs stores tenant-scoped provider configs as event-sourced projections with credential_refs/config JSON and no inline secret values, and admits provider names from the running built-in plus signed-plugin catalog.",
                         "POST /api/v1/acme/dns-01/preflight evaluates configured delegation, TXT propagation, CAA issuer, method policy, and wildcard policy before ACME issuance relies on DNS-01.",
+                        "POST qualification preview is effect-free; qualification runs invoke the selected admitted plugin through the production outbox, verify DNS visibility, clean the exact probe, retain sanitized history, and expose server-held cleanup retry without returning the probe, credential-reference values, or raw worker errors.",
                         "POST /acme/chal/{id} on a served dns-01 challenge resolves a tenant provider config whose provider may be a signed DNS plugin, enqueues acme.dns01.present/acme.dns01.cleanup outbox rows, activates the plugin present/cleanup entrypoints, validates the published TXT, and finalizes through the signer-backed served ACME path.",
                         "served_state=conditional",
                         "backend_status=conditional: served signed DNS-provider plugin admission/conformance provenance, provider catalog disclosure, tenant provider-config CRUD, and ACME order-time DNS-01 activation through the outbox"
@@ -6142,17 +6153,20 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: Protocols at /protocols - served DNS provider catalog and tenant provider configs with built-in/plugin kind, conformance, admission, provenance, capability-grant, provider-package, and secret-reference disclosure",
-                        "Protocols at /protocols renders tenant DNS-01 provider configs with provider, zone/delegation target, CAA issuer, method policy, wildcard policy, and secret-reference field names only."
+                        "current_frontend_mapping: Protocols at /protocols - served DNS provider catalog and tenant provider configs with built-in/plugin identity, plain-language conformance/admission/provenance, capability grants, exact provider package, effect-free qualification preview, real publish/visibility/cleanup execution, durable history, and cleanup recovery",
+                        "Protocols at /protocols renders tenant DNS-01 provider configs with provider, zone/delegation target, CAA issuer, method policy, wildcard policy, and secret-reference field names only.",
+                        "The provider editor and qualification dialog identify verified signed plugins in plain language, show exact package/provenance/contract/admission/grants, show an honest unavailable-plugin recovery state, and complete preview, execution, observation, history, and cleanup retry without rendering secrets."
                     ],
                     "refs": [
                         "web/src/pages/Protocols.tsx",
+                        "web/src/pages/protocols/DNS01ProviderTrustPanel.tsx",
+                        "web/src/pages/protocols/DNS01QualificationDialog.tsx",
                         "web/src/__tests__/protocols.test.tsx"
                     ]
                 },
                 "cli": {
                     "evidence": [
-                        "CLI commands `trstctl acme dns-01 providers`, `trstctl acme dns-01 provider-configs...`, and `trstctl acme dns-01 preflight` map to the served DNS-01 API routes."
+                        "CLI commands `trstctl acme dns-01 providers`, `trstctl acme dns-01 provider-configs...`, `trstctl acme dns-01 preflight`, and the provider-config qualification preview/run/history plus qualification retry-cleanup commands map to the served DNS-01 API routes."
                     ],
                     "refs": [
                         "internal/cli/command.go",
@@ -6161,7 +6175,7 @@
                 },
                 "api": {
                     "evidence": [
-                        "OpenAPI operationIds: listACMEDNS01Providers, createACMEDNS01ProviderConfig, listACMEDNS01ProviderConfigs, getACMEDNS01ProviderConfig, updateACMEDNS01ProviderConfig, deleteACMEDNS01ProviderConfig, preflightACMEDNS01"
+                        "OpenAPI operationIds: listACMEDNS01Providers, createACMEDNS01ProviderConfig, listACMEDNS01ProviderConfigs, getACMEDNS01ProviderConfig, updateACMEDNS01ProviderConfig, deleteACMEDNS01ProviderConfig, preflightACMEDNS01, previewACMEDNS01Qualification, runACMEDNS01Qualification, listACMEDNS01QualificationRuns, retryACMEDNS01QualificationCleanup"
                     ],
                     "refs": [
                         "internal/api/api.go",
@@ -6171,10 +6185,11 @@
                 },
                 "test": {
                     "evidence": [
-                        "acceptance_test: UI distinguishes built-in providers from signed plugin providers and activation is blocked unless DNS plugin conformance/provenance passes startup admission.",
+                        "acceptance_test: UI distinguishes built-in providers from signed plugin providers, explains exact startup trust and capability grants, drives preview/publish/visibility/cleanup/recovery for an admitted plugin, and activation remains blocked unless DNS plugin conformance/provenance passes startup admission.",
                         "TestServedACMEDNS01ProviderConfigAndPreflightTRACE003 drives the assembled handler through provider-config create/list, inline-secret rejection, DNS-01 preflight, and ACME DNS-01 audit-event assertions.",
-                        "TestServedACMEDNS01OrderActivatesSignedDNSProviderPluginTRACE013 drives a signed DNS-provider plugin through provider catalog disclosure, tenant config selection, ACME order-time outbox activation, TXT publish/cleanup, plugin audit events, and certificate finalization.",
+                        "TestServedACMEDNS01OrderActivatesSignedDNSProviderPluginTRACE013 drives a signed DNS-provider plugin through provider catalog disclosure, tenant config selection, ACME order-time outbox activation, TXT publish/cleanup, plugin audit events, certificate finalization, effect-free qualification preview, real qualification publish/visibility/cleanup, sanitized history, and cleanup retry.",
                         "TestServedDNSProviderPluginRequiresDNSContract proves a signed module without the DNS present/cleanup contract is rejected at startup before catalog exposure or activation.",
+                        "The Protocols signed-plugin qualification test proves the console explains signature, contract, exact package, and grant facts before preview, then executes, observes, and recovers cleanup without exposing a secret reference value or credential input.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
                         "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
                     ],
@@ -6183,6 +6198,7 @@
                         "internal/featureparity/feature_facet_coverage_test.go",
                         "web/src/__tests__/route_parity.test.ts",
                         "web/src/__tests__/feature_coverage.test.tsx",
+                        "web/src/__tests__/protocols.test.tsx",
                         "internal/server/plugins_served_test.go"
                     ]
                 },
@@ -6210,7 +6226,8 @@
                     "evidence": [
                         "Provider config create/update/delete append acme.dns01.provider_config.upserted or acme.dns01.provider_config.deleted events before projection.",
                         "Preflight appends acme.dns01.preflighted with config_id, domain, record_name, selected_method, ready, and failed_checks metadata.",
-                        "Order-time signed DNS-provider plugin publish/cleanup appends acme.dns01.plugin.presented and acme.dns01.plugin.cleaned tenant events without credential refs or TXT values, alongside the acme.dns01.record.presented/cleaned outbox delivery metadata."
+                        "Order-time signed DNS-provider plugin publish/cleanup appends acme.dns01.plugin.presented and acme.dns01.plugin.cleaned tenant events without credential refs or TXT values, alongside the acme.dns01.record.presented/cleaned outbox delivery metadata.",
+                        "Plugin qualification retains sanitized run evidence and plugin publish/cleanup audit events while cleanup retry reuses server-held recovery authority."
                     ],
                     "refs": [
                         "internal/api/acme_dns01.go",
@@ -6258,7 +6275,7 @@
                 "purpose": "Lets an operator understand and safely use dns-provider plugin framework while tenant, policy, and security authority remain on the server.",
                 "tool": "certificates",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/protocols",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -6272,7 +6289,7 @@
                 ],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -6293,12 +6310,20 @@
                         ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/protocols/DNS01QualificationDialog.tsx",
+                            "internal/server/protocols_served_test.go",
+                            "OpenAPI operationId: previewACMEDNS01Qualification"
+                        ]
                     },
                     "execute": {
-                        "status": "missing",
-                        "reason": "No complete console execution path is proved for this capability."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/protocols/DNS01QualificationDialog.tsx",
+                            "internal/server/protocols_served_test.go",
+                            "OpenAPI operationId: runACMEDNS01Qualification"
+                        ]
                     },
                     "observe": {
                         "status": "complete",
@@ -6307,8 +6332,13 @@
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/protocols/DNS01ProviderTrustPanel.tsx",
+                            "web/src/pages/protocols/DNS01QualificationDialog.tsx",
+                            "internal/server/protocols_served_test.go",
+                            "OpenAPI operationId: retryACMEDNS01QualificationCleanup"
+                        ]
                     },
                     "verify": {
                         "status": "complete",
@@ -6326,20 +6356,28 @@
                             "OpenAPI operationId: updateACMEDNS01ProviderConfig",
                             "OpenAPI operationId: deleteACMEDNS01ProviderConfig",
                             "OpenAPI operationId: preflightACMEDNS01",
+                            "OpenAPI operationId: previewACMEDNS01Qualification",
+                            "OpenAPI operationId: runACMEDNS01Qualification",
+                            "OpenAPI operationId: listACMEDNS01QualificationRuns",
+                            "OpenAPI operationId: retryACMEDNS01QualificationCleanup",
                             "CLI command: acme dns-01 providers",
                             "CLI command: acme dns-01 provider-configs create",
                             "CLI command: acme dns-01 provider-configs list",
                             "CLI command: acme dns-01 provider-configs get",
                             "CLI command: acme dns-01 provider-configs update",
                             "CLI command: acme dns-01 provider-configs delete",
-                            "CLI command: acme dns-01 preflight"
+                            "CLI command: acme dns-01 preflight",
+                            "CLI command: acme dns-01 provider-configs qualification preview",
+                            "CLI command: acme dns-01 provider-configs qualification run",
+                            "CLI command: acme dns-01 provider-configs qualification history",
+                            "CLI command: acme dns-01 qualification retry-cleanup"
                         ]
                     }
                 },
                 "owner": "pki",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "40253b2dee41b5c789101dfa5dc3abc004d42351",
+                "freshness": "2026-08-29"
             }
         },
         {
