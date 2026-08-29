@@ -1297,8 +1297,11 @@ describe("i18n boundary", () => {
       // names exact preview effects, TTL clamps, key boundaries, signer calls,
       // certificate disclosure, and KRL recovery. Machine-authored es/de —
       // FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "12f91df99b4de47bb9941f5ddf3268ca70fc0099c8d04a79d0208bf67dc38271",
-      "de-DE": "ae7787f2c9c689df4dc2c5d8877628f322b62e0d8cc9134d2e04085b098b4cdb",
+      // F43 live-browser polish re-pin: the SSH readiness line now uses
+      // label-first counts so zero and one cannot produce broken grammar.
+      // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
+      "es-ES": "e15a4f135526c9c7abe63b9ea69886d29c6d2f5463310ac3b8c5aab216688ad6",
+      "de-DE": "a0c452bf315ba4a42b4fb4ef60e49e903aa67256956118ce854992d5719a2e7b",
     });
   });
 

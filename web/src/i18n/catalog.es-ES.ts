@@ -52,7 +52,8 @@ const esESCatalog = {
   "sshTrust.certificate.taskDescription": "Revise la identidad exacta, la duración, los permisos, la llamada al firmante y la recuperación antes de emitir.",
   "sshTrust.certificate.taskAction": "Emitir certificado de host o usuario",
   "sshTrust.certificate.heading": "Solicitud de certificado SSH",
-  "sshTrust.certificate.description": "Cree una identidad de host o un acceso de usuario de corta duración. trstctl muestra primero el plan exacto sin cambiar nada.",
+  "sshTrust.certificate.description":
+    "Cree una identidad de host o un acceso de usuario de corta duración. trstctl muestra primero el plan exacto sin cambiar nada.",
   "sshTrust.certificate.stepRequest": "Elegir certificado",
   "sshTrust.certificate.stepRequestBody": "Indique qué representa el certificado y pegue solo su clave pública.",
   "sshTrust.certificate.stepReview": "Revisar plan exacto",
@@ -78,7 +79,8 @@ const esESCatalog = {
   "sshTrust.certificate.forceCommand": "Comando obligatorio",
   "sshTrust.certificate.forceCommandHelp": "Comando opcional que el servidor debe ejecutar en lugar del solicitado.",
   "sshTrust.certificate.extensions": "Permisos de usuario adicionales",
-  "sshTrust.certificate.extensionsHelp": "Nombres de extensiones OpenSSH permitidas, una por línea. La política aplica los valores interactivos predeterminados.",
+  "sshTrust.certificate.extensionsHelp":
+    "Nombres de extensiones OpenSSH permitidas, una por línea. La política aplica los valores interactivos predeterminados.",
   "sshTrust.certificate.privateKeyBoundary": "Su clave privada permanece donde se creó. Este formulario solo acepta la clave pública correspondiente.",
   "sshTrust.certificate.previewing": "Comprobando el plan exacto del certificado SSH…",
   "sshTrust.certificate.previewFailed": "No se pudo revisar esta solicitud de certificado SSH.",
@@ -97,7 +99,8 @@ const esESCatalog = {
   "sshTrust.certificate.resultTTL": "Duración efectiva",
   "sshTrust.certificate.resultExpiry": "Caduca",
   "sshTrust.certificate.resultKRL": "Versión KRL actual",
-  "sshTrust.certificate.deliveryBoundary": "Este certificado es material público. Entréguelo junto a la clave privada correspondiente; trstctl nunca devuelve esa clave privada.",
+  "sshTrust.certificate.deliveryBoundary":
+    "Este certificado es material público. Entréguelo junto a la clave privada correspondiente; trstctl nunca devuelve esa clave privada.",
   "sshTrust.certificate.showCertificate": "Mostrar certificado público",
   "sshTrust.certificate.startAnother": "Iniciar otra solicitud",
   "sshTrust.certificate.planLabel": "Plan exacto del certificado SSH",
@@ -7223,7 +7226,7 @@ const esESCatalog = {
   "secrets.tasks.pki.title": "Crear un certificado de corta duración",
   "secrets.tasks.pki.description": "Envía una solicitud de firma para que la clave privada permanezca donde se usará el certificado.",
   "secrets.tasks.pki.action": "Abrir solicitud de certificado",
-  "sshTrust.readiness.technicalSummary": "{revoked} certificados revocados · {attestors} métodos de prueba disponibles",
+  "sshTrust.readiness.technicalSummary": "Certificados revocados: {revoked} · Métodos de prueba: {attestors}",
   "sshTrust.readiness.technicalDetails": "Mostrar estado técnico de SSH",
   "sshTrust.tasks.rollout.title": "Mover hosts a confianza de corta duración",
   "sshTrust.tasks.rollout.description": "Registra un canario, una comprobación de salud y un plan de reversión antes de cambiar sshd en un host.",

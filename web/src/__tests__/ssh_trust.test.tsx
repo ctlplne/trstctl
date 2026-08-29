@@ -193,6 +193,22 @@ describe("SSH trust served workflow surface", () => {
     expect(screen.queryByRole("table", { name: "SSH standing access inventory" })).not.toBeInTheDocument();
   });
 
+  it("labels readiness counts without broken singular grammar", async () => {
+    apiMock.sshStatus.mockResolvedValue({
+      served: true,
+      tenant_id: "tenant-1",
+      authority_key: "ssh-ed25519 AAAA trstctl-ca",
+      krl_version: 7,
+      revoked_count: 1,
+      attestors: [],
+    });
+
+    renderSSHTrust();
+
+    expect(await screen.findByText("Revoked certificates: 1 · Proof methods: 0")).toBeInTheDocument();
+    expect(screen.queryByText("1 revoked certificates · 0 proof methods available")).not.toBeInTheDocument();
+  });
+
   it("previews the exact host-certificate plan before issuing and hides raw material by default", async () => {
     const user = userEvent.setup();
     renderSSHTrust();

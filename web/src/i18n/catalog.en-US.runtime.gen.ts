@@ -9525,7 +9525,7 @@ export const defaultMessageValues = [
   "No SSH trust change can be submitted from this page. Enable and bind the SSH protocol to this tenant first.",
   "SSH trust is ready",
   "The CA and revocation list are available. Record a canary plan before changing host trust.",
-  "{revoked} revoked certificates · {attestors} proof methods available",
+  "Revoked certificates: {revoked} · Proof methods: {attestors}",
   "Show SSH technical status",
   "Move hosts to short-lived trust",
   "Record a canary, health check, and rollback plan before anyone changes sshd on a host.",

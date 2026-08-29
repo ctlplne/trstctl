@@ -57,7 +57,8 @@ const deDECatalog = {
   "sshTrust.certificate.taskDescription": "Prüfen Sie vor der Ausstellung die genaue Identität, Laufzeit, Rechte, Signer-Aufruf und Wiederherstellung.",
   "sshTrust.certificate.taskAction": "Host- oder Benutzerzertifikat ausstellen",
   "sshTrust.certificate.heading": "SSH-Zertifikatsanfrage",
-  "sshTrust.certificate.description": "Erstellen Sie eine kurzlebige Host-Identität oder Benutzeranmeldung. trstctl zeigt zuerst den genauen Plan, ohne etwas zu ändern.",
+  "sshTrust.certificate.description":
+    "Erstellen Sie eine kurzlebige Host-Identität oder Benutzeranmeldung. trstctl zeigt zuerst den genauen Plan, ohne etwas zu ändern.",
   "sshTrust.certificate.stepRequest": "Zertifikat wählen",
   "sshTrust.certificate.stepRequestBody": "Benennen Sie die Identität und fügen Sie nur ihren öffentlichen Schlüssel ein.",
   "sshTrust.certificate.stepReview": "Exakten Plan prüfen",
@@ -84,7 +85,8 @@ const deDECatalog = {
   "sshTrust.certificate.forceCommandHelp": "Optionaler Befehl, den der Server anstelle des angeforderten Befehls ausführen muss.",
   "sshTrust.certificate.extensions": "Zusätzliche Benutzerrechte",
   "sshTrust.certificate.extensionsHelp": "Erlaubte OpenSSH-Erweiterungen, eine pro Zeile. Interaktive Standardrechte werden durch die Richtlinie gesetzt.",
-  "sshTrust.certificate.privateKeyBoundary": "Ihr privater Schlüssel bleibt an seinem Erstellungsort. Dieses Formular nimmt nur den passenden öffentlichen Schlüssel an.",
+  "sshTrust.certificate.privateKeyBoundary":
+    "Ihr privater Schlüssel bleibt an seinem Erstellungsort. Dieses Formular nimmt nur den passenden öffentlichen Schlüssel an.",
   "sshTrust.certificate.previewing": "Exakter SSH-Zertifikatsplan wird geprüft…",
   "sshTrust.certificate.previewFailed": "Diese SSH-Zertifikatsanfrage konnte nicht geprüft werden.",
   "sshTrust.certificate.previewFailedTitle": "Planprüfung fehlgeschlagen",
@@ -102,7 +104,8 @@ const deDECatalog = {
   "sshTrust.certificate.resultTTL": "Effektive Laufzeit",
   "sshTrust.certificate.resultExpiry": "Läuft ab",
   "sshTrust.certificate.resultKRL": "Aktuelle KRL-Version",
-  "sshTrust.certificate.deliveryBoundary": "Dieses Zertifikat ist öffentliches Material. Liefern Sie es neben dem passenden privaten Schlüssel aus; trstctl gibt diesen privaten Schlüssel nie zurück.",
+  "sshTrust.certificate.deliveryBoundary":
+    "Dieses Zertifikat ist öffentliches Material. Liefern Sie es neben dem passenden privaten Schlüssel aus; trstctl gibt diesen privaten Schlüssel nie zurück.",
   "sshTrust.certificate.showCertificate": "Öffentliches Zertifikat anzeigen",
   "sshTrust.certificate.startAnother": "Neue Anfrage starten",
   "sshTrust.certificate.planLabel": "Exakter SSH-Zertifikatsplan",
@@ -7269,7 +7272,7 @@ const deDECatalog = {
   "secrets.tasks.pki.title": "Kurzlebiges Zertifikat erstellen",
   "secrets.tasks.pki.description": "Sende eine Zertifikatsignieranfrage, damit der private Schlüssel dort bleibt, wo das Zertifikat verwendet wird.",
   "secrets.tasks.pki.action": "Zertifikatsanfrage öffnen",
-  "sshTrust.readiness.technicalSummary": "{revoked} widerrufene Zertifikate · {attestors} Nachweismethoden verfügbar",
+  "sshTrust.readiness.technicalSummary": "Widerrufene Zertifikate: {revoked} · Nachweismethoden: {attestors}",
   "sshTrust.readiness.technicalDetails": "Technischen SSH-Status anzeigen",
   "sshTrust.tasks.rollout.title": "Hosts auf kurzlebiges Vertrauen umstellen",
   "sshTrust.tasks.rollout.description": "Erfasse Canary, Zustandsprüfung und Rückrollplan, bevor sshd auf einem Host geändert wird.",
