@@ -1380,6 +1380,10 @@ func (s *Server) appendOperationalReadModels(d Deps, defaults *[]api.Option) {
 	// late-bound ACME mount. This prevents the browser from inventing readiness
 	// from a same-origin fetch that cannot see profile or EAB authority.
 	*defaults = append(*defaults, api.WithACMEOperatorPlan(s.acmeOperatorPlan))
+	// F69: preview and execute read the same late-bound provider/outbox/resolver
+	// runtime used by served ACME orders. Attaching the Server pointer here is
+	// safe even though protocol construction follows API construction.
+	*defaults = append(*defaults, api.WithACMEDNS01Qualification(s))
 	// A1: job-ledger queue depth and claim health, read at request time because
 	// the counters are only useful fresh.
 	*defaults = append(*defaults, api.WithAgentJobPosture(s.agentJobPosture))

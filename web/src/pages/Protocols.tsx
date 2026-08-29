@@ -22,6 +22,7 @@ import { CMPOperatorPanel } from "@/pages/protocols/CMPOperatorPanel";
 import { SPIFFEOperatorPanel } from "@/pages/protocols/SPIFFEOperatorPanel";
 import { RevocationCachePanel } from "@/pages/protocols/RevocationCachePanel";
 import { DNS01PreflightDialog } from "@/pages/protocols/DNS01PreflightDialog";
+import { DNS01QualificationDialog } from "@/pages/protocols/DNS01QualificationDialog";
 import { MDMSCEPPolicyDialog } from "@/pages/protocols/MDMSCEPPolicyDialog";
 import { enrollmentRelaySegments } from "@/pages/protocols/enrollmentRelaySegments";
 import {
@@ -260,8 +261,10 @@ export function Protocols() {
   const [scepDeletePolicy, setSCEPDeletePolicy] = useState<MDMSCEPPolicy | null>(null);
   const [scepRotatePolicy, setSCEPRotatePolicy] = useState<MDMSCEPPolicy | null>(null);
   const [dnsEditConfig, setDNSEditConfig] = useState<ACMEDNS01ProviderConfig | null>(null);
+  const [dnsCreateOpen, setDNSCreateOpen] = useState(false);
   const [dnsDeleteConfig, setDNSDeleteConfig] = useState<ACMEDNS01ProviderConfig | null>(null);
   const [dnsPreflightConfig, setDNSPreflightConfig] = useState<ACMEDNS01ProviderConfig | null>(null);
+  const [dnsQualificationConfig, setDNSQualificationConfig] = useState<ACMEDNS01ProviderConfig | null>(null);
   const [operationsOpen, setOperationsOpen] = useState(false);
 
   // B7: upstream authorization staleness, fetched on its own so a deployment
@@ -420,8 +423,11 @@ export function Protocols() {
   }
 
   function handleDNSConfigSaved(updated: ACMEDNS01ProviderConfig) {
-    setDNSProviderConfigs((current) => current.map((config) => (config.id === updated.id ? updated : config)));
+    setDNSProviderConfigs((current) =>
+      current.some((config) => config.id === updated.id) ? current.map((config) => (config.id === updated.id ? updated : config)) : [updated, ...current],
+    );
     setDNSEditConfig(null);
+    setDNSCreateOpen(false);
     toast({ kind: "success", title: t("parity.dns01ProviderConfigUpdated_5a6d3d"), description: updated.name });
   }
 
@@ -1049,9 +1055,17 @@ export function Protocols() {
           )}
 
           <section aria-labelledby="dns-config-heading">
-            <h2 id="dns-config-heading" className="mb-3 text-title font-semibold">
-              {t("protocols.dns01.configHeading")}
-            </h2>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 id="dns-config-heading" className="text-title font-semibold">
+                  {t("protocols.dns01.configHeading")}
+                </h2>
+                <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("protocols.dns01.configHelp")}</p>
+              </div>
+              <Button type="button" size="sm" onClick={() => setDNSCreateOpen(true)}>
+                {t("protocols.dns01.addProvider")}
+              </Button>
+            </div>
             <ScrollableTableRegion className="ui-panel" label={t("protocols.dns01.configCaption")}>
               <table className="ui-table min-w-[76rem]">
                 <caption className="sr-only">{t("protocols.dns01.configCaption")}</caption>
@@ -1107,6 +1121,14 @@ export function Protocols() {
                             <Button
                               type="button"
                               size="sm"
+                              onClick={() => setDNSQualificationConfig(config)}
+                              aria-label={t("protocols.dns01.qualification.open", { name: config.name })}
+                            >
+                              {t("protocols.dns01.qualification.testAction")}
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
                               variant="outline"
                               onClick={() => setDNSPreflightConfig(config)}
                               aria-label={translateNow("source.preflight.check.value1.dd32be6184", { value1: config.name })}
@@ -1148,7 +1170,9 @@ export function Protocols() {
           <section aria-labelledby="mdm-scep-heading">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 id="mdm-scep-heading" className="text-title font-semibold">{t("protocols.mdm.heading")}</h2>
+                <h2 id="mdm-scep-heading" className="text-title font-semibold">
+                  {t("protocols.mdm.heading")}
+                </h2>
                 <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{t("protocols.mdm.sectionHelp")}</p>
               </div>
               <Button type="button" size="sm" onClick={() => setSCEPPolicyEditor({})}>
@@ -1321,9 +1345,7 @@ export function Protocols() {
         </div>
       </details>
 
-      {scepPolicyEditor && (
-        <MDMSCEPPolicyDialog policy={scepPolicyEditor.policy} onClose={() => setSCEPPolicyEditor(null)} onSaved={handleSCEPPolicySaved} />
-      )}
+      {scepPolicyEditor && <MDMSCEPPolicyDialog policy={scepPolicyEditor.policy} onClose={() => setSCEPPolicyEditor(null)} onSaved={handleSCEPPolicySaved} />}
       {scepRotatePolicy && (
         <MDMSCEPRotateChallengeDialog policy={scepRotatePolicy} onClose={() => setSCEPRotatePolicy(null)} onRotated={handleSCEPChallengeRotated} />
       )}
@@ -1331,10 +1353,12 @@ export function Protocols() {
         <MDMSCEPPolicyDeleteDialog policy={scepDeletePolicy} onClose={() => setSCEPDeletePolicy(null)} onDeleted={handleSCEPPolicyDeleted} />
       )}
       {dnsEditConfig && (
-        <DNS01ConfigEditDialog config={dnsEditConfig} providers={dnsProviders} onClose={() => setDNSEditConfig(null)} onSaved={handleDNSConfigSaved} />
+        <DNS01ConfigDialog config={dnsEditConfig} providers={dnsProviders} onClose={() => setDNSEditConfig(null)} onSaved={handleDNSConfigSaved} />
       )}
+      {dnsCreateOpen && <DNS01ConfigDialog providers={dnsProviders} onClose={() => setDNSCreateOpen(false)} onSaved={handleDNSConfigSaved} />}
       {dnsDeleteConfig && <DNS01ConfigDeleteDialog config={dnsDeleteConfig} onClose={() => setDNSDeleteConfig(null)} onDeleted={handleDNSConfigDeleted} />}
       {dnsPreflightConfig && <DNS01PreflightDialog config={dnsPreflightConfig} onClose={() => setDNSPreflightConfig(null)} />}
+      {dnsQualificationConfig && <DNS01QualificationDialog config={dnsQualificationConfig} onClose={() => setDNSQualificationConfig(null)} />}
     </section>
   );
 }
@@ -1500,21 +1524,24 @@ function MDMSCEPRotateChallengeDialog({
       )}
       {preview && (
         <section aria-label={t("protocols.mdm.rotation.previewLabel")} className="mt-3 grid gap-3 rounded-control border border-border bg-muted/25 p-3">
-          <p className="font-medium">
-            {t("protocols.mdm.rotation.versionPlan", { current: preview.current_version, next: preview.next_version })}
-          </p>
+          <p className="font-medium">{t("protocols.mdm.rotation.versionPlan", { current: preview.current_version, next: preview.next_version })}</p>
           <p className="text-caption text-muted-foreground">
-            {preview.effect_free ? t("protocols.mdm.form.effectFree") : t("protocols.mdm.form.effectWarning")} · {preview.outside_calls.length} {t("protocols.mdm.form.outsideCalls")} · {preview.signer_calls} {t("protocols.mdm.form.signerCalls")}
+            {preview.effect_free ? t("protocols.mdm.form.effectFree") : t("protocols.mdm.form.effectWarning")} · {preview.outside_calls.length}{" "}
+            {t("protocols.mdm.form.outsideCalls")} · {preview.signer_calls} {t("protocols.mdm.form.signerCalls")}
           </p>
           {preview.blockers.length > 0 && (
             <ul className="list-disc space-y-1 ps-5 text-sm text-risk-warning">
-              {preview.blockers.map((item) => <li key={item}>{item}</li>)}
+              {preview.blockers.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
             </ul>
           )}
           <div>
             <p className="text-sm font-semibold">{t("protocols.mdm.form.recovery")}</p>
             <ol className="mt-1 list-decimal space-y-1 ps-5 text-sm text-muted-foreground">
-              {preview.recovery_steps.map((item) => <li key={item}>{item}</li>)}
+              {preview.recovery_steps.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
             </ol>
           </div>
           <p className="text-caption text-muted-foreground">{preview.secret_data_handling}</p>
@@ -1522,7 +1549,13 @@ function MDMSCEPRotateChallengeDialog({
       )}
       {error && <ErrorState title={t("parity.challengeRotationFailed_c4b11e")}>{error}</ErrorState>}
       <div className="mt-3 flex gap-2">
-        <Button ref={confirmRef} type="button" size="sm" disabled={busy || previewing || !preview?.ready || !preview.effect_free} onClick={() => void confirmRotate()}>
+        <Button
+          ref={confirmRef}
+          type="button"
+          size="sm"
+          disabled={busy || previewing || !preview?.ready || !preview.effect_free}
+          onClick={() => void confirmRotate()}
+        >
           {t("parity.rotateChallenge_99fc02")}
         </Button>
         <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onClose}>
@@ -1600,41 +1633,42 @@ function MDMSCEPPolicyDeleteDialog({ onClose, onDeleted, policy }: { policy: MDM
   );
 }
 
-function DNS01ConfigEditDialog({
+function DNS01ConfigDialog({
   config,
   onClose,
   onSaved,
   providers,
 }: {
-  config: ACMEDNS01ProviderConfig;
+  config?: ACMEDNS01ProviderConfig;
   providers: ACMEDNS01ProviderCatalogItem[];
   onClose: () => void;
   onSaved: (updated: ACMEDNS01ProviderConfig) => void;
 }) {
   const { t } = useTranslation();
-  const [name, setName] = useState(config.name);
-  const [provider, setProvider] = useState(config.provider);
-  const [zone, setZone] = useState(config.zone ?? "");
-  const [challengeDomain, setChallengeDomain] = useState(config.challenge_domain ?? "");
-  const [delegationTarget, setDelegationTarget] = useState(config.delegation_target ?? "");
-  const [caaIssuerDomain, setCAAIssuerDomain] = useState(config.caa_issuer_domain ?? "");
-  const [allowWildcards, setAllowWildcards] = useState(config.allow_wildcards ?? false);
+  const [name, setName] = useState(config?.name ?? "");
+  const [provider, setProvider] = useState(config?.provider ?? providers[0]?.name ?? "");
+  const [zone, setZone] = useState(config?.zone ?? "");
+  const [challengeDomain, setChallengeDomain] = useState(config?.challenge_domain ?? "");
+  const [delegationTarget, setDelegationTarget] = useState(config?.delegation_target ?? "");
+  const [caaIssuerDomain, setCAAIssuerDomain] = useState(config?.caa_issuer_domain ?? "");
+  const [allowWildcards, setAllowWildcards] = useState(config?.allow_wildcards ?? false);
   // B7 consent. Seeded from the saved config because this dialog does a PUT
   // (replace): a field the form does not send comes back false, so omitting it
   // here silently revoked upstream-DV consent every time an operator edited
   // anything else on the config — and the next renewal cycle would then need a
   // human nobody knew to expect.
-  const [allowUpstreamDV, setAllowUpstreamDV] = useState(config.allow_upstream_dv ?? false);
-  const [allowedMethods, setAllowedMethods] = useState<ACMEChallengeMethod[]>(() => (config.allowed_methods ?? []).filter(isACMEChallengeMethod));
-  const [configJSON, setConfigJSON] = useState(() => stringifyRecord(config.config));
-  const [credentialRefsJSON, setCredentialRefsJSON] = useState(() => stringifyRecord(config.credential_refs));
+  const [allowUpstreamDV, setAllowUpstreamDV] = useState(config?.allow_upstream_dv ?? false);
+  const [allowedMethods, setAllowedMethods] = useState<ACMEChallengeMethod[]>(() => (config?.allowed_methods ?? []).filter(isACMEChallengeMethod));
+  const [configJSON, setConfigJSON] = useState(() => stringifyRecord(config?.config));
+  const [credentialRefsJSON, setCredentialRefsJSON] = useState(() => stringifyRecord(config?.credential_refs));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
-  const titleId = "dns01-config-edit-heading";
-  const providerOptions = providers.some((candidate) => candidate.name === config.provider)
-    ? providers.map((candidate) => candidate.name)
-    : [config.provider, ...providers.map((candidate) => candidate.name)];
+  const titleId = "dns01-config-editor-heading";
+  const providerOptions =
+    config && !providers.some((candidate) => candidate.name === config.provider)
+      ? [config.provider, ...providers.map((candidate) => candidate.name)]
+      : providers.map((candidate) => candidate.name);
 
   function toggleMethod(method: ACMEChallengeMethod, checked: boolean) {
     setAllowedMethods((current) => {
@@ -1673,7 +1707,7 @@ function DNS01ConfigEditDialog({
     setBusy(true);
     setError(null);
     try {
-      onSaved(await api.updateACMEDNS01ProviderConfig(config.id, input));
+      onSaved(config ? await api.updateACMEDNS01ProviderConfig(config.id, input) : await api.createACMEDNS01ProviderConfig(input));
     } catch (err) {
       setError(protocolStatusError(err));
     } finally {
@@ -1694,16 +1728,16 @@ function DNS01ConfigEditDialog({
       <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
         <div className="min-w-0">
           <h2 id={titleId} className="truncate text-title font-semibold">
-            {translateNow("source.edit.dns.01.provider.config.1daa884c33")} {config.name}
+            {config ? t("protocols.dns01.editDialogTitle", { name: config.name }) : t("protocols.dns01.addDialogTitle")}
           </h2>
-          <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{config.id}</p>
+          {config && <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{config.id}</p>}
         </div>
         <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label={t("parity.closeDns01ConfigForm_00c6cb")}>
           <X className="h-4 w-4" aria-hidden="true" />
         </Button>
       </header>
       <form className="grid gap-4 p-5" onSubmit={(event) => void submit(event)}>
-        {error && <ErrorState title={t("parity.dns01ConfigUpdateFailed_86ad97")}>{error}</ErrorState>}
+        {error && <ErrorState title={config ? t("parity.dns01ConfigUpdateFailed_86ad97") : t("protocols.dns01.addFailed")}>{error}</ErrorState>}
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="grid gap-1 text-body font-medium">
             {t("parity.configName_11f179")}
@@ -1813,7 +1847,7 @@ function DNS01ConfigEditDialog({
             {translateNow("source.cancel.19766ed6cc")}
           </Button>
           <Button type="submit" disabled={busy || name.trim() === "" || provider.trim() === ""}>
-            {t("parity.saveConfig_64e1de")}
+            {config ? t("parity.saveConfig_64e1de") : t("protocols.dns01.addAction")}
           </Button>
         </footer>
       </form>

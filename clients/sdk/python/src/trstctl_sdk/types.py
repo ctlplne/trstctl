@@ -175,6 +175,85 @@ ACMEDNS01ProviderConfigRequest = TypedDict(
     total=False,
 )
 
+ACMEDNS01QualificationCheck = TypedDict(
+    'ACMEDNS01QualificationCheck',
+    {
+        'detail': str,
+        'id': str,
+        'label': str,
+        'passed': bool,
+        'recovery': str,
+    },
+    total=False,
+)
+
+ACMEDNS01QualificationPreview = TypedDict(
+    'ACMEDNS01QualificationPreview',
+    {
+        'blockers': list[str],
+        'checks': list[dict[str, Any]],
+        'config_id': str,
+        'config_name': str,
+        'credential_reference_fields': list[str],
+        'domain': str,
+        'effect_free': bool,
+        'execute_external_effects': list[str],
+        'execute_signer_calls': list[str],
+        'execute_writes': list[str],
+        'least_privilege_checklist': list[str],
+        'preview_external_effects': list[str],
+        'preview_signer_calls': list[str],
+        'preview_writes': list[str],
+        'provider': str,
+        'ready': bool,
+        'record_name': str,
+        'recovery_steps': list[str],
+        'secret_data_handling': str,
+        'wildcard': bool,
+    },
+    total=False,
+)
+
+ACMEDNS01QualificationRequest = TypedDict(
+    'ACMEDNS01QualificationRequest',
+    {
+        'domain': str,
+    },
+    total=False,
+)
+
+ACMEDNS01QualificationRun = TypedDict(
+    'ACMEDNS01QualificationRun',
+    {
+        'attempts': int,
+        'cleanup_status': str,
+        'completed_at': str,
+        'config_id': str,
+        'config_name': str,
+        'domain': str,
+        'duration_ms': int,
+        'error_category': str,
+        'id': str,
+        'propagation_status': str,
+        'provider': str,
+        'record_name': str,
+        'recovery_steps': list[str],
+        'secret_data_handling': str,
+        'stage': str,
+        'started_at': str,
+        'status': str,
+    },
+    total=False,
+)
+
+ACMEDNS01QualificationRunList = TypedDict(
+    'ACMEDNS01QualificationRunList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
 ACMEDeviceAttestationPolicy = TypedDict(
     'ACMEDeviceAttestationPolicy',
     {

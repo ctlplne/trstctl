@@ -56,6 +56,7 @@ func evidence(schema, field string, predicate EvidencePredicate, writer string) 
 // look covered while nobody had decided what evidence its words require.
 var servedEvidenceBindings = []EvidenceBinding{
 	evidence("ACMEDNS01PreflightCheck", "status", observationPredicate, "internal/api/acme_dns01.go:API.evaluateDNS01Preflight"),
+	evidence("ACMEDNS01QualificationRun", "status", predicate(evidenceObservation, "passed requires delivered publish and cleanup outbox work plus successful lookup through the served ACME resolver; recovery_required requires a failed cleanup row after the real publish attempt; failed preserves a non-secret failure category rather than a raw worker error"), "internal/server/acme_dns01_qualification.go:Server.ListACMEDNS01QualificationRuns"),
 	evidence("AccessChangeRequest", "status", eventProjectionPredicate, "internal/orchestrator/access_change_request.go:Orchestrator.CreateAccessChangeRequest"),
 	evidence("Agent", "status", observationPredicate, "internal/api/agents.go:toAgentResponse"),
 	evidence("AgentUpgradeCampaign", "status", eventProjectionPredicate, "internal/orchestrator/agent_upgrade.go:Orchestrator.OpenAgentUpgradeCampaign"),

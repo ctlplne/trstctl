@@ -13347,6 +13347,155 @@ export const messages = {
     defaultMessage: "Add a provider connection before using automated DNS-01 challenges.",
     description: "Empty-state message for DNS-01 provider configuration table.",
   },
+  "protocols.dns01.configHelp": {
+    defaultMessage:
+      "Connect a DNS provider by secret reference, then test the real publish, DNS visibility, and cleanup path before relying on it for renewals.",
+    description: "ELI5 explanation above DNS-01 provider configs.",
+  },
+  "protocols.dns01.addProvider": {
+    defaultMessage: "Add DNS-01 provider",
+    description: "Open the create-provider dialog.",
+  },
+  "protocols.dns01.addDialogTitle": {
+    defaultMessage: "Add DNS-01 provider config",
+    description: "Create-provider dialog title.",
+  },
+  "protocols.dns01.editDialogTitle": {
+    defaultMessage: "Edit DNS-01 provider config: {name}",
+    description: "Edit-provider dialog title.",
+  },
+  "protocols.dns01.addFailed": {
+    defaultMessage: "DNS-01 provider could not be added",
+    description: "Create-provider error heading.",
+  },
+  "protocols.dns01.addAction": {
+    defaultMessage: "Add provider",
+    description: "Create-provider submit action.",
+  },
+  "protocols.dns01.qualification.open": {
+    defaultMessage: "Test DNS-01 provider {name}",
+    description: "Accessible label for opening one provider test.",
+  },
+  "protocols.dns01.qualification.testAction": {
+    defaultMessage: "Test provider",
+    description: "Short provider-table action.",
+  },
+  "protocols.dns01.qualification.title": {
+    defaultMessage: "Test DNS-01 provider: {name}",
+    description: "Provider qualification dialog title.",
+  },
+  "protocols.dns01.qualification.intro": {
+    defaultMessage: "First review a no-change plan. If it is safe, trstctl publishes one random test record, checks that DNS can see it, and removes it.",
+    description: "ELI5 provider qualification introduction.",
+  },
+  "protocols.dns01.qualification.close": {
+    defaultMessage: "Close DNS-01 provider test",
+    description: "Accessible close action for provider qualification.",
+  },
+  "protocols.dns01.qualification.errorTitle": {
+    defaultMessage: "Provider test could not continue",
+    description: "Qualification request error heading.",
+  },
+  "protocols.dns01.qualification.domain": {
+    defaultMessage: "Domain to test",
+    description: "Domain field for provider qualification.",
+  },
+  "protocols.dns01.qualification.domainPlaceholder": {
+    defaultMessage: "api.example.com",
+    description: "Example DNS name for provider qualification.",
+  },
+  "protocols.dns01.qualification.reviewAction": {
+    defaultMessage: "Review safe test",
+    description: "Effect-free qualification preview action.",
+  },
+  "protocols.dns01.qualification.planLabel": {
+    defaultMessage: "DNS-01 provider test plan",
+    description: "Accessible label for qualification preview.",
+  },
+  "protocols.dns01.qualification.ready": {
+    defaultMessage: "Safe to test",
+    description: "Qualification preview passed all effect-free checks.",
+  },
+  "protocols.dns01.qualification.blocked": {
+    defaultMessage: "Fix these checks before testing",
+    description: "Qualification preview has blockers.",
+  },
+  "protocols.dns01.qualification.effectFree": {
+    defaultMessage: "This review made no writes, outside calls, or signing calls.",
+    description: "Effect-free preview assurance.",
+  },
+  "protocols.dns01.qualification.outsideEffects": {
+    defaultMessage: "What the real test changes outside trstctl",
+    description: "Qualification execute effects heading.",
+  },
+  "protocols.dns01.qualification.serverEvidence": {
+    defaultMessage: "What trstctl records",
+    description: "Qualification evidence writes heading.",
+  },
+  "protocols.dns01.qualification.referenceFields": {
+    defaultMessage: "Credential reference names used",
+    description: "Secret-reference field-name heading.",
+  },
+  "protocols.dns01.qualification.noReferenceFields": {
+    defaultMessage: "This provider declares no credential reference fields.",
+    description: "Empty credential-reference field list.",
+  },
+  "protocols.dns01.qualification.leastPrivilege": {
+    defaultMessage: "Least-privilege checklist",
+    description: "Provider credential hardening heading.",
+  },
+  "protocols.dns01.qualification.executeAction": {
+    defaultMessage: "Publish, verify, and clean up",
+    description: "Explicit real provider-test action.",
+  },
+  "protocols.dns01.qualification.resultLabel": {
+    defaultMessage: "DNS-01 provider test result",
+    description: "Accessible qualification result label.",
+  },
+  "protocols.dns01.qualification.passed": {
+    defaultMessage: "Provider test passed",
+    description: "Provider test success heading.",
+  },
+  "protocols.dns01.qualification.cleanupAttention": {
+    defaultMessage: "Cleanup needs attention",
+    description: "Provider test cleanup recovery heading.",
+  },
+  "protocols.dns01.qualification.failed": {
+    defaultMessage: "Provider test found a problem",
+    description: "Provider test non-cleanup failure heading.",
+  },
+  "protocols.dns01.qualification.resultSummary": {
+    defaultMessage: "DNS visibility: {propagation} · cleanup: {cleanup} · provider attempts: {attempts}",
+    description: "Compact sanitized provider test result.",
+  },
+  "protocols.dns01.qualification.recovery": {
+    defaultMessage: "What to do next",
+    description: "Provider test recovery instructions heading.",
+  },
+  "protocols.dns01.qualification.retryCleanup": {
+    defaultMessage: "Retry cleanup",
+    description: "Retry removal using the server-held recovery payload.",
+  },
+  "protocols.dns01.qualification.history": {
+    defaultMessage: "Recent provider tests",
+    description: "Provider qualification history heading.",
+  },
+  "protocols.dns01.qualification.historyLoading": {
+    defaultMessage: "Loading recent provider tests.",
+    description: "Provider qualification history loading state.",
+  },
+  "protocols.dns01.qualification.historyEmpty": {
+    defaultMessage: "No provider test has been recorded for this config yet.",
+    description: "Empty provider qualification history.",
+  },
+  "protocols.dns01.qualification.historySummary": {
+    defaultMessage: "DNS visibility: {propagation} · cleanup: {cleanup}",
+    description: "Compact historical qualification result.",
+  },
+  "protocols.dns01.qualification.none": {
+    defaultMessage: "None",
+    description: "Empty exact-effect list.",
+  },
   "protocols.eab.accountsBound": {
     defaultMessage: "{count} accounts",
     description: "B4: how many ACME accounts this credential has admitted.",
@@ -18838,10 +18987,6 @@ export const messages = {
   "source.edge.types.396a236285": {
     defaultMessage: "Edge types",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
-  },
-  "source.edit.dns.01.provider.config.1daa884c33": {
-    defaultMessage: "Edit DNS-01 provider config",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Protocols.tsx.",
   },
   "source.egress.66a3afae15": {
     defaultMessage: "Egress",

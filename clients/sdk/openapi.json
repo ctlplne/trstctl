@@ -499,6 +499,284 @@
         ],
         "type": "object"
       },
+      "ACMEDNS01QualificationCheck": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "passed": {
+            "type": "boolean"
+          },
+          "recovery": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "passed",
+          "detail",
+          "recovery"
+        ],
+        "type": "object"
+      },
+      "ACMEDNS01QualificationPreview": {
+        "properties": {
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/ACMEDNS01QualificationCheck"
+            },
+            "type": "array"
+          },
+          "config_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "config_name": {
+            "type": "string"
+          },
+          "credential_reference_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "execute_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "execute_signer_calls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "execute_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "least_privilege_checklist": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_signer_calls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "record_name": {
+            "type": "string"
+          },
+          "recovery_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "secret_data_handling": {
+            "type": "string"
+          },
+          "wildcard": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ready",
+          "effect_free",
+          "config_id",
+          "config_name",
+          "provider",
+          "domain",
+          "record_name",
+          "wildcard",
+          "credential_reference_fields",
+          "checks",
+          "blockers",
+          "preview_writes",
+          "preview_external_effects",
+          "preview_signer_calls",
+          "execute_writes",
+          "execute_external_effects",
+          "execute_signer_calls",
+          "recovery_steps",
+          "least_privilege_checklist",
+          "secret_data_handling"
+        ],
+        "type": "object"
+      },
+      "ACMEDNS01QualificationRequest": {
+        "properties": {
+          "domain": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "domain"
+        ],
+        "type": "object"
+      },
+      "ACMEDNS01QualificationRun": {
+        "properties": {
+          "attempts": {
+            "type": "integer"
+          },
+          "cleanup_status": {
+            "enum": [
+              "not_needed",
+              "pending",
+              "delivered",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "completed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "config_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "config_name": {
+            "type": "string"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "duration_ms": {
+            "type": "integer"
+          },
+          "error_category": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "propagation_status": {
+            "enum": [
+              "not_run",
+              "pending",
+              "passed",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "record_name": {
+            "type": "string"
+          },
+          "recovery_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "secret_data_handling": {
+            "type": "string"
+          },
+          "stage": {
+            "enum": [
+              "review",
+              "publish",
+              "propagation",
+              "cleanup",
+              "complete"
+            ],
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "running",
+              "passed",
+              "failed",
+              "recovery_required"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "config_id",
+          "config_name",
+          "provider",
+          "domain",
+          "record_name",
+          "status",
+          "stage",
+          "propagation_status",
+          "cleanup_status",
+          "attempts",
+          "started_at",
+          "duration_ms",
+          "recovery_steps",
+          "secret_data_handling"
+        ],
+        "type": "object"
+      },
+      "ACMEDNS01QualificationRunList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ACMEDNS01QualificationRun"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "ACMEDeviceAttestationPolicy": {
         "properties": {
           "allowed_algorithms": {
@@ -29656,6 +29934,207 @@
         "x-trstctl-permission": "issuers:write"
       }
     },
+    "/api/v1/acme/dns-01/provider-configs/{id}/qualification-runs": {
+      "get": {
+        "operationId": "listACMEDNS01QualificationRuns",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ACMEDNS01QualificationRunList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List sanitized durable DNS-01 provider-test history",
+        "x-trstctl-permission": "issuers:read"
+      },
+      "post": {
+        "operationId": "runACMEDNS01Qualification",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ACMEDNS01QualificationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ACMEDNS01QualificationRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Publish, verify, and clean up a server-generated DNS-01 provider probe through the production outbox",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/acme/dns-01/provider-configs/{id}/qualification/preview": {
+      "post": {
+        "operationId": "previewACMEDNS01Qualification",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ACMEDNS01QualificationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ACMEDNS01QualificationPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Review an exact DNS-01 provider test without writes, outside calls, probe generation, or signer calls",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
     "/api/v1/acme/dns-01/providers": {
       "get": {
         "operationId": "listACMEDNS01Providers",
@@ -29701,6 +30180,73 @@
         ],
         "summary": "List served ACME DNS-01 provider coverage",
         "x-trstctl-permission": "issuers:read"
+      }
+    },
+    "/api/v1/acme/dns-01/qualification-runs/{run_id}/retry-cleanup": {
+      "post": {
+        "operationId": "retryACMEDNS01QualificationCleanup",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ACMEDNS01QualificationRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Retry removal of a qualification TXT probe using server-held recovery authority",
+        "x-trstctl-permission": "issuers:write"
       }
     },
     "/api/v1/acme/dns-01/upstream-authorizations": {

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -264,6 +265,19 @@ func (s *Server) buildServedACME(ctx context.Context, cfg config.Protocols, tena
 			profileName: s.defaultProfile,
 		})
 	if s.acmeDNS01 != nil {
+		var txtResolver acme.Resolver
+		switch validator := validators.DNS01.(type) {
+		case acme.DNS01Validator:
+			txtResolver = validator.Resolver
+		case *acme.DNS01Validator:
+			if validator != nil {
+				txtResolver = validator.Resolver
+			}
+		}
+		if txtResolver == nil {
+			txtResolver = net.DefaultResolver
+		}
+		s.acmeDNS01.txtResolvers = []acme.Resolver{txtResolver}
 		acmeSrv = acmeSrv.WithDNS01Automation(s.acmeDNS01).WithDomainValidationPolicy(s.acmeDNS01)
 	}
 	// I4: every refusal this server issues becomes a classified diagnosis an

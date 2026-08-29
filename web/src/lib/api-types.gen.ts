@@ -133,6 +133,65 @@ export interface ACMEDNS01ProviderConfigRequest {
   zone?: string;
 }
 
+export interface ACMEDNS01QualificationCheck {
+  detail: string;
+  id: string;
+  label: string;
+  passed: boolean;
+  recovery: string;
+}
+
+export interface ACMEDNS01QualificationPreview {
+  blockers: string[];
+  checks: ACMEDNS01QualificationCheck[];
+  config_id: string;
+  config_name: string;
+  credential_reference_fields: string[];
+  domain: string;
+  effect_free: boolean;
+  execute_external_effects: string[];
+  execute_signer_calls: string[];
+  execute_writes: string[];
+  least_privilege_checklist: string[];
+  preview_external_effects: string[];
+  preview_signer_calls: string[];
+  preview_writes: string[];
+  provider: string;
+  ready: boolean;
+  record_name: string;
+  recovery_steps: string[];
+  secret_data_handling: string;
+  wildcard: boolean;
+}
+
+export interface ACMEDNS01QualificationRequest {
+  domain: string;
+}
+
+export interface ACMEDNS01QualificationRun {
+  attempts: number;
+  cleanup_status: "not_needed" | "pending" | "delivered" | "failed";
+  completed_at?: string;
+  config_id: string;
+  config_name: string;
+  domain: string;
+  duration_ms: number;
+  error_category?: string;
+  id: string;
+  propagation_status: "not_run" | "pending" | "passed" | "failed";
+  provider: string;
+  record_name: string;
+  recovery_steps: string[];
+  secret_data_handling: string;
+  stage: "review" | "publish" | "propagation" | "cleanup" | "complete";
+  started_at: string;
+  status: "running" | "passed" | "failed" | "recovery_required";
+}
+
+export interface ACMEDNS01QualificationRunList {
+  items: ACMEDNS01QualificationRun[];
+}
+
 export interface ACMEDeviceAttestationPolicy {
   allowed_algorithms?: number[];
   allowed_identifiers?: string[];

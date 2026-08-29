@@ -28,9 +28,14 @@ const { apiMock } = vi.hoisted(() => ({
     previewMDMSCEPChallengeRotation: vi.fn(),
     rotateMDMSCEPChallenge: vi.fn(),
     deleteMDMSCEPPolicy: vi.fn(),
+    createACMEDNS01ProviderConfig: vi.fn(),
     updateACMEDNS01ProviderConfig: vi.fn(),
     deleteACMEDNS01ProviderConfig: vi.fn(),
     acmeDNS01Preflight: vi.fn(),
+    previewACMEDNS01Qualification: vi.fn(),
+    runACMEDNS01Qualification: vi.fn(),
+    acmeDNS01QualificationRuns: vi.fn(),
+    retryACMEDNS01QualificationCleanup: vi.fn(),
     acmeUpstreamAuthorizations: vi.fn(),
     enrollmentDiagnostics: vi.fn(),
     proveEnrollmentDiagnosticFixed: vi.fn(),
@@ -139,9 +144,14 @@ describe("protocol surface", () => {
     apiMock.previewMDMSCEPChallengeRotation.mockReset();
     apiMock.rotateMDMSCEPChallenge.mockReset();
     apiMock.deleteMDMSCEPPolicy.mockReset();
+    apiMock.createACMEDNS01ProviderConfig.mockReset();
     apiMock.updateACMEDNS01ProviderConfig.mockReset();
     apiMock.deleteACMEDNS01ProviderConfig.mockReset();
     apiMock.acmeDNS01Preflight.mockReset();
+    apiMock.previewACMEDNS01Qualification.mockReset();
+    apiMock.runACMEDNS01Qualification.mockReset();
+    apiMock.acmeDNS01QualificationRuns.mockReset();
+    apiMock.retryACMEDNS01QualificationCleanup.mockReset();
     apiMock.acmeUpstreamAuthorizations.mockReset();
     apiMock.enrollmentDiagnostics.mockReset();
     apiMock.proveEnrollmentDiagnosticFixed.mockReset();
@@ -227,7 +237,12 @@ describe("protocol surface", () => {
         { id: "endpoint-mounted", label: "CMP endpoint mounted", passed: true, detail: "The running control plane owns POST /cmp." },
         { id: "tenant-binding", label: "Tenant binding", passed: true, detail: "The CMP mount is bound to this authenticated tenant." },
         { id: "ra-transport", label: "RA transport identity", passed: true, detail: "The sealed CMP response-protection identity is loaded in memory." },
-        { id: "client-trust", label: "Client protection trust", passed: true, detail: "At least one operator-approved client protection trust anchor is loaded." },
+        {
+          id: "client-trust",
+          label: "Client protection trust",
+          passed: true,
+          detail: "At least one operator-approved client protection trust anchor is loaded.",
+        },
         { id: "issuing-path", label: "Isolated issuing path", passed: true, detail: "The event-sourced issuer and isolated signer path are attached." },
         { id: "profile-policy", label: "Issuing profile", passed: true, detail: "The server can enforce the device-90d certificate profile." },
         { id: "bounded-capacity", label: "Bounded enrollment capacity", passed: true, detail: "CMP enrollment uses the bounded protocol worker pool." },
@@ -256,7 +271,12 @@ describe("protocol surface", () => {
         { id: "tenant-binding", label: "Tenant binding", passed: true, detail: "The Workload API is bound to this authenticated tenant." },
         { id: "socket-listening", label: "Unix socket listening", passed: true, detail: "The configured path is a live Unix domain socket." },
         { id: "socket-permissions", label: "Socket owner-only", passed: true, detail: "The socket denies group and other access." },
-        { id: "registration-policy", label: "Registration policy attached", passed: true, detail: "At least one registration entry can bind an approved workload to a SPIFFE ID." },
+        {
+          id: "registration-policy",
+          label: "Registration policy attached",
+          passed: true,
+          detail: "At least one registration entry can bind an approved workload to a SPIFFE ID.",
+        },
         { id: "issuing-path", label: "Isolated issuing path", passed: true, detail: "X.509 and JWT issuance route through the isolated signer boundary." },
         { id: "bounded-capacity", label: "Bounded workload capacity", passed: true, detail: "Workload requests use the bounded protocol worker pool." },
       ],
@@ -265,10 +285,12 @@ describe("protocol surface", () => {
       preview_signer_calls: [],
       proof: ["Server posture only.", "No workload call.", "No effects."],
       blockers: [],
-      client_boundary: "Workloads fetch short-lived credentials from their local Unix socket; operators review readiness here without receiving workload key material.",
+      client_boundary:
+        "Workloads fetch short-lived credentials from their local Unix socket; operators review readiness here without receiving workload key material.",
     });
     apiMock.activateProtocolProfile.mockResolvedValue({ profile: "eval", active: true, protocols: ["acme"] });
     apiMock.acmeUpstreamAuthorizations.mockResolvedValue({ items: [], never_validated_count: 0, guidance: "" });
+    apiMock.acmeDNS01QualificationRuns.mockResolvedValue({ items: [] });
     apiMock.enrollmentDiagnostics.mockResolvedValue({ items: [], unknown_count: 0, guidance: "" });
     apiMock.revocationCaches.mockResolvedValue({
       observed: true,
@@ -1360,7 +1382,14 @@ describe("protocol surface", () => {
     fireEvent.click(screen.getByRole("button", { name: "Copy CMP OpenSSL p10cr command" }));
     await waitFor(() => expect(writeText).toHaveBeenCalled());
     const command = String(writeText.mock.calls.at(-1)?.[0]);
-    for (const required of ["-cert cmp-client.pem", "-key cmp-client.key", "-extracerts cmp-client.pem", "-srvcert cmp-ra.pem", "-reqout request.der", "-rspout response.der"]) {
+    for (const required of [
+      "-cert cmp-client.pem",
+      "-key cmp-client.key",
+      "-extracerts cmp-client.pem",
+      "-srvcert cmp-ra.pem",
+      "-reqout request.der",
+      "-rspout response.der",
+    ]) {
       expect(command).toContain(required);
     }
     expect(command).not.toMatch(/BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY|password=|secret=/i);
@@ -1536,12 +1565,140 @@ describe("protocol surface", () => {
     expect(apiMock.acmeDNS01Preflight).toHaveBeenCalledTimes(3);
   });
 
+  it("reviews, executes, observes, and recovers a real DNS-01 provider qualification without exposing secrets", async () => {
+    const user = userEvent.setup();
+    const preview = {
+      ready: true,
+      effect_free: true,
+      config_id: "01900000-0000-7000-8000-000000000069",
+      config_name: "prod-cloudflare",
+      provider: "cloudflare",
+      domain: "api.example.test",
+      record_name: "_acme-challenge.api.example.test",
+      wildcard: false,
+      credential_reference_fields: ["api_token_ref"],
+      checks: [
+        { id: "domain-policy", label: "Domain policy", passed: true, detail: "This config covers api.example.test.", recovery: "Choose a matching config." },
+        { id: "cleanup", label: "Cleanup path", passed: true, detail: "Cleanup uses the same bounded outbox.", recovery: "Retry cleanup from history." },
+      ],
+      blockers: [],
+      preview_writes: [],
+      preview_external_effects: [],
+      preview_signer_calls: [],
+      execute_writes: ["Record immutable qualification evidence."],
+      execute_external_effects: ["Publish one random TXT probe.", "Remove that exact TXT probe."],
+      execute_signer_calls: [],
+      recovery_steps: ["If cleanup needs attention, use Retry cleanup from qualification history."],
+      least_privilege_checklist: ["Grant TXT edit access only for _acme-challenge.api.example.test."],
+      secret_data_handling: "The browser receives reference field names only; it never receives provider credentials or the TXT probe value.",
+    };
+    const recoveryRequired = {
+      id: "01900000-0000-7000-8000-000000000169",
+      config_id: preview.config_id,
+      config_name: preview.config_name,
+      provider: preview.provider,
+      domain: preview.domain,
+      record_name: preview.record_name,
+      status: "recovery_required",
+      stage: "cleanup",
+      propagation_status: "passed",
+      cleanup_status: "failed",
+      error_category: "cleanup_delivery_failed",
+      attempts: 5,
+      started_at: "2026-08-29T18:00:00Z",
+      completed_at: "2026-08-29T18:00:03Z",
+      duration_ms: 3000,
+      recovery_steps: ["Repair provider access, then retry cleanup from this row."],
+      secret_data_handling: "No TXT value, provider credential, credential reference value, idempotency key, or raw worker error is returned.",
+    };
+    const passed = { ...recoveryRequired, status: "passed", stage: "complete", cleanup_status: "delivered", error_category: undefined };
+    apiMock.previewACMEDNS01Qualification.mockResolvedValue(preview);
+    apiMock.runACMEDNS01Qualification.mockResolvedValue(recoveryRequired);
+    apiMock.retryACMEDNS01QualificationCleanup.mockResolvedValue(passed);
+    apiMock.acmeDNS01QualificationRuns.mockResolvedValueOnce({ items: [] }).mockResolvedValue({ items: [recoveryRequired] });
+
+    await renderProtocols();
+    await user.click(screen.getByRole("button", { name: "Test DNS-01 provider prod-cloudflare" }));
+    const dialog = screen.getByRole("dialog", { name: "Test DNS-01 provider: prod-cloudflare" });
+    await user.type(within(dialog).getByRole("textbox", { name: "Domain to test" }), "api.example.test");
+    await user.click(within(dialog).getByRole("button", { name: "Review safe test" }));
+
+    expect(await within(dialog).findByText("Safe to test")).toBeInTheDocument();
+    expect(within(dialog).getByText("This review made no writes, outside calls, or signing calls.")).toBeInTheDocument();
+    expect(within(dialog).getByText("Publish one random TXT probe.")).toBeInTheDocument();
+    expect(within(dialog).getByText("Remove that exact TXT probe.")).toBeInTheDocument();
+    expect(within(dialog).getByText("api_token_ref")).toBeInTheDocument();
+    expect(within(dialog).getByText(/Grant TXT edit access only/)).toBeInTheDocument();
+    expect(within(dialog).queryByText("secret://dns/cloudflare/api-token")).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("textbox", { name: /token|secret|txt value/i })).not.toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole("button", { name: "Publish, verify, and clean up" }));
+    expect(await within(dialog).findByText("Cleanup needs attention")).toBeInTheDocument();
+    expect(within(dialog).getByText("cleanup_delivery_failed")).toBeInTheDocument();
+    expect(within(dialog).getByText("Repair provider access, then retry cleanup from this row.")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Retry cleanup" }));
+    expect(await within(dialog).findByText("Provider test passed")).toBeInTheDocument();
+
+    expect(apiMock.previewACMEDNS01Qualification).toHaveBeenCalledWith(preview.config_id, { domain: "api.example.test" });
+    expect(apiMock.runACMEDNS01Qualification).toHaveBeenCalledWith(preview.config_id, { domain: "api.example.test" });
+    expect(apiMock.retryACMEDNS01QualificationCleanup).toHaveBeenCalledWith(recoveryRequired.id);
+  });
+
+  it("creates the first DNS-01 provider config from the blank console using references only", async () => {
+    const user = userEvent.setup();
+    apiMock.acmeDNS01ProviderConfigs.mockResolvedValueOnce({ items: [] });
+    apiMock.createACMEDNS01ProviderConfig.mockResolvedValue({
+      id: "01900000-0000-7000-8000-000000000170",
+      tenant_id: "11111111-1111-1111-1111-111111111111",
+      name: "first-cloudflare",
+      provider: "cloudflare",
+      zone: "example.test",
+      credential_refs: { api_token_ref: "secret://dns/cloudflare/first" },
+      config: { zone_id: "zone-first" },
+      allowed_methods: ["dns-01"],
+      allow_wildcards: false,
+      allow_upstream_dv: false,
+      secret_handling: "credential_refs_only",
+      created_at: "2026-08-29T18:00:00Z",
+      updated_at: "2026-08-29T18:00:00Z",
+    });
+    await renderProtocols();
+
+    await user.click(screen.getByRole("button", { name: "Add DNS-01 provider" }));
+    const dialog = screen.getByRole("dialog", { name: "Add DNS-01 provider config" });
+    await user.type(within(dialog).getByRole("textbox", { name: "Config name" }), "first-cloudflare");
+    await user.selectOptions(within(dialog).getByRole("combobox", { name: "Provider" }), "cloudflare");
+    await user.type(within(dialog).getByRole("textbox", { name: "Zone (optional)" }), "example.test");
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Provider config JSON (optional)" }), {
+      target: { value: '{"zone_id":"zone-first"}' },
+    });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: /Credential references JSON \(optional\)/ }), {
+      target: { value: '{"api_token_ref":"secret://dns/cloudflare/first"}' },
+    });
+    await user.click(within(dialog).getByRole("checkbox", { name: "dns-01" }));
+    await user.click(within(dialog).getByRole("button", { name: "Add provider" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add DNS-01 provider config" })).not.toBeInTheDocument());
+    expect(apiMock.createACMEDNS01ProviderConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "first-cloudflare",
+        provider: "cloudflare",
+        zone: "example.test",
+        allowed_methods: ["dns-01"],
+        config: { zone_id: "zone-first" },
+        credential_refs: { api_token_ref: "secret://dns/cloudflare/first" },
+      }),
+    );
+    expect(screen.getAllByText("first-cloudflare").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("textbox", { name: /token|api token|provider token/i })).not.toBeInTheDocument();
+  });
+
   it("validates and saves the served DNS-01 config form without accepting raw non-object JSON", async () => {
     const user = userEvent.setup();
     await renderProtocols();
 
     await user.click(screen.getByRole("button", { name: "Edit DNS-01 config prod-cloudflare" }));
-    const dialog = screen.getByRole("dialog", { name: "Edit DNS-01 provider config prod-cloudflare" });
+    const dialog = screen.getByRole("dialog", { name: "Edit DNS-01 provider config: prod-cloudflare" });
     const configJSON = within(dialog).getByRole("textbox", { name: "Provider config JSON (optional)" });
     const refsJSON = within(dialog).getByRole("textbox", { name: /Credential references JSON \(optional\)/ });
 

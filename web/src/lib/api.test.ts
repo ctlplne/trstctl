@@ -566,6 +566,10 @@ describe("exported API surface census", () => {
       // without allocating a serial, appending an event, changing the KRL, or
       // calling the isolated signer.
       "/api/v1/ssh/certificates/preview",
+      // F69: validates the exact provider, domain, policy, reference shape,
+      // runtime, and resolver without generating a probe, writing, signing, or
+      // contacting DNS/the provider.
+      "/api/v1/acme/dns-01/provider-configs/item%2Fid/qualification/preview",
       "/api/v1/identities/item%2Fid/transitions/preview",
       // F52: normalize and bound the exact CBOM request without connecting,
       // reading a host file, appending an event, or projecting an asset.

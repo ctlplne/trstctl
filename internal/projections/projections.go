@@ -2039,11 +2039,12 @@ type ACMEDNS01Preflighted struct {
 // ACMEDNS01RecordChanged is the audit payload for order-time DNS-01 publish and
 // cleanup. It intentionally omits the TXT value and all credential references.
 type ACMEDNS01RecordChanged struct {
-	ConfigID   string `json:"config_id"`
-	Provider   string `json:"provider"`
-	Domain     string `json:"domain"`
-	RecordName string `json:"record_name"`
-	OutboxID   int64  `json:"outbox_id"`
+	ConfigID        string `json:"config_id"`
+	Provider        string `json:"provider"`
+	Domain          string `json:"domain"`
+	RecordName      string `json:"record_name"`
+	OutboxID        int64  `json:"outbox_id"`
+	QualificationID string `json:"qualification_id,omitempty"`
 }
 
 // MDMSCEPPolicyUpserted is the payload of mdm.scep_policy.upserted. It carries

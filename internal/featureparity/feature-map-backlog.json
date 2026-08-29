@@ -5766,8 +5766,8 @@
             "phase": "P2",
             "priority": 55,
             "served_state": "conditional",
-            "backend_status": "conditional: served order-time DNS-01 publish/cleanup through the outbox using tenant provider configs, secret-reference-backed provider credentials, and DNS-01 preflight",
-            "current_frontend_mapping": "Protocols at /protocols - served DNS-01 provider catalog and tenant provider configs with secret-reference-only disclosure, method/wildcard/CAA policy, and no raw provider-token controls",
+            "backend_status": "conditional: served order-time DNS-01 publish/cleanup plus operator qualification through the outbox using tenant provider configs, secret-reference-backed provider credentials, live propagation verification, sanitized durable history, and bounded cleanup recovery",
+            "current_frontend_mapping": "Protocols at /protocols - create and manage secret-reference-only DNS-01 provider configs, review an effect-free qualification plan, run a real server-generated TXT probe, inspect sanitized history, and retry failed cleanup without exposing provider tokens or recovery payloads",
             "target_gui_mapping": "DNS-01 provider config UI with scoped secret reference, propagation preflight, challenge history, and least-privilege checklist.",
             "acceptance_test": "UI uses secret references, never raw provider token persistence in browser, and tests provider-error states.",
             "source_docs": [
@@ -5778,12 +5778,15 @@
                 "internal/protocols/acme/dns01.go",
                 "internal/dns",
                 "internal/api/acme_dns01.go",
+                "internal/api/acme_dns01_qualification.go",
                 "internal/server/acme_dns01_automation.go",
+                "internal/server/acme_dns01_qualification.go",
                 "internal/server/issuance.go",
                 "internal/server/protocol_mounts.go"
             ],
             "source_frontend": [
-                "web/src/pages/Protocols.tsx"
+                "web/src/pages/Protocols.tsx",
+                "web/src/pages/protocols/DNS01QualificationDialog.tsx"
             ],
             "status": "closed",
             "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
@@ -5795,6 +5798,10 @@
                 "updateACMEDNS01ProviderConfig",
                 "deleteACMEDNS01ProviderConfig",
                 "preflightACMEDNS01",
+                "previewACMEDNS01Qualification",
+                "runACMEDNS01Qualification",
+                "listACMEDNS01QualificationRuns",
+                "retryACMEDNS01QualificationCleanup",
                 "listACMEUpstreamAuthorizations"
             ],
             "api_na": "",
@@ -5806,6 +5813,10 @@
                 "acme dns-01 provider-configs get",
                 "acme dns-01 provider-configs update",
                 "acme dns-01 provider-configs delete",
+                "acme dns-01 provider-configs qualification preview",
+                "acme dns-01 provider-configs qualification run",
+                "acme dns-01 provider-configs qualification history",
+                "acme dns-01 qualification retry-cleanup",
                 "acme dns-01 preflight"
             ],
             "cli_na": "",
@@ -5815,13 +5826,18 @@
                         "GET /api/v1/acme/dns-01/providers returns the served DNS-01 provider catalog with Route 53, Google Cloud DNS, Azure DNS, Cloudflare, RFC 2136, webhook, and additional built-ins.",
                         "POST/GET/PUT/DELETE /api/v1/acme/dns-01/provider-configs stores tenant-scoped provider configs as event-sourced projections with credential_refs/config JSON and no inline secret values.",
                         "POST /api/v1/acme/dns-01/preflight evaluates configured delegation, TXT propagation, CAA issuer, method policy, and wildcard policy before ACME issuance relies on DNS-01.",
+                        "POST qualification/preview is effect-free and names the exact provider, record, checks, side effects, least-privilege checklist, and cleanup plan without generating or exposing a TXT probe.",
+                        "POST qualification-runs publishes a server-generated TXT probe through the production outbox/provider path, verifies propagation with the served ACME resolver, and always attempts cleanup on an independent bounded context.",
+                        "GET qualification-runs derives sanitized tenant-scoped history from outbox evidence; POST retry-cleanup reuses a server-held recovery payload without returning provider credentials, TXT values, raw payloads, or raw worker errors.",
                         "POST /acme/chal/{id} on a served dns-01 challenge resolves the tenant provider config, enqueues acme.dns01.present/acme.dns01.cleanup outbox rows, validates the published TXT, and finalizes through the signer-backed served ACME path.",
                         "served_state=conditional",
-                        "backend_status=conditional: served order-time DNS-01 publish/cleanup through the outbox using tenant provider configs, secret-reference-backed provider credentials, and DNS-01 preflight"
+                        "backend_status=conditional: served order-time DNS-01 publish/cleanup plus operator qualification through the outbox using tenant provider configs, secret-reference-backed provider credentials, live propagation verification, sanitized durable history, and bounded cleanup recovery"
                     ],
                     "refs": [
                         "internal/api/acme_dns01.go",
+                        "internal/api/acme_dns01_qualification.go",
                         "internal/server/acme_dns01_automation.go",
+                        "internal/server/acme_dns01_qualification.go",
                         "internal/server/issuance.go",
                         "internal/server/protocol_mounts.go",
                         "internal/protocols/acme/acme.go",
@@ -5834,17 +5850,19 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: Protocols at /protocols - served DNS-01 provider catalog and tenant provider configs with secret-reference-only disclosure, method/wildcard/CAA policy, and no raw provider-token controls",
-                        "Protocols at /protocols renders tenant DNS-01 provider configs with provider, zone/delegation target, CAA issuer, method policy, wildcard policy, and secret-reference field names only."
+                        "current_frontend_mapping: Protocols at /protocols - create and manage secret-reference-only DNS-01 provider configs, review an effect-free qualification plan, run a real server-generated TXT probe, inspect sanitized history, and retry failed cleanup without exposing provider tokens or recovery payloads",
+                        "Protocols at /protocols renders tenant DNS-01 provider configs with provider, zone/delegation target, CAA issuer, method policy, wildcard policy, and secret-reference field names only.",
+                        "The provider journey includes an explicit Add provider blank state plus a review-before-run qualification dialog with plain-language checks, effects, live progress, sanitized history, and cleanup recovery."
                     ],
                     "refs": [
                         "web/src/pages/Protocols.tsx",
+                        "web/src/pages/protocols/DNS01QualificationDialog.tsx",
                         "web/src/__tests__/protocols.test.tsx"
                     ]
                 },
                 "cli": {
                     "evidence": [
-                        "CLI commands `trstctl acme dns-01 providers`, `trstctl acme dns-01 provider-configs...`, and `trstctl acme dns-01 preflight` map to the served DNS-01 API routes."
+                        "CLI commands `trstctl acme dns-01 providers`, `trstctl acme dns-01 provider-configs...`, `trstctl acme dns-01 provider-configs qualification...`, `trstctl acme dns-01 qualification retry-cleanup`, and `trstctl acme dns-01 preflight` map to the served DNS-01 API routes."
                     ],
                     "refs": [
                         "internal/cli/command.go",
@@ -5853,7 +5871,7 @@
                 },
                 "api": {
                     "evidence": [
-                        "OpenAPI operationIds: listACMEDNS01Providers, createACMEDNS01ProviderConfig, listACMEDNS01ProviderConfigs, getACMEDNS01ProviderConfig, updateACMEDNS01ProviderConfig, deleteACMEDNS01ProviderConfig, preflightACMEDNS01"
+                        "OpenAPI operationIds: listACMEDNS01Providers, createACMEDNS01ProviderConfig, listACMEDNS01ProviderConfigs, getACMEDNS01ProviderConfig, updateACMEDNS01ProviderConfig, deleteACMEDNS01ProviderConfig, preflightACMEDNS01, previewACMEDNS01Qualification, runACMEDNS01Qualification, listACMEDNS01QualificationRuns, retryACMEDNS01QualificationCleanup"
                     ],
                     "refs": [
                         "internal/api/api.go",
@@ -5866,6 +5884,7 @@
                         "acceptance_test: UI uses secret references, never raw provider token persistence in browser, and tests provider-error states.",
                         "TestServedACMEDNS01ProviderConfigAndPreflightTRACE003 drives the assembled handler through provider-config create/list, inline-secret rejection, DNS-01 preflight, and ACME DNS-01 audit-event assertions.",
                         "TestServedACMEDNS01OrderPublishesAndCleansUpThroughOutboxTRACE012 drives a stock ACME client through served dns-01 order-time publish, validation, cleanup, delivered outbox rows, audit events, and certificate finalization.",
+                        "TestServedACMEDNS01ProviderQualificationF69 proves effect-free review, real outbox-backed publish/verify/cleanup, byte-identical idempotent replay, sanitized durable history, terminal cleanup failure, and server-held cleanup recovery.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
                         "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
                     ],
@@ -5904,6 +5923,7 @@
                     ],
                     "refs": [
                         "internal/api/acme_dns01.go",
+                        "internal/api/acme_dns01_qualification.go",
                         "internal/server/acme_dns01_automation.go",
                         "internal/server/issuance.go",
                         "internal/projections/projections.go",
@@ -5947,7 +5967,7 @@
                 "purpose": "Lets an operator understand and safely use dns-01 challenge automation while tenant, policy, and security authority remain on the server.",
                 "tool": "certificates",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/protocols",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -5961,7 +5981,7 @@
                 ],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -5989,8 +6009,12 @@
                         ]
                     },
                     "execute": {
-                        "status": "missing",
-                        "reason": "No complete console execution path is proved for this capability."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/protocols/DNS01QualificationDialog.tsx",
+                            "internal/server/acme_dns01_qualification.go",
+                            "internal/server/protocols_served_test.go"
+                        ]
                     },
                     "observe": {
                         "status": "complete",
@@ -5999,8 +6023,12 @@
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/protocols/DNS01QualificationDialog.tsx",
+                            "internal/server/acme_dns01_qualification.go",
+                            "internal/server/protocols_served_test.go"
+                        ]
                     },
                     "verify": {
                         "status": "complete",
@@ -6018,6 +6046,10 @@
                             "OpenAPI operationId: updateACMEDNS01ProviderConfig",
                             "OpenAPI operationId: deleteACMEDNS01ProviderConfig",
                             "OpenAPI operationId: preflightACMEDNS01",
+                            "OpenAPI operationId: previewACMEDNS01Qualification",
+                            "OpenAPI operationId: runACMEDNS01Qualification",
+                            "OpenAPI operationId: listACMEDNS01QualificationRuns",
+                            "OpenAPI operationId: retryACMEDNS01QualificationCleanup",
                             "OpenAPI operationId: listACMEUpstreamAuthorizations",
                             "CLI command: acme dns-01 providers",
                             "CLI command: acme dns-01 provider-configs create",
@@ -6026,6 +6058,10 @@
                             "CLI command: acme dns-01 provider-configs get",
                             "CLI command: acme dns-01 provider-configs update",
                             "CLI command: acme dns-01 provider-configs delete",
+                            "CLI command: acme dns-01 provider-configs qualification preview",
+                            "CLI command: acme dns-01 provider-configs qualification run",
+                            "CLI command: acme dns-01 provider-configs qualification history",
+                            "CLI command: acme dns-01 qualification retry-cleanup",
                             "CLI command: acme dns-01 preflight"
                         ]
                     }

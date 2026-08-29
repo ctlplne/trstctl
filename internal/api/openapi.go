@@ -2695,6 +2695,43 @@ func componentSchemas() map[string]*Schema {
 		"checks":        {Type: "array", Items: ref("ACMEDNS01PreflightCheck")},
 		"failed_checks": {Type: "array", Items: str()},
 	}, "ready", "config_id", "domain", "record_name", "selected_method", "wildcard", "checks", "failed_checks")
+	acmeDNS01QualificationReq := object(map[string]*Schema{
+		"domain": str(),
+	}, "domain")
+	acmeDNS01QualificationCheck := object(map[string]*Schema{
+		"id": str(), "label": str(), "passed": {Type: "boolean"}, "detail": str(), "recovery": str(),
+	}, "id", "label", "passed", "detail", "recovery")
+	acmeDNS01QualificationPreview := object(map[string]*Schema{
+		"ready": {Type: "boolean"}, "effect_free": {Type: "boolean"},
+		"config_id": uuid(), "config_name": str(), "provider": str(), "domain": str(),
+		"record_name": str(), "wildcard": {Type: "boolean"},
+		"credential_reference_fields": {Type: "array", Items: str()},
+		"checks":                      {Type: "array", Items: ref("ACMEDNS01QualificationCheck")},
+		"blockers":                    {Type: "array", Items: str()},
+		"preview_writes":              {Type: "array", Items: str()},
+		"preview_external_effects":    {Type: "array", Items: str()},
+		"preview_signer_calls":        {Type: "array", Items: str()},
+		"execute_writes":              {Type: "array", Items: str()},
+		"execute_external_effects":    {Type: "array", Items: str()},
+		"execute_signer_calls":        {Type: "array", Items: str()},
+		"recovery_steps":              {Type: "array", Items: str()},
+		"least_privilege_checklist":   {Type: "array", Items: str()},
+		"secret_data_handling":        str(),
+	}, "ready", "effect_free", "config_id", "config_name", "provider", "domain", "record_name", "wildcard",
+		"credential_reference_fields", "checks", "blockers", "preview_writes", "preview_external_effects", "preview_signer_calls",
+		"execute_writes", "execute_external_effects", "execute_signer_calls", "recovery_steps", "least_privilege_checklist", "secret_data_handling")
+	acmeDNS01QualificationRun := object(map[string]*Schema{
+		"id": uuid(), "config_id": uuid(), "config_name": str(), "provider": str(), "domain": str(), "record_name": str(),
+		"status":             {Type: "string", Enum: []string{"running", "passed", "failed", "recovery_required"}},
+		"stage":              {Type: "string", Enum: []string{"review", "publish", "propagation", "cleanup", "complete"}},
+		"propagation_status": {Type: "string", Enum: []string{"not_run", "pending", "passed", "failed"}},
+		"cleanup_status":     {Type: "string", Enum: []string{"not_needed", "pending", "delivered", "failed"}},
+		"error_category":     str(), "attempts": {Type: "integer"}, "started_at": timestamp(), "completed_at": timestamp(),
+		"duration_ms": {Type: "integer"}, "recovery_steps": {Type: "array", Items: str()}, "secret_data_handling": str(),
+	}, "id", "config_id", "config_name", "provider", "domain", "record_name", "status", "stage", "propagation_status", "cleanup_status", "attempts", "started_at", "duration_ms", "recovery_steps", "secret_data_handling")
+	acmeDNS01QualificationRunList := object(map[string]*Schema{
+		"items": {Type: "array", Items: ref("ACMEDNS01QualificationRun")},
+	}, "items")
 	acmeARIWindow := object(map[string]*Schema{
 		"start": timestamp(),
 		"end":   timestamp(),
@@ -5615,6 +5652,11 @@ func componentSchemas() map[string]*Schema {
 		"ACMEDNS01PreflightRequest":                acmeDNS01PreflightReq,
 		"ACMEDNS01PreflightCheck":                  acmeDNS01PreflightCheck,
 		"ACMEDNS01Preflight":                       acmeDNS01Preflight,
+		"ACMEDNS01QualificationRequest":            acmeDNS01QualificationReq,
+		"ACMEDNS01QualificationCheck":              acmeDNS01QualificationCheck,
+		"ACMEDNS01QualificationPreview":            acmeDNS01QualificationPreview,
+		"ACMEDNS01QualificationRun":                acmeDNS01QualificationRun,
+		"ACMEDNS01QualificationRunList":            acmeDNS01QualificationRunList,
 		"ACMEARIWindow":                            acmeARIWindow,
 		"ACMEARIPostureSummary":                    acmeARIPostureSummary,
 		"ACMEARICertificatePosture":                acmeARICertificatePosture,

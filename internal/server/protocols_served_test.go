@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync"
@@ -348,7 +349,7 @@ func TestServedACMEDNS01ProviderConfigAndPreflightTRACE003(t *testing.T) {
 	rejectInlineSecret := map[string]any{
 		"name":     "bad-cloudflare",
 		"provider": "cloudflare",
-		"credential_refs": map[string]any{
+		"credential_refs": map[string]any{ // #nosec G101 -- opaque fake secret reference used only by the local test provider (CWE-798).
 			"api_token": "raw-token",
 		},
 	}
@@ -519,6 +520,168 @@ func TestServedACMEDNS01OrderPublishesAndCleansUpThroughOutboxTRACE012(t *testin
 	}
 	if !h.hasEvent(t, "acme.dns01.record.presented") || !h.hasEvent(t, "acme.dns01.record.cleaned") {
 		t.Fatal("served DNS-01 publish/cleanup did not append audit events")
+	}
+}
+
+// TestServedACMEDNS01ProviderQualificationF69 proves the missing operator slice
+// for F69 on the assembled control plane. Preview is effect-free; execution uses
+// the exact production provider, secret-reference, outbox, propagation, and
+// cleanup boundaries; history survives outside the request; and a terminal
+// cleanup failure can be retried without returning the TXT probe, credential
+// reference values, provider token, raw outbox payload, or raw worker error.
+func TestServedACMEDNS01ProviderQualificationF69(t *testing.T) {
+	dns := newServedDNSWebhookFixture(t, "dns-qualification-token")
+	validators := acmesrv.Validators{
+		HTTP01: acmesrv.HTTP01Validator{},
+		DNS01:  acmesrv.DNS01Validator{Resolver: dns},
+	}
+	h := newServedHarness(t,
+		config.Protocols{ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}},
+		withSecretsEnabled(t, nil),
+		func(d *Deps) { d.ACMEValidators = &validators },
+	)
+	registerServedTenant(t, h, "F69 DNS qualification tenant")
+	startServedOutboxPump(t, h.srv)
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write")
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok, map[string]any{
+		"name":  "dns/qualification/bearer-token",
+		"value": "dns-qualification-token",
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create DNS qualification bearer secret: status %d body %s", status, body)
+	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/acme/dns-01/provider-configs", tok, map[string]any{
+		"name":     "f69-webhook",
+		"provider": "webhook",
+		"zone":     "f69.test",
+		"credential_refs": map[string]any{ // #nosec G101 -- fabricated secret reference, never raw credential material (CWE-798)
+			"bearer_token_ref": "secret://dns/qualification/bearer-token",
+		},
+		"config":          map[string]any{"endpoint": dns.URL()},
+		"allowed_methods": []string{"dns-01"},
+		"allow_wildcards": true,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create DNS qualification provider config: status %d body %s", status, body)
+	}
+	var created struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &created); err != nil || created.ID == "" {
+		t.Fatalf("decode DNS qualification provider config: err=%v body=%s", err, body)
+	}
+
+	previewPath := "/api/v1/acme/dns-01/provider-configs/" + created.ID + "/qualification/preview"
+	beforeRows := servedOutboxRowsByDestination(t, h, "acme.dns01.")
+	status, body = secretsReq(t, h, http.MethodPost, previewPath, tok, map[string]any{"domain": "host.f69.test"})
+	if status != http.StatusOK {
+		t.Fatalf("preview DNS provider qualification: status %d body %s", status, body)
+	}
+	var preview struct {
+		Ready                  bool     `json:"ready"`
+		EffectFree             bool     `json:"effect_free"`
+		ConfigID               string   `json:"config_id"`
+		Provider               string   `json:"provider"`
+		Domain                 string   `json:"domain"`
+		RecordName             string   `json:"record_name"`
+		CredentialRefFields    []string `json:"credential_reference_fields"`
+		PreviewWrites          []string `json:"preview_writes"`
+		PreviewExternalEffects []string `json:"preview_external_effects"`
+		PreviewSignerCalls     []string `json:"preview_signer_calls"`
+		ExecuteExternalEffects []string `json:"execute_external_effects"`
+		RecoverySteps          []string `json:"recovery_steps"`
+		LeastPrivilege         []string `json:"least_privilege_checklist"`
+	}
+	if err := json.Unmarshal(body, &preview); err != nil {
+		t.Fatalf("decode DNS qualification preview: %v body=%s", err, body)
+	}
+	if !preview.Ready || !preview.EffectFree || preview.ConfigID != created.ID || preview.Provider != "webhook" ||
+		preview.Domain != "host.f69.test" || preview.RecordName != "_acme-challenge.host.f69.test" ||
+		len(preview.CredentialRefFields) != 1 || preview.CredentialRefFields[0] != "bearer_token_ref" ||
+		len(preview.PreviewWrites) != 0 || len(preview.PreviewExternalEffects) != 0 || len(preview.PreviewSignerCalls) != 0 ||
+		len(preview.ExecuteExternalEffects) < 2 || len(preview.RecoverySteps) == 0 || len(preview.LeastPrivilege) == 0 {
+		t.Fatalf("DNS qualification preview omitted exact effects/security/recovery facts: %+v", preview)
+	}
+	if afterRows := servedOutboxRowsByDestination(t, h, "acme.dns01."); !reflect.DeepEqual(afterRows, beforeRows) {
+		t.Fatalf("effect-free DNS qualification preview changed outbox: before=%#v after=%#v", beforeRows, afterRows)
+	}
+	for _, forbidden := range [][]byte{
+		[]byte("dns-qualification-token"),
+		[]byte("secret://dns/qualification/bearer-token"),
+		[]byte(dns.URL()),
+	} {
+		if bytes.Contains(body, forbidden) {
+			t.Fatalf("DNS qualification preview leaked secret/config value %q: %s", forbidden, body)
+		}
+	}
+
+	executePath := "/api/v1/acme/dns-01/provider-configs/" + created.ID + "/qualification-runs"
+	status, firstBody := secretsReqKey(t, h, http.MethodPost, executePath, tok, "f69-qualification-1", map[string]any{"domain": "host.f69.test"})
+	if status != http.StatusCreated {
+		t.Fatalf("execute DNS provider qualification: status %d body %s", status, firstBody)
+	}
+	var run struct {
+		ID                string   `json:"id"`
+		Status            string   `json:"status"`
+		Stage             string   `json:"stage"`
+		PropagationStatus string   `json:"propagation_status"`
+		CleanupStatus     string   `json:"cleanup_status"`
+		RecoverySteps     []string `json:"recovery_steps"`
+	}
+	if err := json.Unmarshal(firstBody, &run); err != nil {
+		t.Fatalf("decode DNS qualification run: %v body=%s", err, firstBody)
+	}
+	if run.ID == "" || run.Status != "passed" || run.Stage != "complete" || run.PropagationStatus != "passed" || run.CleanupStatus != "delivered" || len(run.RecoverySteps) == 0 {
+		t.Fatalf("DNS qualification run did not prove publish/propagate/cleanup: %+v", run)
+	}
+	status, replayBody := secretsReqKey(t, h, http.MethodPost, executePath, tok, "f69-qualification-1", map[string]any{"domain": "host.f69.test"})
+	if status != http.StatusCreated || !bytes.Equal(firstBody, replayBody) {
+		t.Fatalf("same-key DNS qualification replay changed response: first=%d %s replay=%d %s", http.StatusCreated, firstBody, status, replayBody)
+	}
+	rows := servedOutboxRowsByDestination(t, h, "acme.dns01.")
+	if rows["acme.dns01.present:delivered"] != 1 || rows["acme.dns01.cleanup:delivered"] != 1 {
+		t.Fatalf("same-key DNS qualification executed more than one publish/cleanup: %#v", rows)
+	}
+
+	historyPath := "/api/v1/acme/dns-01/provider-configs/" + created.ID + "/qualification-runs"
+	status, body = secretsReq(t, h, http.MethodGet, historyPath, tok, nil)
+	if status != http.StatusOK || !bytes.Contains(body, []byte(run.ID)) || !bytes.Contains(body, []byte(`"status":"passed"`)) {
+		t.Fatalf("DNS qualification history omitted completed run: status=%d body=%s", status, body)
+	}
+	for _, forbidden := range [][]byte{[]byte("dns-qualification-token"), []byte("secret://"), []byte(dns.URL())} {
+		if bytes.Contains(body, forbidden) {
+			t.Fatalf("DNS qualification history leaked secret/config value %q: %s", forbidden, body)
+		}
+	}
+
+	// Model a terminal worker failure after a publish may have succeeded. The
+	// recovery route must reuse the server-held cleanup payload, not ask the
+	// browser for the probe or credential again.
+	if err := h.store.WithTenant(context.Background(), h.tenant, func(tx pgx.Tx) error {
+		_, err := tx.Exec(context.Background(),
+			`UPDATE outbox
+			    SET status = 'failed', delivered_at = NULL,
+			        last_error = 'secret://must-not-leak provider cleanup diagnostic'
+			  WHERE tenant_id = $1
+			    AND destination = 'acme.dns01.cleanup'
+			    AND convert_from(payload, 'UTF8')::jsonb ->> 'qualification_id' = $2`,
+			h.tenant, run.ID)
+		return err
+	}); err != nil {
+		t.Fatalf("model terminal DNS qualification cleanup failure: %v", err)
+	}
+	status, body = secretsReq(t, h, http.MethodGet, historyPath, tok, nil)
+	if status != http.StatusOK || !bytes.Contains(body, []byte(`"status":"recovery_required"`)) || bytes.Contains(body, []byte("must-not-leak")) {
+		t.Fatalf("DNS qualification history did not sanitize/reveal cleanup recovery state: status=%d body=%s", status, body)
+	}
+	retryPath := "/api/v1/acme/dns-01/qualification-runs/" + run.ID + "/retry-cleanup"
+	status, body = secretsReqKey(t, h, http.MethodPost, retryPath, tok, "f69-cleanup-retry-1", nil)
+	if status != http.StatusOK || !bytes.Contains(body, []byte(`"cleanup_status":"delivered"`)) || !bytes.Contains(body, []byte(`"status":"passed"`)) {
+		t.Fatalf("retry DNS qualification cleanup: status=%d body=%s", status, body)
+	}
+	if bytes.Contains(body, []byte("must-not-leak")) || bytes.Contains(body, []byte("secret://")) || bytes.Contains(body, []byte("dns-qualification-token")) {
+		t.Fatalf("DNS qualification cleanup recovery leaked sensitive data: %s", body)
 	}
 }
 

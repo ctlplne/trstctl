@@ -45,6 +45,10 @@ import type {
   IssuerCapabilityMatrix,
   ACMEDNS01Preflight,
   ACMEDNS01PreflightRequest,
+  ACMEDNS01QualificationPreview,
+  ACMEDNS01QualificationRequest,
+  ACMEDNS01QualificationRun,
+  ACMEDNS01QualificationRunList,
   ACMEDNS01ProviderCatalog,
   ACMEDNS01ProviderCatalogItem,
   ACMEDNS01ProviderConfig,
@@ -531,6 +535,13 @@ export type { IssuanceRequestList, IssuanceRequest, IssuanceRequestInput, Issuan
 export type { TicketIntakeSchedule } from "./api-types.gen";
 export type { MDMDeviceList, MDMDevice, MDMDeviceTrace, MDMPollScheduleList } from "./api-types.gen";
 export type { AgentUpgradeCampaign } from "./api-types.gen";
+export type {
+  ACMEDNS01QualificationCheck,
+  ACMEDNS01QualificationPreview,
+  ACMEDNS01QualificationRequest,
+  ACMEDNS01QualificationRun,
+  ACMEDNS01QualificationRunList,
+} from "./api-types.gen";
 export type { OutboxReconciliationConflict, OutboxReconciliationConflictList } from "./api-types.gen";
 export type {
   CapabilityView,
@@ -2142,9 +2153,14 @@ export interface Api {
   pamSession(id: string): Promise<PAMSession>;
   openPAMSession(input: PAMSessionRequest): Promise<PAMSession>;
   acmeDNS01ProviderConfig(id: string): Promise<ACMEDNS01ProviderConfig>;
+  createACMEDNS01ProviderConfig(input: ACMEDNS01ProviderConfigRequest): Promise<ACMEDNS01ProviderConfig>;
   updateACMEDNS01ProviderConfig(id: string, input: ACMEDNS01ProviderConfigRequest): Promise<ACMEDNS01ProviderConfig>;
   deleteACMEDNS01ProviderConfig(id: string): Promise<void>;
   acmeDNS01Preflight(input: ACMEDNS01PreflightRequest): Promise<ACMEDNS01Preflight>;
+  previewACMEDNS01Qualification(id: string, input: ACMEDNS01QualificationRequest): Promise<ACMEDNS01QualificationPreview>;
+  runACMEDNS01Qualification(id: string, input: ACMEDNS01QualificationRequest): Promise<ACMEDNS01QualificationRun>;
+  acmeDNS01QualificationRuns(id: string): Promise<ACMEDNS01QualificationRunList>;
+  retryACMEDNS01QualificationCleanup(id: string): Promise<ACMEDNS01QualificationRun>;
   revokeAgentCert(id: string, input: AgentCertRevocationRequest): Promise<AgentCertRevocation>;
   caCeremony(id: string): Promise<CAKeyCeremony>;
   caAuthorities(): Promise<CAAuthorityList>;
@@ -2667,9 +2683,17 @@ const liveApi: Api = {
   pamSession: (id) => req<PAMSession>(`/api/v1/access/sessions/${encodeURIComponent(id)}`),
   openPAMSession: (input) => mutate<PAMSession>("POST", "/api/v1/access/sessions", input),
   acmeDNS01ProviderConfig: (id) => req<ACMEDNS01ProviderConfig>(`/api/v1/acme/dns-01/provider-configs/${encodeURIComponent(id)}`),
+  createACMEDNS01ProviderConfig: (input) => mutate<ACMEDNS01ProviderConfig>("POST", "/api/v1/acme/dns-01/provider-configs", input),
   updateACMEDNS01ProviderConfig: (id, input) => mutate<ACMEDNS01ProviderConfig>("PUT", `/api/v1/acme/dns-01/provider-configs/${encodeURIComponent(id)}`, input),
   deleteACMEDNS01ProviderConfig: (id) => mutate<void>("DELETE", `/api/v1/acme/dns-01/provider-configs/${encodeURIComponent(id)}`),
   acmeDNS01Preflight: (input) => mutate<ACMEDNS01Preflight>("POST", "/api/v1/acme/dns-01/preflight", input),
+  previewACMEDNS01Qualification: (id, input) =>
+    postRead<ACMEDNS01QualificationPreview>(`/api/v1/acme/dns-01/provider-configs/${encodeURIComponent(id)}/qualification/preview`, input),
+  runACMEDNS01Qualification: (id, input) =>
+    mutate<ACMEDNS01QualificationRun>("POST", `/api/v1/acme/dns-01/provider-configs/${encodeURIComponent(id)}/qualification-runs`, input),
+  acmeDNS01QualificationRuns: (id) => req<ACMEDNS01QualificationRunList>(`/api/v1/acme/dns-01/provider-configs/${encodeURIComponent(id)}/qualification-runs`),
+  retryACMEDNS01QualificationCleanup: (id) =>
+    mutate<ACMEDNS01QualificationRun>("POST", `/api/v1/acme/dns-01/qualification-runs/${encodeURIComponent(id)}/retry-cleanup`),
   revokeAgentCert: (id, input) => mutate<AgentCertRevocation>("POST", `/api/v1/agents/${encodeURIComponent(id)}/cert-revocations`, input),
   caCeremony: (id) => req<CAKeyCeremony>(`/api/v1/ca/ceremonies/${encodeURIComponent(id)}`),
   caAuthorities: () => req<CAAuthorityList>("/api/v1/ca/authorities"),

@@ -145,6 +145,7 @@ type API struct {
 	serviceNowBindings                 []ServiceNowBinding
 	outboundEnvCredentialRefs          map[string]struct{}
 	acmeDNS01Providers                 []ACMEDNS01ProviderCatalogItem
+	acmeDNS01Qualification             ACMEDNS01QualificationService
 	acmeCAAResolver                    acmesrv.CAAResolver
 	acmeARIPosture                     ACMEARIPostureProvider
 	acmeEAB                            ACMEEABProvider
@@ -250,6 +251,7 @@ type config struct {
 	serviceNowBindings          []ServiceNowBinding
 	outboundEnvCredentialRefs   map[string]struct{}
 	acmeDNS01Providers          []ACMEDNS01ProviderCatalogItem
+	acmeDNS01Qualification      ACMEDNS01QualificationService
 	acmeCAAResolver             acmesrv.CAAResolver
 	acmeARIPosture              ACMEARIPostureProvider
 	acmeEAB                     ACMEEABProvider
@@ -539,6 +541,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		serviceNowBindings:          append([]ServiceNowBinding(nil), cfg.serviceNowBindings...),
 		outboundEnvCredentialRefs:   copyStringSet(cfg.outboundEnvCredentialRefs),
 		acmeDNS01Providers:          append([]ACMEDNS01ProviderCatalogItem(nil), cfg.acmeDNS01Providers...),
+		acmeDNS01Qualification:      cfg.acmeDNS01Qualification,
 		acmeCAAResolver:             cfg.acmeCAAResolver,
 		acmeARIPosture:              cfg.acmeARIPosture,
 		acmeEAB:                     cfg.acmeEAB,

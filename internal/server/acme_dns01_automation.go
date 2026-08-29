@@ -51,27 +51,36 @@ type servedACMEDNS01Automation struct {
 
 	cnameResolver acme.CNAMEResolver
 	caaResolver   acme.CAAResolver
+	txtResolvers  []acme.Resolver
 }
 
 type acmeDNS01OutboxPayload struct {
-	ConfigID         string          `json:"config_id"`
-	Provider         string          `json:"provider"`
-	Domain           string          `json:"domain"`
-	Zone             string          `json:"zone,omitempty"`
-	ChallengeDomain  string          `json:"challenge_domain,omitempty"`
-	DelegationTarget string          `json:"delegation_target,omitempty"`
-	RecordName       string          `json:"record_name"`
-	Value            string          `json:"value"`
-	CredentialRefs   json.RawMessage `json:"credential_refs,omitempty"`
-	Config           json.RawMessage `json:"config,omitempty"`
+	ConfigID            string          `json:"config_id"`
+	ConfigName          string          `json:"config_name,omitempty"`
+	Provider            string          `json:"provider"`
+	Domain              string          `json:"domain"`
+	Zone                string          `json:"zone,omitempty"`
+	ChallengeDomain     string          `json:"challenge_domain,omitempty"`
+	DelegationTarget    string          `json:"delegation_target,omitempty"`
+	RecordName          string          `json:"record_name"`
+	Value               string          `json:"value"`
+	CredentialRefs      json.RawMessage `json:"credential_refs,omitempty"`
+	Config              json.RawMessage `json:"config,omitempty"`
+	QualificationID     string          `json:"qualification_id,omitempty"`
+	QualificationStatus string          `json:"qualification_status,omitempty"`
+	PropagationStatus   string          `json:"propagation_status,omitempty"`
+	FailureStage        string          `json:"failure_stage,omitempty"`
+	ErrorCategory       string          `json:"error_category,omitempty"`
+	RecoveryOf          string          `json:"recovery_of,omitempty"`
 }
 
 type acmeDNS01RecordEvent struct {
-	ConfigID   string `json:"config_id"`
-	Provider   string `json:"provider"`
-	Domain     string `json:"domain"`
-	RecordName string `json:"record_name"`
-	OutboxID   int64  `json:"outbox_id"`
+	ConfigID        string `json:"config_id"`
+	Provider        string `json:"provider"`
+	Domain          string `json:"domain"`
+	RecordName      string `json:"record_name"`
+	OutboxID        int64  `json:"outbox_id"`
+	QualificationID string `json:"qualification_id,omitempty"`
 }
 
 func newServedACMEDNS01Automation(st *store.Store, log *events.Log, outbox *orchestrator.Outbox, kek sealKeyWrapper, plugins *PluginManager, tenantCrypto ...tenantseal.Access) *servedACMEDNS01Automation {
@@ -323,9 +332,14 @@ func (a *servedACMEDNS01Automation) enforceLiveCAA(ctx context.Context, domain s
 }
 
 func (a *servedACMEDNS01Automation) enqueueAndWait(ctx context.Context, tenantID, destination, idempotencyKey string, payload acmeDNS01OutboxPayload) error {
+	_, err := a.enqueueAndWaitRecord(ctx, tenantID, destination, idempotencyKey, payload)
+	return err
+}
+
+func (a *servedACMEDNS01Automation) enqueueAndWaitRecord(ctx context.Context, tenantID, destination, idempotencyKey string, payload acmeDNS01OutboxPayload) (orchestrator.Record, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return err
+		return orchestrator.Record{}, err
 	}
 	if err := a.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		_, err := a.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
@@ -333,12 +347,12 @@ func (a *servedACMEDNS01Automation) enqueueAndWait(ctx context.Context, tenantID
 		})
 		return err
 	}); err != nil {
-		return err
+		return orchestrator.Record{}, err
 	}
-	return a.waitOutboxDelivered(ctx, tenantID, destination, idempotencyKey)
+	return a.waitOutboxDeliveredRecord(ctx, tenantID, destination, idempotencyKey)
 }
 
-func (a *servedACMEDNS01Automation) waitOutboxDelivered(ctx context.Context, tenantID, destination, idempotencyKey string) error {
+func (a *servedACMEDNS01Automation) waitOutboxDeliveredRecord(ctx context.Context, tenantID, destination, idempotencyKey string) (orchestrator.Record, error) {
 	waitCtx := ctx
 	cancel := func() {}
 	if _, ok := ctx.Deadline(); !ok {
@@ -351,22 +365,22 @@ func (a *servedACMEDNS01Automation) waitOutboxDelivered(ctx context.Context, ten
 	for {
 		rec, ok, err := a.outboxRecord(waitCtx, tenantID, destination, idempotencyKey)
 		if err != nil {
-			return err
+			return rec, err
 		}
 		if ok {
 			switch rec.Status {
 			case "delivered":
-				return nil
+				return rec, nil
 			case "failed":
 				if rec.LastError != "" {
-					return errors.New(rec.LastError)
+					return rec, errors.New(rec.LastError)
 				}
-				return errors.New("outbox delivery failed")
+				return rec, errors.New("outbox delivery failed")
 			}
 		}
 		select {
 		case <-waitCtx.Done():
-			return fmt.Errorf("outbox delivery timed out: %w", waitCtx.Err())
+			return rec, fmt.Errorf("outbox delivery timed out: %w", waitCtx.Err())
 		case <-ticker.C:
 		}
 	}
@@ -910,7 +924,7 @@ func (a *servedACMEDNS01Automation) secretRefString(ctx context.Context, tenantI
 func (a *servedACMEDNS01Automation) appendRecordEvent(ctx context.Context, m orchestrator.Message, payload acmeDNS01OutboxPayload, eventType string) error {
 	body, err := json.Marshal(acmeDNS01RecordEvent{
 		ConfigID: payload.ConfigID, Provider: payload.Provider, Domain: payload.Domain,
-		RecordName: payload.RecordName, OutboxID: m.ID,
+		RecordName: payload.RecordName, OutboxID: m.ID, QualificationID: payload.QualificationID,
 	})
 	if err != nil {
 		return err

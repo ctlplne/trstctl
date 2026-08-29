@@ -1300,8 +1300,12 @@ describe("i18n boundary", () => {
       // F43 live-browser polish re-pin: the SSH readiness line now uses
       // label-first counts so zero and one cannot produce broken grammar.
       // Machine-authored es/de translations — FLAG FOR HUMAN REVIEW.
-      "es-ES": "e15a4f135526c9c7abe63b9ea69886d29c6d2f5463310ac3b8c5aab216688ad6",
-      "de-DE": "a0c452bf315ba4a42b4fb4ef60e49e903aa67256956118ce854992d5719a2e7b",
+      // F69 provider-qualification re-pin: the add, effect-free review, real
+      // publish/verify/cleanup, sanitized history, and cleanup-retry journey is
+      // translated without translating protocol identifiers or the example
+      // DNS name. Machine-authored es/de — FLAG FOR HUMAN REVIEW.
+      "es-ES": "57cf87cbbea153a4db3decad9c45d9cb11f6c5d91d612a0928ad29785e970965",
+      "de-DE": "b96f46b6b1cd7c1e3ebca5fb65eb268e75f999280de7361ea45cceb86340ccff",
     });
   });
 

@@ -59,6 +59,10 @@ func TestACMEDNS01ProviderConfigCommandsExist(t *testing.T) {
 		"acme dns-01 provider-configs get",
 		"acme dns-01 provider-configs update",
 		"acme dns-01 provider-configs delete",
+		"acme dns-01 provider-configs qualification preview",
+		"acme dns-01 provider-configs qualification run",
+		"acme dns-01 provider-configs qualification history",
+		"acme dns-01 qualification retry-cleanup",
 		"acme dns-01 preflight",
 	} {
 		if !commands[command] {
@@ -232,9 +236,11 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// F52's effect-free CBOM review command raises it to 410.
 	// F24's effect-free SPIFFE Workload API qualification raises it to 411.
 	// F25's exact, effect-free JIT credential preview raises it to 412.
-	// F43's SSH certificate preview and issue commands raise it to 414.
-	if len(out) != 414 {
-		t.Fatalf("CLI commands = %d, want 414", len(out))
+	// F43's SSH certificate preview and issue commands raise it to 414. F69's
+	// effect-free provider review, real probe, sanitized history, and bounded
+	// cleanup recovery commands raise it to 418.
+	if len(out) != 418 {
+		t.Fatalf("CLI commands = %d, want 418", len(out))
 	}
 	return out
 }

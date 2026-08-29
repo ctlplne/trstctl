@@ -334,6 +334,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/acme/dns-01/provider-configs/{id}/qualification-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List sanitized durable DNS-01 provider-test history */
+        get: operations["listACMEDNS01QualificationRuns"];
+        put?: never;
+        /** Publish, verify, and clean up a server-generated DNS-01 provider probe through the production outbox */
+        post: operations["runACMEDNS01Qualification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/acme/dns-01/provider-configs/{id}/qualification/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review an exact DNS-01 provider test without writes, outside calls, probe generation, or signer calls */
+        post: operations["previewACMEDNS01Qualification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/acme/dns-01/providers": {
         parameters: {
             query?: never;
@@ -345,6 +380,23 @@ export interface paths {
         get: operations["listACMEDNS01Providers"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/acme/dns-01/qualification-runs/{run_id}/retry-cleanup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry removal of a qualification TXT probe using server-held recovery authority */
+        post: operations["retryACMEDNS01QualificationCleanup"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6049,6 +6101,69 @@ export interface components {
             name: string;
             provider: string;
             zone?: string;
+        };
+        ACMEDNS01QualificationCheck: {
+            detail: string;
+            id: string;
+            label: string;
+            passed: boolean;
+            recovery: string;
+        };
+        ACMEDNS01QualificationPreview: {
+            blockers: string[];
+            checks: components["schemas"]["ACMEDNS01QualificationCheck"][];
+            /** Format: uuid */
+            config_id: string;
+            config_name: string;
+            credential_reference_fields: string[];
+            domain: string;
+            effect_free: boolean;
+            execute_external_effects: string[];
+            execute_signer_calls: string[];
+            execute_writes: string[];
+            least_privilege_checklist: string[];
+            preview_external_effects: string[];
+            preview_signer_calls: string[];
+            preview_writes: string[];
+            provider: string;
+            ready: boolean;
+            record_name: string;
+            recovery_steps: string[];
+            secret_data_handling: string;
+            wildcard: boolean;
+        };
+        ACMEDNS01QualificationRequest: {
+            domain: string;
+        };
+        ACMEDNS01QualificationRun: {
+            attempts: number;
+            /** @enum {string} */
+            cleanup_status: "not_needed" | "pending" | "delivered" | "failed";
+            /** Format: date-time */
+            completed_at?: string;
+            /** Format: uuid */
+            config_id: string;
+            config_name: string;
+            domain: string;
+            duration_ms: number;
+            error_category?: string;
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            propagation_status: "not_run" | "pending" | "passed" | "failed";
+            provider: string;
+            record_name: string;
+            recovery_steps: string[];
+            secret_data_handling: string;
+            /** @enum {string} */
+            stage: "review" | "publish" | "propagation" | "cleanup" | "complete";
+            /** Format: date-time */
+            started_at: string;
+            /** @enum {string} */
+            status: "running" | "passed" | "failed" | "recovery_required";
+        };
+        ACMEDNS01QualificationRunList: {
+            items: components["schemas"]["ACMEDNS01QualificationRun"][];
         };
         ACMEDeviceAttestationPolicy: {
             allowed_algorithms?: number[];
@@ -14355,6 +14470,137 @@ export interface operations {
             };
         };
     };
+    listACMEDNS01QualificationRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ACMEDNS01QualificationRunList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    runACMEDNS01Qualification: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ACMEDNS01QualificationRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ACMEDNS01QualificationRun"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewACMEDNS01Qualification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ACMEDNS01QualificationRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ACMEDNS01QualificationPreview"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     listACMEDNS01Providers: {
         parameters: {
             query?: never;
@@ -14371,6 +14617,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ACMEDNS01ProviderCatalog"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    retryACMEDNS01QualificationCleanup: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ACMEDNS01QualificationRun"];
                 };
             };
             /** @description client error */

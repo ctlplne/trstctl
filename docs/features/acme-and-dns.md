@@ -136,11 +136,14 @@ single isolated cryptography path, so the publish side and verify side can never
 
 Two reliability features matter in practice. A **propagation checker** polls every
 configured resolver until they all see the record (or a budget expires), because DNS is
-eventually-consistent and a too-early check fails spuriously. And a **preflight** can
-publish a throwaway probe at onboarding to prove the whole DNS-01 path works — so a
-broken provider credential surfaces during setup, not during a 3 a.m. renewal. The
-validator **fails closed**: a lookup error, missing record, or mismatch is a failure,
-never a pass.
+eventually-consistent and a too-early check fails spuriously. The **preflight** checks
+policy and currently observed DNS without publishing a TXT record; it does contact DNS
+and records a sanitized audit event. The separate, effect-free **qualification review**
+names what a test would change. The confirmed **provider qualification** then publishes
+a server-generated throwaway probe during
+onboarding, verifies it through the same resolver used by served ACME, and removes it.
+That proves the real provider path before a 3 a.m. renewal. The validator **fails
+closed**: a lookup error, missing record, or mismatch is a failure, never a pass.
 
 The served control plane has a tenant-scoped DNS-01 provider-config API:
 `POST/GET/PUT/DELETE /api/v1/acme/dns-01/provider-configs` stores provider metadata,
@@ -150,6 +153,37 @@ zone/delegation policy, CAA issuer policy, allowed methods, wildcard policy, and
 live CAA, method policy, and wildcard policy against one of those configs and records an
 `acme.dns01.preflighted` event. The matching CLI commands are
 `trstctl acme dns-01 provider-configs ...` and `trstctl acme dns-01 preflight`.
+
+The Protocols page also provides a review-before-run provider test:
+
+1. **Review test** calls
+   `POST /api/v1/acme/dns-01/provider-configs/{id}/qualification/preview`. It performs
+   no write, generates no probe, calls no signer, and contacts no provider. It names
+   the exact record, readiness checks, external effects, least-privilege checklist,
+   and recovery plan.
+2. **Publish, verify, and clean up** calls
+   `POST /api/v1/acme/dns-01/provider-configs/{id}/qualification-runs`. The server
+   creates the TXT probe, sends publish and cleanup through the production outbox and
+   provider implementation, and verifies propagation through the served ACME
+   resolver. Reusing the same idempotency key returns the original result rather than
+   publishing twice.
+3. **History** calls `GET` on that same `qualification-runs` path. The response is
+   rebuilt from tenant-filtered outbox evidence and contains only the provider,
+   domain, safe stage/status, timestamps, attempt count, and recovery instructions.
+4. **Retry cleanup** calls
+   `POST /api/v1/acme/dns-01/qualification-runs/{run_id}/retry-cleanup`. The server
+   recovers the original cleanup request from tenant-scoped storage and never asks the
+   browser or CLI to resend it.
+
+Headless operators have identical commands:
+`trstctl acme dns-01 provider-configs qualification preview <id> -f request.json`,
+`... qualification run`, `... qualification history`, and
+`trstctl acme dns-01 qualification retry-cleanup <run-id>`. The request file contains
+only `{"domain":"example.com"}`. Qualification responses never return provider
+tokens, secret-reference values, raw provider configuration, the TXT probe,
+idempotency keys, raw outbox payloads, or raw worker errors. Cleanup uses an independent
+bounded context, so a disconnected browser does not abandon the DNS record. If cleanup
+still fails, the run stays visibly recoverable instead of being reported as green.
 
 On an actual served ACME DNS-01 order, accepting the `dns-01` challenge resolves the
 tenant's matching provider config, enqueues `acme.dns01.present` and

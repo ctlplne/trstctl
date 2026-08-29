@@ -2031,7 +2031,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use dns-01 challenge automation while tenant, policy, and security authority remain on the server.",
       "tool": "certificates",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/protocols",
       "navigationEntrypoints": [
         "tool navigation",
@@ -2045,7 +2045,7 @@ export const canonicalCapabilities = [
       ],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -2073,8 +2073,12 @@ export const canonicalCapabilities = [
           ]
         },
         "execute": {
-          "status": "missing",
-          "reason": "No complete console execution path is proved for this capability."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/protocols/DNS01QualificationDialog.tsx",
+            "internal/server/acme_dns01_qualification.go",
+            "internal/server/protocols_served_test.go"
+          ]
         },
         "observe": {
           "status": "complete",
@@ -2083,8 +2087,12 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/protocols/DNS01QualificationDialog.tsx",
+            "internal/server/acme_dns01_qualification.go",
+            "internal/server/protocols_served_test.go"
+          ]
         },
         "verify": {
           "status": "complete",
@@ -2102,6 +2110,10 @@ export const canonicalCapabilities = [
             "OpenAPI operationId: updateACMEDNS01ProviderConfig",
             "OpenAPI operationId: deleteACMEDNS01ProviderConfig",
             "OpenAPI operationId: preflightACMEDNS01",
+            "OpenAPI operationId: previewACMEDNS01Qualification",
+            "OpenAPI operationId: runACMEDNS01Qualification",
+            "OpenAPI operationId: listACMEDNS01QualificationRuns",
+            "OpenAPI operationId: retryACMEDNS01QualificationCleanup",
             "OpenAPI operationId: listACMEUpstreamAuthorizations",
             "CLI command: acme dns-01 providers",
             "CLI command: acme dns-01 provider-configs create",
@@ -2110,6 +2122,10 @@ export const canonicalCapabilities = [
             "CLI command: acme dns-01 provider-configs get",
             "CLI command: acme dns-01 provider-configs update",
             "CLI command: acme dns-01 provider-configs delete",
+            "CLI command: acme dns-01 provider-configs qualification preview",
+            "CLI command: acme dns-01 provider-configs qualification run",
+            "CLI command: acme dns-01 provider-configs qualification history",
+            "CLI command: acme dns-01 qualification retry-cleanup",
             "CLI command: acme dns-01 preflight"
           ]
         }
