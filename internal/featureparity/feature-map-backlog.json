@@ -675,8 +675,8 @@
                 },
                 "owner": "discovery",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "eb40c95d82f3e04ea78cfbaecdb3a48c0bc67378",
-                "freshness": "2026-08-29"
+                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
+                "freshness": "2026-08-25"
             }
         },
         {
@@ -6068,8 +6068,8 @@
                 },
                 "owner": "pki",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "dbef6eafbb684c702ef02656bde8e9cf4b30b68b",
+                "freshness": "2026-08-29"
             }
         },
         {

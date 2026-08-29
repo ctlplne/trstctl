@@ -260,8 +260,8 @@ export const canonicalCapabilities = [
       },
       "owner": "discovery",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "eb40c95d82f3e04ea78cfbaecdb3a48c0bc67378",
-      "freshness": "2026-08-29"
+      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
+      "freshness": "2026-08-25"
     }
   },
   {
@@ -2132,8 +2132,8 @@ export const canonicalCapabilities = [
       },
       "owner": "pki",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "dbef6eafbb684c702ef02656bde8e9cf4b30b68b",
+      "freshness": "2026-08-29"
     }
   },
   {
