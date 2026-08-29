@@ -13496,6 +13496,61 @@ export const messages = {
     defaultMessage: "None",
     description: "Empty exact-effect list.",
   },
+  "protocols.dns01.delegation.label": {
+    defaultMessage: "CNAME validation isolation",
+    description: "Accessible label for the DNS-01 CNAME isolation proof panel.",
+  },
+  "protocols.dns01.delegation.directTitle": {
+    defaultMessage: "This provider writes directly to the production DNS name",
+    description: "Warning heading for a DNS-01 config without CNAME isolation.",
+  },
+  "protocols.dns01.delegation.directHelp": {
+    defaultMessage:
+      "To isolate future validation writes, edit this config with a validation-zone target and create a CNAME from each production challenge name to that target.",
+    description: "Safe next step for a direct production-zone DNS-01 config.",
+  },
+  "protocols.dns01.delegation.pendingTitle": {
+    defaultMessage: "CNAME guard configured; live proof pending",
+    description: "Configured-but-not-executed CNAME isolation state.",
+  },
+  "protocols.dns01.delegation.notProvedTitle": {
+    defaultMessage: "CNAME isolation is not proved",
+    description: "CNAME isolation state after a provider test did not pass.",
+  },
+  "protocols.dns01.delegation.provedTitle": {
+    defaultMessage: "CNAME isolation proved by this live test",
+    description: "CNAME isolation state after the served provider test passes.",
+  },
+  "protocols.dns01.delegation.guardHelp": {
+    defaultMessage:
+      "At execution time, trstctl resolves the production challenge name and requires this exact CNAME before it lets the provider write in the isolated validation zone.",
+    description: "ELI5 explanation of the server-enforced CNAME delegation guard.",
+  },
+  "protocols.dns01.delegation.productionName": {
+    defaultMessage: "Production challenge name",
+    description: "Label for the public ACME challenge record in the isolation flow.",
+  },
+  "protocols.dns01.delegation.requiredCNAME": {
+    defaultMessage: "Must resolve by CNAME to",
+    description: "Label for the required CNAME target in the isolation flow.",
+  },
+  "protocols.dns01.delegation.providerWriteTarget": {
+    defaultMessage: "Provider writes only here",
+    description: "Label for the isolated provider write target.",
+  },
+  "protocols.dns01.delegation.changeTitle": {
+    defaultMessage: "One-time production DNS change",
+    description: "Heading for the exact CNAME instruction.",
+  },
+  "protocols.dns01.delegation.changeInstruction": {
+    defaultMessage: "Create {record} CNAME {target}.",
+    description: "Exact per-domain CNAME setup instruction.",
+  },
+  "protocols.dns01.delegation.failClosed": {
+    defaultMessage:
+      "Missing or mismatched CNAME: trstctl stops before the provider write. A green result means the live guard, publish, DNS visibility check, and cleanup all passed.",
+    description: "Fail-closed and proof semantics for CNAME isolation.",
+  },
   "protocols.dns01.providerTrust.label": {
     defaultMessage: "Provider trust and runtime admission",
     description: "Accessible label for DNS provider trust facts.",

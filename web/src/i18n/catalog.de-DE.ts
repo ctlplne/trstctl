@@ -4142,6 +4142,22 @@ const deDECatalog = {
   "protocols.dns01.qualification.historyEmpty": "Für diese Konfiguration wurde noch kein Anbietertest aufgezeichnet.",
   "protocols.dns01.qualification.historySummary": "DNS-Sichtbarkeit: {propagation} · Bereinigung: {cleanup}",
   "protocols.dns01.qualification.none": "Keine",
+  "protocols.dns01.delegation.label": "CNAME-Isolierung der Validierung",
+  "protocols.dns01.delegation.directTitle": "Dieser Anbieter schreibt direkt an den Produktions-DNS-Namen",
+  "protocols.dns01.delegation.directHelp":
+    "Um künftige Validierungsschreibvorgänge zu isolieren, ergänzen Sie in dieser Konfiguration ein Validierungszonenziel und erstellen für jeden Produktions-Challenge-Namen einen CNAME zu diesem Ziel.",
+  "protocols.dns01.delegation.pendingTitle": "CNAME-Schutz konfiguriert; Live-Nachweis steht aus",
+  "protocols.dns01.delegation.notProvedTitle": "CNAME-Isolierung ist nicht nachgewiesen",
+  "protocols.dns01.delegation.provedTitle": "CNAME-Isolierung durch diesen Live-Test nachgewiesen",
+  "protocols.dns01.delegation.guardHelp":
+    "Bei der Ausführung löst trstctl den Produktions-Challenge-Namen auf und verlangt genau diesen CNAME, bevor der Anbieter in die isolierte Validierungszone schreiben darf.",
+  "protocols.dns01.delegation.productionName": "Produktions-Challenge-Name",
+  "protocols.dns01.delegation.requiredCNAME": "Muss per CNAME zeigen auf",
+  "protocols.dns01.delegation.providerWriteTarget": "Anbieter schreibt nur hier",
+  "protocols.dns01.delegation.changeTitle": "Einmalige Produktions-DNS-Änderung",
+  "protocols.dns01.delegation.changeInstruction": "Erstellen Sie {record} CNAME {target}.",
+  "protocols.dns01.delegation.failClosed":
+    "Fehlender oder abweichender CNAME: trstctl stoppt vor dem Anbieterschreibvorgang. Ein grünes Ergebnis bedeutet, dass Live-Schutz, Veröffentlichung, DNS-Sichtbarkeit und Bereinigung bestanden wurden.",
   "protocols.dns01.providerTrust.label": "Vertrauen und Laufzeitzulassung des Anbieters",
   "protocols.dns01.providerTrust.verifiedPlugin": "Verifiziertes signiertes Plugin",
   "protocols.dns01.providerTrust.builtInProvider": "In diesen trstctl-Build integriert",

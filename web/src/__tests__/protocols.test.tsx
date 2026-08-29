@@ -1667,6 +1667,105 @@ describe("protocol surface", () => {
     expect(apiMock.retryACMEDNS01QualificationCleanup).toHaveBeenCalledWith(recoveryRequired.id);
   });
 
+  it("shows and proves the exact fail-closed CNAME isolation path for a delegated provider", async () => {
+    const user = userEvent.setup();
+    const configId = "01900000-0000-7000-8000-000000000071";
+    const target = "tenant-123.auth.acme-dns.example.net";
+    const recordName = "_acme-challenge.api.example.test";
+    apiMock.acmeDNS01ProviderConfigs.mockResolvedValue({
+      items: [
+        {
+          id: configId,
+          tenant_id: "11111111-1111-1111-1111-111111111111",
+          name: "isolated-validation-zone",
+          provider: "webhook",
+          zone: "example.test",
+          delegation_target: target,
+          credential_refs: { bearer_token_ref: "secret://dns/isolated/bearer-token" },
+          config: { endpoint: "https://dns-provider.invalid" },
+          allowed_methods: ["dns-01"],
+          allow_wildcards: false,
+          secret_handling: "credential_refs_only",
+          created_at: "2026-08-29T18:00:00Z",
+          updated_at: "2026-08-29T18:00:00Z",
+        },
+      ],
+    });
+    const preview = {
+      ready: true,
+      effect_free: true,
+      config_id: configId,
+      config_name: "isolated-validation-zone",
+      provider: "webhook",
+      domain: "api.example.test",
+      record_name: recordName,
+      wildcard: false,
+      credential_reference_fields: ["bearer_token_ref"],
+      checks: [],
+      blockers: [],
+      preview_writes: [],
+      preview_external_effects: [],
+      preview_signer_calls: [],
+      execute_writes: ["Record immutable qualification evidence."],
+      execute_external_effects: ["Publish and remove one server-generated probe."],
+      execute_signer_calls: [],
+      recovery_steps: ["Repair the CNAME and run the test again."],
+      least_privilege_checklist: ["Grant TXT access only in the isolated validation zone."],
+      secret_data_handling: "No secret values leave the server.",
+    };
+    const failed = {
+      id: "01900000-0000-7000-8000-000000000171",
+      config_id: configId,
+      config_name: preview.config_name,
+      provider: preview.provider,
+      domain: preview.domain,
+      record_name: recordName,
+      status: "failed",
+      stage: "publish",
+      propagation_status: "not_run",
+      cleanup_status: "delivered",
+      error_category: "publish_delivery_failed",
+      attempts: 1,
+      started_at: "2026-08-29T18:00:00Z",
+      completed_at: "2026-08-29T18:00:01Z",
+      duration_ms: 1000,
+      recovery_steps: ["Repair authoritative DNS or CNAME delegation, then run a new provider test."],
+      secret_data_handling: "No secret values leave the server.",
+    };
+    const passed = {
+      ...failed,
+      id: "01900000-0000-7000-8000-000000000172",
+      status: "passed",
+      stage: "complete",
+      propagation_status: "passed",
+      error_category: undefined,
+      attempts: 2,
+    };
+    apiMock.previewACMEDNS01Qualification.mockResolvedValue(preview);
+    apiMock.runACMEDNS01Qualification.mockResolvedValueOnce(failed).mockResolvedValueOnce(passed);
+    apiMock.acmeDNS01QualificationRuns.mockResolvedValue({ items: [] });
+
+    await renderProtocols();
+    await user.click(screen.getByRole("button", { name: "Test DNS-01 provider isolated-validation-zone" }));
+    const dialog = screen.getByRole("dialog", { name: "Test DNS-01 provider: isolated-validation-zone" });
+    await user.type(within(dialog).getByRole("textbox", { name: "Domain to test" }), "api.example.test");
+    await user.click(within(dialog).getByRole("button", { name: "Review safe test" }));
+
+    expect(await within(dialog).findByRole("heading", { name: "CNAME guard configured; live proof pending" })).toBeInTheDocument();
+    expect(within(dialog).getAllByText(recordName).length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByText(target).length).toBeGreaterThan(0);
+    expect(within(dialog).getByText(`Create ${recordName} CNAME ${target}.`)).toBeInTheDocument();
+    expect(within(dialog).getByText(/stops before the provider write/i)).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole("button", { name: "Publish, verify, and clean up" }));
+    expect(await within(dialog).findByRole("heading", { name: "CNAME isolation is not proved" })).toBeInTheDocument();
+    expect(within(dialog).getByText("Repair authoritative DNS or CNAME delegation, then run a new provider test.")).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole("button", { name: "Publish, verify, and clean up" }));
+    expect(await within(dialog).findByRole("heading", { name: "CNAME isolation proved by this live test" })).toBeInTheDocument();
+    expect(apiMock.runACMEDNS01Qualification).toHaveBeenCalledTimes(2);
+  });
+
   it("creates the first DNS-01 provider config from the blank console using references only", async () => {
     const user = userEvent.setup();
     apiMock.acmeDNS01ProviderConfigs.mockResolvedValueOnce({ items: [] });

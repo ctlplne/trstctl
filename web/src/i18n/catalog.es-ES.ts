@@ -4112,6 +4112,22 @@ const esESCatalog = {
   "protocols.dns01.qualification.historyEmpty": "Todavía no se ha registrado ninguna prueba para esta configuración.",
   "protocols.dns01.qualification.historySummary": "Visibilidad DNS: {propagation} · limpieza: {cleanup}",
   "protocols.dns01.qualification.none": "Ninguno",
+  "protocols.dns01.delegation.label": "Aislamiento de validación mediante CNAME",
+  "protocols.dns01.delegation.directTitle": "Este proveedor escribe directamente en el nombre DNS de producción",
+  "protocols.dns01.delegation.directHelp":
+    "Para aislar futuras escrituras de validación, edite esta configuración con un destino de zona de validación y cree un CNAME desde cada nombre de desafío de producción hacia ese destino.",
+  "protocols.dns01.delegation.pendingTitle": "Guardia CNAME configurada; falta la prueba en vivo",
+  "protocols.dns01.delegation.notProvedTitle": "El aislamiento CNAME no está demostrado",
+  "protocols.dns01.delegation.provedTitle": "Aislamiento CNAME demostrado por esta prueba en vivo",
+  "protocols.dns01.delegation.guardHelp":
+    "Al ejecutar, trstctl resuelve el nombre de desafío de producción y exige este CNAME exacto antes de permitir que el proveedor escriba en la zona de validación aislada.",
+  "protocols.dns01.delegation.productionName": "Nombre de desafío de producción",
+  "protocols.dns01.delegation.requiredCNAME": "Debe resolverse mediante CNAME a",
+  "protocols.dns01.delegation.providerWriteTarget": "El proveedor escribe solo aquí",
+  "protocols.dns01.delegation.changeTitle": "Cambio único en el DNS de producción",
+  "protocols.dns01.delegation.changeInstruction": "Cree {record} CNAME {target}.",
+  "protocols.dns01.delegation.failClosed":
+    "CNAME ausente o distinto: trstctl se detiene antes de la escritura del proveedor. Un resultado verde significa que la guardia en vivo, la publicación, la visibilidad DNS y la limpieza pasaron.",
   "protocols.dns01.providerTrust.label": "Confianza y admisión en ejecución del proveedor",
   "protocols.dns01.providerTrust.verifiedPlugin": "Plugin firmado verificado",
   "protocols.dns01.providerTrust.builtInProvider": "Incluido en esta compilación de trstctl",

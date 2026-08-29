@@ -1311,8 +1311,12 @@ describe("i18n boundary", () => {
       // unavailable in every locale; it must never read as admitted or built
       // in. Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW
       // BEFORE RELEASE.
-      "es-ES": "a5fe21c0d6eb595d550fc4cf95adb467c470b82e5c6b0bfd36e748a40060ae97",
-      "de-DE": "be2dabbf17f4e7f1f1e7d955dbe24dcf35f421bf9a48d4eb58044fd9e5aaf58e",
+      // F71 CNAME-isolation re-pin: the exact production name, required
+      // delegation target, fail-closed behavior, and pending/failed/proved
+      // states are now named in all three locales. Machine-authored es/de —
+      // FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "0eb9b6c0a91432cfc445ac9cd25d0fa065384ca1506b1c8fcdff674dad2bab5e",
+      "de-DE": "830abde3017c2b6ee9436db1c813f5c2b53d258190d9e0de18993531c5d5173a",
     });
   });
 

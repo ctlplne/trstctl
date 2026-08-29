@@ -12,6 +12,7 @@ import {
   type ACMEDNS01QualificationPreview,
   type ACMEDNS01QualificationRun,
 } from "@/lib/api";
+import { DNS01DelegationIsolationPanel } from "@/pages/protocols/DNS01DelegationIsolationPanel";
 import { DNS01ProviderTrustPanel } from "@/pages/protocols/DNS01ProviderTrustPanel";
 
 function qualificationError(err: unknown): string {
@@ -214,6 +215,7 @@ export function DNS01QualificationDialog({
               </ul>
             )}
             <p className="text-caption text-muted-foreground">{preview.secret_data_handling}</p>
+            <DNS01DelegationIsolationPanel config={config} recordName={preview.record_name} run={run} />
             <div>
               <Button type="button" loading={busy === "run"} disabled={!preview.ready || busy !== null} onClick={() => void execute()}>
                 {t("protocols.dns01.qualification.executeAction")}

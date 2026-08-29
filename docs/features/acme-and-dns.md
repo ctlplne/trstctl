@@ -261,6 +261,16 @@ fail-closed check from the DNS-01 outbox worker, so a missing or mismatched CNAM
 issuance before any production-zone TXT write can happen. This is the well-known
 acme-dns pattern, and trstctl's acme-dns provider is the typical validation-zone backend.
 
+In the Protocols console, **Test provider** turns that rule into an exact per-domain
+journey. Its no-change review draws the production challenge name, the required CNAME,
+and the isolated provider write target as three separate facts, then gives the one-time
+DNS record to create. “Configured” is not shown as “proved”: only the real provider test
+can turn the isolation state green, because that test resolves the live CNAME, refuses a
+missing or mismatched target before the provider write, publishes a server-generated
+probe in the validation zone, verifies DNS visibility, cleans the probe up, and preserves
+the sanitized result. A failed run stays visibly unproved and gives the shortest safe
+repair/retry path; it never asks the browser for a TXT value or provider credential.
+
 ### Who's allowed to issue: CAA (F72)
 
 A **CAA record** (Certification Authority Authorization, RFC 8659) is a DNS record where
