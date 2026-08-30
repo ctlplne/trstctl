@@ -6919,8 +6919,8 @@
             "phase": "P2",
             "priority": 59,
             "served_state": "conditional",
-            "backend_status": "conditional: served method-selection helpers, tenant provider-config allowed_methods policy management, DNS-01 preflight policy checks, and ACME order-time challenge filtering plus acceptance enforcement",
-            "current_frontend_mapping": "Protocols at /protocols - served DNS-01 provider configs expose allowed validation methods and preflight method selection",
+            "backend_status": "conditional: served method-selection helpers, tenant provider-config allowed_methods policy management, DNS-01 preflight policy checks, ACME order-time challenge filtering plus acceptance enforcement, and a sanitized event-replayed validation-activity read model",
+            "current_frontend_mapping": "Protocols at /protocols joins allowed-method configuration and preflight with real served ACME validation activity, stock-client execution guidance, and durable enrollment recovery evidence",
             "target_gui_mapping": "Domain-validation policy UI for HTTP-01, DNS-01, TLS-ALPN-01 method choice, constraints, and challenge readiness.",
             "acceptance_test": "UI covers method selection preview and policy-denied challenge states.",
             "source_docs": [
@@ -6929,25 +6929,31 @@
             "source_backend": [
                 "internal/protocols/acme/dvmethod.go",
                 "internal/protocols/acme/acme.go",
+                "internal/protocols/acme/activity.go",
                 "internal/api/acme_dns01.go",
+                "internal/api/acme_operator_plan.go",
                 "internal/server/acme_dns01_automation.go",
+                "internal/server/acme_operator_plan.go",
                 "internal/server/protocol_mounts.go"
             ],
             "source_frontend": [
-                "web/src/pages/Protocols.tsx"
+                "web/src/pages/Protocols.tsx",
+                "web/src/pages/protocols/ACMEOperatorPanel.tsx"
             ],
             "status": "closed",
-            "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+            "notes": "Qualified as a complete F73 vertical slice on implementation candidate c306f132d5fbb94247212c4cd2af3cede510b72d. Tenant allowed_methods policy filters the real served ACME challenge set and is rechecked on acceptance. The operator plan now adds a token-free validation-activity read model from replayed order/challenge state; the console shows the exact methods offered, the method that validated, pending or completed state, stock-client execution guidance, and the existing durable enrollment diagnosis/recovery path. Focused proof covers policy-constrained real orders, cross-tenant and secret non-disclosure, replay after restart, responsive console rendering, typed API generation, and English/Spanish/German catalogs.",
             "api_surface": [
                 "createACMEDNS01ProviderConfig",
                 "updateACMEDNS01ProviderConfig",
-                "preflightACMEDNS01"
+                "preflightACMEDNS01",
+                "getACMEOperatorPlan"
             ],
             "api_na": "",
             "cli_surface": [
                 "acme dns-01 provider-configs create",
                 "acme dns-01 provider-configs update",
-                "acme dns-01 preflight"
+                "acme dns-01 preflight",
+                "acme readiness"
             ],
             "cli_na": "",
             "facet_evidence": {
@@ -6956,8 +6962,9 @@
                         "Tenant DNS-01 provider configs store allowed_methods and POST /api/v1/acme/dns-01/preflight runs the ACME method selector with optional override.",
                         "The served preflight route fails closed when the selected method is not allowed by the provider policy.",
                         "The served ACME new-order path filters advertised HTTP-01, DNS-01, and TLS-ALPN-01 challenges by the matching tenant provider-config allowed_methods policy, and challenge acceptance re-checks the policy before validation.",
+                        "The authenticated operator plan reads the newest real authorization rows from the ACME server's event-replayed state without exposing account URLs, account keys, challenge tokens, key authorizations, or certificate bytes.",
                         "served_state=conditional",
-                        "backend_status=conditional: served method-selection helpers, tenant provider-config allowed_methods policy management, DNS-01 preflight policy checks, and ACME order-time challenge filtering plus acceptance enforcement"
+                        "backend_status=conditional: served method-selection helpers, tenant provider-config allowed_methods policy management, DNS-01 preflight policy checks, ACME order-time challenge filtering plus acceptance enforcement, and a sanitized event-replayed validation-activity read model"
                     ],
                     "refs": [
                         "internal/api/acme_dns01.go",
@@ -6965,8 +6972,12 @@
                         "internal/server/acme_dns01_automation.go",
                         "internal/server/protocol_mounts.go",
                         "internal/server/protocols_served_test.go",
+                        "internal/server/acme_operator_plan.go",
+                        "internal/server/acme_operator_plan_served_test.go",
                         "internal/projections/projections.go",
-                        "internal/protocols/acme/dvmethod.go"
+                        "internal/protocols/acme/dvmethod.go",
+                        "internal/protocols/acme/activity.go",
+                        "internal/protocols/acme/state_restart_test.go"
                     ],
                     "commands": [
                         "make test"
@@ -6974,18 +6985,20 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: Protocols at /protocols - served DNS-01 provider configs expose allowed validation methods and preflight method selection",
-                        "Protocols at /protocols renders tenant DNS-01 provider configs with provider, zone/delegation target, CAA issuer, method policy, wildcard policy, and secret-reference field names only."
+                        "current_frontend_mapping: Protocols at /protocols joins allowed-method configuration and preflight with real served ACME validation activity, stock-client execution guidance, and durable enrollment recovery evidence",
+                        "Protocols at /protocols renders tenant DNS-01 provider configs with method policy and an ACME operator panel that shows each real domain, offered methods, validated method, order state, and recovery guidance without sensitive challenge material."
                     ],
                     "refs": [
                         "web/src/pages/Protocols.tsx",
+                        "web/src/pages/protocols/ACMEOperatorPanel.tsx",
                         "web/src/__tests__/protocols.test.tsx"
                     ]
                 },
                 "cli": {
                     "evidence": [
                         "CLI commands `trstctl acme dns-01 provider-configs create` and `update` manage allowed_methods policy.",
-                        "CLI command `trstctl acme dns-01 preflight` previews the selected validation method and policy denial state."
+                        "CLI command `trstctl acme dns-01 preflight` previews the selected validation method and policy denial state.",
+                        "CLI command `trstctl acme readiness` returns the same sanitized validation activity and recovery plan as the console."
                     ],
                     "refs": [
                         "internal/cli/command.go",
@@ -6995,7 +7008,8 @@
                 "api": {
                     "evidence": [
                         "OpenAPI operationIds createACMEDNS01ProviderConfig and updateACMEDNS01ProviderConfig manage allowed_methods policy.",
-                        "OpenAPI operationId: preflightACMEDNS01 for multi-method validation policy preflight."
+                        "OpenAPI operationId: preflightACMEDNS01 for multi-method validation policy preflight.",
+                        "OpenAPI operationId: getACMEOperatorPlan for effect-free readiness, real validation activity, and recovery guidance."
                     ],
                     "refs": [
                         "internal/api/api.go",
@@ -7008,11 +7022,15 @@
                         "acceptance_test: UI covers method selection preview and policy-denied challenge states.",
                         "TestServedACMEDNS01ProviderConfigAndPreflightTRACE003 drives the assembled handler through provider-config create/list, inline-secret rejection, DNS-01 preflight, and ACME DNS-01 audit-event assertions.",
                         "TestServedACMEDomainValidationPolicyLimitsOrderChallengesTRACE016 proves tenant allowed_methods policy filters served ACME order-time challenge advertisements and provider-config updates take effect on later orders.",
+                        "TestServedACMEOperatorPlanShowsSanitizedRealDomainValidationActivity proves a real policy-constrained served order appears in the tenant plan without challenge, account, or provider-secret material.",
+                        "TestACMEStateRebuildsFromEventLogAfterRestart proves validated-method activity survives replay while excluding the accepted challenge token and account identifier.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
                         "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
                     ],
                     "refs": [
                         "internal/server/protocols_served_test.go",
+                        "internal/server/acme_operator_plan_served_test.go",
+                        "internal/protocols/acme/state_restart_test.go",
                         "internal/featureparity/feature_facet_coverage_test.go",
                         "web/src/__tests__/route_parity.test.ts",
                         "web/src/__tests__/feature_coverage.test.tsx"
@@ -7041,7 +7059,8 @@
                 "audit": {
                     "evidence": [
                         "Provider config create/update/delete append acme.dns01.provider_config.upserted or acme.dns01.provider_config.deleted events before projection.",
-                        "Preflight appends acme.dns01.preflighted with config_id, domain, record_name, selected_method, ready, and failed_checks metadata."
+                        "Preflight appends acme.dns01.preflighted with config_id, domain, record_name, selected_method, ready, and failed_checks metadata.",
+                        "Real ACME order and challenge outcomes append acme.order.created, acme.challenge.validated, and acme.certificate.issued events; the activity view is rebuilt from that source of truth."
                     ],
                     "refs": [
                         "internal/api/acme_dns01.go",
@@ -7086,7 +7105,7 @@
                 "purpose": "Lets an operator understand and safely use multi-method domain-validation policy while tenant, policy, and security authority remain on the server.",
                 "tool": "certificates",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/protocols",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -7100,7 +7119,7 @@
                 ],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -7128,8 +7147,12 @@
                         ]
                     },
                     "execute": {
-                        "status": "missing",
-                        "reason": "No complete console execution path is proved for this capability."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/protocols/ACMEOperatorPanel.tsx",
+                            "internal/server/acme_operator_plan_served_test.go",
+                            "internal/server/protocols_served_test.go"
+                        ]
                     },
                     "observe": {
                         "status": "complete",
@@ -7138,12 +7161,21 @@
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/protocols/ACMEOperatorPanel.tsx",
+                            "web/src/pages/Protocols.tsx",
+                            "internal/api/enrollment_diagnostics.go"
+                        ]
                     },
                     "verify": {
-                        "status": "missing",
-                        "reason": "Durable or external-effect verification is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/protocols/acme/activity.go",
+                            "internal/protocols/acme/state_restart_test.go",
+                            "internal/server/acme_operator_plan_served_test.go",
+                            "web/src/pages/protocols/ACMEOperatorPanel.tsx"
+                        ]
                     },
                     "automate": {
                         "status": "complete",
@@ -7151,16 +7183,18 @@
                             "OpenAPI operationId: createACMEDNS01ProviderConfig",
                             "OpenAPI operationId: updateACMEDNS01ProviderConfig",
                             "OpenAPI operationId: preflightACMEDNS01",
+                            "OpenAPI operationId: getACMEOperatorPlan",
                             "CLI command: acme dns-01 provider-configs create",
                             "CLI command: acme dns-01 provider-configs update",
-                            "CLI command: acme dns-01 preflight"
+                            "CLI command: acme dns-01 preflight",
+                            "CLI command: acme readiness"
                         ]
                     }
                 },
                 "owner": "pki",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "c306f132d5fbb94247212c4cd2af3cede510b72d",
+                "freshness": "2026-08-30"
             }
         },
         {

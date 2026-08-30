@@ -2455,7 +2455,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use multi-method domain-validation policy while tenant, policy, and security authority remain on the server.",
       "tool": "certificates",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/protocols",
       "navigationEntrypoints": [
         "tool navigation",
@@ -2469,7 +2469,7 @@ export const canonicalCapabilities = [
       ],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -2497,8 +2497,12 @@ export const canonicalCapabilities = [
           ]
         },
         "execute": {
-          "status": "missing",
-          "reason": "No complete console execution path is proved for this capability."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/protocols/ACMEOperatorPanel.tsx",
+            "internal/server/acme_operator_plan_served_test.go",
+            "internal/server/protocols_served_test.go"
+          ]
         },
         "observe": {
           "status": "complete",
@@ -2507,12 +2511,21 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/protocols/ACMEOperatorPanel.tsx",
+            "web/src/pages/Protocols.tsx",
+            "internal/api/enrollment_diagnostics.go"
+          ]
         },
         "verify": {
-          "status": "missing",
-          "reason": "Durable or external-effect verification is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "internal/protocols/acme/activity.go",
+            "internal/protocols/acme/state_restart_test.go",
+            "internal/server/acme_operator_plan_served_test.go",
+            "web/src/pages/protocols/ACMEOperatorPanel.tsx"
+          ]
         },
         "automate": {
           "status": "complete",
@@ -2520,16 +2533,18 @@ export const canonicalCapabilities = [
             "OpenAPI operationId: createACMEDNS01ProviderConfig",
             "OpenAPI operationId: updateACMEDNS01ProviderConfig",
             "OpenAPI operationId: preflightACMEDNS01",
+            "OpenAPI operationId: getACMEOperatorPlan",
             "CLI command: acme dns-01 provider-configs create",
             "CLI command: acme dns-01 provider-configs update",
-            "CLI command: acme dns-01 preflight"
+            "CLI command: acme dns-01 preflight",
+            "CLI command: acme readiness"
           ]
         }
       },
       "owner": "pki",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "c306f132d5fbb94247212c4cd2af3cede510b72d",
+      "freshness": "2026-08-30"
     }
   },
   {
