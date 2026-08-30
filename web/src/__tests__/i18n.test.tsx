@@ -1328,8 +1328,13 @@ describe("i18n boundary", () => {
       // maintenance-window deferral, safe controls, durable queue state, and
       // recovery links are now named in all production catalogs. Machine-
       // authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "c9f861c01a1b9a46a155cd72ce23a420754c3572c50f7b9b1dbfaf84245100fe",
-      "de-DE": "1994e04d7d6a6c29f546610b09661ae755767cb4771e8b1e5cf8888e475fc896",
+      // F73 domain-validation activity re-pin: real order state, offered
+      // challenge methods, the method that proved control, pending state, and
+      // the challenge/account non-disclosure boundary are now named in all
+      // production catalogs. Machine-authored es/de — FLAGGED FOR HUMAN
+      // TRANSLATION REVIEW before release.
+      "es-ES": "c26645920de7e087f23f9ecef9d90f4025e316beb56ecc80fd2f46d89903f839",
+      "de-DE": "a3f80dcc74eede12d124351b8e6033cdb9432c1677e0b959e84d6d5ddb478800",
     });
   });
 

@@ -31,6 +31,7 @@ public final class OpenApiSchemas {
       "ACMEDNS01QualificationRun",
       "ACMEDNS01QualificationRunList",
       "ACMEDeviceAttestationPolicy",
+      "ACMEDomainValidationActivity",
       "ACMEEABCredential",
       "ACMEEABPosture",
       "ACMEOperatorAction",

@@ -170,9 +170,12 @@ func TestServedACMEOperatorPlanShowsSanitizedRealDomainValidationActivity(t *tes
 		ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 	})
 	tok := seedScopedToken(t, h.store, h.tenant, string(authz.IssuersRead), string(authz.IssuersWrite))
+	credentialRef := "secret://dns/" + t.Name()
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/acme/dns-01/provider-configs", tok, map[string]any{
 		"name": "operator-activity-policy", "provider": "webhook", "zone": "activity.example.test",
-		"credential_refs": map[string]any{"bearer_token_ref": "secret://dns/operator-activity"},
+		"credential_refs": map[string]any{
+			"bearer_token_ref": credentialRef,
+		},
 		"config":          map[string]any{"endpoint": "https://dns.activity.invalid"},
 		"allowed_methods": []string{"dns-01"},
 	})
@@ -224,7 +227,7 @@ func TestServedACMEOperatorPlanShowsSanitizedRealDomainValidationActivity(t *tes
 		activity.AuthorizationStatus != "pending" || !slices.Equal(activity.ChallengeMethods, []string{"dns-01"}) || activity.ValidatedMethod != "" {
 		t.Fatalf("operator validation activity = %+v", activity)
 	}
-	for _, forbidden := range []string{authz.Challenges[0].Token, string(client.KID), "secret://dns/operator-activity", "bearer_token_ref"} {
+	for _, forbidden := range []string{authz.Challenges[0].Token, string(client.KID), credentialRef, "bearer_token_ref"} {
 		if forbidden != "" && bytes.Contains(body, []byte(forbidden)) {
 			t.Fatalf("operator validation activity leaked %q: %s", forbidden, body)
 		}

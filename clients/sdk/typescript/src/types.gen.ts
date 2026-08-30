@@ -6213,6 +6213,20 @@ export interface components {
             format?: "tpm";
             max_age?: string;
         };
+        ACMEDomainValidationActivity: {
+            /** @enum {string} */
+            authorization_status: "pending" | "valid";
+            challenge_methods: ("http-01" | "dns-01" | "tls-alpn-01" | "device-attest-01")[];
+            /** Format: date-time */
+            created_at: string;
+            domain: string;
+            order_id: string;
+            /** @enum {string} */
+            order_status: "pending" | "ready" | "processing" | "valid";
+            /** @enum {string} */
+            validated_method?: "http-01" | "dns-01" | "tls-alpn-01" | "device-attest-01";
+            validation_skipped: boolean;
+        };
         ACMEEABCredential: {
             accounts_bound: number;
             allowed_identifiers?: string[];
@@ -6269,6 +6283,7 @@ export interface components {
             recovery_steps: string[];
             served: boolean;
             tenant_bound: boolean;
+            validation_activity: components["schemas"]["ACMEDomainValidationActivity"][];
             warnings: string[];
         };
         ACMEUpstreamAuthorization: {

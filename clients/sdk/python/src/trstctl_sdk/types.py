@@ -296,6 +296,21 @@ ACMEDeviceAttestationPolicy = TypedDict(
     total=False,
 )
 
+ACMEDomainValidationActivity = TypedDict(
+    'ACMEDomainValidationActivity',
+    {
+        'authorization_status': str,
+        'challenge_methods': list[str],
+        'created_at': str,
+        'domain': str,
+        'order_id': str,
+        'order_status': str,
+        'validated_method': str,
+        'validation_skipped': bool,
+    },
+    total=False,
+)
+
 ACMEEABCredential = TypedDict(
     'ACMEEABCredential',
     {
@@ -361,6 +376,7 @@ ACMEOperatorPlan = TypedDict(
         'recovery_steps': list[str],
         'served': bool,
         'tenant_bound': bool,
+        'validation_activity': list[dict[str, Any]],
         'warnings': list[str],
     },
     total=False,
