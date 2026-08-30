@@ -34,8 +34,13 @@ export function Approvals() {
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   const [rejectionOpen, setRejectionOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
+  const [selectedIssuance, setSelectedIssuance] = useState<IssuanceRequest | null>(null);
+  const [issuanceReviewOpen, setIssuanceReviewOpen] = useState(false);
+  const [issuanceRejectionOpen, setIssuanceRejectionOpen] = useState(false);
+  const [issuanceRejectionReason, setIssuanceRejectionReason] = useState("");
   const [open, setOpen] = useState<OpenSections>({ queue: false, history: false, specialized: false });
   const reviewHeadingRef = useRef<HTMLHeadingElement>(null);
+  const issuanceReviewHeadingRef = useRef<HTMLHeadingElement>(null);
   const [ephemeralRequestID, setEphemeralRequestID] = useState("");
   const [ephemeralBusy, setEphemeralBusy] = useState(false);
   const [ephemeralError, setEphemeralError] = useState<string | null>(null);
@@ -67,6 +72,22 @@ export function Approvals() {
     setError(null);
     setNotice(null);
     setReviewDialogOpen(true);
+  }, []);
+
+  const closeIssuanceReview = useCallback(() => {
+    setIssuanceReviewOpen(false);
+    setSelectedIssuance(null);
+    setIssuanceRejectionOpen(false);
+    setIssuanceRejectionReason("");
+  }, []);
+
+  const openIssuanceReview = useCallback((request: IssuanceRequest) => {
+    setSelectedIssuance(request);
+    setIssuanceRejectionOpen(false);
+    setIssuanceRejectionReason("");
+    setError(null);
+    setNotice(null);
+    setIssuanceReviewOpen(true);
   }, []);
 
   const retainDecision = useCallback(
@@ -130,13 +151,64 @@ export function Approvals() {
     }
   }
 
+  const retainIssuanceDecision = useCallback(
+    (updated: IssuanceRequest) => {
+      queryClient.setQueryData<{ items: IssuanceRequest[]; open: number; guidance: string }>(issuanceRequestsQueryKey, (current) => {
+        if (!current) return current;
+        const items = current.items.map((request) => (request.id === updated.id ? updated : request));
+        return { ...current, items, open: items.filter((request) => request.status === "requested").length };
+      });
+    },
+    [queryClient],
+  );
+
+  const approveIssuance = useCallback(
+    async (request: IssuanceRequest) => {
+      setBusyKey(`issuance:${request.id}`);
+      setError(null);
+      setNotice(null);
+      try {
+        retainIssuanceDecision(await api.approveIssuanceRequest(request.id));
+        setNotice(t("approvals.design.approvalRecorded", { action: "issue", resource: request.subject }));
+        setOpen((current) => ({ ...current, history: true }));
+        closeIssuanceReview();
+        void queryClient.invalidateQueries({ queryKey: issuanceRequestsQueryKey });
+      } catch (err) {
+        setError({ kind: "error", message: approvalErrorMessage(err) });
+      } finally {
+        setBusyKey(null);
+      }
+    },
+    [closeIssuanceReview, queryClient, retainIssuanceDecision, t],
+  );
+
+  async function denyIssuance(event: FormEvent<HTMLFormElement>, request: IssuanceRequest) {
+    event.preventDefault();
+    const reason = issuanceRejectionReason.trim();
+    if (!reason) return;
+    setBusyKey(`issuance:${request.id}`);
+    setError(null);
+    setNotice(null);
+    try {
+      retainIssuanceDecision(await api.denyIssuanceRequest(request.id, reason));
+      setNotice(t("approvals.design.denialRecorded", { action: "issue", resource: request.subject }));
+      setOpen((current) => ({ ...current, history: true }));
+      closeIssuanceReview();
+      void queryClient.invalidateQueries({ queryKey: issuanceRequestsQueryKey });
+    } catch (err) {
+      setError({ kind: "error", message: approvalErrorMessage(err) });
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
   function reviewNextRequest() {
     if (reviewableRequest) {
       openReview(reviewableRequest);
       return;
     }
     if (reviewableIssuance) {
-      setOpen((current) => ({ ...current, history: true }));
+      openIssuanceReview(reviewableIssuance);
     }
   }
 
@@ -470,6 +542,103 @@ export function Approvals() {
                   disabled={busyKey === rowKey(selectedRequest) || requesterMatchesPrincipal(selectedRequest, user)}
                   aria-describedby={requesterMatchesPrincipal(selectedRequest, user) ? "self-approval-help" : undefined}
                   onClick={() => void approve(selectedRequest)}
+                >
+                  {t("approvals.design.approve")}
+                </Button>
+              </div>
+            )}
+          </div>
+        ) : null}
+      </Dialog>
+
+      <Dialog
+        open={issuanceReviewOpen && Boolean(selectedIssuance)}
+        onClose={closeIssuanceReview}
+        titleId="issuance-review-request-heading"
+        descriptionId="issuance-review-request-description"
+        initialFocusRef={issuanceReviewHeadingRef}
+        panelAnimation="none"
+        panelClassName="fixed left-1/2 top-1/2 grid max-h-[calc(100dvh-2rem)] w-[min(94vw,48rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain rounded-panel border border-border bg-card p-5 shadow-elevation3"
+      >
+        {selectedIssuance ? (
+          <div className="grid min-w-0 gap-4 text-sm">
+            <div>
+              <h2 ref={issuanceReviewHeadingRef} id="issuance-review-request-heading" className="text-title font-semibold" tabIndex={-1}>
+                {t("approvals.design.review")}
+              </h2>
+              <p id="issuance-review-request-description" className="mt-1 max-w-3xl text-sm text-muted-foreground">
+                {t("approvals.design.dialogHelp")}
+              </p>
+            </div>
+
+            <IssuanceRequestSummary request={selectedIssuance} />
+
+            <dl className="grid gap-3 rounded-control border border-border bg-muted/20 p-4 sm:grid-cols-2">
+              <ReviewFact label={t("approvals.design.policyResult")} value={t("approvals.design.policyRequired")} />
+              <ReviewFact label={t("approvals.design.requester")} value={selectedIssuance.requester} />
+              <ReviewFact label={translateNow("source.profile.d696a35bdd")} value={selectedIssuance.profile || "—"} mono />
+              <ReviewFact label={translateNow("source.owner.4b1b8aa360")} value={selectedIssuance.owner_id || "—"} mono />
+              <ReviewFact label={t("approvals.design.expires")} value={formatDate(selectedIssuance.expires_at)} />
+              <ReviewFact label={t("approvals.design.requestId")} value={selectedIssuance.id} mono />
+            </dl>
+
+            <section aria-labelledby="issuance-approval-evidence-heading" className="grid gap-2">
+              <h3 id="issuance-approval-evidence-heading" className="font-semibold">
+                {t("approvals.design.evidence")}
+              </h3>
+              <p className="text-caption text-muted-foreground">{t("approvals.design.evidenceBoundary")}</p>
+              <Link className="w-fit text-brand-accent underline" to={`/audit?q=${encodeURIComponent(selectedIssuance.id)}`}>
+                {t("source.audit.trail.c1ada08ce1")}
+              </Link>
+            </section>
+
+            <p className="rounded-control border border-border bg-muted/20 p-3 text-sm text-muted-foreground">
+              {t("approvals.design.consequence.issue")}
+            </p>
+
+            {error ? (
+              <p role="alert" className="text-sm text-destructive">
+                {error.message}
+              </p>
+            ) : null}
+
+            {issuanceRejectionOpen ? (
+              <form className="grid gap-3 rounded-control border border-border p-4" onSubmit={(event) => void denyIssuance(event, selectedIssuance)}>
+                <label className="grid gap-1 font-medium">
+                  {t("approvals.design.rejectionReason")}
+                  <input
+                    className="ui-input font-normal"
+                    value={issuanceRejectionReason}
+                    onChange={(event) => setIssuanceRejectionReason(event.target.value)}
+                    required
+                  />
+                </label>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Button type="button" variant="ghost" onClick={() => setIssuanceRejectionOpen(false)}>
+                    {t("approvals.design.keepOpen")}
+                  </Button>
+                  <Button type="submit" variant="destructive" disabled={busyKey === `issuance:${selectedIssuance.id}` || !issuanceRejectionReason.trim()}>
+                    {t("approvals.design.confirmRejection")}
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button type="button" variant="ghost" onClick={closeIssuanceReview}>
+                  {t("source.cancel.19766ed6cc")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={busyKey === `issuance:${selectedIssuance.id}`}
+                  onClick={() => setIssuanceRejectionOpen(true)}
+                >
+                  {t("approvals.design.reject")}
+                </Button>
+                <Button
+                  type="button"
+                  disabled={busyKey === `issuance:${selectedIssuance.id}`}
+                  onClick={() => void approveIssuance(selectedIssuance)}
                 >
                   {t("approvals.design.approve")}
                 </Button>

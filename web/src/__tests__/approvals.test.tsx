@@ -17,6 +17,8 @@ const { apiMock } = vi.hoisted(() => ({
     ticketIntakeSchedule: vi.fn(),
     approveApprovalRequest: vi.fn(),
     denyApprovalRequest: vi.fn(),
+    approveIssuanceRequest: vi.fn(),
+    denyIssuanceRequest: vi.fn(),
     approveEphemeralCredential: vi.fn(),
     approveIdentityAction: vi.fn(),
     auditEvents: vi.fn(),
@@ -92,6 +94,33 @@ describe("dedicated approvals inbox", () => {
       approval_count: 1,
       required_approvals: 2,
     });
+    apiMock.approveIssuanceRequest.mockImplementation(async (id: string) => ({
+      id,
+      tenant_id: "t1",
+      subject: "payments-jit-mtls",
+      owner_id: "owner-payments",
+      profile: "service-mtls:4",
+      requester: "requester@example.test",
+      justification: "Temporary mTLS access for the approved deployment window",
+      status: "approved",
+      decided_by: "ra-1",
+      expires_at: "2026-09-06T16:00:00Z",
+      created_at: "2026-08-30T16:00:00Z",
+    }));
+    apiMock.denyIssuanceRequest.mockImplementation(async (id: string, reason: string) => ({
+      id,
+      tenant_id: "t1",
+      subject: "payments-jit-mtls",
+      owner_id: "owner-payments",
+      profile: "service-mtls:4",
+      requester: "requester@example.test",
+      justification: "Temporary mTLS access for the approved deployment window",
+      status: "denied",
+      decided_by: "ra-1",
+      decision_reason: reason,
+      expires_at: "2026-09-06T16:00:00Z",
+      created_at: "2026-08-30T16:00:00Z",
+    }));
     apiMock.approveEphemeralCredential.mockResolvedValue({
       id: "019fec49-6641-7131-ae7f-17f7ea4b5e0e",
       intent_digest: "sha256:ephemeral",
@@ -155,6 +184,83 @@ describe("dedicated approvals inbox", () => {
 
     await user.click(screen.getByText("Specialized approval tools", { exact: true }));
     expect(screen.getByRole("form", { name: "Approve ephemeral credential" })).toBeInTheDocument();
+  });
+
+  it("reviews a first-class JIT certificate request directly, then reveals the safe issuance step", async () => {
+    apiMock.issuanceRequests.mockResolvedValue({
+      items: [
+        {
+          id: "issuance-request-jit-1",
+          tenant_id: "t1",
+          subject: "payments-jit-mtls",
+          owner_id: "owner-payments",
+          profile: "service-mtls:4",
+          requester: "requester@example.test",
+          justification: "Temporary mTLS access for the approved deployment window",
+          status: "requested",
+          expires_at: "2026-09-06T16:00:00Z",
+          created_at: "2026-08-30T16:00:00Z",
+        },
+      ],
+      open: 1,
+      guidance: "Approval is a decision; issuance is a separate, recoverable step.",
+    });
+    const user = userEvent.setup();
+    renderAt("/approvals");
+
+    expect(await screen.findByRole("heading", { name: "Issue a credential for payments-jit-mtls" })).toBeInTheDocument();
+    await user.click(screen.getByTestId("page-depth-operate").querySelector("button")!);
+
+    const dialog = screen.getByRole("dialog", { name: "Review request" });
+    expect(within(dialog).getByText("Temporary mTLS access for the approved deployment window")).toBeInTheDocument();
+    expect(within(dialog).getByText("service-mtls:4")).toBeInTheDocument();
+    expect(within(dialog).getByText("owner-payments")).toBeInTheDocument();
+    expect(within(dialog).getByText("issuance-request-jit-1")).toBeInTheDocument();
+    expect(within(dialog).getAllByText(/permits a separate issuance step/i).length).toBeGreaterThan(0);
+    expect(within(dialog).getByRole("link", { name: /audit trail/i })).toHaveAttribute("href", "/audit?q=issuance-request-jit-1");
+
+    await user.click(within(dialog).getByRole("button", { name: "Approve request" }));
+    await waitFor(() => expect(apiMock.approveIssuanceRequest).toHaveBeenCalledWith("issuance-request-jit-1"));
+    expect(await screen.findByRole("status")).toHaveTextContent(/issue approval recorded/i);
+    expect(screen.getByText("Issuance request lifecycle and history", { exact: true }).closest("details")).toHaveAttribute("open");
+  });
+
+  it("requires a reason before denying a first-class JIT certificate request", async () => {
+    apiMock.issuanceRequests.mockResolvedValue({
+      items: [
+        {
+          id: "issuance-request-jit-deny",
+          tenant_id: "t1",
+          subject: "payments-jit-mtls",
+          owner_id: "owner-payments",
+          profile: "service-mtls:4",
+          requester: "requester@example.test",
+          justification: "Temporary mTLS access for the approved deployment window",
+          status: "requested",
+          expires_at: "2026-09-06T16:00:00Z",
+          created_at: "2026-08-30T16:00:00Z",
+        },
+      ],
+      open: 1,
+      guidance: "",
+    });
+    const user = userEvent.setup();
+    renderAt("/approvals");
+
+    await user.click(await screen.findByRole("button", { name: "Review request" }));
+    const dialog = screen.getByRole("dialog", { name: "Review request" });
+    await user.click(within(dialog).getByRole("button", { name: "Reject request" }));
+    const reason = within(dialog).getByRole("textbox", { name: "Why is this request being rejected?" });
+    await user.type(reason, "The requested host is outside the approved deployment scope.");
+    await user.click(within(dialog).getByRole("button", { name: "Record rejection" }));
+
+    await waitFor(() =>
+      expect(apiMock.denyIssuanceRequest).toHaveBeenCalledWith(
+        "issuance-request-jit-deny",
+        "The requested host is outside the approved deployment scope.",
+      ),
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent(/issue request rejected/i);
   });
 
   it("AUD-77 does not invent approval rows from issued or deployed identities", async () => {
