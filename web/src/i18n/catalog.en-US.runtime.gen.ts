@@ -9584,7 +9584,7 @@ export const defaultMessageValues = [
   "What this check will inspect",
   "Safety boundary: this reads in-memory readiness only. It does not mint a timestamp, read a certificate file, call the signer or network, or write anything.",
   "Endpoint and tenant",
-  "Confirm that POST /tsa is mounted for this signed-in tenant instead of merely looking enabled in a config file.",
+  "Confirm that the timestamp service is connected to this signed-in workspace, not just switched on in a settings file.",
   "Stable timestamp certificate",
   "Confirm that the timestamping-only certificate matches the signer-held key and can remain stable across restarts.",
   "Isolated signing path",

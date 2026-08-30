@@ -7267,7 +7267,7 @@ export const messages = {
   },
   "protocols.tsaCheck.mountPreview": { defaultMessage: "Endpoint and tenant", description: "TSA preview step for endpoint and tenant binding." },
   "protocols.tsaCheck.mountPreviewDetail": {
-    defaultMessage: "Confirm that POST /tsa is mounted for this signed-in tenant instead of merely looking enabled in a config file.",
+    defaultMessage: "Confirm that the timestamp service is connected to this signed-in workspace, not just switched on in a settings file.",
     description: "TSA endpoint and tenant preview detail.",
   },
   "protocols.tsaCheck.certificatePreview": { defaultMessage: "Stable timestamp certificate", description: "TSA preview step for certificate posture." },

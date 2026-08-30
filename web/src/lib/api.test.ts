@@ -591,6 +591,9 @@ describe("exported API surface census", () => {
       // F24: server-owned UDS metadata only; no workload request, signer call,
       // database read, event append, external call, or credential material.
       "/api/v1/protocols/spiffe/qualification",
+      // F51: server-owned in-memory TSA posture only; no request body,
+      // timestamp issuance, signer/network call, event append, or write.
+      "/api/v1/protocols/tsa/qualification",
       "/api/v1/ai/query",
       "/api/v1/ai/rca",
       "/api/v1/graph/query",

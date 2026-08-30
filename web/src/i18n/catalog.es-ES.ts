@@ -2341,7 +2341,7 @@ const esESCatalog = {
     "Límite de seguridad: solo lee la preparación en memoria. No emite un sello de tiempo, no lee un archivo de certificado, no llama al firmante ni a la red y no escribe nada.",
   "protocols.tsaCheck.mountPreview": "Punto de acceso e inquilino",
   "protocols.tsaCheck.mountPreviewDetail":
-    "Confirma que POST /tsa está montado para este inquilino con sesión iniciada y no solo habilitado en un archivo de configuración.",
+    "Confirma que el servicio de sellado de tiempo está conectado a este espacio de trabajo con sesión iniciada y no solo activado en un archivo de configuración.",
   "protocols.tsaCheck.certificatePreview": "Certificado de sellado estable",
   "protocols.tsaCheck.certificatePreviewDetail":
     "Confirma que el certificado exclusivo de sellado coincide con la clave del firmante y puede permanecer estable entre reinicios.",

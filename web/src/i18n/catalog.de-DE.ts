@@ -2362,7 +2362,7 @@ const deDECatalog = {
     "Sicherheitsgrenze: Es wird nur die Bereitschaft im Arbeitsspeicher gelesen. Die Prüfung stellt keinen Zeitstempel aus, liest keine Zertifikatsdatei, ruft weder Signierer noch Netzwerk auf und schreibt nichts.",
   "protocols.tsaCheck.mountPreview": "Endpunkt und Mandant",
   "protocols.tsaCheck.mountPreviewDetail":
-    "Bestätigt, dass POST /tsa für diesen angemeldeten Mandanten eingebunden ist und nicht nur in einer Konfigurationsdatei aktiviert aussieht.",
+    "Bestätigt, dass der Zeitstempeldienst mit diesem angemeldeten Arbeitsbereich verbunden und nicht nur in einer Einstellungsdatei eingeschaltet ist.",
   "protocols.tsaCheck.certificatePreview": "Stabiles Zeitstempelzertifikat",
   "protocols.tsaCheck.certificatePreviewDetail":
     "Bestätigt, dass das reine Zeitstempelzertifikat zum Signiererschlüssel passt und über Neustarts stabil bleiben kann.",
