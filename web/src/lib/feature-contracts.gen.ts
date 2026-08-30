@@ -3356,7 +3356,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use workload attestation chain while tenant, policy, and security authority remain on the server.",
       "tool": "workloads_machines",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/workloads",
       "navigationEntrypoints": [
         "tool navigation",
@@ -3368,7 +3368,7 @@ export const canonicalCapabilities = [
       "dependencies": [],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -3379,24 +3379,35 @@ export const canonicalCapabilities = [
         "understand": {
           "status": "complete",
           "evidence": [
-            "web/src/pages/Workloads.tsx"
+            "web/src/pages/Workloads.tsx",
+            "web/src/pages/workloads/AttestedSVIDWorkflow.tsx"
           ]
         },
         "configure": {
           "status": "complete",
           "evidence": [
-            "web/src/pages/Workloads.tsx"
+            "web/src/pages/Workloads.tsx",
+            "web/src/pages/workloads/AttestedSVIDWorkflow.tsx"
           ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "internal/api/attested_issuance.go",
+            "internal/server/attested_issuance.go",
+            "internal/server/attested_issuance_served_test.go",
+            "web/src/pages/workloads/AttestedSVIDWorkflow.tsx",
+            "web/src/__tests__/attested_svid_workflow.test.tsx",
+            "OpenAPI operationId: previewAttestedSVID",
+            "CLI command: workloads attested-issuance preview"
+          ]
         },
         "execute": {
           "status": "complete",
           "evidence": [
             "web/src/pages/Workloads.tsx",
-            "internal/server/attested_issuance_served_test.go"
+            "internal/server/attested_issuance_served_test.go",
+            "web/src/pages/workloads/AttestedSVIDWorkflow.tsx"
           ]
         },
         "observe": {
@@ -3409,13 +3420,17 @@ export const canonicalCapabilities = [
           "status": "complete",
           "evidence": [
             "web/src/pages/Workloads.tsx",
-            "internal/server/attested_issuance_served_test.go"
+            "internal/server/attested_issuance_served_test.go",
+            "web/src/pages/workloads/AttestedSVIDWorkflow.tsx",
+            "web/src/__tests__/attested_svid_workflow.test.tsx"
           ]
         },
         "verify": {
           "status": "complete",
           "evidence": [
-            "internal/server/attested_issuance_served_test.go"
+            "internal/server/attested_issuance_served_test.go",
+            "internal/featureparity/f30_contract_test.go",
+            "internal/server/workload_attester_trust_served_test.go"
           ]
         },
         "automate": {
@@ -3436,14 +3451,16 @@ export const canonicalCapabilities = [
             "CLI command: workloads attester-trust-sources rotate",
             "CLI command: workloads attester-trust-sources revoke",
             "CLI command: workloads attester-trust-sources delete",
-            "CLI command: workloads attested-issuance"
+            "CLI command: workloads attested-issuance",
+            "OpenAPI operationId: previewAttestedSVID",
+            "CLI command: workloads attested-issuance preview"
           ]
         }
       },
       "owner": "identity",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "bff7c74749bb4f0fcd987d335fd366b75fc4fd52",
-      "freshness": "2026-08-29"
+      "candidateSHA": "118a25c0e7fd71d4f1d62dd5ee14ef8f002820ca",
+      "freshness": "2026-08-30"
     }
   },
   {

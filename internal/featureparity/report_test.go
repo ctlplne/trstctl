@@ -39,10 +39,10 @@ func TestRenderControlPanelUsesCanonicalCatalogOnly(t *testing.T) {
 	for _, want := range []string{
 		"<!doctype html>",
 		"trstctl frontend parity control panel",
-		// F25, F43, F69, F70, F71, F72, F6, F73, F74, F51, and F33 now join the
+		// F25, F43, F69, F70, F71, F72, F6, F73, F74, F51, F33, and F30 now join the
 		// complete vertical slices with exact live evidence, dedicated console workflows, and recovery.
-		"23 release blockers",
-		"46 complete vertical slices",
+		"22 release blockers",
+		"47 complete vertical slices",
 		"Filter capabilities",
 		"data-tool=\"secrets\"",
 		"F66",

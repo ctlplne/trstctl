@@ -9389,9 +9389,9 @@
             "priority": 63,
             "served_state": "served",
             "backend_status": "served tenant workload attestation chain: /api/v1/workloads/attester-trust-sources create/list/get/update/rotate/revoke/delete manages tenant public trust for tpm, aws_iid, gcp_iit, azure_imds, k8s_sat, and github_oidc; POST /api/v1/workloads/attested-issuance verifies proof before signing, derives SPIFFE ID from the verified subject, signs X.509-SVIDs through the isolated signer, records certificate.recorded, binds attestation.bound, is idempotent, and fails closed for forged proofs or offboarded trust",
-            "current_frontend_mapping": "operate: Workloads at /workloads serves attestation policy administration with TPM, AWS IID, GCP, Azure, Kubernetes SAT, and GitHub OIDC methods, trust-source create/rotate/revoke/delete controls, evidence-safe SVID issuance, and rejection metadata.",
+            "current_frontend_mapping": "operate: Workloads at /workloads serves tenant attester trust lifecycle and a dedicated request-review-result AttestedSVIDWorkflow with exact effect-free server preview, configured trust and TTL facts, proof-verification disclosure, stable-key retries, metadata-only outcomes, deliberate public-certificate copy, and inventory/audit links.",
             "target_gui_mapping": "Roadmap residual: dedicated evidence viewer for TPM, AWS IID, GCP, Azure, Kubernetes SAT, GitHub OIDC, raw proof review, and rejection-reason drilldown beyond the metadata-safe Workloads trust-source and attested-SVID workflow.",
-            "acceptance_test": "Served GA acceptance is TestServedAttestedIssuanceEndpointIssuesForK8sAndAWS plus TestJOURNEY001WorkloadOwnerSelfServesAttestedOnboarding and OpenAPI/CLI parity for /api/v1/workloads/attester-trust-sources plus /api/v1/workloads/attested-issuance; roadmap residual is the dedicated evidence viewer with raw proof review and rejection drilldown beyond metadata-safe Workloads controls.",
+            "acceptance_test": "Served GA acceptance is TestServedAttestedIssuanceEndpointIssuesForK8sAndAWS plus TestJOURNEY001WorkloadOwnerSelfServesAttestedOnboarding and OpenAPI/CLI parity for /api/v1/workloads/attester-trust-sources plus /api/v1/workloads/attested-issuance; roadmap residual is the dedicated evidence viewer with raw proof review and rejection drilldown beyond metadata-safe Workloads controls. Exact preview and safe-retry acceptance: TestServedAttestedPreviewIsExactEffectFreeAndFailClosed, TestServedAttestedPreviewRejectsMissingPermissionAndMalformedInput, TestAttestedSVIDTTLClampsBeforeDurationConversion, TestAttestedIssuancePreviewCommandIsReadOnly, and web/src/__tests__/attested_svid_workflow.test.tsx.",
             "source_docs": [
                 "docs/features/workload-identity.md"
             ],
@@ -9402,10 +9402,11 @@
                 "internal/api/workload_attester_trust.go"
             ],
             "source_frontend": [
-                "web/src/pages/Workloads.tsx"
+                "web/src/pages/Workloads.tsx",
+                "web/src/pages/workloads/AttestedSVIDWorkflow.tsx"
             ],
             "status": "closed",
-            "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+            "notes": "F30 exact preview and retry closure is tied to source commit 118a25c0e7fd71d4f1d62dd5ee14ef8f002820ca. Red controls preserved missing route/CLI and duration-overflow failures. Focused served tests prove zero preview verifier/signer calls and unchanged events/durable state, execution-time proof refusal, revoked trust, malformed input and permission denial. Browser tests prove request invalidation, same-key retries, fail-closed plans and trust lifecycle integration. Live candidate qualification is recorded separately in the QA run.",
             "api_surface": [
                 "createWorkloadAttesterTrustSource",
                 "listWorkloadAttesterTrustSources",
@@ -9436,7 +9437,8 @@
                         "/api/v1/workloads/attester-trust-sources lets tenant workload owners configure, rotate, revoke, and offboard public attester trust material before issuance.",
                         "POST /api/v1/workloads/attested-issuance verifies the attestation before signing, records certificate.recorded, binds attestation.bound, and fails closed when attester trust material is not configured.",
                         "served_state=served",
-                        "backend_status=served tenant workload attestation chain: /api/v1/workloads/attester-trust-sources create/list/get/update/rotate/revoke/delete manages tenant public trust for tpm, aws_iid, gcp_iit, azure_imds, k8s_sat, and github_oidc; POST /api/v1/workloads/attested-issuance verifies proof before signing, derives SPIFFE ID from the verified subject, signs X.509-SVIDs through the isolated signer, records certificate.recorded, binds attestation.bound, is idempotent, and fails closed for forged proofs or offboarded trust"
+                        "backend_status=served tenant workload attestation chain: /api/v1/workloads/attester-trust-sources create/list/get/update/rotate/revoke/delete manages tenant public trust for tpm, aws_iid, gcp_iit, azure_imds, k8s_sat, and github_oidc; POST /api/v1/workloads/attested-issuance verifies proof before signing, derives SPIFFE ID from the verified subject, signs X.509-SVIDs through the isolated signer, records certificate.recorded, binds attestation.bound, is idempotent, and fails closed for forged proofs or offboarded trust",
+                        "POST /api/v1/workloads/attested-issuance/preview reads configured tenant/process trust, normalizes TTL before duration conversion, returns exact digests, and makes zero proof-verifier, signer, event, idempotency, outbox, or certificate effects."
                     ],
                     "refs": [
                         "internal/server/attested_issuance.go",
@@ -9451,19 +9453,21 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: operate: Workloads at /workloads serves attestation policy administration with TPM, AWS IID, GCP, Azure, Kubernetes SAT, and GitHub OIDC methods, trust-source create/rotate/revoke/delete controls, evidence-safe SVID issuance, and rejection metadata.",
+                        "current_frontend_mapping: operate: Workloads at /workloads serves tenant attester trust lifecycle and a dedicated request-review-result AttestedSVIDWorkflow with exact effect-free server preview, configured trust and TTL facts, proof-verification disclosure, stable-key retries, metadata-only outcomes, deliberate public-certificate copy, and inventory/audit links.",
                         "target_gui_mapping: Roadmap residual: dedicated evidence viewer for TPM, AWS IID, GCP, Azure, Kubernetes SAT, GitHub OIDC, raw proof review, and rejection-reason drilldown beyond the metadata-safe Workloads trust-source and attested-SVID workflow."
                     ],
                     "refs": [
                         "web/src/pages/Workloads.tsx",
                         "web/src/lib/navigation.ts",
-                        "web/src/App.tsx"
+                        "web/src/App.tsx",
+                        "web/src/pages/workloads/AttestedSVIDWorkflow.tsx"
                     ]
                 },
                 "cli": {
                     "evidence": [
                         "CLI commands: workloads attester-trust-sources create/list/get/update/rotate/revoke/delete",
-                        "CLI command: workloads attested-issuance"
+                        "CLI command: workloads attested-issuance",
+                        "CLI command: workloads attested-issuance preview is a read-only POST and sends no Idempotency-Key."
                     ],
                     "refs": [
                         "internal/cli/command.go",
@@ -9474,7 +9478,8 @@
                 "api": {
                     "evidence": [
                         "OpenAPI operationIds: createWorkloadAttesterTrustSource, listWorkloadAttesterTrustSources, getWorkloadAttesterTrustSource, updateWorkloadAttesterTrustSource, rotateWorkloadAttesterTrustSource, revokeWorkloadAttesterTrustSource, deleteWorkloadAttesterTrustSource, and issueAttestedSVID.",
-                        "POST /api/v1/workloads/attested-issuance requires certs:issue and an Idempotency-Key; trust-source mutations require certs:issue and reads require certs:read."
+                        "POST /api/v1/workloads/attested-issuance requires certs:issue and an Idempotency-Key; trust-source mutations require certs:issue and reads require certs:read.",
+                        "OpenAPI operationId: previewAttestedSVID requires certs:issue and returns AttestedSVIDPreview; proof verification is execution_only."
                     ],
                     "refs": [
                         "internal/api/api.go",
@@ -9491,7 +9496,8 @@
                         "TestServedAttestedIssuanceEndpointIssuesForK8sAndAWS presents k8s_sat and aws_iid proofs to the HTTP API, receives signer-backed SVIDs, replays idempotently, and rejects a forged AWS proof fail-closed.",
                         "TestJOURNEY001WorkloadOwnerSelfServesAttestedOnboarding creates, rotates, revokes, and offboards a tenant trust source before proving revoked trust no longer issues.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
-                        "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
+                        "Route parity and feature coverage tests keep feature evidence tied to registered customer routes.",
+                        "F30 deliberate red controls caught the missing preview route, missing CLI preview, and int64 TTL overflow. Positive controls then passed with zero preview effects; removing the preview stage again must fail the negative parity oracle."
                     ],
                     "refs": [
                         "internal/server/attested_issuance_served_test.go",
@@ -9501,7 +9507,9 @@
                         "internal/featureparity/feature_facet_coverage_test.go",
                         "internal/featureparity/feature_served_ga_coverage_test.go",
                         "web/src/__tests__/route_parity.test.ts",
-                        "web/src/__tests__/feature_coverage.test.tsx"
+                        "web/src/__tests__/feature_coverage.test.tsx",
+                        "internal/featureparity/f30_contract_test.go",
+                        "web/src/__tests__/attested_svid_workflow.test.tsx"
                     ]
                 },
                 "docs": {
@@ -9517,7 +9525,8 @@
                     "evidence": [
                         "feature authz manifest maps attester trust-source writes and issueAttestedSVID to certs:issue, and trust-source reads to certs:read.",
                         "API route registration enforces tenant-scoped authentication before the F30 handlers run.",
-                        "protocol authz manifest keeps the workload-identity protocol denominator tied to explicit tenant/principal mapping instead of a fake REST RBAC claim."
+                        "protocol authz manifest keeps the workload-identity protocol denominator tied to explicit tenant/principal mapping instead of a fake REST RBAC claim.",
+                        "previewAttestedSVID and issueAttestedSVID both require certs:issue; a ready preview does not bypass fresh issuance-time permission and trust checks."
                     ],
                     "refs": [
                         "internal/api/feature_authz_test.go",
@@ -9530,7 +9539,8 @@
                 },
                 "audit": {
                     "evidence": [
-                        "served attested issuance emits attestation.verified or attestation.rejected, binds successful proofs with attestation.bound, emits ephemeral.issued, and records the SVID as certificate.recorded; trust-source lifecycle emits upserted, rotated, revoked, and deleted events."
+                        "served attested issuance emits attestation.verified or attestation.rejected, binds successful proofs with attestation.bound, emits ephemeral.issued, and records the SVID as certificate.recorded; trust-source lifecycle emits upserted, rotated, revoked, and deleted events.",
+                        "Effect-free preview emits no attestation or issuance audit event. Invalid proof remains an execution-time rejection; a retry keeps the same exact issuance key."
                     ],
                     "refs": [
                         "internal/attest/attest.go",
@@ -9567,7 +9577,10 @@
                     "refs": [
                         "web/scripts/extract-i18n-messages.mjs",
                         "web/src/i18n/extractedMessages.gen.ts",
-                        "web/src/__tests__/i18n.test.tsx"
+                        "web/src/__tests__/i18n.test.tsx",
+                        "web/src/i18n/messages.ts",
+                        "web/src/i18n/catalog.es-ES.ts",
+                        "web/src/i18n/catalog.de-DE.ts"
                     ]
                 }
             },
@@ -9577,7 +9590,7 @@
                 "purpose": "Lets an operator understand and safely use workload attestation chain while tenant, policy, and security authority remain on the server.",
                 "tool": "workloads_machines",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/workloads",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -9589,7 +9602,7 @@
                 "dependencies": [],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -9600,24 +9613,35 @@
                     "understand": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/pages/Workloads.tsx"
+                            "web/src/pages/Workloads.tsx",
+                            "web/src/pages/workloads/AttestedSVIDWorkflow.tsx"
                         ]
                     },
                     "configure": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/pages/Workloads.tsx"
+                            "web/src/pages/Workloads.tsx",
+                            "web/src/pages/workloads/AttestedSVIDWorkflow.tsx"
                         ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/api/attested_issuance.go",
+                            "internal/server/attested_issuance.go",
+                            "internal/server/attested_issuance_served_test.go",
+                            "web/src/pages/workloads/AttestedSVIDWorkflow.tsx",
+                            "web/src/__tests__/attested_svid_workflow.test.tsx",
+                            "OpenAPI operationId: previewAttestedSVID",
+                            "CLI command: workloads attested-issuance preview"
+                        ]
                     },
                     "execute": {
                         "status": "complete",
                         "evidence": [
                             "web/src/pages/Workloads.tsx",
-                            "internal/server/attested_issuance_served_test.go"
+                            "internal/server/attested_issuance_served_test.go",
+                            "web/src/pages/workloads/AttestedSVIDWorkflow.tsx"
                         ]
                     },
                     "observe": {
@@ -9630,13 +9654,17 @@
                         "status": "complete",
                         "evidence": [
                             "web/src/pages/Workloads.tsx",
-                            "internal/server/attested_issuance_served_test.go"
+                            "internal/server/attested_issuance_served_test.go",
+                            "web/src/pages/workloads/AttestedSVIDWorkflow.tsx",
+                            "web/src/__tests__/attested_svid_workflow.test.tsx"
                         ]
                     },
                     "verify": {
                         "status": "complete",
                         "evidence": [
-                            "internal/server/attested_issuance_served_test.go"
+                            "internal/server/attested_issuance_served_test.go",
+                            "internal/featureparity/f30_contract_test.go",
+                            "internal/server/workload_attester_trust_served_test.go"
                         ]
                     },
                     "automate": {
@@ -9657,14 +9685,16 @@
                             "CLI command: workloads attester-trust-sources rotate",
                             "CLI command: workloads attester-trust-sources revoke",
                             "CLI command: workloads attester-trust-sources delete",
-                            "CLI command: workloads attested-issuance"
+                            "CLI command: workloads attested-issuance",
+                            "OpenAPI operationId: previewAttestedSVID",
+                            "CLI command: workloads attested-issuance preview"
                         ]
                     }
                 },
                 "owner": "identity",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "bff7c74749bb4f0fcd987d335fd366b75fc4fd52",
-                "freshness": "2026-08-29"
+                "candidate_sha": "118a25c0e7fd71d4f1d62dd5ee14ef8f002820ca",
+                "freshness": "2026-08-30"
             }
         },
         {
