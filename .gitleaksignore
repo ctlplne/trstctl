@@ -170,3 +170,9 @@ c5a260d61b49b2d9f70e3c406ee6bf463c86f60e:internal/store/migration_content_test.g
 # introducing commit, generated path, rule, and line; any new match still fails.
 32d187e6621cc5c324dcd0741116d14fee098ce3:internal/webui/dist/assets/Journeys-TMIUjhAI.js:generic-api-key:8
 32d187e6621cc5c324dcd0741116d14fee098ce3:internal/webui/dist/assets/Journeys-TMIUjhAI.js:generic-api-key:13
+
+# F30 qualification (2026-08-30): this exact historical match is the literal
+# idempotency identifier `f30-invalid-proof` beside a runtime-created test token,
+# not credential material. Pin only this commit/path/rule/line; every new value
+# and every real credential in test sources remains subject to the scanner.
+118a25c0e7fd71d4f1d62dd5ee14ef8f002820ca:internal/server/attested_issuance_served_test.go:generic-api-key:121
