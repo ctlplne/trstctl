@@ -45,10 +45,15 @@ type AttestedSVIDRequest struct {
 }
 
 type attestedSVIDJSON struct {
-	Method        string `json:"method"`
-	PayloadBase64 string `json:"payload_base64"`
-	PublicKeyPEM  string `json:"public_key_pem"`
-	TTLSeconds    int64  `json:"ttl_seconds"`
+	Method        string          `json:"method"`
+	PayloadBase64 secretJSONBytes `json:"payload_base64"`
+	PublicKeyPEM  string          `json:"public_key_pem"`
+	TTLSeconds    int64           `json:"ttl_seconds"`
+}
+
+func (r *attestedSVIDJSON) wipeSecrets() {
+	r.PayloadBase64.wipe()
+	r.PayloadBase64 = nil
 }
 
 type AttestedSVID struct {
@@ -92,15 +97,20 @@ type AttestedSVIDPreview struct {
 }
 
 func attestedSVIDRequestFromJSON(req attestedSVIDJSON) (AttestedSVIDRequest, error) {
+	// Kubernetes/GitHub proof can be a bearer credential. Both its base64 wire
+	// representation and its decoded form must remain wipeable, never strings.
+	defer req.PayloadBase64.wipe()
 	method := strings.TrimSpace(req.Method)
 	if method == "" {
 		return AttestedSVIDRequest{}, errStatus(http.StatusBadRequest, "method is required")
 	}
-	payload, err := base64.StdEncoding.DecodeString(req.PayloadBase64)
-	if err != nil || len(payload) == 0 {
+	payload := make([]byte, base64.StdEncoding.DecodedLen(len(req.PayloadBase64)))
+	n, err := base64.StdEncoding.Decode(payload, req.PayloadBase64)
+	if err != nil || n == 0 {
 		secret.Wipe(payload)
 		return AttestedSVIDRequest{}, errStatus(http.StatusBadRequest, "payload_base64 must be non-empty standard base64")
 	}
+	payload = payload[:n]
 	key, err := crypto.ParsePublicKeyPEM([]byte(req.PublicKeyPEM))
 	if err != nil {
 		secret.Wipe(payload)
@@ -117,6 +127,9 @@ func (a *API) previewAttestedSVID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var wire attestedSVIDJSON
+	// Register the pointer receiver before decoding: it also wipes a proof
+	// decoded before a later field or trailing JSON document is rejected.
+	defer wire.wipeSecrets()
 	if err := decodeJSON(r, &wire); err != nil {
 		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
 		return
@@ -149,6 +162,7 @@ func (a *API) previewAttestedSVID(w http.ResponseWriter, r *http.Request) {
 func (a *API) issueAttestedSVID(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	var wire attestedSVIDJSON
+	defer wire.wipeSecrets()
 	if err := decodeJSON(r, &wire); err != nil {
 		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
 		return

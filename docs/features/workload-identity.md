@@ -94,6 +94,13 @@ mint a second certificate. Inputs and the retry key are not persisted across a
 page reload. If you lose the page, inspect inventory and audit before starting a
 new issuance.
 
+The API keeps both the base64-encoded proof and its decoded payload in wipeable
+byte buffers, not immutable Go strings. It clears the application-owned encoded
+buffer after conversion and on rejected or partially decoded requests, and clears
+the decoded proof when handling finishes. This does not make request logs safe:
+never log the proof or capture it in screenshots. The browser clears its proof
+input after successful issuance; a failed attempt retains it for an unchanged retry.
+
 The CLI supports the same no-effect review:
 
 ```sh
