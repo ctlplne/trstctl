@@ -174,6 +174,16 @@ and recovery steps. It never returns tenant IDs, certificate bytes or paths, sig
 handles, request bodies, tokens, or keys. Timestamp issuance remains exclusively at
 the public protocol endpoint `POST /tsa`.
 
+The equivalent headless operator command is:
+
+```console
+trstctl protocols tsa qualify
+```
+
+It calls that same read-only qualification surface. It sends no request body or
+mutation headers and cannot issue a timestamp; use the OpenSSL flow above for the
+real RFC 3161 proof.
+
 ## Pitfalls & limits
 
 - **Serving status:** code signing is served at `POST /api/v1/code-signing/sign` and

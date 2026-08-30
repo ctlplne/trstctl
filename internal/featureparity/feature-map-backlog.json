@@ -7510,8 +7510,10 @@
             "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
             "api_surface": [],
             "api_na": "N/A: served through protocol-specific endpoints/configuration, not the /api/v1 OpenAPI contract.",
-            "cli_surface": [],
-            "cli_na": "N/A: served through protocol-specific endpoints/configuration, not the trstctl CLI command table.",
+            "cli_surface": [
+                "protocols tsa qualify"
+            ],
+            "cli_na": "",
             "facet_evidence": {
                 "served": {
                     "evidence": [
@@ -7536,7 +7538,14 @@
                     ]
                 },
                 "cli": {
-                    "na": "N/A: served through protocol-specific endpoints/configuration, not the trstctl CLI command table."
+                    "evidence": [
+                        "The read-only `trstctl protocols tsa qualify` command calls the same authenticated, tenant-scoped readiness oracle as the console without a request body, idempotency key, CSRF header, timestamp issuance, signer call, or write."
+                    ],
+                    "refs": [
+                        "internal/cli/command.go",
+                        "internal/cli/cli_test.go",
+                        "internal/cli/feature_parity_test.go"
+                    ]
                 },
                 "api": {
                     "na": "N/A: served through protocol-specific endpoints/configuration, not the /api/v1 OpenAPI contract."
