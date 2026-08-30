@@ -117,6 +117,8 @@ describe("workload identity disclosure surface", () => {
     expect(within(attention).getByRole("link", { name: "Review workload identity" })).toHaveAttribute("href", "/identities");
 
     const health = screen.getByRole("list", { name: "Machine and workload health" });
+    expect(within(health).getByRole("link", { name: "2 registered identities" })).toHaveAttribute("href", "/identities");
+    expect(screen.getByRole("link", { name: "Browse issued certificates" })).toHaveAttribute("href", "/certificates");
     expect(within(health).getByRole("link", { name: /1 agent needs attention/i })).toHaveAttribute("href", "/agents");
     expect(within(health).getByRole("link", { name: /3 hosts outside the ssh ca/i })).toHaveAttribute("href", "/ssh");
     expect(within(health).getByRole("link", { name: /1 failed workload delivery/i })).toHaveAttribute("href", "/connectors");
@@ -144,6 +146,18 @@ describe("workload identity disclosure surface", () => {
     expect(screen.queryByRole("heading", { name: "No urgent machine or workload work" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Identity health unavailable" })).toHaveAttribute("href", "/identities");
     expect(screen.getByRole("link", { name: "0 agents need attention" })).toBeInTheDocument();
+  });
+
+  it("opens only a blank review workflow from an attested replacement link", async () => {
+    render(
+      <MemoryRouter initialEntries={["/workloads?workflow=attested"]}>
+        <Workloads />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByRole("button", { name: "Issue attested SVID" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByLabelText("Attestation proof payload (base64)")).toHaveValue("");
+    expect(screen.getByLabelText("Workload public key")).toHaveValue("");
+    expect(screen.queryByRole("button", { name: "Verify proof and issue" })).not.toBeInTheDocument();
   });
 
   it("renders dynamic lease controls with expiry visualization and no fixture lease rows", async () => {

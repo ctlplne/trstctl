@@ -94,6 +94,24 @@ mint a second certificate. Inputs and the retry key are not persisted across a
 page reload. If you lose the page, inspect inventory and audit before starting a
 new issuance.
 
+The outcome table counts unsuccessful attempts retained in the current browser
+session, not attestation refusals across the server. A signer or database outage
+can happen after proof verification. A server error keeps the unchanged retry
+available; consult **Change history** for the actual verification and issuance
+events. The registered-identity count covers workload and SSH identity records,
+not the number of certificates issued.
+
+An X.509-SVID can have an empty X.509 subject: its SPIFFE URI in the Subject
+Alternative Name (SAN) identifies the workload. Inventory uses that URI rather
+than showing a blank name, and short deadlines use minutes or hours. Certificate
+details include timestamped validity. **Replace with fresh workload proof** opens
+a blank attestation workflow; it never reuses old proof or submits automatically.
+
+New attested issuances record requester key origin in the immutable certificate
+event and its inventory projection. trstctl received only the public key. The
+private key's storage and exportability remain unrecorded because this path has
+no evidence for them. Existing unrecorded custody is not backfilled by assumption.
+
 The API keeps both the base64-encoded proof and its decoded payload in wipeable
 byte buffers, not immutable Go strings. It clears the application-owned encoded
 buffer after conversion and on rejected or partially decoded requests, and clears

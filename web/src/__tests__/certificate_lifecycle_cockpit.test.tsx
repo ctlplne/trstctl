@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { axe } from "vitest-axe";
 import { ToastProvider } from "@/components/ToastProvider";
@@ -324,6 +324,64 @@ describe("Certificate Lifecycle cockpit", () => {
     expect(within(detail).getByText(/Current ownership · Alert contact reachable/)).toBeInTheDocument();
 
     expect(await axe(view.container)).toHaveNoViolations();
+  });
+
+  it("identifies SPIFFE certificates and routes fresh attestation without inventing key custody", async () => {
+    const certificate = {
+      id: "workload-cert",
+      tenant_id: "tenant-1",
+      subject: "",
+      sans: ["spiffe://prod/payments"],
+      issuer: "CN=Issuing CA",
+      status: "active",
+      fingerprint: "fp-workload",
+      source: "attested:k8s_sat",
+      not_before: "2026-08-24T11:59:00Z",
+      not_after: "2026-08-24T12:45:00Z",
+      custody_summary: "Key custody was not recorded for this credential.",
+    };
+    apiMock.certificatePage.mockResolvedValue({ items: [certificate] });
+    apiMock.getCertificate.mockResolvedValue(certificate);
+    renderPage();
+    const queue = await screen.findByRole("table", { name: "Certificate action queue" });
+    expect(within(queue).getByRole("row", { name: /spiffe:\/\/prod\/payments/ })).toHaveTextContent("Expires in 45 min");
+    const inventory = screen.getByRole("table", { name: "Inventoried certificates" });
+    const row = within(inventory).getByRole("row", { name: /spiffe:\/\/prod\/payments/ });
+    fireEvent.click(within(row).getByRole("button", { name: "Review" }));
+    const detail = await screen.findByRole("dialog", { name: "Certificate details" });
+    expect(within(detail).getByRole("link", { name: "Replace with fresh workload proof" })).toHaveAttribute("href", "/workloads?workflow=attested");
+    expect(within(detail).getByText(/cannot establish where the private key was created or how it is protected/i)).toBeInTheDocument();
+    expect(within(detail).queryByText(/predates custody|found by discovery/)).not.toBeInTheDocument();
+    expect(detail.querySelector('time[datetime="2026-08-24T12:45:00Z"]')).not.toBeNull();
+  });
+
+  it("updates a short-lived deadline when expiry passes while the page stays open", async () => {
+    // This test owns the clock: coverage/instrumentation latency must not
+    // advance a 500 ms lifetime before the initial assertion observes it.
+    vi.useFakeTimers({ shouldAdvanceTime: false });
+    vi.setSystemTime(new Date("2026-08-24T12:00:00Z"));
+    apiMock.certificatePage.mockResolvedValue({
+      items: [
+        {
+          id: "brief-cert",
+          tenant_id: "tenant-1",
+          subject: "CN=brief.test",
+          status: "active",
+          fingerprint: "brief-fp",
+          not_after: "2026-08-24T12:00:00.500Z",
+        },
+      ],
+    });
+    await act(async () => {
+      renderPage();
+    });
+    const queue = screen.getByRole("table", { name: "Certificate action queue" });
+    expect(within(queue).getByText("Expires in under 1 min")).toBeInTheDocument();
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(within(queue).getByText("Already expired")).toBeInTheDocument();
+    expect(within(queue).queryByText("Expires today")).not.toBeInTheDocument();
   });
 
   it("counts the complete owner-gap population while keeping the visible work queue bounded", async () => {

@@ -79,6 +79,13 @@ silently counted as a complete custody record.
 | Automated renewal successor, recorded `subject_csr_pem` | The original requester | Wherever the requester kept that matching key; renewal creates no new subject key | No |
 | Automated renewal successor, no CSR and retained control-plane target | The control plane | Locked memory; when a control-plane connector is configured, then a sealed deploy intent | **Yes — deprecated** identity fallback, see below |
 | Ephemeral workload credential (attested) | The attested workload | Wherever the workload put it | No — it presents its own public key |
+| Direct attested X.509-SVID | The requesting workload | Not established by the attestation request | No — only the public key travels up |
+
+Direct attested issuance records `key_origin=requester` through
+`certificate.recorded`. It leaves storage, exportability, and the named key
+generator unrecorded: a valid workload proof does not establish those facts.
+Older rows without custody evidence stay unknown; the console does not invent
+an explanation for missing evidence or silently backfill a security claim.
 
 ## The three retained control-plane generators, and what replaces each
 

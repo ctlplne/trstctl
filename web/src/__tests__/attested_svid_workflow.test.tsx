@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { AttestedSVIDWorkflow } from "@/pages/workloads/AttestedSVIDWorkflow";
 import { attestedPreviewFixture } from "./support/attestedSVID";
+import { ApiError } from "@/lib/api";
 
 const { apiMock } = vi.hoisted(() => ({ apiMock: { previewAttestedSVID: vi.fn(), issueAttestedSVID: vi.fn() } }));
 vi.mock("@/lib/api", async (orig) => {
@@ -74,6 +75,17 @@ describe("attested SVID workflow", () => {
     if (!overrides.effect_free) expect(screen.queryByText("This preview made no database writes, external calls, or signer calls.")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Verify proof and issue" })).toBeDisabled();
     expect(apiMock.issueAttestedSVID).not.toHaveBeenCalled();
+  });
+
+  it("does not present a server outage as rejected proof or expose internal server detail", async () => {
+    apiMock.issueAttestedSVID.mockRejectedValueOnce(new ApiError(500, JSON.stringify({ detail: "private-internal-dependency-detail" })));
+    renderWorkflow();
+    await enterRequest();
+    await screen.findByRole("heading", { name: "Ready to verify and issue" });
+    await userEvent.click(screen.getByRole("button", { name: "Verify proof and issue" }));
+    expect(await screen.findByText(/does not mean the workload proof was rejected/)).toBeInTheDocument();
+    expect(screen.queryByText(/private-internal-dependency-detail/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry exact issuance" })).toBeEnabled();
   });
 
   it("invalidates a reviewed plan after any edit and requires another server preview", async () => {

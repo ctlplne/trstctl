@@ -37,7 +37,8 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { PageHeader } from "@/components/PageHeader";
 import { expiryBandForDate } from "@/lib/statusVocab";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
-import { formatDate as formatDatePolicy, formatNumber as formatNumberPolicy } from "@/i18n/format";
+import { formatDate as formatDatePolicy, formatDateTime, formatNumber as formatNumberPolicy } from "@/i18n/format";
+import { certificateDisplayName, certificateReplacementPath } from "@/lib/certificatePresentation";
 import type { MessageKey } from "@/i18n/messages";
 import { ReadinessPanel, ReadinessSimulator, DeploymentReceipts, RenewalHistory, autoRenewingCount } from "@/components/certs";
 import { LifecycleCockpit } from "@/components/certs/LifecycleCockpit";
@@ -601,7 +602,7 @@ function HealthStat({ label, value }: { label: string; value: number }) {
 }
 
 export function Certificates() {
-  const { t } = useTranslation();
+  const { t, locale, timeZone } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [nextCursor, setNextCursor] = useState<string | undefined>();
@@ -1054,7 +1055,8 @@ export function Certificates() {
       if (environmentFilter !== "all" && certificateEnvironment(c) !== environmentFilter) return false;
       if (!q) return true;
       return [
-        c.subject,
+        certificateDisplayName(c),
+        ...(c.sans ?? []),
         c.issuer,
         c.status,
         c.fingerprint,
@@ -1302,7 +1304,7 @@ export function Certificates() {
                 selection={{
                   selectedIds,
                   onSelectedIdsChange: setSelectedIds,
-                  getRowLabel: (c) => c.subject,
+                  getRowLabel: certificateDisplayName,
                 }}
                 state={filtered.length === 0 ? "empty" : "ready"}
                 stateTitle="No certificates match your search."
@@ -1565,7 +1567,7 @@ export function Certificates() {
             <dl className="grid gap-3 text-sm md:grid-cols-2">
               <div>
                 <dt className="font-medium text-muted-foreground">{translateNow("source.subject.6897128384")}</dt>
-                <dd>{detail.subject}</dd>
+                <dd className="break-all">{certificateDisplayName(detail)}</dd>
               </div>
               <div>
                 <dt className="font-medium text-muted-foreground">{translateNow("source.issuer.39e02c46a0")}</dt>
@@ -1590,7 +1592,13 @@ export function Certificates() {
               <div>
                 <dt className="font-medium text-muted-foreground">{translateNow("source.validity.9c3050e867")}</dt>
                 <dd>
-                  {formatDate(detail.not_before)} {translateNow("source.to.663ea1bfff")} {formatDate(detail.not_after)}
+                  <time dateTime={detail.not_before} title={detail.not_before}>
+                    {formatDateTime(detail.not_before, { locale, timeZone })}
+                  </time>{" "}
+                  {translateNow("source.to.663ea1bfff")}{" "}
+                  <time dateTime={detail.not_after} title={detail.not_after}>
+                    {formatDateTime(detail.not_after, { locale, timeZone })}
+                  </time>
                 </dd>
               </div>
               <div>
@@ -1674,8 +1682,8 @@ export function Certificates() {
                     }
                     if (detail.status === "active") {
                       return (
-                        <Link to="/request" className="text-caption font-medium text-brand-accent hover:underline">
-                          {t("certificates.lifecycle.notManaged")}
+                        <Link to={certificateReplacementPath(detail)} className="text-caption font-medium text-brand-accent hover:underline">
+                          {t(detail.source?.startsWith("attested:") ? "certificates.lifecycle.replaceAttested" : "certificates.lifecycle.notManaged")}
                         </Link>
                       );
                     }
@@ -1691,7 +1699,7 @@ export function Certificates() {
               <div className="md:col-span-2">
                 <dt className="sr-only">{t("certificateCockpit.detail.activity")}</dt>
                 <dd>
-                  <CredentialActivityTimeline credentialLabel={detail.subject} />
+                  <CredentialActivityTimeline credentialLabel={certificateDisplayName(detail)} />
                 </dd>
               </div>
             </dl>
@@ -1714,8 +1722,10 @@ export function certificateCN(subject: string): string {
  * one exists: an x509 identity whose name matches the certificate CN and that
  * is not already retired/revoked. */
 function renewableIdentityFor(certificate: Certificate, identityByCN: Map<string, Identity>): Identity | undefined {
-  if (certificate.status !== "active") return undefined;
-  const identity = identityByCN.get(certificateCN(certificate.subject));
+  if (certificate.status !== "active" || certificate.source?.startsWith("attested:")) return undefined;
+  const commonName = certificateCN(certificate.subject);
+  if (!commonName) return undefined;
+  const identity = identityByCN.get(commonName);
   if (!identity) return undefined;
   if (identity.status === "retired" || identity.status === "revoked") return undefined;
   return identity;
@@ -1756,8 +1766,8 @@ function lifecycleColumn(context: LifecycleColumnContext): DataGridColumn<Certif
       }
       if (c.status === "active") {
         return (
-          <Link to="/request" className="text-caption font-medium text-brand-accent hover:underline">
-            {context.replaceLabel}
+          <Link to={certificateReplacementPath(c)} className="text-caption font-medium text-brand-accent hover:underline">
+            {c.source?.startsWith("attested:") ? translateNow("certificates.lifecycle.replaceAttested") : context.replaceLabel}
           </Link>
         );
       }
@@ -1774,8 +1784,8 @@ function certificateColumns(ownerByID: Map<string, Owner>, lifecycle?: DataGridC
       sortable: true,
       className: "min-w-64 align-middle",
       cell: (c) => (
-        <span title={c.subject} className="block max-w-80 truncate font-medium">
-          {c.subject}
+        <span title={certificateDisplayName(c)} className="block max-w-80 truncate font-medium">
+          {certificateDisplayName(c)}
         </span>
       ),
     },

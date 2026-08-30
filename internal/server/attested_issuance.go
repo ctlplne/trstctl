@@ -27,6 +27,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
@@ -315,6 +316,9 @@ func (s *attestedIssuerService) IssueAttestedSVID(ctx context.Context, tenantID,
 		KeyAlgorithm: info.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
 		Source: "attested:" + att.Method, CertificateDER: append([]byte(nil), certDER...),
 		IssuanceIdempotencyKey: idemKey,
+		// The workload supplied only its public key. Record that custody fact
+		// through the certificate event; storage and exportability stay unknown.
+		KeyOrigin: string(custody.OriginRequester),
 	}); err != nil {
 		return api.AttestedSVID{}, err
 	}

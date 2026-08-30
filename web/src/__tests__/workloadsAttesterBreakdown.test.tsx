@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { attesterBreakdown, type AttestationFailure } from "@/pages/Workloads";
+import { render, screen } from "@testing-library/react";
+import { AttesterBreakdown, attesterBreakdown, type AttestationFailure } from "@/pages/Workloads";
 
 function svid(method: string, verifiedAt: string) {
   return { attestation: { method, verified_at: verifiedAt } };
@@ -13,6 +14,15 @@ function failure(method: string, at = "2026-07-26T12:00:00Z"): AttestationFailur
 // grouping, its most-recent-verification pick, and its failures-first ordering
 // are pinned.
 describe("attester breakdown", () => {
+  it("does not call an infrastructure error a proof refusal or claim it was never verified", () => {
+    render(<AttesterBreakdown rows={[]} failures={[{ method: "k8s_sat", message: "internal error", at: "2026-08-30T12:00:00Z" }]} />);
+    expect(screen.getByRole("columnheader", { name: "Unsuccessful attempts" })).toBeInTheDocument();
+    expect(screen.getByText("1 unsuccessful")).toBeInTheDocument();
+    expect(screen.getByText("No issued result")).toBeInTheDocument();
+    expect(screen.getByText(/not necessarily proof refusals/i)).toBeInTheDocument();
+    expect(screen.queryByText(/refused|^never$/i)).not.toBeInTheDocument();
+  });
+
   it("groups issued SVIDs by attester and keeps the most recent verification", () => {
     const rows = attesterBreakdown([
       svid("k8s_sat", "2026-07-20T00:00:00Z"),

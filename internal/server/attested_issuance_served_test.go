@@ -26,6 +26,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/custody"
 )
 
 // A preview must not consume proof, emit an event, reserve an idempotency key,
@@ -167,6 +168,33 @@ func TestAttestedSVIDTTLClampsBeforeDurationConversion(t *testing.T) {
 		if got := s.ttl(seconds); got != time.Hour {
 			t.Errorf("ttl(%d) = %s, want 1h", seconds, got)
 		}
+	}
+}
+
+func TestServedAttestedIssuanceRecordsRequesterCustodyWithoutStorageClaims(t *testing.T) {
+	fixtures := servedAttestedIssuanceFixtures(t)
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) { d.AttestedIssuance = fixtures.Config })
+	token := seedScopedToken(t, h.store, h.tenant, "certs:issue", "certs:read")
+	publicKey := servedAttestedPublicKeyPEM(t)
+	first := servedAttestedIssue(t, h, token, "f30-custody", "k8s_sat", fixtures.K8sSAT, publicKey, http.StatusCreated)
+	replay := servedAttestedIssue(t, h, token, "f30-custody", "k8s_sat", fixtures.K8sSAT, publicKey, http.StatusCreated)
+	if first.CredentialID != replay.CredentialID || first.CertificatePEM != replay.CertificatePEM {
+		t.Fatal("custody recording changed exact-request replay")
+	}
+	rows, err := h.store.ListCertificatesPage(t.Context(), h.tenant, "00000000-0000-0000-0000-000000000000", nil, 10, nil)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("projected inventory: count=%d error=%v", len(rows), err)
+	}
+	got := rows[0]
+	if got.KeyOrigin != string(custody.OriginRequester) || got.KeyStorage != "" || got.KeyExportable != "" || got.KeyGeneratedBy != "" {
+		t.Fatalf("attested custody must record requester origin only: origin=%q storage=%q exportability=%q actor=%q", got.KeyOrigin, got.KeyStorage, got.KeyExportable, got.KeyGeneratedBy)
+	}
+	status, raw := secretsReq(t, h, http.MethodGet, "/api/v1/certificates/"+got.ID, token, nil)
+	if status != http.StatusOK || !strings.Contains(string(raw), `"key_origin":"requester"`) || !strings.Contains(string(raw), "control plane never held it") {
+		t.Fatalf("served custody metadata: status=%d body=%s", status, raw)
+	}
+	if !h.hasEvent(t, "certificate.recorded") {
+		t.Fatal("custody must travel through the event-backed certificate path")
 	}
 }
 

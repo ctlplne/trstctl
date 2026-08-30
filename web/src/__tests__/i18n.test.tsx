@@ -1361,8 +1361,12 @@ describe("i18n boundary", () => {
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
       // Proof-handling correction: the form sends proof to the server and clears
       // it after success; only the public certificate remains for deliberate copy.
-      "es-ES": "573692a37ccbc6e499e248e0282a40c244f8315466307656762788f12e6945ac",
-      "de-DE": "4eced218e318c4ac3a0126931b7bdaf55a23c3a123235a447fa74f067e1dc362",
+      // g102 live-QA repairs: neutral unsuccessful-attempt labels, accurate
+      // registered-identity counts, minute/hour deadlines, attested replacement,
+      // and custody unknowns without invented explanations. Machine-authored
+      // es/de remain FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "914892293ae066b90e5898ee11bb42cd1778da82148f31ec00431c08185d68d7",
+      "de-DE": "2806ba2dce16e762a5063dcda54f61017f4f979a45653117832c334648bbd579",
     });
   });
 

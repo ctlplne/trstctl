@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, BellRing, CheckCircle2 } from "lucide-react";
 import { StackedTimeBarChart, TimeBarChart, type StackedTimeBarDatum, type TimeBarDatum } from "@/components/charts";
@@ -17,6 +17,7 @@ import type {
 import { useTranslation } from "@/i18n/I18nProvider";
 import type { Locale, MessageKey } from "@/i18n/messages";
 import { formatShortDate } from "@/i18n/format";
+import { certificateDeadline, certificateDisplayName, certificateReplacementPath } from "@/lib/certificatePresentation";
 
 const DAY = 86_400_000;
 const WEEK = 7 * DAY;
@@ -87,11 +88,12 @@ function environmentFor(certificate: Certificate, owner: Owner | undefined): str
   return "Not recorded";
 }
 
-function daysUntil(value?: string): number | null {
+function daysUntil(value: string | undefined, now: number): number | null {
   if (!value) return null;
   const time = new Date(value).getTime();
   if (!Number.isFinite(time)) return null;
-  return Math.ceil((time - Date.now()) / DAY);
+  const remaining = time - now;
+  return remaining <= 0 ? -Math.max(1, Math.floor(-remaining / DAY)) : Math.ceil(remaining / DAY);
 }
 
 function ownerIsReachable(owner: Owner | undefined): boolean {
@@ -107,6 +109,7 @@ function latestByTime<T>(items: T[], time: (item: T) => string | undefined): T |
 
 function matchingIdentity(certificate: Certificate, identities: Identity[]): Identity | undefined {
   const name = commonName(certificate.subject).toLowerCase();
+  if (!name || certificate.source?.startsWith("attested:")) return undefined;
   return identities.find((identity) => identity.kind === "x509_certificate" && identity.name.trim().toLowerCase() === name);
 }
 
@@ -134,23 +137,29 @@ function matchingDelivery(certificate: Certificate, identity: Identity | undefin
   );
 }
 
-function deliveryIssue(delivery: ConnectorDelivery | undefined): "failed" | "unverified" | "delayed" | null {
+function deliveryIssue(delivery: ConnectorDelivery | undefined, now: number): "failed" | "unverified" | "delayed" | null {
   if (!delivery) return null;
   if (["failed", "verify_failed", "rollback_failed", "rollback_refused"].includes(delivery.status)) return "failed";
   if (delivery.status === "delivered") return "unverified";
   if (["queued", "rollback_queued", "dry_run_queued"].includes(delivery.status)) {
     const queuedAt = new Date(delivery.created_at).getTime();
-    if (Number.isFinite(queuedAt) && Date.now() - queuedAt > 15 * 60_000) return "delayed";
+    if (Number.isFinite(queuedAt) && now - queuedAt > 15 * 60_000) return "delayed";
   }
   return null;
 }
 
-function automationState(certificate: Certificate, identity: Identity | undefined, run: RotationRun | undefined, evidenceObserved: boolean): AutomationState {
+function automationState(
+  certificate: Certificate,
+  identity: Identity | undefined,
+  run: RotationRun | undefined,
+  evidenceObserved: boolean,
+  now: number,
+): AutomationState {
   if (!evidenceObserved) return "unknown";
   if (run?.status === "failed") return "failed";
   if (run?.status === "running") {
     const lastUpdate = new Date(run.updated_at || run.created_at).getTime();
-    if (Number.isFinite(lastUpdate) && Date.now() - lastUpdate > 30 * 60_000) return "delayed";
+    if (Number.isFinite(lastUpdate) && now - lastUpdate > 30 * 60_000) return "delayed";
     return "running";
   }
   if (run?.status === "succeeded" && run.successor_fingerprint === certificate.fingerprint) return "verified";
@@ -158,11 +167,11 @@ function automationState(certificate: Certificate, identity: Identity | undefine
   return "manual";
 }
 
-function workArrivalData(certificates: Certificate[], labelForRange: (start: number, end: number) => string): TimeBarDatum[] {
+function workArrivalData(certificates: Certificate[], now: number, labelForRange: (start: number, end: number) => string): TimeBarDatum[] {
   const data = Array.from({ length: 6 }, (_, index) => ({ label: labelForRange(index * 15, index * 15 + 14), value: 0, tone: "warning" as const }));
   for (const certificate of certificates) {
     if (certificate.status === "revoked") continue;
-    const days = daysUntil(certificate.not_after);
+    const days = daysUntil(certificate.not_after, now);
     if (days === null || days < 0 || days > 90) continue;
     const index = Math.min(5, Math.floor(days / 15));
     data[index]!.value += 1;
@@ -177,8 +186,8 @@ function outcomeData(
   timeZone: string,
   succeededLabel: string,
   failedLabel: string,
+  now: number,
 ): StackedTimeBarDatum[] {
-  const now = Date.now();
   const buckets = Array.from({ length: 6 }, (_, index) => {
     const start = now - (5 - index) * WEEK;
     return {
@@ -218,6 +227,13 @@ function outcomeData(
  * job as proof that renewal and deployment actually succeeded. */
 export function LifecycleCockpit(props: LifecycleCockpitProps) {
   const { t, locale, timeZone } = useTranslation();
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    // One observed clock drives every deadline. An open page must notice a
+    // minute-lived certificate expiring without relying on another API render.
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
   const owners = props.owners ?? [];
   const identities = props.identities ?? [];
   const runs = props.rotationRuns ?? [];
@@ -247,27 +263,22 @@ export function LifecycleCockpit(props: LifecycleCockpitProps) {
   const allActionRows = props.certificates
     .map((certificate): ActionRow | null => {
       if (certificate.status === "revoked") return null;
-      const days = daysUntil(certificate.not_after);
+      const days = daysUntil(certificate.not_after, now);
       const identity = matchingIdentity(certificate, identities);
       const run = matchingRun(certificate, identity, scopedRuns);
       const delivery = matchingDelivery(certificate, identity, scopedDeliveries);
-      const automation = automationState(certificate, identity, run, evidenceObserved);
+      const automation = automationState(certificate, identity, run, evidenceObserved, now);
       const owner = certificate.owner_id ? ownerByID.get(certificate.owner_id) : undefined;
       const hasOwner = Boolean(certificate.owner_id);
       const ownerObserved = props.owners !== null;
       const reachable = ownerIsReachable(owner);
       const renewalFailure = run?.status === "failed";
-      const deploymentIssueState = deliveryIssue(delivery);
+      const deploymentIssueState = deliveryIssue(delivery, now);
       const deploymentFailure = deploymentIssueState !== null;
       const urgentExpiry = days !== null && days <= 30;
       if (!urgentExpiry && !renewalFailure && !deploymentFailure && hasOwner && reachable) return null;
 
-      let deadline = t("certificateCockpit.deadline.unknown");
-      if (days !== null && days < 0)
-        deadline = t(days === -1 ? "certificateCockpit.deadline.expiredOne" : "certificateCockpit.deadline.expiredMany", { count: String(Math.abs(days)) });
-      else if (days === 0) deadline = t("certificateCockpit.deadline.today");
-      else if (days === 1) deadline = t("certificateCockpit.deadline.one");
-      else if (days !== null) deadline = t("certificateCockpit.deadline.many", { count: String(days) });
+      const deadline = certificateDeadline(certificate.not_after, now, t);
 
       const reasons: string[] = [];
       if (days !== null && days < 0) reasons.push(t("certificateCockpit.reason.expired"));
@@ -301,13 +312,13 @@ export function LifecycleCockpit(props: LifecycleCockpitProps) {
         actionLabel = t("certificateCockpit.action.renew");
         actionTo = `/identities?identity=${encodeURIComponent(identity.id)}`;
       } else {
-        actionLabel = t("certificateCockpit.action.replace");
-        actionTo = "/request";
+        actionLabel = t(certificate.source?.startsWith("attested:") ? "certificates.lifecycle.replaceAttested" : "certificateCockpit.action.replace");
+        actionTo = certificateReplacementPath(certificate);
       }
 
       return {
         certificate,
-        commonName: commonName(certificate.subject),
+        commonName: certificate.subject.trim() ? commonName(certificate.subject) : certificateDisplayName(certificate),
         environment: environmentFor(certificate, owner),
         deadline,
         automation,
@@ -339,11 +350,13 @@ export function LifecycleCockpit(props: LifecycleCockpitProps) {
   const actionRows = allActionRows.slice(0, 10);
   const ownerGaps = allActionRows.filter((row) => row.ownerGap).length;
   const renewalFailures = scopedRuns.filter((run) => run.status === "failed").length;
-  const deploymentIssues = scopedDeliveries.map(deliveryIssue).filter((issue): issue is NonNullable<ReturnType<typeof deliveryIssue>> => issue !== null);
+  const deploymentIssues = scopedDeliveries
+    .map((delivery) => deliveryIssue(delivery, now))
+    .filter((issue): issue is NonNullable<ReturnType<typeof deliveryIssue>> => issue !== null);
   const deploymentFailures = deploymentIssues.length;
   const onlyExplicitDeploymentFailures = deploymentIssues.every((issue) => issue === "failed");
-  const arrival = workArrivalData(props.certificates, (start, end) => t("certificateCockpit.arrival.range", { start: String(start), end: String(end) }));
-  const outcomes = outcomeData(scopedRuns, scopedDeliveries, locale, timeZone, t("audit.design.result.succeeded"), t("audit.design.result.failed"));
+  const arrival = workArrivalData(props.certificates, now, (start, end) => t("certificateCockpit.arrival.range", { start: String(start), end: String(end) }));
+  const outcomes = outcomeData(scopedRuns, scopedDeliveries, locale, timeZone, t("audit.design.result.succeeded"), t("audit.design.result.failed"), now);
   const deadUrgent = (props.notifications ?? []).filter(
     (notification) => notification.status === "dead" && allActionRows.some((row) => row.certificate.id === notification.certificate_id),
   ).length;

@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Ban, Network, Plus, RefreshCw, RotateCw, ServerOff, ShieldAlert, Trash2, Waypoints } from "lucide-react";
 import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
 import { PageHeader } from "@/components/PageHeader";
@@ -80,7 +80,7 @@ function WorkloadHealthLink({ to, icon, label, urgent }: { to: string; icon: Rea
   );
 }
 
-/** S-C20: an attestation refusal observed in this browser session. The served
+/** S-C20: an unsuccessful issuance attempt observed in this browser session. The served
  * API answers per request, so this is client-observed history, labelled as
  * such — never presented as a server-side failure feed. */
 export type AttestationFailure = { method: string; message: string; at: string };
@@ -88,8 +88,8 @@ export type AttestationFailure = { method: string; message: string; at: string }
 export type AttesterBreakdownRow = { method: string; issued: number; lastVerifiedAt: string; failures: number };
 
 /** Roll the served attested-SVID rows up by attester method and fold in the
- * refusals seen this session, so "which attester is actually working" is one
- * read instead of a scan down the outcomes table. */
+ * attempts retained this session. Failure can happen after proof verification,
+ * so a signer outage must not be labeled as an attestation refusal. */
 export function attesterBreakdown(
   rows: Array<{ attestation: { method: string; verified_at: string } }>,
   failures: AttestationFailure[] = [],
@@ -125,6 +125,7 @@ const attesterMethods: Array<{ value: TrustSourceMethod; labelKey: MessageKey }>
 
 export function Workloads() {
   const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
   const [overviewNow] = useState(() => Date.now());
   const [provider, setProvider] = useState("postgresql");
   const [role, setRole] = useState("readonly-reporting");
@@ -137,7 +138,7 @@ export function Workloads() {
   const [rotateTrustSourceID, setRotateTrustSourceID] = useState("");
   const [showTrustSourceSetup, setShowTrustSourceSetup] = useState(false);
   const [showTrustSourceRotation, setShowTrustSourceRotation] = useState(false);
-  const [showAttestedIssue, setShowAttestedIssue] = useState(false);
+  const [showAttestedIssue, setShowAttestedIssue] = useState(() => searchParams.get("workflow") === "attested");
   const [csrSupport, setCSRSupport] = useState<KubernetesCSRSupport | null>(null);
   const [trustBundleSupport, setTrustBundleSupport] = useState<KubernetesTrustBundleDistribution | null>(null);
   const [kubernetesOpened, setKubernetesOpened] = useState(false);
@@ -591,6 +592,12 @@ export function Workloads() {
                 urgent={deliveryHealthAvailable && failedDeliveries.length + failedRotations.length > 0}
               />
             </ul>
+            <p className="text-sm text-muted-foreground">
+              {t("workloads.overview.identityCountHelp")}{" "}
+              <Link to="/certificates" className="text-brand-accent underline">
+                {t("workloads.overview.issuedCertificates")}
+              </Link>
+            </p>
           </section>
         </>
       )}
@@ -1452,7 +1459,7 @@ function formString(data: FormData, name: string): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function AttesterBreakdown({ rows, failures }: { rows: AttestedSVIDRow[]; failures: AttestationFailure[] }) {
+export function AttesterBreakdown({ rows, failures }: { rows: AttestedSVIDRow[]; failures: AttestationFailure[] }) {
   const breakdown = attesterBreakdown(rows, failures);
   if (breakdown.length === 0) return null;
   return (

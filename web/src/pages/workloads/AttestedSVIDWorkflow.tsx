@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useTranslation } from "@/i18n/I18nProvider";
 import { formatDateTime } from "@/i18n/format";
 import type { MessageKey } from "@/i18n/messages";
-import { api, type AttestedSVID, type AttestedSVIDPreview } from "@/lib/api";
+import { ApiError, api, type AttestedSVID, type AttestedSVIDPreview } from "@/lib/api";
 import type { AttestedSVIDRequest } from "@/lib/api-types.gen";
 import { apiProblemMessage } from "@/lib/apiProblem";
 import { useCapabilityExecution } from "@/lib/capabilities";
@@ -118,7 +118,10 @@ export function AttestedSVIDWorkflow({
       retryKey.current = null;
       setStep(2);
     } catch (error) {
-      const message = apiProblemMessage(error, t("workloads.attestation.issueErrorFallback"));
+      const message =
+        error instanceof ApiError && error.status >= 500
+          ? t("workloads.attested.serverFailure")
+          : apiProblemMessage(error, t("workloads.attestation.issueErrorFallback"));
       setIssueError(message);
       onFailure(request.method, message);
     } finally {

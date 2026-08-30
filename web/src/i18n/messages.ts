@@ -5462,6 +5462,16 @@ export const messages = {
     description: "Truthful empty certificate action queue.",
   },
   "certificateCockpit.deadline.unknown": { defaultMessage: "Expiry not recorded", description: "Unknown certificate deadline." },
+  "certificateCockpit.deadline.expiredNow": {
+    defaultMessage: "Already expired",
+    description: "Certificate expiry has passed, including within the current day.",
+  },
+  "certificateCockpit.deadline.underMinute": { defaultMessage: "Expires in under 1 min", description: "Certificate has less than one minute remaining." },
+  "certificateCockpit.deadline.minutes": { defaultMessage: "Expires in {count} min", description: "Short-lived certificate deadline in minutes." },
+  "certificateCockpit.deadline.hours": {
+    defaultMessage: "Expires in {count} h {minutes} min",
+    description: "Short-lived certificate deadline in hours and minutes.",
+  },
   "certificateCockpit.deadline.expiredOne": { defaultMessage: "Expired 1 day ago", description: "Certificate expired one day ago." },
   "certificateCockpit.deadline.expiredMany": { defaultMessage: "Expired {count} days ago", description: "Certificate expired several days ago." },
   "certificateCockpit.deadline.today": { defaultMessage: "Expires today", description: "Certificate expires today." },
@@ -15145,8 +15155,31 @@ export const messages = {
     defaultMessage: "Workload delivery health unavailable",
     description: "Machine and Workload Trust delivery health check unavailable state.",
   },
-  "workloads.overview.identitiesOne": { defaultMessage: "1 short-lived identity", description: "Single machine/workload identity count." },
-  "workloads.overview.identitiesMany": { defaultMessage: "{count} short-lived identities", description: "Machine/workload identity count." },
+  "workloads.overview.identitiesOne": {
+    defaultMessage: "1 registered identity",
+    description: "Registered machine/workload identity records, not issued certificates.",
+  },
+  "workloads.overview.identitiesMany": {
+    defaultMessage: "{count} registered identities",
+    description: "Registered machine/workload identity records, not issued certificates.",
+  },
+  "workloads.overview.identityCountHelp": {
+    defaultMessage: "These are registered workload and SSH identities, not issued certificate counts.",
+    description: "Explain the boundary of the workload identity metric.",
+  },
+  "workloads.attested.serverFailure": {
+    defaultMessage:
+      "The server could not complete this request. Keep it unchanged, check system health, then retry. This does not mean the workload proof was rejected.",
+    description: "Safe recovery guidance for a server error without guessing which dependency failed or exposing its details.",
+  },
+  "workloads.overview.issuedCertificates": {
+    defaultMessage: "Browse issued certificates",
+    description: "Handoff from registered workload identities to certificate inventory.",
+  },
+  "certificates.lifecycle.replaceAttested": {
+    defaultMessage: "Replace with fresh workload proof",
+    description: "Attested certificates require a fresh proof and preview, not the generic request form.",
+  },
   "workloads.overview.agentsOne": { defaultMessage: "1 agent needs attention", description: "Single unhealthy or stale agent count." },
   "workloads.overview.agentsMany": { defaultMessage: "{count} agents need attention", description: "Unhealthy or stale agent count." },
   "workloads.overview.sshOne": { defaultMessage: "1 host outside the SSH CA", description: "Single host outside SSH certificate trust." },
@@ -21063,28 +21096,29 @@ export const messages = {
     description: "S-C20: column header counting SVIDs issued through an attester.",
   },
   "workloads.attesterBreakdown.refused": {
-    defaultMessage: "Refused",
-    description: "S-C20: column header counting attestation refusals seen in this session.",
+    defaultMessage: "Unsuccessful attempts",
+    description: "Retained unsuccessful issuance attempts, including infrastructure errors; not a count of proof refusals.",
   },
   "workloads.attesterBreakdown.refusedCount": {
-    defaultMessage: "{count} refused",
-    description: "S-C20: badge counting attestation refusals for one attester.",
+    defaultMessage: "{count} unsuccessful",
+    description: "Badge counting retained unsuccessful issuance attempts for one attester.",
   },
   "workloads.attesterBreakdown.lastVerified": {
-    defaultMessage: "Last verified",
-    description: "S-C20: column header for the most recent successful attestation.",
+    defaultMessage: "Verified in last issuance",
+    description: "Proof verification time from the latest successful issuance observed in this browser, not all verification attempts.",
   },
   "workloads.attesterBreakdown.never": {
-    defaultMessage: "Never",
-    description: "S-C20: shown when an attester has never produced a verified attestation.",
+    defaultMessage: "No issued result",
+    description: "No successful issued result is retained; this does not imply the proof was never verified.",
   },
   "workloads.attesterBreakdown.refusalsTitle": {
-    defaultMessage: "Recent refusals",
-    description: "S-C20: heading of the list of attestation refusals.",
+    defaultMessage: "Recent unsuccessful attempts",
+    description: "Heading of the bounded browser-observed issuance failure list.",
   },
   "workloads.attesterBreakdown.refusalsScope": {
-    defaultMessage: "Observed in this browser session — each attempt is checked live, and earlier refusals are not retained.",
-    description: "S-C20: scope disclaimer under the refusals list, so client-observed history is not read as a server feed.",
+    defaultMessage:
+      "Only the five most recent unsuccessful attempts in this browser session are counted. These are not necessarily proof refusals: issuance can fail after verification. Read Change history for the server record.",
+    description: "Bounded local history includes infrastructure failures and must not be mistaken for server-side attestation refusal evidence.",
   },
   "approvals.quorum.remaining": {
     defaultMessage: "{count} more needed",
@@ -22822,7 +22856,8 @@ export const messages = {
     description: "B5: per-certificate key custody line on the certificate detail pane.",
   },
   "source.custody.unrecorded.b5cust0002": {
-    defaultMessage: "This certificate predates custody recording, or was found by discovery rather than issued here. Unrecorded is not the same as safe.",
+    defaultMessage:
+      "This record cannot establish where the private key was created or how it is protected. No reason for the missing evidence is recorded. Unrecorded is not the same as safe.",
     description: "B5: per-certificate key custody line on the certificate detail pane.",
   },
   "source.status.920e413c7d": {
