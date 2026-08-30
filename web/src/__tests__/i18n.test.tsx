@@ -1340,8 +1340,12 @@ describe("i18n boundary", () => {
       // does not weaken ACME validation was reviewed in both translations.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
       // release.
-      "es-ES": "6a7e9f993b7c445f1539ff4abd82ad9d3b149c9249f50da81d343759c62700de",
-      "de-DE": "48c5db4bb734d3f28ca01fb37cf454d19467b940a7d5abb81dbc20669690f80f",
+      // QA F74 g96 re-pin: identity issuance now names a deployment-ready
+      // owner, and first-run setup records a complete, current ownership
+      // attestation before creating a certificate. Machine-authored es/de —
+      // FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "accf5b106a9d81f0f4060a51b017f319e43b16b48cd44498b44c3825a26b7b9e",
+      "de-DE": "bcfb47a6017f40ff827962f15d549b540b280273367d0fda45a050295bdf0154",
     });
   });
 

@@ -596,17 +596,19 @@ func TestCover013ArchLinterFixturesStayPresent(t *testing.T) {
 
 // ---- JOURNEY-005: core issue/revoke surfaces are real + route parity tested ------
 
-// TestJourney005IssueFlowAndRouteParityStayWired locks JOURNEY-005: the web client
-// keeps the chained owner->identity->issue convenience (issueCertificate creates an
-// owner, creates the identity, and transitions it to "issued"), and the route-parity
-// proof (web availability copy backed by OpenAPI + CLI) stays present. ELI5: the UI's
-// "issue a certificate" button really walks the full backend lifecycle, and a test
-// proves the UI's claims about what's available match the served contract.
+// TestJourney005IssueFlowAndRouteParityStayWired locks JOURNEY-005: the first-run
+// wizard creates a complete owner, attests it, and passes that explicit owner to the
+// client before the client creates and issues the identity. The route-parity proof
+// (web availability copy backed by OpenAPI + CLI) stays present. ELI5: the UI's
+// "issue a certificate" button creates accountability first, then walks the real
+// backend lifecycle, and a test proves its availability claims match the server.
 func TestJourney005IssueFlowAndRouteParityStayWired(t *testing.T) {
 	apiTS := read(t, "../web/src/lib/api.ts")
+	wizardTS := read(t, "../web/src/pages/Wizard.tsx")
 	requireAllContained(t, "JOURNEY-005", "web/src/lib/api.ts", apiTS,
 		"issueCertificate",
-		"api.createOwner(",
+		"ownerId: string",
+		"firstCertificateIdentityRequest(input, input.ownerId)",
 		"api.createIdentity(",
 		// B1 passes the requester's own CSR and idempotency key. Keep independent
 		// anchors for the typed mutation, exact route, CSR field, and key because
@@ -620,6 +622,15 @@ func TestJourney005IssueFlowAndRouteParityStayWired(t *testing.T) {
 		"...(subjectCSRPEM ? { subject_csr_pem: subjectCSRPEM } : {}),",
 		"...(expectedVersion == null ? {} : { expected_version: expectedVersion }),",
 		"idempotencyKey,",
+	)
+	requireAllContained(t, "JOURNEY-005", "web/src/pages/Wizard.tsx", wizardTS,
+		"api.createOwner({",
+		`kind: "workload"`,
+		"application_id: applicationID.trim()",
+		"environment: environment.trim()",
+		"api.attestOwner(owner.id)",
+		"!owner.ownership_complete || !owner.ownership_current",
+		"ownerId: owner.id",
 	)
 
 	// Route-parity proof must still exist (the docs-side parity test that binds web

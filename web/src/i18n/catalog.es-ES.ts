@@ -1127,6 +1127,15 @@ const esESCatalog = {
   "wizard.protocols.inactiveError": "el servidor devolvió un perfil inactivo",
   "wizard.protocols.summaryActive": "Perfil de evaluación habilitado; preparación comprobada por protocolo",
   "wizard.certificate.openInventory": "Abrir el inventario de certificados",
+  // Machine translation; human review required before locale release.
+  "wizard.certificate.ownerHeading": "Identifique al responsable",
+  "wizard.certificate.ownerHelp": "El despliegue solo se permite cuando trstctl sabe qué aplicación posee este certificado y dónde se ejecuta.",
+  "wizard.certificate.ownerConfirm": "Confirmo que esta aplicación es propietaria del certificado",
+  "wizard.certificate.ownerConfirmHelp":
+    "trstctl registra una confirmación de responsabilidad vigente para que el despliegue y la renovación se bloqueen si la responsabilidad queda desactualizada.",
+  "wizard.certificate.ownerRequired": "Añada un ID de aplicación y un entorno, y luego confirme la responsabilidad antes de emitir.",
+  "wizard.certificate.ownerNotReady":
+    "El registro del responsable no está completo y confirmado actualmente. Corrija la responsabilidad antes de emitir este certificado.",
   "wizard.protocols.summaryOperator": "Perfil configurado por el operador",
   "wizard.protocols.next": "Siguiente: habilitar protocolos",
   "wizard.issuer.stepLabel": "Comprobar la firma",
@@ -7656,6 +7665,14 @@ const esESCatalog = {
   "identities.wildcard.issuedNext":
     "Despliéguelo para iniciar la supervisión de renovación automática; la evidencia de rotación vinculará las huellas anterior y nueva.",
   "identities.wildcard.renewalGuard": "Renovación de comodín · verifique el sucesor y el recibo de reversión",
+  // F74 owner-readiness repair — machine-authored translations; human linguistic review required before release.
+  "identities.issue.ownerLabel": "Responsable preparado",
+  "identities.issue.ownerOption": "{owner} — {environment}",
+  "identities.issue.ownerPlaceholder": "Elija quién es responsable de esta credencial",
+  "identities.issue.ownerHelp":
+    "Solo se muestran responsables con ID de aplicación, entorno y confirmación vigente. Así se evita que el despliegue falle después de la emisión.",
+  "identities.issue.noReadyOwners": "No hay ningún responsable preparado para el despliegue.",
+  "identities.issue.manageOwners": "Crear o confirmar un responsable",
   "identities.evidence.identity": "Identidad",
   "identities.automation.heading": "Automatización del ciclo de vida",
   "identities.automation.answer": "Vea qué se renueva automáticamente, qué necesita atención y qué puede hacer trstctl de forma segura.",

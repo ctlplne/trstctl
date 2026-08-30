@@ -1145,6 +1145,16 @@ const deDECatalog = {
   "wizard.protocols.inactiveError": "Server meldete ein inaktives Profil",
   "wizard.protocols.summaryActive": "Eval-Profil aktiviert; Bereitschaft wird je Protokoll geprüft",
   "wizard.certificate.openInventory": "Zertifikatinventar öffnen",
+  // Machine translation; human review required before locale release.
+  "wizard.certificate.ownerHeading": "Verantwortlichen Eigentümer benennen",
+  "wizard.certificate.ownerHelp":
+    "Die Bereitstellung ist nur erlaubt, wenn trstctl weiß, welcher Anwendung dieses Zertifikat gehört und wo sie ausgeführt wird.",
+  "wizard.certificate.ownerConfirm": "Ich bestätige, dass dieses Zertifikat dieser Anwendung gehört",
+  "wizard.certificate.ownerConfirmHelp":
+    "trstctl zeichnet eine aktuelle Verantwortungsbestätigung auf, damit Bereitstellung und Erneuerung geschlossen fehlschlagen, wenn die Verantwortlichkeit später veraltet ist.",
+  "wizard.certificate.ownerRequired": "Anwendungs-ID und Umgebung hinzufügen und anschließend die Verantwortung vor der Ausstellung bestätigen.",
+  "wizard.certificate.ownerNotReady":
+    "Der Eigentümerdatensatz ist nicht vollständig und aktuell bestätigt. Korrigieren Sie die Verantwortung, bevor Sie dieses Zertifikat ausstellen.",
   "wizard.protocols.summaryOperator": "Betreiberkonfiguriertes Profil",
   "wizard.protocols.next": "Weiter: Protokolle aktivieren",
   "wizard.issuer.stepLabel": "Signierung prüfen",
@@ -7709,6 +7719,14 @@ const deDECatalog = {
   "identities.wildcard.issuedNext":
     "Stellen Sie es bereit, damit die automatische Erneuerungsüberwachung beginnt; der Rotationsnachweis verbindet alten und neuen Fingerabdruck.",
   "identities.wildcard.renewalGuard": "Wildcard-Erneuerung · Nachfolger und Rollback-Beleg prüfen",
+  // F74 owner-readiness repair — machine-authored translations; human linguistic review required before release.
+  "identities.issue.ownerLabel": "Bereite verantwortliche Stelle",
+  "identities.issue.ownerOption": "{owner} — {environment}",
+  "identities.issue.ownerPlaceholder": "Wählen Sie die verantwortliche Stelle für diesen Zugangsnachweis",
+  "identities.issue.ownerHelp":
+    "Es werden nur Verantwortliche mit Anwendungs-ID, Umgebung und aktueller Bestätigung angezeigt. So scheitert die Bereitstellung nicht erst nach der Ausstellung.",
+  "identities.issue.noReadyOwners": "Keine für die Bereitstellung bereite verantwortliche Stelle ist verfügbar.",
+  "identities.issue.manageOwners": "Verantwortliche Stelle erstellen oder bestätigen",
   "identities.evidence.identity": "Identität",
   "identities.automation.heading": "Lebenszyklusautomatisierung",
   "identities.automation.answer": "Sehen Sie, was automatisch erneuert wird, was Aufmerksamkeit braucht und was trstctl sicher als Nächstes tun kann.",

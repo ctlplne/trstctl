@@ -12,6 +12,8 @@ const { apiMock } = vi.hoisted(() => ({
     platformSystem: vi.fn(),
     createEnrollmentToken: vi.fn(),
     agents: vi.fn(),
+    createOwner: vi.fn(),
+    attestOwner: vi.fn(),
     issueCertificate: vi.fn(),
     protocolProfileStatus: vi.fn(),
     activateProtocolProfile: vi.fn(),
@@ -50,6 +52,12 @@ function renderWizard() {
   );
 }
 
+async function completeOwnerFields(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(screen.getByLabelText("Application ID"), "APP-PAYMENTS");
+  await user.type(screen.getByLabelText("Environment"), "production");
+  await user.click(screen.getByLabelText("I confirm this application owns the certificate"));
+}
+
 async function openIntegrationStep() {
   const user = userEvent.setup();
   renderWizard();
@@ -58,6 +66,7 @@ async function openIntegrationStep() {
   await user.click(await screen.findByRole("button", { name: "Activate eval protocol profile" }));
   await user.click(await screen.findByRole("button", { name: "Next: issue certificate" }));
   await user.type(await screen.findByLabelText("Service name"), "catalog-proof");
+  await completeOwnerFields(user);
   await user.click(screen.getByRole("button", { name: "Issue certificate" }));
   await user.click(await screen.findByRole("button", { name: "Next: prove integrations" }));
   return user;
@@ -72,6 +81,8 @@ describe("C10-7 carousel onboarding wizard", () => {
     apiMock.platformSystem.mockResolvedValue({ signer_mode: "external", dependencies: [{ name: "signer", ready: true }] });
     apiMock.createEnrollmentToken.mockResolvedValue({ token: "BOOT-TOKEN-C10" });
     apiMock.agents.mockResolvedValue([{ id: "agent-1", tenant_id: "t1", name: "edge-01", status: "online" }]);
+    apiMock.createOwner.mockResolvedValue({ id: "owner-1", ownership_complete: true, ownership_current: false });
+    apiMock.attestOwner.mockResolvedValue({ id: "owner-1", ownership_complete: true, ownership_current: true });
     apiMock.issueCertificate.mockResolvedValue({ id: "id-1", tenant_id: "t1", name: "payments", kind: "x509_certificate", status: "issued" });
     apiMock.protocolProfileStatus.mockResolvedValue({
       profile: "eval",
@@ -106,8 +117,9 @@ describe("C10-7 carousel onboarding wizard", () => {
     await user.click(screen.getByRole("button", { name: "Next: issue certificate" }));
 
     await user.type(await screen.findByLabelText("Service name"), "payments");
+    await completeOwnerFields(user);
     await user.click(screen.getByRole("button", { name: "Issue certificate" }));
-    await waitFor(() => expect(apiMock.issueCertificate).toHaveBeenCalledWith({ name: "payments" }));
+    await waitFor(() => expect(apiMock.issueCertificate).toHaveBeenCalledWith({ name: "payments", ownerId: "owner-1" }));
     await user.click(screen.getByRole("button", { name: "Next: prove integrations" }));
     expect(await screen.findByRole("heading", { name: "Verify configured integrations" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Skip integration proof for now" }));

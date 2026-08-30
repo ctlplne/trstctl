@@ -3084,6 +3084,30 @@ export const messages = {
     defaultMessage: "Open certificate inventory",
     description: "Link shown immediately after the first-run wizard issues a certificate.",
   },
+  "wizard.certificate.ownerHeading": {
+    defaultMessage: "Name the accountable owner",
+    description: "Heading for ownership metadata required before the first certificate can be issued.",
+  },
+  "wizard.certificate.ownerHelp": {
+    defaultMessage: "Deployment is allowed only when trstctl knows which application owns this certificate and where it runs.",
+    description: "Plain-language reason the first-run certificate requires owner metadata.",
+  },
+  "wizard.certificate.ownerConfirm": {
+    defaultMessage: "I confirm this application owns the certificate",
+    description: "Explicit human ownership confirmation before first-run issuance.",
+  },
+  "wizard.certificate.ownerConfirmHelp": {
+    defaultMessage: "trstctl records a current ownership attestation so deployment and renewal can fail closed if accountability later becomes stale.",
+    description: "Technical ELI5 explanation of the ownership attestation created by the wizard.",
+  },
+  "wizard.certificate.ownerRequired": {
+    defaultMessage: "Add an application ID and environment, then confirm ownership before issuing.",
+    description: "Recovery instruction when owner fields are missing from first-run issuance.",
+  },
+  "wizard.certificate.ownerNotReady": {
+    defaultMessage: "The owner record is not complete and currently attested. Fix ownership before issuing this certificate.",
+    description: "Fail-closed error when first-run owner creation or attestation does not produce a deployment-ready owner.",
+  },
   "wizard.protocols.summaryOperator": {
     defaultMessage: "Operator-configured profile",
     description: "Completion-summary value when production uses explicit protocol configuration.",
@@ -24044,6 +24068,30 @@ export const messages = {
   "identities.wildcard.renewalGuard": {
     defaultMessage: "Wildcard renewal · verify the successor and rollback receipt",
     description: "Safety reminder on a due wildcard renewal.",
+  },
+  "identities.issue.ownerLabel": {
+    defaultMessage: "Ready owner",
+    description: "Label for the deployment-ready owner selector on the identity issuance form.",
+  },
+  "identities.issue.ownerOption": {
+    defaultMessage: "{owner} — {environment}",
+    description: "Ready owner option showing its human label and deployment environment.",
+  },
+  "identities.issue.ownerPlaceholder": {
+    defaultMessage: "Choose who owns this credential",
+    description: "Placeholder for the deployment-ready owner selector.",
+  },
+  "identities.issue.ownerHelp": {
+    defaultMessage: "Only owners with an application ID, environment, and current attestation are listed. This keeps deployment from failing after issuance.",
+    description: "ELI5 explanation of why identity issuance requires a deployment-ready owner.",
+  },
+  "identities.issue.noReadyOwners": {
+    defaultMessage: "No deployment-ready owner is available.",
+    description: "Blocked identity issuance state when no owner can pass deployment readiness.",
+  },
+  "identities.issue.manageOwners": {
+    defaultMessage: "Create or attest an owner",
+    description: "Recovery link from blocked identity issuance to owner setup.",
   },
   "identities.evidence.identity": { defaultMessage: "Identity", description: "Credential identity column in rotation evidence." },
   "identities.page.title": { defaultMessage: "Machine identities", description: "Quiet title for the identity inventory route." },

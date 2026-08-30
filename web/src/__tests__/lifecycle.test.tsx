@@ -97,7 +97,18 @@ async function confirmReviewedAction(user: ReturnType<typeof userEvent.setup>) {
 describe("lifecycle actions from the UI", () => {
   beforeEach(() => {
     apiMock.issuers.mockReset().mockResolvedValue([{ id: "iss-1", kind: "x509_ca", name: "LE" }]);
-    apiMock.owners.mockReset().mockResolvedValue([{ id: "own-1", kind: "workload", name: "team" }]);
+    apiMock.owners.mockReset().mockResolvedValue([
+      {
+        id: "own-1",
+        kind: "workload",
+        name: "team",
+        application_id: "APP-TEAM",
+        environment: "production",
+        ownership_complete: true,
+        ownership_attested: true,
+        ownership_current: true,
+      },
+    ]);
     // Fixtures use `status` — the field the SERVED Identity contract (OpenAPI) carries
     // and that identityState() reads (SURFACE-005: the FE no longer guesses `state`).
     apiMock.issueCertificate.mockReset().mockResolvedValue({ id: "new-1", name: "svc", status: "issued" });
@@ -984,8 +995,37 @@ describe("lifecycle actions from the UI", () => {
 
     await user.click(await screen.findByRole("button", { name: /add identity/i }));
     await user.type(screen.getByLabelText(/name/i), "svc");
+    await user.selectOptions(screen.getByLabelText("Ready owner"), "own-1");
     await user.click(screen.getByRole("button", { name: /create|issue/i }));
-    await waitFor(() => expect(apiMock.issueCertificate).toHaveBeenCalledWith(expect.objectContaining({ name: "svc" })));
+    await waitFor(() => expect(apiMock.issueCertificate).toHaveBeenCalledWith(expect.objectContaining({ name: "svc", ownerId: "own-1" })));
+  });
+
+  it("refuses to issue into an owner record that cannot pass deployment readiness", async () => {
+    apiMock.identities.mockResolvedValue([]);
+    apiMock.owners.mockResolvedValue([
+      { id: "incomplete", kind: "workload", name: "Missing application", ownership_complete: false, ownership_current: false },
+      {
+        id: "stale",
+        kind: "workload",
+        name: "Stale attestation",
+        application_id: "APP-STALE",
+        environment: "production",
+        ownership_complete: true,
+        ownership_attested: true,
+        ownership_current: false,
+      },
+    ]);
+    const user = userEvent.setup();
+    renderIdentities();
+
+    await user.click(await screen.findByRole("button", { name: /add identity/i }));
+    await user.type(screen.getByLabelText(/name/i), "svc");
+
+    expect(screen.getByRole("combobox", { name: "Ready owner" })).toHaveValue("");
+    expect(screen.getByRole("button", { name: /create|issue/i })).toBeDisabled();
+    expect(screen.getByText("No deployment-ready owner is available.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Create or attest an owner" })).toHaveAttribute("href", "/owners");
+    expect(apiMock.issueCertificate).not.toHaveBeenCalled();
   });
 
   it("requires explicit acknowledgement before issuing a wildcard identity", async () => {
@@ -1005,6 +1045,7 @@ describe("lifecycle actions from the UI", () => {
 
     await user.click(await screen.findByRole("button", { name: /add identity/i }));
     await user.type(screen.getByLabelText(/name/i), "*.payments.example");
+    await user.selectOptions(screen.getByLabelText("Ready owner"), "own-1");
     expect(screen.getByRole("heading", { name: "Wildcard safety check" })).toBeInTheDocument();
     expect(screen.getByText("Automatic ACME requests can prove wildcard control only with DNS-01.")).toBeInTheDocument();
     expect(screen.getByText("Before ACME use, verify that the zone’s DNS provider policy allows wildcards.")).toBeInTheDocument();
@@ -1019,6 +1060,7 @@ describe("lifecycle actions from the UI", () => {
     await waitFor(() =>
       expect(apiMock.issueCertificate).toHaveBeenCalledWith({
         name: "*.payments.example",
+        ownerId: "own-1",
         wildcardBlastRadiusAcknowledged: true,
       }),
     );
@@ -1037,6 +1079,7 @@ describe("lifecycle actions from the UI", () => {
 
     await user.click(await screen.findByRole("button", { name: /add identity/i }));
     await user.type(screen.getByLabelText(/name/i), "*.blocked.example");
+    await user.selectOptions(screen.getByLabelText("Ready owner"), "own-1");
     await user.click(screen.getByLabelText(/Acknowledge wildcard blast radius/i));
     await user.click(screen.getByRole("button", { name: /create|issue/i }));
 

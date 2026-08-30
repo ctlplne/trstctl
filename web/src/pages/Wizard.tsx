@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { Cable, CheckCircle2, FileKey2, KeyRound, Loader2, Network, RotateCcw, Server, ShieldCheck } from "lucide-react";
-import { ApiError, api, type Agent, type EnrollmentToken, type Identity, type ProtocolProfileStatus } from "@/lib/api";
+import { ApiError, api, type Agent, type EnrollmentToken, type Identity, type Owner, type ProtocolProfileStatus } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
@@ -371,6 +371,10 @@ function IssuerStep({
 function CertificateStep({ certificate, onIssued }: { certificate: Identity | null; onIssued: (identity: Identity) => void }) {
   const { t } = useTranslation();
   const [name, setName] = useState("");
+  const [applicationID, setApplicationID] = useState("");
+  const [environment, setEnvironment] = useState("");
+  const [ownershipConfirmed, setOwnershipConfirmed] = useState(false);
+  const [createdOwner, setCreatedOwner] = useState<Owner | null>(null);
   const [wildcardAck, setWildcardAck] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -382,8 +386,33 @@ function CertificateStep({ certificate, onIssued }: { certificate: Identity | nu
     setError(null);
     setBusy(true);
     try {
+      if (!applicationID.trim() || !environment.trim() || !ownershipConfirmed) {
+        throw new Error(t("wizard.certificate.ownerRequired"));
+      }
+      let owner = createdOwner;
+      if (!owner) {
+        owner = await api.createOwner({
+          kind: "workload",
+          name: serviceName,
+          service: serviceName,
+          application_id: applicationID.trim(),
+          environment: environment.trim(),
+        });
+        setCreatedOwner(owner);
+      }
+      if (!owner.ownership_complete) {
+        throw new Error(t("wizard.certificate.ownerNotReady"));
+      }
+      if (!owner.ownership_current) {
+        owner = await api.attestOwner(owner.id);
+        setCreatedOwner(owner);
+      }
+      if (!owner.ownership_complete || !owner.ownership_current) {
+        throw new Error(t("wizard.certificate.ownerNotReady"));
+      }
       const issued = await api.issueCertificate({
         name: serviceName,
+        ownerId: owner.id,
         ...(isWildcard ? { wildcardBlastRadiusAcknowledged: wildcardAck } : {}),
       });
       onIssued(issued);
@@ -421,6 +450,44 @@ function CertificateStep({ certificate, onIssued }: { certificate: Identity | nu
           placeholder={translateNow("source.payments.api.682a1c47a1")}
         />
       </label>
+      <fieldset className="grid gap-3 rounded-control border border-border bg-muted/20 p-3">
+        <legend className="px-1 text-sm font-semibold">{t("wizard.certificate.ownerHeading")}</legend>
+        <p className="text-sm text-muted-foreground">{t("wizard.certificate.ownerHelp")}</p>
+        <label htmlFor="wizard-owner-application-id" className="grid gap-1 text-sm font-medium">
+          {t("owners.readiness.applicationID")}
+          <input
+            id="wizard-owner-application-id"
+            value={applicationID}
+            onChange={(event) => setApplicationID(event.target.value)}
+            className="w-full rounded-control border border-border bg-background px-3 py-2 text-body"
+            placeholder={t("owners.readiness.applicationPlaceholder")}
+          />
+        </label>
+        <label htmlFor="wizard-owner-environment" className="grid gap-1 text-sm font-medium">
+          {t("owners.readiness.environment")}
+          <input
+            id="wizard-owner-environment"
+            value={environment}
+            onChange={(event) => setEnvironment(event.target.value)}
+            className="w-full rounded-control border border-border bg-background px-3 py-2 text-body"
+            placeholder={t("owners.readiness.environmentPlaceholder")}
+          />
+        </label>
+        <label className="flex items-start gap-2 text-sm font-medium" htmlFor="wizard-owner-confirm">
+          <input
+            id="wizard-owner-confirm"
+            type="checkbox"
+            aria-label={t("wizard.certificate.ownerConfirm")}
+            checked={ownershipConfirmed}
+            onChange={(event) => setOwnershipConfirmed(event.target.checked)}
+            className="mt-1 h-4 w-4 rounded border-border"
+          />
+          <span>
+            {t("wizard.certificate.ownerConfirm")}
+            <span className="block text-xs font-normal text-muted-foreground">{t("wizard.certificate.ownerConfirmHelp")}</span>
+          </span>
+        </label>
+      </fieldset>
       {isWildcard && (
         <label className="flex items-start gap-2 text-sm font-medium" htmlFor="wizard-wildcard-ack">
           <input
@@ -447,7 +514,11 @@ function CertificateStep({ certificate, onIssued }: { certificate: Identity | nu
           </Link>
         </div>
       ) : (
-        <Button type="submit" className="justify-self-start" disabled={busy || (isWildcard && !wildcardAck)}>
+        <Button
+          type="submit"
+          className="justify-self-start"
+          disabled={busy || !applicationID.trim() || !environment.trim() || !ownershipConfirmed || (isWildcard && !wildcardAck)}
+        >
           {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
           {translateNow("source.issue.certificate.ff84c7ec37")}
         </Button>

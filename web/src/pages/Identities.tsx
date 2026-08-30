@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import {
   api,
   ApiError,
@@ -682,6 +683,7 @@ export function Identities() {
 
       {showForm && (
         <NewIdentityForm
+          owners={owners ?? []}
           onDone={(issued) => {
             setShowForm(false);
             setSelectedId(issued.id);
@@ -1547,14 +1549,18 @@ function IdentityDetailPanel({
   );
 }
 
-function NewIdentityForm({ onDone }: { onDone: (issued: Identity) => void }) {
+function NewIdentityForm({ owners, onDone }: { owners: Owner[]; onDone: (issued: Identity) => void }) {
   const { t } = useTranslation();
   const [name, setName] = useState("");
+  const [ownerId, setOwnerId] = useState("");
   const [wildcardAck, setWildcardAck] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const serviceName = name.trim() || "new-service";
   const isWildcard = serviceName.startsWith("*.");
+  const readyOwners = owners
+    .filter((owner) => owner.ownership_complete === true && owner.ownership_current === true)
+    .sort((left, right) => ownerLabel(left).localeCompare(ownerLabel(right)));
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -1563,6 +1569,7 @@ function NewIdentityForm({ onDone }: { onDone: (issued: Identity) => void }) {
     try {
       const issued = await api.issueCertificate({
         name: serviceName,
+        ownerId,
         ...(isWildcard ? { wildcardBlastRadiusAcknowledged: wildcardAck } : {}),
       });
       onDone(issued);
@@ -1589,6 +1596,39 @@ function NewIdentityForm({ onDone }: { onDone: (issued: Identity) => void }) {
           className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
           placeholder={translateNow("source.e.g.payments.api.b39781a2b3")}
         />
+        <label htmlFor="new-identity-owner" className="mt-3 block text-sm font-medium">
+          {t("identities.issue.ownerLabel")}
+        </label>
+        <select
+          id="new-identity-owner"
+          value={ownerId}
+          onChange={(event) => setOwnerId(event.target.value)}
+          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+        >
+          <option value="">{t("identities.issue.ownerPlaceholder")}</option>
+          {readyOwners.map((owner) => {
+            const label = ownerLabel(owner);
+            return (
+              <option key={owner.id} value={owner.id}>
+                {owner.environment
+                  ? t("identities.issue.ownerOption", {
+                      owner: label,
+                      environment: titleCaseMachineValue(owner.environment) ?? owner.environment,
+                    })
+                  : label}
+              </option>
+            );
+          })}
+        </select>
+        <p className="text-xs text-muted-foreground">{t("identities.issue.ownerHelp")}</p>
+        {readyOwners.length === 0 && (
+          <p className="text-sm text-risk-warning">
+            {t("identities.issue.noReadyOwners")}{" "}
+            <Link className="font-medium underline underline-offset-2" to="/owners">
+              {t("identities.issue.manageOwners")}
+            </Link>
+          </p>
+        )}
         {isWildcard && (
           <section aria-labelledby="wildcard-safety-heading" className="mt-3 rounded-control border border-status-warning/30 bg-status-warning/5 p-3">
             <h3 id="wildcard-safety-heading" className="text-sm font-semibold">
@@ -1615,7 +1655,7 @@ function NewIdentityForm({ onDone }: { onDone: (issued: Identity) => void }) {
           </section>
         )}
       </div>
-      <Button type="submit" className="w-full md:w-auto" disabled={busy || (isWildcard && !wildcardAck)}>
+      <Button type="submit" className="w-full md:w-auto" disabled={busy || !ownerId || (isWildcard && !wildcardAck)}>
         {translateNow("source.issue.48dc76dfa2")}
       </Button>
       {error && (

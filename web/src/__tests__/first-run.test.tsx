@@ -10,6 +10,8 @@ const { apiMock } = vi.hoisted(() => ({
     platformSystem: vi.fn(),
     protocolProfileStatus: vi.fn(),
     activateProtocolProfile: vi.fn(),
+    createOwner: vi.fn(),
+    attestOwner: vi.fn(),
     issueCertificate: vi.fn(),
     connectorCatalog: vi.fn(),
     createConnectorTarget: vi.fn(),
@@ -42,6 +44,8 @@ describe("first-run served capability journey", () => {
       active: true,
       protocols: ["acme", "est", "scep", "cmp", "ssh", "tsa", "spiffe"],
     });
+    apiMock.createOwner.mockResolvedValue({ id: "owner-1", ownership_complete: true, ownership_current: false });
+    apiMock.attestOwner.mockResolvedValue({ id: "owner-1", ownership_complete: true, ownership_current: true });
     apiMock.issueCertificate.mockResolvedValue({
       id: "identity-1",
       name: "payments",
@@ -108,8 +112,11 @@ describe("first-run served capability journey", () => {
     await screen.findByText(/eval protocol profile is active/i);
     await user.click(screen.getByRole("button", { name: /next: issue certificate/i }));
     await user.type(await screen.findByLabelText(/service name/i), "payments");
+    await user.type(screen.getByLabelText("Application ID"), "APP-PAYMENTS");
+    await user.type(screen.getByLabelText("Environment"), "production");
+    await user.click(screen.getByLabelText("I confirm this application owns the certificate"));
     await user.click(screen.getByRole("button", { name: /^issue certificate$/i }));
-    await waitFor(() => expect(apiMock.issueCertificate).toHaveBeenCalledWith({ name: "payments" }));
+    await waitFor(() => expect(apiMock.issueCertificate).toHaveBeenCalledWith({ name: "payments", ownerId: "owner-1" }));
     await user.click(await screen.findByRole("button", { name: /next: prove integrations/i }));
 
     expect(await screen.findByRole("heading", { name: /verify configured integrations/i })).toBeInTheDocument();

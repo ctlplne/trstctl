@@ -663,9 +663,10 @@ func TestWizardFirstCertificateContractIsBackedByOpenAPIAndStoreValidator(t *tes
 		t.Fatal("web API client should expose a firstCertificateIdentityRequest helper so DOCS-003 can pin the wizard payload to the OpenAPI IdentityRequest contract")
 	}
 	for _, want := range []string{
-		`kind: "workload"`,
 		`kind: "x509_certificate"`,
+		"ownerId: string",
 		"owner_id: ownerId",
+		"firstCertificateIdentityRequest(input, input.ownerId)",
 		`"first issuance via UI"`,
 	} {
 		if !strings.Contains(apiTS, want) {
@@ -678,6 +679,12 @@ func TestWizardFirstCertificateContractIsBackedByOpenAPIAndStoreValidator(t *tes
 	for _, want := range []string{
 		`const serviceName = name.trim() || "first-service";`,
 		`const isWildcard = serviceName.startsWith("*.");`,
+		`kind: "workload"`,
+		"application_id: applicationID.trim()",
+		"environment: environment.trim()",
+		"api.attestOwner(owner.id)",
+		"!owner.ownership_complete || !owner.ownership_current",
+		"ownerId: owner.id",
 		`...(isWildcard ? { wildcardBlastRadiusAcknowledged: wildcardAck } : {})`,
 	} {
 		if !strings.Contains(wizardTS, want) {
@@ -689,7 +696,9 @@ func TestWizardFirstCertificateContractIsBackedByOpenAPIAndStoreValidator(t *tes
 	}
 	for _, want := range []string{
 		"createIssuer).not.toHaveBeenCalled",
-		`issueCertificate).toHaveBeenCalledWith({ name: "payments" })`,
+		`createOwner).toHaveBeenCalledWith({`,
+		`attestOwner).toHaveBeenCalledWith("owner-1")`,
+		`issueCertificate).toHaveBeenCalledWith({ name: "payments", ownerId: "owner-1" })`,
 	} {
 		if !strings.Contains(wizardTest, want) {
 			t.Errorf("wizard test should pin the served first-run contract with %q", want)

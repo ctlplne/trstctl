@@ -695,7 +695,9 @@ export type Profile = GenProfile;
 export type ProfileMutationResult = Profile | ProfileApprovalResponse;
 export type IssueCertificateInput = {
   name: string;
-  ownerId?: string;
+  /** A complete, currently attested owner. Issuance never invents a bare
+   * owner because that creates a certificate that deployment must reject. */
+  ownerId: string;
   issuerId?: string;
   wildcardBlastRadiusAcknowledged?: boolean;
   /** A PKCS#10 request the operator generated on the host that will use the
@@ -1852,7 +1854,7 @@ function postRead<T>(path: string, body?: unknown): Promise<T> {
   });
 }
 
-export function firstCertificateIdentityRequest(input: IssueCertificateInput, ownerId: string): IdentityRequest {
+export function firstCertificateIdentityRequest(input: Omit<IssueCertificateInput, "ownerId">, ownerId: string): IdentityRequest {
   const wildcardAttrs =
     input.name.trim().startsWith("*.") && input.wildcardBlastRadiusAcknowledged
       ? {
@@ -2505,12 +2507,7 @@ const liveApi: Api = {
     ),
   approveIdentityAction: (id, input) => mutate<Approval>("POST", `/api/v1/identities/${encodeURIComponent(id)}/approvals`, input),
   issueCertificate: async (input) => {
-    let ownerId = input.ownerId;
-    if (!ownerId) {
-      const owner = await api.createOwner({ kind: "workload", name: input.name });
-      ownerId = owner.id;
-    }
-    const identity = await api.createIdentity(firstCertificateIdentityRequest(input, ownerId));
+    const identity = await api.createIdentity(firstCertificateIdentityRequest(input, input.ownerId));
     return api.transitionIdentity(
       identity.id,
       "issued",

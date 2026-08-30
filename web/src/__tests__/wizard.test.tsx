@@ -11,6 +11,8 @@ const { apiMock } = vi.hoisted(() => ({
     platformSystem: vi.fn(),
     createEnrollmentToken: vi.fn(),
     agents: vi.fn(),
+    createOwner: vi.fn(),
+    attestOwner: vi.fn(),
     issueCertificate: vi.fn(),
     protocolProfileStatus: vi.fn(),
     activateProtocolProfile: vi.fn(),
@@ -32,6 +34,16 @@ function renderWizard() {
   );
 }
 
+async function issueFirstCertificate(user: ReturnType<typeof userEvent.setup>, name = "payments") {
+  const serviceName = await screen.findByLabelText(/service name/i);
+  await user.clear(serviceName);
+  await user.type(serviceName, name);
+  await user.type(screen.getByLabelText("Application ID"), "APP-PAYMENTS");
+  await user.type(screen.getByLabelText("Environment"), "production");
+  await user.click(screen.getByLabelText("I confirm this application owns the certificate"));
+  await user.click(screen.getByRole("button", { name: /issue certificate/i }));
+}
+
 describe("first-run wizard", () => {
   beforeEach(() => {
     apiMock.createIssuer.mockReset();
@@ -48,6 +60,26 @@ describe("first-run wizard", () => {
       roles: ["host"],
     });
     apiMock.agents.mockReset().mockResolvedValue([{ id: "ag-1", name: "edge-01", status: "online" }]);
+    apiMock.createOwner.mockReset().mockResolvedValue({
+      id: "owner-1",
+      kind: "workload",
+      name: "payments",
+      application_id: "APP-PAYMENTS",
+      environment: "production",
+      ownership_complete: true,
+      ownership_attested: false,
+      ownership_current: false,
+    });
+    apiMock.attestOwner.mockReset().mockResolvedValue({
+      id: "owner-1",
+      kind: "workload",
+      name: "payments",
+      application_id: "APP-PAYMENTS",
+      environment: "production",
+      ownership_complete: true,
+      ownership_attested: true,
+      ownership_current: true,
+    });
     apiMock.issueCertificate.mockReset().mockResolvedValue({ id: "id-1", name: "payments", status: "issued" });
     apiMock.protocolProfileStatus.mockReset().mockResolvedValue({
       profile: "eval",
@@ -91,9 +123,18 @@ describe("first-run wizard", () => {
 
     // Step 3 — issue the first certificate.
     expect(await screen.findByRole("heading", { name: /issue your first certificate/i })).toBeInTheDocument();
-    await user.type(screen.getByLabelText(/service name/i), "payments");
-    await user.click(screen.getByRole("button", { name: /issue certificate/i }));
-    await waitFor(() => expect(apiMock.issueCertificate).toHaveBeenCalledWith({ name: "payments" }));
+    await issueFirstCertificate(user);
+    await waitFor(() =>
+      expect(apiMock.createOwner).toHaveBeenCalledWith({
+        kind: "workload",
+        name: "payments",
+        service: "payments",
+        application_id: "APP-PAYMENTS",
+        environment: "production",
+      }),
+    );
+    expect(apiMock.attestOwner).toHaveBeenCalledWith("owner-1");
+    expect(apiMock.issueCertificate).toHaveBeenCalledWith({ name: "payments", ownerId: "owner-1" });
     expect(screen.getByRole("link", { name: /open certificate inventory/i })).toHaveAttribute("href", "/certificates");
     await user.click(screen.getByRole("button", { name: /next: prove integrations/i }));
 
@@ -135,8 +176,7 @@ describe("first-run wizard", () => {
     await user.click(screen.getByRole("button", { name: /activate eval protocol profile/i }));
     await screen.findByText(/eval protocol profile is active/i);
     await user.click(screen.getByRole("button", { name: /next: issue certificate/i }));
-    await user.type(await screen.findByLabelText(/service name/i), "payments");
-    await user.click(screen.getByRole("button", { name: /issue certificate/i }));
+    await issueFirstCertificate(user);
     await user.click(await screen.findByRole("button", { name: /next: prove integrations/i }));
     await screen.findByRole("heading", { name: /verify configured integrations/i });
     await user.click(screen.getByRole("button", { name: /skip integration proof/i }));
@@ -164,11 +204,15 @@ describe("first-run wizard", () => {
     await user.click(screen.getByRole("button", { name: /activate eval protocol profile/i }));
     await screen.findByText(/eval protocol profile is active/i);
     await user.click(screen.getByRole("button", { name: /next: issue certificate/i }));
-    await user.type(await screen.findByLabelText(/service name/i), "payments");
-    await user.click(screen.getByRole("button", { name: /issue certificate/i }));
+    await issueFirstCertificate(user);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/boom|could not|failed/i);
     expect(apiMock.createIssuer).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: /issue certificate/i }));
+    await waitFor(() => expect(apiMock.issueCertificate).toHaveBeenCalledTimes(2));
+    expect(apiMock.createOwner).toHaveBeenCalledTimes(1);
+    expect(apiMock.attestOwner).toHaveBeenCalledTimes(1);
   });
 
   it("does not invent an issuer row and explains exactly what an empty catalog proves", async () => {
@@ -207,7 +251,7 @@ describe("first-run wizard", () => {
     await user.click(await screen.findByRole("button", { name: /activate eval protocol profile/i }));
     await screen.findByText(/eval protocol profile is active/i);
     await user.click(screen.getByRole("button", { name: /next: issue certificate/i }));
-    await user.click(await screen.findByRole("button", { name: /issue certificate/i }));
+    await issueFirstCertificate(user, "first-service");
     await user.click(await screen.findByRole("button", { name: /next: prove integrations/i }));
     await user.click(await screen.findByRole("button", { name: /skip integration proof/i }));
     await user.click(screen.getByRole("button", { name: /next: optional agent/i }));

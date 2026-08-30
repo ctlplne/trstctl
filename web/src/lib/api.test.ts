@@ -1216,13 +1216,9 @@ describe("api CSRF contract (SEC-001)", () => {
     });
   });
 
-  it("issues the first wizard certificate without posting a fake issuer_id", async () => {
+  it("issues the first wizard certificate with an explicit ready owner and no fake issuer_id", async () => {
     document.cookie = "trstctl_csrf=csrf-token-first-cert; path=/";
     mockFetchSequence([
-      {
-        status: 201,
-        body: JSON.stringify({ id: "owner-1", tenant_id: "tenant-1", kind: "workload", name: "payments" }),
-      },
       {
         status: 201,
         body: JSON.stringify({
@@ -1247,17 +1243,17 @@ describe("api CSRF contract (SEC-001)", () => {
       },
     ]);
 
-    await api.issueCertificate({ name: "payments" });
+    await api.issueCertificate({ name: "payments", ownerId: "owner-1" });
 
     const calls = vi.mocked(fetch).mock.calls;
-    expect(calls.map((call) => call[0])).toEqual(["/api/v1/owners", "/api/v1/identities", "/api/v1/identities/identity-1/transitions"]);
-    expect(JSON.parse(calls[1][1]?.body as string)).toEqual({
+    expect(calls.map((call) => call[0])).toEqual(["/api/v1/identities", "/api/v1/identities/identity-1/transitions"]);
+    expect(JSON.parse(calls[0][1]?.body as string)).toEqual({
       kind: "x509_certificate",
       name: "payments",
       owner_id: "owner-1",
     });
-    expect(JSON.stringify(calls[1][1]?.body)).not.toContain("issuer_id");
-    expect((calls[1][1]?.headers as Record<string, string>)["Idempotency-Key"]).toMatch(/^(?:idem-.+|[0-9a-f-]{36})$/);
+    expect(JSON.stringify(calls[0][1]?.body)).not.toContain("issuer_id");
+    expect((calls[0][1]?.headers as Record<string, string>)["Idempotency-Key"]).toMatch(/^(?:idem-.+|[0-9a-f-]{36})$/);
   });
 });
 
