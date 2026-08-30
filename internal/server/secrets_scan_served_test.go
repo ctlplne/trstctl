@@ -37,8 +37,22 @@ func TestServedGitleaksScanDetectsPlantedSecret(t *testing.T) {
 		t.Fatalf("write planted secret fixture: %v", err)
 	}
 
-	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
+	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
+		// The real scanner must see only this fixture, not the entire temporary
+		// directory or host filesystem. Production's default root stays closed.
+		d.SecretScanRoots = []string{repo}
+	})
 	tok := seedScopedToken(t, h.store, h.tenant, "secrets:write", "discovery:read", "graph:read")
+
+	outsideStatus, outsideBody := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/scans", tok, "sec-07-outside-root", map[string]any{
+		"path": t.TempDir(),
+	})
+	if outsideStatus != http.StatusBadRequest || !strings.Contains(string(outsideBody), "outside the configured scan roots") {
+		t.Fatalf("scan outside fixture root: status %d body %s", outsideStatus, outsideBody)
+	}
+	if h.hasEvent(t, "discovery.finding.recorded") || h.hasEvent(t, "discovery.run.completed") {
+		t.Fatal("refused scan outside fixture root must not record discovery results")
+	}
 
 	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/scans", tok, "sec-07-gitleaks-scan", map[string]any{
 		"path": repo,
