@@ -52,6 +52,7 @@ func (source tsaQualificationSource) read(_ context.Context, tenantID string) ap
 		return posture
 	}
 	posture.Served = true
+	posture.Activated = served.activation == nil || served.activation.Active()
 	// buildTSA cannot return an Authority until it has loaded or created a
 	// timestamping-only certificate and matched it to the signer-held key.
 	posture.StableCertificateReady = source.stableCertConfigured

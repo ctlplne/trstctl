@@ -24,7 +24,7 @@ func TestTSAQualificationIsTenantScopedEffectFreeAndExact(t *testing.T) {
 			calls++
 			seenTenant = tenantID
 			return api.TSARuntimePosture{
-				Configured: true, Served: true, Endpoint: "/tsa", TenantBound: true,
+				Configured: true, Served: true, Activated: true, Endpoint: "/tsa", TenantBound: true,
 				StableCertificateReady: true, SignerReady: true, AuditReady: true,
 				BulkheadReady: true, PolicyOID: "1.3.6.1.4.1.59551.2.1",
 			}
@@ -49,7 +49,7 @@ func TestTSAQualificationIsTenantScopedEffectFreeAndExact(t *testing.T) {
 	if !got.Ready || !got.EffectFree || got.Endpoint != "/tsa" || got.PolicyOID != "1.3.6.1.4.1.59551.2.1" {
 		t.Fatalf("TSA qualification=%+v, want ready exact plan", got)
 	}
-	if len(got.Checks) != 7 || len(got.Blockers) != 0 || len(got.Proof) < 3 {
+	if len(got.Checks) != 8 || len(got.Blockers) != 0 || len(got.Proof) < 3 {
 		t.Fatalf("TSA qualification checks=%d blockers=%v proof=%v", len(got.Checks), got.Blockers, got.Proof)
 	}
 	if len(got.PreviewWrites) != 0 || len(got.PreviewExternalEffects) != 0 || len(got.PreviewSignerCalls) != 0 {
@@ -60,6 +60,38 @@ func TestTSAQualificationIsTenantScopedEffectFreeAndExact(t *testing.T) {
 		if strings.Contains(body, forbidden) {
 			t.Fatalf("qualification exposed forbidden field %q: %s", forbidden, rec.Body.String())
 		}
+	}
+}
+
+func TestTSAQualificationFailsClosedWhenEvalProtocolProfileIsInactive(t *testing.T) {
+	handler := api.New(nil, nil, nil,
+		api.WithInsecureHeaderResolver(),
+		api.WithTSAQualificationPosture(func(context.Context, string) api.TSARuntimePosture {
+			return api.TSARuntimePosture{
+				Configured: true, Served: true, Activated: false, Endpoint: "/tsa", TenantBound: true,
+				StableCertificateReady: true, SignerReady: true, AuditReady: true,
+				BulkheadReady: true, PolicyOID: "1.3.6.1.4.1.59551.2.1",
+			}
+		}),
+	)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/protocols/tsa/qualification", nil)
+	req.Header.Set("X-Tenant-ID", tsaQualificationTenant)
+	req.Header.Set("X-Subject", "operator-a")
+	req.Header.Set("X-Roles", "admin")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("blocked TSA qualification status=%d body=%s, want 200", rec.Code, rec.Body.String())
+	}
+	var got api.TSAQualification
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode blocked TSA qualification: %v", err)
+	}
+	if got.Ready {
+		t.Fatalf("inactive protocol profile was reported ready: %+v", got)
+	}
+	if len(got.Blockers) != 1 || !strings.Contains(got.Blockers[0], "Protocol profile active") {
+		t.Fatalf("inactive protocol profile blockers=%v, want one exact activation blocker", got.Blockers)
 	}
 }
 

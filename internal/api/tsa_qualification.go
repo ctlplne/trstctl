@@ -19,6 +19,7 @@ const defaultTSAPolicyOID = "1.3.6.1.4.1.59551.2.1"
 type TSARuntimePosture struct {
 	Configured             bool
 	Served                 bool
+	Activated              bool
 	Endpoint               string
 	TenantBound            bool
 	StableCertificateReady bool
@@ -93,6 +94,9 @@ func buildTSAQualification(posture TSARuntimePosture, checkedAt time.Time) TSAQu
 		tsaCheck("endpoint-mounted", "TSA endpoint mounted", posture.Served,
 			"The running control plane owns POST "+posture.Endpoint+".",
 			"Repair protocol startup; do not route around a missing responder or substitute the web application fallback."),
+		tsaCheck("activation", "Protocol profile active", posture.Activated,
+			"The configured protocol profile allows the timestamp responder to serve.",
+			"Activate the reviewed protocol profile, then re-run this check before sending a timestamp request."),
 		tsaCheck("tenant-binding", "Tenant binding", posture.TenantBound,
 			"The TSA mount is bound to this authenticated tenant.",
 			"Bind protocols.tsa.tenant_id to this tenant and restart; never share a timestamp authority across tenant boundaries implicitly."),

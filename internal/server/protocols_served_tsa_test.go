@@ -107,6 +107,49 @@ func TestServedTSAOpenSSLTimestampOverHTTP(t *testing.T) {
 	archiveServedTSATranscripts(t, dataPath, reqPath, respPath, caPath, verifyLogPath)
 }
 
+func TestServedTSAQualificationMatchesEvalActivationGate(t *testing.T) {
+	dir := t.TempDir()
+	h := newServedHarness(t, config.Protocols{
+		TSA:         config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
+		TSACertFile: filepath.Join(dir, "tsa.crt"),
+	})
+	h.srv.protocols.activation = newProtocolActivationGate(false)
+
+	readToken := seedAPITokenWithScopes(t, h.store, servedTestTenant, []string{"certs:read"})
+	qualify := func() api.TSAQualification {
+		t.Helper()
+		req, _ := http.NewRequest(http.MethodPost, h.ts.URL+"/api/v1/protocols/tsa/qualification", nil)
+		req.Header.Set("Authorization", "Bearer "+readToken)
+		resp, err := h.ts.Client().Do(req)
+		if err != nil {
+			t.Fatalf("TSA qualification: %v", err)
+		}
+		body, _ := readAllClose(resp)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("TSA qualification status %d: %s", resp.StatusCode, body)
+		}
+		var got api.TSAQualification
+		if err := json.Unmarshal(body, &got); err != nil {
+			t.Fatalf("decode TSA qualification: %v body=%s", err, body)
+		}
+		return got
+	}
+
+	blocked := qualify()
+	if blocked.Ready {
+		t.Fatalf("closed eval gate reported ready: %+v", blocked)
+	}
+	if len(blocked.Blockers) != 1 || !bytes.Contains([]byte(blocked.Blockers[0]), []byte("Protocol profile active")) {
+		t.Fatalf("closed eval gate blockers=%v, want exact activation blocker", blocked.Blockers)
+	}
+
+	h.srv.protocols.activation.Activate()
+	ready := qualify()
+	if !ready.Ready {
+		t.Fatalf("open eval gate reported blocked: %+v", ready)
+	}
+}
+
 func countServedTSAEvents(t *testing.T, h *servedHarness) int {
 	t.Helper()
 	count := 0
