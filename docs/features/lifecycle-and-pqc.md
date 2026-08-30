@@ -86,6 +86,40 @@ the same `ca.renew` path. The issuer builds the deploy payload while the key is 
 memory, so the connector delivers the certificate/key bundle without PEM bytes ever
 returning from the API response.
 
+#### See and operate the live renewal plan
+
+The **Machine identities → Lifecycle automation** panel answers the everyday operator
+questions in one place:
+
+- Is automatic renewal running, disabled, or waiting for a maintenance window?
+- How many days before expiry does trstctl renew and alert?
+- Which certificates are watched, due now, already in flight, or failed?
+- Is lifecycle work waiting, processing, or failed in the durable outbox?
+- Which actions are real, and where are the rotation, delivery, and rollback receipts?
+
+The panel reads `GET /api/v1/lifecycle/automation-plan`; headless operators use the same
+contract with `trstctl lifecycle automation-plan`. This is an effect-free preview: it
+writes no row or event and contacts no CA, connector, or notification service. Its
+tenant-scoped inventory includes public metadata only. Certificate bytes, private keys,
+outbox payloads, and idempotency keys are not returned.
+
+For a due or failed identity, **Review renewal now** or **Review retry** opens the normal
+version-bound lifecycle transition preview before anything is queued. Execution then
+appends the lifecycle event and the `ca.renew` outbox intent through the existing
+idempotent mutation path. Verification comes from the resulting rotation run and
+connector receipt, not from a green button state.
+
+The control limits are intentional and visible:
+
+- **Pause** is a maintenance-window configuration action. The current web request does
+  not silently rewrite operator configuration.
+- **Resume** is automatic when the next configured maintenance window opens.
+- **Cancel after enqueue** is not offered. A worker may already have leased the command,
+  so claiming it was cancelled could allow an unseen issuance or deployment to finish.
+- **Rollback** is available through Connectors only when a deployed predecessor and a
+  connector-backed rollback procedure exist. The rotation run keeps the public rollback
+  reference used to verify that recovery.
+
 ### Crypto-agility (F16)
 
 Crypto-agility is an architecture property, and in trstctl it's non-negotiable: all

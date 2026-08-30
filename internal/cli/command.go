@@ -271,6 +271,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"connectors", "deliveries", "list"}, Method: "GET", Path: "/api/v1/connectors/deliveries", Query: []string{"limit", "cursor", "identity_id"}, Summary: "List connector delivery receipts"},
 	{Name: []string{"connectors", "deliveries", "get"}, Method: "GET", Path: "/api/v1/connectors/deliveries/{id}", Summary: "Get a connector delivery receipt"},
 	{Name: []string{"lifecycle", "endpoint-bindings", "create"}, Method: "POST", Path: "/api/v1/lifecycle/endpoint-bindings", Body: bodyFile, Summary: "Create an automated endpoint binding"},
+	{Name: []string{"lifecycle", "automation-plan"}, Method: "GET", Path: "/api/v1/lifecycle/automation-plan", Summary: "Preview lifecycle scheduler timing, due work, safe controls, and recovery evidence without effects"},
 	{Name: []string{"lifecycle", "rotation-runs", "list"}, Method: "GET", Path: "/api/v1/lifecycle/rotation-runs", Query: []string{"limit", "cursor", "identity_id"}, Summary: "List lifecycle rotation runs"},
 	{Name: []string{"lifecycle", "rotation-runs", "get"}, Method: "GET", Path: "/api/v1/lifecycle/rotation-runs/{id}", Summary: "Get a lifecycle rotation run"},
 

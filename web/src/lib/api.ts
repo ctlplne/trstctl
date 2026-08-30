@@ -365,6 +365,7 @@ import type {
   ResponseIntegrationDispatchRequest,
   RogueCertificatePosture,
   RoleList,
+  LifecycleAutomationPlan,
   RotationRun,
   RotationRunList,
   ScaleOrchestrationPlan,
@@ -962,6 +963,7 @@ export type {
   ResponseIntegrationDispatchRequest,
   RogueCertificatePosture,
   RoleList,
+  LifecycleAutomationPlan,
   RotationRun,
   RotationRunList,
   ScaleOrchestrationPlan,
@@ -2043,6 +2045,7 @@ export interface Api {
   deployConnectorTarget(id: string, input: ConnectorTargetActionRequest): Promise<Identity>;
   rollbackConnectorTarget(id: string, input: ConnectorTargetActionRequest): Promise<ConnectorDelivery>;
   connectorDeliveries(options?: { limit?: number; cursor?: string; identityId?: string }): Promise<ConnectorDeliveryList>;
+  lifecycleAutomationPlan(): Promise<LifecycleAutomationPlan>;
   rotationRuns(options?: { limit?: number; cursor?: string; identityId?: string }): Promise<RotationRunList>;
   executeIncident(input: IncidentExecutionRequest): Promise<IncidentExecution>;
   dispatchResponseIntegrations(input: ResponseIntegrationDispatchRequest): Promise<ResponseIntegrationDispatch>;
@@ -2570,6 +2573,7 @@ const liveApi: Api = {
   deployConnectorTarget: (id, input) => mutate<Identity>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/deploy`, input),
   rollbackConnectorTarget: (id, input) => mutate<ConnectorDelivery>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/rollback`, input),
   connectorDeliveries: (options) => req<ConnectorDeliveryList>(`/api/v1/connectors/deliveries${pageQueryString(options, options?.identityId)}`),
+  lifecycleAutomationPlan: () => req<LifecycleAutomationPlan>("/api/v1/lifecycle/automation-plan"),
   rotationRuns: (options) => req<RotationRunList>(`/api/v1/lifecycle/rotation-runs${pageQueryString(options, options?.identityId)}`),
   executeIncident: (input) => mutate<IncidentExecution>("POST", "/api/v1/incidents/executions", input),
   dispatchResponseIntegrations: (input) => mutate<ResponseIntegrationDispatch>("POST", "/api/v1/incidents/response-integrations/dispatch", input),

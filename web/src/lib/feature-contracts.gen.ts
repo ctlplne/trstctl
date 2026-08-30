@@ -3893,7 +3893,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use lifecycle automation while tenant, policy, and security authority remain on the server.",
       "tool": "operations",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/identities",
       "navigationEntrypoints": [
         "tool navigation",
@@ -3905,7 +3905,7 @@ export const canonicalCapabilities = [
       "dependencies": [],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -3931,12 +3931,20 @@ export const canonicalCapabilities = [
           ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "The console does not yet show the exact renewal window, affected credentials, connector effects, policy decisions, and outbox work before a lifecycle run starts."
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: getLifecycleAutomationPlan",
+            "internal/server/lifecycle_automation_plan_served_test.go",
+            "web/src/pages/identities/LifecycleAutomationPanel.tsx"
+          ]
         },
         "execute": {
-          "status": "missing",
-          "reason": "Endpoint-binding setup is available, but the console does not yet provide the complete start, pause, resume, retry, and cancel workflow for lifecycle automation runs."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/identities/LifecycleAutomationPanel.tsx",
+            "internal/api/lifecycle_automation.go",
+            "internal/server/lifecycle_automation_plan_served_test.go"
+          ]
         },
         "observe": {
           "status": "complete",
@@ -3946,8 +3954,12 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "The backend records rotation and delivery recovery evidence, but the console does not yet give the operator a complete retry, resume, or rollback workflow."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/identities/LifecycleAutomationPanel.tsx",
+            "internal/api/lifecycle_automation.go",
+            "web/src/__tests__/lifecycle.test.tsx"
+          ]
         },
         "verify": {
           "status": "complete",
@@ -3961,6 +3973,7 @@ export const canonicalCapabilities = [
             "OpenAPI operationId: listIdentities",
             "OpenAPI operationId: transitionIdentity",
             "OpenAPI operationId: createEndpointBinding",
+            "OpenAPI operationId: getLifecycleAutomationPlan",
             "OpenAPI operationId: listNotifications",
             "OpenAPI operationId: getNotification",
             "OpenAPI operationId: searchAudit",
@@ -3971,6 +3984,7 @@ export const canonicalCapabilities = [
             "CLI command: identities transition",
             "CLI command: audit events",
             "CLI command: lifecycle endpoint-bindings create",
+            "CLI command: lifecycle automation-plan",
             "CLI command: notifications list",
             "CLI command: notifications get",
             "CLI command: lifecycle rotation-runs list",
@@ -3982,7 +3996,7 @@ export const canonicalCapabilities = [
       "owner": "operations",
       "targetCheckpoint": "frontend-convergence",
       "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "freshness": "2026-08-30"
     }
   },
   {

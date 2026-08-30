@@ -3124,6 +3124,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lifecycle/automation-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Preview scheduler timing, due work, safe controls, and recovery evidence without effects */
+        get: operations["getLifecycleAutomationPlan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lifecycle/endpoint-bindings": {
         parameters: {
             query?: never;
@@ -9820,6 +9837,74 @@ export interface components {
             served: boolean;
             status_fields: string[];
             summary?: components["schemas"]["KubernetesPostureSummary"];
+        };
+        LifecycleAutomationControl: {
+            /** @enum {string} */
+            action: "start" | "pause" | "resume" | "retry" | "cancel" | "rollback";
+            detail: string;
+            /** @enum {string} */
+            state: "available" | "configuration_only" | "automatic" | "conditional" | "unavailable_after_enqueue";
+        };
+        LifecycleAutomationItem: {
+            blockers: string[];
+            /** Format: uuid */
+            certificate_id: string;
+            due: boolean;
+            /** Format: uuid */
+            identity_id: string;
+            identity_name: string;
+            identity_status: string;
+            /** Format: uuid */
+            latest_run_id?: string;
+            latest_run_status?: string;
+            /** Format: date-time */
+            not_after?: string;
+            /** Format: uuid */
+            owner_id: string;
+            owner_name: string;
+            reason: string;
+            /** @enum {string} */
+            renewal_source: "ari" | "fixed_deadline" | "not_due" | "in_flight";
+            rollback_ref?: string;
+        };
+        LifecycleAutomationPlan: {
+            capability: string;
+            controls: components["schemas"]["LifecycleAutomationControl"][];
+            execution_external_effects: string[];
+            execution_writes: string[];
+            /** Format: date-time */
+            generated_at: string;
+            items: components["schemas"]["LifecycleAutomationItem"][];
+            preview_external_effects: string[];
+            preview_writes: string[];
+            ready: boolean;
+            scheduler: components["schemas"]["LifecycleAutomationScheduler"];
+            summary: components["schemas"]["LifecycleAutomationSummary"];
+            verification_steps: string[];
+        };
+        LifecycleAutomationScheduler: {
+            alert_before: string;
+            alert_before_seconds: number;
+            ari_first: boolean;
+            interval: string;
+            interval_seconds: number;
+            maintenance_deferral?: string;
+            /** @enum {string} */
+            maintenance_window_status: "open" | "closed";
+            /** Format: date-time */
+            next_open?: string;
+            renew_before: string;
+            renew_before_seconds: number;
+            /** @enum {string} */
+            status: "running" | "deferred" | "disabled";
+        };
+        LifecycleAutomationSummary: {
+            due_now: number;
+            monitored: number;
+            outbox_failed: number;
+            outbox_pending: number;
+            outbox_processing: number;
+            renewal_failed: number;
         };
         MCPToolCall: {
             authority_id?: string;
@@ -22289,6 +22374,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KubernetesTrustBundleDistribution"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getLifecycleAutomationPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LifecycleAutomationPlan"];
                 };
             };
             /** @description client error */

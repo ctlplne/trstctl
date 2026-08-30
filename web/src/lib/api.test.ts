@@ -2457,6 +2457,7 @@ describe("CLI-parity client methods (S3.3)", () => {
       path: "/api/v1/ephemeral/019fec49-6641-7131-ae7f-17f7ea4b5e0e/approvals",
     },
     { name: "issuer", call: () => api.issuer("iss1"), method: "GET", path: "/api/v1/issuers/iss1" },
+    { name: "lifecycleAutomationPlan", call: () => api.lifecycleAutomationPlan(), method: "GET", path: "/api/v1/lifecycle/automation-plan" },
     { name: "rotationRuns", call: () => api.rotationRuns({ limit: 10 }), method: "GET", path: "/api/v1/lifecycle/rotation-runs?limit=10" },
     { name: "rotationRun", call: () => api.rotationRun("run1"), method: "GET", path: "/api/v1/lifecycle/rotation-runs/run1" },
     { name: "mdmSCEPPolicy", call: () => api.mdmSCEPPolicy("p1"), method: "GET", path: "/api/v1/mdm/scep/policies/p1" },

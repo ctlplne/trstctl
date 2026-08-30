@@ -1336,6 +1336,7 @@ func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 		api.WithOutboundEnvCredentialRefs(d.OutboundEnvCredentialRefs...),
 		api.WithACMEDNS01CAAResolver(acme.DefaultCAAResolver()),
 		api.WithACMEARIPosture(s.ACMEARIPosture),
+		api.WithLifecycleAutomationPlan(s),
 		api.WithTenantKeyDomainLifecycle(d.TenantKeyDomains),
 		api.WithTenantCrypto(d.TenantCrypto),
 		api.WithOwnershipAttestationCadence(d.OwnershipAttestationCadence),

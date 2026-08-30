@@ -5162,6 +5162,87 @@ KubernetesTrustBundleDistribution = TypedDict(
     total=False,
 )
 
+LifecycleAutomationControl = TypedDict(
+    'LifecycleAutomationControl',
+    {
+        'action': str,
+        'detail': str,
+        'state': str,
+    },
+    total=False,
+)
+
+LifecycleAutomationItem = TypedDict(
+    'LifecycleAutomationItem',
+    {
+        'blockers': list[str],
+        'certificate_id': str,
+        'due': bool,
+        'identity_id': str,
+        'identity_name': str,
+        'identity_status': str,
+        'latest_run_id': str,
+        'latest_run_status': str,
+        'not_after': str,
+        'owner_id': str,
+        'owner_name': str,
+        'reason': str,
+        'renewal_source': str,
+        'rollback_ref': str,
+    },
+    total=False,
+)
+
+LifecycleAutomationPlan = TypedDict(
+    'LifecycleAutomationPlan',
+    {
+        'capability': str,
+        'controls': list[dict[str, Any]],
+        'execution_external_effects': list[str],
+        'execution_writes': list[str],
+        'generated_at': str,
+        'items': list[dict[str, Any]],
+        'preview_external_effects': list[str],
+        'preview_writes': list[str],
+        'ready': bool,
+        'scheduler': dict[str, Any],
+        'summary': dict[str, Any],
+        'verification_steps': list[str],
+    },
+    total=False,
+)
+
+LifecycleAutomationScheduler = TypedDict(
+    'LifecycleAutomationScheduler',
+    {
+        'alert_before': str,
+        'alert_before_seconds': int,
+        'ari_first': bool,
+        'interval': str,
+        'interval_seconds': int,
+        'maintenance_deferral': str,
+        'maintenance_window_status': str,
+        'next_open': str,
+        'renew_before': str,
+        'renew_before_seconds': int,
+        'status': str,
+    },
+    total=False,
+)
+
+LifecycleAutomationSummary = TypedDict(
+    'LifecycleAutomationSummary',
+    {
+        'due_now': int,
+        'monitored': int,
+        'outbox_failed': int,
+        'outbox_pending': int,
+        'outbox_processing': int,
+        'renewal_failed': int,
+    },
+    total=False,
+)
+
 MCPToolCall = TypedDict(
     'MCPToolCall',
     {

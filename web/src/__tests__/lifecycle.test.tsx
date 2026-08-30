@@ -21,6 +21,7 @@ const { apiMock } = vi.hoisted(() => ({
     graphBlastRadius: vi.fn(),
     connectorDeliveries: vi.fn(),
     rotationRuns: vi.fn(),
+    lifecycleAutomationPlan: vi.fn(),
     bulkRevokeIdentities: vi.fn(),
   },
 }));
@@ -129,6 +130,41 @@ describe("lifecycle actions from the UI", () => {
     });
     apiMock.connectorDeliveries.mockReset().mockResolvedValue({ items: [] });
     apiMock.rotationRuns.mockReset().mockResolvedValue({ items: [] });
+    apiMock.lifecycleAutomationPlan.mockReset().mockResolvedValue({
+      capability: "lifecycle_automation",
+      ready: true,
+      generated_at: "2026-06-20T00:00:00Z",
+      scheduler: {
+        status: "running",
+        renew_before: "720h0m0s",
+        alert_before: "168h0m0s",
+        interval: "1m0s",
+        ari_first: true,
+        maintenance_window_status: "open",
+      },
+      summary: {
+        monitored: 0,
+        due_now: 0,
+        renewal_failed: 0,
+        outbox_pending: 0,
+        outbox_processing: 0,
+        outbox_failed: 0,
+      },
+      items: [],
+      controls: [
+        { action: "start", state: "available", detail: "Review and queue one due renewal." },
+        { action: "pause", state: "configuration_only", detail: "Maintenance windows pause new starts." },
+        { action: "resume", state: "automatic", detail: "New starts resume when the window opens." },
+        { action: "retry", state: "conditional", detail: "A failed renewal can be reviewed as a new attempt." },
+        { action: "cancel", state: "unavailable_after_enqueue", detail: "Queued work may already be leased." },
+        { action: "rollback", state: "conditional", detail: "Use predecessor evidence after delivery." },
+      ],
+      preview_writes: [],
+      preview_external_effects: [],
+      execution_writes: ["Append one lifecycle transition event.", "Queue ca.renew through the outbox."],
+      execution_external_effects: ["The signer issues a successor and the connector deploys it."],
+      verification_steps: ["Confirm the rotation run and connector delivery receipts."],
+    });
     apiMock.identities.mockReset();
   });
 
@@ -825,7 +861,7 @@ describe("lifecycle actions from the UI", () => {
     expect(row).not.toHaveTextContent("plugin_not_loaded");
   });
 
-  it("renders scheduler-backed rotation evidence without the automation preview", async () => {
+  it("renders the server-owned lifecycle automation plan with safe controls and scheduler evidence", async () => {
     apiMock.identities.mockResolvedValue([{ id: "ren-1", name: "manual-renewal-svc", kind: "x509_certificate", status: "deployed" }]);
     apiMock.rotationRuns.mockResolvedValue({
       items: [
@@ -846,19 +882,67 @@ describe("lifecycle actions from the UI", () => {
         },
       ],
     });
+    apiMock.lifecycleAutomationPlan.mockResolvedValue({
+      capability: "lifecycle_automation",
+      ready: true,
+      generated_at: "2026-06-20T00:00:00Z",
+      scheduler: {
+        status: "running",
+        renew_before: "720h0m0s",
+        alert_before: "168h0m0s",
+        interval: "1m0s",
+        ari_first: true,
+        maintenance_window_status: "open",
+      },
+      summary: { monitored: 1, due_now: 1, renewal_failed: 0, outbox_pending: 0, outbox_processing: 0, outbox_failed: 0 },
+      items: [
+        {
+          identity_id: "ren-1",
+          identity_name: "manual-renewal-svc",
+          identity_status: "deployed",
+          owner_id: "own-1",
+          owner_name: "team",
+          certificate_id: "cert-1",
+          not_after: "2026-06-25T00:00:00Z",
+          due: true,
+          renewal_source: "ari",
+          reason: "The CA renewal window is open.",
+          latest_run_id: "run-1",
+          latest_run_status: "succeeded",
+          rollback_ref: "restore certificate fingerprint old",
+          blockers: [],
+        },
+      ],
+      controls: [
+        { action: "start", state: "available", detail: "Review and queue one due renewal." },
+        { action: "pause", state: "configuration_only", detail: "Maintenance windows pause new starts." },
+        { action: "resume", state: "automatic", detail: "New starts resume when the window opens." },
+        { action: "retry", state: "conditional", detail: "A failed renewal can be reviewed as a new attempt." },
+        { action: "cancel", state: "unavailable_after_enqueue", detail: "Queued work may already be leased." },
+        { action: "rollback", state: "conditional", detail: "Use predecessor evidence after delivery." },
+      ],
+      preview_writes: [],
+      preview_external_effects: [],
+      execution_writes: ["Append identity.renewing and queue ca.renew."],
+      execution_external_effects: ["Issue and deploy the successor asynchronously."],
+      verification_steps: ["Confirm rotation and connector receipts."],
+    });
     const user = userEvent.setup();
     renderIdentities();
+
+    expect(await screen.findByRole("heading", { name: "Lifecycle automation" })).toBeInTheDocument();
+    expect(screen.getByText("Automatic renewals are running")).toBeInTheDocument();
+    expect(screen.getByText(/Renew 30 days before expiry/)).toBeInTheDocument();
+    expect(screen.getByText(/ARI window opens first/)).toBeInTheDocument();
+    expect(screen.getByText(/Maintenance windows pause new starts/)).toBeInTheDocument();
+    expect(screen.getByText(/Queued work cannot be safely cancelled/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Review renewal now" })).toBeInTheDocument();
+    expect(apiMock.lifecycleAutomationPlan).toHaveBeenCalled();
 
     await user.click((await screen.findAllByText("Delivery and rotation evidence"))[0]);
     expect(screen.getAllByText("succeeded").length).toBeGreaterThan(0);
     expect(screen.getAllByText("scheduler").length).toBeGreaterThan(0);
     expect(screen.getByText("restore certificate fingerprint old")).toBeInTheDocument();
-    expect(screen.queryByText("Lifecycle automation")).not.toBeInTheDocument();
-    expect(screen.queryByText("Automation layout preview")).not.toBeInTheDocument();
-    expect(screen.queryByText("Renew before")).not.toBeInTheDocument();
-    expect(screen.queryByText("Alert before")).not.toBeInTheDocument();
-    expect(screen.queryByText("Dry run")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /save schedule|run automation/i })).not.toBeInTheDocument();
   });
 
   it("reports idempotency protection after a successful lifecycle transition", async () => {

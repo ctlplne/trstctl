@@ -150,6 +150,7 @@ type API struct {
 	acmeARIPosture                     ACMEARIPostureProvider
 	acmeEAB                            ACMEEABProvider
 	acmeOperatorPlan                   ACMEOperatorPlanProvider
+	lifecycleAutomationPlan            LifecycleAutomationPlanProvider
 	agentJobPosture                    AgentJobPostureProvider
 	enqueueConnectorTest               ConnectorTestEnqueuer
 	adcsPosture                        ADCSPostureProvider
@@ -256,6 +257,7 @@ type config struct {
 	acmeARIPosture              ACMEARIPostureProvider
 	acmeEAB                     ACMEEABProvider
 	acmeOperatorPlan            ACMEOperatorPlanProvider
+	lifecycleAutomationPlan     LifecycleAutomationPlanProvider
 	agentJobPosture             AgentJobPostureProvider
 	enqueueConnectorTest        ConnectorTestEnqueuer
 	adcsPosture                 ADCSPostureProvider
@@ -546,6 +548,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		acmeARIPosture:              cfg.acmeARIPosture,
 		acmeEAB:                     cfg.acmeEAB,
 		acmeOperatorPlan:            cfg.acmeOperatorPlan,
+		lifecycleAutomationPlan:     cfg.lifecycleAutomationPlan,
 		agentJobPosture:             cfg.agentJobPosture,
 		enqueueConnectorTest:        cfg.enqueueConnectorTest,
 		adcsPosture:                 cfg.adcsPosture,
@@ -1191,6 +1194,7 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/connectors/deliveries", opID: "listConnectorDeliveries", summary: "List connector delivery receipts", handler: a.listConnectorDeliveries, query: identityScopedPage, resSchema: "ConnectorDeliveryList", successCode: "200", perm: authz.ConnectorsRead},
 		{method: "GET", path: "/api/v1/connectors/deliveries/{id}", opID: "getConnectorDelivery", summary: "Get a connector delivery receipt", handler: a.getConnectorDelivery, pathParams: idPath, resSchema: "ConnectorDelivery", successCode: "200", perm: authz.ConnectorsRead},
 		{method: "POST", path: "/api/v1/lifecycle/endpoint-bindings", opID: "createEndpointBinding", summary: "Create an automated enrollment-to-endpoint binding", handler: a.createEndpointBinding, reqSchema: "EndpointBindingRequest", resSchema: "EndpointBinding", successCode: "201", mutation: true, perm: authz.ConnectorsWrite},
+		{method: "GET", path: "/api/v1/lifecycle/automation-plan", opID: "getLifecycleAutomationPlan", summary: "Preview scheduler timing, due work, safe controls, and recovery evidence without effects", handler: a.getLifecycleAutomationPlan, resSchema: "LifecycleAutomationPlan", successCode: "200", perm: authz.LifecycleRead},
 		{method: "GET", path: "/api/v1/lifecycle/rotation-runs", opID: "listRotationRuns", summary: "List lifecycle rotation runs", handler: a.listRotationRuns, query: identityScopedPage, resSchema: "RotationRunList", successCode: "200", perm: authz.LifecycleRead},
 		{method: "GET", path: "/api/v1/lifecycle/rotation-runs/{id}", opID: "getRotationRun", summary: "Get a lifecycle rotation run", handler: a.getRotationRun, pathParams: idPath, resSchema: "RotationRun", successCode: "200", perm: authz.LifecycleRead},
 		{method: "GET", path: "/api/v1/acme/eab-credentials", opID: "listACMEEABCredentials", summary: "List served ACME external account binding credentials with their scope and usage", handler: a.listACMEEABCredentials, resSchema: "ACMEEABPosture", successCode: "200", perm: authz.IssuersRead},

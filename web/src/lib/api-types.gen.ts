@@ -3704,6 +3704,67 @@ export interface KubernetesTrustBundleDistribution {
   summary?: KubernetesPostureSummary;
 }
 
+export interface LifecycleAutomationControl {
+  action: "start" | "pause" | "resume" | "retry" | "cancel" | "rollback";
+  detail: string;
+  state: "available" | "configuration_only" | "automatic" | "conditional" | "unavailable_after_enqueue";
+}
+
+export interface LifecycleAutomationItem {
+  blockers: string[];
+  certificate_id: string;
+  due: boolean;
+  identity_id: string;
+  identity_name: string;
+  identity_status: string;
+  latest_run_id?: string;
+  latest_run_status?: string;
+  not_after?: string;
+  owner_id: string;
+  owner_name: string;
+  reason: string;
+  renewal_source: "ari" | "fixed_deadline" | "not_due" | "in_flight";
+  rollback_ref?: string;
+}
+
+export interface LifecycleAutomationPlan {
+  capability: string;
+  controls: LifecycleAutomationControl[];
+  execution_external_effects: string[];
+  execution_writes: string[];
+  generated_at: string;
+  items: LifecycleAutomationItem[];
+  preview_external_effects: string[];
+  preview_writes: string[];
+  ready: boolean;
+  scheduler: LifecycleAutomationScheduler;
+  summary: LifecycleAutomationSummary;
+  verification_steps: string[];
+}
+
+export interface LifecycleAutomationScheduler {
+  alert_before: string;
+  alert_before_seconds: number;
+  ari_first: boolean;
+  interval: string;
+  interval_seconds: number;
+  maintenance_deferral?: string;
+  maintenance_window_status: "open" | "closed";
+  next_open?: string;
+  renew_before: string;
+  renew_before_seconds: number;
+  status: "running" | "deferred" | "disabled";
+}
+
+export interface LifecycleAutomationSummary {
+  due_now: number;
+  monitored: number;
+  outbox_failed: number;
+  outbox_pending: number;
+  outbox_processing: number;
+  renewal_failed: number;
+}
+
 export interface MCPToolCall {
   authority_id?: string;
   csr_pem?: string;

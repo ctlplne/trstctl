@@ -238,9 +238,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// F25's exact, effect-free JIT credential preview raises it to 412.
 	// F43's SSH certificate preview and issue commands raise it to 414. F69's
 	// effect-free provider review, real probe, sanitized history, and bounded
-	// cleanup recovery commands raise it to 418.
-	if len(out) != 418 {
-		t.Fatalf("CLI commands = %d, want 418", len(out))
+	// cleanup recovery commands raise it to 418. F6's lifecycle automation-plan
+	// read raises it to 419 so headless and browser operators share one oracle.
+	if len(out) != 419 {
+		t.Fatalf("CLI commands = %d, want 419", len(out))
 	}
 	return out
 }

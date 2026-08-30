@@ -3156,6 +3156,42 @@ func componentSchemas() map[string]*Schema {
 		"idempotency_key": str(), "created_at": timestamp(), "updated_at": timestamp(),
 		"completed_at": timestamp(),
 	}, "id", "tenant_id", "identity_id", "status", "trigger", "created_at", "updated_at")
+	lifecycleAutomationScheduler := object(map[string]*Schema{
+		"status":       {Type: "string", Enum: []string{"running", "deferred", "disabled"}},
+		"renew_before": str(), "renew_before_seconds": {Type: "integer"},
+		"alert_before": str(), "alert_before_seconds": {Type: "integer"},
+		"interval": str(), "interval_seconds": {Type: "integer"},
+		"ari_first":                 {Type: "boolean"},
+		"maintenance_window_status": {Type: "string", Enum: []string{"open", "closed"}},
+		"maintenance_deferral":      str(), "next_open": timestamp(),
+	}, "status", "renew_before", "renew_before_seconds", "alert_before", "alert_before_seconds", "interval", "interval_seconds", "ari_first", "maintenance_window_status")
+	lifecycleAutomationSummary := object(map[string]*Schema{
+		"monitored": {Type: "integer"}, "due_now": {Type: "integer"}, "renewal_failed": {Type: "integer"},
+		"outbox_pending": {Type: "integer"}, "outbox_processing": {Type: "integer"}, "outbox_failed": {Type: "integer"},
+	}, "monitored", "due_now", "renewal_failed", "outbox_pending", "outbox_processing", "outbox_failed")
+	lifecycleAutomationItem := object(map[string]*Schema{
+		"identity_id": uuid(), "identity_name": str(), "identity_status": str(),
+		"owner_id": uuid(), "owner_name": str(), "certificate_id": uuid(), "not_after": timestamp(),
+		"due": {Type: "boolean"}, "renewal_source": {Type: "string", Enum: []string{"ari", "fixed_deadline", "not_due", "in_flight"}},
+		"reason": str(), "latest_run_id": uuid(), "latest_run_status": str(), "rollback_ref": str(),
+		"blockers": {Type: "array", Items: str()},
+	}, "identity_id", "identity_name", "identity_status", "owner_id", "owner_name", "certificate_id", "due", "renewal_source", "reason", "blockers")
+	lifecycleAutomationControl := object(map[string]*Schema{
+		"action": {Type: "string", Enum: []string{"start", "pause", "resume", "retry", "cancel", "rollback"}},
+		"state":  {Type: "string", Enum: []string{"available", "configuration_only", "automatic", "conditional", "unavailable_after_enqueue"}},
+		"detail": str(),
+	}, "action", "state", "detail")
+	lifecycleAutomationPlan := object(map[string]*Schema{
+		"capability": str(), "ready": {Type: "boolean"}, "generated_at": timestamp(),
+		"scheduler": ref("LifecycleAutomationScheduler"), "summary": ref("LifecycleAutomationSummary"),
+		"items":                      {Type: "array", Items: ref("LifecycleAutomationItem")},
+		"controls":                   {Type: "array", Items: ref("LifecycleAutomationControl")},
+		"preview_writes":             {Type: "array", Items: str()},
+		"preview_external_effects":   {Type: "array", Items: str()},
+		"execution_writes":           {Type: "array", Items: str()},
+		"execution_external_effects": {Type: "array", Items: str()},
+		"verification_steps":         {Type: "array", Items: str()},
+	}, "capability", "ready", "generated_at", "scheduler", "summary", "items", "controls", "preview_writes", "preview_external_effects", "execution_writes", "execution_external_effects", "verification_steps")
 	incidentExecutionReq := object(map[string]*Schema{
 		"identity_id": uuid(), "reason": str(), "replacement_name": str(),
 		"connector": str(), "target": str(), "delivery_rollback_ref": str(),
@@ -5748,6 +5784,11 @@ func componentSchemas() map[string]*Schema {
 		"OutboxCircuitList":                        list("OutboxCircuit"),
 		"RotationRun":                              rotationRun,
 		"RotationRunList":                          list("RotationRun"),
+		"LifecycleAutomationScheduler":             lifecycleAutomationScheduler,
+		"LifecycleAutomationSummary":               lifecycleAutomationSummary,
+		"LifecycleAutomationItem":                  lifecycleAutomationItem,
+		"LifecycleAutomationControl":               lifecycleAutomationControl,
+		"LifecycleAutomationPlan":                  lifecycleAutomationPlan,
 		"IncidentExecutionRequest":                 incidentExecutionReq,
 		"IncidentExecution":                        incidentExecution,
 		"IncidentExecutionList":                    list("IncidentExecution"),

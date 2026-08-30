@@ -29,6 +29,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { graphNodeIdForIdentity, revocationReasons } from "@/lib/revocation";
+import { LifecycleAutomationPanel } from "@/pages/identities/LifecycleAutomationPanel";
 
 export { graphNodeIdForIdentity } from "@/lib/revocation";
 
@@ -670,6 +671,11 @@ export function Identities() {
       />
 
       <IssuancePipeline identities={items ?? []} />
+
+      <LifecycleAutomationPanel
+        identities={items ?? []}
+        onReviewRenewal={(identity, label, reason) => request(identity, "renewing", label, reason)}
+      />
 
       {showForm && (
         <NewIdentityForm

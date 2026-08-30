@@ -10964,8 +10964,8 @@
             "phase": "P1",
             "priority": 29,
             "served_state": "served",
-            "backend_status": "served endpoint-binding automation plus ARI-first lifecycle renewal scheduler with credential-bearing connector.deploy push, rotation evidence, and owner/approver expiry escalation",
-            "current_frontend_mapping": "served UI: Connectors can create endpoint bindings; Notifications shows owner/approver expiry escalation; identity actions and registered customer route evidence disclose served lifecycle automation",
+            "backend_status": "served endpoint-binding automation plus an effect-free lifecycle automation plan over the ARI-first renewal scheduler, credential-bearing connector.deploy push, rotation evidence, durable outbox state, and owner/approver expiry escalation",
+            "current_frontend_mapping": "served UI: Identities explains the exact renewal and alert timing, due work, scheduler/maintenance state, safe start and retry reviews, unsafe cancel boundary, queue counts, and recovery links; Connectors creates endpoint bindings and performs supported rollback; Notifications shows owner/approver expiry escalation",
             "target_gui_mapping": "Lifecycle automation UI for renew-before, alert-before, scheduled runs, pending actions, dry-run, outbox state, rollback, and policy denials.",
             "acceptance_test": "Served integration tests prove endpoint-binding automation queues issue/deploy, pushes issued credentials to web-server, keystore, and load-balancer connectors, expiry alerting escalates to owner/approver recipients, and later ARI-window renewal queues ca.renew and records rotation evidence.",
             "source_docs": [
@@ -10976,25 +10976,30 @@
                 "internal/server/issuance.go",
                 "internal/connector/registry.go",
                 "internal/store/connector_lifecycle.go",
+                "internal/store/lifecycle_automation.go",
                 "internal/api/connectors_lifecycle.go",
+                "internal/api/lifecycle_automation.go",
                 "internal/api/notifications.go",
                 "internal/lifecycle/lifecycle.go",
                 "internal/protocols/ari",
                 "/api/v1/lifecycle/endpoint-bindings",
+                "/api/v1/lifecycle/automation-plan",
                 "/api/v1/notifications",
                 "/api/v1/identities/{id}/transitions"
             ],
             "source_frontend": [
                 "web/src/pages/Identities.tsx",
+                "web/src/pages/identities/LifecycleAutomationPanel.tsx",
                 "web/src/pages/Connectors.tsx",
                 "web/src/pages/Notifications.tsx"
             ],
             "status": "closed",
-            "notes": "Closed by route-level feature-map evidence, CLM-01, CAP-LIFE-01, CAP-LIFE-04, and CAP-LIFE-05. CLM-01 wires the served scheduler to consume ARI windows before the fixed renew_before fallback. CAP-LIFE-01 adds /api/v1/lifecycle/endpoint-bindings for one-call owner-scoped X.509 identity creation, connector target provisioning, endpoint binding, issue/deploy outbox queueing, and renewal back to the same bound target. CAP-LIFE-04 enriches notification.expiry outbox payloads with owner contact, active approver escalation recipients, severity, and threshold-day metadata and exposes those fields through the notification inbox. CAP-LIFE-05 makes endpoint-binding issue/renewal emit credential-bearing connector.deploy payloads while the generated key is still in memory, records keyless receipts with identity and fingerprint evidence, and proves mutation across nginx, java-keystore, and Kemp load-balancer connectors. Test evidence: TestServedEndpointBindingAutomationCAPLIFE01, TestServedEndpointBindingPushesCredentialsCAPLIFE05, and TestServedLifecycleSchedulerUsesARIWindowForRenewal in internal/server; TestServedExpiryEscalatesToOwnerAndApproversCAPLIFE04 in internal/server/notifications_served_test.go; web/src/__tests__/connectors.test.tsx and C10-3 notification inbox coverage.",
+            "notes": "Closed by route-level feature-map evidence, CLM-01, CAP-LIFE-01, CAP-LIFE-04, CAP-LIFE-05, and the F6 operator workflow. GET /api/v1/lifecycle/automation-plan is effect-free and tenant-scoped: it owns scheduler timing, ARI-first decisions, maintenance deferral, due credentials, aggregate payload-free outbox state, real rotation/rollback evidence, and the exact safe-control boundary. The Identities panel consumes that one oracle and routes start/retry through the existing version-bound transition preview. Pause is truthfully configuration-only, resume is automatic at the next window, and cancel is explicitly unavailable after enqueue because a worker may already have leased the command. Test evidence: TestServedLifecycleAutomationPlanF6, TestServedEndpointBindingAutomationCAPLIFE01, TestServedEndpointBindingPushesCredentialsCAPLIFE05, TestServedLifecycleSchedulerUsesARIWindowForRenewal, TestServedExpiryEscalatesToOwnerAndApproversCAPLIFE04, and web/src/__tests__/lifecycle.test.tsx.",
             "api_surface": [
                 "listIdentities",
                 "transitionIdentity",
                 "createEndpointBinding",
+                "getLifecycleAutomationPlan",
                 "listNotifications",
                 "getNotification",
                 "searchAudit",
@@ -11008,6 +11013,7 @@
                 "identities transition",
                 "audit events",
                 "lifecycle endpoint-bindings create",
+                "lifecycle automation-plan",
                 "notifications list",
                 "notifications get",
                 "lifecycle rotation-runs list",
@@ -11034,6 +11040,7 @@
                         "web/src/lib/navigation.ts",
                         "web/src/App.tsx",
                         "web/src/pages/Identities.tsx",
+                        "web/src/pages/identities/LifecycleAutomationPanel.tsx",
                         "web/src/pages/Connectors.tsx",
                         "web/src/pages/Notifications.tsx"
                     ]
@@ -11044,6 +11051,7 @@
                         "CLI command: identities transition",
                         "CLI command: audit events",
                         "CLI command: lifecycle endpoint-bindings create",
+                        "CLI command: lifecycle automation-plan",
                         "CLI command: lifecycle rotation-runs list",
                         "CLI command: lifecycle rotation-runs get"
                     ],
@@ -11057,6 +11065,7 @@
                         "OpenAPI operationId: listIdentities",
                         "OpenAPI operationId: transitionIdentity",
                         "OpenAPI operationId: createEndpointBinding",
+                        "OpenAPI operationId: getLifecycleAutomationPlan",
                         "OpenAPI operationId: listNotifications",
                         "OpenAPI operationId: getNotification",
                         "OpenAPI operationId: searchAudit",
@@ -11096,7 +11105,7 @@
                 },
                 "rbac": {
                     "evidence": [
-                        "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listIdentities, transitionIdentity, createEndpointBinding, searchAudit, listRotationRuns, getRotationRun",
+                        "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listIdentities, transitionIdentity, createEndpointBinding, getLifecycleAutomationPlan, searchAudit, listRotationRuns, getRotationRun",
                         "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
                     ],
                     "refs": [
@@ -11155,7 +11164,7 @@
                 "purpose": "Lets an operator understand and safely use lifecycle automation while tenant, policy, and security authority remain on the server.",
                 "tool": "operations",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/identities",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -11167,7 +11176,7 @@
                 "dependencies": [],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -11193,12 +11202,20 @@
                         ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "The console does not yet show the exact renewal window, affected credentials, connector effects, policy decisions, and outbox work before a lifecycle run starts."
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: getLifecycleAutomationPlan",
+                            "internal/server/lifecycle_automation_plan_served_test.go",
+                            "web/src/pages/identities/LifecycleAutomationPanel.tsx"
+                        ]
                     },
                     "execute": {
-                        "status": "missing",
-                        "reason": "Endpoint-binding setup is available, but the console does not yet provide the complete start, pause, resume, retry, and cancel workflow for lifecycle automation runs."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/identities/LifecycleAutomationPanel.tsx",
+                            "internal/api/lifecycle_automation.go",
+                            "internal/server/lifecycle_automation_plan_served_test.go"
+                        ]
                     },
                     "observe": {
                         "status": "complete",
@@ -11208,8 +11225,12 @@
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "The backend records rotation and delivery recovery evidence, but the console does not yet give the operator a complete retry, resume, or rollback workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/identities/LifecycleAutomationPanel.tsx",
+                            "internal/api/lifecycle_automation.go",
+                            "web/src/__tests__/lifecycle.test.tsx"
+                        ]
                     },
                     "verify": {
                         "status": "complete",
@@ -11223,6 +11244,7 @@
                             "OpenAPI operationId: listIdentities",
                             "OpenAPI operationId: transitionIdentity",
                             "OpenAPI operationId: createEndpointBinding",
+                            "OpenAPI operationId: getLifecycleAutomationPlan",
                             "OpenAPI operationId: listNotifications",
                             "OpenAPI operationId: getNotification",
                             "OpenAPI operationId: searchAudit",
@@ -11233,6 +11255,7 @@
                             "CLI command: identities transition",
                             "CLI command: audit events",
                             "CLI command: lifecycle endpoint-bindings create",
+                            "CLI command: lifecycle automation-plan",
                             "CLI command: notifications list",
                             "CLI command: notifications get",
                             "CLI command: lifecycle rotation-runs list",
@@ -11244,7 +11267,7 @@
                 "owner": "operations",
                 "target_checkpoint": "frontend-convergence",
                 "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "freshness": "2026-08-30"
             }
         },
         {

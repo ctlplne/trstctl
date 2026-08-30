@@ -15002,6 +15002,280 @@
         ],
         "type": "object"
       },
+      "LifecycleAutomationControl": {
+        "properties": {
+          "action": {
+            "enum": [
+              "start",
+              "pause",
+              "resume",
+              "retry",
+              "cancel",
+              "rollback"
+            ],
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "available",
+              "configuration_only",
+              "automatic",
+              "conditional",
+              "unavailable_after_enqueue"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "state",
+          "detail"
+        ],
+        "type": "object"
+      },
+      "LifecycleAutomationItem": {
+        "properties": {
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "certificate_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "due": {
+            "type": "boolean"
+          },
+          "identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "identity_name": {
+            "type": "string"
+          },
+          "identity_status": {
+            "type": "string"
+          },
+          "latest_run_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "latest_run_status": {
+            "type": "string"
+          },
+          "not_after": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "owner_name": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "renewal_source": {
+            "enum": [
+              "ari",
+              "fixed_deadline",
+              "not_due",
+              "in_flight"
+            ],
+            "type": "string"
+          },
+          "rollback_ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "identity_id",
+          "identity_name",
+          "identity_status",
+          "owner_id",
+          "owner_name",
+          "certificate_id",
+          "due",
+          "renewal_source",
+          "reason",
+          "blockers"
+        ],
+        "type": "object"
+      },
+      "LifecycleAutomationPlan": {
+        "properties": {
+          "capability": {
+            "type": "string"
+          },
+          "controls": {
+            "items": {
+              "$ref": "#/components/schemas/LifecycleAutomationControl"
+            },
+            "type": "array"
+          },
+          "execution_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "execution_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LifecycleAutomationItem"
+            },
+            "type": "array"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "scheduler": {
+            "$ref": "#/components/schemas/LifecycleAutomationScheduler"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/LifecycleAutomationSummary"
+          },
+          "verification_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "ready",
+          "generated_at",
+          "scheduler",
+          "summary",
+          "items",
+          "controls",
+          "preview_writes",
+          "preview_external_effects",
+          "execution_writes",
+          "execution_external_effects",
+          "verification_steps"
+        ],
+        "type": "object"
+      },
+      "LifecycleAutomationScheduler": {
+        "properties": {
+          "alert_before": {
+            "type": "string"
+          },
+          "alert_before_seconds": {
+            "type": "integer"
+          },
+          "ari_first": {
+            "type": "boolean"
+          },
+          "interval": {
+            "type": "string"
+          },
+          "interval_seconds": {
+            "type": "integer"
+          },
+          "maintenance_deferral": {
+            "type": "string"
+          },
+          "maintenance_window_status": {
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "type": "string"
+          },
+          "next_open": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "renew_before": {
+            "type": "string"
+          },
+          "renew_before_seconds": {
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "running",
+              "deferred",
+              "disabled"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "renew_before",
+          "renew_before_seconds",
+          "alert_before",
+          "alert_before_seconds",
+          "interval",
+          "interval_seconds",
+          "ari_first",
+          "maintenance_window_status"
+        ],
+        "type": "object"
+      },
+      "LifecycleAutomationSummary": {
+        "properties": {
+          "due_now": {
+            "type": "integer"
+          },
+          "monitored": {
+            "type": "integer"
+          },
+          "outbox_failed": {
+            "type": "integer"
+          },
+          "outbox_pending": {
+            "type": "integer"
+          },
+          "outbox_processing": {
+            "type": "integer"
+          },
+          "renewal_failed": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "monitored",
+          "due_now",
+          "renewal_failed",
+          "outbox_pending",
+          "outbox_processing",
+          "outbox_failed"
+        ],
+        "type": "object"
+      },
       "MCPToolCall": {
         "properties": {
           "authority_id": {
@@ -41573,6 +41847,53 @@
         ],
         "summary": "Get Kubernetes trust-bundle distribution support",
         "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/lifecycle/automation-plan": {
+      "get": {
+        "operationId": "getLifecycleAutomationPlan",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LifecycleAutomationPlan"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Preview scheduler timing, due work, safe controls, and recovery evidence without effects",
+        "x-trstctl-permission": "lifecycle:read"
       }
     },
     "/api/v1/lifecycle/endpoint-bindings": {
