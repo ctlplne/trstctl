@@ -672,10 +672,7 @@ export function Identities() {
 
       <IssuancePipeline identities={items ?? []} />
 
-      <LifecycleAutomationPanel
-        identities={items ?? []}
-        onReviewRenewal={(identity, label, reason) => request(identity, "renewing", label, reason)}
-      />
+      <LifecycleAutomationPanel identities={items ?? []} onReviewRenewal={(identity, label, reason) => request(identity, "renewing", label, reason)} />
 
       {showForm && (
         <NewIdentityForm

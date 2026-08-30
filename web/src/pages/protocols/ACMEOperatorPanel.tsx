@@ -229,9 +229,7 @@ export function ACMEOperatorPanel() {
                           tone={activity.authorization_status === "valid" ? "success" : "neutral"}
                           label={result}
                         />
-                        <span className="text-caption text-muted-foreground">
-                          {t("protocols.acmePlan.activityOrder", { status: activity.order_status })}
-                        </span>
+                        <span className="text-caption text-muted-foreground">{t("protocols.acmePlan.activityOrder", { status: activity.order_status })}</span>
                       </div>
                     </li>
                   );

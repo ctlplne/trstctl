@@ -2212,7 +2212,8 @@ const deDECatalog = {
   "protocols.acmePlan.activityDescription":
     "Dies sind echte ACME-Aufträge, die aus dem Ereignisprotokoll rekonstruiert wurden. Sie zeigen die von der Richtlinie angebotenen Methoden und die Methode, die die Kontrolle tatsächlich nachgewiesen hat; Challenge-Token und Kontoschlüssel bleiben verborgen.",
   "protocols.acmePlan.activityCount": "{count} kürzlich",
-  "protocols.acmePlan.activityEmpty": "Noch hat kein ACME-Client eine Domainvalidierung gestartet. Kopieren Sie den obigen Client-Befehl, um den ersten echten Auftrag zu erstellen.",
+  "protocols.acmePlan.activityEmpty":
+    "Noch hat kein ACME-Client eine Domainvalidierung gestartet. Kopieren Sie den obigen Client-Befehl, um den ersten echten Auftrag zu erstellen.",
   "protocols.acmePlan.activityValidated": "Mit {method} validiert",
   "protocols.acmePlan.activitySkipped": "Domainprüfung durch vertrauenswürdiges Profil übersprungen",
   "protocols.acmePlan.activityWaiting": "Warten auf eine Client-Antwort",
@@ -7711,10 +7712,12 @@ const deDECatalog = {
   "identities.automation.monitored": "Überwachte Zertifikate",
   "identities.automation.dueNow": "Bereit zur Erneuerung",
   "identities.automation.failed": "Benötigen Aufmerksamkeit",
-  "identities.automation.maintenance": "Wartungsfenster pausieren neue Starts; eingereihte Arbeit behält ihren dauerhaften Datensatz und wird automatisch fortgesetzt.",
+  "identities.automation.maintenance":
+    "Wartungsfenster pausieren neue Starts; eingereihte Arbeit behält ihren dauerhaften Datensatz und wird automatisch fortgesetzt.",
   "identities.automation.maintenanceDeferral": " Grund: {reason}.",
   "identities.automation.nextOpen": " Nächste Öffnung: {time}.",
-  "identities.automation.cancelLimit": "Eingereihte Arbeit kann nicht sicher abgebrochen werden, nachdem ein Prozess sie übernommen haben könnte. Ein Wiederholungsversuch wird separat geprüft und idempotent ausgeführt.",
+  "identities.automation.cancelLimit":
+    "Eingereihte Arbeit kann nicht sicher abgebrochen werden, nachdem ein Prozess sie übernommen haben könnte. Ein Wiederholungsversuch wird separat geprüft und idempotent ausgeführt.",
   "identities.automation.pendingHeading": "Zu prüfende Erneuerungen",
   "identities.automation.expires": " · läuft {time} ab",
   "identities.automation.startAction": "Erneuerung jetzt prüfen",

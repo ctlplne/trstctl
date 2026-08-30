@@ -2195,7 +2195,8 @@ const esESCatalog = {
   "protocols.acmePlan.activityDescription":
     "Estos son pedidos ACME reales reconstruidos desde el registro de eventos. Muestran los métodos que ofreció la política y el método que realmente demostró el control; los tokens de desafío y las claves de cuenta permanecen ocultos.",
   "protocols.acmePlan.activityCount": "{count} recientes",
-  "protocols.acmePlan.activityEmpty": "Ningún cliente ACME ha iniciado todavía la validación de dominio. Copie el comando de cliente de arriba para crear el primer pedido real.",
+  "protocols.acmePlan.activityEmpty":
+    "Ningún cliente ACME ha iniciado todavía la validación de dominio. Copie el comando de cliente de arriba para crear el primer pedido real.",
   "protocols.acmePlan.activityValidated": "Validado con {method}",
   "protocols.acmePlan.activitySkipped": "Comprobación de dominio omitida por un perfil de confianza",
   "protocols.acmePlan.activityWaiting": "Esperando la respuesta de un cliente",
@@ -7658,10 +7659,12 @@ const esESCatalog = {
   "identities.automation.monitored": "Certificados vigilados",
   "identities.automation.dueNow": "Listos para renovar",
   "identities.automation.failed": "Necesitan atención",
-  "identities.automation.maintenance": "Las ventanas de mantenimiento pausan los nuevos inicios; el trabajo en cola conserva su registro duradero y se reanuda automáticamente.",
+  "identities.automation.maintenance":
+    "Las ventanas de mantenimiento pausan los nuevos inicios; el trabajo en cola conserva su registro duradero y se reanuda automáticamente.",
   "identities.automation.maintenanceDeferral": " Motivo: {reason}.",
   "identities.automation.nextOpen": " Próxima apertura: {time}.",
-  "identities.automation.cancelLimit": "El trabajo en cola no se puede cancelar de forma segura cuando un proceso puede haberlo tomado. Reintentar crea un intento separado, revisado e idempotente.",
+  "identities.automation.cancelLimit":
+    "El trabajo en cola no se puede cancelar de forma segura cuando un proceso puede haberlo tomado. Reintentar crea un intento separado, revisado e idempotente.",
   "identities.automation.pendingHeading": "Renovaciones para revisar",
   "identities.automation.expires": " · vence {time}",
   "identities.automation.startAction": "Revisar renovación ahora",
