@@ -261,30 +261,30 @@ func TestOutboxExclusiveLockProbeRejectsLongTransaction(t *testing.T) {
 
 func waitForNonConnectorOutboxPools(t *testing.T, set *bulkhead.Set) {
 	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
+	// The customer-visible isolation requirement is asserted above with its own
+	// strict two-second deadline. This wait covers only the bookkeeping sweeps
+	// submitted by dispatchOnce so the exclusive-lock probe starts from a known
+	// quiet database. Race instrumentation and whole-repository CPU pressure can
+	// delay those empty sweeps without delaying either real non-connector row.
+	deadline := time.Now().Add(5 * time.Second)
 	for {
 		allDone := true
-		for _, name := range []string{
-			bulkhead.SubsystemOutbox,
-			bulkhead.SubsystemOutboxExternalCA,
-			bulkhead.SubsystemOutboxSecrets,
-			bulkhead.SubsystemOutboxManagedKeys,
-			bulkhead.SubsystemOutboxTransparency,
-			bulkhead.SubsystemOutboxNotifications,
-			bulkhead.SubsystemOutboxFleet,
-			bulkhead.SubsystemOutboxAuditFeeds,
-		} {
-			stats := set.Pool(name).Stats()
+		pending := make([]bulkhead.Stats, 0, len(outboxDispatchFamilies)-1)
+		for _, family := range outboxDispatchFamilies {
+			if family.pool == bulkhead.SubsystemOutboxConnectors {
+				continue
+			}
+			stats := set.Pool(family.pool).Stats()
 			if stats.Completed != stats.Submitted || stats.Queued != 0 {
 				allDone = false
-				break
+				pending = append(pending, stats)
 			}
 		}
 		if allDone {
 			return
 		}
 		if time.Now().After(deadline) {
-			t.Fatal("non-connector outbox sweeps did not quiesce")
+			t.Fatalf("non-connector outbox sweeps did not quiesce; pending pool stats: %+v", pending)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
