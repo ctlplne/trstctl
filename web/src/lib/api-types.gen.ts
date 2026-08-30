@@ -6764,6 +6764,28 @@ export interface SystemReadout {
   version: string;
 }
 
+export interface TSAQualification {
+  blockers: string[];
+  checked_at: string;
+  checks: TSAQualificationCheck[];
+  effect_free: boolean;
+  endpoint: string;
+  policy_oid: string;
+  preview_external_effects: string[];
+  preview_signer_calls: string[];
+  preview_writes: string[];
+  proof: string[];
+  ready: boolean;
+}
+
+export interface TSAQualificationCheck {
+  detail: string;
+  id: string;
+  label: string;
+  passed: boolean;
+  recovery?: string;
+}
+
 export interface TenantKeyDomainMigrateRequest {
   wrapper_id: string;
   wrapper_kind?: "local_file";

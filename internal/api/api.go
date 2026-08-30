@@ -110,6 +110,7 @@ type API struct {
 	vaultCompat                *vaultCompatState
 	protocolProfile            ProtocolProfileControl
 	cmpQualificationPosture    CMPQualificationPosture
+	tsaQualificationPosture    TSAQualificationPosture
 	spiffeQualificationPosture SPIFFEQualificationPosture
 	codeSigning                CodeSigningService
 	ctSubmission               CTSubmissionService
@@ -225,6 +226,7 @@ type config struct {
 	transit                     TransitService
 	protocolProfile             ProtocolProfileControl
 	cmpQualificationPosture     CMPQualificationPosture
+	tsaQualificationPosture     TSAQualificationPosture
 	spiffeQualificationPosture  SPIFFEQualificationPosture
 	codeSigning                 CodeSigningService
 	ctSubmission                CTSubmissionService
@@ -516,6 +518,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		vaultCompat:                 newVaultCompatState(cfg.eventLog),
 		protocolProfile:             cfg.protocolProfile,
 		cmpQualificationPosture:     cfg.cmpQualificationPosture,
+		tsaQualificationPosture:     cfg.tsaQualificationPosture,
 		spiffeQualificationPosture:  cfg.spiffeQualificationPosture,
 		codeSigning:                 cfg.codeSigning,
 		ctSubmission:                cfg.ctSubmission,
@@ -1019,6 +1022,7 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/setup/protocols", opID: "getProtocolProfile", summary: "Get the tenant-bound eval protocol profile status", handler: a.getProtocolProfile, resSchema: "ProtocolProfileStatus", successCode: "200", perm: authz.IssuersRead},
 		{method: "POST", path: "/api/v1/setup/protocols/activate", opID: "activateProtocolProfile", summary: "Activate the tenant-bound eval protocol profile", handler: a.activateProtocolProfile, resSchema: "ProtocolProfileStatus", successCode: "200", mutation: true, perm: authz.IssuersWrite},
 		{method: "POST", path: "/api/v1/protocols/cmp/qualification", opID: "qualifyCMP", summary: "Check the tenant-bound CMP endpoint without sending a PKIMessage, calling the signer, or writing state", handler: a.qualifyCMP, resSchema: "CMPQualification", successCode: "200", perm: authz.CertsRead},
+		{method: "POST", path: "/api/v1/protocols/tsa/qualification", opID: "qualifyTSA", summary: "Check tenant-bound TSA readiness without sending a TimeStampReq, calling the signer, or writing state", handler: a.qualifyTSA, resSchema: "TSAQualification", successCode: "200", perm: authz.CertsRead},
 		{method: "POST", path: "/api/v1/protocols/spiffe/qualification", opID: "qualifySPIFFE", summary: "Check the tenant-bound SPIFFE Workload API without dialing the socket, requesting an SVID, calling the signer, or writing state", handler: a.qualifySPIFFE, resSchema: "SPIFFEQualification", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/issuers/{id}", opID: "getIssuer", summary: "Get an issuer", handler: a.getIssuer, pathParams: idPath, resSchema: "Issuer", successCode: "200", perm: authz.IssuersRead, scope: scopeIssuerPath("id")},
 		{method: "POST", path: "/api/v1/ca/ceremonies/preview", opID: "previewCACeremony", summary: "Validate and explain an exact CA key ceremony without writing state, creating keys, or contacting an authority", handler: a.previewCACeremony, reqSchema: "CACeremonyStartRequest", resSchema: "CACeremonyPlanPreview", successCode: "200", perm: authz.IssuersWrite},

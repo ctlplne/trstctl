@@ -1301,6 +1301,7 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 // one named startup stage instead of growing configureAPI for every protocol.
 func (s *Server) appendProtocolQualificationOptions(d Deps, options *[]api.Option) {
 	s.appendCMPQualificationOption(d, options)
+	s.appendTSAQualificationOption(d, options)
 	s.appendSPIFFEQualificationOption(d, options)
 }
 

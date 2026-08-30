@@ -9398,6 +9398,36 @@ SystemReadout = TypedDict(
     total=False,
 )
 
+TSAQualification = TypedDict(
+    'TSAQualification',
+    {
+        'blockers': list[str],
+        'checked_at': str,
+        'checks': list[dict[str, Any]],
+        'effect_free': bool,
+        'endpoint': str,
+        'policy_oid': str,
+        'preview_external_effects': list[str],
+        'preview_signer_calls': list[str],
+        'preview_writes': list[str],
+        'proof': list[str],
+        'ready': bool,
+    },
+    total=False,
+)
+
+TSAQualificationCheck = TypedDict(
+    'TSAQualificationCheck',
+    {
+        'detail': str,
+        'id': str,
+        'label': str,
+        'passed': bool,
+        'recovery': str,
+    },
+    total=False,
+)
+
 TenantKeyDomainMigrateRequest = TypedDict(
     'TenantKeyDomainMigrateRequest',
     {

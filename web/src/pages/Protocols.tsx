@@ -20,6 +20,7 @@ import { ESTOperatorPanel } from "@/pages/protocols/ESTOperatorPanel";
 import { SCEPOperatorPanel } from "@/pages/protocols/SCEPOperatorPanel";
 import { CMPOperatorPanel } from "@/pages/protocols/CMPOperatorPanel";
 import { SPIFFEOperatorPanel } from "@/pages/protocols/SPIFFEOperatorPanel";
+import { TSAOperatorPanel } from "@/pages/protocols/TSAOperatorPanel";
 import { RevocationCachePanel } from "@/pages/protocols/RevocationCachePanel";
 import { DNS01PreflightDialog } from "@/pages/protocols/DNS01PreflightDialog";
 import { DNS01QualificationDialog } from "@/pages/protocols/DNS01QualificationDialog";
@@ -831,6 +832,7 @@ export function Protocols() {
           <ESTOperatorPanel />
           <SCEPOperatorPanel />
           <CMPOperatorPanel diagnostics={diagnostics?.items ?? []} />
+          <TSAOperatorPanel />
           <SPIFFEOperatorPanel onResult={recordSPIFFEQualification} />
 
           <section aria-labelledby="protocol-status-heading" className="border-y border-border py-4">

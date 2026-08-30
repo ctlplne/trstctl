@@ -1349,8 +1349,12 @@ describe("i18n boundary", () => {
       // exact endpoint warning remains reserved for an unusable token response.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
       // release.
-      "es-ES": "7474572a2f98725f61730b45d98ed7ed636e5fbcea26d64554578a895a007930",
-      "de-DE": "3a0c888c39dcfb3f98904f20326443afa5ffe2b5c0cc02f2e49138f99c6b64a5",
+      // QA F51 g98 re-pin: the timestamp workflow now names the effect-free
+      // readiness check, isolated signer/certificate/audit gates, safe repairs,
+      // and the separate OpenSSL wire-proof boundary. Machine-authored es/de —
+      // FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "dc685c24f42e6fad85d26a7b9961f647021a3dd8f6d2a7ac55adad7a7ec0efd8",
+      "de-DE": "17eef0e040a6cd4500fbbcf935110fc879ecade8fad01649cd5c4a7baa8862ca",
     });
   });
 

@@ -399,6 +399,18 @@ func componentSchemas() map[string]*Schema {
 		"preview_signer_calls":      {Type: "array", Items: str()},
 		"proof":                     {Type: "array", Items: str()}, "blockers": {Type: "array", Items: str()},
 	}, "checked_at", "ready", "effect_free", "endpoint", "profile", "binding_mode", "client_trust_anchor_count", "checks", "preview_writes", "preview_external_effects", "preview_signer_calls", "proof", "blockers")
+	tsaQualificationCheck := object(map[string]*Schema{
+		"id": str(), "label": str(), "passed": {Type: "boolean"}, "detail": str(), "recovery": str(),
+	}, "id", "label", "passed", "detail")
+	tsaQualification := object(map[string]*Schema{
+		"checked_at": timestamp(), "ready": {Type: "boolean"}, "effect_free": {Type: "boolean"},
+		"endpoint": str(), "policy_oid": str(),
+		"checks":                   {Type: "array", Items: ref("TSAQualificationCheck")},
+		"preview_writes":           {Type: "array", Items: str()},
+		"preview_external_effects": {Type: "array", Items: str()},
+		"preview_signer_calls":     {Type: "array", Items: str()},
+		"proof":                    {Type: "array", Items: str()}, "blockers": {Type: "array", Items: str()},
+	}, "checked_at", "ready", "effect_free", "endpoint", "policy_oid", "checks", "preview_writes", "preview_external_effects", "preview_signer_calls", "proof", "blockers")
 	spiffeQualificationCheck := object(map[string]*Schema{
 		"id": str(), "label": str(), "passed": {Type: "boolean"}, "detail": str(), "recovery": str(),
 	}, "id", "label", "passed", "detail")
@@ -6011,6 +6023,8 @@ func componentSchemas() map[string]*Schema {
 		"ProtocolProfileStatus":                    protocolProfileStatus,
 		"CMPQualificationCheck":                    cmpQualificationCheck,
 		"CMPQualification":                         cmpQualification,
+		"TSAQualificationCheck":                    tsaQualificationCheck,
+		"TSAQualification":                         tsaQualification,
 		"SPIFFEQualificationCheck":                 spiffeQualificationCheck,
 		"SPIFFEQualification":                      spiffeQualification,
 		"CASpec":                                   caSpec,

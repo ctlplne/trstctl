@@ -671,6 +671,8 @@ public final class OpenApiSchemas {
       "ShareValue",
       "SystemDependency",
       "SystemReadout",
+      "TSAQualification",
+      "TSAQualificationCheck",
       "TenantKeyDomainMigrateRequest",
       "TenantKeyDomainSealReceipt",
       "TenantKeyDomainStatus",

@@ -14,6 +14,7 @@ const { apiMock } = vi.hoisted(() => ({
     estQualification: vi.fn(),
     scepQualification: vi.fn(),
     cmpQualification: vi.fn(),
+    tsaQualification: vi.fn(),
     spiffeQualification: vi.fn(),
     acmeOperatorPlan: vi.fn(),
     activateProtocolProfile: vi.fn(),
@@ -141,6 +142,7 @@ describe("protocol surface", () => {
     apiMock.estQualification.mockReset();
     apiMock.scepQualification.mockReset();
     apiMock.cmpQualification.mockReset();
+    apiMock.tsaQualification.mockReset();
     apiMock.spiffeQualification.mockReset();
     apiMock.acmeOperatorPlan.mockReset();
     apiMock.activateProtocolProfile.mockReset();
@@ -262,6 +264,27 @@ describe("protocol surface", () => {
       preview_external_effects: [],
       preview_signer_calls: [],
       proof: ["In-memory only.", "No request material.", "No effects."],
+      blockers: [],
+    });
+    apiMock.tsaQualification.mockResolvedValue({
+      checked_at: "2026-08-30T18:15:00Z",
+      ready: true,
+      effect_free: true,
+      endpoint: "/tsa",
+      policy_oid: "1.3.6.1.4.1.59551.2.1",
+      checks: [
+        { id: "configured", label: "TSA enabled", passed: true, detail: "TSA is enabled in startup configuration." },
+        { id: "endpoint-mounted", label: "TSA endpoint mounted", passed: true, detail: "The running control plane owns POST /tsa." },
+        { id: "tenant-binding", label: "Tenant binding", passed: true, detail: "The TSA mount is bound to this authenticated tenant." },
+        { id: "stable-certificate", label: "Stable TSA certificate", passed: true, detail: "The timestamp certificate matches the signer-held key." },
+        { id: "signer", label: "Isolated timestamp signer", passed: true, detail: "The timestamp key stays in the isolated signer." },
+        { id: "audit", label: "Immutable issuance audit", passed: true, detail: "Timestamp issuances can be recorded." },
+        { id: "bounded-capacity", label: "Bounded responder capacity", passed: true, detail: "The TSA responder is bulkheaded." },
+      ],
+      preview_writes: [],
+      preview_external_effects: [],
+      preview_signer_calls: [],
+      proof: ["In-memory only.", "No timestamp request.", "No effects."],
       blockers: [],
     });
     apiMock.spiffeQualification.mockResolvedValue({

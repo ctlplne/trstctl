@@ -2352,6 +2352,43 @@ const deDECatalog = {
   "protocols.cmpCheck.failedTitle": "CMP-Prüfung konnte nicht ausgeführt werden",
   "protocols.cmpCheck.failedBody": "Die CMP-Prüfung ist fehlgeschlagen, bevor sie Nachweise zurückgeben konnte.",
   "protocols.cmpCheck.invalidResult": "Die CMP-Prüfung hat unvollständige Nachweise zurückgegeben.",
+  // F51 TSA operator workflow — Machine-authored, FLAG FOR HUMAN REVIEW.
+  "protocols.tsaCheck.region": "Bereitschaft der Zeitstempelstelle",
+  "protocols.tsaCheck.heading": "Bereitschaft der Zeitstempelstelle",
+  "protocols.tsaCheck.description":
+    "Prüfen Sie, ob dieser laufende Server ein Artefakt zeitstempeln kann, bevor Sie eine echte RFC-3161-Anfrage senden.",
+  "protocols.tsaCheck.previewHeading": "Was diese Prüfung untersucht",
+  "protocols.tsaCheck.safePreview":
+    "Sicherheitsgrenze: Es wird nur die Bereitschaft im Arbeitsspeicher gelesen. Die Prüfung stellt keinen Zeitstempel aus, liest keine Zertifikatsdatei, ruft weder Signierer noch Netzwerk auf und schreibt nichts.",
+  "protocols.tsaCheck.mountPreview": "Endpunkt und Mandant",
+  "protocols.tsaCheck.mountPreviewDetail":
+    "Bestätigt, dass POST /tsa für diesen angemeldeten Mandanten eingebunden ist und nicht nur in einer Konfigurationsdatei aktiviert aussieht.",
+  "protocols.tsaCheck.certificatePreview": "Stabiles Zeitstempelzertifikat",
+  "protocols.tsaCheck.certificatePreviewDetail":
+    "Bestätigt, dass das reine Zeitstempelzertifikat zum Signiererschlüssel passt und über Neustarts stabil bleiben kann.",
+  "protocols.tsaCheck.signerPreview": "Isolierter Signaturpfad",
+  "protocols.tsaCheck.signerPreviewDetail":
+    "Bestätigt, dass Zeitstempelsignaturen im separaten Signiererprozess bleiben und Schlüsselmaterial nie in Browser oder Control Plane gelangt.",
+  "protocols.tsaCheck.auditPreview": "Audit und begrenzte Kapazität",
+  "protocols.tsaCheck.auditPreviewDetail":
+    "Bestätigt, dass jeder akzeptierte Zeitstempel auditierbar ist und ein Ansturm die Control-Plane-API nicht blockieren kann.",
+  "protocols.tsaCheck.ready": "Bereit für einen Standard-Client-Test",
+  "protocols.tsaCheck.blocked": "Vor dem Zeitstempeln ist eine Reparatur nötig",
+  "protocols.tsaCheck.endpoint": "Zeitstempel-Endpunkt",
+  "protocols.tsaCheck.policy": "Richtlinien-OID",
+  "protocols.tsaCheck.resultsLabel": "Ergebnisse der Bereitschaftsprüfung der Zeitstempelstelle",
+  "protocols.tsaCheck.passed": "Bestanden",
+  "protocols.tsaCheck.failed": "Blockiert",
+  "protocols.tsaCheck.effectProof":
+    "0 Schreibvorgänge · 0 externe Aufrufe · 0 Signierer-Aufrufe · 0 ausgestellte Zeitstempel. Der OpenSSL-Befehl unten ist der echte Protokolltest und prüft die Antwort gegen vertrauenswürdiges CA-Material.",
+  "protocols.tsaCheck.run": "TSA-Bereitschaft prüfen",
+  "protocols.tsaCheck.running": "TSA wird geprüft…",
+  "protocols.tsaCheck.runAgain": "Erneut prüfen",
+  "protocols.tsaCheck.clientBoundary":
+    "Der OpenSSL-Befehl unten ist der echte Protokolltest: Er bildet den Hash lokal, sendet nur diesen Hash und prüft die signierte Antwort. Artefakt und privater Signaturschlüssel gelangen nie in trstctl.",
+  "protocols.tsaCheck.failedTitle": "TSA-Bereitschaftsprüfung fehlgeschlagen",
+  "protocols.tsaCheck.failedBody": "Die TSA-Prüfung ist fehlgeschlagen, bevor sie Nachweise zurückgeben konnte.",
+  "protocols.tsaCheck.invalidResult": "Die TSA-Prüfung hat unvollständige Nachweise zurückgegeben.",
   "protocols.spiffeCheck.region": "Bereitschaft der SPIFFE-Workload-Identität",
   "protocols.spiffeCheck.heading": "Bereitschaft der SPIFFE-Workload-Identität",
   "protocols.spiffeCheck.description":

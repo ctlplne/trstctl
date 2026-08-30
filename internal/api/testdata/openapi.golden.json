@@ -27224,6 +27224,102 @@
         ],
         "type": "object"
       },
+      "TSAQualification": {
+        "properties": {
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "checked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/TSAQualificationCheck"
+            },
+            "type": "array"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "endpoint": {
+            "type": "string"
+          },
+          "policy_oid": {
+            "type": "string"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_signer_calls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "proof": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ready": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "checked_at",
+          "ready",
+          "effect_free",
+          "endpoint",
+          "policy_oid",
+          "checks",
+          "preview_writes",
+          "preview_external_effects",
+          "preview_signer_calls",
+          "proof",
+          "blockers"
+        ],
+        "type": "object"
+      },
+      "TSAQualificationCheck": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "passed": {
+            "type": "boolean"
+          },
+          "recovery": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "passed",
+          "detail"
+        ],
+        "type": "object"
+      },
       "TenantKeyDomainMigrateRequest": {
         "properties": {
           "wrapper_id": {
@@ -48834,6 +48930,53 @@
           }
         ],
         "summary": "Check the tenant-bound SPIFFE Workload API without dialing the socket, requesting an SVID, calling the signer, or writing state",
+        "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/protocols/tsa/qualification": {
+      "post": {
+        "operationId": "qualifyTSA",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TSAQualification"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Check tenant-bound TSA readiness without sending a TimeStampReq, calling the signer, or writing state",
         "x-trstctl-permission": "certs:read"
       }
     },

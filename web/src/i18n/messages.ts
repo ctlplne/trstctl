@@ -7253,6 +7253,61 @@ export const messages = {
   "protocols.cmpCheck.failedTitle": { defaultMessage: "CMP check could not run", description: "CMP qualification transport error heading." },
   "protocols.cmpCheck.failedBody": { defaultMessage: "The CMP check failed before returning evidence.", description: "Fallback CMP qualification error." },
   "protocols.cmpCheck.invalidResult": { defaultMessage: "The CMP check returned incomplete evidence.", description: "CMP qualification schema guard error." },
+  "protocols.tsaCheck.region": { defaultMessage: "Timestamp authority readiness", description: "Accessible label for the safe TSA operator workflow." },
+  "protocols.tsaCheck.heading": { defaultMessage: "Timestamp authority readiness", description: "Heading for the safe TSA operator workflow." },
+  "protocols.tsaCheck.description": {
+    defaultMessage: "Check whether this running server is ready to timestamp an artifact before you send a real RFC 3161 request.",
+    description: "ELI5 explanation of the TSA qualification workflow.",
+  },
+  "protocols.tsaCheck.previewHeading": { defaultMessage: "What this check will inspect", description: "TSA qualification preview heading." },
+  "protocols.tsaCheck.safePreview": {
+    defaultMessage:
+      "Safety boundary: this reads in-memory readiness only. It does not mint a timestamp, read a certificate file, call the signer or network, or write anything.",
+    description: "Explicit effect boundary for TSA qualification.",
+  },
+  "protocols.tsaCheck.mountPreview": { defaultMessage: "Endpoint and tenant", description: "TSA preview step for endpoint and tenant binding." },
+  "protocols.tsaCheck.mountPreviewDetail": {
+    defaultMessage: "Confirm that POST /tsa is mounted for this signed-in tenant instead of merely looking enabled in a config file.",
+    description: "TSA endpoint and tenant preview detail.",
+  },
+  "protocols.tsaCheck.certificatePreview": { defaultMessage: "Stable timestamp certificate", description: "TSA preview step for certificate posture." },
+  "protocols.tsaCheck.certificatePreviewDetail": {
+    defaultMessage: "Confirm that the timestamping-only certificate matches the signer-held key and can remain stable across restarts.",
+    description: "TSA certificate preview detail.",
+  },
+  "protocols.tsaCheck.signerPreview": { defaultMessage: "Isolated signing path", description: "TSA preview step for signer posture." },
+  "protocols.tsaCheck.signerPreviewDetail": {
+    defaultMessage: "Confirm that timestamp signing stays in the separate signer process and never moves key material into the browser or control plane.",
+    description: "TSA signer preview detail.",
+  },
+  "protocols.tsaCheck.auditPreview": { defaultMessage: "Audit and bounded capacity", description: "TSA preview step for evidence and backpressure." },
+  "protocols.tsaCheck.auditPreviewDetail": {
+    defaultMessage: "Confirm that each accepted timestamp can be audited and that a burst cannot starve the control-plane API.",
+    description: "TSA audit and bulkhead preview detail.",
+  },
+  "protocols.tsaCheck.ready": { defaultMessage: "Ready for a stock-client test", description: "Successful TSA readiness state." },
+  "protocols.tsaCheck.blocked": { defaultMessage: "Needs repair before timestamping", description: "Blocked TSA readiness state." },
+  "protocols.tsaCheck.endpoint": { defaultMessage: "Timestamp endpoint", description: "TSA runtime endpoint label." },
+  "protocols.tsaCheck.policy": { defaultMessage: "Policy OID", description: "TSA runtime policy identifier label." },
+  "protocols.tsaCheck.resultsLabel": { defaultMessage: "Timestamp authority readiness gate results", description: "Accessible label for TSA results." },
+  "protocols.tsaCheck.passed": { defaultMessage: "Passed", description: "One TSA readiness gate passed." },
+  "protocols.tsaCheck.failed": { defaultMessage: "Blocked", description: "One TSA readiness gate failed closed." },
+  "protocols.tsaCheck.effectProof": {
+    defaultMessage:
+      "0 writes · 0 outside calls · 0 signer calls · 0 timestamps issued. The OpenSSL command below is the real wire test and verifies the returned timestamp against trusted CA material.",
+    description: "TSA qualification no-effect proof and real-client boundary.",
+  },
+  "protocols.tsaCheck.run": { defaultMessage: "Check TSA readiness", description: "Run the effect-free TSA readiness check." },
+  "protocols.tsaCheck.running": { defaultMessage: "Checking TSA…", description: "Busy label during TSA qualification." },
+  "protocols.tsaCheck.runAgain": { defaultMessage: "Check again", description: "Repeat TSA qualification after repair." },
+  "protocols.tsaCheck.clientBoundary": {
+    defaultMessage:
+      "The OpenSSL command below is the real wire test: it hashes the artifact locally, sends only that hash, and verifies the signed timestamp response. The artifact and private signing key never enter trstctl.",
+    description: "Boundary between TSA readiness preview and real RFC 3161 execution.",
+  },
+  "protocols.tsaCheck.failedTitle": { defaultMessage: "TSA readiness check failed", description: "TSA qualification transport or schema error heading." },
+  "protocols.tsaCheck.failedBody": { defaultMessage: "The TSA readiness check failed before returning evidence.", description: "Fallback TSA qualification error." },
+  "protocols.tsaCheck.invalidResult": { defaultMessage: "The TSA readiness check returned incomplete evidence.", description: "TSA qualification schema guard error." },
   "protocols.spiffeCheck.region": {
     defaultMessage: "SPIFFE workload identity readiness",
     description: "Accessible label for the safe SPIFFE operator workflow.",

@@ -1223,6 +1223,28 @@ export interface CMPQualification {
   blockers: string[];
 }
 
+export interface TSAQualificationCheck {
+  id: string;
+  label: string;
+  passed: boolean;
+  detail: string;
+  recovery?: string;
+}
+
+export interface TSAQualification {
+  checked_at: string;
+  ready: boolean;
+  effect_free: boolean;
+  endpoint: string;
+  policy_oid: string;
+  checks: TSAQualificationCheck[];
+  preview_writes: string[];
+  preview_external_effects: string[];
+  preview_signer_calls: string[];
+  proof: string[];
+  blockers: string[];
+}
+
 export interface SPIFFEQualificationCheck {
   id: string;
   label: string;
@@ -2255,6 +2277,8 @@ export interface Api {
   scepQualification(): Promise<SCEPQualificationResult>;
   /** F55: server-owned, tenant-scoped CMP gate qualification with no PKIMessage, signer call, external call, or write. */
   cmpQualification(): Promise<CMPQualification>;
+  /** F51: server-owned, tenant-scoped TSA readiness with no TimeStampReq, signer call, filesystem read, or write. */
+  tsaQualification(): Promise<TSAQualification>;
   /** F24: server-owned SPIFFE UDS posture without dialing the socket, requesting an SVID, calling the signer, or writing. */
   spiffeQualification(): Promise<SPIFFEQualification>;
   mdmSCEPStatus(): Promise<MDMSCEPStatus>;
@@ -2796,6 +2820,7 @@ const liveApi: Api = {
   estQualification,
   scepQualification,
   cmpQualification: () => postRead<CMPQualification>("/api/v1/protocols/cmp/qualification"),
+  tsaQualification: () => postRead<TSAQualification>("/api/v1/protocols/tsa/qualification"),
   spiffeQualification: () => postRead<SPIFFEQualification>("/api/v1/protocols/spiffe/qualification"),
   secretPage: (options) => {
     const qs = new URLSearchParams();

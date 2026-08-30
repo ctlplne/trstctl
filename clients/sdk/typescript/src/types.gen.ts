@@ -4710,6 +4710,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/protocols/tsa/qualification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Check tenant-bound TSA readiness without sending a TimeStampReq, calling the signer, or writing state */
+        post: operations["qualifyTSA"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/remediation/owner-actions": {
         parameters: {
             query?: never;
@@ -13072,6 +13089,27 @@ export interface components {
             started_at: string;
             uptime_seconds: number;
             version: string;
+        };
+        TSAQualification: {
+            blockers: string[];
+            /** Format: date-time */
+            checked_at: string;
+            checks: components["schemas"]["TSAQualificationCheck"][];
+            effect_free: boolean;
+            endpoint: string;
+            policy_oid: string;
+            preview_external_effects: string[];
+            preview_signer_calls: string[];
+            preview_writes: string[];
+            proof: string[];
+            ready: boolean;
+        };
+        TSAQualificationCheck: {
+            detail: string;
+            id: string;
+            label: string;
+            passed: boolean;
+            recovery?: string;
         };
         TenantKeyDomainMigrateRequest: {
             wrapper_id: string;
@@ -27211,6 +27249,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SPIFFEQualification"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    qualifyTSA: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TSAQualification"];
                 };
             };
             /** @description client error */

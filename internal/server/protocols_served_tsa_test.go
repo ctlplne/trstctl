@@ -4,6 +4,7 @@ package server
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"net/http"
 	"os"
@@ -11,7 +12,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/testutil/openssltest"
 	"trstctl.com/trstctl/internal/tsa"
 )
@@ -75,7 +78,47 @@ func TestServedTSAOpenSSLTimestampOverHTTP(t *testing.T) {
 	if err := os.WriteFile(verifyLogPath, out, 0o600); err != nil {
 		t.Fatal(err)
 	}
+
+	// The console preview reads the exact assembled runtime after OpenSSL proves
+	// the wire path. It must not issue a second timestamp or require timestamp
+	// request/certificate material from the browser.
+	issuedBefore := countServedTSAEvents(t, h)
+	readToken := seedAPITokenWithScopes(t, h.store, servedTestTenant, []string{"certs:read"})
+	qualifyReq, _ := http.NewRequest(http.MethodPost, h.ts.URL+"/api/v1/protocols/tsa/qualification", nil)
+	qualifyReq.Header.Set("Authorization", "Bearer "+readToken)
+	qualifyResp, err := h.ts.Client().Do(qualifyReq)
+	if err != nil {
+		t.Fatalf("TSA qualification: %v", err)
+	}
+	qualifyBody, _ := readAllClose(qualifyResp)
+	if qualifyResp.StatusCode != http.StatusOK {
+		t.Fatalf("TSA qualification status %d: %s", qualifyResp.StatusCode, qualifyBody)
+	}
+	var qualification api.TSAQualification
+	if err := json.Unmarshal(qualifyBody, &qualification); err != nil {
+		t.Fatalf("decode TSA qualification: %v body=%s", err, qualifyBody)
+	}
+	if !qualification.Ready || !qualification.EffectFree || qualification.Endpoint != "/tsa" {
+		t.Fatalf("TSA qualification=%+v, want ready effect-free exact live posture", qualification)
+	}
+	if issuedAfter := countServedTSAEvents(t, h); issuedAfter != issuedBefore {
+		t.Fatalf("effect-free TSA qualification changed issuance count from %d to %d", issuedBefore, issuedAfter)
+	}
 	archiveServedTSATranscripts(t, dataPath, reqPath, respPath, caPath, verifyLogPath)
+}
+
+func countServedTSAEvents(t *testing.T, h *servedHarness) int {
+	t.Helper()
+	count := 0
+	if err := h.log.Replay(t.Context(), 0, func(event events.Event) error {
+		if event.TenantID == servedTestTenant && event.Type == "tsa.timestamp.issued" {
+			count++
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("replay TSA events: %v", err)
+	}
+	return count
 }
 
 func requireOpenSSLTSServer(t *testing.T) string {

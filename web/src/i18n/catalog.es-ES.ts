@@ -2331,6 +2331,43 @@ const esESCatalog = {
   "protocols.cmpCheck.failedTitle": "No se pudo ejecutar la comprobación de CMP",
   "protocols.cmpCheck.failedBody": "La comprobación de CMP falló antes de devolver evidencia.",
   "protocols.cmpCheck.invalidResult": "La comprobación de CMP devolvió evidencia incompleta.",
+  // F51 TSA operator workflow — Machine-authored, FLAG FOR HUMAN REVIEW.
+  "protocols.tsaCheck.region": "Preparación de la autoridad de sellado de tiempo",
+  "protocols.tsaCheck.heading": "Preparación de la autoridad de sellado de tiempo",
+  "protocols.tsaCheck.description":
+    "Comprueba si este servidor está listo para sellar un artefacto antes de enviar una solicitud RFC 3161 real.",
+  "protocols.tsaCheck.previewHeading": "Qué inspeccionará esta comprobación",
+  "protocols.tsaCheck.safePreview":
+    "Límite de seguridad: solo lee la preparación en memoria. No emite un sello de tiempo, no lee un archivo de certificado, no llama al firmante ni a la red y no escribe nada.",
+  "protocols.tsaCheck.mountPreview": "Punto de acceso e inquilino",
+  "protocols.tsaCheck.mountPreviewDetail":
+    "Confirma que POST /tsa está montado para este inquilino con sesión iniciada y no solo habilitado en un archivo de configuración.",
+  "protocols.tsaCheck.certificatePreview": "Certificado de sellado estable",
+  "protocols.tsaCheck.certificatePreviewDetail":
+    "Confirma que el certificado exclusivo de sellado coincide con la clave del firmante y puede permanecer estable entre reinicios.",
+  "protocols.tsaCheck.signerPreview": "Ruta de firma aislada",
+  "protocols.tsaCheck.signerPreviewDetail":
+    "Confirma que la firma de sellos permanece en el proceso de firma separado y que las claves nunca pasan al navegador ni al plano de control.",
+  "protocols.tsaCheck.auditPreview": "Auditoría y capacidad limitada",
+  "protocols.tsaCheck.auditPreviewDetail":
+    "Confirma que cada sello aceptado se puede auditar y que una ráfaga no puede bloquear la API del plano de control.",
+  "protocols.tsaCheck.ready": "Listo para una prueba con un cliente estándar",
+  "protocols.tsaCheck.blocked": "Necesita reparación antes de sellar",
+  "protocols.tsaCheck.endpoint": "Punto de acceso de sellado",
+  "protocols.tsaCheck.policy": "OID de política",
+  "protocols.tsaCheck.resultsLabel": "Resultados de preparación de la autoridad de sellado",
+  "protocols.tsaCheck.passed": "Superada",
+  "protocols.tsaCheck.failed": "Bloqueada",
+  "protocols.tsaCheck.effectProof":
+    "0 escrituras · 0 llamadas externas · 0 llamadas al firmante · 0 sellos emitidos. El comando OpenSSL de abajo es la prueba real del protocolo y verifica la respuesta con material de CA confiable.",
+  "protocols.tsaCheck.run": "Comprobar preparación de TSA",
+  "protocols.tsaCheck.running": "Comprobando TSA…",
+  "protocols.tsaCheck.runAgain": "Comprobar de nuevo",
+  "protocols.tsaCheck.clientBoundary":
+    "El comando OpenSSL de abajo es la prueba real: calcula el hash localmente, envía solo ese hash y verifica la respuesta firmada. El artefacto y la clave privada nunca entran en trstctl.",
+  "protocols.tsaCheck.failedTitle": "Falló la comprobación de preparación de TSA",
+  "protocols.tsaCheck.failedBody": "La comprobación de TSA falló antes de devolver evidencia.",
+  "protocols.tsaCheck.invalidResult": "La comprobación de TSA devolvió evidencia incompleta.",
   "protocols.spiffeCheck.region": "Preparación de identidad de cargas SPIFFE",
   "protocols.spiffeCheck.heading": "Preparación de identidad de cargas SPIFFE",
   "protocols.spiffeCheck.description":
