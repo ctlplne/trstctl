@@ -7647,8 +7647,7 @@ const esESCatalog = {
   "identities.wildcard.dnsOnly": "Las solicitudes ACME automáticas solo pueden demostrar el control de comodines con DNS-01.",
   "identities.wildcard.policy": "Antes de usar ACME, verifique que la política del proveedor DNS de la zona permita comodines.",
   "identities.wildcard.renewal": "Después del despliegue, el planificador de ciclo de vida lo vigila y renueva.",
-  "identities.wildcard.ackHelp":
-    "Esta emisión de operador registra su aprobación del radio de impacto; no debilita la validación ACME.",
+  "identities.wildcard.ackHelp": "Esta emisión de operador registra su aprobación del radio de impacto; no debilita la validación ACME.",
   "identities.wildcard.issueFailed": "No se emitió ningún certificado comodín",
   "identities.wildcard.recoveryAction": "Comprobar la configuración de DNS-01",
   "identities.wildcard.recoveryBoundary":

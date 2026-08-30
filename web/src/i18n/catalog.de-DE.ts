@@ -7700,8 +7700,7 @@ const deDECatalog = {
   "identities.wildcard.dnsOnly": "Automatische ACME-Anfragen können Wildcard-Kontrolle nur mit DNS-01 nachweisen.",
   "identities.wildcard.policy": "Prüfen Sie vor der ACME-Nutzung, dass die DNS-Anbieterrichtlinie der Zone Wildcards erlaubt.",
   "identities.wildcard.renewal": "Nach der Bereitstellung überwacht und erneuert der Lebenszyklusplaner das Zertifikat.",
-  "identities.wildcard.ackHelp":
-    "Diese Operator-Ausstellung protokolliert Ihre Blast-Radius-Freigabe; sie schwächt die ACME-Validierung nicht ab.",
+  "identities.wildcard.ackHelp": "Diese Operator-Ausstellung protokolliert Ihre Blast-Radius-Freigabe; sie schwächt die ACME-Validierung nicht ab.",
   "identities.wildcard.issueFailed": "Es wurde kein Wildcard-Zertifikat ausgestellt",
   "identities.wildcard.recoveryAction": "DNS-01-Einrichtung prüfen",
   "identities.wildcard.recoveryBoundary":
