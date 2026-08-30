@@ -55,6 +55,7 @@ func evidence(schema, field string, predicate EvidencePredicate, writer string) 
 // wildcard or a default would recreate AUD-57: a new status-bearing DTO would
 // look covered while nobody had decided what evidence its words require.
 var servedEvidenceBindings = []EvidenceBinding{
+	evidence("ACMEDNS01CAAPolicyEvidence", "status", predicate(evidenceObservation, "allowed, denied, unrestricted, and lookup_failed are derived from the authoritative live DNS CAA lookup used by the production preflight; not_configured is emitted only when the tenant provider configuration names no CAA issuer domain, and lookup failure remains a fail-closed result rather than an authorization"), "internal/api/acme_dns01.go:API.evaluateDNS01Preflight"),
 	evidence("ACMEDNS01PreflightCheck", "status", observationPredicate, "internal/api/acme_dns01.go:API.evaluateDNS01Preflight"),
 	evidence("ACMEDNS01QualificationRun", "status", predicate(evidenceObservation, "passed requires delivered publish and cleanup outbox work plus successful lookup through the served ACME resolver; recovery_required requires a failed cleanup row after the real publish attempt; failed preserves a non-secret failure category rather than a raw worker error"), "internal/server/acme_dns01_qualification.go:Server.ListACMEDNS01QualificationRuns"),
 	evidence("AccessChangeRequest", "status", eventProjectionPredicate, "internal/orchestrator/access_change_request.go:Orchestrator.CreateAccessChangeRequest"),

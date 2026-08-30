@@ -105,7 +105,7 @@ not this file.
 | `internal/aimodel/redactor_test.go:112` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/aimodel/redactor_test.go:157` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/aimodel/redactor_test.go:162` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/api/acme_dns01.go:521` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/acme_dns01.go:548` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/agents.go:57` | source-kind label naming where key material was located; no credential value present (CWE-798) |
 | `internal/api/aisurface_contract_test.go:148` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/idempotency_binding_test.go:21` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -306,7 +306,7 @@ not this file.
 | `internal/server/protocols_served_test.go:876` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/protocols_served_test.go:947` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/protocols_served_test.go:1024` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/protocols_served_test.go:1199` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/protocols_served_test.go:1224` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/response_integrations_served_test.go:32` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/response_integrations_served_test.go:52` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/response_integrations_served_test.go:53` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
