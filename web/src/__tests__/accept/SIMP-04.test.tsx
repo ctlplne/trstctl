@@ -102,7 +102,8 @@ describe("SIMP-04 identities declutter", () => {
 
     await waitFor(() => expect(apiMock.connectorDeliveries).toHaveBeenCalledWith({ limit: 50 }));
     expect(apiMock.rotationRuns).toHaveBeenCalledWith({ limit: 50 });
-    expect(await screen.findByRole("table", { name: /credential identities/i })).toBeInTheDocument();
+    const identitiesTable = await screen.findByRole("table", { name: /credential identities/i });
+    expect(identitiesTable).toBeInTheDocument();
     await user.click(screen.getAllByText("Delivery and rotation evidence")[0]);
     expect(screen.getAllByText("kubernetes").length).toBeGreaterThan(0);
     expect(screen.getAllByText("prod/payments-tls").length).toBeGreaterThan(0);
@@ -110,7 +111,7 @@ describe("SIMP-04 identities declutter", () => {
     expect(screen.getByText("outbox_delivered")).toBeInTheDocument();
     expect(screen.getAllByText("scheduler").length).toBeGreaterThan(0);
 
-    const row = screen.getByText("payments-tls").closest("tr")!;
+    const row = within(identitiesTable).getByText("payments-tls").closest("tr")!;
     expect(row).toHaveTextContent("Delivered successfully.");
     expect(row).not.toHaveTextContent("outbox_delivered");
     await user.click(within(row).getByRole("button", { name: /view details/i }));

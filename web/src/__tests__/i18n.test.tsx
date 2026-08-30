@@ -1333,8 +1333,15 @@ describe("i18n boundary", () => {
       // the challenge/account non-disclosure boundary are now named in all
       // production catalogs. Machine-authored es/de — FLAGGED FOR HUMAN
       // TRANSLATION REVIEW before release.
-      "es-ES": "c26645920de7e087f23f9ecef9d90f4025e316beb56ecc80fd2f46d89903f839",
-      "de-DE": "a3f80dcc74eede12d124351b8e6033cdb9432c1677e0b959e84d6d5ddb478800",
+      // F74 wildcard-lifecycle re-pin: the DNS-01-only proof boundary,
+      // blast-radius acknowledgement, fail-closed recovery, exact issued-name
+      // receipt, renewal handoff, and predecessor/successor evidence label are
+      // now named in all production catalogs. The negation that operator issue
+      // does not weaken ACME validation was reviewed in both translations.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
+      // release.
+      "es-ES": "6a7e9f993b7c445f1539ff4abd82ad9d3b149c9249f50da81d343759c62700de",
+      "de-DE": "48c5db4bb734d3f28ca01fb37cf454d19467b940a7d5abb81dbc20669690f80f",
     });
   });
 
