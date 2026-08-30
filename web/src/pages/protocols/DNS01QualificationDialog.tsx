@@ -45,6 +45,7 @@ export function DNS01QualificationDialog({
   const [busy, setBusy] = useState<"review" | "run" | "cleanup" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const domainRef = useRef<HTMLInputElement>(null);
+  const planRef = useRef<HTMLElement>(null);
   const titleId = "dns01-qualification-heading";
 
   useEffect(() => {
@@ -65,6 +66,10 @@ export function DNS01QualificationDialog({
       active = false;
     };
   }, [config.id]);
+
+  useEffect(() => {
+    if (preview) planRef.current?.focus();
+  }, [preview]);
 
   async function review(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -164,7 +169,12 @@ export function DNS01QualificationDialog({
         </form>
 
         {preview && (
-          <section aria-label={t("protocols.dns01.qualification.planLabel")} className="grid gap-4 rounded-control border border-border bg-muted/20 p-4">
+          <section
+            ref={planRef}
+            tabIndex={-1}
+            aria-label={t("protocols.dns01.qualification.planLabel")}
+            className="grid gap-4 rounded-control border border-border bg-muted/20 p-4"
+          >
             <div className="flex items-start gap-3">
               {preview.ready ? (
                 <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-status-success" aria-hidden="true" />

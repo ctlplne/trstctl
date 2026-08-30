@@ -1752,6 +1752,7 @@ describe("protocol surface", () => {
     await user.click(within(dialog).getByRole("button", { name: "Review safe test" }));
 
     expect(await within(dialog).findByRole("heading", { name: "CNAME guard configured; live proof pending" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("region", { name: "DNS-01 provider test plan" })).toHaveFocus();
     expect(within(dialog).getAllByText(recordName).length).toBeGreaterThan(0);
     expect(within(dialog).getAllByText(target).length).toBeGreaterThan(0);
     expect(within(dialog).getByText(`Create ${recordName} CNAME ${target}.`)).toBeInTheDocument();

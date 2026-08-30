@@ -78,9 +78,9 @@ export function DNS01ProviderTrustPanel({ provider }: { provider?: ACMEDNS01Prov
 
 function TrustFact({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div>
+    <div className="min-w-0">
       <dt className="text-caption font-medium text-muted-foreground">{label}</dt>
-      <dd className={`mt-0.5 break-all ${mono ? "font-mono text-xs" : "font-medium"}`}>{value}</dd>
+      <dd className={`mt-0.5 ${mono ? "break-all font-mono text-xs" : "break-words font-medium"}`}>{value}</dd>
     </div>
   );
 }
