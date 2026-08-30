@@ -28,9 +28,13 @@ const ZeroUUID = "00000000-0000-0000-0000-000000000000"
 var ErrIdempotencyConflict = errors.New("store: idempotency identity belongs to a different command")
 
 // IsNotFound reports whether err indicates a missing row (as returned by the
-// Get* repositories), letting callers map it to a 404 without importing the
-// database driver.
-func IsNotFound(err error) bool { return errors.Is(err, pgx.ErrNoRows) }
+// Get* repositories), letting callers map it to an indistinguishable 404 without
+// importing the database driver. ACME DNS-01 intentionally replaces pgx.ErrNoRows
+// with a stable tenant-scoped sentinel; preserve the same HTTP classification when
+// that sentinel crosses the shared mutation/idempotency wrapper.
+func IsNotFound(err error) bool {
+	return errors.Is(err, pgx.ErrNoRows) || errors.Is(err, ErrACMEDNS01ProviderConfigNotFound)
+}
 
 // appRole is the non-superuser role that tenant-scoped operations run as, so
 // that row-level security applies (superusers and table owners bypass RLS).

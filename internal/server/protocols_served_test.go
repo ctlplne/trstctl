@@ -347,6 +347,30 @@ func TestServedACMEDNS01ProviderConfigAndPreflightTRACE003(t *testing.T) {
 		t.Fatalf("created provider config did not retain DNS-01 method policy: %+v", created.AllowedMethods)
 	}
 
+	// Tenant B must not be able to distinguish tenant A's provider config from a
+	// nonexistent ID. This exercises the mutation/idempotency wrapper used by the
+	// served preflight route: the store deliberately returns a tenant-scoped
+	// sentinel, which must still become a generic 404 instead of a 500 or a leak.
+	otherTenant := "22222222-2222-2222-2222-222222222222"
+	registerServedTenantID(t, h, otherTenant, "Other DNS tenant")
+	otherTok := seedScopedToken(t, h.store, otherTenant, "issuers:read", "issuers:write")
+	preflightEventsBeforeIsolationProbe := servedEventCount(t, h, projections.EventACMEDNS01Preflighted)
+	status, isolatedBody := secretsReq(t, h, http.MethodPost, "/api/v1/acme/dns-01/preflight", otherTok, map[string]any{
+		"config_id":    created.ID,
+		"domain":       "example.test",
+		"expected_txt": "tenant-isolation-proof",
+		"observed_txt": []string{"tenant-isolation-proof"},
+	})
+	if status != http.StatusNotFound || !bytes.Contains(isolatedBody, []byte(`"detail":"resource not found"`)) {
+		t.Fatalf("cross-tenant DNS-01 preflight must be an indistinguishable 404: status=%d body=%s", status, isolatedBody)
+	}
+	if bytes.Contains(isolatedBody, []byte(created.ID)) || bytes.Contains(isolatedBody, []byte(h.tenant)) {
+		t.Fatalf("cross-tenant DNS-01 preflight disclosed tenant A identity: %s", isolatedBody)
+	}
+	if got := servedEventCount(t, h, projections.EventACMEDNS01Preflighted); got != preflightEventsBeforeIsolationProbe {
+		t.Fatalf("rejected cross-tenant DNS-01 preflight appended events=%d, want unchanged %d", got, preflightEventsBeforeIsolationProbe)
+	}
+
 	rejectInlineSecret := map[string]any{
 		"name":     "bad-cloudflare",
 		"provider": "cloudflare",
