@@ -81,6 +81,19 @@ and keyless (Fulcio) signing: it submits only
 the artifact digest and renders the returned signature receipt, so private keys and
 artifact bytes never enter the browser. See [The web console](../web-console.md).
 
+For timestamping, open **Certificates → Protocols**, then **Set up and operate
+methods**. **Timestamp authority readiness** checks the exact running process before
+you send an artifact hash. It confirms the tenant-bound `/tsa` mount, stable
+timestamping-only certificate, isolated signer connection, immutable audit path, and
+bounded responder capacity. The check is deliberately effect-free: it issues no
+timestamp, reads no certificate file, contacts no signer or network, and performs no
+write. A failed gate names the safe repair and leaves **Check again** available.
+
+Readiness is not interoperability proof. The OpenSSL query, HTTP POST, and verify
+commands in the same Protocols workspace are the real wire test. OpenSSL hashes the
+artifact locally; trstctl receives only the hash inside the RFC 3161 request. The
+artifact and its private signing key never enter the console or timestamp service.
+
 ## Use it
 
 The code-signing API requires the shipped `code_signing` configuration, which
@@ -154,6 +167,13 @@ curl -sS -H 'Content-Type: application/timestamp-query' \
   -o signature.tsr
 ```
 
+An authenticated automation can review the same zero-effect runtime gates with
+`POST /api/v1/protocols/tsa/qualification` using `certs:read`. Its response contains
+only readiness booleans, the public endpoint and policy OID, bounded explanations,
+and recovery steps. It never returns tenant IDs, certificate bytes or paths, signer
+handles, request bodies, tokens, or keys. Timestamp issuance remains exclusively at
+the public protocol endpoint `POST /tsa`.
+
 ## Pitfalls & limits
 
 - **Serving status:** code signing is served at `POST /api/v1/code-signing/sign` and
@@ -167,7 +187,9 @@ curl -sS -H 'Content-Type: application/timestamp-query' \
   signer purpose constraints are the authorization boundary. The TSA is served at
   `/tsa` when
   `protocols.tsa.enabled` plus `protocols.tsa.tenant_id` are set, returning
-  `application/timestamp-reply` `TimeStampResp` bodies.
+  `application/timestamp-reply` `TimeStampResp` bodies. The console readiness check
+  is a preview, not a synthetic timestamp: only a real request to `/tsa` calls the
+  signer and emits `tsa.timestamp.issued`.
 - Wire formats differ by surface: the TSA emits a real RFC 3161 `TimeStampToken` — a
   CMS `SignedData` over a DER `TSTInfo` — wrapped in the required `TimeStampResp`
   envelope for stock verifiers (`openssl ts -verify`, DSS/ESS validators). Code signing

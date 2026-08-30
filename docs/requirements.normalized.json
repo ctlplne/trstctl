@@ -679,7 +679,7 @@
       "requirement_text": "trstctl shall provide Timestamping authority (RFC 3161).",
       "owner": "Code signing and timestamping",
       "priority": "P1",
-      "acceptance_criteria": "Served /tsa endpoint accepts an RFC 3161 TimeStampReq, returns an application/timestamp-reply TimeStampResp verified by OpenSSL, emits tsa.timestamp.issued, and the dedicated TSA admin console remains a roadmap residual.",
+      "acceptance_criteria": "TestServedTSAOpenSSLTimestampOverHTTP proves the assembled /tsa endpoint accepts an RFC 3161 TimeStampReq, returns an application/timestamp-reply TimeStampResp verified by OpenSSL, emits exactly the real issuance event, and then returns a ready effect-free qualification without issuing again. API tests prove tenant scoping, authentication, zero-effect evidence, fail-closed checks, and secret-field exclusion; TSAOperatorPanel tests prove preview, exact readiness, malformed-response refusal, secure repair, retry, and the distinct stock-client wire boundary. The dedicated TSA policy/certificate lifecycle admin console remains a roadmap residual.",
       "status": "conditional",
       "served_state": "conditional",
       "backend_status": "conditional: served /tsa RFC 3161 protocol",

@@ -4561,7 +4561,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use timestamping authority while tenant, policy, and security authority remain on the server.",
       "tool": "software_trust",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/protocols",
       "navigationEntrypoints": [
         "tool navigation",
@@ -4575,7 +4575,7 @@ export const canonicalCapabilities = [
       ],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -4596,12 +4596,20 @@ export const canonicalCapabilities = [
           ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "internal/api/tsa_qualification.go",
+            "web/src/pages/protocols/TSAOperatorPanel.tsx",
+            "internal/api/tsa_qualification_test.go"
+          ]
         },
         "execute": {
-          "status": "missing",
-          "reason": "No complete console execution path is proved for this capability."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/Protocols.tsx",
+            "web/src/pages/protocols/TSAOperatorPanel.tsx",
+            "internal/server/protocols_served_tsa_test.go"
+          ]
         },
         "observe": {
           "status": "complete",
@@ -4610,8 +4618,12 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "internal/api/tsa_qualification.go",
+            "web/src/pages/protocols/TSAOperatorPanel.tsx",
+            "web/src/pages/protocols/TSAOperatorPanel.test.tsx"
+          ]
         },
         "verify": {
           "status": "complete",
@@ -4620,14 +4632,18 @@ export const canonicalCapabilities = [
           ]
         },
         "automate": {
-          "status": "not_applicable",
-          "reason": "The catalog declares no supported API or CLI automation surface for this capability."
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: qualifyTSA",
+            "internal/api/tsa_qualification.go",
+            "docs/features/code-signing-and-timestamping.md"
+          ]
         }
       },
       "owner": "software-trust",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "e01971259ae21169a59c74296a9b2ed22fe362de",
+      "freshness": "2026-08-30"
     }
   },
   {

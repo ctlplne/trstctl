@@ -208,9 +208,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// F43's exact, effect-free SSH host/user certificate preview and idempotent
 	// issue route raise it to 402. F69's effect-free DNS provider review, real
 	// probe, sanitized history, and cleanup recovery routes raise it to 406.
-	// F6's effect-free lifecycle automation plan raises it to 407.
-	if len(out) != 407 {
-		t.Fatalf("OpenAPI operationIds = %d, want 407", len(out))
+	// F6's effect-free lifecycle automation plan raises it to 407, and F51's
+	// effect-free timestamp-authority qualification posture raises it to 408.
+	if len(out) != 408 {
+		t.Fatalf("OpenAPI operationIds = %d, want 408", len(out))
 	}
 	return out
 }

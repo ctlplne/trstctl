@@ -3622,6 +3622,12 @@ This is a deliberate, documented trust boundary, not an accident.
     key lives in the signer under its own stable handle, the TSA certificate
     is persisted at `protocols.tsa_cert_file`, and the certificate carries
     the critical `timeStamping` EKU that stock OpenSSL enforces.
+    The authenticated `POST /api/v1/protocols/tsa/qualification` surface and
+    Protocols console panel review the exact tenant-bound mount, certificate,
+    isolated signer, audit, and bulkhead posture without reading files, calling
+    the signer/network, issuing a timestamp, or writing state. They name a secure
+    repair for each failed gate and keep retry available. This is readiness only;
+    stock OpenSSL over `/tsa` remains the wire and signature-verification proof.
   - The code-signing service is served by the running binary at
     `POST /api/v1/code-signing/sign` and `POST /api/v1/code-signing/keyless`
     when `code_signing.enabled` is configured. Tenant-scoped persistent keys

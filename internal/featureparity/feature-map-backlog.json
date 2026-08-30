@@ -12808,23 +12808,27 @@
             "priority": 30,
             "served_state": "conditional",
             "backend_status": "conditional: served /tsa RFC 3161 protocol",
-            "current_frontend_mapping": "operate: Protocols at /protocols serves TSA timestamp workflow evidence with endpoint/certificate requirements, live responder status, OpenSSL query and verification commands, tenant binding, and audit-ready client guidance; the control plane serves the RFC 3161 TSA responder when protocols.tsa.enabled plus tenant_id are configured.",
+            "current_frontend_mapping": "operate: Protocols at /protocols serves a tenant-scoped, effect-free TSA readiness review for the exact mounted endpoint, stable certificate, isolated signer, immutable audit path, and bounded capacity; it names secure recovery per failed gate, keeps retry available, and separates that preview from the stock OpenSSL query/POST/verification commands that perform the real RFC 3161 wire test.",
             "target_gui_mapping": "Roadmap residual: dedicated TSA admin console for policy/certificate lifecycle and richer audit exploration; GA scope is the served RFC 3161 TSA responder plus the route-backed Protocols workflow evidence.",
-            "acceptance_test": "Served /tsa endpoint accepts an RFC 3161 TimeStampReq, returns an application/timestamp-reply TimeStampResp verified by OpenSSL, emits tsa.timestamp.issued, and the dedicated TSA admin console remains a roadmap residual.",
+            "acceptance_test": "TestServedTSAOpenSSLTimestampOverHTTP proves the assembled /tsa endpoint accepts an RFC 3161 TimeStampReq, returns an application/timestamp-reply TimeStampResp verified by OpenSSL, emits exactly the real issuance event, and then returns a ready effect-free qualification without issuing again. API tests prove tenant scoping, authentication, zero-effect evidence, fail-closed checks, and secret-field exclusion; TSAOperatorPanel tests prove preview, exact readiness, malformed-response refusal, secure repair, retry, and the distinct stock-client wire boundary. The dedicated TSA policy/certificate lifecycle admin console remains a roadmap residual.",
             "source_docs": [
                 "docs/features/code-signing-and-timestamping.md"
             ],
             "source_backend": [
                 "/tsa",
-                "internal/tsa"
+                "internal/tsa",
+                "internal/api/tsa_qualification.go",
+                "internal/server/tsa_qualification.go"
             ],
             "source_frontend": [
-                "web/src/pages/Protocols.tsx"
+                "web/src/pages/Protocols.tsx",
+                "web/src/pages/protocols/TSAOperatorPanel.tsx"
             ],
             "status": "closed",
-            "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-            "api_surface": [],
-            "api_na": "N/A: served through protocol-specific endpoints/configuration, not the /api/v1 OpenAPI contract.",
+            "notes": "Qualified as a complete F51 vertical slice on implementation candidate e01971259ae21169a59c74296a9b2ed22fe362de. The readiness action is authenticated, tenant-derived, and effect-free; it cannot mint or accept a TimeStampReq. The real RFC 3161 operation remains POST /tsa and is proved with stock OpenSSL against the assembled signer-backed responder. Every failed gate has a security-preserving repair and retry path, while the optional dedicated lifecycle admin console stays a named roadmap residual.",
+            "api_surface": [
+                "qualifyTSA"
+            ],
             "cli_surface": [],
             "cli_na": "N/A: served through protocol-specific endpoints/configuration, not the trstctl CLI command table.",
             "facet_evidence": {
@@ -12840,11 +12844,12 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: operate: Protocols at /protocols serves TSA timestamp workflow evidence with endpoint/certificate requirements, live responder status, OpenSSL query and verification commands, tenant binding, and audit-ready client guidance.",
-                        "target_gui_mapping: TSA UI for endpoint, certificate, request test, OpenSSL verification, tenant binding, status, and audit trail."
+                        "Protocols mounts TSAOperatorPanel beside the protocol register and stock OpenSSL commands. The panel previews exact runtime gates, renders only server-owned non-secret facts, names one secure recovery for each failed gate, retries in place, and states that it issues no timestamp.",
+                        "target_gui_mapping: Roadmap residual: dedicated TSA admin console for policy/certificate lifecycle and richer audit exploration; GA scope is the served RFC 3161 TSA responder plus the route-backed Protocols workflow evidence."
                     ],
                     "refs": [
                         "web/src/pages/Protocols.tsx",
+                        "web/src/pages/protocols/TSAOperatorPanel.tsx",
                         "web/src/lib/navigation.ts",
                         "web/src/App.tsx"
                     ]
@@ -12853,11 +12858,22 @@
                     "na": "N/A: served through protocol-specific endpoints/configuration, not the trstctl CLI command table."
                 },
                 "api": {
-                    "na": "N/A: served through protocol-specific endpoints/configuration, not the /api/v1 OpenAPI contract."
+                    "evidence": [
+                        "OpenAPI operationId qualifyTSA reads authenticated tenant-scoped in-memory posture only and returns zero writes, zero outside effects, and zero signer calls; the public RFC 3161 issuance surface remains POST /tsa."
+                    ],
+                    "refs": [
+                        "internal/api/feature_authz_test.go",
+                        "internal/api/tsa_qualification.go",
+                        "internal/api/tsa_qualification_test.go",
+                        "internal/api/openapi.go"
+                    ]
                 },
                 "test": {
                     "evidence": [
                         "TRACE-030: TestServedTSAOpenSSLTimestampOverHTTP proves server.Build mounts /tsa and stock OpenSSL verifies the served RFC 3161 TimeStampResp.",
+                        "The same assembled test proves POST /api/v1/protocols/tsa/qualification reports the exact live mount and does not append a second tsa.timestamp.issued event.",
+                        "TestTSAQualificationIsTenantScopedEffectFreeAndExact, TestTSAQualificationFailsClosedAndNamesEveryBlockedGate, and TestTSAQualificationRouteIsRegisteredReadOnlyAndAuthenticated prove the preview boundary.",
+                        "TSAOperatorPanel.test.tsx proves preview, ready, blocked, secure recovery, retry, stock-client boundary, and malformed-response refusal.",
                         "TestTimeStampHTTPPostOpenSSLTSVerify proves the internal TSA HTTP handler accepts TimeStampReq, returns application/timestamp-reply, and verifies with OpenSSL.",
                         "acceptance_test: Served /tsa endpoint accepts an RFC 3161 TimeStampReq, returns an application/timestamp-reply TimeStampResp verified by OpenSSL, emits tsa.timestamp.issued, and the dedicated TSA admin console remains a roadmap residual.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
@@ -12866,8 +12882,10 @@
                     "refs": [
                         "internal/server/protocols_served_tsa_test.go",
                         "internal/tsa/http_test.go",
+                        "internal/api/tsa_qualification_test.go",
                         "internal/featureparity/feature_facet_coverage_test.go",
                         "internal/featureparity/feature_served_ga_coverage_test.go",
+                        "web/src/pages/protocols/TSAOperatorPanel.test.tsx",
                         "web/src/__tests__/route_parity.test.ts",
                         "web/src/__tests__/feature_coverage.test.tsx"
                     ]
@@ -12883,9 +12901,12 @@
                 "rbac": {
                     "evidence": [
                         "protocol authz manifest maps tsa route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
-                        "tsa is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+                        "The public POST /tsa protocol keeps its explicit public-protocol rationale; the API feature authz manifest maps the separate qualifyTSA operator preview to certs:read and the route derives tenant identity only from the authenticated request context."
                     ],
                     "refs": [
+                        "internal/api/feature_authz_test.go",
+                        "internal/api/tsa_qualification.go",
+                        "internal/api/tsa_qualification_test.go",
                         "internal/server/protocol_authz.go",
                         "internal/server/protocol_authz_test.go",
                         "internal/tsa/http_test.go"
@@ -12941,7 +12962,7 @@
                 "purpose": "Lets an operator understand and safely use timestamping authority while tenant, policy, and security authority remain on the server.",
                 "tool": "software_trust",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/protocols",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -12955,7 +12976,7 @@
                 ],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -12976,12 +12997,20 @@
                         ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/api/tsa_qualification.go",
+                            "web/src/pages/protocols/TSAOperatorPanel.tsx",
+                            "internal/api/tsa_qualification_test.go"
+                        ]
                     },
                     "execute": {
-                        "status": "missing",
-                        "reason": "No complete console execution path is proved for this capability."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/Protocols.tsx",
+                            "web/src/pages/protocols/TSAOperatorPanel.tsx",
+                            "internal/server/protocols_served_tsa_test.go"
+                        ]
                     },
                     "observe": {
                         "status": "complete",
@@ -12990,8 +13019,12 @@
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/api/tsa_qualification.go",
+                            "web/src/pages/protocols/TSAOperatorPanel.tsx",
+                            "web/src/pages/protocols/TSAOperatorPanel.test.tsx"
+                        ]
                     },
                     "verify": {
                         "status": "complete",
@@ -13000,14 +13033,18 @@
                         ]
                     },
                     "automate": {
-                        "status": "not_applicable",
-                        "reason": "The catalog declares no supported API or CLI automation surface for this capability."
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: qualifyTSA",
+                            "internal/api/tsa_qualification.go",
+                            "docs/features/code-signing-and-timestamping.md"
+                        ]
                     }
                 },
                 "owner": "software-trust",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "e01971259ae21169a59c74296a9b2ed22fe362de",
+                "freshness": "2026-08-30"
             }
         },
         {

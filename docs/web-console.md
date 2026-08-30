@@ -477,8 +477,11 @@ See [Incident response & JIT](features/incident-and-jit.md) and
 ### Protocols (`/protocols`)
 
 Protocols is the enrollment control room: a live register of ACME, EST, SCEP, CMP,
-SPIFFE, SSH CA, and TSA, each backed by a read-only, same-origin probe of the real
-responder plus tenant-binding and profile-gate requirements. A DNS-01 provider
+SPIFFE, SSH CA, and TSA, backed by protocol-specific responder probes or authenticated
+effect-free qualification plus tenant-binding and profile-gate requirements. The TSA
+panel reads the exact in-memory mount, stable-certificate, isolated-signer, audit, and
+bulkhead posture; it issues nothing and keeps the stock OpenSSL commands as the real
+RFC 3161 wire proof. A DNS-01 provider
 catalog and provider-config table (preflight, edit, delete; configs are provisioned
 outside the console) support ACME's DNS-01 challenge; an MDM/SCEP panel does the same
 for Intune-style SCEP, plus challenge rotation and allow/deny telemetry.
