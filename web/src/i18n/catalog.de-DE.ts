@@ -2355,8 +2355,7 @@ const deDECatalog = {
   // F51 TSA operator workflow — Machine-authored, FLAG FOR HUMAN REVIEW.
   "protocols.tsaCheck.region": "Bereitschaft der Zeitstempelstelle",
   "protocols.tsaCheck.heading": "Bereitschaft der Zeitstempelstelle",
-  "protocols.tsaCheck.description":
-    "Prüfen Sie, ob dieser laufende Server ein Artefakt zeitstempeln kann, bevor Sie eine echte RFC-3161-Anfrage senden.",
+  "protocols.tsaCheck.description": "Prüfen Sie, ob dieser laufende Server ein Artefakt zeitstempeln kann, bevor Sie eine echte RFC-3161-Anfrage senden.",
   "protocols.tsaCheck.previewHeading": "Was diese Prüfung untersucht",
   "protocols.tsaCheck.safePreview":
     "Sicherheitsgrenze: Es wird nur die Bereitschaft im Arbeitsspeicher gelesen. Die Prüfung stellt keinen Zeitstempel aus, liest keine Zertifikatsdatei, ruft weder Signierer noch Netzwerk auf und schreibt nichts.",

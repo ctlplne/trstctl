@@ -617,24 +617,30 @@ offers requeue only for failed delivery. Toasts report real success and failure.
 ### Approvals, self-service & administration
 
 - Request a credential (`/request`) and the approvals inbox (`/approvals`) are the
-  self-service pair: submit, then approve as a distinct principal — the inbox blocks
-  self-approval of your own request. The request wizard reads the tenant owner
+  self-service pair: preview and submit, then approve as a distinct principal — the
+  inbox blocks self-approval of your own request. The request wizard reads the tenant owner
   roster and requires an explicit accountable owner; an authentication subject is
   never guessed to be an owner UUID. Submission opens the first-class
   `issuance.request.opened` lifecycle object, so the requester and approver read the
-  same event-projected request instead of two independently inferred views.
+  same event-projected request instead of two independently inferred views. The exact
+  preview is effect-free and submission cannot proceed when it is unavailable or stale.
 - **Requests waiting for approval** opens with the complete pending count and the
   next independently reviewable change. It states the reason, consequence,
   requester, and decision expiry before offering one **Review request** action. The
   bounded review shows the server-owned policy result, immutable request ID, bound
   target version and intent digest, evidence references, approval threshold, and
-  audit history. Approve and reject record decisions only; neither performs the
+  audit history. A first-class certificate request uses the same direct action and
+  shows its owner, profile, purpose, requester, and seven-day decision expiry instead
+  of dropping the operator into a long history section. Approve and reject record decisions only; neither performs the
   requested issue, rotate, revoke, create, sign, recovery, or delete operation.
   Rejection requires a reason, and self-approval stays disabled with an explicit
   dual-control explanation. The complete generic queue, issuance-request lifecycle,
   and exact-ID ephemeral tool remain available in three closed sections; ticket
   intake and specialized controls are not loaded or rendered until their section is
-  opened. Credential values and private keys never enter the review.
+  opened. After a certificate approval, the issuance lifecycle opens and preserves a
+  failed signer-backed attempt as an approved request with a safe retry under the same
+  deterministic identity and issuance key. Credential values and private keys never
+  enter the review.
 - Rules and approvals (`/policy`) includes access-change approvals for NHI entitlement changes: a
   PR/ticket/CAB-backed request, evidence refs, and approve/deny by a distinct
   reviewer. The panel stores metadata and evidence references only, never credential

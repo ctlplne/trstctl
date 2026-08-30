@@ -140,14 +140,23 @@ route as guidance; historical execution reads remain available. CLI parity is
 
 ### Just-in-time issuance with approval (F33)
 
-JIT turns issuance into an approval workflow. A request enters `awaiting-approval` and
-notifies approvers (Slack/Teams) — nothing is issued yet. Approvals are **dual-control**
-by default (2 required, configurable for m-of-n), **self-approval is blocked**, approvers
-can be policy-scoped, and the request is **time-bounded** (it expires if not approved in
-time). One denial is terminal. When the quorum is met, trstctl issues and transitions to
-`issued`. Approve/deny take an `Idempotency-Key` and are no-ops once a request is
-terminal, so a retry never double-acts, and every step is recorded as an immutable event
-(`approval.requested/approved/denied/issued/expired/refused`).
+F33 has three related lanes, and the distinction matters. The ordinary self-service
+certificate lane opens one seven-day request and requires one **different** principal
+with `certs:issue` to approve it. The attested ephemeral lane is **dual-control** by
+default (2 required, configurable for m-of-n), has a shorter approval window, and queues
+its approver notification through the transactional outbox. The PAM lane opens a
+short-lived database or SSH session instead of minting a general-purpose certificate.
+All three block self-approval and keep the grant time-bounded.
+
+On `/request`, the requester first reviews an exact, effect-free server preview bound to
+the tenant owner, active profile version, requester, subject, and optional requester-held
+CSR. Preview writes nothing, calls no signer or CA, and explains that submission opens a
+request only. On `/approvals`, a different principal can review the subject, purpose,
+owner, profile, decision expiry, immutable request ID, and audit link in one dialog.
+Approve and deny take an `Idempotency-Key`; denial requires a reason and is terminal.
+Approval still mints nothing: it reveals the separate prepare/issue/complete step. If
+that step fails, the request remains approved and retries the same deterministic identity
+and issuance key instead of minting a duplicate.
 
 The generic operation-review surface keeps those domains separate: certificate
 review requires `certs:issue`, secret review requires `secrets:write`, and managed-key
@@ -168,11 +177,14 @@ time. The event trail is filterable by `pam.session.started` and
 
 **Status:** the core identity approval gate is served through
 `POST /api/v1/identities/{id}/approvals`. The self-service certificate portal is
-served through `/request` plus `/approvals`: it submits a profile-bound
-`x509_certificate` identity request, denies requester self-issue, blocks RA
-self-approval of privileged issue, rotate, or revoke actions, accepts a distinct
-approval, then mints through the signer-backed issuance outbox and records certificate
-inventory evidence.
+served through `/request` plus `/approvals` and the
+`/api/v1/issuance-requests{,/preview,/{id}/{approve,deny,cancel,prepare,complete}}`
+family. It previews and submits a profile-bound `x509_certificate` request, denies
+requester self-issue, blocks RA self-approval of privileged issue, rotate, or revoke
+actions, accepts a distinct approval, then mints through the signer-backed issuance
+outbox and records certificate inventory evidence. The direct review dialog and the
+history panel are two views of the same event-projected request; failed issuance stays
+visible with an explicit safe-retry action.
 Ephemeral/JIT credential issuance is served when configured through `POST /api/v1/ephemeral` plus
 `POST /api/v1/ephemeral/{id}/approvals`, where `{id}` is the genuine
 `approval_request_id` and the body carries the same UUID as `request_id` plus its

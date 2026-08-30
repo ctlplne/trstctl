@@ -7306,8 +7306,14 @@ export const messages = {
     description: "Boundary between TSA readiness preview and real RFC 3161 execution.",
   },
   "protocols.tsaCheck.failedTitle": { defaultMessage: "TSA readiness check failed", description: "TSA qualification transport or schema error heading." },
-  "protocols.tsaCheck.failedBody": { defaultMessage: "The TSA readiness check failed before returning evidence.", description: "Fallback TSA qualification error." },
-  "protocols.tsaCheck.invalidResult": { defaultMessage: "The TSA readiness check returned incomplete evidence.", description: "TSA qualification schema guard error." },
+  "protocols.tsaCheck.failedBody": {
+    defaultMessage: "The TSA readiness check failed before returning evidence.",
+    description: "Fallback TSA qualification error.",
+  },
+  "protocols.tsaCheck.invalidResult": {
+    defaultMessage: "The TSA readiness check returned incomplete evidence.",
+    description: "TSA qualification schema guard error.",
+  },
   "protocols.spiffeCheck.region": {
     defaultMessage: "SPIFFE workload identity readiness",
     description: "Accessible label for the safe SPIFFE operator workflow.",

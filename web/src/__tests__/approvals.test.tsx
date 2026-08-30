@@ -255,10 +255,7 @@ describe("dedicated approvals inbox", () => {
     await user.click(within(dialog).getByRole("button", { name: "Record rejection" }));
 
     await waitFor(() =>
-      expect(apiMock.denyIssuanceRequest).toHaveBeenCalledWith(
-        "issuance-request-jit-deny",
-        "The requested host is outside the approved deployment scope.",
-      ),
+      expect(apiMock.denyIssuanceRequest).toHaveBeenCalledWith("issuance-request-jit-deny", "The requested host is outside the approved deployment scope."),
     );
     expect(await screen.findByRole("status")).toHaveTextContent(/issue request rejected/i);
   });

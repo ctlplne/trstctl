@@ -592,9 +592,7 @@ export function Approvals() {
               </Link>
             </section>
 
-            <p className="rounded-control border border-border bg-muted/20 p-3 text-sm text-muted-foreground">
-              {t("approvals.design.consequence.issue")}
-            </p>
+            <p className="rounded-control border border-border bg-muted/20 p-3 text-sm text-muted-foreground">{t("approvals.design.consequence.issue")}</p>
 
             {error ? (
               <p role="alert" className="text-sm text-destructive">
@@ -627,19 +625,10 @@ export function Approvals() {
                 <Button type="button" variant="ghost" onClick={closeIssuanceReview}>
                   {t("source.cancel.19766ed6cc")}
                 </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={busyKey === `issuance:${selectedIssuance.id}`}
-                  onClick={() => setIssuanceRejectionOpen(true)}
-                >
+                <Button type="button" variant="outline" disabled={busyKey === `issuance:${selectedIssuance.id}`} onClick={() => setIssuanceRejectionOpen(true)}>
                   {t("approvals.design.reject")}
                 </Button>
-                <Button
-                  type="button"
-                  disabled={busyKey === `issuance:${selectedIssuance.id}`}
-                  onClick={() => void approveIssuance(selectedIssuance)}
-                >
+                <Button type="button" disabled={busyKey === `issuance:${selectedIssuance.id}`} onClick={() => void approveIssuance(selectedIssuance)}>
                   {t("approvals.design.approve")}
                 </Button>
               </div>

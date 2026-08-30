@@ -725,7 +725,7 @@
       "requirement_text": "trstctl shall provide Just-in-time issuance with approval flows.",
       "owner": "Incident and JIT",
       "priority": "P1",
-      "acceptance_criteria": "Served API test proves requester portal intake, requester self-issue denial, distinct approval, signer-backed certificate issuance, inventory projection, and event evidence; UI covers requester cannot approve own request and approver can approve/deny with audit link.",
+      "acceptance_criteria": "Served API tests prove exact effect-free preview, requester portal intake, requester self-issue denial, distinct approval, deterministic prepare/retry, signer-backed certificate issuance, expiry, inventory projection, and event evidence. UI tests cover direct owner/profile/purpose/TTL review, self-approval denial, reasoned approve/deny with audit link, and handoff to the separate recoverable issuance step.",
       "status": "served",
       "served_state": "served",
       "backend_status": "served self-service certificate request portal, core approval gate, approval-gated JIT issuance, and PAM-lite Postgres/SSH sessions",

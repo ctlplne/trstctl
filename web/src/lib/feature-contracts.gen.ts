@@ -4881,7 +4881,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use just-in-time issuance with approval flows while tenant, policy, and security authority remain on the server.",
       "tool": "operations",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/request",
       "navigationEntrypoints": [
         "tool navigation",
@@ -4893,7 +4893,7 @@ export const canonicalCapabilities = [
       "dependencies": [],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -4916,8 +4916,14 @@ export const canonicalCapabilities = [
           ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: previewIssuanceRequest",
+            "CLI command: issuance-requests preview",
+            "internal/server/issuance_request_served_test.go",
+            "web/src/pages/RequestCredential.tsx",
+            "web/src/__tests__/self_service.test.tsx"
+          ]
         },
         "execute": {
           "status": "complete",
@@ -4933,8 +4939,14 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "internal/server/issuance_request_served_test.go",
+            "web/src/pages/Approvals.tsx",
+            "web/src/components/IssuanceRequestsPanel.tsx",
+            "web/src/__tests__/approvals.test.tsx",
+            "web/src/__tests__/issuance_requests_panel.test.tsx"
+          ]
         },
         "verify": {
           "status": "complete",
@@ -4979,8 +4991,8 @@ export const canonicalCapabilities = [
       },
       "owner": "operations",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "6f5cb9e4abffa7350f3cdbb8e0c7fa12df0305c8",
+      "freshness": "2026-08-30"
     }
   },
   {

@@ -13727,13 +13727,19 @@
             "priority": 31,
             "served_state": "served",
             "backend_status": "served self-service certificate request portal, core approval gate, approval-gated JIT issuance, and PAM-lite Postgres/SSH sessions",
-            "current_frontend_mapping": "served: Request a credential at /request submits profile-bound certificate requests, Approvals at /approvals blocks self-approval and records distinct issue approvals, Identities completes approved issue transitions, and Workloads discloses REST/CLI ephemeral JIT and PAM session posture",
-            "target_gui_mapping": "JIT request queue with requester, approver, scope, TTL, policy reason, self-approval denial, notifications, and time-bound grant.",
-            "acceptance_test": "Served API test proves requester portal intake, requester self-issue denial, distinct approval, signer-backed certificate issuance, inventory projection, and event evidence; UI covers requester cannot approve own request and approver can approve/deny with audit link.",
+            "current_frontend_mapping": "served: Request a credential at /request binds an owner and active profile to one exact, effect-free server preview before submission. Approvals at /approvals shows requester, scope, owner, profile, policy reason, expiry, immutable ID, and audit link in a direct review dialog; self-approval is blocked, a reason is required for denial, and approval reveals the separate retry-safe signer-backed issuance step. Workloads discloses the shorter-TTL attested JIT and PAM session paths.",
+            "target_gui_mapping": "Delivered for the core request, independent decision, issuance, expiry, audit, and safe-retry journey. Roadmap residual: consolidate external approval-delivery receipts beside the request instead of requiring the Alerts surface for delivery history.",
+            "acceptance_test": "TestServedSelfServiceIssuancePortalCAPISS11 and the issuance-request served suite prove effect-free preview, requester portal intake, requester self-issue denial, distinct approval, deterministic prepare/retry, signer-backed certificate issuance, expiry, inventory projection, and event evidence. Approvals tests prove direct first-class review, scope/TTL/policy evidence, accessible self-approval denial, reasoned rejection, audit linkage, and handoff to the separate recoverable issuance step.",
             "source_docs": [
                 "docs/features/incident-and-jit.md"
             ],
             "source_backend": [
+                "/api/v1/issuance-requests/preview",
+                "/api/v1/issuance-requests",
+                "/api/v1/issuance-requests/{id}/approve",
+                "/api/v1/issuance-requests/{id}/deny",
+                "/api/v1/issuance-requests/{id}/prepare",
+                "/api/v1/issuance-requests/{id}/complete",
                 "/api/v1/approval-requests",
                 "/api/v1/approval-requests/{id}/approvals",
                 "/api/v1/approval-requests/{id}/denials",
@@ -13751,8 +13757,16 @@
                 "web/src/pages/Identities.tsx"
             ],
             "status": "closed",
-            "notes": "Closed by route-level feature-map evidence and COMPETE-057. Test evidence: internal/server/self_service_issuance_served_test.go proves CAP-ISS-11 requester portal intake through served profile/identity APIs, requester self-issue denial, distinct approval, signer-backed issuance, certificate inventory projection, and profile/identity/certificate events. UI evidence: web/src/__tests__/self_service.test.tsx covers profile-bound request submission and requester request status; web/src/__tests__/approvals.test.tsx covers self-approval denial and distinct approval actions; web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search.",
+            "notes": "Qualified as a complete F33 vertical slice on implementation candidate 6f5cb9e4abffa7350f3cdbb8e0c7fa12df0305c8. The requester gets an effect-free exact preview and cannot approve or mint their own request. A distinct approver reviews the bound owner, profile, purpose, decision window, immutable request ID, and audit link in one dialog; approval itself mints nothing and reveals the separate deterministic prepare/issue/complete path. A failed issue remains approved and retries under the same identity and idempotency key. The attested ephemeral path separately proves m-of-n approval, transactional notification intent, bounded TTL, and one-time short-lived issuance.",
             "api_surface": [
+                "previewIssuanceRequest",
+                "openIssuanceRequest",
+                "listIssuanceRequests",
+                "approveIssuanceRequest",
+                "denyIssuanceRequest",
+                "cancelIssuanceRequest",
+                "prepareIssuanceRequest",
+                "completeIssuanceRequest",
                 "listProfiles",
                 "listIdentities",
                 "createIdentity",
@@ -13769,6 +13783,14 @@
             ],
             "api_na": "",
             "cli_surface": [
+                "issuance-requests preview",
+                "issuance-requests open",
+                "issuance-requests list",
+                "issuance-requests approve",
+                "issuance-requests deny",
+                "issuance-requests cancel",
+                "issuance-requests prepare",
+                "issuance-requests complete",
                 "profiles list",
                 "identities list",
                 "identities create",
@@ -13807,8 +13829,10 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: served: Request a credential at /request submits profile-bound certificate requests, Approvals at /approvals blocks self-approval and records distinct issue approvals, Identities completes approved issue transitions, and Workloads discloses REST/CLI ephemeral JIT and PAM session posture",
-                        "target_gui_mapping: JIT request queue with requester, approver, scope, TTL, policy reason, self-approval denial, notifications, and time-bound grant."
+                        "RequestCredential binds active profile and owner selection to the exact preview payload, refuses stale or failed previews, and explains that submission opens a decision window without minting.",
+                        "Approvals opens a genuine first-class issuance request directly from the primary action, shows requester, purpose, owner, profile, expiry, immutable request ID, audit link, and approval consequence, then reveals the separate issuance lifecycle after a decision.",
+                        "IssuanceRequestsPanel retains approved-but-not-issued work, exposes the deterministic fulfillment action, and labels a failed attempt as safe to retry without minting under a new identity.",
+                        "target_gui_mapping: Delivered for the core request, independent decision, issuance, expiry, audit, and safe-retry journey. Roadmap residual: consolidate external approval-delivery receipts beside the request instead of requiring the Alerts surface for delivery history."
                     ],
                     "refs": [
                         "web/src/lib/navigation.ts",
@@ -13864,19 +13888,23 @@
                 },
                 "test": {
                     "evidence": [
-                        "acceptance_test: Served API test proves requester portal intake, requester self-issue denial, distinct approval, signer-backed certificate issuance, inventory projection, and event evidence; UI covers requester cannot approve own request and approver can approve/deny with audit link.",
+                        "acceptance_test: Served API and UI tests prove effect-free preview, requester portal intake, requester self-issue denial, distinct approval, signer-backed issuance, expiry, safe retry, inventory projection, event evidence, and an audit-linked direct review dialog.",
                         "TestServedSelfServiceIssuancePortalCAPISS11 drives the served requester portal path from profile lookup/request intake to approval-gated signer-backed issuance and certificate inventory readback.",
+                        "internal/server/issuance_request_served_test.go proves preview zero effects, fail-closed admission, self-approval denial, reasoned terminal denial, expiry, deterministic prepare/retry, and completion only after matching signer-backed inventory evidence.",
                         "web/src/__tests__/self_service.test.tsx proves /request submits profile-bound requests and shows requester status without claiming self-issue.",
-                        "web/src/__tests__/approvals.test.tsx proves /approvals blocks self-approval and records distinct approval actions with audit links.",
+                        "web/src/__tests__/approvals.test.tsx proves /approvals directly reviews a first-class issuance request, exposes its bound scope and decision window, blocks self-approval, records distinct approval or reasoned denial, links audit, and opens the recoverable issuance lifecycle.",
+                        "web/src/__tests__/issuance_requests_panel.test.tsx proves failed fulfillment remains approved and retries the same request identity.",
                         "internal/server/ephemeral_served_test.go proves an attested JIT request opens approval, enqueues outbox notification intent, blocks self-issue until approval, and then mints a short-TTL credential.",
                         "internal/server/pam_served_test.go proves an attested PAM request opens real Postgres and sshd-backed sessions, audits them, and expires them.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
                         "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
                     ],
                     "refs": [
+                        "internal/server/issuance_request_served_test.go",
                         "internal/server/self_service_issuance_served_test.go",
                         "web/src/__tests__/self_service.test.tsx",
                         "web/src/__tests__/approvals.test.tsx",
+                        "web/src/__tests__/issuance_requests_panel.test.tsx",
                         "internal/featureparity/feature_facet_coverage_test.go",
                         "web/src/__tests__/route_parity.test.ts",
                         "web/src/__tests__/feature_coverage.test.tsx"
@@ -13959,7 +13987,7 @@
                 "purpose": "Lets an operator understand and safely use just-in-time issuance with approval flows while tenant, policy, and security authority remain on the server.",
                 "tool": "operations",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/request",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -13971,7 +13999,7 @@
                 "dependencies": [],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -13994,8 +14022,14 @@
                         ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: previewIssuanceRequest",
+                            "CLI command: issuance-requests preview",
+                            "internal/server/issuance_request_served_test.go",
+                            "web/src/pages/RequestCredential.tsx",
+                            "web/src/__tests__/self_service.test.tsx"
+                        ]
                     },
                     "execute": {
                         "status": "complete",
@@ -14011,8 +14045,14 @@
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/server/issuance_request_served_test.go",
+                            "web/src/pages/Approvals.tsx",
+                            "web/src/components/IssuanceRequestsPanel.tsx",
+                            "web/src/__tests__/approvals.test.tsx",
+                            "web/src/__tests__/issuance_requests_panel.test.tsx"
+                        ]
                     },
                     "verify": {
                         "status": "complete",
@@ -14057,8 +14097,8 @@
                 },
                 "owner": "operations",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "6f5cb9e4abffa7350f3cdbb8e0c7fa12df0305c8",
+                "freshness": "2026-08-30"
             }
         },
         {

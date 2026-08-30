@@ -2334,8 +2334,7 @@ const esESCatalog = {
   // F51 TSA operator workflow — Machine-authored, FLAG FOR HUMAN REVIEW.
   "protocols.tsaCheck.region": "Preparación de la autoridad de sellado de tiempo",
   "protocols.tsaCheck.heading": "Preparación de la autoridad de sellado de tiempo",
-  "protocols.tsaCheck.description":
-    "Comprueba si este servidor está listo para sellar un artefacto antes de enviar una solicitud RFC 3161 real.",
+  "protocols.tsaCheck.description": "Comprueba si este servidor está listo para sellar un artefacto antes de enviar una solicitud RFC 3161 real.",
   "protocols.tsaCheck.previewHeading": "Qué inspeccionará esta comprobación",
   "protocols.tsaCheck.safePreview":
     "Límite de seguridad: solo lee la preparación en memoria. No emite un sello de tiempo, no lee un archivo de certificado, no llama al firmante ni a la red y no escribe nada.",
@@ -2349,8 +2348,7 @@ const esESCatalog = {
   "protocols.tsaCheck.signerPreviewDetail":
     "Confirma que la firma de sellos permanece en el proceso de firma separado y que las claves nunca pasan al navegador ni al plano de control.",
   "protocols.tsaCheck.auditPreview": "Auditoría y capacidad limitada",
-  "protocols.tsaCheck.auditPreviewDetail":
-    "Confirma que cada sello aceptado se puede auditar y que una ráfaga no puede bloquear la API del plano de control.",
+  "protocols.tsaCheck.auditPreviewDetail": "Confirma que cada sello aceptado se puede auditar y que una ráfaga no puede bloquear la API del plano de control.",
   "protocols.tsaCheck.ready": "Listo para una prueba con un cliente estándar",
   "protocols.tsaCheck.blocked": "Necesita reparación antes de sellar",
   "protocols.tsaCheck.endpoint": "Punto de acceso de sellado",
