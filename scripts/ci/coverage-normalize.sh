@@ -46,6 +46,21 @@ awk -v module="$MODULE" '
 		fragment = trim(s)
 		return fragment == "" || index(module, fragment) == 1 || index(fragment, module) == 1 || fragment ~ /^[0-9]+([[:space:]]+[0-9]+)?([[:space:]]+[0-9]+)?$/
 	}
+	function is_source_suffix_fragment(s,    fields, block) {
+		s = trim(s)
+		if (split(s, fields, " ") != 3) return 0
+		block = fields[1]
+		return block ~ /^[^[:space:]]+[.]go:[0-9]+[.][0-9]+,[0-9]+[.][0-9]+$/ && fields[2] ~ /^[0-9]+$/ && fields[3] ~ /^[0-9]+$/
+	}
+	function remember_source_suffix(s, line_no,    fields) {
+		s = trim(s)
+		split(s, fields, " ")
+		pending_block[++npending] = fields[1]
+		pending_stmts[npending] = fields[2]
+		pending_count[npending] = fields[3] + 0
+		pending_line[npending] = line_no
+		pending_raw[npending] = s
+	}
 	function add_row(row, line_no,    fields, block, stmts, count, tail, nested) {
 		split(row, fields, " ")
 		block = fields[1]
@@ -102,6 +117,14 @@ awk -v module="$MODULE" '
 				malformed_fragments++
 				next
 			}
+			# Go has occasionally emitted the tail of one otherwise duplicated
+			# source row when a very large -coverpkg profile is assembled. Do not
+			# guess its path here. Defer it until END, then accept it only when its
+			# complete path+coordinates suffix identifies exactly one valid row.
+			if (is_source_suffix_fragment(line)) {
+				remember_source_suffix(line, NR)
+				next
+			}
 			printf("coverage-normalize: malformed cover row at line %d: %s\n", NR, $0) > "/dev/stderr"
 			exit 1
 		}
@@ -112,6 +135,27 @@ awk -v module="$MODULE" '
 		if (mode == "") {
 			print "coverage-normalize: missing cover mode header" > "/dev/stderr"
 			exit 1
+		}
+		for (p = 1; p <= npending; p++) {
+			matches = 0
+			resolved = ""
+			for (i = 1; i <= norder; i++) {
+				candidate = order[i]
+				if (length(candidate) >= length(pending_block[p]) && substr(candidate, length(candidate) - length(pending_block[p]) + 1) == pending_block[p]) {
+					matches++
+					resolved = candidate
+				}
+			}
+			if (matches != 1) {
+				printf("coverage-normalize: malformed cover row at line %d: %s (suffix matched %d complete rows)\n", pending_line[p], pending_raw[p], matches) > "/dev/stderr"
+				exit 1
+			}
+			if (block_stmts[resolved] != pending_stmts[p]) {
+				printf("coverage-normalize: recovered suffix %s has inconsistent statement counts (%s vs %s)\n", pending_block[p], block_stmts[resolved], pending_stmts[p]) > "/dev/stderr"
+				exit 1
+			}
+			if (pending_count[p] > block_count[resolved]) block_count[resolved] = pending_count[p]
+			malformed_fragments++
 		}
 		if (malformed_fragments > 0) {
 			printf("coverage-normalize: ignored malformed fragments on %d coverprofile line(s)\n", malformed_fragments) > "/dev/stderr"

@@ -29,7 +29,11 @@ numeric_orphan_profile="$(mktemp)"
 numeric_orphan_out="$(mktemp)"
 path_orphan_profile="$(mktemp)"
 path_orphan_out="$(mktemp)"
-trap 'rm -f "$duplicate_profile" "$normalized_profile" "$bad_profile" "$bad_out" "$repaired_profile" "$repaired_out" "$orphan_profile" "$orphan_out" "$numeric_orphan_profile" "$numeric_orphan_out" "$path_orphan_profile" "$path_orphan_out"' EXIT
+suffix_profile="$(mktemp)"
+suffix_out="$(mktemp)"
+ambiguous_suffix_profile="$(mktemp)"
+ambiguous_suffix_out="$(mktemp)"
+trap 'rm -f "$duplicate_profile" "$normalized_profile" "$bad_profile" "$bad_out" "$repaired_profile" "$repaired_out" "$orphan_profile" "$orphan_out" "$numeric_orphan_profile" "$numeric_orphan_out" "$path_orphan_profile" "$path_orphan_out" "$suffix_profile" "$suffix_out" "$ambiguous_suffix_profile" "$ambiguous_suffix_out"' EXIT
 covered_block="trstctl.com/trstctl/cmd/terraform-provider-trstctl/main.go:13.13,17.16"
 uncovered_block="trstctl.com/trstctl/cmd/trstctl/connector.go:39.2,40.16"
 if [[ -z "${GOCACHE:-}" ]]; then
@@ -48,7 +52,7 @@ EOF
 "$normalizer" "$duplicate_profile" "$normalized_profile"
 
 expected="$(mktemp)"
-trap 'rm -f "$duplicate_profile" "$normalized_profile" "$bad_profile" "$bad_out" "$repaired_profile" "$repaired_out" "$orphan_profile" "$orphan_out" "$numeric_orphan_profile" "$numeric_orphan_out" "$path_orphan_profile" "$path_orphan_out" "$expected"' EXIT
+trap 'rm -f "$duplicate_profile" "$normalized_profile" "$bad_profile" "$bad_out" "$repaired_profile" "$repaired_out" "$orphan_profile" "$orphan_out" "$numeric_orphan_profile" "$numeric_orphan_out" "$path_orphan_profile" "$path_orphan_out" "$suffix_profile" "$suffix_out" "$ambiguous_suffix_profile" "$ambiguous_suffix_out" "$expected"' EXIT
 cat >"$expected" <<EOF
 mode: atomic
 ${covered_block} 2 3
@@ -137,6 +141,33 @@ else
 	echo "FAIL: module-path orphan fragment repair is not accepted by go tool cover"
 	fails=1
 fi
+
+cat >"$suffix_profile" <<EOF
+mode: atomic
+trstctl.com/trstctl/internal/api/secrets_scanning.go:636.2,643.8 1 0
+anning.go:636.2,643.8 1 4
+EOF
+
+"$normalizer" "$suffix_profile" "$suffix_out"
+if grep -qx 'trstctl.com/trstctl/internal/api/secrets_scanning.go:636.2,643.8 1 4' "$suffix_out"; then
+	echo "PASS: recovers a uniquely matching truncated source-row suffix"
+else
+	echo "FAIL: truncated source-row suffix did not merge into its unique complete row"
+	fails=1
+fi
+
+cat >"$ambiguous_suffix_profile" <<EOF
+mode: atomic
+trstctl.com/trstctl/internal/api/secrets_scanning.go:636.2,643.8 1 0
+trstctl.com/trstctl/internal/agent/network_scanning.go:636.2,643.8 1 0
+scanning.go:636.2,643.8 1 4
+EOF
+
+set +e
+"$normalizer" "$ambiguous_suffix_profile" "$ambiguous_suffix_out" >/dev/null 2>&1
+ambiguous_suffix_status=$?
+set -e
+check "rejects an ambiguous truncated source-row suffix" "1" "$ambiguous_suffix_status"
 
 cat >"$bad_profile" <<EOF
 mode: atomic
