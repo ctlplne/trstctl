@@ -52,9 +52,9 @@
       "owner": "Store/Operations",
       "status": "accepted_deferral",
       "behind_since": "2026-06-21",
-      "next_review_by": "2026-08-29",
+      "next_review_by": "2026-09-05",
       "deferral_until": "2026-09-05",
-      "rationale": "AUD-15 dated deferral. The security-maintained source fork is compiled from third_party/embedded-postgres and affects local integration tests and single-node eval startup only. The upgrade must rebase the reviewed fork, refresh committed archive pins, and refresh Trivy receipts together, so it is one reviewed change and not a source-version-only bump."
+      "rationale": "AUD-15 dated deferral. The 2026-08-30 review reconfirmed v1.34.0 as the latest upstream release and confirmed that it still imports github.com/lib/pq, so it cannot replace the security-maintained source fork without restoring the dependency the fork removes. The fork is compiled from third_party/embedded-postgres and affects local integration tests and single-node eval startup only. The upgrade must rebase the reviewed fork, preserve the pgx and mandatory-checksum repairs, refresh committed archive pins, and refresh Trivy receipts together, so it is one reviewed change and not a source-version-only bump."
     },
     {
       "ecosystem": "gomod",
