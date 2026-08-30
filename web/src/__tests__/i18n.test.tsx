@@ -1344,8 +1344,13 @@ describe("i18n boundary", () => {
       // owner, and first-run setup records a complete, current ownership
       // attestation before creating a certificate. Machine-authored es/de —
       // FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "accf5b106a9d81f0f4060a51b017f319e43b16b48cd44498b44c3825a26b7b9e",
-      "de-DE": "bcfb47a6017f40ff827962f15d549b540b280273367d0fda45a050295bdf0154",
+      // QA F75 g97 re-pin: the optional-agent step now names the honest
+      // pre-token state without claiming the server omitted its endpoint. The
+      // exact endpoint warning remains reserved for an unusable token response.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
+      // release.
+      "es-ES": "7474572a2f98725f61730b45d98ed7ed636e5fbcea26d64554578a895a007930",
+      "de-DE": "3a0c888c39dcfb3f98904f20326443afa5ffe2b5c0cc02f2e49138f99c6b64a5",
     });
   });
 

@@ -980,7 +980,11 @@ function AgentStep({
         </div>
       )}
       <p className="text-caption text-muted-foreground">{t("wizard.agent.commandIntro")}</p>
-      {installPlan.blockedReason ? (
+      {!token ? (
+        <p className="rounded-control border border-border bg-muted/40 p-3 text-caption text-muted-foreground" role="status">
+          {t("wizard.agent.commandPending")}
+        </p>
+      ) : installPlan.blockedReason ? (
         <p className="rounded-control border border-status-warning/40 bg-status-warning/10 p-3 text-caption" role="alert">
           {installPlan.blockedReason}
         </p>

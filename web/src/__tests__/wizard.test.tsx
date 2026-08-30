@@ -145,6 +145,9 @@ describe("first-run wizard", () => {
 
     // Step 5 — install an agent: a one-time token is minted and shown in the
     // install command, then the wizard detects the agent's registration.
+    expect(await screen.findByText(/mint a one-time enrollment token to reveal the exact server-verified install command/i)).toBeInTheDocument();
+    expect(screen.queryByText(/did not publish its agent endpoint/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Runnable Linux agent command")).not.toBeInTheDocument();
     await user.type(await screen.findByLabelText(/agent identity/i), "edge-01");
     await user.click(screen.getByRole("button", { name: /mint enrollment token/i }));
     await waitFor(() => expect(apiMock.createEnrollmentToken).toHaveBeenCalledWith({ allowed_identity: "edge-01" }));
@@ -262,5 +265,34 @@ describe("first-run wizard", () => {
 
     expect(await screen.findByText(/optional step deferred/i)).toBeInTheDocument();
     expect(apiMock.createEnrollmentToken).not.toHaveBeenCalled();
+  });
+
+  it("reports a missing public agent endpoint only after the server returns an unusable token response", async () => {
+    apiMock.createEnrollmentToken.mockResolvedValueOnce({
+      token: "BOOT-TOKEN-NO-ENDPOINT",
+      enroll_path: "/enroll/bootstrap",
+      agent_server: "",
+      agent_server_name: "",
+      roles: ["host"],
+    });
+    const user = userEvent.setup();
+    renderWizard();
+
+    await user.click(screen.getByRole("button", { name: /check signing health/i }));
+    await screen.findByText(/signer health check passed/i);
+    await user.click(screen.getByRole("button", { name: /next: enable protocols/i }));
+    await user.click(await screen.findByRole("button", { name: /activate eval protocol profile/i }));
+    await screen.findByText(/eval protocol profile is active/i);
+    await user.click(screen.getByRole("button", { name: /next: issue certificate/i }));
+    await issueFirstCertificate(user, "agent-endpoint-control");
+    await user.click(await screen.findByRole("button", { name: /next: prove integrations/i }));
+    await user.click(await screen.findByRole("button", { name: /skip integration proof/i }));
+    await user.click(screen.getByRole("button", { name: /next: optional agent/i }));
+
+    expect(await screen.findByText(/mint a one-time enrollment token to reveal the exact server-verified install command/i)).toBeInTheDocument();
+    expect(screen.queryByText(/did not publish its agent endpoint/i)).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /mint enrollment token/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/did not publish its agent endpoint/i);
+    expect(screen.queryByText(/reveal the exact server-verified install command/i)).not.toBeInTheDocument();
   });
 });

@@ -3276,6 +3276,10 @@ export const messages = {
     defaultMessage: "Linux example for the blank Compose stack. Save the one-time token and CA bundle beside this command first.",
     description: "Context immediately before the runnable first-run agent command.",
   },
+  "wizard.agent.commandPending": {
+    defaultMessage: "Mint a one-time enrollment token to reveal the exact server-verified install command.",
+    description: "Neutral first-run state before the server has returned an enrollment endpoint in a one-time token response.",
+  },
   "wizard.agent.commandLabel": {
     defaultMessage: "Runnable Linux agent command",
     description: "Accessible label for the first-run agent command block.",

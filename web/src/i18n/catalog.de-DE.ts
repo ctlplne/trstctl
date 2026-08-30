@@ -1202,6 +1202,8 @@ const deDECatalog = {
   "wizard.agent.description":
     "Ein Agent lässt trstctl Anmeldedaten in einem Netzwerk erkennen und ausliefern. Zertifikatsvorgänge funktionieren ohne Agenten, daher können Sie das Setup jetzt abschließen und später einen Agenten verbinden. Sein einmaliges Enrollment-Token kann nur diesen Agenten registrieren; es kann keine Zertifikate ausstellen.",
   "wizard.agent.commandIntro": "Linux-Beispiel für den leeren Compose-Stack. Speichern Sie zuerst das Einmal-Token und das CA-Bundle neben diesem Befehl.",
+  // Machine-authored; human translation review required before release.
+  "wizard.agent.commandPending": "Erstellen Sie ein einmaliges Enrollment-Token, um den exakten, vom Server bestätigten Installationsbefehl anzuzeigen.",
   "wizard.agent.commandLabel": "Ausführbarer Linux-Agentenbefehl",
   "wizard.agent.skip": "Agent vorerst überspringen",
   "wizard.agent.skipped":

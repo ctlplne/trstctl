@@ -1183,6 +1183,8 @@ const esESCatalog = {
     "Un agente permite que trstctl descubra y despliegue credenciales dentro de una red. Las operaciones de certificados funcionan sin uno, así que puede terminar la preparación ahora y conectar un agente después. Su token de inscripción de un solo uso solo puede registrar ese agente; no puede emitir certificados.",
   "wizard.agent.commandIntro":
     "Ejemplo de Linux para el entorno Compose vacío. Guarde primero el token de un solo uso y el paquete de CA junto a este comando.",
+  // Machine-authored; human translation review required before release.
+  "wizard.agent.commandPending": "Cree un token de inscripción de un solo uso para mostrar el comando de instalación exacto verificado por el servidor.",
   "wizard.agent.commandLabel": "Comando ejecutable del agente para Linux",
   "wizard.agent.skip": "Omitir el agente por ahora",
   "wizard.agent.skipped":
