@@ -112,6 +112,10 @@ export function AttestedSVIDWorkflow({
       setResult({ credential_id: value.credential_id, subject: value.subject, not_after: value.not_after });
       setPayload("");
       setPublicKey("");
+      // The exact request key contains proof bytes. Drop the reviewed request
+      // after success instead of retaining it behind the result screen.
+      setReviewed(null);
+      retryKey.current = null;
       setStep(2);
     } catch (error) {
       const message = apiProblemMessage(error, t("workloads.attestation.issueErrorFallback"));

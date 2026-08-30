@@ -15197,20 +15197,20 @@ export const messages = {
     description: "Primary action that jumps to workload attester setup.",
   },
   "workloads.readiness.needsTrustHeading": {
-    defaultMessage: "Workload identity needs a trust source",
-    description: "Readiness heading when no workload attester trust source is enabled.",
+    defaultMessage: "No tenant trust source is enabled",
+    description: "Tenant trust-list state only; operator-managed trust may still exist.",
   },
   "workloads.readiness.needsTrustBody": {
-    defaultMessage: "Add one trusted attester for the platform your workload runs on. Issuance stays disabled until then.",
-    description: "Explanation of the workload identity setup prerequisite.",
+    defaultMessage: "Preview also checks trust configured by your platform operator. If none is available for your method, add a trust source before issuing.",
+    description: "The server preview, not the tenant list alone, resolves available trust.",
   },
   "workloads.readiness.readyHeading": {
-    defaultMessage: "Workload identity is ready to issue",
-    description: "Readiness heading when at least one workload attester is enabled.",
+    defaultMessage: "Tenant trust is configured",
+    description: "A configured trust source is not proof of successful workload verification.",
   },
   "workloads.readiness.readyBody": {
-    defaultMessage: "An enabled attester can verify workload evidence. Select its method below to issue a short-lived SVID.",
-    description: "Explanation of workload identity readiness.",
+    defaultMessage: "Preview checks the exact method and lifetime. Only issuance verifies the workload proof and creates its certificate.",
+    description: "Separate trust configuration, effect-free preview, and proof-verifying issuance.",
   },
   "workloads.attestation.addTrustBeforeIssue": {
     defaultMessage: "No tenant trust source is enabled. Preview also checks operator-managed trust; otherwise add a trust source before issuing.",
@@ -21738,7 +21738,7 @@ export const messages = {
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Risk.tsx.",
   },
   "source.raw.attestation.evidence.stays.out.of.the.6ffaf184fc": {
-    defaultMessage: "Raw attestation evidence stays out of the browser",
+    defaultMessage: "Proof is cleared after successful issuance",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Workloads.tsx.",
   },
   "source.raw.fec6060499": {
@@ -22852,7 +22852,8 @@ export const messages = {
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/RequestCredential.tsx.",
   },
   "source.submitted.proof.fields.are.cleared.after.i.b9215d2471": {
-    defaultMessage: "Submitted proof fields are cleared after issue. Returned certificate PEM and claim maps are discarded before the row is stored.",
+    defaultMessage:
+      "Your proof is sent to the server for preview and issuance, then cleared from this form after success. Result history keeps only metadata. The public certificate is available for deliberate copying while this workflow remains open.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Workloads.tsx.",
   },
   "source.succeeded.5dceaeceb6": {

@@ -152,7 +152,9 @@ describe("workload identity disclosure surface", () => {
 
     expect(screen.getByRole("heading", { name: "Workloads & Machines" })).toBeInTheDocument();
     expect(screen.getByText(/which machine identities may stop working.*agents are stale/i)).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Workload identity needs a trust source" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "No tenant trust source is enabled" })).toBeInTheDocument();
+    expect(screen.getByText(/Preview also checks trust configured by your platform operator/)).toBeInTheDocument();
+    expect(screen.queryByText(/Issuance stays disabled until then/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Set up workload identity" })).toHaveAttribute("aria-expanded", "false");
     await user.click(screen.getByText("Kubernetes controller evidence"));
     expect(await screen.findByText("CAP-K8S-04")).toBeInTheDocument();
@@ -178,6 +180,17 @@ describe("workload identity disclosure surface", () => {
     expect(screen.queryByText("PKI secret bundle")).not.toBeInTheDocument();
     expect(screen.queryByText(/BEGIN PRIVATE KEY/)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /revoke now|renew now/i })).not.toBeInTheDocument();
+  });
+
+  it("describes configured tenant trust without claiming the workload proof is already verified", async () => {
+    apiMock.workloadAttesterTrustSources.mockResolvedValue({
+      items: [{ id: "trust-1", name: "Payments Kubernetes", method: "k8s_sat", enabled: true, rotation_version: 1 }],
+    });
+    renderWorkloads();
+
+    expect(await screen.findByRole("heading", { name: "Tenant trust is configured" })).toBeInTheDocument();
+    expect(screen.getByText(/Only issuance verifies the workload proof and creates its certificate/)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Workload identity is ready to issue" })).not.toBeInTheDocument();
   });
 
   it("reveals trust setup on request and keeps proof and rotation forms closed while allowing server-owned trust preview", async () => {
@@ -210,8 +223,9 @@ describe("workload identity disclosure surface", () => {
     expect(
       screen.getByText("No tenant trust source is enabled. Preview also checks operator-managed trust; otherwise add a trust source before issuing."),
     ).toBeInTheDocument();
-    expect(screen.getByText("Raw attestation evidence stays out of the browser")).toBeInTheDocument();
-    expect(screen.getByText(/Returned certificate PEM and claim maps are discarded/i)).toBeInTheDocument();
+    expect(screen.getByText("Proof is cleared after successful issuance")).toBeInTheDocument();
+    expect(screen.getByText(/Your proof is sent to the server for preview and issuance/)).toBeInTheDocument();
+    expect(screen.queryByText("Raw attestation evidence stays out of the browser")).not.toBeInTheDocument();
     expect(screen.queryByText("Workload attestation fixtures")).not.toBeInTheDocument();
     expect(screen.queryByText("accepted")).not.toBeInTheDocument();
     expect(screen.queryByText("wrong-tenant")).not.toBeInTheDocument();

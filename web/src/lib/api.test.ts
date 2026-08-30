@@ -562,6 +562,9 @@ describe("exported API surface census", () => {
       // F25: the temporary-credential review computes the exact bounded plan
       // and proof digests without persisting, signing, or contacting a target.
       "/api/v1/ephemeral/preview",
+      // F30: exact trust configuration, key/proof digests, and lifetime bounds;
+      // no attestation verification, signing, event append, or durable write.
+      "/api/v1/workloads/attested-issuance/preview",
       // F43: validates and normalizes one SSH public-key certificate request
       // without allocating a serial, appending an event, changing the KRL, or
       // calling the isolated signer.

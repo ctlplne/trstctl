@@ -255,8 +255,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// cleanup recovery commands raise it to 418. F6's lifecycle automation-plan
 	// read raises it to 419 so headless and browser operators share one oracle.
 	// F51's effect-free TSA readiness command raises it to 420.
-	if len(out) != 420 {
-		t.Fatalf("CLI commands = %d, want 420", len(out))
+	// F30's exact, effect-free attested issuance preview raises it to 421.
+	if len(out) != 421 {
+		t.Fatalf("CLI commands = %d, want 421", len(out))
 	}
 	return out
 }

@@ -55,6 +55,11 @@ describe("attested SVID workflow", () => {
     expect(apiMock.issueAttestedSVID.mock.calls[0][0]).toEqual(apiMock.previewAttestedSVID.mock.calls[0][0]);
     expect(apiMock.issueAttestedSVID.mock.calls[1]).toEqual(apiMock.issueAttestedSVID.mock.calls[0]);
     expect(apiMock.issueAttestedSVID.mock.calls[0][1]).toEqual(expect.any(String));
+    expect(screen.queryByDisplayValue("c2VjcmV0LXByb29m")).not.toBeInTheDocument();
+    expect(screen.queryByText(/PUBLIC-KEY|PUBLIC-CERTIFICATE/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Start another request" }));
+    expect(screen.getByLabelText("Attestation proof payload (base64)")).toHaveValue("");
+    expect(screen.getByLabelText("Workload public key")).toHaveValue("");
   });
 
   it.each([

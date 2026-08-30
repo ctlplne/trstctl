@@ -1356,8 +1356,13 @@ describe("i18n boundary", () => {
       // F30 exact-preview re-pin: request/review/result copy, deferred proof
       // verification, stable retry keys, and operator-managed trust guidance.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "114c2a08cfb45f530e45a87ff1db95a421ee94e210bb47f8c63c696f5d664464",
-      "de-DE": "58957830b04f6f86de292f5ef7ef557c903232da326e75c24535d359774ab1e2",
+      // F30 live-baseline correction: tenant trust configuration is not proof
+      // that issuance will succeed; server preview also resolves operator trust.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      // Proof-handling correction: the form sends proof to the server and clears
+      // it after success; only the public certificate remains for deliberate copy.
+      "es-ES": "573692a37ccbc6e499e248e0282a40c244f8315466307656762788f12e6945ac",
+      "de-DE": "4eced218e318c4ac3a0126931b7bdaf55a23c3a123235a447fa74f067e1dc362",
     });
   });
 

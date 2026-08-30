@@ -193,12 +193,12 @@ const deDECatalog = {
   "workloads.page.details":
     "Mandantenbezogene Prüfer-Vertrauensquellen validieren Kubernetes-, Cloud-, GitHub- oder TPM-Nachweise, bevor der Server ein X.509-SVID ausstellt. Nachweise und private Schlüssel werden nicht als Browser-Belege gespeichert.",
   "workloads.page.setupAction": "Workload-Identität einrichten",
-  "workloads.readiness.needsTrustHeading": "Workload-Identität benötigt eine Vertrauensquelle",
+  "workloads.readiness.needsTrustHeading": "Keine Mandanten-Vertrauensquelle ist aktiviert",
   "workloads.readiness.needsTrustBody":
-    "Fügen Sie einen vertrauenswürdigen Prüfer für die Plattform des Workloads hinzu. Die Ausstellung bleibt bis dahin deaktiviert.",
-  "workloads.readiness.readyHeading": "Workload-Identität ist ausstellungsbereit",
+    "Die Vorschau prüft auch das vom Plattformbetreiber konfigurierte Vertrauen. Falls für Ihre Methode keines verfügbar ist, fügen Sie vor der Ausstellung eine Vertrauensquelle hinzu.",
+  "workloads.readiness.readyHeading": "Mandantenvertrauen ist konfiguriert",
   "workloads.readiness.readyBody":
-    "Ein aktivierter Prüfer kann Workload-Nachweise validieren. Wählen Sie unten seine Methode, um ein kurzlebiges SVID auszustellen.",
+    "Die Vorschau prüft die genaue Methode und Laufzeit. Erst die Ausstellung verifiziert den Workload-Nachweis und erstellt sein Zertifikat.",
   "workloads.attestation.addTrustBeforeIssue":
     "Keine Mandanten-Vertrauensquelle ist aktiviert. Die Vorschau prüft auch vom Betreiber konfiguriertes Vertrauen; andernfalls füge vor der Ausstellung eine Vertrauensquelle hinzu.",
   "sshTrust.advanced.revocationSummary": "Sperrung und Host-Ausmusterung",
@@ -6215,7 +6215,7 @@ const deDECatalog = {
   "source.queue.a.servicenow.table.api.ticket.throug.0df778f34b":
     "Ein ServiceNow-Table-API-Ticket über dasselbe Ereignisprotokoll und dieselbe Outbox wie bei Zugangsdaten-Workflows in die Warteschlange stellen.",
   "source.raw.668ba48102": "(raw",
-  "source.raw.attestation.evidence.stays.out.of.the.6ffaf184fc": "Unverarbeitete Attestierungsnachweise bleiben außerhalb des Browsers",
+  "source.raw.attestation.evidence.stays.out.of.the.6ffaf184fc": "Der Nachweis wird nach erfolgreicher Ausstellung gelöscht",
   "source.raw.fec6060499": ", raw",
   "source.rca.answers.are.sufficient.or.insufficient.5a9397d141":
     "RCA-Antworten sind je nach zitiertem Nachweis ausreichend oder unzureichend. Bösartiger Datensatztext wird als inaktiver Text dargestellt, und nächste Aktionen bleiben Links oder Text, bis ein Behebungsworkflow vorhanden ist.",
@@ -6487,7 +6487,7 @@ const deDECatalog = {
   "source.subject.6897128384": "Subjekt",
   "source.submit.request.917e144e4b": "Anfrage einreichen",
   "source.submitted.proof.fields.are.cleared.after.i.b9215d2471":
-    "Eingereichte Nachweisfelder werden nach der Ausstellung gelöscht. Das zurückgegebene Zertifikat-PEM und die Claim-Maps werden verworfen, bevor die Zeile gespeichert wird.",
+    "Ihr Nachweis wird für Vorschau und Ausstellung an den Server gesendet und nach erfolgreicher Ausstellung aus diesem Formular gelöscht. Der Ergebnisverlauf enthält nur Metadaten. Das öffentliche Zertifikat kann ausdrücklich kopiert werden, solange dieser Ablauf geöffnet bleibt.",
   "source.succeeded.5dceaeceb6": "succeeded",
   "source.succeeded.6d9a6f97a5": "Succeeded",
   "source.successor.activation.2c89a6285d": "Nachfolgeraktivierung",

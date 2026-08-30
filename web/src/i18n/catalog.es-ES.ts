@@ -188,11 +188,12 @@ const esESCatalog = {
   "workloads.page.details":
     "Las fuentes de confianza de verificadores por inquilino validan evidencia de Kubernetes, nube, GitHub o TPM antes de que el servidor emita un X.509-SVID. Las pruebas y claves privadas no se conservan como evidencia del navegador.",
   "workloads.page.setupAction": "Configurar identidad de carga de trabajo",
-  "workloads.readiness.needsTrustHeading": "La identidad de carga de trabajo necesita una fuente de confianza",
+  "workloads.readiness.needsTrustHeading": "No hay una fuente de confianza del tenant habilitada",
   "workloads.readiness.needsTrustBody":
-    "Añada un verificador de confianza para la plataforma donde se ejecuta la carga. La emisión permanece deshabilitada hasta entonces.",
-  "workloads.readiness.readyHeading": "La identidad de carga de trabajo está lista para emitirse",
-  "workloads.readiness.readyBody": "Un verificador habilitado puede validar la evidencia. Seleccione su método abajo para emitir un SVID de corta duración.",
+    "La vista previa también comprueba la confianza configurada por el operador de la plataforma. Si no hay ninguna para su método, añada una fuente de confianza antes de emitir.",
+  "workloads.readiness.readyHeading": "La confianza del tenant está configurada",
+  "workloads.readiness.readyBody":
+    "La vista previa comprueba el método y la duración exactos. Solo la emisión verifica la prueba de la carga de trabajo y crea su certificado.",
   "workloads.attestation.addTrustBeforeIssue":
     "No hay una fuente de confianza del tenant habilitada. La vista previa también comprueba la confianza configurada por el operador; si no existe, añade una fuente de confianza antes de emitir.",
   "sshTrust.advanced.revocationSummary": "Revocación y retiro de hosts",
@@ -6172,7 +6173,7 @@ const esESCatalog = {
   "source.queue.a.servicenow.table.api.ticket.throug.0df778f34b":
     "Poner en cola un ticket de ServiceNow Table API mediante el mismo registro de eventos y la misma outbox que usan los flujos de trabajo de credenciales.",
   "source.raw.668ba48102": "(raw",
-  "source.raw.attestation.evidence.stays.out.of.the.6ffaf184fc": "La evidencia de atestación sin procesar permanece fuera del navegador",
+  "source.raw.attestation.evidence.stays.out.of.the.6ffaf184fc": "La prueba se borra después de una emisión correcta",
   "source.raw.fec6060499": ", raw",
   "source.rca.answers.are.sufficient.or.insufficient.5a9397d141":
     "Las respuestas del RCA son suficientes o insuficientes según la evidencia citada. El texto de registros hostiles se representa como texto inerte, y las siguientes acciones permanecen como enlaces o texto hasta que exista un flujo de trabajo de remediación.",
@@ -6444,7 +6445,7 @@ const esESCatalog = {
   "source.subject.6897128384": "Sujeto",
   "source.submit.request.917e144e4b": "Enviar solicitud",
   "source.submitted.proof.fields.are.cleared.after.i.b9215d2471":
-    "Los campos de prueba enviados se borran después de la emisión. El PEM del certificado devuelto y los mapas de reclamaciones se descartan antes de almacenar la fila.",
+    "La prueba se envía al servidor para la vista previa y la emisión, y se borra de este formulario después de una emisión correcta. El historial de resultados solo conserva metadatos. El certificado público puede copiarse de forma explícita mientras este flujo siga abierto.",
   "source.succeeded.5dceaeceb6": "succeeded",
   "source.succeeded.6d9a6f97a5": "Succeeded",
   "source.successor.activation.2c89a6285d": "Activación del sucesor",
