@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 )
@@ -52,6 +53,19 @@ func TestJOURNEY001WorkloadOwnerSelfServesAttestedOnboarding(t *testing.T) {
 	if created.ID == "" || created.Method != "k8s_sat" || created.RotationVersion != 1 || !created.Enabled {
 		t.Fatalf("created trust source lost required fields: %+v", created)
 	}
+	previewBody := map[string]any{
+		"method": "k8s_sat", "payload_base64": base64.StdEncoding.EncodeToString([]byte(first.SAT)),
+		"public_key_pem": servedAttestedPublicKeyPEM(t), "ttl_seconds": 600,
+	}
+	assertTrustPreview := func(wantReady bool) {
+		t.Helper()
+		status, raw := secretsReqKey(t, h, http.MethodPost, "/api/v1/workloads/attested-issuance/preview", token, "", previewBody)
+		var preview api.AttestedSVIDPreview
+		if status != http.StatusOK || json.Unmarshal(raw, &preview) != nil || preview.Ready != wantReady || !preview.EffectFree {
+			t.Fatalf("tenant trust preview ready=%v: status=%d body=%s", wantReady, status, raw)
+		}
+	}
+	assertTrustPreview(true)
 
 	issued := servedAttestedIssue(t, h, token, "journey-001-issue", "k8s_sat", []byte(first.SAT), servedAttestedPublicKeyPEM(t), http.StatusCreated)
 	assertServedAttestedSVID(t, h, issued, "spiffe://served.test/ns/default/sa/web")
@@ -87,6 +101,7 @@ func TestJOURNEY001WorkloadOwnerSelfServesAttestedOnboarding(t *testing.T) {
 	if status != http.StatusOK {
 		t.Fatalf("revoke workload attester trust source: status %d body %s", status, body)
 	}
+	assertTrustPreview(false)
 	rejected := servedAttestedIssue(t, h, token, "journey-001-after-revoke", "k8s_sat", []byte(rotated.SAT), servedAttestedPublicKeyPEM(t), http.StatusUnprocessableEntity)
 	if rejected.CertificatePEM != "" {
 		t.Fatalf("revoked trust source still issued a certificate: %+v", rejected)

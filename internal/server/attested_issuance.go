@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -144,6 +145,100 @@ func (s *Server) IssueAttestedSVID(ctx context.Context, tenantID, idempotencyKey
 	return s.attestedIssuance.IssueAttestedSVID(ctx, tenantID, idempotencyKey, req)
 }
 
+func (s *Server) PreviewAttestedSVID(ctx context.Context, tenantID, requester string, req api.AttestedSVIDRequest) (api.AttestedSVIDPreview, error) {
+	if s.attestedIssuance == nil {
+		return api.AttestedSVIDPreview{}, api.ErrAttestedIssuanceUnavailable
+	}
+	return s.attestedIssuance.PreviewAttestedSVID(ctx, tenantID, requester, req)
+}
+
+// PreviewAttestedSVID reads configured trust and hashes the exact input. It does
+// not call a verifier, signer, orchestrator, event log, or external worker.
+func (s *attestedIssuerService) PreviewAttestedSVID(ctx context.Context, tenantID, requester string, req api.AttestedSVIDRequest) (api.AttestedSVIDPreview, error) {
+	if strings.TrimSpace(tenantID) == "" || strings.TrimSpace(requester) == "" {
+		return api.AttestedSVIDPreview{}, fmt.Errorf("%w: tenant and requester are required", api.ErrAttestedIssuanceInvalid)
+	}
+	methods, err := s.availableMethods(ctx, tenantID)
+	if err != nil {
+		return api.AttestedSVIDPreview{}, fmt.Errorf("%w: resolve attestation trust: %v", api.ErrAttestedIssuanceInvalid, err)
+	}
+	method := strings.TrimSpace(req.Method)
+	blockers := []string{}
+	configured := false
+	for _, available := range methods {
+		configured = configured || available == method
+	}
+	if !supportedAttestedIssuanceMethod(method) || !configured {
+		blockers = append(blockers, fmt.Sprintf("Attestation method %q is not configured for this tenant. Enable a matching trust source before issuing.", method))
+	}
+	if len(req.Payload) == 0 {
+		blockers = append(blockers, "Provide the workload's attestation proof before issuing.")
+	}
+	if err := crypto.ValidatePublicKeyDER(req.PublicKeyDER); err != nil {
+		blockers = append(blockers, "Provide a valid workload public key. Keep the matching private key on the workload.")
+	}
+	return api.AttestedSVIDPreview{
+		Capability: "workload_attested_issuance", Ready: len(blockers) == 0, EffectFree: true,
+		Method: method, Requester: strings.TrimSpace(requester), TrustDomain: s.trustDomain, SupportedMethods: methods,
+		RequestedTTLSeconds: req.TTLSeconds, EffectiveTTLSeconds: int64(s.ttl(req.TTLSeconds) / time.Second),
+		DefaultTTLSeconds: int64(s.defaultTTL / time.Second), MaxTTLSeconds: int64(s.maxTTL / time.Second),
+		TTLDefaulted: req.TTLSeconds <= 0, TTLClamped: req.TTLSeconds > int64(s.maxTTL/time.Second),
+		RequiredPermission: "certs:issue", AttestationVerification: "execution_only",
+		PayloadSHA256: crypto.SHA256Hex(req.Payload), PublicKeySHA256: crypto.SHA256Hex(req.PublicKeyDER),
+		PreviewWrites: []string{}, PreviewExternalEffects: []string{}, PreviewSignerCalls: []string{},
+		ExecutionWrites: []string{
+			"Record the proof verification result, then append a certificate-recorded event and project its inventory row after signing.",
+			"Bind the verified workload to the credential, append issuance audit evidence, and record the idempotent result.",
+		},
+		ExecutionExternalEffects: []string{},
+		ExecutionSignerCalls: []string{
+			"Ask the isolated signer to sign one X.509-SVID for the verified workload subject and effective lifetime.",
+		},
+		Steps: []string{
+			"Review the exact method, request digests, and effective lifetime. This preview does not verify the proof or reserve a subject.",
+			"Issue explicitly. The server rechecks your permission and enabled tenant trust, verifies the proof, and derives the SPIFFE identity from its verified subject.",
+			"Read the issued credential and audit evidence. Your workload keeps the matching private key; trstctl returns only the public certificate.",
+		},
+		Blockers: blockers,
+		RecoverySteps: []string{
+			"If a response is lost, retry the exact request with the same Idempotency-Key to recover the original result instead of minting twice.",
+			"If proof verification fails, correct the trust configuration or obtain fresh proof, then review a new request. Never disable verification to continue.",
+			"If the signer is unavailable, restore the isolated signer and retry the unchanged request. An expired proof requires a fresh preview.",
+		},
+		DataHandling: []string{
+			"The preview returns only SHA-256 digests and operational metadata, never the raw proof or public-key body. Decoded proof buffers are wiped after the response.",
+			"Proof verification happens only during issuance so preview cannot consume one-time evidence or create verification audit events.",
+			"No private key is uploaded, generated, stored, or returned by this workflow.",
+		},
+	}, nil
+}
+
+func (s *attestedIssuerService) availableMethods(ctx context.Context, tenantID string) ([]string, error) {
+	methods := make(map[string]struct{}, len(s.methods))
+	for method := range s.methods {
+		methods[method] = struct{}{}
+	}
+	sources, err := s.store.ListWorkloadAttesterTrustSources(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	for _, source := range sources {
+		if !source.Enabled || source.RevokedAt != nil {
+			continue
+		}
+		if _, err := attestorFromTrustSource(source); err != nil {
+			return nil, err
+		}
+		methods[source.Method] = struct{}{}
+	}
+	out := make([]string, 0, len(methods))
+	for method := range methods {
+		out = append(out, method)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
 func (s *attestedIssuerService) IssueAttestedSVID(ctx context.Context, tenantID, idempotencyKey string, req api.AttestedSVIDRequest) (api.AttestedSVID, error) {
 	if tenantID == "" {
 		return api.AttestedSVID{}, fmt.Errorf("%w: tenant is required", api.ErrAttestedIssuanceInvalid)
@@ -230,14 +325,12 @@ func (s *attestedIssuerService) ttl(seconds int64) time.Duration {
 	if seconds <= 0 {
 		return s.defaultTTL
 	}
-	ttl := time.Duration(seconds) * time.Second
-	if ttl <= 0 {
-		return s.defaultTTL
-	}
-	if s.maxTTL > 0 && ttl > s.maxTTL {
+	// Compare seconds before converting: a hostile int64 must not overflow a
+	// nanosecond duration and silently fall back to a different lifetime.
+	if s.maxTTL > 0 && seconds > int64(s.maxTTL/time.Second) {
 		return s.maxTTL
 	}
-	return ttl
+	return time.Duration(seconds) * time.Second
 }
 
 func (s *attestedIssuerService) attestorsForMethod(ctx context.Context, tenantID, method string) ([]attest.Attestor, error) {

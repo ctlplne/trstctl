@@ -87,6 +87,7 @@ import type {
   ApprovalRequest,
   Attestation as GenAttestation,
   AttestedSVID as GenAttestedSVID,
+  AttestedSVIDPreview as GenAttestedSVIDPreview,
   AttestedSVIDRequest,
   AuditBundle,
   AuditFeed,
@@ -573,6 +574,7 @@ export type EnrollmentToken = GenEnrollmentToken;
 export type EnrollmentTokenRequest = GenEnrollmentTokenRequest;
 export type Attestation = GenAttestation;
 export type AttestedSVID = GenAttestedSVID;
+export type AttestedSVIDPreview = GenAttestedSVIDPreview;
 export type BrokerAgentIdentity = GenBrokerAgentIdentity;
 export type CBOMAsset = GenCBOMAsset;
 export type {
@@ -2261,7 +2263,8 @@ export interface Api {
   rotateWorkloadAttesterTrustSource(id: string, input: WorkloadAttesterTrustSourceRotateRequest): Promise<WorkloadAttesterTrustSourceRotated>;
   revokeWorkloadAttesterTrustSource(id: string, input: WorkloadAttesterTrustSourceRevokeRequest): Promise<WorkloadAttesterTrustSourceRevoked>;
   deleteWorkloadAttesterTrustSource(id: string): Promise<void>;
-  issueAttestedSVID(input: AttestedSVIDRequest): Promise<AttestedSVID>;
+  previewAttestedSVID(input: AttestedSVIDRequest): Promise<AttestedSVIDPreview>;
+  issueAttestedSVID(input: AttestedSVIDRequest, idempotencyKey?: string): Promise<AttestedSVID>;
   sshStatus(): Promise<SSHStatus>;
   sshFleet(): Promise<SSHFleetInventory>;
   recordSSHTrustRollout(input: SSHTrustRolloutRequest): Promise<SSHTrustRollout>;
@@ -2803,7 +2806,8 @@ const liveApi: Api = {
   revokeWorkloadAttesterTrustSource: (id, input) =>
     mutate<WorkloadAttesterTrustSourceRevoked>("POST", `/api/v1/workloads/attester-trust-sources/${encodeURIComponent(id)}/revoke`, input),
   deleteWorkloadAttesterTrustSource: (id) => mutate<void>("DELETE", `/api/v1/workloads/attester-trust-sources/${encodeURIComponent(id)}`),
-  issueAttestedSVID: (input) => mutate<AttestedSVID>("POST", "/api/v1/workloads/attested-issuance", input),
+  previewAttestedSVID: (input) => postRead<AttestedSVIDPreview>("/api/v1/workloads/attested-issuance/preview", input),
+  issueAttestedSVID: (input, idempotencyKey) => mutate<AttestedSVID>("POST", "/api/v1/workloads/attested-issuance", input, idempotencyKey),
   sshStatus: () => req<SSHStatus>("/api/v1/ssh/status"),
   sshFleet: () => req<SSHFleetInventory>("/api/v1/ssh/fleet"),
   recordSSHTrustRollout: (input) => mutate<SSHTrustRollout>("POST", "/api/v1/ssh/trust-rollouts", input),

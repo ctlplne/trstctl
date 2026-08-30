@@ -9414,6 +9414,7 @@
                 "rotateWorkloadAttesterTrustSource",
                 "revokeWorkloadAttesterTrustSource",
                 "deleteWorkloadAttesterTrustSource",
+                "previewAttestedSVID",
                 "issueAttestedSVID"
             ],
             "api_na": "",
@@ -9425,6 +9426,7 @@
                 "workloads attester-trust-sources rotate",
                 "workloads attester-trust-sources revoke",
                 "workloads attester-trust-sources delete",
+                "workloads attested-issuance preview",
                 "workloads attested-issuance"
             ],
             "cli_na": "",

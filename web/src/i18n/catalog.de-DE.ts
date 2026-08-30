@@ -199,7 +199,8 @@ const deDECatalog = {
   "workloads.readiness.readyHeading": "Workload-Identität ist ausstellungsbereit",
   "workloads.readiness.readyBody":
     "Ein aktivierter Prüfer kann Workload-Nachweise validieren. Wählen Sie unten seine Methode, um ein kurzlebiges SVID auszustellen.",
-  "workloads.attestation.addTrustBeforeIssue": "Fügen Sie einen vertrauenswürdigen Prüfer hinzu, bevor Sie eine Workload-Identität ausstellen.",
+  "workloads.attestation.addTrustBeforeIssue":
+    "Keine Mandanten-Vertrauensquelle ist aktiviert. Die Vorschau prüft auch vom Betreiber konfiguriertes Vertrauen; andernfalls füge vor der Ausstellung eine Vertrauensquelle hinzu.",
   "sshTrust.advanced.revocationSummary": "Sperrung und Host-Ausmusterung",
   "sshTrust.advanced.authorityKeySummary": "Öffentlichen SSH-CA-Schlüssel anzeigen",
   "workloads.advanced.kubernetesSummary": "Kubernetes-Controller-Nachweise",
@@ -7670,6 +7671,34 @@ const deDECatalog = {
   "capabilities.action.unavailable": "Dieser Build oder eine seiner erforderlichen Abhängigkeiten stellt die Aktion nicht bereit.",
   "capabilities.action.denied": "Ihre aktuelle Rolle enthält nicht die kleinste für diese Aktion erforderliche Berechtigung.",
   "capabilities.action.unknown": "Der Server hat diese Operation nicht in der kanonischen Funktionszeile beschrieben; deshalb führt der Browser sie nicht aus.",
+  "workloads.attested.description":
+    "Eine attestierte SVID ist ein kurzlebiges Zertifikat für einen Workload. Prüfe zuerst Nachweismethode und Laufzeit; trstctl prüft den Nachweis erst, wenn du ausdrücklich ausstellst.",
+  "workloads.attested.progress": "Fortschritt der attestierten Zertifikatsanforderung",
+  "workloads.attested.reviewBody": "Prüfe die genaue Anforderung, effektive Laufzeit, Signiereffekte und sichere Wiederholung. Die Vorschau ändert nichts.",
+  "workloads.attested.resultStep": "Abholen und belegen",
+  "workloads.attested.resultBody":
+    "Nutze das ausgestellte öffentliche Zertifikat und prüfe Inventar und Auditnachweise. Der private Schlüssel bleibt beim Workload.",
+  "workloads.attested.methodHelp":
+    "Wähle den Nachweis deines Workloads. Die Vorschau prüft Mandanten- und Betreibervertrauen, ohne den Nachweis zu verbrauchen.",
+  "workloads.attested.issuing": "Nachweis wird geprüft und Zertifikat ausgestellt…",
+  "workloads.attested.retryIssue": "Genaue Ausstellung wiederholen",
+  "workloads.attested.issue": "Nachweis prüfen und ausstellen",
+  "workloads.attested.copyFailed":
+    "Der Browser konnte das Zertifikat nicht kopieren. Lass diese Seite geöffnet, erlaube den Zwischenablagezugriff und versuche es erneut.",
+  "workloads.attested.issuedTitle": "Workload-Zertifikat ausgestellt",
+  "workloads.attested.issuedBody":
+    "trstctl hat den Workload-Nachweis geprüft, ein kurzlebiges Zertifikat signiert und Zertifikat sowie Auditnachweise erfasst.",
+  "workloads.attested.subject": "Verifiziertes Workload-Subjekt",
+  "workloads.attested.openInventory": "Zertifikatsinventar öffnen",
+  "workloads.attested.openAudit": "Auditnachweise öffnen",
+  "workloads.attested.planLabel": "Genauer Plan für das attestierte Zertifikat",
+  "workloads.attested.ready": "Bereit zum Prüfen und Ausstellen",
+  "workloads.attested.permission": "Bei Ausstellung erneut geprüfte Berechtigung",
+  "workloads.attested.proofDeferred":
+    "Bereit bedeutet, dass die Anforderung konfiguriert ist, nicht dass der Nachweis vertrauenswürdig ist. Die Ausstellung prüft das Vertrauen erneut und leitet die Workload-Identität erst nach erfolgreicher Nachweisprüfung ab.",
+  "workloads.attested.effects": "Beim Prüfen und Ausstellen",
+  "workloads.attested.exactEvidence": "Genaue Prüfsummen und Datenverarbeitung",
+  "workloads.attested.previewUnsafe": "Diese Antwort bestätigt keine nebenwirkungsfreie Vorschau. Nicht ausstellen; lade den Serverplan erneut.",
   "workloads.ephemeral.heading": "Temporäres Workload-Zertifikat anfordern",
   "workloads.ephemeral.description":
     "Übergeben Sie trstctl den Workload-Nachweis und den öffentlichen Schlüssel. Prüfen Sie den exakten Plan ohne Änderungen, lassen Sie ihn von einer anderen Person genehmigen und holen Sie genau ein kurzlebiges Zertifikat ab.",

@@ -3,10 +3,16 @@
 package server
 
 import (
+	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
+	"math"
 	"net/http"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -21,6 +27,148 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 )
+
+// A preview must not consume proof, emit an event, reserve an idempotency key,
+// queue an external call, or ask the signer to do work.
+func TestServedAttestedPreviewIsExactEffectFreeAndFailClosed(t *testing.T) {
+	attestor := &countingAttestedPreviewAttestor{}
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.AttestedIssuance = AttestedIssuanceConfig{
+			Enabled: true, TrustDomain: "served.test", DefaultTTL: 10 * time.Minute,
+			MaxTTL: time.Hour, Attestors: []attest.Attestor{attestor},
+		}
+	})
+	token := seedScopedTokenSubject(t, h.store, h.tenant, "attested-preview-owner", "certs:issue", "certs:read")
+	body := map[string]any{
+		"method": "k8s_sat", "payload_base64": base64.StdEncoding.EncodeToString([]byte("one-time-proof")),
+		"public_key_pem": servedAttestedPublicKeyPEM(t), "ttl_seconds": int64(math.MaxInt64),
+	}
+	headBefore, err := h.log.LastSequence(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	stateBefore := ephemeralPreviewMutationState(t, h)
+	signer := &countingEphemeralDigestSigner{DigestSigner: h.srv.attestedIssuance.caSigner}
+	h.srv.attestedIssuance.caSigner = signer
+	status, raw := secretsReqKey(t, h, http.MethodPost, "/api/v1/workloads/attested-issuance/preview", token, "", body)
+	if status != http.StatusOK {
+		t.Fatalf("attested preview status = %d, want 200; body=%s", status, raw)
+	}
+	var preview struct {
+		Ready                   bool     `json:"ready"`
+		EffectFree              bool     `json:"effect_free"`
+		Method                  string   `json:"method"`
+		Requester               string   `json:"requester"`
+		TrustDomain             string   `json:"trust_domain"`
+		EffectiveTTLSeconds     int64    `json:"effective_ttl_seconds"`
+		TTLClamped              bool     `json:"ttl_clamped"`
+		RequiredPermission      string   `json:"required_permission"`
+		AttestationVerification string   `json:"attestation_verification"`
+		PayloadSHA256           string   `json:"payload_sha256"`
+		PublicKeySHA256         string   `json:"public_key_sha256"`
+		PreviewWrites           []string `json:"preview_writes"`
+		PreviewExternalEffects  []string `json:"preview_external_effects"`
+		PreviewSignerCalls      []string `json:"preview_signer_calls"`
+		ExecutionWrites         []string `json:"execution_writes"`
+		ExecutionSignerCalls    []string `json:"execution_signer_calls"`
+		Steps                   []string `json:"steps"`
+		Blockers                []string `json:"blockers"`
+		RecoverySteps           []string `json:"recovery_steps"`
+		DataHandling            []string `json:"data_handling"`
+	}
+	if err := json.Unmarshal(raw, &preview); err != nil {
+		t.Fatal(err)
+	}
+	if !preview.Ready || !preview.EffectFree || preview.Method != "k8s_sat" ||
+		preview.Requester != "attested-preview-owner" || preview.TrustDomain != "served.test" ||
+		preview.EffectiveTTLSeconds != 3600 || !preview.TTLClamped ||
+		preview.RequiredPermission != "certs:issue" || preview.AttestationVerification != "execution_only" {
+		t.Fatalf("exact attested preview = %+v", preview)
+	}
+	if len(preview.PayloadSHA256) != 64 || len(preview.PublicKeySHA256) != 64 ||
+		len(preview.PreviewWrites) != 0 || len(preview.PreviewExternalEffects) != 0 || len(preview.PreviewSignerCalls) != 0 ||
+		len(preview.ExecutionWrites) == 0 || len(preview.ExecutionSignerCalls) == 0 || len(preview.Steps) < 2 ||
+		len(preview.RecoverySteps) == 0 || len(preview.DataHandling) == 0 || len(preview.Blockers) != 0 {
+		t.Fatalf("incomplete attested preview contract: %+v", preview)
+	}
+	if bytes.Contains(raw, []byte("one-time-proof")) || bytes.Contains(raw, []byte(body["payload_base64"].(string))) || bytes.Contains(raw, []byte("BEGIN PUBLIC KEY")) {
+		t.Fatalf("preview leaked proof or public-key body: %s", raw)
+	}
+	for _, method := range []string{"aws_iid", "unknown"} {
+		body["method"] = method
+		status, raw = secretsReqKey(t, h, http.MethodPost, "/api/v1/workloads/attested-issuance/preview", token, "", body)
+		if status != http.StatusOK {
+			t.Fatalf("unconfigured %s preview status = %d; body=%s", method, status, raw)
+		}
+		if err := json.Unmarshal(raw, &preview); err != nil {
+			t.Fatal(err)
+		}
+		if preview.Ready || len(preview.Blockers) == 0 || !strings.Contains(strings.Join(preview.Blockers, " "), "not configured") {
+			t.Fatalf("unconfigured method did not fail closed: %+v", preview)
+		}
+	}
+	if signer.calls.Load() != 0 || attestor.calls.Load() != 0 {
+		t.Fatalf("preview called signer=%d or proof verifier=%d", signer.calls.Load(), attestor.calls.Load())
+	}
+	if headAfter, err := h.log.LastSequence(t.Context()); err != nil || headAfter != headBefore {
+		t.Fatalf("preview changed event head: before=%d after=%d err=%v", headBefore, headAfter, err)
+	}
+	if stateAfter := ephemeralPreviewMutationState(t, h); stateAfter != stateBefore {
+		t.Fatalf("preview changed durable state: before=%+v after=%+v", stateBefore, stateAfter)
+	}
+	// Ready is configuration truth, not a bypass of proof verification.
+	body["method"] = "k8s_sat"
+	status, raw = secretsReqKey(t, h, http.MethodPost, "/api/v1/workloads/attested-issuance", token, "f30-invalid-proof", body)
+	if status != http.StatusForbidden || signer.calls.Load() != 0 || attestor.calls.Load() != 1 {
+		t.Fatalf("ready preview bypassed proof verification: status=%d signer=%d verifier=%d body=%s", status, signer.calls.Load(), attestor.calls.Load(), raw)
+	}
+}
+
+func TestServedAttestedPreviewRejectsMissingPermissionAndMalformedInput(t *testing.T) {
+	fixtures := servedAttestedIssuanceFixtures(t)
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) { d.AttestedIssuance = fixtures.Config })
+	owner := seedScopedToken(t, h.store, h.tenant, "certs:issue")
+	reader := seedScopedToken(t, h.store, h.tenant, "certs:read")
+	key := servedAttestedPublicKeyPEM(t)
+	for _, tc := range []struct {
+		name, token, payload, key string
+		status                    int
+	}{
+		{"reader cannot issue", reader, "c2F0", key, http.StatusForbidden},
+		{"anonymous", "", "c2F0", key, http.StatusUnauthorized},
+		{"malformed base64", owner, "!not-base64!", key, http.StatusBadRequest},
+		{"empty proof", owner, "", key, http.StatusBadRequest},
+		{"malformed public key", owner, "c2F0", "not-a-key", http.StatusBadRequest},
+		{"multiple public keys", owner, "c2F0", key + key, http.StatusBadRequest},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			status, raw := secretsReqKey(t, h, http.MethodPost, "/api/v1/workloads/attested-issuance/preview", tc.token, "", map[string]any{
+				"method": "k8s_sat", "payload_base64": tc.payload, "public_key_pem": tc.key,
+			})
+			if status != tc.status {
+				t.Fatalf("preview status=%d want=%d body=%s", status, tc.status, raw)
+			}
+		})
+	}
+}
+
+type countingAttestedPreviewAttestor struct{ calls atomic.Int32 }
+
+func (*countingAttestedPreviewAttestor) Method() string { return "k8s_sat" }
+
+func (a *countingAttestedPreviewAttestor) Attest(context.Context, []byte) (attest.Attestation, error) {
+	a.calls.Add(1)
+	return attest.Attestation{}, errors.New("preview must not consume one-time proof")
+}
+
+func TestAttestedSVIDTTLClampsBeforeDurationConversion(t *testing.T) {
+	s := attestedIssuerService{defaultTTL: 10 * time.Minute, maxTTL: time.Hour}
+	for _, seconds := range []int64{3601, math.MaxInt64} {
+		if got := s.ttl(seconds); got != time.Hour {
+			t.Errorf("ttl(%d) = %s, want 1h", seconds, got)
+		}
+	}
+}
 
 // TestServedAttestedIssuanceEndpointIssuesForK8sAndAWS is the NHI-02 acceptance
 // proof. It drives the assembled HTTP API, not the library attesters directly:

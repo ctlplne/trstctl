@@ -5,6 +5,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Workloads } from "@/pages/Workloads";
+import { attestedPreviewFixture } from "../support/attestedSVID";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -13,6 +14,7 @@ const { apiMock } = vi.hoisted(() => ({
     workloadAttesterTrustSources: vi.fn(),
     issueBrokerAgentIdentity: vi.fn(),
     issueAttestedSVID: vi.fn(),
+    previewAttestedSVID: vi.fn(),
     issueDynamicLease: vi.fn(),
     renewDynamicLease: vi.fn(),
     revokeDynamicLease: vi.fn(),
@@ -86,6 +88,7 @@ describe("WIRE-02 Workloads broker and attestation wiring", () => {
         claims: { token: "RAW-SVID-PROOF" },
       },
     });
+    apiMock.previewAttestedSVID.mockResolvedValue(attestedPreviewFixture);
   });
 
   it("renders broker identities and attested SVID rows from the served endpoints", async () => {
@@ -110,18 +113,24 @@ describe("WIRE-02 Workloads broker and attestation wiring", () => {
 
     await user.click(screen.getByRole("button", { name: "Issue attested SVID" }));
     const attestationPayload = screen.getByLabelText("Attestation proof payload (base64)");
-    const attestedIssueForm = attestationPayload.closest("form");
+    const attestedIssueForm = screen.getByRole("region", { name: "Issue attested SVID" });
     expect(attestedIssueForm).toBeTruthy();
     await user.type(attestationPayload, "c3ZpZC1wcm9vZg==");
     await user.type(screen.getByLabelText("Workload public key"), "-----BEGIN PUBLIC KEY-----\nSVID\n-----END PUBLIC KEY-----");
-    await user.click(within(attestedIssueForm as HTMLFormElement).getByRole("button", { name: "Issue attested SVID" }));
+    await user.click(within(attestedIssueForm).getByRole("button", { name: "Preview request" }));
+    await screen.findByRole("heading", { name: "Ready to verify and issue" });
+    expect(apiMock.issueAttestedSVID).not.toHaveBeenCalled();
+    await user.click(within(attestedIssueForm).getByRole("button", { name: "Verify proof and issue" }));
 
-    expect(apiMock.issueAttestedSVID).toHaveBeenCalledWith({
-      method: "k8s_sat",
-      payload_base64: "c3ZpZC1wcm9vZg==",
-      public_key_pem: "-----BEGIN PUBLIC KEY-----\nSVID\n-----END PUBLIC KEY-----",
-      ttl_seconds: 600,
-    });
+    expect(apiMock.issueAttestedSVID).toHaveBeenCalledWith(
+      {
+        method: "k8s_sat",
+        payload_base64: "c3ZpZC1wcm9vZg==",
+        public_key_pem: "-----BEGIN PUBLIC KEY-----\nSVID\n-----END PUBLIC KEY-----",
+        ttl_seconds: 600,
+      },
+      expect.any(String),
+    );
 
     expect(await screen.findByRole("row", { name: /cred-svid-1 spiffe:\/\/tenant\/ns\/default\/sa\/api k8s_sat/i })).toBeInTheDocument();
     expect(screen.queryByText(/BEGIN CERTIFICATE|RAW-BROKER-PROOF|RAW-SVID-PROOF/)).not.toBeInTheDocument();

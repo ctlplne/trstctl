@@ -207,6 +207,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"workloads", "attester-trust-sources", "revoke"}, Method: "POST", Path: "/api/v1/workloads/attester-trust-sources/{id}/revoke", Body: bodyFile, Summary: "Revoke a workload attester trust source"},
 	{Name: []string{"workloads", "attester-trust-sources", "delete"}, Method: "DELETE", Path: "/api/v1/workloads/attester-trust-sources/{id}", Summary: "Delete a workload attester trust source"},
 	{Name: []string{"workloads", "attested-issuance"}, Method: "POST", Path: "/api/v1/workloads/attested-issuance", Body: bodyFile, Summary: "Issue an attested X.509-SVID"},
+	{Name: []string{"workloads", "attested-issuance", "preview"}, Method: "POST", Path: "/api/v1/workloads/attested-issuance/preview", Body: bodyFile, ReadOnly: true, Summary: "Review an exact attested workload certificate request without side effects"},
 	{Name: []string{"ssh", "status"}, Method: "GET", Path: "/api/v1/ssh/status", Summary: "Show SSH CA, KRL, and attestation workflow status"},
 	{Name: []string{"ssh", "trust-rollout"}, Method: "POST", Path: "/api/v1/ssh/trust-rollouts", Body: bodyFile, Summary: "Record SSH trust rollout status from the agent-safe workflow"},
 	{Name: []string{"ssh", "preview"}, Method: "POST", Path: "/api/v1/ssh/certificates/preview", Body: bodyFile, ReadOnly: true, Summary: "Review an exact SSH host or user certificate request without side effects"},

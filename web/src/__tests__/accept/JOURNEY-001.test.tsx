@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Workloads } from "@/pages/Workloads";
+import { attestedPreviewFixture } from "../support/attestedSVID";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -14,6 +15,7 @@ const { apiMock } = vi.hoisted(() => ({
     revokeWorkloadAttesterTrustSource: vi.fn(),
     deleteWorkloadAttesterTrustSource: vi.fn(),
     issueAttestedSVID: vi.fn(),
+    previewAttestedSVID: vi.fn(),
   },
 }));
 
@@ -44,6 +46,7 @@ describe("JOURNEY-001 workload owner attested onboarding", () => {
       trust_source: trustSourceFixture({ revoked_at: "2026-06-30T12:20:00Z", revoked_reason: "workload owner offboarding", rotation_version: 2 }),
     });
     apiMock.deleteWorkloadAttesterTrustSource.mockResolvedValue(undefined);
+    apiMock.previewAttestedSVID.mockResolvedValue(attestedPreviewFixture);
     apiMock.issueAttestedSVID
       .mockResolvedValueOnce(attestedSVIDFixture("cred-svid-1", "2026-06-30T12:05:00Z"))
       .mockResolvedValueOnce(attestedSVIDFixture("cred-svid-2", "2026-06-30T12:15:00Z"));
@@ -77,17 +80,22 @@ describe("JOURNEY-001 workload owner attested onboarding", () => {
     expect(within(trustSourceRow!).getByText("k8s_sat")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Issue attested SVID" }));
-    const issueForm = screen.getByRole("form", { name: "Issue attested SVID" });
+    const issueForm = screen.getByRole("region", { name: "Issue attested SVID" });
     fireEvent.change(within(issueForm).getByLabelText("Attestation proof payload (base64)"), { target: { value: "c2F0LWpvdXJuZXktMQ==" } });
     await user.type(within(issueForm).getByLabelText("Workload public key"), "-----BEGIN PUBLIC KEY-----\nSVID\n-----END PUBLIC KEY-----");
-    await user.click(within(issueForm).getByRole("button", { name: "Issue attested SVID" }));
+    await user.click(within(issueForm).getByRole("button", { name: "Preview request" }));
+    await screen.findByRole("heading", { name: "Ready to verify and issue" });
+    await user.click(within(issueForm).getByRole("button", { name: "Verify proof and issue" }));
 
-    expect(apiMock.issueAttestedSVID).toHaveBeenCalledWith({
-      method: "k8s_sat",
-      payload_base64: "c2F0LWpvdXJuZXktMQ==",
-      public_key_pem: "-----BEGIN PUBLIC KEY-----\nSVID\n-----END PUBLIC KEY-----",
-      ttl_seconds: 600,
-    });
+    expect(apiMock.issueAttestedSVID).toHaveBeenCalledWith(
+      {
+        method: "k8s_sat",
+        payload_base64: "c2F0LWpvdXJuZXktMQ==",
+        public_key_pem: "-----BEGIN PUBLIC KEY-----\nSVID\n-----END PUBLIC KEY-----",
+        ttl_seconds: 600,
+      },
+      expect.any(String),
+    );
     expect(await screen.findByRole("row", { name: /cred-svid-1.*spiffe:\/\/tenant\/ns\/default\/sa\/api/i })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Rotate trust source" }));
@@ -102,18 +110,24 @@ describe("JOURNEY-001 workload owner attested onboarding", () => {
     });
     await waitFor(() => expect(trustSourceRow).toHaveTextContent(/Version 2 · Last rotated/));
 
+    await user.click(within(issueForm).getByRole("button", { name: "Start another request" }));
     fireEvent.change(within(issueForm).getByLabelText("Attestation proof payload (base64)"), { target: { value: "c2F0LWpvdXJuZXktMg==" } });
     fireEvent.change(within(issueForm).getByLabelText("Workload public key"), {
       target: { value: "-----BEGIN PUBLIC KEY-----\nSVID-ROTATED\n-----END PUBLIC KEY-----" },
     });
-    await user.click(within(issueForm).getByRole("button", { name: "Issue attested SVID" }));
+    await user.click(within(issueForm).getByRole("button", { name: "Preview request" }));
+    await screen.findByRole("heading", { name: "Ready to verify and issue" });
+    await user.click(within(issueForm).getByRole("button", { name: "Verify proof and issue" }));
 
-    expect(apiMock.issueAttestedSVID).toHaveBeenLastCalledWith({
-      method: "k8s_sat",
-      payload_base64: "c2F0LWpvdXJuZXktMg==",
-      public_key_pem: "-----BEGIN PUBLIC KEY-----\nSVID-ROTATED\n-----END PUBLIC KEY-----",
-      ttl_seconds: 600,
-    });
+    expect(apiMock.issueAttestedSVID).toHaveBeenLastCalledWith(
+      {
+        method: "k8s_sat",
+        payload_base64: "c2F0LWpvdXJuZXktMg==",
+        public_key_pem: "-----BEGIN PUBLIC KEY-----\nSVID-ROTATED\n-----END PUBLIC KEY-----",
+        ttl_seconds: 600,
+      },
+      expect.any(String),
+    );
     expect(await screen.findByRole("row", { name: /cred-svid-2.*spiffe:\/\/tenant\/ns\/default\/sa\/api/i })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Revoke" }));

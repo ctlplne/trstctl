@@ -180,7 +180,7 @@ describe("workload identity disclosure surface", () => {
     expect(screen.queryByRole("button", { name: /revoke now|renew now/i })).not.toBeInTheDocument();
   });
 
-  it("reveals trust setup on request and keeps unusable proof and rotation forms out of the opening view", async () => {
+  it("reveals trust setup on request and keeps proof and rotation forms closed while allowing server-owned trust preview", async () => {
     const user = userEvent.setup();
     renderWorkloads();
 
@@ -191,7 +191,9 @@ describe("workload identity disclosure surface", () => {
     expect(screen.queryByLabelText("Trust source name")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Rotation JWKS JSON")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Attestation proof payload (base64)")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Issue attested SVID" })).not.toBeInTheDocument();
+    // Deployment-managed trust is not in the tenant trust-source list. Opening
+    // this wizard is safe; its server preview decides whether issuance can run.
+    expect(screen.getByRole("button", { name: "Issue attested SVID" })).toHaveAttribute("aria-expanded", "false");
 
     await user.click(setup);
 
@@ -205,7 +207,9 @@ describe("workload identity disclosure surface", () => {
     expect(within(trustSourceTable).getAllByRole("columnheader")).toHaveLength(5);
     expect(within(trustSourceTable).queryByRole("columnheader", { name: "Version" })).not.toBeInTheDocument();
     expect(within(trustSourceTable).queryByRole("columnheader", { name: "Last rotated" })).not.toBeInTheDocument();
-    expect(screen.getByText("Add a trusted attester before issuing a workload identity.")).toBeInTheDocument();
+    expect(
+      screen.getByText("No tenant trust source is enabled. Preview also checks operator-managed trust; otherwise add a trust source before issuing."),
+    ).toBeInTheDocument();
     expect(screen.getByText("Raw attestation evidence stays out of the browser")).toBeInTheDocument();
     expect(screen.getByText(/Returned certificate PEM and claim maps are discarded/i)).toBeInTheDocument();
     expect(screen.queryByText("Workload attestation fixtures")).not.toBeInTheDocument();

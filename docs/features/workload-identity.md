@@ -1,4 +1,4 @@
-# Workload identity — give software a verifiable identity, no secrets to steal
+# Workload identity — give software a verifiable, short-lived identity
 
 ## What it is
 
@@ -8,9 +8,9 @@ long-lived password or API key planted inside it, by combining
 [attestation](../glossary.md) (cryptographic proof of what and where a workload is)
 with short-lived credentials issued only to workloads that pass it.
 
-The mental model: instead of a permanent badge every employee might lose, you install
-a fingerprint scanner at each door. The workload carries no secret — it *proves what it
-is* at the moment it needs access and gets a pass that expires in minutes. This page
+The mental model: replace a permanent shared badge with a temporary badge issued
+after checking the workload's proof. The workload still protects its private key
+and any sensitive proof; the resulting pass expires in minutes. This page
 covers the [SPIFFE](../glossary.md) standard, trstctl's attestation chain, ephemeral
 issuance, the non-human identity lifecycle, and a purpose-built AI-agent broker.
 
@@ -19,8 +19,9 @@ issuance, the non-human identity lifecycle, and a purpose-built AI-agent broker.
 The classic way to give a service access — bake an API key or certificate into it — is
 also the classic way to get breached: those secrets get copied into logs, images, git
 history, and laptops, and rarely expire. Attestation-based, short-lived identity
-removes the thing attackers steal: nothing long-lived to leak, and a captured
-credential is useless within minutes. This is the foundation of "zero-trust"
+reduces the exposure window: a stolen private key and certificate can still be
+abused before expiry, but a short lifetime limits how long that access lasts.
+Attestation and rotation do not replace key protection. This is a foundation of "zero-trust"
 service-to-service security, and it matters even more for AI agents, which spin up
 fast, act with real privileges, and need tight, revocable scopes.
 
@@ -59,6 +60,50 @@ verifier from those records plus any configured process defaults. It verifies th
 proof, signs an X.509-SVID through the isolated signer, records the certificate as
 `certificate.recorded`, and binds the attestation with `attestation.bound` — or fails
 closed if no enabled trust source matches the method.
+
+#### Review before issuing
+
+On **Workloads & Machines**, open **Issue attested SVID**. An SVID is the workload's
+short-lived identity certificate. The workflow has three steps:
+
+1. **Describe the request.** Choose the proof method, paste the base64 proof and
+   one public-key PEM block, and request a lifetime in seconds. The matching
+   private key stays on the workload.
+2. **Review what will happen.** `POST /api/v1/workloads/attested-issuance/preview`
+   returns the exact request's SHA-256 digests, trust domain, enabled methods,
+   effective lifetime, required permission, execution effects, and safe recovery.
+   It reads tenant and operator-managed trust configuration but makes no event,
+   outbox, idempotency, or certificate writes and calls neither verifier nor signer.
+3. **Collect and prove.** Explicit issuance rechecks `certs:issue` and current
+   trust, verifies the proof, derives the workload subject, and signs through the
+   isolated signer. Copy the public certificate deliberately, then inspect the
+   certificate inventory and audit evidence.
+
+**Ready is not verified.** Some proofs contain one-time nonces. Preview must not
+consume those proofs or emit verification events, so proof verification happens
+only during issuance. A ready preview can still be refused if proof is invalid,
+expired, or its trust source is revoked before execution. Missing trust produces
+a visible blocker; it never falls back to trusting the browser.
+
+The lifetime uses the server default for a nonpositive value and is capped at the
+server maximum before conversion to a Go duration, including very large integer
+inputs. The console accepts nonnegative whole seconds and shows any adjustment.
+Changing an input invalidates the previous review. Within the open workflow, an
+unchanged issuance retry keeps the same `Idempotency-Key`; a lost response must not
+mint a second certificate. Inputs and the retry key are not persisted across a
+page reload. If you lose the page, inspect inventory and audit before starting a
+new issuance.
+
+The CLI supports the same no-effect review:
+
+```sh
+trstctl workloads attested-issuance preview -f attested-request.json
+```
+
+The JSON uses the same `method`, `payload_base64`, `public_key_pem`, and optional
+`ttl_seconds` fields as issuance. Preview requires `certs:issue` but sends no
+`Idempotency-Key`. Protect the request file as sensitive short-lived proof; do not
+commit it or include it in screenshots, logs, or QA reports.
 
 ### The SPIFFE Workload API (F24) — the standard interface
 
@@ -304,7 +349,7 @@ These environment variables are the container equivalent of the
 platform by itself: issuance remains disabled for a method until that tenant
 adds an enabled public trust source. Never put an attestation token or private
 key in an environment variable; send the proof and public key only in the
-single issuance request.
+preview and issuance request bodies. Preview does not verify or consume proof.
 
 ```sh
 curl -sS -X POST https://localhost:8443/api/v1/workloads/attested-issuance \
@@ -378,7 +423,7 @@ Replaying the same key returns the same response without minting twice.
 | SPIFFE Workload API (F24) | Served — gRPC over a UDS (`protocols.spiffe.enabled`); `FetchX509SVID`, `FetchJWTSVID`, bundle fetches, and `ValidateJWTSVID` wired to the signer-backed path |
 | SPIRE upstream authority | Served and container-proven for X.509 — SPIRE loads `trstctl-spire-upstream-authority`, trstctl signs its intermediate CA CSR via `/api/v1/ca/authorities/{id}/intermediates/csr`, and the e2e verifies a minted SVID chain to the trstctl root |
 | Ephemeral issuance (F25) | Served — direct attested X.509-SVID mint at `POST /api/v1/workloads/attested-issuance`; effect-free exact JIT review at `POST /api/v1/ephemeral/preview`; approval-gated mint at `POST /api/v1/ephemeral` plus `/api/v1/ephemeral/{id}/approvals`; and a dedicated review/approval/recovery workflow on Workloads |
-| Attestation chain (F30) | Served — tenant trust-source lifecycle at `/api/v1/workloads/attester-trust-sources`; the six-attester verifier gates `POST /api/v1/workloads/attested-issuance`; conformance covers each attester |
+| Attestation chain (F30) | Served — tenant trust-source lifecycle at `/api/v1/workloads/attester-trust-sources`; exact effect-free review at `/api/v1/workloads/attested-issuance/preview`; the six-attester verifier gates `POST /api/v1/workloads/attested-issuance`; the console separates request, review, and result with unchanged-key retries; conformance covers each attester |
 | AI-agent broker (F61) | Served when configured — `POST /api/v1/broker/agent-identities` verifies proof, gates policy, mints a short-lived credential, and projects the graph grant |
 
 Operationally: each attestation method needs public trust material configured first

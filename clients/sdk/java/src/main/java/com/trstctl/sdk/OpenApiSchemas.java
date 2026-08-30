@@ -102,6 +102,7 @@ public final class OpenApiSchemas {
       "ApprovalRequestList",
       "Attestation",
       "AttestedSVID",
+      "AttestedSVIDPreview",
       "AttestedSVIDRequest",
       "AuditAnchor",
       "AuditBundle",

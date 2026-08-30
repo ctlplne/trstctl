@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Num } from "@/components/typography";
 import { EphemeralCredentialWorkflow } from "@/pages/workloads/EphemeralCredentialWorkflow";
+import { AttestedSVIDWorkflow } from "@/pages/workloads/AttestedSVIDWorkflow";
 import {
   api,
   type Agent,
@@ -133,7 +134,6 @@ export function Workloads() {
   const [attestedSVIDs, setAttestedSVIDs] = useState<AttestedSVIDRow[]>([]);
   const [attesterTrustSources, setAttesterTrustSources] = useState<WorkloadAttesterTrustSource[]>([]);
   const [trustSourceMethod, setTrustSourceMethod] = useState<TrustSourceMethod>("k8s_sat");
-  const [issueAttestationMethod, setIssueAttestationMethod] = useState<TrustSourceMethod>("k8s_sat");
   const [rotateTrustSourceID, setRotateTrustSourceID] = useState("");
   const [showTrustSourceSetup, setShowTrustSourceSetup] = useState(false);
   const [showTrustSourceRotation, setShowTrustSourceRotation] = useState(false);
@@ -158,16 +158,13 @@ export function Workloads() {
   const [overviewLoading, setOverviewLoading] = useState(true);
   const [leaseError, setLeaseError] = useState<string | null>(null);
   const [brokerError, setBrokerError] = useState<string | null>(null);
-  const [attestationError, setAttestationError] = useState<string | null>(null);
   const [attestationFailures, setAttestationFailures] = useState<AttestationFailure[]>([]);
   const [trustSourceError, setTrustSourceError] = useState<string | null>(null);
   const [csrSupportError, setCSRSupportError] = useState<string | null>(null);
   const [trustBundleError, setTrustBundleError] = useState<string | null>(null);
   const trustSourceLoadErrorFallback = t("workloads.attestation.loadErrorFallback");
   const enabledTrustSources = attesterTrustSources.filter((source) => source.enabled && !source.revoked_at);
-  const enabledAttesterMethods = new Set(enabledTrustSources.map((source) => source.method));
   const hasEnabledTrustSource = enabledTrustSources.length > 0;
-  const canIssueSelectedMethod = enabledAttesterMethods.has(issueAttestationMethod);
 
   useEffect(() => {
     let active = true;
@@ -242,12 +239,6 @@ export function Workloads() {
     };
   }, [trustSourceLoadErrorFallback]);
 
-  useEffect(() => {
-    if (!canIssueSelectedMethod && enabledTrustSources[0]) {
-      setIssueAttestationMethod(enabledTrustSources[0].method);
-    }
-  }, [canIssueSelectedMethod, enabledTrustSources]);
-
   function upsertLease(lease: DynamicLease) {
     const metadata = leaseMetadataOnly(lease);
     setLeases((current) => [metadata, ...current.filter((item) => item.id !== metadata.id)]);
@@ -266,7 +257,6 @@ export function Workloads() {
   function upsertTrustSource(source: WorkloadAttesterTrustSource) {
     setAttesterTrustSources((current) => [source, ...current.filter((item) => item.id !== source.id)]);
     setRotateTrustSourceID((current) => current || source.id);
-    if (source.enabled && !source.revoked_at) setIssueAttestationMethod(source.method);
   }
 
   async function issueLease(event: FormEvent<HTMLFormElement>) {
@@ -326,35 +316,6 @@ export function Workloads() {
       form.reset();
     } catch (err) {
       setBrokerError(apiProblemMessage(err, "Could not issue broker identity"));
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function issueAttestedSVID(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    setBusy("attested-svid");
-    setAttestationError(null);
-    try {
-      upsertAttestedSVID(
-        await api.issueAttestedSVID({
-          method: formString(data, "method") as "aws_iid" | "azure_imds" | "gcp_iit" | "github_oidc" | "k8s_sat" | "tpm",
-          payload_base64: formString(data, "payload_base64"),
-          public_key_pem: formString(data, "public_key_pem"),
-          ttl_seconds: formNumber(data, "ttl_seconds"),
-        }),
-      );
-      form.reset();
-    } catch (err) {
-      const message = apiProblemMessage(err, t("workloads.attestation.issueErrorFallback"));
-      setAttestationError(message);
-      // S-C20: a refused attestation used to leave only a transient error line
-      // that the next attempt erased, so "which attester keeps failing, and
-      // why" was unanswerable. Keep the refusals of this session, newest
-      // first, with the method that produced them.
-      setAttestationFailures((current) => [{ method: formString(data, "method"), message, at: new Date().toISOString() }, ...current].slice(0, 5));
     } finally {
       setBusy(null);
     }
@@ -1002,17 +963,15 @@ export function Workloads() {
               {t("workloads.attestation.rotateTrustSource")}
             </Button>
           ) : null}
-          {hasEnabledTrustSource ? (
-            <Button
-              type="button"
-              variant="outline"
-              aria-expanded={showAttestedIssue}
-              aria-controls="attested-svid-issue-form"
-              onClick={() => setShowAttestedIssue((visible) => !visible)}
-            >
-              {t("workloads.attestation.issueButton")}
-            </Button>
-          ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            aria-expanded={showAttestedIssue}
+            aria-controls="attested-svid-issue-form"
+            onClick={() => setShowAttestedIssue((visible) => !visible)}
+          >
+            {t("workloads.attestation.issueButton")}
+          </Button>
         </div>
 
         {showTrustSourceSetup ? (
@@ -1225,55 +1184,12 @@ export function Workloads() {
 
         {!hasEnabledTrustSource ? <p className="text-sm text-muted-foreground">{t("workloads.attestation.addTrustBeforeIssue")}</p> : null}
 
-        {showAttestedIssue && hasEnabledTrustSource ? (
-          <form
-            id="attested-svid-issue-form"
-            aria-labelledby="attested-issue-heading"
-            className="ui-panel grid gap-3 p-comfortable"
-            onSubmit={issueAttestedSVID}
-          >
-            <div>
-              <h3 id="attested-issue-heading" className="text-title font-semibold">
-                {t("workloads.attestation.issueHeading")}
-              </h3>
-              <p className="mt-1 text-sm text-muted-foreground">{t("workloads.attestation.issueDescription")}</p>
-            </div>
-            <div className="grid gap-3 md:grid-cols-[12rem_1fr_1fr_10rem_auto]">
-              <label className="grid gap-1 text-sm font-medium">
-                {t("workloads.attestation.method")}
-                <select
-                  className="ui-input"
-                  name="method"
-                  value={issueAttestationMethod}
-                  onChange={(event) => setIssueAttestationMethod(event.target.value as TrustSourceMethod)}
-                >
-                  {attesterMethods.map((method) => (
-                    <option key={method.value} value={method.value}>
-                      {t(method.labelKey)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="grid gap-1 text-sm font-medium">
-                {t("workloads.attestation.proofPayload")}
-                <textarea className="ui-input min-h-20 font-mono text-xs" name="payload_base64" required />
-              </label>
-              <label className="grid gap-1 text-sm font-medium">
-                {t("workloads.attestation.publicKey")}
-                <textarea className="ui-input min-h-20 font-mono text-xs" name="public_key_pem" required />
-              </label>
-              <label className="grid gap-1 text-sm font-medium">
-                {t("workloads.attestation.svidTTL")}
-                <input className="ui-input" type="number" min={60} max={86400} name="ttl_seconds" defaultValue={600} />
-              </label>
-              <Button type="submit" className="self-end" disabled={busy === "attested-svid" || !canIssueSelectedMethod}>
-                {busy === "attested-svid" ? <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
-                {t("workloads.attestation.issueButton")}
-              </Button>
-            </div>
-          </form>
+        {showAttestedIssue ? (
+          <AttestedSVIDWorkflow
+            onIssued={upsertAttestedSVID}
+            onFailure={(method, message) => setAttestationFailures((current) => [{ method, message, at: new Date().toISOString() }, ...current].slice(0, 5))}
+          />
         ) : null}
-        {attestationError && <ErrorState title={t("workloads.attestation.issueErrorTitle")}>{attestationError}</ErrorState>}
         {attestedSVIDs.length > 0 || attestationFailures.length > 0 ? <AttesterBreakdown rows={attestedSVIDs} failures={attestationFailures} /> : null}
         {attestedSVIDs.length > 0 ? (
           <ScrollableTableRegion className="ui-panel" label={t("workloads.attestation.outcomesCaption")}>

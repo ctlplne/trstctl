@@ -14659,6 +14659,57 @@ export const messages = {
     defaultMessage: "{provider} scan queued as run {run}",
     description: "Success status after CAP-SCAN-04 ingest is accepted.",
   },
+  "workloads.attested.description": {
+    defaultMessage:
+      "An attested SVID is a short-lived certificate for a workload. Review the proof method and lifetime first; trstctl verifies the proof only when you explicitly issue.",
+    description: "F30 exact attested certificate workflow: description.",
+  },
+  "workloads.attested.progress": { defaultMessage: "Attested certificate request progress", description: "F30 exact attested certificate workflow: progress." },
+  "workloads.attested.reviewBody": {
+    defaultMessage: "Check the exact request, effective lifetime, signing effects, and safe retry path. Preview changes nothing.",
+    description: "F30 exact attested certificate workflow: reviewBody.",
+  },
+  "workloads.attested.resultStep": { defaultMessage: "Collect and prove", description: "F30 exact attested certificate workflow: resultStep." },
+  "workloads.attested.resultBody": {
+    defaultMessage: "Use the issued public certificate and check its inventory and audit evidence. The private key stays on the workload.",
+    description: "F30 exact attested certificate workflow: resultBody.",
+  },
+  "workloads.attested.methodHelp": {
+    defaultMessage: "Choose the proof your workload provides. Preview checks tenant trust and operator-managed trust without consuming the proof.",
+    description: "F30 exact attested certificate workflow: methodHelp.",
+  },
+  "workloads.attested.issuing": { defaultMessage: "Verifying proof and issuing…", description: "F30 exact attested certificate workflow: issuing." },
+  "workloads.attested.retryIssue": { defaultMessage: "Retry exact issuance", description: "F30 exact attested certificate workflow: retryIssue." },
+  "workloads.attested.issue": { defaultMessage: "Verify proof and issue", description: "F30 exact attested certificate workflow: issue." },
+  "workloads.attested.copyFailed": {
+    defaultMessage: "The browser could not copy the certificate. Keep this page open and allow clipboard access, then try again.",
+    description: "F30 exact attested certificate workflow: copyFailed.",
+  },
+  "workloads.attested.issuedTitle": { defaultMessage: "Workload certificate issued", description: "F30 exact attested certificate workflow: issuedTitle." },
+  "workloads.attested.issuedBody": {
+    defaultMessage: "trstctl verified the workload proof, signed one short-lived certificate, and recorded its certificate and audit evidence.",
+    description: "F30 exact attested certificate workflow: issuedBody.",
+  },
+  "workloads.attested.subject": { defaultMessage: "Verified workload subject", description: "F30 exact attested certificate workflow: subject." },
+  "workloads.attested.openInventory": { defaultMessage: "Open certificate inventory", description: "F30 exact attested certificate workflow: openInventory." },
+  "workloads.attested.openAudit": { defaultMessage: "Open audit evidence", description: "F30 exact attested certificate workflow: openAudit." },
+  "workloads.attested.planLabel": { defaultMessage: "Exact attested certificate plan", description: "F30 exact attested certificate workflow: planLabel." },
+  "workloads.attested.ready": { defaultMessage: "Ready to verify and issue", description: "F30 exact attested certificate workflow: ready." },
+  "workloads.attested.permission": { defaultMessage: "Permission rechecked at issuance", description: "F30 exact attested certificate workflow: permission." },
+  "workloads.attested.proofDeferred": {
+    defaultMessage:
+      "Ready means the request is configured, not that the proof is trusted. Issuance rechecks trust and derives the workload identity only after proof verification.",
+    description: "F30 exact attested certificate workflow: proofDeferred.",
+  },
+  "workloads.attested.effects": { defaultMessage: "When you verify and issue", description: "F30 exact attested certificate workflow: effects." },
+  "workloads.attested.exactEvidence": {
+    defaultMessage: "Exact digests and data handling",
+    description: "F30 exact attested certificate workflow: exactEvidence.",
+  },
+  "workloads.attested.previewUnsafe": {
+    defaultMessage: "This response does not confirm an effect-free preview. Do not issue; reload the server plan.",
+    description: "F30 exact attested certificate workflow: previewUnsafe.",
+  },
   "workloads.ephemeral.heading": {
     defaultMessage: "Request a temporary workload certificate",
     description: "Heading for the approval-gated ephemeral credential wizard.",
@@ -15162,8 +15213,8 @@ export const messages = {
     description: "Explanation of workload identity readiness.",
   },
   "workloads.attestation.addTrustBeforeIssue": {
-    defaultMessage: "Add a trusted attester before issuing a workload identity.",
-    description: "Inline explanation for a disabled workload identity issuance button.",
+    defaultMessage: "No tenant trust source is enabled. Preview also checks operator-managed trust; otherwise add a trust source before issuing.",
+    description: "Tenant trust is absent, but server preview can still resolve deployment-managed trust.",
   },
   "workloads.advanced.kubernetesSummary": {
     defaultMessage: "Kubernetes controller evidence",

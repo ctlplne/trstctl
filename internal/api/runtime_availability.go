@@ -39,7 +39,7 @@ func (a *API) runtimeRouteAvailability(r route) (bool, string) {
 	case "listExternalCAs", "issueExternalCA":
 		return runtimeDependency(a.externalCAs != nil,
 			"No external CA service is configured in this deployment.")
-	case "issueAttestedSVID":
+	case "previewAttestedSVID", "issueAttestedSVID":
 		return runtimeDependency(a.attestedIssuer != nil,
 			"Attested workload issuance is not configured in this deployment.")
 	case "getSSHStatus", "recordSSHTrustRollout", "previewSSHCertificate", "issueSSHCertificate", "issueAttestedSSHUserCert", "revokeSSHCertificate", "retireSSHHost":

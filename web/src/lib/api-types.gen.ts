@@ -901,6 +901,36 @@ export interface AttestedSVID {
   subject: string;
 }
 
+export interface AttestedSVIDPreview {
+  attestation_verification: string;
+  blockers: string[];
+  capability: string;
+  data_handling: string[];
+  default_ttl_seconds: number;
+  effect_free: boolean;
+  effective_ttl_seconds: number;
+  execution_external_effects: string[];
+  execution_signer_calls: string[];
+  execution_writes: string[];
+  max_ttl_seconds: number;
+  method: string;
+  payload_sha256: string;
+  preview_external_effects: string[];
+  preview_signer_calls: string[];
+  preview_writes: string[];
+  public_key_sha256: string;
+  ready: boolean;
+  recovery_steps: string[];
+  requested_ttl_seconds: number;
+  requester: string;
+  required_permission: string;
+  steps: string[];
+  supported_methods: string[];
+  trust_domain: string;
+  ttl_clamped: boolean;
+  ttl_defaulted: boolean;
+}
+
 export interface AttestedSVIDRequest {
   method: "aws_iid" | "azure_imds" | "gcp_iit" | "github_oidc" | "k8s_sat" | "tpm";
   payload_base64: string;

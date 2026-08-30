@@ -1259,6 +1259,40 @@ AttestedSVID = TypedDict(
     total=False,
 )
 
+AttestedSVIDPreview = TypedDict(
+    'AttestedSVIDPreview',
+    {
+        'attestation_verification': str,
+        'blockers': list[str],
+        'capability': str,
+        'data_handling': list[str],
+        'default_ttl_seconds': int,
+        'effect_free': bool,
+        'effective_ttl_seconds': int,
+        'execution_external_effects': list[str],
+        'execution_signer_calls': list[str],
+        'execution_writes': list[str],
+        'max_ttl_seconds': int,
+        'method': str,
+        'payload_sha256': str,
+        'preview_external_effects': list[str],
+        'preview_signer_calls': list[str],
+        'preview_writes': list[str],
+        'public_key_sha256': str,
+        'ready': bool,
+        'recovery_steps': list[str],
+        'requested_ttl_seconds': int,
+        'requester': str,
+        'required_permission': str,
+        'steps': list[str],
+        'supported_methods': list[str],
+        'trust_domain': str,
+        'ttl_clamped': bool,
+        'ttl_defaulted': bool,
+    },
+    total=False,
+)
+
 AttestedSVIDRequest = TypedDict(
     'AttestedSVIDRequest',
     {

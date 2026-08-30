@@ -1353,8 +1353,11 @@ describe("i18n boundary", () => {
       // readiness check, isolated signer/certificate/audit gates, safe repairs,
       // and the separate OpenSSL wire-proof boundary. Machine-authored es/de —
       // FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "1fcf2937ce624f72507f6c10ae906f3564ea76033184a80943675c0a991595f4",
-      "de-DE": "10ce76d1bdb039bb6c38a8ac07a72ef3645be339a8bf164108d63d6088ffdc94",
+      // F30 exact-preview re-pin: request/review/result copy, deferred proof
+      // verification, stable retry keys, and operator-managed trust guidance.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "114c2a08cfb45f530e45a87ff1db95a421ee94e210bb47f8c63c696f5d664464",
+      "de-DE": "58957830b04f6f86de292f5ef7ef557c903232da326e75c24535d359774ab1e2",
     });
   });
 

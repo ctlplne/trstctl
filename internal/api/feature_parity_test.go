@@ -210,8 +210,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// probe, sanitized history, and cleanup recovery routes raise it to 406.
 	// F6's effect-free lifecycle automation plan raises it to 407, and F51's
 	// effect-free timestamp-authority qualification posture raises it to 408.
-	if len(out) != 408 {
-		t.Fatalf("OpenAPI operationIds = %d, want 408", len(out))
+	// F30 adds an effect-free attested-SVID preview; execution remains separate.
+	if len(out) != 409 {
+		t.Fatalf("OpenAPI operationIds = %d, want 409", len(out))
 	}
 	return out
 }

@@ -3657,6 +3657,154 @@
         ],
         "type": "object"
       },
+      "AttestedSVIDPreview": {
+        "properties": {
+          "attestation_verification": {
+            "type": "string"
+          },
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "data_handling": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "default_ttl_seconds": {
+            "type": "integer"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "effective_ttl_seconds": {
+            "type": "integer"
+          },
+          "execution_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "execution_signer_calls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "execution_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "max_ttl_seconds": {
+            "type": "integer"
+          },
+          "method": {
+            "type": "string"
+          },
+          "payload_sha256": {
+            "type": "string"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_signer_calls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "public_key_sha256": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "recovery_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "requested_ttl_seconds": {
+            "type": "integer"
+          },
+          "requester": {
+            "type": "string"
+          },
+          "required_permission": {
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "supported_methods": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "trust_domain": {
+            "type": "string"
+          },
+          "ttl_clamped": {
+            "type": "boolean"
+          },
+          "ttl_defaulted": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "capability",
+          "ready",
+          "effect_free",
+          "method",
+          "requester",
+          "trust_domain",
+          "supported_methods",
+          "requested_ttl_seconds",
+          "effective_ttl_seconds",
+          "default_ttl_seconds",
+          "max_ttl_seconds",
+          "ttl_defaulted",
+          "ttl_clamped",
+          "required_permission",
+          "attestation_verification",
+          "payload_sha256",
+          "public_key_sha256",
+          "preview_writes",
+          "preview_external_effects",
+          "preview_signer_calls",
+          "execution_writes",
+          "execution_external_effects",
+          "execution_signer_calls",
+          "steps",
+          "blockers",
+          "recovery_steps",
+          "data_handling"
+        ],
+        "type": "object"
+      },
       "AttestedSVIDRequest": {
         "properties": {
           "method": {
@@ -53750,6 +53898,63 @@
           }
         ],
         "summary": "Issue an X.509-SVID after workload attestation",
+        "x-trstctl-permission": "certs:issue"
+      }
+    },
+    "/api/v1/workloads/attested-issuance/preview": {
+      "post": {
+        "operationId": "previewAttestedSVID",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttestedSVIDRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttestedSVIDPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Preview an exact attested workload certificate request without side effects",
         "x-trstctl-permission": "certs:issue"
       }
     },

@@ -193,7 +193,8 @@ const esESCatalog = {
     "Añada un verificador de confianza para la plataforma donde se ejecuta la carga. La emisión permanece deshabilitada hasta entonces.",
   "workloads.readiness.readyHeading": "La identidad de carga de trabajo está lista para emitirse",
   "workloads.readiness.readyBody": "Un verificador habilitado puede validar la evidencia. Seleccione su método abajo para emitir un SVID de corta duración.",
-  "workloads.attestation.addTrustBeforeIssue": "Añada un verificador de confianza antes de emitir una identidad de carga de trabajo.",
+  "workloads.attestation.addTrustBeforeIssue":
+    "No hay una fuente de confianza del tenant habilitada. La vista previa también comprueba la confianza configurada por el operador; si no existe, añade una fuente de confianza antes de emitir.",
   "sshTrust.advanced.revocationSummary": "Revocación y retiro de hosts",
   "sshTrust.advanced.authorityKeySummary": "Mostrar clave pública de la CA SSH",
   "workloads.advanced.kubernetesSummary": "Evidencia de controladores de Kubernetes",
@@ -7613,6 +7614,35 @@ const esESCatalog = {
   "capabilities.action.unavailable": "Esta compilación o una de sus dependencias requeridas no proporciona la acción.",
   "capabilities.action.denied": "Su rol actual no incluye el permiso mínimo requerido para esta acción.",
   "capabilities.action.unknown": "El servidor no describió esta operación en la fila canónica de capacidades, por lo que el navegador no la ejecutará.",
+  "workloads.attested.description":
+    "Un SVID atestado es un certificado de corta duración para una carga de trabajo. Revisa primero el método de prueba y la duración; trstctl verifica la prueba solo cuando eliges emitir.",
+  "workloads.attested.progress": "Progreso de la solicitud de certificado atestado",
+  "workloads.attested.reviewBody":
+    "Comprueba la solicitud exacta, la duración efectiva, los efectos de firma y el reintento seguro. La vista previa no cambia nada.",
+  "workloads.attested.resultStep": "Recoger y comprobar",
+  "workloads.attested.resultBody":
+    "Usa el certificado público emitido y comprueba el inventario y la auditoría. La clave privada permanece en la carga de trabajo.",
+  "workloads.attested.methodHelp":
+    "Elige la prueba que proporciona tu carga de trabajo. La vista previa comprueba la confianza del tenant y del operador sin consumir la prueba.",
+  "workloads.attested.issuing": "Verificando la prueba y emitiendo…",
+  "workloads.attested.retryIssue": "Reintentar la emisión exacta",
+  "workloads.attested.issue": "Verificar prueba y emitir",
+  "workloads.attested.copyFailed":
+    "El navegador no pudo copiar el certificado. Mantén esta página abierta, permite el acceso al portapapeles e inténtalo de nuevo.",
+  "workloads.attested.issuedTitle": "Certificado de carga de trabajo emitido",
+  "workloads.attested.issuedBody":
+    "trstctl verificó la prueba de la carga de trabajo, firmó un certificado de corta duración y registró el certificado y la auditoría.",
+  "workloads.attested.subject": "Identidad de la carga de trabajo verificada",
+  "workloads.attested.openInventory": "Abrir inventario de certificados",
+  "workloads.attested.openAudit": "Abrir evidencia de auditoría",
+  "workloads.attested.planLabel": "Plan exacto del certificado atestado",
+  "workloads.attested.ready": "Listo para verificar y emitir",
+  "workloads.attested.permission": "Permiso comprobado de nuevo al emitir",
+  "workloads.attested.proofDeferred":
+    "Listo significa que la solicitud está configurada, no que la prueba sea de confianza. La emisión comprueba de nuevo la confianza y determina la identidad solo después de verificar la prueba.",
+  "workloads.attested.effects": "Al verificar y emitir",
+  "workloads.attested.exactEvidence": "Huellas exactas y tratamiento de datos",
+  "workloads.attested.previewUnsafe": "Esta respuesta no confirma una vista previa sin efectos. No emitas; vuelve a cargar el plan del servidor.",
   "workloads.ephemeral.heading": "Solicitar un certificado temporal para una carga de trabajo",
   "workloads.ephemeral.description":
     "Muestre a trstctl la prueba y la clave pública de la carga de trabajo. Revise el plan exacto sin cambios, envíelo para que lo apruebe otra persona y obtenga un único certificado de corta duración.",

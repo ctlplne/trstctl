@@ -855,6 +855,22 @@ func TestAttestedIssuanceCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	}
 }
 
+func TestAttestedIssuancePreviewCommandIsReadOnly(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, 200, `{"ready":true,"effect_free":true}`, &cap)
+	body := `{"method":"k8s_sat","payload_base64":"c2F0","public_key_pem":"public-key","ttl_seconds":600}`
+	code, _, stderr := run(t, []string{"workloads", "attested-issuance", "preview", "-f", "-"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, body)
+	if code != 0 {
+		t.Fatalf("preview exit = %d; stderr=%s", code, stderr)
+	}
+	if cap.Method != "POST" || cap.Path != "/api/v1/workloads/attested-issuance/preview" || strings.TrimSpace(string(cap.Body)) != body {
+		t.Errorf("preview request = %s %s body=%q", cap.Method, cap.Path, cap.Body)
+	}
+	if cap.Header.Get("Idempotency-Key") != "" {
+		t.Error("effect-free attested preview must not send an Idempotency-Key")
+	}
+}
+
 func TestCAAuthorityIssueIntermediateCSRCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 201, `{"certificate_pem":"-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n","serial":"01","not_after":"2026-06-24T12:00:00Z"}`, &cap)

@@ -5928,6 +5928,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workloads/attested-issuance/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview an exact attested workload certificate request without side effects */
+        post: operations["previewAttestedSVID"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workloads/attester-trust-sources": {
         parameters: {
             query?: never;
@@ -6937,6 +6954,35 @@ export interface components {
             /** Format: date-time */
             not_after: string;
             subject: string;
+        };
+        AttestedSVIDPreview: {
+            attestation_verification: string;
+            blockers: string[];
+            capability: string;
+            data_handling: string[];
+            default_ttl_seconds: number;
+            effect_free: boolean;
+            effective_ttl_seconds: number;
+            execution_external_effects: string[];
+            execution_signer_calls: string[];
+            execution_writes: string[];
+            max_ttl_seconds: number;
+            method: string;
+            payload_sha256: string;
+            preview_external_effects: string[];
+            preview_signer_calls: string[];
+            preview_writes: string[];
+            public_key_sha256: string;
+            ready: boolean;
+            recovery_steps: string[];
+            requested_ttl_seconds: number;
+            requester: string;
+            required_permission: string;
+            steps: string[];
+            supported_methods: string[];
+            trust_domain: string;
+            ttl_clamped: boolean;
+            ttl_defaulted: boolean;
         };
         AttestedSVIDRequest: {
             /** @enum {string} */
@@ -30621,6 +30667,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AttestedSVID"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewAttestedSVID: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttestedSVIDRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttestedSVIDPreview"];
                 };
             };
             /** @description client error */
