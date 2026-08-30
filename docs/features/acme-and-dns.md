@@ -285,6 +285,31 @@ order-time denial stops before any `acme.dns01.present` outbox row or DNS provid
 The check runs before the CA is asked to sign, so a CAA violation surfaces with a clear
 reason instead of a confusing downstream rejection. RFC 8659.
 
+The **Protocols → DNS-01 preflight** turns that gate into a complete operator workflow.
+It reads authoritative DNS live and shows the DNS name that sets the rule, every public
+CAA record in that governing set, the issuers parsed from the relevant `issue` or
+`issuewild` properties, and the issuer configured in trstctl. It leads with one of five
+plain-language results:
+
+- **CAA policy is not configured:** set the provider config's CAA issuer domain, then
+  run the check again.
+- **No CAA record limits issuance:** issuance is allowed, but DNS is not restricting
+  which CA may issue; the console provides an exact optional record to add that guardrail.
+- **CAA allows this issuer:** the live governing policy already names this CA and no
+  record change is required.
+- **CAA blocks this issuer:** issuance stops; the console shows the current records, the
+  allowed issuers, an exact record recommendation, and a safe publish/propagate/re-run path.
+- **CAA could not be verified:** issuance stops without guessing. Repair authoritative
+  DNS reachability, delegation, or the CAA response and re-run; the console deliberately
+  does not invent a DNS record change when it has no trustworthy answer.
+
+Wildcard preflights state that `issuewild` is being evaluated. Each result receives
+keyboard focus after a run or re-run, so keyboard and screen-reader operators land on the
+new decision rather than having to search the dialog. Exact DNS values remain visible as
+monospaced technical evidence, while the decision and recovery stay in deeply technical
+ELI5 language. The API carries the same structured evidence in `caa_policy`; CAA is public
+DNS policy, and provider credentials or private key material never enter that response.
+
 ### Picking the right challenge: multi-method policy (F73)
 
 Rather than make you choose a challenge type per name, trstctl can select one

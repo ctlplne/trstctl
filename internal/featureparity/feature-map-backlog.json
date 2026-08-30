@@ -6652,7 +6652,7 @@
             "priority": 58,
             "served_state": "conditional",
             "backend_status": "conditional: served CAA checker, live DNS CAA resolver, provider-config caa_issuer_domain, DNS-01 preflight live CAA checks, and ACME order-time fail-closed CAA enforcement before DNS publish",
-            "current_frontend_mapping": "Protocols at /protocols - served DNS-01 provider configs expose CAA issuer policy and preflight state",
+            "current_frontend_mapping": "Protocols at /protocols - the live DNS-01 preflight shows the governing public CAA records, allowed issuers, wildcard rule, fail-closed lookup state, exact safe record recommendation, and recovery steps",
             "target_gui_mapping": "CAA policy UI showing current CAA records, allowed issuers, fail-closed lookup errors, and recommended record changes.",
             "acceptance_test": "UI covers no CAA, allowed, denied, DNS failure, and wildcard cases.",
             "source_docs": [
@@ -6665,10 +6665,12 @@
                 "internal/server/acme_dns01_automation.go"
             ],
             "source_frontend": [
-                "web/src/pages/Protocols.tsx"
+                "web/src/pages/Protocols.tsx",
+                "web/src/pages/protocols/DNS01PreflightDialog.tsx",
+                "web/src/pages/protocols/DNS01CAAPolicyPanel.tsx"
             ],
             "status": "closed",
-            "notes": "TRACE-015 closure: served DNS-01 preflight and order-time ACME DNS-01 automation now use an authoritative live CAA resolver for the configured caa_issuer_domain, ignore request-supplied CAA as policy authority, fail closed on lookup errors or denied issuers, and stop before enqueueing DNS provider writes when live CAA disagrees. Test evidence: TestServedACMEDNS01LiveCAAEnforcementTRACE015 and TestServedACMEDNS01ProviderConfigAndPreflightTRACE003.",
+            "notes": "F72 qualification: served DNS-01 preflight and order-time automation use authoritative live CAA, ignore caller-supplied CAA as policy authority, fail closed on lookup errors or denied issuers, and stop before provider writes. The Protocols workflow now preserves and explains governing names, exact public records, parsed allowed issuers, ordinary versus wildcard rule selection, exact safe record recommendations, recovery, re-run focus, and the no-CAA unrestricted state. Tests cover no CAA, allowed, denied, DNS failure, wildcard precedence, and assembled served enforcement.",
             "api_surface": [
                 "preflightACMEDNS01"
             ],
@@ -6699,11 +6701,15 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: Protocols at /protocols - served DNS-01 provider configs expose CAA issuer policy and preflight state",
-                        "Protocols at /protocols renders tenant DNS-01 provider configs with provider, zone/delegation target, CAA issuer, method policy, wildcard policy, and secret-reference field names only."
+                        "current_frontend_mapping: Protocols at /protocols - the live DNS-01 preflight shows the governing public CAA records, allowed issuers, wildcard rule, fail-closed lookup state, exact safe record recommendation, and recovery steps",
+                        "DNS01CAAPolicyPanel leads with one of five plain-language decisions, retains exact public DNS evidence, and returns keyboard focus to each new preflight result."
                     ],
                     "refs": [
                         "web/src/pages/Protocols.tsx",
+                        "web/src/pages/protocols/DNS01PreflightDialog.tsx",
+                        "web/src/pages/protocols/DNS01PreflightResultPanel.tsx",
+                        "web/src/pages/protocols/DNS01CAAPolicyPanel.tsx",
+                        "web/src/__tests__/dns01_caa_policy.test.tsx",
                         "web/src/__tests__/protocols.test.tsx"
                     ]
                 },
@@ -6729,6 +6735,8 @@
                 "test": {
                     "evidence": [
                         "acceptance_test: UI covers no CAA, allowed, denied, DNS failure, and wildcard cases.",
+                        "TestCAAPolicyCheckReturnsOperatorEvidence proves the API maps all five states to sanitized authoritative evidence and safe recovery without inventing a DNS change on lookup failure.",
+                        "dns01_caa_policy.test.tsx and protocols.test.tsx prove the five operator states, exact record display, wildcard issuewild guidance, absent-change honesty, and result focus.",
                         "TestServedACMEDNS01ProviderConfigAndPreflightTRACE003 drives the assembled handler through provider-config create/list, inline-secret rejection, DNS-01 preflight, and ACME DNS-01 audit-event assertions.",
                         "TestServedACMEDNS01LiveCAAEnforcementTRACE015 proves served preflight uses live CAA over request-supplied CAA, live lookup errors fail closed, and order-time CAA denial stops before DNS provider writes or outbox enqueue.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
@@ -6736,7 +6744,11 @@
                     ],
                     "refs": [
                         "internal/server/protocols_served_test.go",
+                        "internal/api/acme_dns01_caa_test.go",
+                        "internal/protocols/acme/caa_test.go",
                         "internal/featureparity/feature_facet_coverage_test.go",
+                        "web/src/__tests__/dns01_caa_policy.test.tsx",
+                        "web/src/__tests__/protocols.test.tsx",
                         "web/src/__tests__/route_parity.test.ts",
                         "web/src/__tests__/feature_coverage.test.tsx"
                     ]
@@ -6789,6 +6801,8 @@
                         "web/src/__tests__/feature_a11y_receipts.test.tsx",
                         "web/src/lib/navigation.ts",
                         "web/src/pages/Protocols.tsx",
+                        "web/src/pages/protocols/DNS01PreflightDialog.tsx",
+                        "web/src/pages/protocols/DNS01CAAPolicyPanel.tsx",
                         "web/src/__tests__/protocols.test.tsx"
                     ]
                 },
@@ -6809,7 +6823,7 @@
                 "purpose": "Lets an operator understand and safely use caa policy enforcement and management while tenant, policy, and security authority remain on the server.",
                 "tool": "certificates",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/protocols",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -6823,7 +6837,7 @@
                 ],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -6851,22 +6865,37 @@
                         ]
                     },
                     "execute": {
-                        "status": "missing",
-                        "reason": "No complete console execution path is proved for this capability."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/protocols/DNS01PreflightDialog.tsx",
+                            "web/src/pages/protocols/DNS01CAAPolicyPanel.tsx",
+                            "internal/server/protocols_served_test.go",
+                            "OpenAPI operationId: preflightACMEDNS01"
+                        ]
                     },
                     "observe": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/pages/Protocols.tsx"
+                            "web/src/pages/protocols/DNS01CAAPolicyPanel.tsx",
+                            "web/src/pages/protocols/DNS01PreflightResultPanel.tsx"
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/protocols/DNS01CAAPolicyPanel.tsx",
+                            "web/src/pages/protocols/DNS01PreflightDialog.tsx",
+                            "web/src/__tests__/dns01_caa_policy.test.tsx",
+                            "web/src/__tests__/protocols.test.tsx"
+                        ]
                     },
                     "verify": {
-                        "status": "missing",
-                        "reason": "Durable or external-effect verification is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/server/protocols_served_test.go",
+                            "internal/api/acme_dns01_caa_test.go",
+                            "internal/protocols/acme/caa_test.go"
+                        ]
                     },
                     "automate": {
                         "status": "complete",
@@ -6878,8 +6907,8 @@
                 },
                 "owner": "pki",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "a6abfc04b38f6c10447c80ce41930b1a673ac11c",
+                "freshness": "2026-08-29"
             }
         },
         {
