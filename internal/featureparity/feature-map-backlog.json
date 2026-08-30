@@ -7510,10 +7510,8 @@
             "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
             "api_surface": [],
             "api_na": "N/A: served through protocol-specific endpoints/configuration, not the /api/v1 OpenAPI contract.",
-            "cli_surface": [
-                "protocols tsa qualify"
-            ],
-            "cli_na": "",
+            "cli_surface": [],
+            "cli_na": "N/A: served through protocol-specific endpoints/configuration, not the trstctl CLI command table.",
             "facet_evidence": {
                 "served": {
                     "evidence": [
@@ -7538,14 +7536,7 @@
                     ]
                 },
                 "cli": {
-                    "evidence": [
-                        "The read-only `trstctl protocols tsa qualify` command calls the same authenticated, tenant-scoped readiness oracle as the console without a request body, idempotency key, CSRF header, timestamp issuance, signer call, or write."
-                    ],
-                    "refs": [
-                        "internal/cli/command.go",
-                        "internal/cli/cli_test.go",
-                        "internal/cli/feature_parity_test.go"
-                    ]
+                    "na": "N/A: served through protocol-specific endpoints/configuration, not the trstctl CLI command table."
                 },
                 "api": {
                     "na": "N/A: served through protocol-specific endpoints/configuration, not the /api/v1 OpenAPI contract."
@@ -12819,7 +12810,7 @@
             "backend_status": "conditional: served /tsa RFC 3161 protocol",
             "current_frontend_mapping": "operate: Protocols at /protocols serves a tenant-scoped, effect-free TSA readiness review for the exact mounted endpoint, stable certificate, isolated signer, immutable audit path, and bounded capacity; it names secure recovery per failed gate, keeps retry available, and separates that preview from the stock OpenSSL query/POST/verification commands that perform the real RFC 3161 wire test.",
             "target_gui_mapping": "Roadmap residual: dedicated TSA admin console for policy/certificate lifecycle and richer audit exploration; GA scope is the served RFC 3161 TSA responder plus the route-backed Protocols workflow evidence.",
-            "acceptance_test": "TestServedTSAOpenSSLTimestampOverHTTP proves the assembled /tsa endpoint accepts an RFC 3161 TimeStampReq, returns an application/timestamp-reply TimeStampResp verified by OpenSSL, emits exactly the real issuance event, and then returns a ready effect-free qualification without issuing again. API tests prove tenant scoping, authentication, zero-effect evidence, fail-closed checks, and secret-field exclusion; TSAOperatorPanel tests prove preview, exact readiness, malformed-response refusal, secure repair, retry, and the distinct stock-client wire boundary. The dedicated TSA policy/certificate lifecycle admin console remains a roadmap residual.",
+            "acceptance_test": "TestServedTSAOpenSSLTimestampOverHTTP proves the assembled /tsa endpoint accepts an RFC 3161 TimeStampReq, returns an application/timestamp-reply TimeStampResp verified by OpenSSL, emits exactly the real issuance event, and then returns a ready effect-free qualification without issuing again. API tests prove tenant scoping, authentication, zero-effect evidence, fail-closed checks, and secret-field exclusion; TSAOperatorPanel tests prove preview, exact readiness, malformed-response refusal, secure repair, retry, and the distinct stock-client wire boundary; TestTSAQualificationUsesAuthenticatedReadOnlyPOST proves the equivalent headless command. The dedicated TSA policy/certificate lifecycle admin console remains a roadmap residual.",
             "source_docs": [
                 "docs/features/code-signing-and-timestamping.md"
             ],
@@ -12834,12 +12825,14 @@
                 "web/src/pages/protocols/TSAOperatorPanel.tsx"
             ],
             "status": "closed",
-            "notes": "Qualified as a complete F51 vertical slice on implementation candidate e01971259ae21169a59c74296a9b2ed22fe362de. The readiness action is authenticated, tenant-derived, and effect-free; it cannot mint or accept a TimeStampReq. The real RFC 3161 operation remains POST /tsa and is proved with stock OpenSSL against the assembled signer-backed responder. Every failed gate has a security-preserving repair and retry path, while the optional dedicated lifecycle admin console stays a named roadmap residual.",
+            "notes": "Qualified as a complete F51 vertical slice on implementation candidate 76adf7864fb92334c4b5ab6a902a6c13f3414343. The readiness action is authenticated, tenant-derived, and effect-free; it cannot mint or accept a TimeStampReq. The real RFC 3161 operation remains POST /tsa and is proved with stock OpenSSL against the assembled signer-backed responder. Browser and headless operators share the same readiness oracle, every failed gate has a security-preserving repair and retry path, and the optional dedicated lifecycle admin console stays a named roadmap residual.",
             "api_surface": [
                 "qualifyTSA"
             ],
-            "cli_surface": [],
-            "cli_na": "N/A: served through protocol-specific endpoints/configuration, not the trstctl CLI command table.",
+            "cli_surface": [
+                "protocols tsa qualify"
+            ],
+            "cli_na": "",
             "facet_evidence": {
                 "served": {
                     "evidence": [
@@ -12864,7 +12857,14 @@
                     ]
                 },
                 "cli": {
-                    "na": "N/A: served through protocol-specific endpoints/configuration, not the trstctl CLI command table."
+                    "evidence": [
+                        "The read-only `trstctl protocols tsa qualify` command calls the same authenticated, tenant-scoped readiness oracle as the console without a request body, idempotency key, CSRF header, timestamp issuance, signer call, or write."
+                    ],
+                    "refs": [
+                        "internal/cli/command.go",
+                        "internal/cli/cli_test.go",
+                        "internal/cli/feature_parity_test.go"
+                    ]
                 },
                 "api": {
                     "evidence": [
@@ -13045,6 +13045,7 @@
                         "status": "complete",
                         "evidence": [
                             "OpenAPI operationId: qualifyTSA",
+                            "CLI command: protocols tsa qualify",
                             "internal/api/tsa_qualification.go",
                             "docs/features/code-signing-and-timestamping.md"
                         ]
@@ -13052,7 +13053,7 @@
                 },
                 "owner": "software-trust",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "e01971259ae21169a59c74296a9b2ed22fe362de",
+                "candidate_sha": "76adf7864fb92334c4b5ab6a902a6c13f3414343",
                 "freshness": "2026-08-30"
             }
         },

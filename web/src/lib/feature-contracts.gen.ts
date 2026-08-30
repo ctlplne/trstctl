@@ -4635,6 +4635,7 @@ export const canonicalCapabilities = [
           "status": "complete",
           "evidence": [
             "OpenAPI operationId: qualifyTSA",
+            "CLI command: protocols tsa qualify",
             "internal/api/tsa_qualification.go",
             "docs/features/code-signing-and-timestamping.md"
           ]
@@ -4642,7 +4643,7 @@ export const canonicalCapabilities = [
       },
       "owner": "software-trust",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "e01971259ae21169a59c74296a9b2ed22fe362de",
+      "candidateSHA": "76adf7864fb92334c4b5ab6a902a6c13f3414343",
       "freshness": "2026-08-30"
     }
   },

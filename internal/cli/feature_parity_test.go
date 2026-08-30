@@ -51,6 +51,20 @@ func TestEveryCLICommandMapsToFeature(t *testing.T) {
 	}
 }
 
+func TestTSAQualificationCommandMapsOnlyToF51(t *testing.T) {
+	var owners []string
+	for _, item := range loadFeatureParityCatalog(t).Items {
+		for _, command := range item.CLISurface {
+			if strings.TrimSpace(command) == "protocols tsa qualify" {
+				owners = append(owners, item.FeatureID)
+			}
+		}
+	}
+	if len(owners) != 1 || owners[0] != "F51" {
+		t.Fatalf("protocols tsa qualify owners = %v, want [F51]", owners)
+	}
+}
+
 func TestACMEDNS01ProviderConfigCommandsExist(t *testing.T) {
 	commands := cliCommandSet(t)
 	for _, command := range []string{
