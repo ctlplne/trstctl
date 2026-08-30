@@ -7206,7 +7206,7 @@
             "priority": 60,
             "served_state": "conditional",
             "backend_status": "conditional: served wildcard DNS-01 policy helpers, provider-config allow_wildcards, DNS-01 preflight checks, API/UI blast-radius acknowledgement for wildcard X.509 issuance, DNS-01-only order-time enforcement, and lifecycle scheduler renewal evidence through ca.renew rotation runs",
-            "current_frontend_mapping": "Identities at /identities - New identity wildcard acknowledgement; Protocols at /protocols - served DNS-01 provider configs expose wildcard policy and DNS-01-only preflight state",
+            "current_frontend_mapping": "Identities at /identities joins a three-part wildcard safety explanation, explicit blast-radius acknowledgement, verified issuance receipt, exact deploy handoff, wildcard-named renewal review, safe recovery links, and identity-bound rotation/rollback evidence; Protocols at /protocols exposes DNS-01 provider wildcard policy and preflight state",
             "target_gui_mapping": "Wildcard issuance UI with explicit DNS-01 requirement, profile opt-in, blast-radius warning, and renewal readiness.",
             "acceptance_test": "UI requires explicit acknowledgement for wildcard profile/issuance and shows DNS-01-only constraint.",
             "source_docs": [
@@ -7221,10 +7221,11 @@
             ],
             "source_frontend": [
                 "web/src/pages/Identities.tsx",
+                "web/src/pages/identities/LifecycleAutomationPanel.tsx",
                 "web/src/pages/Protocols.tsx"
             ],
             "status": "closed",
-            "notes": "Closed by TRACE-017 served evidence. TestServedWildcardIdentityRequiresAcknowledgementAndRenewsTRACE017 drives the assembled API through wildcard acknowledgement denial, DNS-01-only acknowledgement, issuance, deploy, scheduler renewal, successor SAN preservation, and lifecycle.rotation.recorded evidence. UI tests prove the /identities form requires the acknowledgement before sending wildcard issuance, and api helper tests prove IdentityRequest carries wildcard_blast_radius_acknowledged plus validation_method=dns-01.",
+            "notes": "Qualified as a complete F74 vertical slice on implementation candidate 624298b0259b9ceddc64062c4523693d8e073fa0. TRACE-017 drives the assembled API through wildcard acknowledgement denial, DNS-01-only acknowledgement, issuance, deploy, scheduler renewal, successor SAN preservation, and lifecycle.rotation.recorded evidence. The console now distinguishes operator authorization from ACME DNS proof, explains the three safety boundaries before issue, opens the exact issued identity for deployment, makes due wildcard renewal review executable from the lifecycle panel, provides fail-closed DNS setup/retry guidance, and binds every durable rotation receipt to the exact identity name.",
             "api_surface": [
                 "createIdentity",
                 "transitionIdentity",
@@ -7261,12 +7262,14 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: Identities at /identities - New identity wildcard acknowledgement; Protocols at /protocols - served DNS-01 provider configs expose wildcard policy and DNS-01-only preflight state",
-                        "Identities at /identities disables wildcard issuance until the operator checks the blast-radius acknowledgement and then sends wildcardBlastRadiusAcknowledged through the UI API helper.",
+                        "current_frontend_mapping: Identities at /identities joins a three-part wildcard safety explanation, explicit blast-radius acknowledgement, verified issuance receipt, exact deploy handoff, wildcard-named renewal review, safe recovery links, and identity-bound rotation/rollback evidence; Protocols at /protocols exposes DNS-01 provider wildcard policy and preflight state",
+                        "Identities at /identities distinguishes operator-issued wildcard authority from public ACME DNS-01 proof, disables issue until acknowledgement, verifies the returned issued state, opens the exact identity for deployment, and keeps the server's safe failure detail beside a DNS-01 setup recovery link.",
+                        "Lifecycle automation opens reviewed ca.renew actions from a due wildcard row; Delivery and rotation evidence names the identity beside successor fingerprint and rollback reference.",
                         "Protocols at /protocols renders tenant DNS-01 provider configs with provider, zone/delegation target, CAA issuer, method policy, wildcard policy, and secret-reference field names only."
                     ],
                     "refs": [
                         "web/src/pages/Identities.tsx",
+                        "web/src/pages/identities/LifecycleAutomationPanel.tsx",
                         "web/src/__tests__/lifecycle.test.tsx",
                         "web/src/lib/api.test.ts",
                         "web/src/pages/Protocols.tsx",
@@ -7299,6 +7302,8 @@
                         "acceptance_test: UI requires explicit acknowledgement for wildcard profile/issuance and shows DNS-01-only constraint.",
                         "TestServedWildcardIdentityRequiresAcknowledgementAndRenewsTRACE017 drives wildcard create denial, DNS-01 acknowledgement, issuance, deploy, scheduled renewal, successor SAN preservation, and lifecycle.rotation.recorded evidence.",
                         "web lifecycle tests prove the /identities form disables wildcard issue until acknowledgement and sends wildcardBlastRadiusAcknowledged=true.",
+                        "Focused lifecycle tests prove the safety explanation, exact issued-identity deploy handoff, fail-closed DNS recovery path, lifecycle-panel review execution, and identity-named successor/rollback evidence.",
+                        "The lifecycle-panel regression proves a due renewal opened no review when the detail drawer was closed, then pins the repaired exact-identity state handoff.",
                         "web API tests prove firstCertificateIdentityRequest serializes validation_method=dns-01 and wildcard_blast_radius_acknowledged=true.",
                         "TestServedACMEDNS01ProviderConfigAndPreflightTRACE003 drives the assembled handler through provider-config create/list, inline-secret rejection, DNS-01 preflight, and ACME DNS-01 audit-event assertions.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
@@ -7316,7 +7321,7 @@
                 },
                 "docs": {
                     "evidence": [
-                        "documented in docs/features/acme-and-dns.md"
+                        "docs/features/acme-and-dns.md distinguishes administrator acknowledgement from ACME DNS ownership proof and documents issue, deploy, renewal, evidence, and safe retry behavior"
                     ],
                     "refs": [
                         "docs/features/acme-and-dns.md"
@@ -7388,7 +7393,7 @@
                 "purpose": "Lets an operator understand and safely use automated wildcard issuance and renewal while tenant, policy, and security authority remain on the server.",
                 "tool": "certificates",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/protocols",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -7402,7 +7407,7 @@
                 ],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -7430,8 +7435,13 @@
                         ]
                     },
                     "execute": {
-                        "status": "missing",
-                        "reason": "No complete console execution path is proved for this capability."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/Identities.tsx",
+                            "web/src/pages/identities/LifecycleAutomationPanel.tsx",
+                            "web/src/__tests__/lifecycle.test.tsx",
+                            "internal/server/journey_delivery_served_test.go"
+                        ]
                     },
                     "observe": {
                         "status": "complete",
@@ -7440,12 +7450,21 @@
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/Identities.tsx",
+                            "web/src/pages/identities/LifecycleAutomationPanel.tsx",
+                            "web/src/__tests__/lifecycle.test.tsx"
+                        ]
                     },
                     "verify": {
-                        "status": "missing",
-                        "reason": "Durable or external-effect verification is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/Identities.tsx",
+                            "web/src/__tests__/lifecycle.test.tsx",
+                            "internal/server/journey_delivery_served_test.go",
+                            "internal/projections/projections.go"
+                        ]
                     },
                     "automate": {
                         "status": "complete",
@@ -7459,8 +7478,8 @@
                 },
                 "owner": "pki",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "624298b0259b9ceddc64062c4523693d8e073fa0",
+                "freshness": "2026-08-30"
             }
         },
         {
