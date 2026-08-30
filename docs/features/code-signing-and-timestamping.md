@@ -83,9 +83,9 @@ artifact bytes never enter the browser. See [The web console](../web-console.md)
 
 For timestamping, open **Certificates → Protocols**, then **Set up and operate
 methods**. **Timestamp authority readiness** checks the exact running process before
-you send an artifact hash. It confirms the tenant-bound `/tsa` mount, stable
-timestamping-only certificate, isolated signer connection, immutable audit path, and
-bounded responder capacity. The check is deliberately effect-free: it issues no
+you send an artifact hash. It confirms the tenant-bound `/tsa` mount, active protocol
+profile, stable timestamping-only certificate, isolated signer connection, immutable
+audit path, and bounded responder capacity. The check is deliberately effect-free: it issues no
 timestamp, reads no certificate file, contacts no signer or network, and performs no
 write. A failed gate names the safe repair and leaves **Check again** available.
 
