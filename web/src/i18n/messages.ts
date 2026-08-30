@@ -24009,6 +24009,43 @@ export const messages = {
   "identities.automation.openRuns": { defaultMessage: "Open rotation runs", description: "Link to lifecycle rotation evidence." },
   "identities.automation.openConnectors": { defaultMessage: "Open connectors and rollback", description: "Link to connector recovery." },
   "identities.automation.openAlerts": { defaultMessage: "Open expiry alerts", description: "Link to lifecycle notifications." },
+  "identities.issue.failed": { defaultMessage: "Could not issue the certificate", description: "Context for an identity issuance failure." },
+  "identities.wildcard.safetyHeading": { defaultMessage: "Wildcard safety check", description: "Heading for the wildcard issuance safety explanation." },
+  "identities.wildcard.dnsOnly": {
+    defaultMessage: "Automatic ACME requests can prove wildcard control only with DNS-01.",
+    description: "First wildcard issuance safety fact.",
+  },
+  "identities.wildcard.policy": {
+    defaultMessage: "Before ACME use, verify that the zone’s DNS provider policy allows wildcards.",
+    description: "Second wildcard issuance safety fact.",
+  },
+  "identities.wildcard.renewal": {
+    defaultMessage: "After deployment, the lifecycle scheduler watches and renews it.",
+    description: "Third wildcard issuance safety fact.",
+  },
+  "identities.wildcard.ackHelp": {
+    defaultMessage: "This operator issue records your blast-radius approval; it does not weaken ACME validation.",
+    description: "Wildcard acknowledgement consequence.",
+  },
+  "identities.wildcard.issueFailed": {
+    defaultMessage: "No wildcard certificate was issued",
+    description: "Fail-closed wildcard issuance error context.",
+  },
+  "identities.wildcard.recoveryAction": { defaultMessage: "Check DNS-01 setup", description: "Wildcard issuance recovery link." },
+  "identities.wildcard.recoveryBoundary": {
+    defaultMessage: "and review the exact server error before retrying. Do not weaken validation to make the request pass.",
+    description: "Safe wildcard issuance recovery boundary.",
+  },
+  "identities.wildcard.issued": { defaultMessage: "Wildcard issued: {name}.", description: "Verified wildcard issuance receipt." },
+  "identities.wildcard.issuedNext": {
+    defaultMessage: "Deploy it to enter automatic renewal monitoring; rotation evidence will bind the old and new fingerprints.",
+    description: "Next step after wildcard issuance.",
+  },
+  "identities.wildcard.renewalGuard": {
+    defaultMessage: "Wildcard renewal · verify the successor and rollback receipt",
+    description: "Safety reminder on a due wildcard renewal.",
+  },
+  "identities.evidence.identity": { defaultMessage: "Identity", description: "Credential identity column in rotation evidence." },
   "identities.page.title": { defaultMessage: "Machine identities", description: "Quiet title for the identity inventory route." },
   "identities.page.answer": {
     defaultMessage: "Which machines and services have identities, and whether they are healthy.",

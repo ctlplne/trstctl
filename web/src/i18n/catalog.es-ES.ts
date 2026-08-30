@@ -7642,6 +7642,22 @@ const esESCatalog = {
   "workloads.ephemeral.startAnother": "Iniciar otra solicitud",
   "workloads.ephemeral.recovery": "Reintento y recuperación seguros",
   "identities.automation.eyebrow": "Protección continua",
+  "identities.issue.failed": "No se pudo emitir el certificado",
+  "identities.wildcard.safetyHeading": "Comprobación de seguridad del comodín",
+  "identities.wildcard.dnsOnly": "Las solicitudes ACME automáticas solo pueden demostrar el control de comodines con DNS-01.",
+  "identities.wildcard.policy": "Antes de usar ACME, verifique que la política del proveedor DNS de la zona permita comodines.",
+  "identities.wildcard.renewal": "Después del despliegue, el planificador de ciclo de vida lo vigila y renueva.",
+  "identities.wildcard.ackHelp":
+    "Esta emisión de operador registra su aprobación del radio de impacto; no debilita la validación ACME.",
+  "identities.wildcard.issueFailed": "No se emitió ningún certificado comodín",
+  "identities.wildcard.recoveryAction": "Comprobar la configuración de DNS-01",
+  "identities.wildcard.recoveryBoundary":
+    "y revise el error exacto del servidor antes de volver a intentarlo. No debilite la validación para que la solicitud pase.",
+  "identities.wildcard.issued": "Comodín emitido: {name}.",
+  "identities.wildcard.issuedNext":
+    "Despliéguelo para iniciar la supervisión de renovación automática; la evidencia de rotación vinculará las huellas anterior y nueva.",
+  "identities.wildcard.renewalGuard": "Renovación de comodín · verifique el sucesor y el recibo de reversión",
+  "identities.evidence.identity": "Identidad",
   "identities.automation.heading": "Automatización del ciclo de vida",
   "identities.automation.answer": "Vea qué se renueva automáticamente, qué necesita atención y qué puede hacer trstctl de forma segura.",
   "identities.automation.refresh": "Actualizar plan",

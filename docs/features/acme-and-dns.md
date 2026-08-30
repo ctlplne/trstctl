@@ -357,6 +357,29 @@ the lifecycle scheduler treats it like any other deployed X.509 identity: it que
 `ca.renew`, mints a successor with the same wildcard SAN, and records
 `lifecycle.rotation.recorded` evidence for renewal history.
 
+The **Machine identities** page keeps that journey together. Entering a wildcard name
+opens a three-part safety explanation before the issue action: automatic ACME proof is
+DNS-01-only, the zone's DNS provider policy must explicitly allow wildcards before ACME
+use, and automatic renewal monitoring begins only after deployment. The operator must
+acknowledge the larger blast radius. A successful operator issuance returns the exact
+issued identity, opens its detail drawer, and makes **Deploy** the next valid action
+instead of dropping the operator back into an undifferentiated list.
+
+The operator-issued path and the ACME protocol path have different authorities. The
+operator path records an authorized administrator's explicit blast-radius decision;
+that acknowledgement is not a DNS ownership proof. A public ACME wildcard order still
+must complete DNS-01, and its tenant provider policy is enforced by the ACME server.
+The UI states this distinction so an acknowledgement cannot be mistaken for a
+successful challenge.
+
+After deployment, **Lifecycle automation** names wildcard items in the due-renewal
+queue, opens the same effect-free transition review used by other credentials, and
+queues `ca.renew` only after confirmation. **Delivery and rotation evidence** names the
+identity beside each durable rotation receipt, so the operator can tie the successor
+fingerprint and rollback reference to the exact wildcard. A failed issue keeps the form
+open, shows the server's exact safe error, links to DNS-01 setup, and explicitly says not
+to weaken validation before retrying.
+
 ## Use it
 
 Point any ACME client at trstctl's directory. With certbot, using DNS-01:

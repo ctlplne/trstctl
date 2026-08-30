@@ -137,6 +137,9 @@ export function LifecycleAutomationPanel({ identities, onReviewRenewal }: Props)
                     >
                       <div className="min-w-0">
                         <p className="break-all text-sm font-medium">{item.identity_name}</p>
+                        {item.identity_name.startsWith("*.") && (
+                          <p className="mt-1 text-xs font-medium text-status-warning">{t("identities.wildcard.renewalGuard")}</p>
+                        )}
                         <p className="break-words text-xs text-muted-foreground">
                           {item.owner_name} · {item.reason}
                           {item.not_after ? t("identities.automation.expires", { time: formatDateTime(item.not_after) }) : ""}

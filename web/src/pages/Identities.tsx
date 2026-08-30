@@ -532,6 +532,12 @@ export function Identities() {
             : "unspecified"
           : requestedReason || (to === "retired" ? "operator requested retirement" : `${to} via UI`);
       const transition: PendingTransition = { id: identity.id, name: identity.name, to, label, reason: reviewedReason, destructive };
+      // LifecycleAutomationPanel can start this review without the identity
+      // drawer already being open. The reviewed-action dialog is intentionally
+      // owned by that drawer, so bind the exact row before setting `pending`;
+      // otherwise the button looks enabled but renders no review surface.
+      setSelectedId(identity.id);
+      setDetail(identity);
       setPendingConfirmName("");
       setPendingReason(reviewedReason);
       setPending(transition);
@@ -676,9 +682,13 @@ export function Identities() {
 
       {showForm && (
         <NewIdentityForm
-          onDone={() => {
+          onDone={(issued) => {
             setShowForm(false);
+            setSelectedId(issued.id);
+            setDetail(issued);
+            setNotice(issued.name.startsWith("*.") ? `${t("identities.wildcard.issued", { name: issued.name })} ${t("identities.wildcard.issuedNext")}` : null);
             void load();
+            void loadEvidence();
           }}
         />
       )}
@@ -844,7 +854,7 @@ export function Identities() {
           <span className="ms-2 text-xs font-normal text-muted-foreground group-open:hidden">{t("identities.evidence.openHint")}</span>
           <span className="ms-2 hidden text-xs font-normal text-muted-foreground group-open:inline">{t("identities.evidence.closeHint")}</span>
         </summary>
-        <DeliveryEvidencePanel deliveries={deliveryReceipts} rotations={rotationRuns} error={evidenceError} />
+        <DeliveryEvidencePanel identities={items ?? []} deliveries={deliveryReceipts} rotations={rotationRuns} error={evidenceError} />
       </details>
 
       <section aria-labelledby="decommission-heading" className="mb-3 border-y border-border py-4">
@@ -1157,10 +1167,12 @@ export function Identities() {
 }
 
 function DeliveryEvidencePanel({
+  identities,
   deliveries,
   rotations,
   error,
 }: {
+  identities: Identity[];
   deliveries: ConnectorDelivery[] | null;
   rotations: RotationRun[] | null;
   error: string | null;
@@ -1168,6 +1180,7 @@ function DeliveryEvidencePanel({
   const loading = !deliveries && !rotations && !error;
   const recentDeliveries = (deliveries ?? []).slice(0, 5);
   const recentRotations = (rotations ?? []).slice(0, 5);
+  const identityByID = new Map(identities.map((identity) => [identity.id, identity]));
 
   return (
     <section aria-labelledby="delivery-evidence-heading" className="pt-4">
@@ -1232,6 +1245,7 @@ function DeliveryEvidencePanel({
               <caption className="sr-only">{translateNow("source.recent.lifecycle.rotation.runs.4de11752b6")}</caption>
               <thead>
                 <tr>
+                  <th scope="col">{translateNow("identities.evidence.identity")}</th>
                   <th scope="col">{translateNow("source.status.920e413c7d")}</th>
                   <th scope="col">{translateNow("source.trigger.8b9c643731")}</th>
                   <th scope="col">{translateNow("source.successor.d29e68e27e")}</th>
@@ -1242,13 +1256,14 @@ function DeliveryEvidencePanel({
               <tbody>
                 {recentRotations.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="text-muted-foreground">
+                    <td colSpan={6} className="text-muted-foreground">
                       {translateNow("source.no.rotation.runs.cf68af2637")}
                     </td>
                   </tr>
                 ) : (
                   recentRotations.map((run) => (
                     <tr key={run.id} className="align-top">
+                      <td className="break-all font-medium">{identityByID.get(run.identity_id)?.name || run.identity_id}</td>
                       <td className="font-mono text-xs">{run.status}</td>
                       <td>{run.trigger}</td>
                       <td className="break-all font-mono text-xs">{shortFingerprint(run.successor_fingerprint)}</td>
@@ -1532,7 +1547,8 @@ function IdentityDetailPanel({
   );
 }
 
-function NewIdentityForm({ onDone }: { onDone: () => void }) {
+function NewIdentityForm({ onDone }: { onDone: (issued: Identity) => void }) {
+  const { t } = useTranslation();
   const [name, setName] = useState("");
   const [wildcardAck, setWildcardAck] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -1545,13 +1561,13 @@ function NewIdentityForm({ onDone }: { onDone: () => void }) {
     setError(null);
     setBusy(true);
     try {
-      await api.issueCertificate({
+      const issued = await api.issueCertificate({
         name: serviceName,
         ...(isWildcard ? { wildcardBlastRadiusAcknowledged: wildcardAck } : {}),
       });
-      onDone();
+      onDone(issued);
     } catch (err) {
-      setError(`Could not issue: ${String(err)}`);
+      setError(isWildcard ? apiProblemContext(err, t("identities.wildcard.issueFailed")) : apiProblemContext(err, t("identities.issue.failed")));
     } finally {
       setBusy(false);
     }
@@ -1574,28 +1590,46 @@ function NewIdentityForm({ onDone }: { onDone: () => void }) {
           placeholder={translateNow("source.e.g.payments.api.b39781a2b3")}
         />
         {isWildcard && (
-          <label className="mt-2 flex items-start gap-2 text-sm font-medium" htmlFor="wildcard-ack">
-            <input
-              id="wildcard-ack"
-              type="checkbox"
-              checked={wildcardAck}
-              onChange={(e) => setWildcardAck(e.target.checked)}
-              className="mt-1 h-4 w-4 rounded border-border"
-            />
-            <span>
-              {translateNow("source.acknowledge.wildcard.blast.radius.868520eb71")}
-              <span className="block text-xs font-normal text-muted-foreground">DNS-01 validation is required; renewal uses the lifecycle scheduler.</span>
-            </span>
-          </label>
+          <section aria-labelledby="wildcard-safety-heading" className="mt-3 rounded-control border border-status-warning/30 bg-status-warning/5 p-3">
+            <h3 id="wildcard-safety-heading" className="text-sm font-semibold">
+              {t("identities.wildcard.safetyHeading")}
+            </h3>
+            <ol className="mt-2 grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
+              <li className="border-s-2 border-border ps-2">{t("identities.wildcard.dnsOnly")}</li>
+              <li className="border-s-2 border-border ps-2">{t("identities.wildcard.policy")}</li>
+              <li className="border-s-2 border-border ps-2">{t("identities.wildcard.renewal")}</li>
+            </ol>
+            <label className="mt-3 flex items-start gap-2 text-sm font-medium" htmlFor="wildcard-ack">
+              <input
+                id="wildcard-ack"
+                type="checkbox"
+                checked={wildcardAck}
+                onChange={(e) => setWildcardAck(e.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-border"
+              />
+              <span>
+                {translateNow("source.acknowledge.wildcard.blast.radius.868520eb71")}
+                <span className="block text-xs font-normal text-muted-foreground">{t("identities.wildcard.ackHelp")}</span>
+              </span>
+            </label>
+          </section>
         )}
       </div>
       <Button type="submit" className="w-full md:w-auto" disabled={busy || (isWildcard && !wildcardAck)}>
         {translateNow("source.issue.48dc76dfa2")}
       </Button>
       {error && (
-        <p role="alert" className="text-sm text-destructive md:col-span-2">
-          {error}
-        </p>
+        <div role="alert" className="text-sm text-destructive md:col-span-2">
+          <p className="font-medium">{error}</p>
+          {isWildcard && (
+            <p className="mt-1">
+              <a className="font-medium underline underline-offset-2" href="/protocols#dns-config-heading">
+                {t("identities.wildcard.recoveryAction")}
+              </a>{" "}
+              {t("identities.wildcard.recoveryBoundary")}
+            </p>
+          )}
+        </div>
       )}
     </form>
   );

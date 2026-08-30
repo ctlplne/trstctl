@@ -990,14 +990,28 @@ describe("lifecycle actions from the UI", () => {
 
   it("requires explicit acknowledgement before issuing a wildcard identity", async () => {
     apiMock.identities.mockResolvedValue([]);
+    const issued = {
+      id: "wildcard-1",
+      name: "*.payments.example",
+      kind: "x509_certificate",
+      owner_id: "own-1",
+      status: "issued",
+      attributes: { validation_method: "dns-01", wildcard_blast_radius_acknowledged: true },
+    };
+    apiMock.issueCertificate.mockResolvedValue(issued);
+    apiMock.getIdentity.mockResolvedValue(issued);
     const user = userEvent.setup();
     renderIdentities();
 
     await user.click(await screen.findByRole("button", { name: /add identity/i }));
     await user.type(screen.getByLabelText(/name/i), "*.payments.example");
+    expect(screen.getByRole("heading", { name: "Wildcard safety check" })).toBeInTheDocument();
+    expect(screen.getByText("Automatic ACME requests can prove wildcard control only with DNS-01.")).toBeInTheDocument();
+    expect(screen.getByText("Before ACME use, verify that the zone’s DNS provider policy allows wildcards.")).toBeInTheDocument();
+    expect(screen.getByText("After deployment, the lifecycle scheduler watches and renews it.")).toBeInTheDocument();
     const issue = screen.getByRole("button", { name: /create|issue/i });
     expect(issue).toBeDisabled();
-    expect(screen.getByText(/DNS-01 validation is required/i)).toBeInTheDocument();
+    expect(screen.getByText(/does not weaken ACME validation/i)).toBeInTheDocument();
 
     await user.click(screen.getByLabelText(/Acknowledge wildcard blast radius/i));
     expect(issue).toBeEnabled();
@@ -1008,6 +1022,108 @@ describe("lifecycle actions from the UI", () => {
         wildcardBlastRadiusAcknowledged: true,
       }),
     );
+    expect(await screen.findByText(/Wildcard issued: \*\.payments\.example/i)).toBeInTheDocument();
+    expect(screen.getByText(/Deploy it to enter automatic renewal monitoring/i)).toBeInTheDocument();
+    const detail = await screen.findByRole("dialog", { name: "Identity detail" });
+    expect(within(detail).getByText("*.payments.example")).toBeInTheDocument();
+    expect(within(detail).getByRole("button", { name: /^deploy$/i })).toBeInTheDocument();
+  });
+
+  it("fails wildcard issuance closed with a direct DNS-policy recovery path", async () => {
+    apiMock.identities.mockResolvedValue([]);
+    apiMock.issueCertificate.mockRejectedValue(new ApiError(400, "wildcard policy does not allow this zone"));
+    const user = userEvent.setup();
+    renderIdentities();
+
+    await user.click(await screen.findByRole("button", { name: /add identity/i }));
+    await user.type(screen.getByLabelText(/name/i), "*.blocked.example");
+    await user.click(screen.getByLabelText(/Acknowledge wildcard blast radius/i));
+    await user.click(screen.getByRole("button", { name: /create|issue/i }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("No wildcard certificate was issued");
+    expect(alert).toHaveTextContent("wildcard policy does not allow this zone");
+    expect(within(alert).getByRole("link", { name: "Check DNS-01 setup" })).toHaveAttribute("href", "/protocols#dns-config-heading");
+    expect(alert).toHaveTextContent("Do not weaken validation to make the request pass");
+  });
+
+  it("ties a wildcard renewal action to recovery links and identity-named rotation proof", async () => {
+    const wildcard = {
+      id: "wildcard-deployed-1",
+      name: "*.renew.example",
+      kind: "x509_certificate",
+      owner_id: "own-1",
+      status: "deployed",
+      attributes: { validation_method: "dns-01", wildcard_blast_radius_acknowledged: true },
+    };
+    apiMock.identities.mockResolvedValue([wildcard]);
+    apiMock.getIdentity.mockResolvedValue(wildcard);
+    apiMock.transitionIdentity.mockResolvedValue({ ...wildcard, status: "renewing" });
+    apiMock.lifecycleAutomationPlan.mockResolvedValue({
+      capability: "lifecycle_automation",
+      ready: true,
+      generated_at: "2026-08-30T00:00:00Z",
+      scheduler: {
+        status: "running",
+        renew_before: "720h0m0s",
+        alert_before: "336h0m0s",
+        interval: "1m0s",
+        ari_first: true,
+        maintenance_window_status: "open",
+      },
+      summary: { monitored: 1, due_now: 1, renewal_failed: 0, outbox_pending: 0, outbox_processing: 0, outbox_failed: 0 },
+      items: [
+        {
+          identity_id: wildcard.id,
+          identity_name: wildcard.name,
+          identity_status: "deployed",
+          owner_id: "own-1",
+          owner_name: "team",
+          certificate_id: "cert-wildcard-1",
+          not_after: "2026-08-31T00:00:00Z",
+          due: true,
+          renewal_source: "ari",
+          reason: "The CA renewal window is open.",
+          blockers: [],
+        },
+      ],
+      controls: [],
+      preview_writes: [],
+      preview_external_effects: [],
+      execution_writes: ["Append identity.renewing and queue ca.renew."],
+      execution_external_effects: ["Issue and deploy the successor asynchronously."],
+      verification_steps: ["Confirm rotation and connector receipts."],
+    });
+    apiMock.rotationRuns.mockResolvedValue({
+      items: [
+        {
+          id: "rotation-wildcard-1",
+          identity_id: wildcard.id,
+          status: "succeeded",
+          trigger: "scheduler",
+          predecessor_fingerprint: "sha256:old",
+          successor_fingerprint: "sha256:new",
+          rollback_ref: "restore sha256:old",
+          updated_at: "2026-08-30T00:01:00Z",
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    renderIdentities();
+
+    expect(await screen.findByText("Wildcard renewal · verify the successor and rollback receipt")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Review renewal now" }));
+    await confirmReviewedAction(user);
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith(wildcard.id, "renewing", expect.anything(), undefined, undefined, 2));
+
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    await user.click(screen.getByText("Delivery and rotation evidence", { selector: "summary" }));
+    const rotationTable = screen.getByRole("table", { name: "Recent lifecycle rotation runs" });
+    expect(within(rotationTable).getByText("*.renew.example")).toBeInTheDocument();
+    expect(within(rotationTable).getByText("scheduler")).toBeInTheDocument();
+    expect(within(rotationTable).getByText("restore sha256:old")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open rotation runs" })).toHaveAttribute("href", "/operations");
+    expect(screen.getByRole("link", { name: "Open connectors and rollback" })).toHaveAttribute("href", "/connectors");
   });
 
   it("does not record dual-control approval from the identity row", async () => {

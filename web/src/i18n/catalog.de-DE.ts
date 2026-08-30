@@ -7695,6 +7695,22 @@ const deDECatalog = {
   "workloads.ephemeral.startAnother": "Weitere Anforderung starten",
   "workloads.ephemeral.recovery": "Sichere Wiederholung und Wiederherstellung",
   "identities.automation.eyebrow": "Kontinuierlicher Schutz",
+  "identities.issue.failed": "Das Zertifikat konnte nicht ausgestellt werden",
+  "identities.wildcard.safetyHeading": "Wildcard-Sicherheitsprüfung",
+  "identities.wildcard.dnsOnly": "Automatische ACME-Anfragen können Wildcard-Kontrolle nur mit DNS-01 nachweisen.",
+  "identities.wildcard.policy": "Prüfen Sie vor der ACME-Nutzung, dass die DNS-Anbieterrichtlinie der Zone Wildcards erlaubt.",
+  "identities.wildcard.renewal": "Nach der Bereitstellung überwacht und erneuert der Lebenszyklusplaner das Zertifikat.",
+  "identities.wildcard.ackHelp":
+    "Diese Operator-Ausstellung protokolliert Ihre Blast-Radius-Freigabe; sie schwächt die ACME-Validierung nicht ab.",
+  "identities.wildcard.issueFailed": "Es wurde kein Wildcard-Zertifikat ausgestellt",
+  "identities.wildcard.recoveryAction": "DNS-01-Einrichtung prüfen",
+  "identities.wildcard.recoveryBoundary":
+    "und den genauen Serverfehler vor einem erneuten Versuch prüfen. Schwächen Sie die Validierung nicht ab, nur damit die Anfrage besteht.",
+  "identities.wildcard.issued": "Wildcard ausgestellt: {name}.",
+  "identities.wildcard.issuedNext":
+    "Stellen Sie es bereit, damit die automatische Erneuerungsüberwachung beginnt; der Rotationsnachweis verbindet alten und neuen Fingerabdruck.",
+  "identities.wildcard.renewalGuard": "Wildcard-Erneuerung · Nachfolger und Rollback-Beleg prüfen",
+  "identities.evidence.identity": "Identität",
   "identities.automation.heading": "Lebenszyklusautomatisierung",
   "identities.automation.answer": "Sehen Sie, was automatisch erneuert wird, was Aufmerksamkeit braucht und was trstctl sicher als Nächstes tun kann.",
   "identities.automation.refresh": "Plan aktualisieren",
