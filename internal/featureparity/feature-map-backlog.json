@@ -6405,10 +6405,12 @@
                 "internal/server/acme_dns01_automation.go"
             ],
             "source_frontend": [
-                "web/src/pages/Protocols.tsx"
+                "web/src/pages/Protocols.tsx",
+                "web/src/pages/protocols/DNS01QualificationDialog.tsx",
+                "web/src/pages/protocols/DNS01DelegationIsolationPanel.tsx"
             ],
             "status": "closed",
-            "notes": "TRACE-014 plus F71 qualification closure: the served order-time worker and real provider-test path both resolve the production _acme-challenge CNAME, require the exact configured validation target, fail before any provider write on absence/mismatch, then publish and clean only at the isolated target. The console makes that boundary visible as an exact per-domain three-step flow, keeps configured distinct from live-proved, shows direct-production-write configurations as caution, preserves durable history, and reuses bounded cleanup recovery. Test evidence: TestServedACMEDNS01OrderPublishesDelegatedCNAMEThroughOutboxTRACE014, the delegated passing/failing Protocols qualification test, feature facet coverage, route parity, and i18n/design-system guards.",
+            "notes": "TRACE-014 plus F71 qualification closure: the served order-time worker and real provider-test path both resolve the production _acme-challenge CNAME, require the exact configured validation target, fail before any provider write on absence/mismatch, then publish and clean only at the isolated target. The console makes that boundary visible as an exact per-domain three-step flow, keeps configured distinct from live-proved, shows direct-production-write configurations as caution, preserves durable history, reuses bounded cleanup recovery, returns keyboard focus to the named review region, and keeps human prose on word boundaries at mobile widths. Test evidence: TestServedACMEDNS01OrderPublishesDelegatedCNAMEThroughOutboxTRACE014, the delegated passing/failing Protocols qualification test with focus assertion, feature facet coverage, route parity, browser desktop/mobile qualification, and i18n/design-system guards.",
             "api_surface": [
                 "preflightACMEDNS01"
             ],
@@ -6637,7 +6639,7 @@
                 },
                 "owner": "pki",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "49f1859a769590e5191818a05bc1472ac6ad3ffc",
+                "candidate_sha": "6c6bb3dea274e1d18ac53589b9e7e353a1613e00",
                 "freshness": "2026-08-29"
             }
         },
