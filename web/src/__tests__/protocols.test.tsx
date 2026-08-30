@@ -1657,10 +1657,12 @@ describe("protocol surface", () => {
 
     await user.click(within(dialog).getByRole("button", { name: "Publish, verify, and clean up" }));
     expect(await within(dialog).findByText("Cleanup needs attention")).toBeInTheDocument();
+    expect(within(dialog).getByRole("region", { name: "DNS-01 provider test result" })).toHaveFocus();
     expect(within(dialog).getByText("cleanup_delivery_failed")).toBeInTheDocument();
     expect(within(dialog).getByText("Repair provider access, then retry cleanup from this row.")).toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "Retry cleanup" }));
     expect(await within(dialog).findByText("Provider test passed")).toBeInTheDocument();
+    expect(within(dialog).getByRole("region", { name: "DNS-01 provider test result" })).toHaveFocus();
 
     expect(apiMock.previewACMEDNS01Qualification).toHaveBeenCalledWith(preview.config_id, { domain: "api.example.test" });
     expect(apiMock.runACMEDNS01Qualification).toHaveBeenCalledWith(preview.config_id, { domain: "api.example.test" });
@@ -1760,10 +1762,12 @@ describe("protocol surface", () => {
 
     await user.click(within(dialog).getByRole("button", { name: "Publish, verify, and clean up" }));
     expect(await within(dialog).findByRole("heading", { name: "CNAME isolation is not proved" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("region", { name: "DNS-01 provider test result" })).toHaveFocus();
     expect(within(dialog).getByText("Repair authoritative DNS or CNAME delegation, then run a new provider test.")).toBeInTheDocument();
 
     await user.click(within(dialog).getByRole("button", { name: "Publish, verify, and clean up" }));
     expect(await within(dialog).findByRole("heading", { name: "CNAME isolation proved by this live test" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("region", { name: "DNS-01 provider test result" })).toHaveFocus();
     expect(apiMock.runACMEDNS01Qualification).toHaveBeenCalledTimes(2);
   });
 

@@ -46,6 +46,7 @@ export function DNS01QualificationDialog({
   const [error, setError] = useState<string | null>(null);
   const domainRef = useRef<HTMLInputElement>(null);
   const planRef = useRef<HTMLElement>(null);
+  const resultRef = useRef<HTMLElement>(null);
   const titleId = "dns01-qualification-heading";
 
   useEffect(() => {
@@ -70,6 +71,10 @@ export function DNS01QualificationDialog({
   useEffect(() => {
     if (preview) planRef.current?.focus();
   }, [preview]);
+
+  useEffect(() => {
+    if (run) resultRef.current?.focus();
+  }, [run]);
 
   async function review(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -236,6 +241,8 @@ export function DNS01QualificationDialog({
 
         {run && (
           <section
+            ref={resultRef}
+            tabIndex={-1}
             aria-label={t("protocols.dns01.qualification.resultLabel")}
             className={`grid gap-3 rounded-control border p-4 ${run.status === "passed" ? "border-status-success/30 bg-status-success/10" : "border-status-warning/30 bg-status-warning/10"}`}
           >
