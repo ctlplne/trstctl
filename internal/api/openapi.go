@@ -682,6 +682,15 @@ func componentSchemas() map[string]*Schema {
 		"kind":  {Type: "string", Enum: []string{"activate_eval_profile", "connect_acme_client", "repair_prerequisites", "repair_startup_configuration"}},
 		"label": str(), "detail": str(), "method": str(), "path": str(),
 	}, "kind", "label", "detail")
+	acmeDomainValidationActivity := object(map[string]*Schema{
+		"order_id": str(), "domain": str(),
+		"order_status":         {Type: "string", Enum: []string{"pending", "ready", "processing", "valid"}},
+		"authorization_status": {Type: "string", Enum: []string{"pending", "valid"}},
+		"challenge_methods":    {Type: "array", Items: &Schema{Type: "string", Enum: []string{"http-01", "dns-01", "tls-alpn-01", "device-attest-01"}}},
+		"validated_method":     {Type: "string", Enum: []string{"http-01", "dns-01", "tls-alpn-01", "device-attest-01"}},
+		"validation_skipped":   {Type: "boolean"},
+		"created_at":           timestamp(),
+	}, "order_id", "domain", "order_status", "authorization_status", "challenge_methods", "validation_skipped", "created_at")
 	acmeOperatorPlan := object(map[string]*Schema{
 		"ready": {Type: "boolean"}, "served": {Type: "boolean"}, "tenant_bound": {Type: "boolean"},
 		"directory_path":    {Type: "string", Enum: []string{"/directory"}},
@@ -694,10 +703,11 @@ func componentSchemas() map[string]*Schema {
 		"blockers":    {Type: "array", Items: str()}, "warnings": {Type: "array", Items: str()},
 		"recovery_steps": {Type: "array", Items: str()},
 		"preview_writes": {Type: "array", Items: str()}, "preview_external_effects": {Type: "array", Items: str()},
-		"generated_at": timestamp(),
+		"validation_activity": {Type: "array", Items: ref("ACMEDomainValidationActivity")},
+		"generated_at":        timestamp(),
 	}, "ready", "served", "tenant_bound", "directory_path", "challenge_methods", "eab_required", "eab_configured", "eab_active",
 		"dns01_provider_configs", "issuing_profile", "issuing_profile_ready", "activation_mode", "activation_required", "activation_available",
-		"next_action", "blockers", "warnings", "recovery_steps", "preview_writes", "preview_external_effects", "generated_at")
+		"next_action", "blockers", "warnings", "recovery_steps", "preview_writes", "preview_external_effects", "validation_activity", "generated_at")
 	caAuthorityHorizon := object(map[string]*Schema{
 		"band_months": {Type: "integer"}, "months_remaining": {Type: "integer"},
 		"severity":            {Type: "string", Enum: []string{"low", "informational", "warning", "critical"}},
@@ -6031,6 +6041,7 @@ func componentSchemas() map[string]*Schema {
 		"ACMEEABCredential":                        acmeEABCredential,
 		"ACMEEABPosture":                           acmeEABPosture,
 		"ACMEOperatorAction":                       acmeOperatorAction,
+		"ACMEDomainValidationActivity":             acmeDomainValidationActivity,
 		"ACMEOperatorPlan":                         acmeOperatorPlan,
 		"AgentJobQueue":                            agentJobQueue,
 		"AgentJobPosture":                          agentJobPosture,

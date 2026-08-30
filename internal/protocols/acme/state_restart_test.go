@@ -5,8 +5,10 @@ package acme_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"testing"
 
 	xacme "golang.org/x/crypto/acme"
@@ -65,6 +67,7 @@ func TestACMEStateRebuildsFromEventLogAfterRestart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("authorize order: %v", err)
 	}
+	var acceptedToken string
 	for _, authzURL := range order.AuthzURLs {
 		authz, err := client.GetAuthorization(ctx, authzURL)
 		if err != nil {
@@ -74,6 +77,7 @@ func TestACMEStateRebuildsFromEventLogAfterRestart(t *testing.T) {
 			if chal.Type != "http-01" {
 				continue
 			}
+			acceptedToken = chal.Token
 			if _, err := client.Accept(ctx, chal); err != nil {
 				t.Fatalf("accept challenge: %v", err)
 			}
@@ -84,6 +88,22 @@ func TestACMEStateRebuildsFromEventLogAfterRestart(t *testing.T) {
 	}
 	if order, err = client.WaitOrder(ctx, order.URI); err != nil {
 		t.Fatalf("wait order: %v", err)
+	}
+	activity := srv1.DomainValidationActivities(10)
+	if len(activity) != 1 {
+		t.Fatalf("domain-validation activity rows = %d, want 1: %+v", len(activity), activity)
+	}
+	if activity[0].Domain != "restart.acme.test" || activity[0].OrderStatus != "ready" ||
+		activity[0].AuthorizationStatus != "valid" || activity[0].ValidatedMethod != "http-01" ||
+		!slices.Equal(activity[0].ChallengeMethods, []string{"http-01", "dns-01", "tls-alpn-01"}) {
+		t.Fatalf("domain-validation activity = %+v", activity[0])
+	}
+	activityJSON, err := json.Marshal(activity)
+	if err != nil {
+		t.Fatalf("marshal domain-validation activity: %v", err)
+	}
+	if acceptedToken == "" || bytes.Contains(activityJSON, []byte(acceptedToken)) || bytes.Contains(activityJSON, []byte(client.KID)) {
+		t.Fatalf("sanitized domain-validation activity leaked challenge/account material: %s", activityJSON)
 	}
 	der, certURL, err := client.CreateOrderCert(ctx, order.FinalizeURL, buildCSR(t, "restart.acme.test", []string{"restart.acme.test"}), true)
 	if err != nil {
@@ -109,6 +129,11 @@ func TestACMEStateRebuildsFromEventLogAfterRestart(t *testing.T) {
 	}
 	ts2 := httptest.NewServer(srv2)
 	t.Cleanup(ts2.Close)
+	replayedActivity := srv2.DomainValidationActivities(10)
+	if len(replayedActivity) != 1 || replayedActivity[0].Domain != "restart.acme.test" ||
+		replayedActivity[0].OrderStatus != "valid" || replayedActivity[0].ValidatedMethod != "http-01" {
+		t.Fatalf("replayed domain-validation activity = %+v", replayedActivity)
+	}
 
 	restartedClient := &xacme.Client{
 		Key:          client.Key,

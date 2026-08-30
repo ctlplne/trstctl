@@ -9,8 +9,11 @@ import (
 	"slices"
 	"testing"
 
+	xacme "golang.org/x/crypto/acme"
+
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto/acmekey"
 )
 
 // F5 needs one server-owned answer to the operator's simple question: "Can an
@@ -155,5 +158,75 @@ func TestServedACMEOperatorPlanDoesNotDescribeAnotherTenantsMount(t *testing.T) 
 	}
 	if plan.Ready || plan.Served || plan.TenantBound || plan.EABRequired || plan.EABConfigured != 0 || len(plan.Blockers) == 0 {
 		t.Fatalf("cross-tenant plan was not safely blocked: %+v", plan)
+	}
+}
+
+// F73's console evidence must come from an order accepted by the real served
+// ACME responder, not from browser state or the effect-free DNS preflight. The
+// operator plan may reveal the domain and policy result to an authorized tenant,
+// but never the account URL or challenge token needed to answer the challenge.
+func TestServedACMEOperatorPlanShowsSanitizedRealDomainValidationActivity(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{
+		ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
+	})
+	tok := seedScopedToken(t, h.store, h.tenant, string(authz.IssuersRead), string(authz.IssuersWrite))
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/acme/dns-01/provider-configs", tok, map[string]any{
+		"name": "operator-activity-policy", "provider": "webhook", "zone": "activity.example.test",
+		"credential_refs": map[string]any{"bearer_token_ref": "secret://dns/operator-activity"},
+		"config":          map[string]any{"endpoint": "https://dns.activity.invalid"},
+		"allowed_methods": []string{"dns-01"},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create domain-validation policy: status=%d body=%s", status, body)
+	}
+
+	client, err := acmekey.NewClient(h.ts.URL + "/directory")
+	if err != nil {
+		t.Fatalf("ACME client: %v", err)
+	}
+	if _, err := client.Register(t.Context(), &xacme.Account{}, xacme.AcceptTOS); err != nil {
+		t.Fatalf("register ACME account: %v", err)
+	}
+	order, err := client.AuthorizeOrder(t.Context(), xacme.DomainIDs("api.activity.example.test"))
+	if err != nil {
+		t.Fatalf("create served ACME order: %v", err)
+	}
+	authz, err := client.GetAuthorization(t.Context(), order.AuthzURLs[0])
+	if err != nil {
+		t.Fatalf("read served ACME authorization: %v", err)
+	}
+	if len(authz.Challenges) != 1 || authz.Challenges[0].Type != "dns-01" {
+		t.Fatalf("served policy challenge choices = %+v, want dns-01 only", authz.Challenges)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/acme/operator-plan", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("read ACME operator plan: status=%d body=%s", status, body)
+	}
+	var plan struct {
+		ValidationActivity []struct {
+			OrderID             string   `json:"order_id"`
+			Domain              string   `json:"domain"`
+			OrderStatus         string   `json:"order_status"`
+			AuthorizationStatus string   `json:"authorization_status"`
+			ChallengeMethods    []string `json:"challenge_methods"`
+			ValidatedMethod     string   `json:"validated_method"`
+		} `json:"validation_activity"`
+	}
+	if err := json.Unmarshal(body, &plan); err != nil {
+		t.Fatalf("decode activity plan: %v body=%s", err, body)
+	}
+	if len(plan.ValidationActivity) != 1 {
+		t.Fatalf("operator validation activity rows = %d, want 1: %s", len(plan.ValidationActivity), body)
+	}
+	activity := plan.ValidationActivity[0]
+	if activity.OrderID == "" || activity.Domain != "api.activity.example.test" || activity.OrderStatus != "pending" ||
+		activity.AuthorizationStatus != "pending" || !slices.Equal(activity.ChallengeMethods, []string{"dns-01"}) || activity.ValidatedMethod != "" {
+		t.Fatalf("operator validation activity = %+v", activity)
+	}
+	for _, forbidden := range []string{authz.Challenges[0].Token, string(client.KID), "secret://dns/operator-activity", "bearer_token_ref"} {
+		if forbidden != "" && bytes.Contains(body, []byte(forbidden)) {
+			t.Fatalf("operator validation activity leaked %q: %s", forbidden, body)
+		}
 	}
 }

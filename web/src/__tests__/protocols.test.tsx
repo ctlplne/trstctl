@@ -119,6 +119,17 @@ function readyACMEOperatorPlan() {
     recovery_steps: ["Open Enrollment diagnostics after a client refusal, repair the named cause, and retry without weakening validation."],
     preview_writes: [],
     preview_external_effects: [],
+    validation_activity: [
+      {
+        order_id: "order-23",
+        domain: "api.example.test",
+        order_status: "ready",
+        authorization_status: "valid",
+        challenge_methods: ["http-01", "dns-01"],
+        validated_method: "http-01",
+        created_at: "2026-08-27T23:44:00Z",
+      },
+    ],
     generated_at: "2026-08-27T23:45:00Z",
   };
 }
@@ -710,6 +721,10 @@ describe("protocol surface", () => {
     expect(within(panel).getByText("1 active of 2 configured")).toBeInTheDocument();
     expect(within(panel).getByText("This check made no changes and contacted no external system.")).toBeInTheDocument();
     expect(within(panel).getByRole("heading", { name: "If a client fails" })).toBeInTheDocument();
+    expect(within(panel).getByRole("heading", { name: "Recent domain validation" })).toBeInTheDocument();
+    expect(within(panel).getByText("api.example.test")).toBeInTheDocument();
+    expect(within(panel).getByText("Validated with HTTP-01")).toBeInTheDocument();
+    expect(within(panel).getByText("Offered HTTP-01 and DNS-01")).toBeInTheDocument();
 
     await userEvent.click(within(panel).getByRole("button", { name: "Copy ACME client command" }));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("--server"));
@@ -745,6 +760,7 @@ describe("protocol surface", () => {
         recovery_steps: ["Retry activation with the same idempotency key."],
         preview_writes: [],
         preview_external_effects: [],
+        validation_activity: [],
         generated_at: "2026-08-27T23:45:00Z",
       })
       .mockResolvedValueOnce({

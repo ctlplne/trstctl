@@ -69,6 +69,16 @@ ACME clients**, copy its credential-free Certbot command, replace the DNS-name a
 EAB placeholders, and run it from the machine that needs the certificate. Never put
 an EAB HMAC key in screenshots, tickets, or shared QA evidence.
 
+The same panel shows **Recent domain validation** from the running ACME server's
+event-replayed state. Each row is a real authorization started by an ACME client. It
+shows the domain, the challenge methods that tenant policy actually offered, the
+method that proved control, and the current authorization/order state. It does not
+return the ACME account URL, account key, challenge token, key authorization, or
+certificate bytes. A pending row means the client still needs to answer one of the
+offered challenges; a validated row is durable proof that the served validator
+accepted that method. The same rows rebuild after restart from `acme.order.created`,
+`acme.challenge.validated`, and `acme.certificate.issued` events.
+
 If setup is blocked, repair each named prerequisite and reload the effect-free plan.
 If a client begins an order but fails, open **Enrollment diagnostics** on the same
 page; it shows the refused step and safe retry guidance. Retrying must not mean

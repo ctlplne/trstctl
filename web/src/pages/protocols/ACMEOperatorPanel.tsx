@@ -31,14 +31,25 @@ function isACMEOperatorPlan(value: unknown): value is ACMEOperatorPlan {
     Array.isArray(plan.recovery_steps) &&
     Array.isArray(plan.preview_writes) &&
     Array.isArray(plan.preview_external_effects) &&
+    Array.isArray(plan.validation_activity) &&
     typeof plan.next_action === "object" &&
     plan.next_action !== null &&
     typeof plan.next_action.kind === "string"
   );
 }
 
+function displayMethod(method: string): string {
+  return method.toUpperCase();
+}
+
+function displayMethodList(methods: string[], locale: string): string {
+  const labels = methods.map(displayMethod);
+  if (labels.length === 0) return "—";
+  return new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(labels);
+}
+
 export function ACMEOperatorPanel() {
-  const { t } = useTranslation();
+  const { t, locale, formatDateTime } = useTranslation();
   const canRead = useCan("issuers:read");
   const canWrite = useCan("issuers:write");
   const activation = useCapabilityExecution("F5", "activateProtocolProfile");
@@ -181,6 +192,53 @@ export function ACMEOperatorPanel() {
               </ul>
             </details>
           ) : null}
+          <section aria-labelledby="acme-validation-activity-heading" className="border-t border-border pt-4">
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <h3 id="acme-validation-activity-heading" className="text-sm font-semibold">
+                  {t("protocols.acmePlan.activityHeading")}
+                </h3>
+                <p className="mt-1 max-w-3xl text-caption text-muted-foreground">{t("protocols.acmePlan.activityDescription")}</p>
+              </div>
+              <span className="text-caption text-muted-foreground">{t("protocols.acmePlan.activityCount", { count: plan.validation_activity.length })}</span>
+            </div>
+            {plan.validation_activity.length === 0 ? (
+              <p className="mt-3 text-sm text-muted-foreground">{t("protocols.acmePlan.activityEmpty")}</p>
+            ) : (
+              <ul className="mt-3 divide-y divide-border border-y border-border">
+                {plan.validation_activity.map((activity) => {
+                  const result = activity.validation_skipped
+                    ? t("protocols.acmePlan.activitySkipped")
+                    : activity.validated_method
+                      ? t("protocols.acmePlan.activityValidated", { method: displayMethod(activity.validated_method) })
+                      : t("protocols.acmePlan.activityWaiting");
+                  return (
+                    <li key={`${activity.order_id}:${activity.domain}`} className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                      <div className="min-w-0">
+                        <p className="break-all text-sm font-semibold">{activity.domain}</p>
+                        <p className="mt-1 text-caption text-muted-foreground">
+                          {t("protocols.acmePlan.activityOffered", { methods: displayMethodList(activity.challenge_methods, locale) })}
+                        </p>
+                        <p className="mt-1 text-caption text-muted-foreground">
+                          {t("protocols.acmePlan.activityStarted", { at: formatDateTime(activity.created_at) })}
+                        </p>
+                      </div>
+                      <div className="grid justify-items-start gap-1 sm:justify-items-end">
+                        <StatusBadge
+                          value={activity.authorization_status}
+                          tone={activity.authorization_status === "valid" ? "success" : "neutral"}
+                          label={result}
+                        />
+                        <span className="text-caption text-muted-foreground">
+                          {t("protocols.acmePlan.activityOrder", { status: activity.order_status })}
+                        </span>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
           <section aria-labelledby="acme-plan-recovery-heading" className="border-t border-border pt-4">
             <h3 id="acme-plan-recovery-heading" className="text-sm font-semibold">
               {t("protocols.acmePlan.recovery")}

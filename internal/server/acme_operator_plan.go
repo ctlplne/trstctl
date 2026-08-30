@@ -40,6 +40,15 @@ func (s *Server) acmeOperatorPlan(ctx context.Context, tenantID string) (api.ACM
 	}
 	plan.TenantBound = true
 	plan.Served = sp.activation == nil || sp.activation.Active()
+	for _, activity := range sp.acme.DomainValidationActivities(12) {
+		plan.ValidationActivity = append(plan.ValidationActivity, api.ACMEDomainValidationActivity{
+			OrderID: activity.OrderID, Domain: activity.Domain,
+			OrderStatus: activity.OrderStatus, AuthorizationStatus: activity.AuthorizationStatus,
+			ChallengeMethods: append([]string(nil), activity.ChallengeMethods...),
+			ValidatedMethod:  activity.ValidatedMethod, ValidationSkipped: activity.ValidationSkipped,
+			CreatedAt: activity.CreatedAt,
+		})
+	}
 
 	if sp.activation != nil {
 		plan.ActivationMode = "eval_profile_event"

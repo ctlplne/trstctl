@@ -19,33 +19,48 @@ type ACMEOperatorAction struct {
 	Path   string `json:"path,omitempty"`
 }
 
+// ACMEDomainValidationActivity is a sanitized read model of one real served
+// ACME authorization. It proves which methods the policy offered and which one
+// validated without exposing challenge tokens or ACME account material.
+type ACMEDomainValidationActivity struct {
+	OrderID             string    `json:"order_id"`
+	Domain              string    `json:"domain"`
+	OrderStatus         string    `json:"order_status"`
+	AuthorizationStatus string    `json:"authorization_status"`
+	ChallengeMethods    []string  `json:"challenge_methods"`
+	ValidatedMethod     string    `json:"validated_method,omitempty"`
+	ValidationSkipped   bool      `json:"validation_skipped"`
+	CreatedAt           time.Time `json:"created_at"`
+}
+
 // ACMEOperatorPlan is a tenant-bound, secret-free, effect-free answer to "can an
 // ACME client use this control plane now?" It joins the mounted responder,
 // activation gate, issuing profile, EAB admission, and DNS automation state at
 // request time. Empty preview effect lists are explicit evidence, not an omitted
 // implementation detail.
 type ACMEOperatorPlan struct {
-	Ready                  bool               `json:"ready"`
-	Served                 bool               `json:"served"`
-	TenantBound            bool               `json:"tenant_bound"`
-	DirectoryPath          string             `json:"directory_path"`
-	ChallengeMethods       []string           `json:"challenge_methods"`
-	EABRequired            bool               `json:"eab_required"`
-	EABConfigured          int                `json:"eab_configured"`
-	EABActive              int                `json:"eab_active"`
-	DNS01ProviderConfigs   int                `json:"dns01_provider_configs"`
-	IssuingProfile         string             `json:"issuing_profile"`
-	IssuingProfileReady    bool               `json:"issuing_profile_ready"`
-	ActivationMode         string             `json:"activation_mode"`
-	ActivationRequired     bool               `json:"activation_required"`
-	ActivationAvailable    bool               `json:"activation_available"`
-	NextAction             ACMEOperatorAction `json:"next_action"`
-	Blockers               []string           `json:"blockers"`
-	Warnings               []string           `json:"warnings"`
-	RecoverySteps          []string           `json:"recovery_steps"`
-	PreviewWrites          []string           `json:"preview_writes"`
-	PreviewExternalEffects []string           `json:"preview_external_effects"`
-	GeneratedAt            time.Time          `json:"generated_at"`
+	Ready                  bool                           `json:"ready"`
+	Served                 bool                           `json:"served"`
+	TenantBound            bool                           `json:"tenant_bound"`
+	DirectoryPath          string                         `json:"directory_path"`
+	ChallengeMethods       []string                       `json:"challenge_methods"`
+	EABRequired            bool                           `json:"eab_required"`
+	EABConfigured          int                            `json:"eab_configured"`
+	EABActive              int                            `json:"eab_active"`
+	DNS01ProviderConfigs   int                            `json:"dns01_provider_configs"`
+	IssuingProfile         string                         `json:"issuing_profile"`
+	IssuingProfileReady    bool                           `json:"issuing_profile_ready"`
+	ActivationMode         string                         `json:"activation_mode"`
+	ActivationRequired     bool                           `json:"activation_required"`
+	ActivationAvailable    bool                           `json:"activation_available"`
+	NextAction             ACMEOperatorAction             `json:"next_action"`
+	Blockers               []string                       `json:"blockers"`
+	Warnings               []string                       `json:"warnings"`
+	RecoverySteps          []string                       `json:"recovery_steps"`
+	PreviewWrites          []string                       `json:"preview_writes"`
+	PreviewExternalEffects []string                       `json:"preview_external_effects"`
+	ValidationActivity     []ACMEDomainValidationActivity `json:"validation_activity"`
+	GeneratedAt            time.Time                      `json:"generated_at"`
 }
 
 // ACMEOperatorPlanProvider resolves the late-bound protocol assembly for one
@@ -90,6 +105,9 @@ func (a *API) getACMEOperatorPlan(w http.ResponseWriter, r *http.Request) {
 	}
 	if plan.PreviewExternalEffects == nil {
 		plan.PreviewExternalEffects = []string{}
+	}
+	if plan.ValidationActivity == nil {
+		plan.ValidationActivity = []ACMEDomainValidationActivity{}
 	}
 	if plan.GeneratedAt.IsZero() {
 		plan.GeneratedAt = time.Now().UTC()

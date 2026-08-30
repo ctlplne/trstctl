@@ -910,6 +910,70 @@
         },
         "type": "object"
       },
+      "ACMEDomainValidationActivity": {
+        "properties": {
+          "authorization_status": {
+            "enum": [
+              "pending",
+              "valid"
+            ],
+            "type": "string"
+          },
+          "challenge_methods": {
+            "items": {
+              "enum": [
+                "http-01",
+                "dns-01",
+                "tls-alpn-01",
+                "device-attest-01"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "order_id": {
+            "type": "string"
+          },
+          "order_status": {
+            "enum": [
+              "pending",
+              "ready",
+              "processing",
+              "valid"
+            ],
+            "type": "string"
+          },
+          "validated_method": {
+            "enum": [
+              "http-01",
+              "dns-01",
+              "tls-alpn-01",
+              "device-attest-01"
+            ],
+            "type": "string"
+          },
+          "validation_skipped": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "order_id",
+          "domain",
+          "order_status",
+          "authorization_status",
+          "challenge_methods",
+          "validation_skipped",
+          "created_at"
+        ],
+        "type": "object"
+      },
       "ACMEEABCredential": {
         "properties": {
           "accounts_bound": {
@@ -1119,6 +1183,12 @@
           "tenant_bound": {
             "type": "boolean"
           },
+          "validation_activity": {
+            "items": {
+              "$ref": "#/components/schemas/ACMEDomainValidationActivity"
+            },
+            "type": "array"
+          },
           "warnings": {
             "items": {
               "type": "string"
@@ -1147,6 +1217,7 @@
           "recovery_steps",
           "preview_writes",
           "preview_external_effects",
+          "validation_activity",
           "generated_at"
         ],
         "type": "object"

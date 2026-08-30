@@ -222,6 +222,17 @@ export interface ACMEDeviceAttestationPolicy {
   max_age?: string;
 }
 
+export interface ACMEDomainValidationActivity {
+  authorization_status: "pending" | "valid";
+  challenge_methods: ("http-01" | "dns-01" | "tls-alpn-01" | "device-attest-01")[];
+  created_at: string;
+  domain: string;
+  order_id: string;
+  order_status: "pending" | "ready" | "processing" | "valid";
+  validated_method?: "http-01" | "dns-01" | "tls-alpn-01" | "device-attest-01";
+  validation_skipped: boolean;
+}
+
 export interface ACMEEABCredential {
   accounts_bound: number;
   allowed_identifiers?: string[];
@@ -273,6 +284,7 @@ export interface ACMEOperatorPlan {
   recovery_steps: string[];
   served: boolean;
   tenant_bound: boolean;
+  validation_activity: ACMEDomainValidationActivity[];
   warnings: string[];
 }
 
