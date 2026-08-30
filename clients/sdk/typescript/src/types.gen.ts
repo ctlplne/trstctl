@@ -6017,7 +6017,29 @@ export interface components {
             /** Format: date-time */
             start: string;
         };
+        ACMEDNS01CAAPolicyEvidence: {
+            allowed_issuers: string[];
+            configured_issuer?: string;
+            fail_closed: boolean;
+            governing_name?: string;
+            recommended_records: string[];
+            records: components["schemas"]["ACMEDNS01CAAPolicyRecord"][];
+            recovery_steps: string[];
+            /** @enum {string} */
+            relevant_tag: "issue" | "issuewild";
+            /** @enum {string} */
+            source: "authoritative_live_dns";
+            /** @enum {string} */
+            status: "not_configured" | "unrestricted" | "allowed" | "denied" | "lookup_failed";
+            wildcard: boolean;
+        };
+        ACMEDNS01CAAPolicyRecord: {
+            flag: number;
+            tag: string;
+            value: string;
+        };
         ACMEDNS01Preflight: {
+            caa_policy: components["schemas"]["ACMEDNS01CAAPolicyEvidence"];
             checks: components["schemas"]["ACMEDNS01PreflightCheck"][];
             /** Format: uuid */
             config_id: string;

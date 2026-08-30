@@ -48,7 +48,28 @@ export interface ACMEARIWindow {
   start: string;
 }
 
+export interface ACMEDNS01CAAPolicyEvidence {
+  allowed_issuers: string[];
+  configured_issuer?: string;
+  fail_closed: boolean;
+  governing_name?: string;
+  recommended_records: string[];
+  records: ACMEDNS01CAAPolicyRecord[];
+  recovery_steps: string[];
+  relevant_tag: "issue" | "issuewild";
+  source: "authoritative_live_dns";
+  status: "not_configured" | "unrestricted" | "allowed" | "denied" | "lookup_failed";
+  wildcard: boolean;
+}
+
+export interface ACMEDNS01CAAPolicyRecord {
+  flag: number;
+  tag: string;
+  value: string;
+}
+
 export interface ACMEDNS01Preflight {
+  caa_policy: ACMEDNS01CAAPolicyEvidence;
   checks: ACMEDNS01PreflightCheck[];
   config_id: string;
   domain: string;

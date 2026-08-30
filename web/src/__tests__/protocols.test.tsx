@@ -1516,6 +1516,19 @@ describe("protocol surface", () => {
         record_name: "_acme-challenge.api.example.test",
         method_rationale: "Wildcard orders require DNS-01.",
         ready: false,
+        caa_policy: {
+          status: "denied",
+          source: "authoritative_live_dns",
+          configured_issuer: "trstctl.example",
+          governing_name: "example.test",
+          wildcard: true,
+          relevant_tag: "issuewild",
+          records: [{ flag: 0, tag: "issuewild", value: "other.ca" }],
+          allowed_issuers: ["other.ca"],
+          recommended_records: ['example.test CAA 0 issuewild "trstctl.example"'],
+          recovery_steps: ["Publish the recommended record.", "Wait for DNS, then check again."],
+          fail_closed: true,
+        },
         checks: [
           { name: "delegation", status: "pass", detail: "Delegation reached the configured target." },
           { name: "CAA", status: "fail", detail: "The issuer is not allowed." },
@@ -1530,6 +1543,19 @@ describe("protocol surface", () => {
         selected_method: "dns-01",
         record_name: "_acme-challenge.api.example.test",
         ready: true,
+        caa_policy: {
+          status: "allowed",
+          source: "authoritative_live_dns",
+          configured_issuer: "trstctl.example",
+          governing_name: "example.test",
+          wildcard: false,
+          relevant_tag: "issue",
+          records: [{ flag: 0, tag: "issue", value: "trstctl.example" }],
+          allowed_issuers: ["trstctl.example"],
+          recommended_records: [],
+          recovery_steps: ["No CAA change is required."],
+          fail_closed: true,
+        },
         checks: [{ name: "delegation", status: "pass", detail: "Ready." }],
         failed_checks: [],
       });
@@ -1557,11 +1583,16 @@ describe("protocol surface", () => {
     expect(await within(dialog).findByText("Not ready")).toBeInTheDocument();
     expect(within(dialog).getByText("Wildcard orders require DNS-01.")).toBeInTheDocument();
     expect(within(dialog).getByText(/Failed checks:.*CAA/)).toBeInTheDocument();
+    expect(within(dialog).getByRole("region", { name: "CAA issuance policy" })).toHaveTextContent("CAA blocks this issuer");
+    expect(within(dialog).getByText('example.test CAA 0 issuewild "trstctl.example"')).toBeInTheDocument();
+    expect(within(dialog).getByRole("status", { name: "Preflight result for *.api.example.test" })).toHaveFocus();
 
     await user.clear(within(dialog).getByRole("textbox", { name: "Domain" }));
     await user.type(within(dialog).getByRole("textbox", { name: "Domain" }), "api.example.test");
     await user.click(within(dialog).getByRole("button", { name: "Re-run preflight" }));
     expect(await within(dialog).findByText("Ready")).toBeInTheDocument();
+    expect(within(dialog).getByRole("region", { name: "CAA issuance policy" })).toHaveTextContent("CAA allows this issuer");
+    expect(within(dialog).getByRole("status", { name: "Preflight result for api.example.test" })).toHaveFocus();
     expect(apiMock.acmeDNS01Preflight).toHaveBeenCalledTimes(3);
   });
 

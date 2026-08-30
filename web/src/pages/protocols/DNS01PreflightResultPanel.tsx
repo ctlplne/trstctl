@@ -1,12 +1,16 @@
 import { CheckCircle2, MinusCircle, XCircle } from "lucide-react";
+import type { Ref } from "react";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import type { ACMEDNS01Preflight } from "@/lib/api";
+import { DNS01CAAPolicyPanel } from "@/pages/protocols/DNS01CAAPolicyPanel";
 
-export function DNS01PreflightResultPanel({ result }: { result: ACMEDNS01Preflight }) {
+export function DNS01PreflightResultPanel({ result, sectionRef }: { result: ACMEDNS01Preflight; sectionRef?: Ref<HTMLElement> }) {
   const { t } = useTranslation();
   return (
     <section
+      ref={sectionRef}
+      tabIndex={-1}
       role="status"
       aria-label={translateNow("source.preflight.result.for.value1.b75b62525f", { value1: result.domain })}
       className="grid gap-3 rounded-control border border-border p-3 text-sm"
@@ -29,6 +33,7 @@ export function DNS01PreflightResultPanel({ result }: { result: ACMEDNS01Preflig
         </div>
       </dl>
       {result.method_rationale && <p className="text-sm text-muted-foreground">{result.method_rationale}</p>}
+      <DNS01CAAPolicyPanel policy={result.caa_policy} />
       <ul className="grid gap-2">
         {result.checks.map((check) => (
           <li

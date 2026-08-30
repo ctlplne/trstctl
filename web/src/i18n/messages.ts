@@ -13620,6 +13620,106 @@ export const messages = {
     defaultMessage: "No extra plugin capabilities are granted.",
     description: "Empty capability-grant state.",
   },
+  "protocols.dns01.caa.label": {
+    defaultMessage: "CAA issuance policy",
+    description: "Accessible label for the live CAA evidence panel.",
+  },
+  "protocols.dns01.caa.notConfiguredTitle": {
+    defaultMessage: "CAA policy is not configured",
+    description: "Heading when the provider config has no issuer domain to check.",
+  },
+  "protocols.dns01.caa.notConfiguredHelp": {
+    defaultMessage: "trstctl does not know which CA name it should look for in DNS yet. Set the issuer domain, then check again.",
+    description: "ELI5 explanation for missing CAA issuer configuration.",
+  },
+  "protocols.dns01.caa.unrestrictedTitle": {
+    defaultMessage: "No CAA record limits issuance",
+    description: "Heading when no governing CAA record exists.",
+  },
+  "protocols.dns01.caa.unrestrictedHelp": {
+    defaultMessage: "Issuance can continue, but DNS currently does not restrict which CA may issue. The suggested record adds that guardrail.",
+    description: "ELI5 explanation for unrestricted CAA policy.",
+  },
+  "protocols.dns01.caa.allowedTitle": {
+    defaultMessage: "CAA allows this issuer",
+    description: "Heading when live governing CAA authorizes the configured issuer.",
+  },
+  "protocols.dns01.caa.allowedHelp": {
+    defaultMessage: "The live governing DNS policy names this CA for this request type. No CAA change is needed.",
+    description: "ELI5 explanation for an allowed CAA decision.",
+  },
+  "protocols.dns01.caa.deniedTitle": {
+    defaultMessage: "CAA blocks this issuer",
+    description: "Heading when governing CAA denies the configured issuer.",
+  },
+  "protocols.dns01.caa.deniedHelp": {
+    defaultMessage: "trstctl stopped before issuance because the live DNS policy does not allow this CA for this request type.",
+    description: "ELI5 explanation for a denied CAA decision.",
+  },
+  "protocols.dns01.caa.lookupFailedTitle": {
+    defaultMessage: "CAA could not be verified",
+    description: "Heading when the authoritative CAA lookup fails.",
+  },
+  "protocols.dns01.caa.lookupFailedHelp": {
+    defaultMessage: "DNS did not provide a trustworthy answer. trstctl fails closed: it blocks issuance instead of guessing.",
+    description: "ELI5 explanation for fail-closed CAA lookup failure.",
+  },
+  "protocols.dns01.caa.liveSource": {
+    defaultMessage: "Checked authoritative DNS live",
+    description: "Human-readable source label for CAA evidence.",
+  },
+  "protocols.dns01.caa.configuredIssuer": {
+    defaultMessage: "Issuer trstctl expects",
+    description: "Label for the configured CA identifier.",
+  },
+  "protocols.dns01.caa.governingName": {
+    defaultMessage: "DNS name that sets the rule",
+    description: "ELI5 label for the governing CAA owner name.",
+  },
+  "protocols.dns01.caa.noGoverningName": {
+    defaultMessage: "No governing CAA record found",
+    description: "Value shown when the DNS tree has no CAA record set.",
+  },
+  "protocols.dns01.caa.requestType": {
+    defaultMessage: "Request type checked",
+    description: "Label for ordinary versus wildcard CAA evaluation.",
+  },
+  "protocols.dns01.caa.standardRequest": {
+    defaultMessage: "Standard name · issue record",
+    description: "CAA property selected for a non-wildcard request.",
+  },
+  "protocols.dns01.caa.wildcardRequest": {
+    defaultMessage: "Wildcard name · issuewild record",
+    description: "CAA property selected for a wildcard request.",
+  },
+  "protocols.dns01.caa.currentRecords": {
+    defaultMessage: "Current governing records",
+    description: "Heading for CAA records observed in live DNS.",
+  },
+  "protocols.dns01.caa.noCurrentRecords": {
+    defaultMessage: "No CAA records were found from this name up the DNS tree.",
+    description: "Empty state for governing CAA records.",
+  },
+  "protocols.dns01.caa.allowedIssuers": {
+    defaultMessage: "Issuers allowed for this request",
+    description: "Heading for parsed issuer names in the relevant CAA properties.",
+  },
+  "protocols.dns01.caa.noAllowedIssuers": {
+    defaultMessage: "No issuer is allowed by the governing records.",
+    description: "Empty state for a deny-all or otherwise denying CAA set.",
+  },
+  "protocols.dns01.caa.recommendedChange": {
+    defaultMessage: "Recommended DNS record",
+    description: "Heading for an exact CAA record recommendation.",
+  },
+  "protocols.dns01.caa.nextSteps": {
+    defaultMessage: "What to do next",
+    description: "Heading for safe CAA recovery steps.",
+  },
+  "protocols.dns01.caa.failClosed": {
+    defaultMessage: "Safety rule: if live CAA cannot be read or does not allow this issuer, trstctl stops before any provider write or certificate issuance.",
+    description: "Explicit fail-closed trust boundary under CAA evidence.",
+  },
   "protocols.eab.accountsBound": {
     defaultMessage: "{count} accounts",
     description: "B4: how many ACME accounts this credential has admitted.",

@@ -1315,8 +1315,12 @@ describe("i18n boundary", () => {
       // delegation target, fail-closed behavior, and pending/failed/proved
       // states are now named in all three locales. Machine-authored es/de —
       // FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "0eb9b6c0a91432cfc445ac9cd25d0fa065384ca1506b1c8fcdff674dad2bab5e",
-      "de-DE": "830abde3017c2b6ee9436db1c813f5c2b53d258190d9e0de18993531c5d5173a",
+      // F72 CAA-policy re-pin: the five live policy states, governing name,
+      // exact public records, allowed issuers, fail-closed boundary, and safe
+      // recovery are named in all three locales. Machine-authored es/de —
+      // FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "e7a74051f1e0524c9b5a0c7863994fa4f30cfc99ce7137b8661b6dcfdf6726e2",
+      "de-DE": "42f21ebf4e92ef4dfe2fa33f7dbad7c8e0874a87f7a9755a81f0b78e30e9b5a5",
     });
   });
 

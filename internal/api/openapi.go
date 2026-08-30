@@ -2689,12 +2689,27 @@ func componentSchemas() map[string]*Schema {
 	acmeDNS01PreflightCheck := object(map[string]*Schema{
 		"name": str(), "status": {Type: "string", Enum: []string{"pass", "fail", "skipped"}}, "detail": str(),
 	}, "name", "status", "detail")
+	acmeDNS01CAAPolicyRecord := object(map[string]*Schema{
+		"flag": {Type: "integer"}, "tag": str(), "value": str(),
+	}, "flag", "tag", "value")
+	acmeDNS01CAAPolicyEvidence := object(map[string]*Schema{
+		"status":            {Type: "string", Enum: []string{"not_configured", "unrestricted", "allowed", "denied", "lookup_failed"}},
+		"source":            {Type: "string", Enum: []string{"authoritative_live_dns"}},
+		"configured_issuer": str(), "governing_name": str(), "wildcard": {Type: "boolean"},
+		"relevant_tag":        {Type: "string", Enum: []string{"issue", "issuewild"}},
+		"records":             {Type: "array", Items: ref("ACMEDNS01CAAPolicyRecord")},
+		"allowed_issuers":     {Type: "array", Items: str()},
+		"recommended_records": {Type: "array", Items: str()},
+		"recovery_steps":      {Type: "array", Items: str()},
+		"fail_closed":         {Type: "boolean"},
+	}, "status", "source", "wildcard", "relevant_tag", "records", "allowed_issuers", "recommended_records", "recovery_steps", "fail_closed")
 	acmeDNS01Preflight := object(map[string]*Schema{
 		"ready": {Type: "boolean"}, "config_id": uuid(), "domain": str(), "record_name": str(),
 		"selected_method": str(), "method_rationale": str(), "wildcard": {Type: "boolean"},
 		"checks":        {Type: "array", Items: ref("ACMEDNS01PreflightCheck")},
 		"failed_checks": {Type: "array", Items: str()},
-	}, "ready", "config_id", "domain", "record_name", "selected_method", "wildcard", "checks", "failed_checks")
+		"caa_policy":    ref("ACMEDNS01CAAPolicyEvidence"),
+	}, "ready", "config_id", "domain", "record_name", "selected_method", "wildcard", "checks", "failed_checks", "caa_policy")
 	acmeDNS01QualificationReq := object(map[string]*Schema{
 		"domain": str(),
 	}, "domain")
@@ -5651,6 +5666,8 @@ func componentSchemas() map[string]*Schema {
 		"ACMEDNS01ProviderConfigList":              acmeDNS01ProviderConfigList,
 		"ACMEDNS01PreflightRequest":                acmeDNS01PreflightReq,
 		"ACMEDNS01PreflightCheck":                  acmeDNS01PreflightCheck,
+		"ACMEDNS01CAAPolicyRecord":                 acmeDNS01CAAPolicyRecord,
+		"ACMEDNS01CAAPolicyEvidence":               acmeDNS01CAAPolicyEvidence,
 		"ACMEDNS01Preflight":                       acmeDNS01Preflight,
 		"ACMEDNS01QualificationRequest":            acmeDNS01QualificationReq,
 		"ACMEDNS01QualificationCheck":              acmeDNS01QualificationCheck,

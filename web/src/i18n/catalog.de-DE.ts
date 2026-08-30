@@ -4178,6 +4178,36 @@ const deDECatalog = {
   "protocols.dns01.providerTrust.notReported": "Von dieser Laufzeit nicht gemeldet",
   "protocols.dns01.providerTrust.grants": "Erlaubte Plugin-Fähigkeiten",
   "protocols.dns01.providerTrust.noGrants": "Es sind keine zusätzlichen Plugin-Fähigkeiten erlaubt.",
+  "protocols.dns01.caa.label": "CAA-Ausstellungsrichtlinie",
+  "protocols.dns01.caa.notConfiguredTitle": "CAA-Richtlinie ist nicht konfiguriert",
+  "protocols.dns01.caa.notConfiguredHelp":
+    "trstctl weiß noch nicht, nach welchem CA-Namen es im DNS suchen soll. Legen Sie die Aussteller-Domain fest und prüfen Sie erneut.",
+  "protocols.dns01.caa.unrestrictedTitle": "Kein CAA-Eintrag begrenzt die Ausstellung",
+  "protocols.dns01.caa.unrestrictedHelp":
+    "Die Ausstellung kann fortfahren, aber DNS beschränkt derzeit nicht, welche CA ausstellen darf. Der vorgeschlagene Eintrag fügt diese Schutzregel hinzu.",
+  "protocols.dns01.caa.allowedTitle": "CAA erlaubt diesen Aussteller",
+  "protocols.dns01.caa.allowedHelp": "Die maßgebliche Live-DNS-Richtlinie nennt diese CA für diesen Anfragetyp. Keine CAA-Änderung ist nötig.",
+  "protocols.dns01.caa.deniedTitle": "CAA blockiert diesen Aussteller",
+  "protocols.dns01.caa.deniedHelp":
+    "trstctl stoppte vor der Ausstellung, weil die maßgebliche Live-DNS-Richtlinie diese CA für diesen Anfragetyp nicht erlaubt.",
+  "protocols.dns01.caa.lookupFailedTitle": "CAA konnte nicht verifiziert werden",
+  "protocols.dns01.caa.lookupFailedHelp":
+    "DNS lieferte keine vertrauenswürdige Antwort. trstctl sperrt sicher: Die Ausstellung wird blockiert, statt zu raten.",
+  "protocols.dns01.caa.liveSource": "Autoritatives DNS live geprüft",
+  "protocols.dns01.caa.configuredIssuer": "Von trstctl erwarteter Aussteller",
+  "protocols.dns01.caa.governingName": "DNS-Name, der die Regel festlegt",
+  "protocols.dns01.caa.noGoverningName": "Kein maßgeblicher CAA-Eintrag gefunden",
+  "protocols.dns01.caa.requestType": "Geprüfter Anfragetyp",
+  "protocols.dns01.caa.standardRequest": "Standardname · issue-Eintrag",
+  "protocols.dns01.caa.wildcardRequest": "Wildcard-Name · issuewild-Eintrag",
+  "protocols.dns01.caa.currentRecords": "Aktuelle maßgebliche Einträge",
+  "protocols.dns01.caa.noCurrentRecords": "Von diesem Namen aufwärts im DNS-Baum wurden keine CAA-Einträge gefunden.",
+  "protocols.dns01.caa.allowedIssuers": "Für diese Anfrage erlaubte Aussteller",
+  "protocols.dns01.caa.noAllowedIssuers": "Die maßgeblichen Einträge erlauben keinen Aussteller.",
+  "protocols.dns01.caa.recommendedChange": "Empfohlener DNS-Eintrag",
+  "protocols.dns01.caa.nextSteps": "Nächste Schritte",
+  "protocols.dns01.caa.failClosed":
+    "Sicherheitsregel: Wenn Live-CAA nicht gelesen werden kann oder diesen Aussteller nicht erlaubt, stoppt trstctl vor jedem Anbieterschreibvorgang und jeder Zertifikatsausstellung.",
   "protocols.eab.accountsBound": "{count} Konten",
   "protocols.eab.description":
     "Jede Berechtigung ist eine Autorisierung, nicht nur ein T\u00fcrschl\u00fcssel: Ein Konto merkt sich, welche Berechtigung es zugelassen hat, und jede Bestellung dieses Kontos wird gegen deren Geltungsbereich gepr\u00fcft. Das Deaktivieren stoppt neue Konten und Bestellungen; bereits ausgestellte Zertifikate bleiben g\u00fcltig.",

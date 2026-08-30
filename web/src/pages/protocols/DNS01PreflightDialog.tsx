@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { X } from "lucide-react";
 import { Dialog } from "@/components/Dialog";
 import { ErrorState } from "@/components/StatePrimitives";
@@ -32,7 +32,12 @@ export function DNS01PreflightDialog({ config, onClose }: { config: ACMEDNS01Pro
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ACMEDNS01Preflight | null>(null);
   const domainRef = useRef<HTMLInputElement>(null);
+  const resultRef = useRef<HTMLElement>(null);
   const titleId = "dns01-preflight-heading";
+
+  useEffect(() => {
+    if (result) resultRef.current?.focus();
+  }, [result]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -135,7 +140,7 @@ export function DNS01PreflightDialog({ config, onClose }: { config: ACMEDNS01Pro
             {result ? translateNow("source.re.run.preflight.8d65b96680") : translateNow("source.run.preflight.3cd0b7ebda")}
           </Button>
         </div>
-        {result && <DNS01PreflightResultPanel result={result} />}
+        {result && <DNS01PreflightResultPanel result={result} sectionRef={resultRef} />}
       </form>
     </Dialog>
   );

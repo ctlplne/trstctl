@@ -97,16 +97,43 @@ type dns01PreflightCheck struct {
 	Detail string `json:"detail"`
 }
 
+// dns01CAAPolicyRecord is one public DNS policy record observed during the live
+// preflight. It deliberately contains no resolver packet metadata or provider
+// credential material.
+type dns01CAAPolicyRecord struct {
+	Flag uint8  `json:"flag"`
+	Tag  string `json:"tag"`
+	Data string `json:"value"`
+}
+
+// dns01CAAPolicyEvidence turns the binary CAA gate into an operator workflow:
+// what live DNS said, why issuance is allowed or blocked, and the shortest safe
+// recovery. CAA records are public DNS policy and may be returned unredacted.
+type dns01CAAPolicyEvidence struct {
+	Status             string                 `json:"status"`
+	Source             string                 `json:"source"`
+	ConfiguredIssuer   string                 `json:"configured_issuer,omitempty"`
+	GoverningName      string                 `json:"governing_name,omitempty"`
+	Wildcard           bool                   `json:"wildcard"`
+	RelevantTag        string                 `json:"relevant_tag"`
+	Records            []dns01CAAPolicyRecord `json:"records"`
+	AllowedIssuers     []string               `json:"allowed_issuers"`
+	RecommendedRecords []string               `json:"recommended_records"`
+	RecoverySteps      []string               `json:"recovery_steps"`
+	FailClosed         bool                   `json:"fail_closed"`
+}
+
 type dns01PreflightResponse struct {
-	Ready           bool                  `json:"ready"`
-	ConfigID        string                `json:"config_id"`
-	Domain          string                `json:"domain"`
-	RecordName      string                `json:"record_name"`
-	SelectedMethod  string                `json:"selected_method"`
-	MethodRationale string                `json:"method_rationale"`
-	Wildcard        bool                  `json:"wildcard"`
-	Checks          []dns01PreflightCheck `json:"checks"`
-	FailedChecks    []string              `json:"failed_checks"`
+	Ready           bool                   `json:"ready"`
+	ConfigID        string                 `json:"config_id"`
+	Domain          string                 `json:"domain"`
+	RecordName      string                 `json:"record_name"`
+	SelectedMethod  string                 `json:"selected_method"`
+	MethodRationale string                 `json:"method_rationale"`
+	Wildcard        bool                   `json:"wildcard"`
+	Checks          []dns01PreflightCheck  `json:"checks"`
+	FailedChecks    []string               `json:"failed_checks"`
+	CAAPolicy       dns01CAAPolicyEvidence `json:"caa_policy"`
 }
 
 var servedDNS01ProviderCatalog = []ACMEDNS01ProviderCatalogItem{
@@ -555,13 +582,14 @@ func (a *API) evaluateDNS01Preflight(ctx context.Context, req dns01PreflightRequ
 	}
 	checks = append(checks, delegationCheck(recordName, cfg.DelegationTarget, req.ObservedCNAME))
 	checks = append(checks, propagationCheck(req.ExpectedTXT, req.ObservedTXT))
-	checks = append(checks, caaCheck(ctx, a.acmeCAAResolver, domain, wildcard, cfg.CAAIssuerDomain))
+	caa, caaPolicy := caaPolicyCheck(ctx, a.acmeCAAResolver, domain, wildcard, cfg.CAAIssuerDomain)
+	checks = append(checks, caa)
 
 	failed := failedDNS01Checks(checks)
 	return dns01PreflightResponse{
 		Ready: len(failed) == 0, ConfigID: cfg.ID, Domain: domain, RecordName: recordName,
 		SelectedMethod: method, MethodRationale: rationale, Wildcard: wildcard,
-		Checks: checks, FailedChecks: failed,
+		Checks: checks, FailedChecks: failed, CAAPolicy: caaPolicy,
 	}
 }
 
@@ -590,19 +618,79 @@ func propagationCheck(expected string, observed []string) dns01PreflightCheck {
 	return dns01PreflightCheck{Name: "txt_propagation", Status: "fail", Detail: "observed TXT records do not contain the expected DNS-01 value"}
 }
 
-func caaCheck(ctx context.Context, resolver acmesrv.CAAResolver, domain string, wildcard bool, issuer string) dns01PreflightCheck {
+func caaPolicyCheck(ctx context.Context, resolver acmesrv.CAAResolver, domain string, wildcard bool, issuer string) (dns01PreflightCheck, dns01CAAPolicyEvidence) {
 	issuer = strings.TrimSpace(issuer)
+	evidence := dns01CAAPolicyEvidence{
+		Status: "not_configured", Source: "authoritative_live_dns", ConfiguredIssuer: issuer,
+		Wildcard: wildcard, RelevantTag: "issue", Records: []dns01CAAPolicyRecord{},
+		AllowedIssuers: []string{}, RecommendedRecords: []string{}, RecoverySteps: []string{},
+		FailClosed: true,
+	}
+	if wildcard {
+		evidence.RelevantTag = "issuewild"
+	}
 	if issuer == "" {
-		return dns01PreflightCheck{Name: "caa_policy", Status: "skipped", Detail: "provider config does not declare a CAA issuer domain"}
+		evidence.RecoverySteps = []string{
+			"Set the provider config's CAA issuer domain to the CA identifier expected in public DNS.",
+			"Run this preflight again before relying on CAA enforcement.",
+		}
+		return dns01PreflightCheck{Name: "caa_policy", Status: "skipped", Detail: "provider config does not declare a CAA issuer domain"}, evidence
 	}
 	if resolver == nil {
-		return dns01PreflightCheck{Name: "caa_policy", Status: "fail", Detail: "CAA lookup failed closed: no live CAA resolver is configured"}
+		evidence.Status = "lookup_failed"
+		evidence.RecoverySteps = caaLookupRecovery()
+		return dns01PreflightCheck{Name: "caa_policy", Status: "fail", Detail: "CAA lookup failed closed: no live CAA resolver is configured"}, evidence
 	}
 	checker := acmesrv.CAAChecker{Resolver: resolver, IssuerDomain: issuer}
-	if err := checker.Check(ctx, domain, wildcard); err != nil {
-		return dns01PreflightCheck{Name: "caa_policy", Status: "fail", Detail: "live CAA lookup failed closed: " + err.Error()}
+	inspection, err := checker.Inspect(ctx, domain, wildcard)
+	evidence.GoverningName = inspection.GoverningName
+	evidence.RelevantTag = inspection.RelevantTag
+	evidence.AllowedIssuers = append(evidence.AllowedIssuers, inspection.AllowedIssuers...)
+	for _, record := range inspection.Records {
+		evidence.Records = append(evidence.Records, dns01CAAPolicyRecord{Flag: record.Flag, Tag: record.Tag, Data: record.Value})
 	}
-	return dns01PreflightCheck{Name: "caa_policy", Status: "pass", Detail: "live governing CAA authorizes the configured issuer or no CAA record restricts issuance"}
+	if err != nil {
+		if len(inspection.Records) == 0 {
+			evidence.Status = "lookup_failed"
+			evidence.RecoverySteps = caaLookupRecovery()
+			return dns01PreflightCheck{Name: "caa_policy", Status: "fail", Detail: "live CAA lookup failed closed: " + err.Error()}, evidence
+		}
+		evidence.Status = "denied"
+		evidence.RecommendedRecords = []string{recommendedCAARecord(inspection.GoverningName, inspection.RelevantTag, issuer)}
+		evidence.RecoverySteps = []string{
+			"Confirm that this issuer should be authorized for the requested name.",
+			"Publish the recommended CAA record without removing other issuers your organization still uses.",
+			"Wait for authoritative DNS to serve the new record, then run this preflight again.",
+		}
+		return dns01PreflightCheck{Name: "caa_policy", Status: "fail", Detail: "live governing CAA blocks the configured issuer: " + err.Error()}, evidence
+	}
+	if inspection.Unrestricted {
+		evidence.Status = "unrestricted"
+		name := strings.TrimSuffix(strings.TrimPrefix(domain, "*."), ".")
+		evidence.RecommendedRecords = []string{recommendedCAARecord(name, evidence.RelevantTag, issuer)}
+		evidence.RecoverySteps = []string{
+			"Issuance is allowed because no CAA record currently limits which CA may issue.",
+			"For tighter control, publish the recommended record and run this preflight again.",
+		}
+		return dns01PreflightCheck{Name: "caa_policy", Status: "pass", Detail: "no governing CAA record restricts issuance"}, evidence
+	}
+	evidence.Status = "allowed"
+	evidence.RecoverySteps = []string{
+		"No CAA change is required for this issuer and request type.",
+		"Run this preflight again after any DNS or issuer configuration change.",
+	}
+	return dns01PreflightCheck{Name: "caa_policy", Status: "pass", Detail: "live governing CAA authorizes the configured issuer"}, evidence
+}
+
+func recommendedCAARecord(name, tag, issuer string) string {
+	return strings.TrimSuffix(name, ".") + " CAA 0 " + tag + " \"" + issuer + "\""
+}
+
+func caaLookupRecovery() []string {
+	return []string{
+		"Repair authoritative DNS reachability, delegation, or the CAA response; trstctl will not guess while DNS is unavailable.",
+		"Run this preflight again and require a live allowed or unrestricted result before issuance.",
+	}
 }
 
 func failedDNS01Checks(checks []dns01PreflightCheck) []string {

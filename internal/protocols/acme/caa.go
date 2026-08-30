@@ -27,6 +27,19 @@ type CAAResolver interface {
 	LookupCAA(ctx context.Context, name string) ([]CAARecord, error)
 }
 
+// CAAInspection is the operator-safe evidence behind one CAA decision. Records are
+// public DNS policy, not credentials. GoverningName is empty only when the complete
+// tree walk found no CAA record set; on lookup failure it identifies the exact name
+// whose answer could not be trusted.
+type CAAInspection struct {
+	GoverningName  string
+	Records        []CAARecord
+	RelevantTag    string
+	AllowedIssuers []string
+	Unrestricted   bool
+	Authorized     bool
+}
+
 // CAAChecker performs the pre-issuance CAA check: issuance is permitted only if the CAA
 // policy for the domain authorizes the configured issuer. It walks from the FQDN up
 // toward the apex and applies the first level that publishes a CAA set (RFC 8659 §3).
@@ -40,27 +53,45 @@ type CAAChecker struct {
 // request, issuewild (if present at the governing level) takes precedence over issue
 // (RFC 8659 §4.3).
 func (c CAAChecker) Check(ctx context.Context, domain string, wildcard bool) error {
+	_, err := c.Inspect(ctx, domain, wildcard)
+	return err
+}
+
+// Inspect applies the same fail-closed decision as Check and also returns the public
+// DNS facts that explain it. A caller may safely display the returned evidence even
+// when err is non-nil; Authorized remains false for both a policy denial and a lookup
+// failure.
+func (c CAAChecker) Inspect(ctx context.Context, domain string, wildcard bool) (CAAInspection, error) {
+	inspection := CAAInspection{RelevantTag: "issue"}
+	if wildcard {
+		inspection.RelevantTag = "issuewild"
+	}
 	if c.Resolver == nil {
-		return fmt.Errorf("acme: CAA check requires a resolver")
+		return inspection, fmt.Errorf("acme: CAA check requires a resolver")
 	}
 	labels := strings.Split(strings.TrimSuffix(strings.TrimPrefix(domain, "*."), "."), ".")
 	for i := 0; i < len(labels); i++ {
 		name := strings.Join(labels[i:], ".")
+		inspection.GoverningName = name
 		records, err := c.Resolver.LookupCAA(ctx, name)
 		if err != nil {
-			return fmt.Errorf("acme: CAA lookup %s: %w", name, err)
+			return inspection, fmt.Errorf("acme: CAA lookup %s: %w", name, err)
 		}
 		if len(records) == 0 {
 			continue // walk up to the parent
 		}
-		return c.evaluate(name, records, wildcard)
+		inspection.Records = append([]CAARecord(nil), records...)
+		return c.evaluateInspection(inspection, wildcard)
 	}
-	return nil // no CAA anywhere up the tree => unrestricted
+	inspection.GoverningName = ""
+	inspection.Unrestricted = true
+	inspection.Authorized = true
+	return inspection, nil // no CAA anywhere up the tree => unrestricted
 }
 
-func (c CAAChecker) evaluate(name string, records []CAARecord, wildcard bool) error {
+func (c CAAChecker) evaluateInspection(inspection CAAInspection, wildcard bool) (CAAInspection, error) {
 	var issue, issuewild []CAARecord
-	for _, r := range records {
+	for _, r := range inspection.Records {
 		switch strings.ToLower(r.Tag) {
 		case "issue":
 			issue = append(issue, r)
@@ -71,28 +102,52 @@ func (c CAAChecker) evaluate(name string, records []CAARecord, wildcard bool) er
 	relevant := issue
 	if wildcard && len(issuewild) > 0 {
 		relevant = issuewild
+		inspection.RelevantTag = "issuewild"
+	} else {
+		inspection.RelevantTag = "issue"
+	}
+	for _, r := range relevant {
+		issuer := caaIssuer(r.Value)
+		if issuer != "" {
+			inspection.AllowedIssuers = appendUniqueFold(inspection.AllowedIssuers, issuer)
+		}
 	}
 	if len(relevant) == 0 {
-		return fmt.Errorf("acme: CAA at %s authorizes no issuer for this request", name)
+		return inspection, fmt.Errorf("acme: CAA at %s authorizes no issuer for this request", inspection.GoverningName)
 	}
 	for _, r := range relevant {
 		if c.authorizes(r.Value) {
-			return nil
+			inspection.Authorized = true
+			return inspection, nil
 		}
 	}
-	return fmt.Errorf("acme: CAA at %s does not authorize issuer %q", name, c.IssuerDomain)
+	return inspection, fmt.Errorf("acme: CAA at %s does not authorize issuer %q", inspection.GoverningName, c.IssuerDomain)
 }
 
 // authorizes parses a CAA issue/issuewild property value ("ca.example; account=1") and
 // reports whether it names this issuer. A value of ";" (empty issuer) forbids all
 // issuance (RFC 8659 §4.2).
 func (c CAAChecker) authorizes(value string) bool {
-	field := strings.TrimSpace(value)
-	if i := strings.IndexByte(field, ';'); i >= 0 {
-		field = strings.TrimSpace(field[:i])
-	}
+	field := caaIssuer(value)
 	if field == "" {
 		return false
 	}
 	return strings.EqualFold(field, c.IssuerDomain)
+}
+
+func caaIssuer(value string) string {
+	field := strings.TrimSpace(value)
+	if i := strings.IndexByte(field, ';'); i >= 0 {
+		field = strings.TrimSpace(field[:i])
+	}
+	return field
+}
+
+func appendUniqueFold(values []string, candidate string) []string {
+	for _, value := range values {
+		if strings.EqualFold(value, candidate) {
+			return values
+		}
+	}
+	return append(values, candidate)
 }

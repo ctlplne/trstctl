@@ -15,6 +15,8 @@ public final class OpenApiSchemas {
       "ACMEARIPosture",
       "ACMEARIPostureSummary",
       "ACMEARIWindow",
+      "ACMEDNS01CAAPolicyEvidence",
+      "ACMEDNS01CAAPolicyRecord",
       "ACMEDNS01Preflight",
       "ACMEDNS01PreflightCheck",
       "ACMEDNS01PreflightRequest",

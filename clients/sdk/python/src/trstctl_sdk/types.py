@@ -58,9 +58,38 @@ ACMEARIWindow = TypedDict(
     total=False,
 )
 
+ACMEDNS01CAAPolicyEvidence = TypedDict(
+    'ACMEDNS01CAAPolicyEvidence',
+    {
+        'allowed_issuers': list[str],
+        'configured_issuer': str,
+        'fail_closed': bool,
+        'governing_name': str,
+        'recommended_records': list[str],
+        'records': list[dict[str, Any]],
+        'recovery_steps': list[str],
+        'relevant_tag': str,
+        'source': str,
+        'status': str,
+        'wildcard': bool,
+    },
+    total=False,
+)
+
+ACMEDNS01CAAPolicyRecord = TypedDict(
+    'ACMEDNS01CAAPolicyRecord',
+    {
+        'flag': int,
+        'tag': str,
+        'value': str,
+    },
+    total=False,
+)
+
 ACMEDNS01Preflight = TypedDict(
     'ACMEDNS01Preflight',
     {
+        'caa_policy': dict[str, Any],
         'checks': list[dict[str, Any]],
         'config_id': str,
         'domain': str,

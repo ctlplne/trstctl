@@ -1059,7 +1059,21 @@ func TestServedACMEDNS01LiveCAAEnforcementTRACE015(t *testing.T) {
 	var preflight struct {
 		Ready        bool     `json:"ready"`
 		FailedChecks []string `json:"failed_checks"`
-		Checks       []struct {
+		CAAPolicy    struct {
+			Status           string   `json:"status"`
+			Source           string   `json:"source"`
+			ConfiguredIssuer string   `json:"configured_issuer"`
+			GoverningName    string   `json:"governing_name"`
+			RelevantTag      string   `json:"relevant_tag"`
+			AllowedIssuers   []string `json:"allowed_issuers"`
+			FailClosed       bool     `json:"fail_closed"`
+			Records          []struct {
+				Flag  uint8  `json:"flag"`
+				Tag   string `json:"tag"`
+				Value string `json:"value"`
+			} `json:"records"`
+		} `json:"caa_policy"`
+		Checks []struct {
 			Name   string `json:"name"`
 			Status string `json:"status"`
 			Detail string `json:"detail"`
@@ -1073,6 +1087,13 @@ func TestServedACMEDNS01LiveCAAEnforcementTRACE015(t *testing.T) {
 	}
 	if !checkStatus(preflight.Checks, "caa_policy", "pass") {
 		t.Fatalf("preflight did not report passing live CAA policy: %+v", preflight.Checks)
+	}
+	if preflight.CAAPolicy.Status != "allowed" || preflight.CAAPolicy.Source != "authoritative_live_dns" ||
+		preflight.CAAPolicy.ConfiguredIssuer != "trstctl.example" || preflight.CAAPolicy.GoverningName != "trace015.test" ||
+		preflight.CAAPolicy.RelevantTag != "issue" || !preflight.CAAPolicy.FailClosed ||
+		len(preflight.CAAPolicy.Records) != 1 || len(preflight.CAAPolicy.AllowedIssuers) != 1 ||
+		preflight.CAAPolicy.AllowedIssuers[0] != "trstctl.example" {
+		t.Fatalf("preflight did not return operator-safe authoritative CAA evidence: %+v body=%s", preflight.CAAPolicy, body)
 	}
 
 	dns.setCAA("trace015.test", []acmesrv.CAARecord{{Tag: "issue", Value: "other.ca"}})
@@ -1103,6 +1124,10 @@ func TestServedACMEDNS01LiveCAAEnforcementTRACE015(t *testing.T) {
 	}
 	if preflight.Ready || !containsString(preflight.FailedChecks, "caa_policy") {
 		t.Fatalf("preflight did not fail closed on live CAA lookup error: %+v body=%s", preflight, body)
+	}
+	if preflight.CAAPolicy.Status != "lookup_failed" || preflight.CAAPolicy.GoverningName != "lookup-error.trace015.test" ||
+		!preflight.CAAPolicy.FailClosed || len(preflight.CAAPolicy.Records) != 0 {
+		t.Fatalf("lookup failure did not preserve fail-closed CAA evidence: %+v body=%s", preflight.CAAPolicy, body)
 	}
 }
 

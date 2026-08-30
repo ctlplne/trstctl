@@ -172,8 +172,105 @@
         ],
         "type": "object"
       },
+      "ACMEDNS01CAAPolicyEvidence": {
+        "properties": {
+          "allowed_issuers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "configured_issuer": {
+            "type": "string"
+          },
+          "fail_closed": {
+            "type": "boolean"
+          },
+          "governing_name": {
+            "type": "string"
+          },
+          "recommended_records": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/ACMEDNS01CAAPolicyRecord"
+            },
+            "type": "array"
+          },
+          "recovery_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "relevant_tag": {
+            "enum": [
+              "issue",
+              "issuewild"
+            ],
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "authoritative_live_dns"
+            ],
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "not_configured",
+              "unrestricted",
+              "allowed",
+              "denied",
+              "lookup_failed"
+            ],
+            "type": "string"
+          },
+          "wildcard": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "status",
+          "source",
+          "wildcard",
+          "relevant_tag",
+          "records",
+          "allowed_issuers",
+          "recommended_records",
+          "recovery_steps",
+          "fail_closed"
+        ],
+        "type": "object"
+      },
+      "ACMEDNS01CAAPolicyRecord": {
+        "properties": {
+          "flag": {
+            "type": "integer"
+          },
+          "tag": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "flag",
+          "tag",
+          "value"
+        ],
+        "type": "object"
+      },
       "ACMEDNS01Preflight": {
         "properties": {
+          "caa_policy": {
+            "$ref": "#/components/schemas/ACMEDNS01CAAPolicyEvidence"
+          },
           "checks": {
             "items": {
               "$ref": "#/components/schemas/ACMEDNS01PreflightCheck"
@@ -217,7 +314,8 @@
           "selected_method",
           "wildcard",
           "checks",
-          "failed_checks"
+          "failed_checks",
+          "caa_policy"
         ],
         "type": "object"
       },

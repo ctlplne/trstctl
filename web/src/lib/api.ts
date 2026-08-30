@@ -535,6 +535,7 @@ export type { IssuanceRequestList, IssuanceRequest, IssuanceRequestInput, Issuan
 export type { TicketIntakeSchedule } from "./api-types.gen";
 export type { MDMDeviceList, MDMDevice, MDMDeviceTrace, MDMPollScheduleList } from "./api-types.gen";
 export type { AgentUpgradeCampaign } from "./api-types.gen";
+export type { ACMEDNS01CAAPolicyEvidence, ACMEDNS01CAAPolicyRecord } from "./api-types.gen";
 export type {
   ACMEDNS01QualificationCheck,
   ACMEDNS01QualificationPreview,
