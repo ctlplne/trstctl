@@ -879,7 +879,7 @@ not this file.
 | `internal/server/protocols_served_stock_clients_test.go:86` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/protocols_served_stock_clients_test.go:733` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/protocols_served_stock_clients_test.go:747` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
-| `internal/server/protocols_served_tsa_test.go:146` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
+| `internal/server/protocols_served_tsa_test.go:189` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/secret_third_party_scan_served_test.go:154` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_rotation_served_test.go:2447` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/server.go:2200` | served CA certificate directory; the PEM is public material (CWE-276) |
@@ -911,7 +911,7 @@ not this file.
 | `internal/crypto/secretfile/secretfile_test.go:67` | restores the fixture dir so t.TempDir cleanup can remove it (CWE-276) |
 | `internal/server/external_ca_config_test.go:120` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/managed_key_signer_config.go:27` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
-| `internal/server/protocols_served_tsa_test.go:155` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
+| `internal/server/protocols_served_tsa_test.go:198` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
 | `internal/signing/serve.go:199` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:59` | deliberately widened so enforceExactSocketDirMode has something to tighten (CWE-276) |
 | `internal/signing/socket_mode_unix_test.go:206` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -1183,8 +1183,8 @@ not this file.
 | `internal/server/protocols_served_stock_clients_test.go:763` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:769` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/protocols_served_tsa_test.go:53` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/server/protocols_served_tsa_test.go:150` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/server/protocols_served_tsa_test.go:155` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
+| `internal/server/protocols_served_tsa_test.go:193` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/server/protocols_served_tsa_test.go:198` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
 | `internal/server/rekor.go:46` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/response_buffer_guard_test.go:63` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/run.go:1123` | operator-configured local file path from deployment config (CWE-22) |
@@ -1508,8 +1508,8 @@ not this file.
 | `internal/server/protocols_served_stock_clients_test.go:733` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/protocols_served_stock_clients_test.go:747` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/protocols_served_stock_clients_test.go:769` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/server/protocols_served_tsa_test.go:146` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
-| `internal/server/protocols_served_tsa_test.go:155` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
+| `internal/server/protocols_served_tsa_test.go:189` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
+| `internal/server/protocols_served_tsa_test.go:198` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
 | `internal/server/secrets_scan_served_test.go:189` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/vault_compat_served_test.go:78` | test path inside its own tempdir/checkout (CWE-22) |
