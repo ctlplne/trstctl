@@ -14,6 +14,7 @@ const { apiMock } = vi.hoisted(() => ({
     graphBlastRadius: vi.fn(),
     connectorDeliveries: vi.fn(),
     rotationRuns: vi.fn(),
+    lifecycleAutomationPlan: vi.fn(),
   },
 }));
 
@@ -92,6 +93,27 @@ describe("WIRE-11 identity delivery and rotation evidence", () => {
         },
       ],
     });
+    apiMock.lifecycleAutomationPlan.mockResolvedValue({
+      capability: "lifecycle_automation",
+      ready: true,
+      generated_at: "2026-06-26T13:02:00Z",
+      scheduler: {
+        status: "running",
+        renew_before: "720h0m0s",
+        alert_before: "336h0m0s",
+        interval: "1m0s",
+        ari_first: true,
+        maintenance_window_status: "open",
+      },
+      summary: { monitored: 1, due_now: 0, renewal_failed: 0, outbox_pending: 0, outbox_processing: 0, outbox_failed: 0 },
+      items: [],
+      controls: [],
+      preview_writes: [],
+      preview_external_effects: [],
+      execution_writes: [],
+      execution_external_effects: [],
+      verification_steps: [],
+    });
   });
 
   it("renders served delivery and rotation evidence while removing unserved preview panels", async () => {
@@ -113,7 +135,8 @@ describe("WIRE-11 identity delivery and rotation evidence", () => {
     expect(identityRow).toHaveTextContent("Delivered successfully.");
     expect(identityRow).not.toHaveTextContent("outbox_delivered");
 
-    expect(screen.queryByText("Lifecycle automation")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Lifecycle automation" })).toBeInTheDocument();
+    expect(screen.getByText("Nothing needs a manual nudge right now. trstctl will keep checking.")).toBeInTheDocument();
     expect(screen.queryByText("Automation layout preview")).not.toBeInTheDocument();
     expect(screen.queryByText("JIT approvals moved to the inbox")).not.toBeInTheDocument();
     expect(screen.queryByText("Pending JIT approval requests")).not.toBeInTheDocument();

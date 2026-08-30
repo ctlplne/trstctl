@@ -861,8 +861,9 @@ describe("lifecycle actions from the UI", () => {
     expect(row).not.toHaveTextContent("plugin_not_loaded");
   });
 
-  it("renders the server-owned lifecycle automation plan with safe controls and scheduler evidence", async () => {
-    apiMock.identities.mockResolvedValue([{ id: "ren-1", name: "manual-renewal-svc", kind: "x509_certificate", status: "deployed" }]);
+  it("renders the server-owned lifecycle automation plan with safe controls, scheduler evidence, and narrow-screen containment", async () => {
+    const longIdentityName = "checkout-39e37caa-8171-426c-a311-5b7c9fd87bb7.qa.trstctl.test";
+    apiMock.identities.mockResolvedValue([{ id: "ren-1", name: longIdentityName, kind: "x509_certificate", status: "deployed" }]);
     apiMock.rotationRuns.mockResolvedValue({
       items: [
         {
@@ -898,7 +899,7 @@ describe("lifecycle actions from the UI", () => {
       items: [
         {
           identity_id: "ren-1",
-          identity_name: "manual-renewal-svc",
+          identity_name: longIdentityName,
           identity_status: "deployed",
           owner_id: "own-1",
           owner_name: "team",
@@ -930,7 +931,11 @@ describe("lifecycle actions from the UI", () => {
     const user = userEvent.setup();
     renderIdentities();
 
-    expect(await screen.findByRole("heading", { name: "Lifecycle automation" })).toBeInTheDocument();
+    const heading = await screen.findByRole("heading", { name: "Lifecycle automation" });
+    const panel = heading.closest("section");
+    expect(panel).toHaveClass("min-w-0", "max-w-full");
+    expect(panel?.querySelector('[data-testid="lifecycle-automation-body"]')).toHaveClass("min-w-0", "grid-cols-[minmax(0,1fr)]");
+    expect(within(panel!).getByText(longIdentityName)).toHaveClass("break-all");
     expect(screen.getByText("Automatic renewals are running")).toBeInTheDocument();
     expect(screen.getByText(/Renew 30 days before expiry/)).toBeInTheDocument();
     expect(screen.getByText(/ARI window opens first/)).toBeInTheDocument();
@@ -943,6 +948,17 @@ describe("lifecycle actions from the UI", () => {
     expect(screen.getAllByText("succeeded").length).toBeGreaterThan(0);
     expect(screen.getAllByText("scheduler").length).toBeGreaterThan(0);
     expect(screen.getByText("restore certificate fingerprint old")).toBeInTheDocument();
+  });
+
+  it("fails closed instead of crashing when lifecycle automation evidence is malformed", async () => {
+    apiMock.identities.mockResolvedValue([]);
+    apiMock.lifecycleAutomationPlan.mockResolvedValue({ capability: "lifecycle_automation", ready: true });
+
+    renderIdentities();
+
+    expect(await screen.findByText("Automation details are unavailable")).toBeInTheDocument();
+    expect(screen.getByText(/Could not load the lifecycle automation plan/)).toBeInTheDocument();
+    expect(screen.queryByText("Automatic renewals are running")).not.toBeInTheDocument();
   });
 
   it("reports idempotency protection after a successful lifecycle transition", async () => {

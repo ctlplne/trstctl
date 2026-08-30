@@ -1324,8 +1324,12 @@ describe("i18n boundary", () => {
       // configuration from a real deny-all record. The negation and unknown
       // state were reviewed for meaning in all three locales. Machine-authored
       // es/de translations — FLAGGED FOR HUMAN TRANSLATION REVIEW.
-      "es-ES": "80512f88c1c73cd6f823b9b996cb14cb4f10e4805d1627f711c97ed3027e733d",
-      "de-DE": "8923daf0d40cfdd01e877fd1682eec2ded92cf9aa8ecc9a7db8cb9fbd19d0d32",
+      // F6 lifecycle-automation re-pin: renewal and alert timing, ARI priority,
+      // maintenance-window deferral, safe controls, durable queue state, and
+      // recovery links are now named in all production catalogs. Machine-
+      // authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "c9f861c01a1b9a46a155cd72ce23a420754c3572c50f7b9b1dbfaf84245100fe",
+      "de-DE": "1994e04d7d6a6c29f546610b09661ae755767cb4771e8b1e5cf8888e475fc896",
     });
   });
 
