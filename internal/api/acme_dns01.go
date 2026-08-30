@@ -694,7 +694,10 @@ func caaLookupRecovery() []string {
 }
 
 func failedDNS01Checks(checks []dns01PreflightCheck) []string {
-	var failed []string
+	// failed_checks is a required array in the served OpenAPI contract. Start
+	// non-nil so successful preflights encode as [] rather than JSON null; this
+	// keeps generated clients and simple operator tooling type-safe.
+	failed := make([]string, 0)
 	for _, check := range checks {
 		if check.Status == "fail" {
 			failed = append(failed, check.Name)

@@ -405,6 +405,9 @@ func TestServedACMEDNS01ProviderConfigAndPreflightTRACE003(t *testing.T) {
 	if status != http.StatusOK {
 		t.Fatalf("dns-01 preflight: status %d body %s", status, body)
 	}
+	if !bytes.Contains(body, []byte(`"failed_checks":[]`)) {
+		t.Fatalf("successful DNS-01 preflight must honor the required array schema, not return null: %s", body)
+	}
 	var result struct {
 		Ready          bool     `json:"ready"`
 		RecordName     string   `json:"record_name"`
