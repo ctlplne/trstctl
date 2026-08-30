@@ -4171,6 +4171,9 @@ const esESCatalog = {
   "protocols.dns01.caa.noCurrentRecords": "No se encontraron registros CAA desde este nombre hacia arriba en el árbol DNS.",
   "protocols.dns01.caa.allowedIssuers": "Emisores permitidos para esta solicitud",
   "protocols.dns01.caa.noAllowedIssuers": "Los registros rectores no permiten ningún emisor.",
+  "protocols.dns01.caa.noAllowedIssuersNotConfigured": "Configura el emisor esperado antes de que trstctl pueda compararlo con el DNS en vivo.",
+  "protocols.dns01.caa.noAllowedIssuersUnrestricted": "Ningún registro CAA restringe qué emisor puede emitir.",
+  "protocols.dns01.caa.noAllowedIssuersLookupFailed": "Se desconoce la autorización del emisor porque no se pudo verificar el DNS en vivo.",
   "protocols.dns01.caa.recommendedChange": "Registro DNS recomendado",
   "protocols.dns01.caa.nextSteps": "Qué hacer a continuación",
   "protocols.dns01.caa.failClosed":

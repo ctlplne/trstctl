@@ -1319,8 +1319,13 @@ describe("i18n boundary", () => {
       // exact public records, allowed issuers, fail-closed boundary, and safe
       // recovery are named in all three locales. Machine-authored es/de —
       // FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "e7a74051f1e0524c9b5a0c7863994fa4f30cfc99ce7137b8661b6dcfdf6726e2",
-      "de-DE": "42f21ebf4e92ef4dfe2fa33f7dbad7c8e0874a87f7a9755a81f0b78e30e9b5a5",
+      // F72 live-browser follow-up: three CAA empty states now distinguish an
+      // unrestricted policy, an unverified DNS answer, and missing issuer
+      // configuration from a real deny-all record. The negation and unknown
+      // state were reviewed for meaning in all three locales. Machine-authored
+      // es/de translations — FLAGGED FOR HUMAN TRANSLATION REVIEW.
+      "es-ES": "80512f88c1c73cd6f823b9b996cb14cb4f10e4805d1627f711c97ed3027e733d",
+      "de-DE": "8923daf0d40cfdd01e877fd1682eec2ded92cf9aa8ecc9a7db8cb9fbd19d0d32",
     });
   });
 

@@ -40,6 +40,13 @@ export function DNS01CAAPolicyPanel({ policy }: { policy: ACMEDNS01CAAPolicyEvid
     },
   };
   const selected = state[policy.status];
+  const emptyAllowedIssuerCopy: Record<ACMEDNS01CAAPolicyEvidence["status"], string> = {
+    not_configured: t("protocols.dns01.caa.noAllowedIssuersNotConfigured"),
+    unrestricted: t("protocols.dns01.caa.noAllowedIssuersUnrestricted"),
+    allowed: t("protocols.dns01.caa.noAllowedIssuers"),
+    denied: t("protocols.dns01.caa.noAllowedIssuers"),
+    lookup_failed: t("protocols.dns01.caa.noAllowedIssuersLookupFailed"),
+  };
   const frame =
     selected.tone === "success"
       ? "border-status-success/35 bg-status-success/5"
@@ -94,7 +101,7 @@ export function DNS01CAAPolicyPanel({ policy }: { policy: ACMEDNS01CAAPolicyEvid
         <div className="min-w-0">
           <h4 className="text-sm font-semibold">{t("protocols.dns01.caa.allowedIssuers")}</h4>
           {policy.allowed_issuers.length === 0 ? (
-            <p className="mt-1 text-sm text-muted-foreground">{t("protocols.dns01.caa.noAllowedIssuers")}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{emptyAllowedIssuerCopy[policy.status]}</p>
           ) : (
             <ul className="mt-2 flex flex-wrap gap-2">
               {policy.allowed_issuers.map((issuer) => (

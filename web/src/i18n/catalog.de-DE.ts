@@ -4204,6 +4204,9 @@ const deDECatalog = {
   "protocols.dns01.caa.noCurrentRecords": "Von diesem Namen aufwärts im DNS-Baum wurden keine CAA-Einträge gefunden.",
   "protocols.dns01.caa.allowedIssuers": "Für diese Anfrage erlaubte Aussteller",
   "protocols.dns01.caa.noAllowedIssuers": "Die maßgeblichen Einträge erlauben keinen Aussteller.",
+  "protocols.dns01.caa.noAllowedIssuersNotConfigured": "Legen Sie den erwarteten Aussteller fest, bevor trstctl ihn mit dem Live-DNS vergleichen kann.",
+  "protocols.dns01.caa.noAllowedIssuersUnrestricted": "Kein CAA-Eintrag schränkt ein, welcher Aussteller Zertifikate ausstellen darf.",
+  "protocols.dns01.caa.noAllowedIssuersLookupFailed": "Die Autorisierung des Ausstellers ist unbekannt, weil das Live-DNS nicht verifiziert werden konnte.",
   "protocols.dns01.caa.recommendedChange": "Empfohlener DNS-Eintrag",
   "protocols.dns01.caa.nextSteps": "Nächste Schritte",
   "protocols.dns01.caa.failClosed":

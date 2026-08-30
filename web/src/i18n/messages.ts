@@ -13708,6 +13708,18 @@ export const messages = {
     defaultMessage: "No issuer is allowed by the governing records.",
     description: "Empty state for a deny-all or otherwise denying CAA set.",
   },
+  "protocols.dns01.caa.noAllowedIssuersNotConfigured": {
+    defaultMessage: "Set an expected issuer before trstctl can compare it with live DNS.",
+    description: "Allowed-issuer empty state when the operator has not configured the expected issuer.",
+  },
+  "protocols.dns01.caa.noAllowedIssuersUnrestricted": {
+    defaultMessage: "No CAA record restricts which issuer may issue.",
+    description: "Allowed-issuer empty state when live DNS contains no governing CAA record.",
+  },
+  "protocols.dns01.caa.noAllowedIssuersLookupFailed": {
+    defaultMessage: "Issuer authorization is unknown because live DNS could not be verified.",
+    description: "Allowed-issuer empty state when the authoritative DNS lookup failed closed.",
+  },
   "protocols.dns01.caa.recommendedChange": {
     defaultMessage: "Recommended DNS record",
     description: "Heading for an exact CAA record recommendation.",

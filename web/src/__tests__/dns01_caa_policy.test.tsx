@@ -39,6 +39,8 @@ describe("DNS-01 CAA policy evidence", () => {
     expect(within(panel).getByRole("heading", { name: "No CAA record limits issuance" })).toBeInTheDocument();
     expect(within(panel).getByText(/DNS currently does not restrict which CA may issue/i)).toBeInTheDocument();
     expect(within(panel).getByText("No governing CAA record found")).toBeInTheDocument();
+    expect(within(panel).getByText("No CAA record restricts which issuer may issue.")).toBeInTheDocument();
+    expect(within(panel).queryByText("No issuer is allowed by the governing records.")).not.toBeInTheDocument();
     expect(within(panel).getByText('api.example.test CAA 0 issue "trstctl.example"')).toBeInTheDocument();
   });
 
@@ -70,6 +72,8 @@ describe("DNS-01 CAA policy evidence", () => {
     expect(within(panel).getByRole("heading", { name: "CAA could not be verified" })).toBeInTheDocument();
     expect(within(panel).getByText(/blocks issuance instead of guessing/i)).toBeInTheDocument();
     expect(within(panel).getByText("api.example.test")).toBeInTheDocument();
+    expect(within(panel).getByText("Issuer authorization is unknown because live DNS could not be verified.")).toBeInTheDocument();
+    expect(within(panel).queryByText("No issuer is allowed by the governing records.")).not.toBeInTheDocument();
     expect(within(panel).getByText(/stops before any provider write or certificate issuance/i)).toBeInTheDocument();
     expect(within(panel).queryByText("Recommended DNS record")).not.toBeInTheDocument();
   });
@@ -91,5 +95,25 @@ describe("DNS-01 CAA policy evidence", () => {
     const panel = screen.getByRole("region", { name: "CAA issuance policy" });
     expect(within(panel).getByRole("heading", { name: "CAA policy is not configured" })).toBeInTheDocument();
     expect(within(panel).getByText(/Set the issuer domain, then check again/i)).toBeInTheDocument();
+    expect(within(panel).getByText("Set an expected issuer before trstctl can compare it with live DNS.")).toBeInTheDocument();
+    expect(within(panel).queryByText("No issuer is allowed by the governing records.")).not.toBeInTheDocument();
+  });
+
+  it("uses the deny-all explanation only when governing records actually deny every issuer", () => {
+    render(
+      <DNS01CAAPolicyPanel
+        policy={policy({
+          status: "denied",
+          records: [{ flag: 0, tag: "issue", value: ";" }],
+          allowed_issuers: [],
+          recommended_records: ['example.test CAA 0 issue "trstctl.example"'],
+          recovery_steps: ["Replace the deny-all record only after approval."],
+        })}
+      />,
+    );
+
+    const panel = screen.getByRole("region", { name: "CAA issuance policy" });
+    expect(within(panel).getByRole("heading", { name: "CAA blocks this issuer" })).toBeInTheDocument();
+    expect(within(panel).getByText("No issuer is allowed by the governing records.")).toBeInTheDocument();
   });
 });
