@@ -80,6 +80,15 @@ CWE_BY_RULE = {
 # The weaknesses that were FIXED (not waived), each with the guard that fails
 # if the weakness returns. Hand-maintained: a fix lands here in the same change.
 FIXED = [
+    ("CWE-287", "internal/server/workload_identity.go",
+     "Automatic workload identities omitted the authenticated tenant under a shared CA. Versioned names now bind tenant, route, verified method and broker agent; approval recovery checks the signed tenant and method.",
+     "TestServedWorkloadIdentitiesAreTenantIsolated and TestServedEphemeralIdentitiesAndApprovalsAreTenantIsolated (internal/server/workload_identity_tenant_test.go) + TestApprovalBindingDecodesScopedSubjectWithoutChangingAuthority (internal/ephemeral/approval_test.go)"),
+    ("CWE-863", "internal/crypto/workload_namespace.go",
+     "Ordinary CSR profiles and manual Workload API registrations could claim automatic workload names. Both now refuse the reserved /_trstctl namespace, including alias attempts.",
+     "TestLeafProfilesCannotMintReservedWorkloadIdentities (internal/crypto/workload_namespace_test.go) + TestRegistrationCannotClaimAutomaticWorkloadNamespace (internal/protocols/spiffe/workload_namespace_test.go)"),
+    ("CWE-863", "internal/crypto/leafca.go",
+     "LeafProfile.ExtraExtensions could overwrite a checked SAN or another core certificate policy field. The shared classical/opaque profile gate now rejects those parsed OIDs before signing; non-core extensions remain supported.",
+     "TestLeafProfileExtraExtensionsCannotOverrideIdentityPolicy (internal/crypto/workload_namespace_test.go)"),
     ("CWE-190", "internal/crypto/seal/seal.go",
      "Seal accepted a wrapped DEK larger than the v1 container's 2-byte length prefix and silently mis-framed it; now refused with ErrFormat.",
      "TestSealRefusesOversizedWrappedDEK (internal/crypto/seal/bounds_guard_test.go)"),

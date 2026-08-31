@@ -104,38 +104,81 @@ the reader also refuses a certificate with more than one URI SAN. This is strict
 canonical-input behavior, not automatic normalization of URI aliases. See the
 [SPIFFE identity specification](https://github.com/spiffe/spiffe/blob/main/standards/SPIFFE-ID.md).
 
-Attested and ephemeral issuance preserve valid subject path segments. Brokered
-issuance adds the reserved `/agent/` namespace. A subject segment containing
-punctuation outside the SPIFFE alphabet is encoded as `trstctl-hex-` followed by
-lowercase hexadecimal bytes. Literal segments already starting with `trstctl-hex-`
-are encoded too, so a workload cannot choose an encoded-looking subject to take
-another workload's name. For non-broker issuance, an initial `agent` segment is
-also encoded, keeping the automatic naming routes separate. Empty, `.` and `..`
-segments are rejected rather than stripped or cleaned.
+Automatic identities start with `/_trstctl/v1/tenant/<tenant UUID>/`. The tenant
+comes from the authenticated server context, never from a proof's tenant claim.
+That matters even when two tenants use the same CA: a separate service must be able
+to distinguish their signed identity names, not just their database records.
 
-| Verified subject | Attested / ephemeral path | Broker path |
-| --- | --- | --- |
-| `ns/qa/sa/web` | `/ns/qa/sa/web` | `/agent/ns/qa/sa/web` |
-| `a:b` | `/trstctl-hex-613a62` | `/agent/trstctl-hex-613a62` |
-| `agent/worker` | `/trstctl-hex-6167656e74/worker` | `/agent/agent/worker` |
+After that prefix, the issuance route and verified method are explicit:
+
+| Route | Path after the tenant prefix |
+| --- | --- |
+| Attested issuance | `attested/method/<method>/subject/<mapped subject>` |
+| Approval-gated ephemeral issuance | `ephemeral/method/<method>/subject/<mapped subject>` |
+| Broker issuance | `broker/agent/<authorized agent ID>/method/<method>/subject/<mapped subject>` |
+
+For example, a Kubernetes subject `ns/qa/sa/web` in tenant
+`11111111-1111-4111-8111-111111111111` receives:
+
+```text
+spiffe://example.org/_trstctl/v1/tenant/11111111-1111-4111-8111-111111111111/attested/method/k8s_sat/subject/ns/qa/sa/web
+```
+
+Valid subject path segments stay readable. Punctuation outside the SPIFFE alphabet
+is encoded as `trstctl-hex-` followed by lowercase hexadecimal bytes: `a:b` becomes
+`trstctl-hex-613a62`. Literal segments already starting with `trstctl-hex-` are encoded
+too, preventing encoded-looking names from impersonating another subject. Empty,
+`.` and `..` segments are rejected rather than stripped or cleaned. Agent IDs and
+methods are whole segments, so a slash in one cannot escape into another field.
+
+Ordinary CSR profiles cannot mint the reserved `/_trstctl` namespace, even with a
+permissive URI allow-list. Manual SPIFFE registration entries cannot claim it
+either. Those paths continue to support nonreserved identities. The reservation
+does not silently change the issuer, replace an external CA or rotate a trust root.
+The profile's custom-extension seam also refuses core identity and policy OIDs;
+an extra SAN extension cannot replace the identities checked before signing.
+Non-core extensions remain supported.
+
+Ephemeral approval checks the exact signed URI, public key, approved CA and
+lifetime, then checks that the URI's tenant and method match the retained event.
+Its versioned subject decoder reverses only canonical mappings: it rejects unknown
+versions, a different issuance route and alternate spellings. Historical unreserved
+subjects remain literal. This check preserves old command meaning; it does not
+turn an old approval into permission for a new tenant-bound credential.
 
 The verified original subject stays unchanged in responses, audit and durable
 history; encoding is not encryption. Never put secrets in an identity subject.
 These names do not add permissions or replace tenant-scoped attestor trust and
-broker policy. Operators must still allocate non-overlapping identities across
-trusted proof issuers and manually registered Workload API entries.
+broker policy. Operators must still allocate identities deliberately across multiple
+trusted proof sources within one tenant and method; this is not automatic
+per-cluster identity policy. Manually registered Workload API entries use their own
+nonreserved namespace and operator-managed authorization.
 
 **Upgrading an exact-name consumer:** earlier broker certificates could contain
-`ns%2Fqa%2Fsa%2Fweb`; standard SPIFFE clients reject that name. Punctuation-bearing
-subjects and the reserved-prefix cases also change under the corrected mapping.
+`ns%2Fqa%2Fsa%2Fweb`; standard SPIFFE clients reject that name. Older automatic
+identities also omitted tenant scope. All new automatic names use the tenant-bound
+prefix above; old certificates do not become tenant-isolated by upgrading software.
 Inspect existing pins before rollout. Issue a new credential with a new issuance
 idempotency key, verify its chain and exact URI using the intended consumer, and
 replace the old exact-name pin deliberately. Do not wildcard the path, disable
 verification or alias the old identity automatically. Existing history and old
-certificate bytes are not rewritten; retrying an old command recovers its old
-result, not a renamed credential. Rotate or revoke the old certificate and prove
-the new connection before retiring the old deployment. No automatic relying-party
-policy migration is performed.
+certificate bytes are not rewritten. An old completed command can only return its
+original credential, never a renamed one; current authorization or a changed
+approval binding can refuse recovery. Approval-gated cutovers require a new exact
+approval for the new tenant-bound URI. Rotate or revoke the old certificate and
+prove the new connection before retiring the old deployment. No automatic
+relying-party policy migration is performed.
+
+**A reused CA needs a separate migration proof.** An older, permissive issuance
+path may already have signed a URI that looks like the newly reserved namespace.
+Reserving names now does not invalidate those older signatures. Before accepting
+the new names under an existing CA, inspect its prior issuance and registration
+inventory for conflicting claims and retire them, then prove that every intended
+consumer enforces the revocation. If that history or revocation enforcement cannot
+be established, use an explicitly approved new issuing authority and trust-policy
+cutover. Do not silently rotate the CA or call an in-place upgrade isolated based
+only on the new naming tests. Fresh-stack qualification does not prove this upgrade
+boundary.
 
 The lifetime uses the server default for a nonpositive value and is capped at the
 server maximum before conversion to a Go duration, including very large integer
@@ -568,8 +611,9 @@ curl -sS -X POST https://localhost:8443/api/v1/workloads/attested-issuance \
       "ttl_seconds":600}'
 ```
 
-The response is the certificate the workload should load, plus the verified subject
-that became the SPIFFE path (e.g. `spiffe://example.org/ns/default/sa/web`). Trust
+The response is the certificate the workload should load, plus the original verified
+subject. The SPIFFE URI includes the authenticated tenant, issuance route and method
+before that mapped subject, as described above. Trust
 material rotates, revokes, and offboards via `.../rotate`, `.../revoke`, and
 `DELETE .../{id}`, each idempotent and recorded as an immutable event.
 

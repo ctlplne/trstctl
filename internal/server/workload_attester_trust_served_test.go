@@ -68,7 +68,7 @@ func TestJOURNEY001WorkloadOwnerSelfServesAttestedOnboarding(t *testing.T) {
 	assertTrustPreview(true)
 
 	issued := servedAttestedIssue(t, h, token, "journey-001-issue", "k8s_sat", []byte(first.SAT), servedAttestedPublicKeyPEM(t), http.StatusCreated)
-	assertServedAttestedSVID(t, h, issued, "spiffe://served.test/ns/default/sa/web")
+	assertServedAttestedSVID(t, h, issued, "spiffe://served.test/_trstctl/v1/tenant/"+h.tenant+"/attested/method/k8s_sat/subject/ns/default/sa/web")
 
 	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/workloads/attester-trust-sources/"+created.ID+"/rotate",
 		token, "journey-001-trust-rotate", map[string]any{
@@ -91,7 +91,7 @@ func TestJOURNEY001WorkloadOwnerSelfServesAttestedOnboarding(t *testing.T) {
 	}
 
 	renewed := servedAttestedIssue(t, h, token, "journey-001-renew", "k8s_sat", []byte(rotated.SAT), servedAttestedPublicKeyPEM(t), http.StatusCreated)
-	assertServedAttestedSVID(t, h, renewed, "spiffe://served.test/ns/default/sa/web")
+	assertServedAttestedSVID(t, h, renewed, "spiffe://served.test/_trstctl/v1/tenant/"+h.tenant+"/attested/method/k8s_sat/subject/ns/default/sa/web")
 	if renewed.CredentialID == issued.CredentialID {
 		t.Fatalf("renewal reused the original SVID credential id: first=%s renewed=%s", issued.CredentialID, renewed.CredentialID)
 	}

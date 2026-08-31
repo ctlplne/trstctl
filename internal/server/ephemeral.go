@@ -198,7 +198,7 @@ func (s *ephemeralIssuerService) IssueEphemeralCredential(ctx context.Context, t
 	if err != nil {
 		return api.EphemeralCredential{}, err
 	}
-	expectedBinding, err := s.ephemeralApprovalBinding(req, att)
+	expectedBinding, err := s.ephemeralApprovalBinding(tenantID, req, att)
 	if err != nil {
 		return api.EphemeralCredential{}, err
 	}
@@ -387,7 +387,7 @@ func (s *ephemeralIssuerService) issueApprovedEphemeralCredential(
 	issuer, err := ephemerallib.New(ephemerallib.Config{
 		TenantID: tenantID,
 		Verifier: verifier,
-		Sign:     s.sign(),
+		Sign:     s.sign(tenantID),
 		Policy: ephemerallib.TTLPolicy{
 			Default: s.ttl(req.TTLSeconds),
 			Max:     s.maxTTL,
@@ -414,7 +414,7 @@ func (s *ephemeralIssuerService) issueApprovedEphemeralCredential(
 	if err != nil {
 		return api.EphemeralCredential{}, err
 	}
-	approvalBinding, err := s.ephemeralApprovalBinding(req, issued.Attestation)
+	approvalBinding, err := s.ephemeralApprovalBinding(tenantID, req, issued.Attestation)
 	if err != nil {
 		return api.EphemeralCredential{}, err
 	}
@@ -639,7 +639,7 @@ func (s *ephemeralIssuerService) attestorsForMethod(ctx context.Context, tenantI
 }
 
 func (s *ephemeralIssuerService) ensureEphemeralApprovalRequest(ctx context.Context, tenantID, requester string, req api.EphemeralCredentialRequest, att attest.Attestation) (store.OperationApprovalRequest, error) {
-	binding, err := s.ephemeralApprovalBinding(req, att)
+	binding, err := s.ephemeralApprovalBinding(tenantID, req, att)
 	if err != nil {
 		return store.OperationApprovalRequest{}, err
 	}
@@ -661,8 +661,8 @@ func (s *ephemeralIssuerService) ensureEphemeralApprovalRequest(ctx context.Cont
 	})
 }
 
-func (s *ephemeralIssuerService) ephemeralApprovalBinding(req api.EphemeralCredentialRequest, att attest.Attestation) (ephemerallib.ApprovalBinding, error) {
-	spiffeID, err := attestedSPIFFEID(s.trustDomain, att.Subject)
+func (s *ephemeralIssuerService) ephemeralApprovalBinding(tenantID string, req api.EphemeralCredentialRequest, att attest.Attestation) (ephemerallib.ApprovalBinding, error) {
+	spiffeID, err := ephemeralSPIFFEID(s.trustDomain, tenantID, att.Method, att.Subject)
 	if err != nil {
 		return ephemerallib.ApprovalBinding{}, err
 	}
@@ -713,9 +713,9 @@ func (s *ephemeralIssuerService) ttl(seconds int64) time.Duration {
 	return ttl
 }
 
-func (s *ephemeralIssuerService) sign() ephemerallib.SignFunc {
+func (s *ephemeralIssuerService) sign(tenantID string) ephemerallib.SignFunc {
 	return func(ctx context.Context, att attest.Attestation, pubDER []byte, ttl time.Duration) ([]byte, error) {
-		spiffeID, err := attestedSPIFFEID(s.trustDomain, att.Subject)
+		spiffeID, err := ephemeralSPIFFEID(s.trustDomain, tenantID, att.Method, att.Subject)
 		if err != nil {
 			return nil, err
 		}

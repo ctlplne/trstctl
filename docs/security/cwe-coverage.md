@@ -27,6 +27,9 @@ coverage ledger applies to assets, applied to weaknesses.
 
 | CWE | Where | Guard |
 |---|---|---|
+| CWE-287 | `internal/server/workload_identity.go` | TestServedWorkloadIdentitiesAreTenantIsolated and TestServedEphemeralIdentitiesAndApprovalsAreTenantIsolated (internal/server/workload_identity_tenant_test.go) + TestApprovalBindingDecodesScopedSubjectWithoutChangingAuthority (internal/ephemeral/approval_test.go) |
+| CWE-863 | `internal/crypto/workload_namespace.go` | TestLeafProfilesCannotMintReservedWorkloadIdentities (internal/crypto/workload_namespace_test.go) + TestRegistrationCannotClaimAutomaticWorkloadNamespace (internal/protocols/spiffe/workload_namespace_test.go) |
+| CWE-863 | `internal/crypto/leafca.go` | TestLeafProfileExtraExtensionsCannotOverrideIdentityPolicy (internal/crypto/workload_namespace_test.go) |
 | CWE-190 | `internal/crypto/seal/seal.go` | TestSealRefusesOversizedWrappedDEK (internal/crypto/seal/bounds_guard_test.go) |
 | CWE-295 | `internal/crypto/mtls/mtls.go` | TestPinnedConfigsEnforcePinOnResumedSessions (internal/crypto/mtls/resumption_pin_test.go) |
 | CWE-79 | `internal/secretstore/access.go` | TestAPIResponsesDeclareContentTypeAndNosniff (internal/secretstore/access_headers_test.go) |

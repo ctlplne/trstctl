@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -133,7 +132,7 @@ func (b ApprovalBinding) EvidenceRefs() ([]string, error) {
 // target event is the command reviewers authorized. Shorter validity is safe;
 // the approved TTL is a hard maximum because X.509 has no trusted issuance-time
 // field from which an exact elapsed duration can be recovered.
-func (b ApprovalBinding) ValidateCertificate(certificateDER []byte, source string, eventTime time.Time) (certinfo.Info, error) {
+func (b ApprovalBinding) ValidateCertificate(certificateDER []byte, source, tenantID string, eventTime time.Time) (certinfo.Info, error) {
 	if err := b.validate(); err != nil {
 		return certinfo.Info{}, err
 	}
@@ -166,9 +165,12 @@ func (b ApprovalBinding) ValidateCertificate(certificateDER []byte, source strin
 	if crypto.SHA256Hex([]byte(spiffeID)) != b.SPIFFEIDSHA256 {
 		return certinfo.Info{}, fmt.Errorf("ephemeral: certificate SPIFFE ID does not match approved command")
 	}
-	subject, err := SubjectFromSPIFFEID(spiffeID)
+	identityTenant, identityMethod, subject, err := ephemeralIdentitySubject(spiffeID)
 	if err != nil {
 		return certinfo.Info{}, err
+	}
+	if identityTenant != "" && (identityTenant != tenantID || identityMethod != b.AttestationMethod) {
+		return certinfo.Info{}, fmt.Errorf("ephemeral: certificate authority context does not match approved tenant and method")
 	}
 	if crypto.SHA256Hex([]byte(subject)) != b.AttestationSubjectSHA256 {
 		return certinfo.Info{}, fmt.Errorf("ephemeral: certificate subject does not match approved attestation")
@@ -238,22 +240,45 @@ func svidExtKeyUsages(usages []string) bool {
 	return seen["serverAuth"] && seen["clientAuth"]
 }
 
-// SubjectFromSPIFFEID returns the attestation subject encoded as the SPIFFE path.
+// SubjectFromSPIFFEID returns the original attestation subject. Versioned
+// automatic identities have a tenant/route/method prefix and reversible segment
+// encoding. Historical unreserved identities retain their literal path meaning.
+// This decoder never converts an old approval into authority for a new identity.
 func SubjectFromSPIFFEID(raw string) (string, error) {
+	_, _, subject, err := ephemeralIdentitySubject(raw)
+	return subject, err
+}
+
+func ephemeralIdentitySubject(raw string) (tenantID, method, subject string, err error) {
 	id, err := crypto.ParseSPIFFEID(raw)
 	if err != nil {
-		return "", err
+		return "", "", "", err
 	}
-	escaped := strings.TrimPrefix(id.EscapedPath(), "/")
-	if escaped == "" {
-		return "", fmt.Errorf("ephemeral: certificate SPIFFE ID has no subject path")
+	subjectPath := strings.TrimPrefix(id.Path, "/")
+	if subjectPath == "" {
+		return "", "", "", fmt.Errorf("ephemeral: certificate SPIFFE ID has no subject path")
 	}
-	parts := strings.Split(escaped, "/")
-	for i, part := range parts {
-		parts[i], err = url.PathUnescape(part)
-		if err != nil || parts[i] == "" {
-			return "", fmt.Errorf("ephemeral: certificate SPIFFE subject path is invalid")
+	if !crypto.IsReservedWorkloadSPIFFEID(raw) {
+		return "", "", subjectPath, nil
+	}
+	parts := strings.Split(subjectPath, "/")
+	if len(parts) < 9 || parts[0] != "_trstctl" || parts[1] != "v1" || parts[2] != "tenant" || parts[4] != "ephemeral" || parts[5] != "method" || parts[7] != "subject" {
+		return "", "", "", fmt.Errorf("ephemeral: certificate has an unsupported automatic identity shape")
+	}
+	tenant, err := uuid.Parse(parts[3])
+	if err != nil || tenant == uuid.Nil || tenant.String() != parts[3] {
+		return "", "", "", fmt.Errorf("ephemeral: certificate has an invalid tenant namespace")
+	}
+	method, err = crypto.DecodeWorkloadSPIFFESegment(parts[6])
+	if err != nil {
+		return "", "", "", err
+	}
+	subjectParts := parts[8:]
+	for i, part := range subjectParts {
+		subjectParts[i], err = crypto.DecodeWorkloadSPIFFESegment(part)
+		if err != nil || strings.Contains(subjectParts[i], "/") {
+			return "", "", "", fmt.Errorf("ephemeral: certificate has an invalid mapped subject segment")
 		}
 	}
-	return strings.Join(parts, "/"), nil
+	return tenant.String(), method, strings.Join(subjectParts, "/"), nil
 }

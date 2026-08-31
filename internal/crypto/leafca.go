@@ -56,8 +56,9 @@ func SelfSignedCACert(signer DigestSigner, commonName string, ttl time.Duration)
 // check status, the issuer-certificate pointer for chain building, the policy OIDs
 // the certificate is issued under, and the constraints the issuance must satisfy.
 // It lives inside the crypto boundary (AN-3) so the issuance code never names
-// crypto/x509. The zero value adds no extension and enforces no constraint —
-// SignLeafFromCSR uses it, preserving the legacy leaf shape for callers that have
+// crypto/x509. The zero value adds no extension and no configurable constraint;
+// the reserved automatic-workload namespace is still protected. SignLeafFromCSR
+// uses it, preserving the legacy leaf shape for callers that have
 // no served revocation infrastructure (test/library CAs, breakglass, the protocol
 // servers' own CAs).
 type LeafProfile struct {
@@ -514,6 +515,28 @@ func enforceLeafProfile(csr *x509.CertificateRequest, ttl time.Duration, prof Le
 // edition verifier authenticates the PKCS#10 signature; classical requests use
 // the same implementation through enforceLeafProfile above.
 func EnforceLeafProfileInfo(info CSRInfo, ttl time.Duration, prof LeafProfile) error {
+	// A permissive SAN profile is not authority to impersonate an automatically
+	// attested workload. This gate is shared by classical and opaque licensed
+	// subject algorithms and runs before either signing path. It cannot be
+	// overridden by a profile allow-list or by disabling a workload feature.
+	for _, uri := range info.URIs {
+		if IsReservedWorkloadSPIFFEID(uri) {
+			return &leafProfileError{"URI SAN claims the reserved trstctl workload namespace; use authenticated workload issuance"}
+		}
+	}
+	// ExtraExtensions is a non-core extension seam, not a second way to set
+	// SANs or replace the policy fields already checked above. Compare parsed
+	// OIDs so alternate spellings such as 2.5.29.017 cannot evade this gate.
+	for _, ext := range prof.ExtraExtensions {
+		oid, err := parseOID(ext.OID)
+		if err != nil {
+			return &leafProfileError{fmt.Sprintf("invalid extra extension OID: %v", err)}
+		}
+		switch oid.String() {
+		case "2.5.29.14", "2.5.29.15", "2.5.29.17", "2.5.29.19", "2.5.29.30", "2.5.29.31", "2.5.29.32", "2.5.29.35", "2.5.29.37", "1.3.6.1.5.5.7.1.1":
+			return &leafProfileError{"extra extension cannot replace a core certificate policy field"}
+		}
+	}
 	if prof.MaxValidity > 0 && ttl > prof.MaxValidity {
 		return &leafProfileError{fmt.Sprintf("validity %s exceeds the profile ceiling %s", ttl, prof.MaxValidity)}
 	}

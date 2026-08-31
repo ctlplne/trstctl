@@ -72,7 +72,7 @@ func TestSPIFFEIdentityGrammarMatchesStockParser(t *testing.T) {
 		ids = append(ids, "spiffe://a"+string(rune(c))+"b.test/a", "spiffe://served.test/a"+string(rune(c))+"b")
 	}
 	for _, subject := range []string{"agent-7", "ns/qa/sa/web", "repo:org/project:ref:refs/heads/main", "a%2Fb", "trstctl-hex-613a62", "agent/ns/qa/sa/web", "é"} {
-		for _, makeID := range []func(string, string) (string, error){brokerSPIFFEID, attestedSPIFFEID} {
+		for _, makeID := range []func(string, string) (string, error){testBrokerSPIFFEID, testAttestedSPIFFEID} {
 			id, err := makeID("served.test", subject)
 			if err != nil {
 				t.Fatal(err)
@@ -136,9 +136,9 @@ func TestServedWorkloadIdentitiesVerifyWithStockSPIFFE(t *testing.T) {
 			path = "trstctl-hex-7265706f3a6f7267/trstctl-hex-70726f6a6563743a7265663a72656673/heads/main"
 		}
 		for _, surface := range []string{"broker", "attested"} {
-			route, namespace := "/api/v1/broker/agent-identities", "/agent/"
+			route, namespace := "/api/v1/broker/agent-identities", "/broker/agent/agent-7/"
 			if surface == "attested" {
-				route, namespace = "/api/v1/workloads/attested-issuance", "/"
+				route, namespace = "/api/v1/workloads/attested-issuance", "/attested/"
 				delete(request, "agent_id")
 				delete(request, "scopes")
 			}
@@ -158,7 +158,7 @@ func TestServedWorkloadIdentitiesVerifyWithStockSPIFFE(t *testing.T) {
 				t.Fatal("expected one public certificate")
 			}
 			certificates = append(certificates, stockIdentityCertificate{DER: block.Bytes, CA: h.srv.agentBroker.caCertDER, TrustDomain: "served.test"})
-			wantIDs = append(wantIDs, "spiffe://served.test"+namespace+path)
+			wantIDs = append(wantIDs, "spiffe://served.test/_trstctl/v1/tenant/"+h.tenant+namespace+"method/"+method+"/subject/"+path)
 		}
 	}
 	// Calibrate chain validation: a corrupted signed leaf and the right leaf

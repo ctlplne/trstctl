@@ -44,6 +44,22 @@ func FuzzParseSPIFFEID(f *testing.F) {
 	})
 }
 
+func FuzzDecodeWorkloadSPIFFESegment(f *testing.F) {
+	for _, seed := range []string{"", "web", "trstctl-hex-613a62", "trstctl-hex-7472737463746c2d6865782d61", "trstctl-hex-2e", "a/b", "trstctl-hex-776562"} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, wire string) {
+		raw, err := DecodeWorkloadSPIFFESegment(wire)
+		if err != nil {
+			return
+		}
+		encoded, err := EncodeWorkloadSPIFFESegment(raw)
+		if err != nil || encoded != wire {
+			t.Fatal("accepted workload segment does not round-trip byte-for-byte")
+		}
+	})
+}
+
 func FuzzParseJWKS(f *testing.F) {
 	f.Add([]byte(`{"keys":[]}`))
 	f.Add([]byte(`{`))

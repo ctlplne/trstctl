@@ -1041,7 +1041,7 @@ func ValidateApprovedCertificatePayload(event events.Event, payload CertificateR
 		payload.CAID != binding.CAID {
 		return fmt.Errorf("%w: approved certificate command identity changed", store.ErrApprovalDrifted)
 	}
-	info, err := binding.ValidateCertificate(payload.CertificateDER, payload.Source, event.Time)
+	info, err := binding.ValidateCertificate(payload.CertificateDER, payload.Source, event.TenantID, event.Time)
 	if err != nil {
 		if errors.Is(err, ephemerallib.ErrApprovalCertificateLifetime) {
 			return fmt.Errorf("%w: %w", store.ErrApprovalDrifted, err)
@@ -1074,7 +1074,7 @@ func ApprovedCertificateSemanticDigest(event events.Event, payload CertificateRe
 	if payload.Approval == nil || payload.ApprovalBinding == nil {
 		return "", errors.New("projections: approved certificate semantic digest lacks authority")
 	}
-	info, err := payload.ApprovalBinding.ValidateCertificate(payload.CertificateDER, payload.Source, event.Time)
+	info, err := payload.ApprovalBinding.ValidateCertificate(payload.CertificateDER, payload.Source, event.TenantID, event.Time)
 	if err != nil {
 		return "", err
 	}

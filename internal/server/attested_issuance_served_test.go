@@ -215,7 +215,7 @@ func TestServedAttestedIssuanceEndpointIssuesForK8sAndAWS(t *testing.T) {
 	if k8s.Subject != "ns/default/sa/web" || k8s.Attestation.Method != "k8s_sat" {
 		t.Fatalf("k8s attested issuance = %+v", k8s)
 	}
-	assertServedAttestedSVID(t, h, k8s, "spiffe://served.test/ns/default/sa/web")
+	assertServedAttestedSVID(t, h, k8s, "spiffe://served.test/_trstctl/v1/tenant/"+h.tenant+"/attested/method/k8s_sat/subject/ns/default/sa/web")
 
 	// AN-5: replay returns the exact original response rather than minting a second
 	// SVID or re-verifying the proof.
@@ -228,7 +228,7 @@ func TestServedAttestedIssuanceEndpointIssuesForK8sAndAWS(t *testing.T) {
 	if aws.Subject != "i-0abc123" || aws.Attestation.Method != "aws_iid" {
 		t.Fatalf("aws attested issuance = %+v", aws)
 	}
-	assertServedAttestedSVID(t, h, aws, "spiffe://served.test/i-0abc123")
+	assertServedAttestedSVID(t, h, aws, "spiffe://served.test/_trstctl/v1/tenant/"+h.tenant+"/attested/method/aws_iid/subject/i-0abc123")
 
 	forged := servedAttestedIssue(t, h, token, "nhi-02-aws-forged", "aws_iid", fixtures.ForgedAWSIID, publicKeyPEM, http.StatusForbidden)
 	if forged.CertificatePEM != "" {

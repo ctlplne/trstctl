@@ -148,6 +148,9 @@ func New(cfg Config) (*Server, error) {
 		cfg.Audit = auditsink.Nop{}
 	}
 	for i := range cfg.Entries {
+		if crypto.IsReservedWorkloadSPIFFEID(cfg.Entries[i].SPIFFEID) {
+			return nil, fmt.Errorf("spiffe: entry %d claims the reserved automatic workload namespace", i)
+		}
 		if _, err := crypto.ParseSPIFFEID(cfg.Entries[i].SPIFFEID); err != nil {
 			return nil, fmt.Errorf("spiffe: entry %d: %w", i, err)
 		}

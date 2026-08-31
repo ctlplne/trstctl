@@ -310,7 +310,7 @@ func (s *attestedIssuerService) IssueAttestedSVID(ctx context.Context, tenantID,
 		return s.finish(ctx, tenantID, verifier, att, recovered[0].CertificateDER, ttl, false)
 	}
 
-	spiffeID, err := attestedSPIFFEID(s.trustDomain, att.Subject)
+	spiffeID, err := attestedSPIFFEID(s.trustDomain, tenantID, att.Method, att.Subject)
 	if err != nil {
 		return api.AttestedSVID{}, fmt.Errorf("%w: %v", api.ErrAttestedIssuanceInvalid, err)
 	}
@@ -532,8 +532,8 @@ func (s *attestedIssuerService) emitIssued(ctx context.Context, tenantID string,
 	_ = auditsink.Emit(ctx, s.audit, nil, "ephemeral.issued", tenantID, payload)
 }
 
-func attestedSPIFFEID(trustDomain, subject string) (string, error) {
-	return workloadSPIFFEID(trustDomain, "", subject)
+func attestedSPIFFEID(trustDomain, tenantID, method, subject string) (string, error) {
+	return workloadSPIFFEID(trustDomain, workloadIdentityScope{TenantID: tenantID, Method: method, Kind: "attested"}, subject)
 }
 
 func attestedIssuanceAuditor(log *events.Log) auditsink.Auditor {

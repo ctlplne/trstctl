@@ -319,7 +319,7 @@ func TestApprovedEphemeralRetryAfterAppendAndSQLRollbackNeverResigns(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	binding, err := h.srv.ephemeralIssuer.ephemeralApprovalBinding(req, attestation)
+	binding, err := h.srv.ephemeralIssuer.ephemeralApprovalBinding(h.tenant, req, attestation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -329,7 +329,7 @@ func TestApprovedEphemeralRetryAfterAppendAndSQLRollbackNeverResigns(t *testing.
 	}
 	countedSigner := &countingEphemeralDigestSigner{DigestSigner: h.srv.ephemeralIssuer.caSigner}
 	h.srv.ephemeralIssuer.caSigner = countedSigner
-	certificateDER, err := h.srv.ephemeralIssuer.sign()(ctx, attestation, req.PublicKeyDER, h.srv.ephemeralIssuer.ttl(req.TTLSeconds))
+	certificateDER, err := h.srv.ephemeralIssuer.sign(h.tenant)(ctx, attestation, req.PublicKeyDER, h.srv.ephemeralIssuer.ttl(req.TTLSeconds))
 	if err != nil {
 		t.Fatal(err)
 	}

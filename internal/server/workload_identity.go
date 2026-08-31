@@ -3,24 +3,30 @@
 package server
 
 import (
-	"encoding/hex"
 	"errors"
 	"strings"
+
+	"github.com/google/uuid"
 
 	"trstctl.com/trstctl/internal/crypto"
 )
 
-const encodedSubjectSegmentPrefix = "trstctl-hex-"
+// workloadIdentityScope comes from authenticated server arguments and the
+// verified attestation, never from proof claims selecting their own tenant.
+// Separate routes prevent an ordinary attested request claiming an approved
+// ephemeral identity or a broker's policy-authorized agent name.
+type workloadIdentityScope struct {
+	TenantID string
+	Method   string
+	Kind     string
+	AgentID  string
+}
 
-// workloadSPIFFEID preserves valid subject hierarchy, not URL escaping. A
-// segment outside SPIFFE's alphabet becomes trstctl-hex-<lowercase byte hex>.
-// Literal segments starting with that reserved prefix are encoded too: otherwise
-// the subject "a:b" and the literal subject "trstctl-hex-613a62" would collide.
-// Empty and relative segments are rejected, never trimmed or cleaned. The
-// top-level agent namespace belongs only to brokered issuance, so attested
-// subjects beginning with agent encode that segment as well. The verified
-// original subject remains unchanged in audit and issuance history.
-func workloadSPIFFEID(trustDomain, namespace, subject string) (string, error) {
+// workloadSPIFFEID binds authority before appending any subject-controlled text.
+// Its reserved prefix cannot be minted by ordinary CSR profiles or manual
+// Workload API registration. The original readable subject remains unchanged
+// in issuance responses, audit and history.
+func workloadSPIFFEID(trustDomain string, scope workloadIdentityScope, subject string) (string, error) {
 	domainID, err := crypto.ParseSPIFFEID("spiffe://" + strings.TrimSpace(trustDomain))
 	if err != nil || domainID.Path != "" {
 		return "", errors.New("a canonical SPIFFE trust domain without a path is required")
@@ -28,18 +34,35 @@ func workloadSPIFFEID(trustDomain, namespace, subject string) (string, error) {
 	if subject == "" || len(subject) > crypto.MaxSPIFFEIDLength {
 		return "", errors.New("attestation subject is empty or exceeds the identity size limit")
 	}
-	id := domainID.String()
-	if namespace != "" {
-		id += "/" + namespace
+	tenant, err := uuid.Parse(scope.TenantID)
+	if err != nil || tenant == uuid.Nil || tenant.String() != scope.TenantID {
+		return "", errors.New("a canonical authenticated tenant UUID is required for workload identity")
 	}
-	for index, segment := range strings.Split(subject, "/") {
-		if segment == "" || segment == "." || segment == ".." {
-			return "", errors.New("attestation subject must not contain empty or relative path segments")
+	method, err := workloadIdentitySegment(scope.Method)
+	if err != nil {
+		return "", errors.New("a verified attestation method is required for workload identity")
+	}
+	id := domainID.String() + crypto.ReservedWorkloadSPIFFEPath + "/v1/tenant/" + scope.TenantID
+	switch scope.Kind {
+	case "broker":
+		agent, err := workloadIdentitySegment(scope.AgentID)
+		if err != nil {
+			return "", errors.New("a policy-authorized agent ID is required for broker identity")
 		}
-		segmentErr := crypto.ValidateSPIFFEPathSegment(segment)
-		reservedNamespace := namespace == "" && index == 0 && segment == "agent"
-		if segmentErr != nil || strings.HasPrefix(segment, encodedSubjectSegmentPrefix) || reservedNamespace {
-			segment = encodedSubjectSegmentPrefix + hex.EncodeToString([]byte(segment))
+		id += "/broker/agent/" + agent
+	case "attested", "ephemeral":
+		if scope.AgentID != "" {
+			return "", errors.New("non-broker workload identity cannot carry a broker agent ID")
+		}
+		id += "/" + scope.Kind
+	default:
+		return "", errors.New("an explicit workload issuance route is required")
+	}
+	id += "/method/" + method + "/subject"
+	for _, part := range strings.Split(subject, "/") {
+		segment, err := workloadIdentitySegment(part)
+		if err != nil {
+			return "", err
 		}
 		if len(id)+1+len(segment) > crypto.MaxSPIFFEIDLength {
 			return "", errors.New("mapped attestation subject exceeds the SPIFFE identity size limit")
@@ -50,4 +73,15 @@ func workloadSPIFFEID(trustDomain, namespace, subject string) (string, error) {
 		return "", err
 	}
 	return id, nil
+}
+
+// Whole-segment encoding is injective: literal encoded-looking names are
+// encoded too. Slashes in an agent ID or method cannot escape their field.
+// Subject hierarchy is split before this helper; no empty/dot segment is cleaned.
+func workloadIdentitySegment(segment string) (string, error) {
+	return crypto.EncodeWorkloadSPIFFESegment(segment)
+}
+
+func ephemeralSPIFFEID(trustDomain, tenantID, method, subject string) (string, error) {
+	return workloadSPIFFEID(trustDomain, workloadIdentityScope{TenantID: tenantID, Method: method, Kind: "ephemeral"}, subject)
 }

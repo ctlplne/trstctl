@@ -265,7 +265,7 @@ func (s *agentBrokerService) IssueBrokerAgentIdentity(ctx context.Context, tenan
 	issuer, err := ephemeral.New(ephemeral.Config{
 		TenantID: tenantID,
 		Verifier: verifier,
-		Sign:     s.sign(),
+		Sign:     s.sign(tenantID, req.AgentID),
 		Policy: ephemeral.TTLPolicy{
 			// This issuer is request-local. Carry the exact policy-bounded request
 			// lifetime into its signing policy instead of silently using the default.
@@ -480,9 +480,9 @@ func (s *agentBrokerService) verifyAndAuthorize(ctx context.Context, tenantID st
 	return att, nil
 }
 
-func (s *agentBrokerService) sign() ephemeral.SignFunc {
+func (s *agentBrokerService) sign(tenantID, agentID string) ephemeral.SignFunc {
 	return func(ctx context.Context, att attest.Attestation, pubDER []byte, ttl time.Duration) ([]byte, error) {
-		spiffeID, err := brokerSPIFFEID(s.trustDomain, att.Subject)
+		spiffeID, err := brokerSPIFFEID(s.trustDomain, tenantID, agentID, att.Method, att.Subject)
 		if err != nil {
 			return nil, err
 		}
@@ -529,8 +529,8 @@ func brokerOwnerID(tenantID, agentID string) string {
 	return uuid.NewSHA1(brokerAgentOwnerNamespace, []byte(tenantID+"\x00"+agentID)).String()
 }
 
-func brokerSPIFFEID(trustDomain, subject string) (string, error) {
-	return workloadSPIFFEID(trustDomain, "agent", subject)
+func brokerSPIFFEID(trustDomain, tenantID, agentID, method, subject string) (string, error) {
+	return workloadSPIFFEID(trustDomain, workloadIdentityScope{TenantID: tenantID, Method: method, Kind: "broker", AgentID: agentID}, subject)
 }
 
 func brokerAuditor(log *events.Log) auditsink.Auditor {
