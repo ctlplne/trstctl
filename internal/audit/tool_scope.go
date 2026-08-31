@@ -23,7 +23,7 @@ var ErrUnknownTool = errors.New("audit: tool must name a supported canonical too
 var runtimeToolNamespaces = map[featureparity.CanonicalTool][]string{
 	featureparity.ToolDiscover:             {"discovery.", "drift."},
 	featureparity.ToolCertificates:         {"certificate.", "ca.", "acme.", "est.", "scep.", "cmp.", "ct.", "ocsp.", "crl.", "mdm."},
-	featureparity.ToolWorkloadsMachines:    {"workload.", "attestation.", "ephemeral.", "spiffe.", "ssh.", "agent.", "edge.", "pam."},
+	featureparity.ToolWorkloadsMachines:    {"workload.", "attestation.", "ephemeral.", "spiffe.", "ssh.", "agent.", "broker.", "edge.", "pam."},
 	featureparity.ToolSecrets:              {"secret.", "kmip.", "transit."},
 	featureparity.ToolSoftwareTrust:        {"codesign.", "timestamp.", "tsa.", "cbom."},
 	featureparity.ToolOperations:           {"incident.", "compromise.", "rotation.", "notification.", "owner.", "approval.", "policy.", "compliance.", "audit.", "privacy.", "graph.", "connector."},

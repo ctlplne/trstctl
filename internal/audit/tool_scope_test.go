@@ -30,7 +30,7 @@ func workloadAuditQuery(t *testing.T, tool string) audit.Query {
 
 func TestAuditToolScopeIncludesAttestationSSHAndWorkloadCertificates(t *testing.T) {
 	log := openLog(t)
-	want := []string{"workload.attester_trust_source.upserted", "attestation.verified", "attestation.rejected", "attestation.bound", "ephemeral.issued", "ssh.cert.issued", "agent.identity.issued"}
+	want := []string{"workload.attester_trust_source.upserted", "attestation.verified", "attestation.rejected", "attestation.bound", "ephemeral.issued", "ssh.cert.issued", "agent.identity.issued", "broker.agent_identity.task_bound"}
 	appendEvent(t, log, tenantA, "owner.created")
 	appendEvent(t, log, tenantB, "attestation.verified")
 	for _, typ := range want {
