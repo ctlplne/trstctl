@@ -16,6 +16,7 @@ import (
 
 	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // audience accepts a JWT "aud" claim encoded as either a string or an array.
@@ -64,7 +65,6 @@ func (a *Attestor) Method() string { return "k8s_sat" }
 type k8sClaims struct {
 	Iss string   `json:"iss"`
 	Aud audience `json:"aud"`
-	Exp int64    `json:"exp"`
 	Sub string   `json:"sub"`
 	K8s struct {
 		Namespace      string `json:"namespace"`
@@ -81,10 +81,11 @@ type k8sClaims struct {
 
 // Attest verifies the projected SAT and returns the attestation.
 func (a *Attestor) Attest(_ context.Context, payload []byte) (attest.Attestation, error) {
-	raw, err := crypto.VerifyJWT(string(payload), a.JWKS)
+	raw, err := crypto.VerifyJWTBytes(payload, a.JWKS)
 	if err != nil {
 		return attest.Attestation{}, fmt.Errorf("k8s_sat: %w", err)
 	}
+	defer secret.Wipe(raw)
 	var c k8sClaims
 	if err := json.Unmarshal(raw, &c); err != nil {
 		return attest.Attestation{}, fmt.Errorf("k8s_sat: parse claims: %w", err)
@@ -99,8 +100,8 @@ func (a *Attestor) Attest(_ context.Context, payload []byte) (attest.Attestation
 	if a.Now != nil {
 		now = a.Now
 	}
-	if c.Exp != 0 && now().Unix() >= c.Exp {
-		return attest.Attestation{}, fmt.Errorf("k8s_sat: token expired")
+	if err := attest.ValidateJWTTimeWindow(raw, now()); err != nil {
+		return attest.Attestation{}, fmt.Errorf("k8s_sat: %w", err)
 	}
 	ns := c.K8s.Namespace
 	sa := c.K8s.ServiceAccount.Name

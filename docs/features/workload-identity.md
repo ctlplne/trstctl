@@ -82,8 +82,16 @@ short-lived identity certificate. The workflow has three steps:
 **Ready is not verified.** Some proofs contain one-time nonces. Preview must not
 consume those proofs or emit verification events, so proof verification happens
 only during issuance. A ready preview can still be refused if proof is invalid,
-expired, or its trust source is revoked before execution. Missing trust produces
+expired, not yet valid, or its trust source is revoked before execution. Missing trust produces
 a visible blocker; it never falls back to trusting the browser.
+
+Kubernetes, GitHub and GCP JWT proofs must contain an integer-second `exp`
+(expiry). A signed proof is refused at or after that deadline. If `nbf` (not
+before) or `iat` (issued at) is present, it must be an integer-second timestamp
+that is not in the future. Missing expiry, null values and malformed times are
+refused. There is no implicit clock-skew allowance: keep the issuer and trstctl
+clocks synchronized. Legacy non-expiring Kubernetes tokens are not supported by
+this projected-token proof path. These are proof checks, not certificate renewal.
 
 The lifetime uses the server default for a nonpositive value and is capped at the
 server maximum before conversion to a Go duration, including very large integer
@@ -343,8 +351,10 @@ steps. It never calls policy, the proof verifier, the licensed task gate, or the
 signer, and does not append events or write mutation state.
 
 **Ready means configured, not authorized.** Issuance still verifies fresh proof,
-checks current tenant trust and scope policy, and refuses invalid, expired, or
-revoked trust. A supplied `task_envelope_base64` requires the licensed task gate;
+checks current tenant trust and scope policy, and refuses invalid, expired or
+not-yet-valid proof and revoked trust. JWT proof uses the same required expiry
+and optional start/issued-at checks described above. A supplied
+`task_envelope_base64` requires the licensed task gate;
 a deployment without that gate refuses it instead of silently dropping its task
 restriction. Preview exposes this as a blocker without consuming task proof.
 Requested scopes are issuance-policy inputs: the certificate proves identity,

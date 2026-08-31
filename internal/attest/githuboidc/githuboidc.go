@@ -44,7 +44,6 @@ func (a *Attestor) Method() string { return "github_oidc" }
 type ghClaims struct {
 	Iss               string `json:"iss"`
 	Aud               string `json:"aud"`
-	Exp               int64  `json:"exp"`
 	Sub               string `json:"sub"`
 	Repository        string `json:"repository"`
 	RepositoryOwner   string `json:"repository_owner"`
@@ -94,8 +93,8 @@ func (a *Attestor) Attest(_ context.Context, payload []byte) (attest.Attestation
 	if a.Now != nil {
 		now = a.Now
 	}
-	if c.Exp != 0 && now().Unix() >= c.Exp {
-		return attest.Attestation{}, fmt.Errorf("github_oidc: token expired")
+	if err := attest.ValidateJWTTimeWindow(raw, now()); err != nil {
+		return attest.Attestation{}, fmt.Errorf("github_oidc: %w", err)
 	}
 	if c.Repository == "" {
 		return attest.Attestation{}, fmt.Errorf("github_oidc: token missing repository")

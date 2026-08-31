@@ -15,6 +15,7 @@ import (
 
 	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // Attestor verifies GCP instance identity tokens (JWT / RS256 or ES256).
@@ -37,7 +38,6 @@ func (a *Attestor) Method() string { return "gcp_iit" }
 type gcpClaims struct {
 	Iss    string `json:"iss"`
 	Aud    string `json:"aud"`
-	Exp    int64  `json:"exp"`
 	Sub    string `json:"sub"`
 	Google struct {
 		ComputeEngine struct {
@@ -51,10 +51,11 @@ type gcpClaims struct {
 
 // Attest verifies the Google-signed identity token and returns the attestation.
 func (a *Attestor) Attest(_ context.Context, payload []byte) (attest.Attestation, error) {
-	raw, err := crypto.VerifyJWT(string(payload), a.JWKS)
+	raw, err := crypto.VerifyJWTBytes(payload, a.JWKS)
 	if err != nil {
 		return attest.Attestation{}, fmt.Errorf("gcp_iit: %w", err)
 	}
+	defer secret.Wipe(raw)
 	var c gcpClaims
 	if err := json.Unmarshal(raw, &c); err != nil {
 		return attest.Attestation{}, fmt.Errorf("gcp_iit: parse claims: %w", err)
@@ -69,8 +70,8 @@ func (a *Attestor) Attest(_ context.Context, payload []byte) (attest.Attestation
 	if a.Now != nil {
 		now = a.Now
 	}
-	if c.Exp != 0 && now().Unix() >= c.Exp {
-		return attest.Attestation{}, fmt.Errorf("gcp_iit: token expired")
+	if err := attest.ValidateJWTTimeWindow(raw, now()); err != nil {
+		return attest.Attestation{}, fmt.Errorf("gcp_iit: %w", err)
 	}
 	ce := c.Google.ComputeEngine
 	if ce.InstanceID == "" || ce.ProjectID == "" {
