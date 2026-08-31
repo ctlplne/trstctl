@@ -14,6 +14,26 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
+// ensureIssuedCredentialCRL completes the same trusted initial-publication step
+// used by ordinary and protocol issuance. The certificate event and CA ledger
+// are already durable. If local signed-public-material publication fails, the
+// caller receives a failure; its unchanged authorized retry recovers that same
+// recorded leaf and retries publication, never another leaf signature.
+//
+// This uses the existing isolated signer and ca.crl.published event path. It does
+// not make an upstream CA/connector call, write projections directly, or turn an
+// anonymous GET into a signing command. The retained issuance event also makes
+// the missing CRL discoverable by startup/freshness reconciliation after a crash.
+func (s *Server) ensureIssuedCredentialCRL(ctx context.Context, tenantID string) error {
+	if s.revoc == nil {
+		return errors.New("server: initial credential CRL publication is unavailable")
+	}
+	if err := s.revoc.ensureCRL(ctx, tenantID); err != nil {
+		return fmt.Errorf("server: initial credential CRL publication failed; retry the unchanged issuance command: %w", err)
+	}
+	return nil
+}
+
 // certificateRevocationAuthority accepts only a leaf actually signed by this
 // served authority. Imported certificates remain inventory, not an invitation
 // to revoke an unrelated local leaf with the same serial. Other authority paths

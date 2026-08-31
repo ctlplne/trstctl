@@ -174,7 +174,14 @@ func (s *Server) IssueBrokerAgentIdentity(ctx context.Context, tenantID, idempot
 	if s.agentBroker == nil {
 		return api.BrokerAgentIdentity{}, api.ErrBrokerUnavailable
 	}
-	return s.agentBroker.IssueBrokerAgentIdentity(ctx, tenantID, idempotencyKey, req)
+	identity, err := s.agentBroker.IssueBrokerAgentIdentity(ctx, tenantID, idempotencyKey, req)
+	if err != nil {
+		return api.BrokerAgentIdentity{}, err
+	}
+	if err := s.ensureIssuedCredentialCRL(ctx, tenantID); err != nil {
+		return api.BrokerAgentIdentity{}, err
+	}
+	return identity, nil
 }
 
 // BrokerTaskEnvelopeGate verifies an AGID-05 task envelope as a precondition of

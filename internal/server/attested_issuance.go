@@ -143,7 +143,14 @@ func (s *Server) IssueAttestedSVID(ctx context.Context, tenantID, idempotencyKey
 	if s.attestedIssuance == nil {
 		return api.AttestedSVID{}, api.ErrAttestedIssuanceUnavailable
 	}
-	return s.attestedIssuance.IssueAttestedSVID(ctx, tenantID, idempotencyKey, req)
+	identity, err := s.attestedIssuance.IssueAttestedSVID(ctx, tenantID, idempotencyKey, req)
+	if err != nil {
+		return api.AttestedSVID{}, err
+	}
+	if err := s.ensureIssuedCredentialCRL(ctx, tenantID); err != nil {
+		return api.AttestedSVID{}, err
+	}
+	return identity, nil
 }
 
 func (s *Server) PreviewAttestedSVID(ctx context.Context, tenantID, requester string, req api.AttestedSVIDRequest) (api.AttestedSVIDPreview, error) {
@@ -190,10 +197,12 @@ func (s *attestedIssuerService) PreviewAttestedSVID(ctx context.Context, tenantI
 		ExecutionWrites: []string{
 			"Record the proof verification result, then append a certificate-recorded event and project its inventory row after signing.",
 			"Bind the verified workload to the credential, append issuance audit evidence, and record the idempotent result.",
+			"Publish the issuing CA's initial certificate revocation list, or refresh it when due, before reporting successful issuance.",
 		},
 		ExecutionExternalEffects: []string{},
 		ExecutionSignerCalls: []string{
 			"Ask the isolated signer to sign one X.509-SVID for the verified workload subject and effective lifetime.",
+			"Sign the public certificate revocation list when it is missing or due for refresh; this does not sign another workload certificate.",
 		},
 		Steps: []string{
 			"Review the exact method, request digests, and effective lifetime. This preview does not verify the proof or reserve a subject.",
@@ -205,6 +214,7 @@ func (s *attestedIssuerService) PreviewAttestedSVID(ctx context.Context, tenantI
 			"If a response is lost, retry the exact request with the same Idempotency-Key to recover the original result instead of minting twice.",
 			"If proof verification fails, correct the trust configuration or obtain fresh proof, then review a new request. Never disable verification to continue.",
 			"If the signer is unavailable, restore the isolated signer and retry the unchanged request. An expired proof requires a fresh preview.",
+			"If initial revocation-list publication fails after the certificate was recorded, retry the same command. The server recovers that certificate and completes publication instead of issuing another leaf.",
 		},
 		DataHandling: []string{
 			"The preview returns only SHA-256 digests and operational metadata, never the raw proof or public-key body. Decoded proof buffers are wiped after the response.",

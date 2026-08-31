@@ -70,9 +70,15 @@ func (s *agentBrokerService) PreviewBrokerAgentIdentity(ctx context.Context, ten
 		RequiredPermission: "certs:issue", AttestationVerification: "execution_only", PolicyEvaluation: "execution_only",
 		TaskEnvelopeVerification: taskVerification, PayloadSHA256: crypto.SHA256Hex(req.Payload), PublicKeySHA256: crypto.SHA256Hex(req.PublicKeyDER), TaskEnvelopeSHA256: taskDigest,
 		PreviewWrites: []string{}, PreviewExternalEffects: []string{}, PreviewSignerCalls: []string{},
-		ExecutionWrites:          []string{"Record verification and issuance events, the agent owner, its shared certificate inventory row, and the idempotent result."},
+		ExecutionWrites: []string{
+			"Record verification and issuance events, the agent owner, its shared certificate inventory row, and the idempotent result.",
+			"Publish the issuing CA's initial certificate revocation list, or refresh it when due, before reporting successful issuance.",
+		},
 		ExecutionExternalEffects: []string{},
-		ExecutionSignerCalls:     []string{"Ask the isolated signer for one certificate with the verified workload subject and the effective lifetime."},
+		ExecutionSignerCalls: []string{
+			"Ask the isolated signer for one certificate with the verified workload subject and the effective lifetime.",
+			"Sign the public certificate revocation list when it is missing or due for refresh; this does not sign another workload certificate.",
+		},
 		Steps: []string{
 			"Review the exact agent, scopes, proof fingerprints, and effective lifetime. Ready means configured, not verified or authorized.",
 			"Issue explicitly. The server checks tenant trust, any task envelope, scope policy, and attestation before signing.",
@@ -83,6 +89,7 @@ func (s *agentBrokerService) PreviewBrokerAgentIdentity(ctx context.Context, ten
 			"If the response is lost, retry the unchanged request with the same Idempotency-Key. Do not create a new key just because delivery was uncertain.",
 			"If proof or policy is refused, correct tenant trust, request permitted scopes, or obtain fresh proof and review a new command. Never disable verification to continue.",
 			"If signing is unavailable, restore the isolated signer, then retry the unchanged command. Use the certificate inventory and audit trail to inspect the outcome.",
+			"If initial revocation-list publication fails after the certificate was recorded, retry the same command. The server recovers that certificate and completes publication instead of issuing another leaf.",
 		},
 		DataHandling: []string{
 			"Preview returns digests and operational metadata only. Raw proof and task-envelope bytes are not returned; their server buffers are wiped after the request.",

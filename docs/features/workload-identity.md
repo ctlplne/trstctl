@@ -109,6 +109,23 @@ available; consult **Change history** for the actual verification and issuance
 events. The registered-identity count covers workload and SSH identity records,
 not the number of certificates issued.
 
+Broker and attested REST issuance also complete the issuing CA's initial
+certificate revocation list (CRL) before returning success. A CRL is a signed
+list of certificate serial numbers that should no longer be trusted. The list
+starts empty and is published through the existing event-sourced revocation
+service; an anonymous CRL download never triggers a signature or state change.
+If publication fails after the leaf certificate was recorded, the API returns a
+server error. Restore the dependency and retry the identical request with the
+same `Idempotency-Key`: current proof and permission are checked again, the
+recorded certificate is recovered, and publication is retried without signing
+another leaf. Inspect inventory if proof expires before recovery; do not disable
+verification or assume the failed response means nothing was recorded.
+
+A published CRL does not force every consumer to check it. The receiving service
+must enforce certificate-chain trust, workload identity, validity, revocation
+and its own authorization policy. Prove those decisions with fresh connections
+on the actual receiving platform before claiming end-to-end revocation.
+
 An X.509-SVID can have an empty X.509 subject: its SPIFFE URI in the Subject
 Alternative Name (SAN) identifies the workload. Inventory uses that URI rather
 than showing a blank name, and short deadlines use minutes or hours. Certificate
