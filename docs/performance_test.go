@@ -272,6 +272,7 @@ func TestMakeTestShardsRow501ServerProofWithoutDroppingCoverage(t *testing.T) {
 	for _, want := range []string{
 		"SERVER_IMPORT := $(MODULE)/internal/server",
 		"SERVER_ROTATION_CURSOR_TEST := ^" + proof + "$$",
+		"SERVER_COMPLEMENTARY_TIMEOUT := 15m",
 		"COVERPROFILE_SERVER := $(COVERPROFILE).server",
 		"COVERPROFILE_SERVER_ROTATION_CURSOR := $(COVERPROFILE).server-rotation-cursor",
 	} {
@@ -287,7 +288,7 @@ func TestMakeTestShardsRow501ServerProofWithoutDroppingCoverage(t *testing.T) {
 	testBlock := mk[testStart:wallStart]
 	for _, want := range []string{
 		"grep -v -E '^$(SERVER_IMPORT)$$'",
-		"-coverprofile=$(COVERPROFILE_SERVER) -skip '$(SERVER_ROTATION_CURSOR_TEST)' -timeout=10m ./internal/server",
+		"-coverprofile=$(COVERPROFILE_SERVER) -skip '$(SERVER_ROTATION_CURSOR_TEST)' -timeout=$(SERVER_COMPLEMENTARY_TIMEOUT) ./internal/server",
 		"-coverprofile=$(COVERPROFILE_SERVER_ROTATION_CURSOR) -run '$(SERVER_ROTATION_CURSOR_TEST)' -timeout=10m ./internal/server",
 		"tail -n +2 $(COVERPROFILE_SERVER)",
 		"tail -n +2 $(COVERPROFILE_SERVER_ROTATION_CURSOR)",
@@ -299,8 +300,11 @@ func TestMakeTestShardsRow501ServerProofWithoutDroppingCoverage(t *testing.T) {
 	if got := strings.Count(testBlock, "$(SERVER_ROTATION_CURSOR_TEST)"); got != 2 {
 		t.Errorf("row-501 proof selector appears in %d test commands, want one complementary skip plus one dedicated run", got)
 	}
-	if got := strings.Count(testBlock, "-timeout=10m ./internal/server"); got != 2 {
-		t.Errorf("internal/server shards carrying the hard ten-minute ceiling = %d, want 2", got)
+	if got := strings.Count(testBlock, "-timeout=$(SERVER_COMPLEMENTARY_TIMEOUT) ./internal/server"); got != 1 {
+		t.Errorf("internal/server complementary shard using its measured budget = %d, want 1", got)
+	}
+	if got := strings.Count(testBlock, "-timeout=10m ./internal/server"); got != 1 {
+		t.Errorf("row-501 shard retaining its ten-minute ceiling = %d, want 1", got)
 	}
 	if !anyTestDeclaresUnder(t, "../internal/server", proof) {
 		t.Fatalf("dedicated server proof %s is no longer declared", proof)
