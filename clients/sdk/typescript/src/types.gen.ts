@@ -16674,7 +16674,7 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description success */
-            "": {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16761,7 +16761,7 @@ export interface operations {
         };
         responses: {
             /** @description success */
-            "": {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16801,7 +16801,7 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description success */
-            "": {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -20476,7 +20476,16 @@ export interface operations {
             };
         };
         responses: {
-            /** @description success */
+            /** @description credential issued */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EphemeralCredential"];
+                };
+            };
+            /** @description credential request awaiting approval */
             202: {
                 headers: {
                     [name: string]: unknown;

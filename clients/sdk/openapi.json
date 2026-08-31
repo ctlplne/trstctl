@@ -33772,7 +33772,7 @@
           }
         ],
         "responses": {
-          "": {
+          "200": {
             "content": {
               "application/json": {
                 "schema": {
@@ -33895,7 +33895,7 @@
           "required": true
         },
         "responses": {
-          "": {
+          "200": {
             "content": {
               "application/json": {
                 "schema": {
@@ -33953,7 +33953,7 @@
           }
         ],
         "responses": {
-          "": {
+          "200": {
             "content": {
               "application/json": {
                 "schema": {
@@ -39337,6 +39337,16 @@
           "required": true
         },
         "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EphemeralCredential"
+                }
+              }
+            },
+            "description": "credential issued"
+          },
           "202": {
             "content": {
               "application/json": {
@@ -39345,7 +39355,7 @@
                 }
               }
             },
-            "description": "success"
+            "description": "credential request awaiting approval"
           },
           "4XX": {
             "content": {

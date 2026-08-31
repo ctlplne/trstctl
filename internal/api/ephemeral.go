@@ -62,11 +62,16 @@ type EphemeralCredentialRequest struct {
 }
 
 type ephemeralCredentialJSON struct {
-	RequestID     string `json:"request_id"`
-	Method        string `json:"method"`
-	PayloadBase64 string `json:"payload_base64"`
-	PublicKeyPEM  string `json:"public_key_pem"`
-	TTLSeconds    int64  `json:"ttl_seconds"`
+	RequestID     string          `json:"request_id"`
+	Method        string          `json:"method"`
+	PayloadBase64 secretJSONBytes `json:"payload_base64"`
+	PublicKeyPEM  string          `json:"public_key_pem"`
+	TTLSeconds    int64           `json:"ttl_seconds"`
+}
+
+func (r *ephemeralCredentialJSON) wipeSecrets() {
+	r.PayloadBase64.wipe()
+	r.PayloadBase64 = nil
 }
 
 type EphemeralCredential struct {
@@ -153,6 +158,9 @@ type ephemeralAPIKeyJSON struct {
 }
 
 func ephemeralCredentialRequestFromJSON(wire ephemeralCredentialJSON) (EphemeralCredentialRequest, error) {
+	// Attestation proof can be a bearer credential. Keep both its base64 wire
+	// representation and decoded form in wipeable byte slices.
+	defer wire.PayloadBase64.wipe()
 	requestID := strings.TrimSpace(wire.RequestID)
 	method := strings.TrimSpace(wire.Method)
 	if requestID == "" {
@@ -161,10 +169,13 @@ func ephemeralCredentialRequestFromJSON(wire ephemeralCredentialJSON) (Ephemeral
 	if method == "" {
 		return EphemeralCredentialRequest{}, errStatus(http.StatusBadRequest, "method is required")
 	}
-	payload, err := base64.StdEncoding.DecodeString(wire.PayloadBase64)
-	if err != nil || len(payload) == 0 {
+	payload := make([]byte, base64.StdEncoding.DecodedLen(len(wire.PayloadBase64)))
+	n, err := base64.StdEncoding.Decode(payload, wire.PayloadBase64)
+	if err != nil || n == 0 {
+		secret.Wipe(payload)
 		return EphemeralCredentialRequest{}, errStatus(http.StatusBadRequest, "payload_base64 must be non-empty standard base64")
 	}
+	payload = payload[:n]
 	block, _ := pem.Decode([]byte(wire.PublicKeyPEM))
 	if block == nil || block.Type != "PUBLIC KEY" || len(block.Bytes) == 0 {
 		secret.Wipe(payload)
@@ -186,6 +197,7 @@ func (a *API) previewEphemeralCredential(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	var wire ephemeralCredentialJSON
+	defer wire.wipeSecrets()
 	if err := decodeJSON(r, &wire); err != nil {
 		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
 		return
@@ -280,6 +292,7 @@ func (a *API) issueEphemeralCredential(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var wire ephemeralCredentialJSON
+	defer wire.wipeSecrets()
 	if err := decodeJSON(r, &wire); err != nil {
 		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
 		return
