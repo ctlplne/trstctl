@@ -15869,6 +15869,8 @@ export interface operations {
     searchAudit: {
         parameters: {
             query?: {
+                /** @description canonical tool: discover, certificates, workloads_machines, secrets, software_trust, operations, or platform_integrations; intersects other filters before the result limit */
+                tool?: string;
                 /** @description comma-separated event types to include */
                 type?: string;
                 /** @description catalog feature id (e.g. F6); returns only events the feature's mutating actions emit */
@@ -15926,6 +15928,8 @@ export interface operations {
     exportAudit: {
         parameters: {
             query?: {
+                /** @description canonical tool: discover, certificates, workloads_machines, secrets, software_trust, operations, or platform_integrations; intersects other filters before the result limit */
+                tool?: string;
                 /** @description comma-separated event types to include */
                 type?: string;
                 /** @description catalog feature id (e.g. F6); returns only events the feature's mutating actions emit */

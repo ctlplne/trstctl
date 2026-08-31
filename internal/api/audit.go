@@ -4,6 +4,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -39,6 +40,7 @@ func (a *API) auditVerificationKeys(w http.ResponseWriter, r *http.Request) {
 // guard against exactly that.
 func auditQueryParams() []param {
 	return []param{
+		{name: "tool", typ: "string", desc: "canonical tool: discover, certificates, workloads_machines, secrets, software_trust, operations, or platform_integrations; intersects other filters before the result limit"},
 		{name: "type", typ: "string", desc: "comma-separated event types to include"},
 		{name: "feature_id", typ: "string", desc: "catalog feature id (e.g. F6); returns only events the feature's mutating actions emit"},
 		{name: "action", typ: "string", desc: "catalog action (e.g. revoke); returns only events that action emits, optionally scoped by feature_id"},
@@ -56,9 +58,16 @@ func auditQueryParams() []param {
 func (a *API) auditQueryFromRequest(r *http.Request, tenantID string) (audit.Query, error) {
 	q := audit.Query{
 		TenantID:  tenantID,
+		Tool:      strings.TrimSpace(r.URL.Query().Get("tool")),
 		Contains:  r.URL.Query().Get("q"),
 		FeatureID: strings.TrimSpace(r.URL.Query().Get("feature_id")),
 		Action:    strings.TrimSpace(r.URL.Query().Get("action")),
+	}
+	if err := audit.ValidateTool(q.Tool); err != nil {
+		if errors.Is(err, audit.ErrUnknownTool) {
+			return audit.Query{}, errStatus(http.StatusBadRequest, err.Error())
+		}
+		return audit.Query{}, err
 	}
 	if t := r.URL.Query().Get("type"); t != "" {
 		for _, name := range strings.Split(t, ",") {
@@ -167,7 +176,9 @@ func (a *API) exportAudit(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	head := auditchain.Seal(recs)
+	// The archived prefix is part of the proof. Re-sealing from genesis here
+	// would emit a trailer naming one seed and rows hashed from another.
+	head := auditchain.SealFrom(prevHash, recs)
 	// Best effort, and honest about it: an export from a deployment with no TSA
 	// is unanchored, says so in its own payload, and is still worth having.
 	// Failing the export instead would leave an operator with nothing.

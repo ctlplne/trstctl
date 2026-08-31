@@ -51,7 +51,7 @@ export function AppQueryProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     function onVisibilityChange() {
       if (document.visibilityState !== "visible") return;
-      void client.invalidateQueries({ predicate: (query) => query.meta?.live === true });
+      void client.invalidateQueries({ predicate: (query) => query.meta?.live === true }, { cancelRefetch: false });
     }
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => document.removeEventListener("visibilitychange", onVisibilityChange);
@@ -83,6 +83,8 @@ export function useHasAppQueryProvider(): boolean {
 }
 
 export interface ApiQueryOptions {
+  /** Explicit workflows may surface failure immediately for an operator retry. */
+  retry?: boolean | number;
   /** Keeps dependent queries idle until their parent selection exists. */
   enabled?: boolean;
   /** Marks a live tile: poll every intervalMs while the tab is visible, pause
@@ -101,27 +103,36 @@ export function liveRefetchInterval(intervalMs: number): number | false {
 export interface ApiQueryResult<T> {
   data: T | null;
   loading: boolean;
+  fetching: boolean;
   error: string | null;
   errorValue: unknown | null;
   refetch: () => void;
 }
 
 /** useApiQuery: the useResource-compatible adapter over useQuery. */
-export function useApiQuery<T>(key: readonly unknown[], loader: () => Promise<T>, options?: ApiQueryOptions): ApiQueryResult<T> {
+export function useApiQuery<T>(
+  key: readonly unknown[],
+  loader: (context: { signal: AbortSignal }) => Promise<T>,
+  options?: ApiQueryOptions,
+): ApiQueryResult<T> {
   const live = options?.live;
   const query = useQuery({
     queryKey: key,
     queryFn: loader,
     enabled: options?.enabled,
+    ...(options?.retry === undefined ? {} : { retry: options.retry }),
     meta: live ? { live: true } : undefined,
     refetchInterval: live ? () => liveRefetchInterval(live.intervalMs) : undefined,
   });
   return {
     data: query.data ?? null,
     loading: query.isPending,
+    fetching: query.isFetching,
     error: query.error ? (query.error instanceof Error ? query.error.message : String(query.error)) : null,
     errorValue: query.error ?? null,
-    refetch: () => void query.refetch(),
+    // A boundary refresh joins an active read instead of canceling and
+    // restarting it. Polling and explicit refresh never create parallel reads.
+    refetch: () => void query.refetch({ cancelRefetch: false }),
   };
 }
 

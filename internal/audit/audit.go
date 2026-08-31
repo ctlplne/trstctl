@@ -44,6 +44,7 @@ var ErrMissingSigner = errors.New("audit: signing key is required for signed exp
 // isolation; the zero value of the other fields means "unbounded".
 type Query struct {
 	TenantID            string    `json:"tenant_id"`
+	Tool                string    `json:"tool,omitempty"`                  // canonical product tool; intersects all other selectors before limiting
 	Types               []string  `json:"types,omitempty"`                 // exact event-type filter
 	ExcludeTypePrefixes []string  `json:"exclude_type_prefixes,omitempty"` // internal stream cursors may omit their own control events
 	FeatureID           string    `json:"feature_id,omitempty"`            // catalog feature id (COVER-008); resolved to event types via the ledger
@@ -182,21 +183,33 @@ func (s *Service) search(ctx context.Context, q Query) ([]Record, string, error)
 	if q.TenantID == "" {
 		return nil, "", ErrMissingTenant
 	}
+	toolScope, err := newAuditToolScope(q.Tool)
+	if err != nil {
+		return nil, "", err
+	}
 	var (
 		seed string
 		out  []Record
 	)
-	err := s.log.WithHistoryRead(ctx, func(readCtx context.Context) error {
+	err = s.log.WithHistoryRead(ctx, func(readCtx context.Context) error {
 		// The retention checkpoint is only a query floor, not permission to skip
 		// safety inspection. Scan the complete retained tenant prefix first, on the
 		// same pinned generation as the eventual filtered result.
+		var scopeOrdinal uint64
 		if err := s.log.Replay(readCtx, 0, func(e events.Event) error {
 			if e.TenantID != q.TenantID {
 				return nil
 			}
+			scopeOrdinal++
 			unsafe, inspectErr := schedulerhistory.RequiresSanitation(e.Type, e.SchemaVersion, e.Data)
 			if inspectErr != nil || unsafe {
 				return schedulerhistory.ErrSanitationRequired
+			}
+			// Safety inspection above still covers the entire retained history.
+			// Classification, however, must not learn an object's tool from a
+			// record newer than the operator's requested point in time.
+			if (q.AsOfSequence == 0 || scopeOrdinal <= q.AsOfSequence) && (q.Until.IsZero() || !e.Time.After(q.Until)) {
+				toolScope.observe(e)
 			}
 			return nil
 		}); err != nil {
@@ -227,7 +240,7 @@ func (s *Service) search(ctx context.Context, q Query) ([]Record, string, error)
 				redacted.Data = redactor.RedactJSON(e.Data)
 			}
 			tenantOrdinal++
-			if !q.matches(redacted, tenantOrdinal) {
+			if !toolScope.matches(redacted) || !q.matches(redacted, tenantOrdinal) {
 				return nil
 			}
 			out = append(out, Record{

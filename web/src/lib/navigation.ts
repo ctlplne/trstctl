@@ -1,5 +1,5 @@
 import type { MessageKey } from "@/i18n/messages";
-import type { CanonicalCapabilityID } from "@/lib/feature-contracts.gen";
+import type { CanonicalCapabilityID, CanonicalTool } from "@/lib/feature-contracts.gen";
 
 export type NavIcon =
   | "activity"
@@ -309,12 +309,8 @@ export function moduleForRoute(to: string): ModuleId | undefined {
   return navModules.find((module) => module.routes.includes(path))?.id;
 }
 
-/** S-B4: dual-scope filters for the global planes. A module id maps to a free-
- * text term that scopes the (single, shared) audit stream and risk list to that
- * module's events/credentials — Infisical's dual-scope audit, adapted. There is
- * still ONE audit surface and one hash chain; these are lenses, not silos (the
- * DigiCert per-manager-audit anti-pattern, 03 §2). FE-only: the term is applied
- * as the existing `q` free-text filter. */
+/** Legacy risk-list search hints only. Audit uses the server-owned predicate
+ * below: a word such as "ssh" cannot define all workload activity. */
 const moduleScopeTerms: Record<ModuleId, string> = {
   discovery: "discover",
   certificates: "cert",
@@ -326,6 +322,27 @@ const moduleScopeTerms: Record<ModuleId, string> = {
 
 export function moduleScopeTerm(moduleId: string): string | undefined {
   return (moduleScopeTerms as Record<string, string>)[moduleId];
+}
+
+const moduleAuditTools: Record<ModuleId, CanonicalTool> = {
+  discovery: "discover",
+  certificates: "certificates",
+  workload: "workloads_machines",
+  secrets: "secrets",
+  posture: "software_trust",
+  platform: "operations",
+};
+
+/** Compatibility for existing deep links; membership is decided by the server
+ * before limits and export, not by this route-to-tool adapter. */
+export function moduleAuditTool(moduleId: string): CanonicalTool | undefined {
+  return (moduleAuditTools as Record<string, CanonicalTool>)[moduleId];
+}
+
+export function auditToolLabelKey(tool: string): MessageKey | undefined {
+  if (tool === "platform_integrations") return "audit.scope.platformIntegrations";
+  const module = navModules.find((item) => moduleAuditTools[item.id] === tool);
+  return module?.labelKey;
 }
 
 export function moduleLabelKey(moduleId: string): MessageKey | undefined {

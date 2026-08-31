@@ -1,9 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { AttesterBreakdown, attesterBreakdown, type AttestationFailure } from "@/pages/Workloads";
+import { IntlProvider } from "@/i18n/I18nProvider";
 
 function svid(method: string, verifiedAt: string) {
-  return { attestation: { method, verified_at: verifiedAt } };
+  return {
+    subject: "fixture-workload",
+    credential_id: `fixture-${method}-${verifiedAt}`,
+    not_after: verifiedAt,
+    attestation: { id: `att-${method}`, subject: "fixture-workload", selectors: [], method, verified_at: verifiedAt },
+  };
 }
 
 function failure(method: string, at = "2026-07-26T12:00:00Z"): AttestationFailure {
@@ -14,6 +20,16 @@ function failure(method: string, at = "2026-07-26T12:00:00Z"): AttestationFailur
 // grouping, its most-recent-verification pick, and its failures-first ordering
 // are pinned.
 describe("attester breakdown", () => {
+  it("uses the same active time zone for verification and unsuccessful-attempt times", () => {
+    render(
+      <IntlProvider initialLocale="en-US" initialTimeZone="America/New_York">
+        <AttesterBreakdown rows={[svid("k8s_sat", "2026-08-31T00:24:48Z")]} failures={[failure("k8s_sat", "2026-08-31T00:25:00Z")]} />
+      </IntlProvider>,
+    );
+    expect(screen.getByText("Aug 30, 2026, 8:24 PM")).toBeInTheDocument();
+    expect(screen.getByText("Aug 30, 2026, 8:25 PM")).toBeInTheDocument();
+    expect(screen.queryByText(/Aug 31/)).not.toBeInTheDocument();
+  });
   it("does not call an infrastructure error a proof refusal or claim it was never verified", () => {
     render(<AttesterBreakdown rows={[]} failures={[{ method: "k8s_sat", message: "internal error", at: "2026-08-30T12:00:00Z" }]} />);
     expect(screen.getByRole("columnheader", { name: "Unsuccessful attempts" })).toBeInTheDocument();

@@ -12,6 +12,7 @@
 import { translateNow } from "@/i18n/I18nProvider";
 import * as estate from "./estateApi";
 import { downloadAuditExport as downloadAuditExportImpl } from "./auditExport";
+import { auditQueryParams, auditReadSignal } from "./auditQuery";
 import type {
   CapabilityView,
   CryptoReadiness,
@@ -1135,6 +1136,10 @@ export interface AuthMethods {
 }
 
 export interface AuditQuery {
+  /** Server-owned selector. Unknown values are rejected, never made unscoped. */
+  tool?: string;
+  featureID?: string;
+  action?: string;
   type?: string;
   since?: string;
   until?: string;
@@ -1922,7 +1927,7 @@ export interface Api {
   provisionManagedTenant(input: ManagedTenantProvisionRequest): Promise<ManagedTenant>;
   certificates(): Promise<Certificate[]>;
   certificatePage(options?: { limit?: number; cursor?: string; expiringBefore?: string }): Promise<CertificatePage>;
-  certificateHealth(): Promise<CertificateHealthDashboard>;
+  certificateHealth(signal?: AbortSignal): Promise<CertificateHealthDashboard>;
   crlDistributions(): Promise<CRLDistributionList>;
   revocationCaches(): Promise<RevocationCachePosture>;
   revocationHealth(): Promise<RevocationHealth>;
@@ -2142,13 +2147,13 @@ export interface Api {
   enforcePrivacyRetention(): Promise<PrivacyRetentionRun>;
   privacyRetentionRuns(options?: { limit?: number; cursor?: string }): Promise<PrivacyRetentionRunList>;
   privacyCatalog(): Promise<PrivacyCatalog>;
-  auditEvents(options?: AuditQuery): Promise<AuditEvent[]>;
-  exportAudit(options?: AuditQuery): Promise<AuditBundle>;
+  auditEvents(options?: AuditQuery, signal?: AbortSignal): Promise<AuditEvent[]>;
+  exportAudit(options?: AuditQuery, signal?: AbortSignal): Promise<AuditBundle>;
   auditFeeds(): Promise<AuditFeedList>;
   previewAuditFeed(id: string, input: AuditFeedRequest): Promise<AuditFeedPreview>;
   putAuditFeed(id: string, input: AuditFeedRequest): Promise<AuditFeed>;
   // J1: download a record stream (ndjson/csv/splunk-hec/sentinel) as a file.
-  downloadAuditExport(options: AuditQuery | undefined, format: string): Promise<string>;
+  downloadAuditExport(options: AuditQuery | undefined, format: string, signal?: AbortSignal): Promise<string>;
   complianceEvidencePack(framework: ComplianceEvidencePack["framework"]): Promise<ComplianceEvidencePack>;
   complianceInventoryReport(): Promise<ComplianceInventoryReport>;
   nhiComplianceReport(): Promise<NHIComplianceReport>;
@@ -2441,7 +2446,10 @@ const liveApi: Api = {
     return req<CertificatePage>(`/api/v1/certificates${suffix ? `?${suffix}` : ""}`);
   },
   certificates: () => api.certificatePage().then((r) => r.items ?? []),
-  certificateHealth: () => req<CertificateHealthDashboard>("/api/v1/certificates/health"),
+  certificateHealth: (signal) =>
+    req<CertificateHealthDashboard>("/api/v1/certificates/health", {
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000),
+    }),
   crlDistributions: () => req<CRLDistributionList>("/api/v1/revocation/crls"),
   revocationCaches: () => req<RevocationCachePosture>("/api/v1/revocation/caches"),
   revocationHealth: () => req<RevocationHealth>("/api/v1/revocation/health"),
@@ -2676,12 +2684,13 @@ const liveApi: Api = {
   enforcePrivacyRetention: () => mutate<PrivacyRetentionRun>("POST", "/api/v1/privacy/retention-runs"),
   privacyRetentionRuns: (options) => req<PrivacyRetentionRunList>(`/api/v1/privacy/retention-runs${pageQueryString(options)}`),
   privacyCatalog: () => req<PrivacyCatalog>("/api/v1/privacy/catalog"),
-  auditEvents: (options) => req<{ events: AuditEvent[] }>(`/api/v1/audit/events${auditQueryString(options)}`).then((r) => r.events ?? []),
-  exportAudit: (options) => req<AuditBundle>(`/api/v1/audit/export${auditQueryString(options)}`),
+  auditEvents: (options, signal) =>
+    req<{ events: AuditEvent[] }>(`/api/v1/audit/events${auditQueryString(options)}`, { signal: auditReadSignal(signal) }).then((r) => r.events ?? []),
+  exportAudit: (options, signal) => req<AuditBundle>(`/api/v1/audit/export${auditQueryString(options)}`, { signal: auditReadSignal(signal) }),
   auditFeeds: () => req<AuditFeedList>("/api/v1/audit/feeds"),
   previewAuditFeed: (id, input) => postRead<AuditFeedPreview>(`/api/v1/audit/feeds/${encodeURIComponent(id)}/preview`, input),
   putAuditFeed: (id, input) => mutate<AuditFeed>("PUT", `/api/v1/audit/feeds/${encodeURIComponent(id)}`, input),
-  downloadAuditExport: (options, format) => downloadAuditExportImpl(options, format),
+  downloadAuditExport: (options, format, signal) => downloadAuditExportImpl(options, format, signal),
   complianceEvidencePack: (framework) => req<ComplianceEvidencePack>(`/api/v1/compliance/evidence-packs/${encodeURIComponent(framework)}`),
   complianceInventoryReport: () => req<ComplianceInventoryReport>("/api/v1/compliance/inventory-report"),
   nhiComplianceReport: () => req<NHIComplianceReport>("/api/v1/compliance/nhi-report"),
@@ -2934,14 +2943,7 @@ export const api: Api = createPreviewAwareApi(liveApi);
 export const loginURL = "/auth/login";
 
 function auditQueryString(options?: AuditQuery): string {
-  const qs = new URLSearchParams();
-  qs.set("limit", String(options?.limit ?? 50));
-  if (options?.type) qs.set("type", options.type);
-  if (options?.since) qs.set("since", options.since);
-  if (options?.until) qs.set("until", options.until);
-  if (options?.asOf != null) qs.set("as_of", String(options.asOf));
-  if (options?.q) qs.set("q", options.q);
-  return `?${qs.toString()}`;
+  return `?${auditQueryParams(options).toString()}`;
 }
 
 function riskQueryString(options?: RiskQuery): string {

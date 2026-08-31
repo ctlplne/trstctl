@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError, type AuditBundle, type AuditEvent, type AuditQuery } from "@/lib/api";
 // This page renders errors in the fallback-prefixed shape ("Could not export
@@ -10,7 +10,13 @@ import { PageHeader } from "@/components/PageHeader";
 import { ErrorState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
-import { moduleLabelKey, moduleScopeTerm } from "@/lib/navigation";
+import { Input } from "@/components/ui/input";
+import { Field } from "@/components/ui/field";
+import { Card } from "@/components/ui/card";
+import { auditToolLabelKey, moduleAuditTool } from "@/lib/navigation";
+import { auditQueryParams } from "@/lib/auditQuery";
+import { AppQueryProvider, useApiQuery, useHasAppQueryProvider } from "@/lib/query";
+import { useAuth } from "@/auth/AuthProvider";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
 import { AuditFeedPanel } from "@/pages/audit/AuditFeedPanel";
@@ -19,6 +25,8 @@ type Notice = { kind: "permission" | "error"; message: string };
 type Disclosure = "search" | "evidence" | "collectors";
 
 interface FilterState {
+  featureID: string;
+  action: string;
   type: string;
   since: string;
   until: string;
@@ -28,6 +36,8 @@ interface FilterState {
 }
 
 const defaultFilters: FilterState = {
+  featureID: "",
+  action: "",
   type: "",
   since: "",
   until: "",
@@ -37,26 +47,41 @@ const defaultFilters: FilterState = {
 };
 
 export function Audit() {
+  const hasProvider = useHasAppQueryProvider();
+  return hasProvider ? (
+    <AuditWorkspace />
+  ) : (
+    <AppQueryProvider>
+      <AuditWorkspace />
+    </AppQueryProvider>
+  );
+}
+
+function AuditWorkspace() {
   const { t, formatDateTime } = useTranslation();
-  const [searchParams] = useSearchParams();
-  const initialFilters = filtersFromSearchParams(searchParams);
+  const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialFilters = useMemo(() => filtersFromSearchParams(searchParams), [searchParams]);
   const explicitlyScoped = hasExplicitAuditScope(searchParams);
   const [filters, setFilters] = useState<FilterState>(initialFilters);
-  // S-B4: the module scope is a lens over the one shared stream; surfaced as a
-  // clearable chip so it never becomes an invisible, sticky filter.
-  const [moduleScope, setModuleScope] = useState<string>(() => searchParams.get("module") ?? "");
-  const moduleScopeLabelKey = moduleScope ? moduleLabelKey(moduleScope) : undefined;
+  // URL, cache key, visible chip and exports use the same server predicate.
+  // Keep unknown deep-link selectors so the server rejects them; never silently
+  // widen an unknown tool to the entire tenant stream.
+  const module = searchParams.get("module") ?? "";
+  const moduleScope = searchParams.get("tool") || moduleAuditTool(module) || module;
+  const moduleScopeLabelKey = auditToolLabelKey(moduleScope);
+  const applied = toAuditQuery(initialFilters, moduleScope);
+  const queryKey = ["audit", user?.tenant_id ?? null, user?.subject ?? null, (user?.permissions ?? []).join("|"), applied];
+  const scopeKey = JSON.stringify(queryKey);
+  const scopeRef = useRef(scopeKey);
+  const result = useApiQuery<AuditEvent[]>(queryKey, ({ signal }) => api.auditEvents(applied, signal), { retry: false });
+  const events = result.error ? null : result.data;
+  const loading = result.loading || result.fetching;
+  const error = result.errorValue ? noticeFor(result.errorValue, "Could not load audit events") : null;
 
   function clearModuleScope() {
-    setModuleScope("");
-    const cleared = { ...filters, q: "" };
-    setFilters(cleared);
-    void loadEvents(toAuditQuery(cleared));
+    applyFilters(filters, true);
   }
-  const [applied, setApplied] = useState<AuditQuery>(toAuditQuery(initialFilters));
-  const [events, setEvents] = useState<AuditEvent[] | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Notice | null>(null);
   const [selected, setSelected] = useState<AuditEvent | null>(null);
   const [bundle, setBundle] = useState<AuditBundle | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -68,29 +93,34 @@ export function Audit() {
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<Record<Disclosure, boolean>>({ search: explicitlyScoped, evidence: false, collectors: false });
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const exportController = useRef<AbortController | null>(null);
 
-  useEffect(() => {
-    void loadEvents(toAuditQuery(initialFilters));
-    // The initial URL query seeds the audit view once for deep links.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  async function loadEvents(query: AuditQuery) {
-    setLoading(true);
-    setError(null);
+  useLayoutEffect(() => {
+    scopeRef.current = scopeKey;
+    setFilters(initialFilters);
     setSelected(null);
-    try {
-      setEvents(await api.auditEvents(query));
-      setApplied(query);
-    } catch (err) {
-      setEvents(null);
-      setError(noticeFor(err, "Could not load audit events"));
-    } finally {
-      setLoading(false);
+    setBundle(null);
+    setExportError(null);
+    setBusy(false);
+    return () => exportController.current?.abort();
+  }, [scopeKey, initialFilters]);
+
+  function applyFilters(next: FilterState, clearTool = false) {
+    const params = auditQueryParams(toAuditQuery(next));
+    if (!clearTool) {
+      if (searchParams.has("module")) params.set("module", module);
+      if (searchParams.has("tool")) params.set("tool", searchParams.get("tool") ?? "");
     }
+    if (params.get("limit") === "50") params.delete("limit");
+    if (params.toString() === searchParams.toString()) result.refetch();
+    else setSearchParams(params);
   }
 
   async function exportEvidence() {
+    if (loading || error || events === null || busy) return;
+    const startedScope = scopeKey;
+    const controller = new AbortController();
+    exportController.current = controller;
     setBusy(true);
     setExportError(null);
     setBundle(null);
@@ -98,14 +128,15 @@ export function Audit() {
       if (exportFormat !== "jws") {
         // A record stream is a file, not something to render: a year of audit
         // events pasted into the page would hang the browser and help nobody.
-        await api.downloadAuditExport(applied, exportFormat);
+        await api.downloadAuditExport(applied, exportFormat, controller.signal);
         return;
       }
-      setBundle(await api.exportAudit(applied));
+      const exported = await api.exportAudit(applied, controller.signal);
+      if (!controller.signal.aborted && scopeRef.current === startedScope) setBundle(exported);
     } catch (err) {
-      setExportError(apiProblemMessage(err, "Could not export evidence"));
+      if (!controller.signal.aborted && scopeRef.current === startedScope) setExportError(apiProblemMessage(err, "Could not export evidence"));
     } finally {
-      setBusy(false);
+      if (scopeRef.current === startedScope) setBusy(false);
     }
   }
 
@@ -116,7 +147,7 @@ export function Audit() {
   function applyTypePreset(type: string) {
     const next = { ...filters, type };
     setFilters(next);
-    void loadEvents(toAuditQuery(next));
+    applyFilters(next);
   }
 
   function openSearch() {
@@ -220,7 +251,7 @@ export function Audit() {
         </div>
       )}
 
-      <section aria-labelledby="audit-summary-heading" className="ui-panel grid gap-4 p-comfortable" aria-live="polite">
+      <Card role="region" aria-labelledby="audit-summary-heading" className="grid gap-4 p-comfortable" aria-live="polite">
         <div className="grid gap-1">
           <h2 id="audit-summary-heading" className="text-title font-semibold">
             {summaryTitle}
@@ -235,7 +266,7 @@ export function Audit() {
             <SummaryFact label={t("audit.design.result")} value={t(eventResultKey(lastShown))} />
           </dl>
         ) : null}
-      </section>
+      </Card>
 
       <AuditDisclosure
         title={t("audit.design.disclosure.search")}
@@ -246,7 +277,7 @@ export function Audit() {
           <form
             onSubmit={(event) => {
               event.preventDefault();
-              void loadEvents(toAuditQuery(filters));
+              applyFilters(filters);
             }}
           >
             <DataGrid
@@ -283,6 +314,18 @@ export function Audit() {
                   onSearchChange={(value) => updateFilter("q", value)}
                   filters={
                     <>
+                      <AuditFilterInput
+                        id="audit-feature"
+                        label={t("audit.filter.feature")}
+                        value={filters.featureID}
+                        onChange={(value) => updateFilter("featureID", value)}
+                      />
+                      <AuditFilterInput
+                        id="audit-action"
+                        label={t("audit.filter.action")}
+                        value={filters.action}
+                        onChange={(value) => updateFilter("action", value)}
+                      />
                       <AuditFilterInput
                         id="audit-type"
                         label="Type"
@@ -339,7 +382,7 @@ export function Audit() {
                         variant="outline"
                         onClick={() => {
                           setFilters(defaultFilters);
-                          void loadEvents(toAuditQuery(defaultFilters));
+                          applyFilters(defaultFilters, true);
                         }}
                       >
                         {translateNow("source.reset.daee7606b3")}
@@ -379,7 +422,7 @@ export function Audit() {
                 <option value="sentinel">{translateNow("source.format.sentinel.j1exp00006")}</option>
               </Select>
             </label>
-            <Button type="button" onClick={() => void exportEvidence()} disabled={busy || loading}>
+            <Button type="button" onClick={() => void exportEvidence()} disabled={busy || loading || !!error || events === null}>
               {translateNow("source.export.evidence.caab91492e")}
             </Button>
           </div>
@@ -444,19 +487,20 @@ function AuditFilterInput({
   value: string;
 }) {
   return (
-    <label className="grid gap-1 text-sm font-medium" htmlFor={id}>
-      {label}
-      <input
-        id={id}
-        type={type}
-        min={min}
-        max={max}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-sm"
-        placeholder={placeholder}
-      />
-    </label>
+    <Field label={label}>
+      {(control) => (
+        <Input
+          {...control}
+          data-testid={id}
+          type={type}
+          min={min}
+          max={max}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+        />
+      )}
+    </Field>
   );
 }
 
@@ -517,23 +561,20 @@ function EvidenceBundle({ bundle }: { bundle: AuditBundle }) {
 }
 
 function filtersFromSearchParams(searchParams: URLSearchParams): FilterState {
-  // S-B4: ?module=<id> scopes the shared audit stream to one module by seeding
-  // the free-text query with the module's scope term (unless an explicit q is
-  // already present, which wins).
-  const moduleParam = searchParams.get("module") ?? "";
-  const moduleTerm = moduleParam ? moduleScopeTerm(moduleParam) : undefined;
   return {
+    featureID: searchParams.get("feature_id") ?? "",
+    action: searchParams.get("action") ?? "",
     type: searchParams.get("type") ?? "",
     since: searchParams.get("since") ?? "",
     until: searchParams.get("until") ?? "",
     asOf: searchParams.get("as_of") ?? "",
-    q: searchParams.get("q") ?? moduleTerm ?? "",
+    q: searchParams.get("q") ?? "",
     limit: searchParams.get("limit") ?? "50",
   };
 }
 
 function hasExplicitAuditScope(searchParams: URLSearchParams): boolean {
-  return ["module", "type", "since", "until", "as_of", "q", "limit"].some((key) => searchParams.has(key));
+  return ["module", "tool", "feature_id", "action", "type", "since", "until", "as_of", "q", "limit"].some((key) => searchParams.has(key));
 }
 
 function lastAuditEventShown(events: AuditEvent[] | null): AuditEvent | null {
@@ -659,8 +700,11 @@ function affectedResourceLinks(event: AuditEvent): Array<{ label: MessageKey; to
   return links;
 }
 
-function toAuditQuery(state: FilterState): AuditQuery {
+function toAuditQuery(state: FilterState, tool?: string): AuditQuery {
   const query: AuditQuery = { limit: clampLimit(state.limit) };
+  if (tool) query.tool = tool;
+  if (state.featureID.trim()) query.featureID = state.featureID.trim();
+  if (state.action.trim()) query.action = state.action.trim();
   if (state.type.trim()) query.type = state.type.trim();
   if (state.since.trim()) query.since = state.since.trim();
   if (state.until.trim()) query.until = state.until.trim();

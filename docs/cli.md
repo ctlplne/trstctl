@@ -73,6 +73,24 @@ usage error — scriptable end to end.
 
 ## Verify audit exports offline
 
+Search and export accept the same optional filters: `--tool`, `--feature_id`,
+`--action`, `--type`, `--since`, `--until`, `--as_of`, `--q`, and `--limit`.
+The server intersects them before applying the limit. `--tool` accepts `discover`,
+`certificates`, `workloads_machines`, `secrets`, `software_trust`, `operations`,
+or the supporting `platform_integrations` area. Omit it for the whole tenant
+stream; an unknown tool is an error, not an unfiltered result. Shared lifecycle
+records can appear in more than one tool without creating another audit stream.
+
+```bash
+trstctl-cli audit events --tool workloads_machines --limit 100
+trstctl-cli audit export --tool workloads_machines --as_of 120 --limit 100 --format ndjson > workload-audit.ndjson
+```
+
+Here `--as_of 120` means “up to tenant-local event sequence 120,” not the newest
+120 events. A retained export carries its archived-prefix hash so the verifier
+can check the surviving chain. A tool filter never overrides tenant permissions,
+privacy redaction or the configured retention window.
+
 `trstctl-cli audit verify` is a local command: it opens no HTTP connection and
 does not need `TRSTCTL_SERVER`, a token, or a running control plane. It verifies
 the canonical JWS envelope and the exact CSV, NDJSON, Splunk HEC (`splunk-hec`),

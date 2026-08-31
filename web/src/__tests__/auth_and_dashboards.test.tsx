@@ -548,7 +548,7 @@ describe("auth + dashboards", () => {
     expect(await screen.findByRole("heading", { name: "Change history is unavailable" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Search activity" }));
     expect(await screen.findByText("Your session cannot read tenant audit evidence.")).toBeInTheDocument();
-    expect(apiMock.auditEvents).toHaveBeenCalledWith({ limit: 50 });
+    expect(apiMock.auditEvents).toHaveBeenCalledWith({ limit: 50 }, expect.any(AbortSignal));
     const nav = screen.getByRole("navigation", { name: "Primary" });
     expect(within(nav).queryByRole("link", { name: /^Change history$/i })).not.toBeInTheDocument();
   });

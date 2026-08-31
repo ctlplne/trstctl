@@ -29,7 +29,6 @@ import {
   type WorkloadAttesterTrustSourceRotateRequest,
 } from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
-import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
 
@@ -124,7 +123,7 @@ const attesterMethods: Array<{ value: TrustSourceMethod; labelKey: MessageKey }>
 ];
 
 export function Workloads() {
-  const { t } = useTranslation();
+  const { t, formatDateTime: formatDate } = useTranslation();
   const [searchParams] = useSearchParams();
   const [overviewNow] = useState(() => Date.now());
   const [provider, setProvider] = useState("postgresql");
@@ -659,7 +658,7 @@ export function Workloads() {
                         : "—"}
                     </td>
                     <td className="text-xs text-muted-foreground">
-                      {host.workload_api.reported_at ? formatDateTimePolicy(host.workload_api.reported_at) : translateNow("source.never.b3wla0012")}
+                      {host.workload_api.reported_at ? formatDate(host.workload_api.reported_at) : translateNow("source.never.b3wla0012")}
                     </td>
                   </tr>
                 ))}
@@ -1341,10 +1340,6 @@ export function Workloads() {
   );
 }
 
-function formatDate(value?: string): string {
-  return formatDateTimePolicy(value);
-}
-
 function leaseMetadataOnly(lease: DynamicLease): DynamicLease {
   return {
     id: lease.id,
@@ -1460,6 +1455,7 @@ function formString(data: FormData, name: string): string {
 }
 
 export function AttesterBreakdown({ rows, failures }: { rows: AttestedSVIDRow[]; failures: AttestationFailure[] }) {
+  const { formatDateTime: formatDate } = useTranslation();
   const breakdown = attesterBreakdown(rows, failures);
   if (breakdown.length === 0) return null;
   return (

@@ -32352,6 +32352,14 @@
         "operationId": "searchAudit",
         "parameters": [
           {
+            "description": "canonical tool: discover, certificates, workloads_machines, secrets, software_trust, operations, or platform_integrations; intersects other filters before the result limit",
+            "in": "query",
+            "name": "tool",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "description": "comma-separated event types to include",
             "in": "query",
             "name": "type",
@@ -32472,6 +32480,14 @@
       "get": {
         "operationId": "exportAudit",
         "parameters": [
+          {
+            "description": "canonical tool: discover, certificates, workloads_machines, secrets, software_trust, operations, or platform_integrations; intersects other filters before the result limit",
+            "in": "query",
+            "name": "tool",
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "description": "comma-separated event types to include",
             "in": "query",

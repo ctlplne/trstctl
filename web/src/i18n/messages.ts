@@ -768,8 +768,20 @@ export const messages = {
     description: "Accessible label for the button that removes the audit module scope.",
   },
   "audit.moduleScope.note": {
-    defaultMessage: "One audit stream, filtered to this module. Clear to see all events.",
+    defaultMessage: "One audit stream, filtered by the server to this tool. Clearing the tool keeps your other filters.",
     description: "Explanatory note beside the audit module-scope chip.",
+  },
+  "audit.filter.feature": {
+    defaultMessage: "Feature ID",
+    description: "Optional canonical feature identifier that intersects the audit tool and text filters.",
+  },
+  "audit.filter.action": {
+    defaultMessage: "Action",
+    description: "Optional canonical action name that intersects other audit filters.",
+  },
+  "audit.scope.platformIntegrations": {
+    defaultMessage: "Platform & Integrations",
+    description: "Canonical audit scope label for supporting platform capabilities, not a seventh customer tool.",
   },
   "audit.hash.heading": {
     defaultMessage: "Hash coverage",
@@ -5405,6 +5417,18 @@ export const messages = {
   },
   "certificateCockpit.metric.ownerGaps": { defaultMessage: "Owner gaps (loaded)", description: "Loaded certificate owner gap metric." },
   "certificateCockpit.metrics.label": { defaultMessage: "Certificate Lifecycle module metrics", description: "Accessible certificate cockpit metric label." },
+  "certificateCockpit.snapshot.observed": {
+    defaultMessage: "Server totals observed {time}. Refreshes every 30 seconds while this tab is visible, and when a displayed certificate expires.",
+    description: "Expiry aggregates are a dated server snapshot, not live totals inferred from a partial page.",
+  },
+  "certificateCockpit.snapshot.refreshing": {
+    defaultMessage: "Updating expiry totals. Figures shown are from the previous server snapshot.",
+    description: "A bounded background refresh is in progress; old evidence is not presented as current.",
+  },
+  "certificateCockpit.snapshot.unavailable": {
+    defaultMessage: "Expiry totals are unavailable. The inventory remains usable; totals will be checked again automatically.",
+    description: "Failed aggregate reads must not leave a stale reassuring zero.",
+  },
   "certificateCockpit.renewalFailure.one": { defaultMessage: "1 renewal failed", description: "One failed renewal job." },
   "certificateCockpit.renewalFailure.many": { defaultMessage: "{count} renewals failed", description: "Failed renewal job count." },
   "certificateCockpit.deploymentFailure.one": {

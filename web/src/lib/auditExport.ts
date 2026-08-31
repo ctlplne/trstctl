@@ -1,5 +1,6 @@
 import { ApiError, UnauthorizedError, csrfHeaders, previewRefusal, previewTransportIsIsolated } from "./api";
 import type { AuditQuery } from "./api";
+import { auditQueryParams, auditReadSignal } from "./auditQuery";
 
 // Downloading an audit record stream (epic J1).
 //
@@ -26,25 +27,24 @@ function fileExtension(format: string): string {
  * one pins the entire export in memory for the life of the tab, and an audit
  * export is exactly the download large enough for that to matter.
  */
-export async function downloadAuditExport(options: AuditQuery | undefined, format: string): Promise<string> {
+export async function downloadAuditExport(options: AuditQuery | undefined, format: string, signal?: AbortSignal): Promise<string> {
   if (previewTransportIsIsolated()) throw previewRefusal();
-  const params = new URLSearchParams();
-  if (options?.type) params.set("type", options.type);
-  if (options?.since) params.set("since", options.since);
-  if (options?.until) params.set("until", options.until);
-  if (options?.q) params.set("q", options.q);
-  if (options?.limit) params.set("limit", String(options.limit));
+  const params = auditQueryParams(options);
   params.set("format", format);
 
+  const readSignal = auditReadSignal(signal);
   const res = await fetch(`/api/v1/audit/export?${params.toString()}`, {
     credentials: "include",
     headers: { ...csrfHeaders("GET") },
+    signal: readSignal,
   });
   if (res.status === 401) throw new UnauthorizedError();
   if (!res.ok) throw new ApiError(res.status, await res.text());
 
   const filename = `trstctl-audit.${fileExtension(format)}`;
-  const url = URL.createObjectURL(await res.blob());
+  const blob = await res.blob();
+  readSignal.throwIfAborted();
+  const url = URL.createObjectURL(blob);
   try {
     const a = document.createElement("a");
     a.href = url;

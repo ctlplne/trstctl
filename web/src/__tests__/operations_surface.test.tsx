@@ -417,7 +417,7 @@ describe("operational console surface", () => {
     await user.click(screen.getByRole("button", { name: /Export evidence/i }));
     expect(await screen.findByText("jws: sealed.bundle")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Download signed bundle" })).toHaveAttribute("download", "audit-evidence.jws.json");
-    expect(apiMock.exportAudit).toHaveBeenCalledWith({ limit: 50 });
+    expect(apiMock.exportAudit).toHaveBeenCalledWith({ limit: 50 }, expect.any(AbortSignal));
   });
 
   it("filters audit events through served params and opens the event detail drawer", async () => {
@@ -450,12 +450,15 @@ describe("operational console surface", () => {
     await user.click(screen.getByRole("button", { name: "Apply filters" }));
 
     await waitFor(() =>
-      expect(apiMock.auditEvents).toHaveBeenLastCalledWith({
-        type: "identity.issued",
-        since: "2026-06-17T00:00:00Z",
-        q: "payments",
-        limit: 25,
-      }),
+      expect(apiMock.auditEvents).toHaveBeenLastCalledWith(
+        {
+          type: "identity.issued",
+          since: "2026-06-17T00:00:00Z",
+          q: "payments",
+          limit: 25,
+        },
+        expect.any(AbortSignal),
+      ),
     );
     expect(await screen.findByText("cert/payments")).toBeInTheDocument();
 

@@ -373,7 +373,7 @@ describe("SIMP-03 policy, audit, and compliance remediation", () => {
     await screen.findByText("identity.issued");
     await user.click(screen.getByRole("button", { name: "Policy decisions" }));
 
-    await waitFor(() => expect(apiMock.auditEvents).toHaveBeenLastCalledWith({ type: "policy.decision", limit: 50 }));
+    await waitFor(() => expect(apiMock.auditEvents).toHaveBeenLastCalledWith({ type: "policy.decision", limit: 50 }, expect.any(AbortSignal)));
     expect(await screen.findByText("policy.decision")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Filters" }));
     expect(screen.getByDisplayValue("policy.decision")).toBeInTheDocument();

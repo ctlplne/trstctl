@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { CheckCircle2, Clipboard, RotateCcw, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { CapabilityActionNotice } from "@/components/CapabilityTruth";
@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useTranslation } from "@/i18n/I18nProvider";
-import { formatDateTime } from "@/i18n/format";
 import type { MessageKey } from "@/i18n/messages";
 import { ApiError, api, type AttestedSVID, type AttestedSVIDPreview } from "@/lib/api";
 import type { AttestedSVIDRequest } from "@/lib/api-types.gen";
@@ -35,7 +34,7 @@ export function AttestedSVIDWorkflow({
   onIssued: (result: AttestedSVID) => void;
   onFailure: (method: string, message: string) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, formatDateTime } = useTranslation();
   const previewAction = useCapabilityExecution("F30", "previewAttestedSVID");
   const issueAction = useCapabilityExecution("F30", "issueAttestedSVID");
   const [step, setStep] = useState(0);
@@ -257,7 +256,14 @@ export function AttestedSVIDWorkflow({
               </div>
             </div>
             <dl className="grid gap-3 sm:grid-cols-2">
-              <Fact label={t("workloads.ephemeral.credentialExpires")} value={formatDateTime(result.not_after)} />
+              <Fact
+                label={t("workloads.ephemeral.credentialExpires")}
+                value={
+                  <time dateTime={result.not_after} title={result.not_after}>
+                    {formatDateTime(result.not_after)}
+                  </time>
+                }
+              />
               <Fact label={t("workloads.attested.subject")} value={result.subject} />
             </dl>
             <p className="text-sm text-muted-foreground">{t("workloads.ephemeral.noPrivateKey")}</p>
@@ -339,7 +345,7 @@ function PlanReview({ plan }: { plan: AttestedSVIDPreview }) {
   );
 }
 
-function Fact({ label, value }: { label: string; value: string }) {
+function Fact({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="min-w-0">
       <dt className="text-caption text-muted-foreground">{label}</dt>

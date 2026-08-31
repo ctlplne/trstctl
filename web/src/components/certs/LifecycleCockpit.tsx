@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, BellRing, CheckCircle2 } from "lucide-react";
 import { StackedTimeBarChart, TimeBarChart, type StackedTimeBarDatum, type TimeBarDatum } from "@/components/charts";
@@ -27,6 +27,9 @@ type Evidence<T> = T[] | null;
 export interface LifecycleCockpitProps {
   certificates: Certificate[];
   health: CertificateHealthDashboard;
+  healthRefreshing?: boolean;
+  healthUnavailable?: boolean;
+  onExpiryBoundary?: () => void;
   owners: Evidence<Owner>;
   identities: Evidence<Identity>;
   rotationRuns: Evidence<RotationRun>;
@@ -226,14 +229,28 @@ function outcomeData(
  * guesses that a provider delivery reached a human, or treats a configured
  * job as proof that renewal and deployment actually succeeded. */
 export function LifecycleCockpit(props: LifecycleCockpitProps) {
-  const { t, locale, timeZone } = useTranslation();
+  const { t, locale, timeZone, formatDateTime } = useTranslation();
+  const { certificates, onExpiryBoundary } = props;
   const [now, setNow] = useState(Date.now);
+  const priorClock = useRef(now);
   useEffect(() => {
     // One observed clock drives every deadline. An open page must notice a
     // minute-lived certificate expiring without relying on another API render.
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, []);
+  useEffect(() => {
+    const previous = priorClock.current;
+    priorClock.current = now;
+    // This clock is only a reason to refresh server evidence. It does not
+    // calculate an estate-wide count from the partial inventory page.
+    if (document.visibilityState === "hidden") return;
+    const crossedExpiry = certificates.some((certificate) => {
+      const expires = Date.parse(certificate.not_after ?? "");
+      return certificate.status === "active" && expires > previous && expires <= now;
+    });
+    if (crossedExpiry) onExpiryBoundary?.();
+  }, [now, certificates, onExpiryBoundary]);
   const owners = props.owners ?? [];
   const identities = props.identities ?? [];
   const runs = props.rotationRuns ?? [];
@@ -384,19 +401,32 @@ export function LifecycleCockpit(props: LifecycleCockpitProps) {
       </div>
 
       <section aria-label={t("certificateCockpit.metrics.label")}>
+        <p className="mb-2 text-caption text-muted-foreground" role="status">
+          {props.healthUnavailable
+            ? t("certificateCockpit.snapshot.unavailable")
+            : props.healthRefreshing
+              ? t("certificateCockpit.snapshot.refreshing")
+              : t("certificateCockpit.snapshot.observed", { time: formatDateTime(props.health.generated_at) })}
+        </p>
         <ul className="grid gap-px overflow-hidden rounded-card border border-border bg-border sm:grid-cols-3 xl:grid-cols-6">
-          <MetricLink to="/certificates?expiry=7d" label={t("source.expired.424a2551d3")} value={props.health.summary.expired} metric="expired" urgent />
+          <MetricLink
+            to="/certificates?expiry=7d"
+            label={t("source.expired.424a2551d3")}
+            value={props.healthUnavailable ? t("source.not.checked.d3tri00006") : props.health.summary.expired}
+            metric="expired"
+            urgent
+          />
           <MetricLink
             to="/certificates?expiry=7d"
             label={t("moduleKpi.certificates.expiring7d")}
-            value={props.health.summary.expiring_7d}
+            value={props.healthUnavailable ? t("source.not.checked.d3tri00006") : props.health.summary.expiring_7d}
             metric="expiring-7d"
             urgent
           />
           <MetricLink
             to="/certificates?expiry=30d"
             label={t("moduleKpi.certificates.expiring30d")}
-            value={props.health.summary.expiring_30d}
+            value={props.healthUnavailable ? t("source.not.checked.d3tri00006") : props.health.summary.expiring_30d}
             metric="expiring-30d"
             urgent={props.health.summary.expiring_30d > 0}
           />
@@ -407,7 +437,12 @@ export function LifecycleCockpit(props: LifecycleCockpitProps) {
             metric="owner-gaps"
             urgent={ownerGaps > 0}
           />
-          <MetricLink to="/certificates" label={t("moduleKpi.certificates.active")} value={props.health.summary.active} metric="active" />
+          <MetricLink
+            to="/certificates"
+            label={t("moduleKpi.certificates.active")}
+            value={props.healthUnavailable ? t("source.not.checked.d3tri00006") : props.health.summary.active}
+            metric="active"
+          />
           <MetricLink to="/ca-hierarchy" label={t("moduleKpi.certificates.authorities")} value={t("moduleKpi.view")} metric="authorities" />
         </ul>
       </section>

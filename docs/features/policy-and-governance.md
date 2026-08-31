@@ -206,6 +206,13 @@ old segments are archived.
 
 **Status:** served — `GET /api/v1/audit/events` and `GET /api/v1/audit/export`.
 
+Both endpoints accept `tool` in addition to `feature_id`, `action`, event type,
+text and time filters. The tool predicate is server-owned and applied before the
+result limit. For example, `tool=workloads_machines` includes attestation and
+workload issuance, not just events containing the word “ssh.” Unknown tools fail
+with HTTP 400. Every export encoding preserves the same scope and retained-prefix
+chain. See [the CLI filter examples](../cli.md#verify-audit-exports-offline).
+
 ### Notifications (F29)
 
 When something matters — a certificate nearing expiry, a CT-log anomaly — trstctl alerts

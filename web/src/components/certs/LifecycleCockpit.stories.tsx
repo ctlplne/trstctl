@@ -126,6 +126,10 @@ type Story = StoryObj<typeof meta>;
 
 export const UrgentWork: Story = {};
 
+export const RefreshingServerTotals: Story = { args: { healthRefreshing: true } };
+
+export const ExpiryTotalsUnavailable: Story = { args: { healthUnavailable: true } };
+
 export const EvidenceUnavailable: Story = {
   args: {
     owners: null,

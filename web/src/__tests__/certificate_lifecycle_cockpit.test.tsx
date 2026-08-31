@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import { axe } from "vitest-axe";
 import { ToastProvider } from "@/components/ToastProvider";
 import { Certificates } from "@/pages/Certificates";
+import { IntlProvider } from "@/i18n/I18nProvider";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -29,11 +30,13 @@ vi.mock("@/lib/api", async (orig) => {
   return { ...actual, api: apiMock };
 });
 
-function renderPage() {
+function renderPage(timeZone = "UTC") {
   return render(
     <MemoryRouter>
       <ToastProvider>
-        <Certificates />
+        <IntlProvider initialLocale="en-US" initialTimeZone={timeZone}>
+          <Certificates />
+        </IntlProvider>
       </ToastProvider>
     </MemoryRouter>,
   );
@@ -41,6 +44,7 @@ function renderPage() {
 
 describe("Certificate Lifecycle cockpit", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.setSystemTime(new Date("2026-08-24T12:00:00Z"));
     localStorage.clear();
@@ -266,6 +270,29 @@ describe("Certificate Lifecycle cockpit", () => {
     vi.useRealTimers();
   });
 
+  it("keeps inventory and certificate details on the selected local calendar day", async () => {
+    const certificate = {
+      id: "midnight-cert",
+      tenant_id: "tenant-1",
+      subject: "CN=midnight.example.test",
+      status: "active",
+      fingerprint: "midnight-fp",
+      not_before: "2026-08-30T23:24:48Z",
+      not_after: "2026-08-31T00:24:48Z",
+    };
+    apiMock.certificatePage.mockResolvedValue({ items: [certificate] });
+    apiMock.getCertificate.mockResolvedValue(certificate);
+    renderPage("America/New_York");
+    const inventory = await screen.findByRole("table", { name: "Inventoried certificates" });
+    const row = within(inventory).getByRole("row", { name: /midnight.example.test/ });
+    expect(within(row).getByText("Aug 30, 2026")).toBeInTheDocument();
+    expect(within(row).queryByText("Aug 31, 2026")).not.toBeInTheDocument();
+    fireEvent.click(within(row).getByRole("button", { name: "Review" }));
+    const detail = await screen.findByRole("dialog", { name: "Certificate details" });
+    expect(within(detail).getByText("Aug 30, 2026, 8:24 PM")).toBeInTheDocument();
+    expect(detail.querySelector('time[datetime="2026-08-31T00:24:48Z"]')).not.toBeNull();
+  });
+
   it("puts the whole urgent answer, evidence, and next actions in the default first view", async () => {
     const view = renderPage();
 
@@ -382,6 +409,66 @@ describe("Certificate Lifecycle cockpit", () => {
     });
     expect(within(queue).getByText("Already expired")).toBeInTheDocument();
     expect(within(queue).queryByText("Expires today")).not.toBeInTheDocument();
+  });
+
+  it("refreshes server totals at expiry without counting only the loaded certificate page", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: false });
+    vi.setSystemTime(new Date("2026-08-24T12:00:00Z"));
+    const initial = await apiMock.certificateHealth();
+    apiMock.certificateHealth
+      .mockClear()
+      .mockResolvedValueOnce({ ...initial, summary: { ...initial.summary, total: 100, expired: 0 } })
+      .mockImplementation(async () => ({ ...initial, generated_at: new Date().toISOString(), summary: { ...initial.summary, total: 100, expired: 38 } }));
+    apiMock.certificatePage.mockResolvedValue({
+      items: [{ id: "brief", subject: "CN=brief.test", status: "active", fingerprint: "brief-fp", not_after: "2026-08-24T12:00:00.500Z" }],
+      next_cursor: "more-pages",
+    });
+    await act(async () => {
+      renderPage();
+      await vi.advanceTimersByTimeAsync(25);
+    });
+    const cockpit = screen.getByRole("region", { name: "Certificate Lifecycle cockpit" });
+    expect(cockpit.querySelector('[data-metric="expired"]')).toHaveTextContent("0");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1100);
+    });
+    expect(within(cockpit).getByText("Already expired")).toBeInTheDocument();
+    expect(apiMock.certificateHealth).toHaveBeenCalledTimes(2);
+    // React commits the clock effect at the end of act; deliver the query
+    // notification scheduled by that effect in a separate timer turn.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(25);
+    });
+    expect(cockpit.querySelector('[data-metric="expired"]')).toHaveTextContent("38");
+    expect(apiMock.certificateHealth).toHaveBeenCalledTimes(2);
+    expect(apiMock.owners).toHaveBeenCalledTimes(1);
+    expect(apiMock.notificationChannels).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(31_000);
+    });
+    expect(apiMock.certificateHealth).toHaveBeenCalledTimes(3);
+    expect(apiMock.certificatePage).toHaveBeenCalledTimes(1);
+  });
+
+  it("makes failed expiry refresh unavailable instead of presenting a stale safe zero", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: false });
+    const initial = await apiMock.certificateHealth();
+    apiMock.certificateHealth
+      .mockClear()
+      .mockResolvedValueOnce({ ...initial, summary: { ...initial.summary, expired: 0 } })
+      .mockRejectedValue(new Error("dependency unavailable"));
+    await act(async () => {
+      renderPage();
+      await vi.advanceTimersByTimeAsync(25);
+    });
+    const cockpit = screen.getByRole("region", { name: "Certificate Lifecycle cockpit" });
+    expect(cockpit.querySelector('[data-metric="expired"]')).toHaveTextContent("0");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(32_000);
+    });
+    expect(within(cockpit).getByText(/Expiry totals are unavailable/)).toBeInTheDocument();
+    expect(cockpit.querySelector('[data-metric="expired"]')).not.toHaveTextContent(/^0$/);
+    expect(screen.getByRole("table", { name: "Inventoried certificates" })).toBeInTheDocument();
   });
 
   it("counts the complete owner-gap population while keeping the visible work queue bounded", async () => {

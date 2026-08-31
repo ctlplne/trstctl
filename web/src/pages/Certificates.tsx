@@ -37,7 +37,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { PageHeader } from "@/components/PageHeader";
 import { expiryBandForDate } from "@/lib/statusVocab";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
-import { formatDate as formatDatePolicy, formatDateTime, formatNumber as formatNumberPolicy } from "@/i18n/format";
+import { formatNumber as formatNumberPolicy } from "@/i18n/format";
 import { certificateDisplayName, certificateReplacementPath } from "@/lib/certificatePresentation";
 import type { MessageKey } from "@/i18n/messages";
 import { ReadinessPanel, ReadinessSimulator, DeploymentReceipts, RenewalHistory, autoRenewingCount } from "@/components/certs";
@@ -45,6 +45,8 @@ import { LifecycleCockpit } from "@/components/certs/LifecycleCockpit";
 import type { GridViewPrimitive } from "@/lib/gridViews";
 import { revocationReasons } from "@/lib/revocation";
 import { RevocationCenter } from "@/pages/certificates/RevocationCenter";
+import { AppQueryProvider, useApiQuery, useHasAppQueryProvider } from "@/lib/query";
+import { useAuth } from "@/auth/AuthProvider";
 
 type ExpiryFilter = "all" | "7d" | "30d" | "90d";
 
@@ -123,10 +125,6 @@ function noticeForError(err: unknown, action: string): Notice {
   return { kind: "error", message: err instanceof Error ? err.message : String(err) };
 }
 
-function formatDate(value?: string): string {
-  return formatDatePolicy(value);
-}
-
 function formatCount(value: number): string {
   return formatNumberPolicy(value);
 }
@@ -159,7 +157,7 @@ function settleOptional<T>(make: () => Promise<T>): Promise<T | undefined> {
 }
 
 function CertificateHealthPanel({ health }: { health: CertificateHealthDashboard }) {
-  const { t } = useTranslation();
+  const { t, formatDate } = useTranslation();
   const state = health.summary.health;
   const stateClass =
     state === "critical"
@@ -249,7 +247,7 @@ function CertificateHealthPanel({ health }: { health: CertificateHealthDashboard
 }
 
 function CRLDistributionPanel({ distributions }: { distributions: CRLDistribution[] }) {
-  const { t } = useTranslation();
+  const { t, formatDate } = useTranslation();
   const totalShards = distributions.reduce((sum, item) => sum + (item.shards?.length ?? 0), 0);
   const totalRevoked = distributions.reduce((sum, item) => sum + item.revoked_count, 0);
   return (
@@ -296,7 +294,7 @@ function CRLDistributionPanel({ distributions }: { distributions: CRLDistributio
 }
 
 function RevocationHealthPanel({ health }: { health: RevocationHealth }) {
-  const { t } = useTranslation();
+  const { t, formatDate } = useTranslation();
   const statusLabel = (status: RevocationHealth["items"][number]["status"]): string =>
     t(
       status === "fresh"
@@ -602,7 +600,21 @@ function HealthStat({ label, value }: { label: string; value: number }) {
 }
 
 export function Certificates() {
-  const { t, locale, timeZone } = useTranslation();
+  // The app supplies a shared cache. Isolated component workbenches use the
+  // same provider, never a second implementation of the live read behavior.
+  const hasQueryProvider = useHasAppQueryProvider();
+  return hasQueryProvider ? (
+    <CertificateWorkspace />
+  ) : (
+    <AppQueryProvider>
+      <CertificateWorkspace />
+    </AppQueryProvider>
+  );
+}
+
+function CertificateWorkspace() {
+  const { t, formatDate, formatDateTime } = useTranslation();
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [nextCursor, setNextCursor] = useState<string | undefined>();
@@ -641,7 +653,12 @@ export function Certificates() {
   const [notificationChannels, setNotificationChannels] = useState<NotificationChannel[] | null>(null);
   const [notificationRoutingPolicies, setNotificationRoutingPolicies] = useState<NotificationRoutingPolicy[] | null>(null);
   const [renewingIds, setRenewingIds] = useState<Set<string>>(() => new Set());
-  const [health, setHealth] = useState<CertificateHealthDashboard | null>(null);
+  const healthQuery = useApiQuery<CertificateHealthDashboard | null>(
+    ["certificate-health", user?.tenant_id ?? null, user?.subject ?? null, (user?.permissions ?? []).join("|")],
+    async ({ signal }) => (await api.certificateHealth(signal)) ?? null,
+    { live: { intervalMs: 30_000 }, enabled: typeof api.certificateHealth === "function" },
+  );
+  const health = healthQuery.data;
   const [crlDistributions, setCRLDistributions] = useState<CRLDistribution[]>([]);
   const [revocationHealth, setRevocationHealth] = useState<RevocationHealth | null>(null);
   const [roguePosture, setRoguePosture] = useState<RogueCertificatePosture | null>(null);
@@ -665,7 +682,6 @@ export function Certificates() {
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      settleOptional(() => api.certificateHealth()),
       settleOptional(() => api.crlDistributions()),
       settleOptional(() => api.revocationHealth()),
       settleOptional(() => api.rogueCertificates()),
@@ -678,7 +694,6 @@ export function Certificates() {
       settleOptional(() => api.notificationRoutingPolicies()),
     ]).then(
       ([
-        healthResult,
         crlResult,
         revocationResult,
         rogueResult,
@@ -691,7 +706,6 @@ export function Certificates() {
         policyResult,
       ]) => {
         if (cancelled) return;
-        if (healthResult) setHealth(healthResult);
         if (crlResult) setCRLDistributions(crlResult.items ?? []);
         if (revocationResult) setRevocationHealth(revocationResult);
         if (rogueResult) setRoguePosture(rogueResult);
@@ -878,8 +892,7 @@ export function Certificates() {
       setDeploymentLocation("");
       setSource("manual-ui");
       setIngestSuccess(`Ingested ${cert.subject}.`);
-      const nextHealth = await settleOptional(() => api.certificateHealth());
-      if (nextHealth) setHealth(nextHealth);
+      healthQuery.refetch();
     } catch (err) {
       setIngestError(noticeForError(err, "ingest a certificate"));
     } finally {
@@ -928,6 +941,7 @@ export function Certificates() {
     setBulkError(null);
     try {
       const result = await api.bulkRevokeCertificates({ certificate_ids: ids, reason: bulkReason });
+      healthQuery.refetch();
       setBulkRevokeOpen(false);
       setSelectedIds(new Set());
       toast({
@@ -954,17 +968,16 @@ export function Certificates() {
       title: t("certificates.revocation.accepted"),
       description: t("certificates.revocation.description"),
     });
+    healthQuery.refetch();
     void Promise.all([
       settleOptional(() => api.certificatePage({ limit, expiringBefore: expiringBefore(expiry) })),
-      settleOptional(() => api.certificateHealth()),
       settleOptional(() => api.crlDistributions()),
       settleOptional(() => api.revocationHealth()),
-    ]).then(([page, nextHealth, nextCRLs, nextRevocationHealth]) => {
+    ]).then(([page, nextCRLs, nextRevocationHealth]) => {
       if (page) {
         setCertificates(page.items ?? []);
         setNextCursor(page.next_cursor || undefined);
       }
-      if (nextHealth) setHealth(nextHealth);
       if (nextCRLs) setCRLDistributions(nextCRLs.items ?? []);
       if (nextRevocationHealth) setRevocationHealth(nextRevocationHealth);
     });
@@ -1034,6 +1047,7 @@ export function Certificates() {
     () =>
       certificateColumns(
         ownerByID,
+        formatDate,
         lifecycleColumn({
           identityByCN,
           renewingIds,
@@ -1042,7 +1056,7 @@ export function Certificates() {
         }),
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- startRenew is stable per render semantics used across this page
-    [ownerByID, identityByCN, renewingIds, t],
+    [ownerByID, identityByCN, renewingIds, t, formatDate],
   );
 
   const filtered = useMemo(() => {
@@ -1225,7 +1239,7 @@ export function Certificates() {
           />
           {tab === "health" && (
             <div {...tabPanelProps("certs", "health")} className="grid gap-4">
-              {health && <CertificateHealthPanel health={health} />}
+              {healthQuery.error ? <ErrorState title={t("certificateCockpit.snapshot.unavailable")} /> : health && <CertificateHealthPanel health={health} />}
               {roguePosture && <RogueCertificatePanel posture={roguePosture} />}
             </div>
           )}
@@ -1269,10 +1283,14 @@ export function Certificates() {
           )}
           {tab === "inventory" && (
             <div {...tabPanelProps("certs", "inventory")} className="grid min-w-0 max-w-full gap-4">
+              {!health && healthQuery.error && <ErrorState title={t("certificateCockpit.snapshot.unavailable")} />}
               {health && (
                 <LifecycleCockpit
                   certificates={certificates}
                   health={health}
+                  healthRefreshing={healthQuery.fetching}
+                  healthUnavailable={healthQuery.error !== null}
+                  onExpiryBoundary={healthQuery.refetch}
                   owners={ownersObserved ? owners : null}
                   identities={identitiesObserved ? identities : null}
                   rotationRuns={rotationRunsObserved ? rotationRuns : null}
@@ -1593,11 +1611,11 @@ export function Certificates() {
                 <dt className="font-medium text-muted-foreground">{translateNow("source.validity.9c3050e867")}</dt>
                 <dd>
                   <time dateTime={detail.not_before} title={detail.not_before}>
-                    {formatDateTime(detail.not_before, { locale, timeZone })}
+                    {formatDateTime(detail.not_before)}
                   </time>{" "}
                   {translateNow("source.to.663ea1bfff")}{" "}
                   <time dateTime={detail.not_after} title={detail.not_after}>
-                    {formatDateTime(detail.not_after, { locale, timeZone })}
+                    {formatDateTime(detail.not_after)}
                   </time>
                 </dd>
               </div>
@@ -1776,7 +1794,11 @@ function lifecycleColumn(context: LifecycleColumnContext): DataGridColumn<Certif
   };
 }
 
-function certificateColumns(ownerByID: Map<string, Owner>, lifecycle?: DataGridColumn<Certificate>): Array<DataGridColumn<Certificate>> {
+function certificateColumns(
+  ownerByID: Map<string, Owner>,
+  formatDate: (value?: string) => string,
+  lifecycle?: DataGridColumn<Certificate>,
+): Array<DataGridColumn<Certificate>> {
   const base: Array<DataGridColumn<Certificate>> = [
     {
       id: "subject",
@@ -1838,7 +1860,11 @@ function certificateColumns(ownerByID: Map<string, Owner>, lifecycle?: DataGridC
       header: "Expires",
       sortable: true,
       className: "whitespace-nowrap align-middle",
-      cell: (c) => formatDate(c.not_after),
+      cell: (c) => (
+        <time dateTime={c.not_after} title={c.not_after}>
+          {formatDate(c.not_after)}
+        </time>
+      ),
     },
     {
       id: "expiry-band",

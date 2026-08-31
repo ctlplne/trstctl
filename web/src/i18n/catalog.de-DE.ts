@@ -397,7 +397,10 @@ const deDECatalog = {
   "moduleKpi.view": "Ansehen →",
   "audit.moduleScope.label": "Eingegrenzt auf {module}",
   "audit.moduleScope.clear": "Modulfilter entfernen",
-  "audit.moduleScope.note": "Ein Audit-Strom, gefiltert auf dieses Modul. Entfernen Sie den Filter, um alle Ereignisse zu sehen.",
+  "audit.moduleScope.note": "Ein Audit-Strom, serverseitig auf dieses Werkzeug gefiltert. Beim Entfernen des Werkzeugs bleiben die anderen Filter erhalten.",
+  "audit.filter.feature": "Funktions-ID",
+  "audit.filter.action": "Aktion",
+  "audit.scope.platformIntegrations": "Plattform und Integrationen",
   // F9 audit review — Machine-authored, FLAG FOR HUMAN REVIEW.
   "audit.hash.heading": "Hash-Abdeckung",
   "audit.hash.empty": "Dieses Audit-Fenster enthält keine Ereignisse.",
@@ -1815,6 +1818,10 @@ const deDECatalog = {
   "certificateCockpit.answer.clear": "Kein geladenes Zertifikat braucht laut den aktuell verfügbaren Nachweisen eine Aktion.",
   "certificateCockpit.metric.ownerGaps": "Zuständigkeitslücken (geladen)",
   "certificateCockpit.metrics.label": "Kennzahlen des Zertifikatslebenszyklus",
+  "certificateCockpit.snapshot.observed":
+    "Server-Summen erfasst am {time}. Sie werden alle 30 Sekunden aktualisiert, solange dieser Tab sichtbar ist, und wenn ein angezeigtes Zertifikat abläuft.",
+  "certificateCockpit.snapshot.refreshing": "Ablauf-Summen werden aktualisiert. Die angezeigten Zahlen stammen aus dem vorherigen Server-Snapshot.",
+  "certificateCockpit.snapshot.unavailable": "Ablauf-Summen sind nicht verfügbar. Das Inventar bleibt nutzbar; die Summen werden automatisch erneut geprüft.",
   "certificateCockpit.renewalFailure.one": "1 Erneuerung fehlgeschlagen",
   "certificateCockpit.renewalFailure.many": "{count} Erneuerungen fehlgeschlagen",
   "certificateCockpit.deploymentFailure.one": "1 Bereitstellung hat die Prüfung nicht bestanden",

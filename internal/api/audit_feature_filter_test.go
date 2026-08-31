@@ -43,7 +43,7 @@ func TestAuditEndpointExposesFeatureActionParams(t *testing.T) {
 				have[p.Name] = true
 			}
 		}
-		for _, want := range []string{"feature_id", "action"} {
+		for _, want := range []string{"feature_id", "action", "tool"} {
 			if !have[want] {
 				t.Errorf("GET %s (%s) is missing the %q query parameter for catalog-driven audit filtering (COVER-008)",
 					path, get.OperationID, want)

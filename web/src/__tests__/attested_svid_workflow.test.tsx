@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { AttestedSVIDWorkflow } from "@/pages/workloads/AttestedSVIDWorkflow";
 import { attestedPreviewFixture } from "./support/attestedSVID";
 import { ApiError } from "@/lib/api";
+import { IntlProvider } from "@/i18n/I18nProvider";
 
 const { apiMock } = vi.hoisted(() => ({ apiMock: { previewAttestedSVID: vi.fn(), issueAttestedSVID: vi.fn() } }));
 vi.mock("@/lib/api", async (orig) => {
@@ -20,10 +21,12 @@ const issued = {
   attestation: { id: "att-1", method: "k8s_sat", subject: "ns/default/sa/web", selectors: ["ns:default"], verified_at: "2026-08-30T20:00:00Z" },
 };
 
-function renderWorkflow() {
+function renderWorkflow(timeZone = "UTC") {
   return render(
     <MemoryRouter>
-      <AttestedSVIDWorkflow onIssued={vi.fn()} onFailure={vi.fn()} />
+      <IntlProvider initialLocale="en-US" initialTimeZone={timeZone}>
+        <AttestedSVIDWorkflow onIssued={vi.fn()} onFailure={vi.fn()} />
+      </IntlProvider>
     </MemoryRouter>,
   );
 }
@@ -38,6 +41,20 @@ describe("attested SVID workflow", () => {
   beforeEach(() => {
     apiMock.previewAttestedSVID.mockReset().mockResolvedValue(attestedPreviewFixture);
     apiMock.issueAttestedSVID.mockReset().mockResolvedValue(issued);
+  });
+
+  it.each([
+    ["2026-08-31T00:24:48Z", "Aug 30, 2026, 8:24 PM"],
+    ["2026-03-08T06:59:00Z", "Mar 8, 2026, 1:59 AM"],
+    ["2026-03-08T07:00:00Z", "Mar 8, 2026, 3:00 AM"],
+  ])("uses the selected time zone across midnight and DST without changing validity: %s", async (notAfter, visibleTime) => {
+    apiMock.issueAttestedSVID.mockResolvedValue({ ...issued, not_after: notAfter });
+    renderWorkflow("America/New_York");
+    await enterRequest();
+    await screen.findByRole("heading", { name: "Ready to verify and issue" });
+    await userEvent.click(screen.getByRole("button", { name: "Verify proof and issue" }));
+    expect(await screen.findByText(visibleTime)).toBeInTheDocument();
+    expect(apiMock.issueAttestedSVID).toHaveBeenCalledTimes(1);
   });
 
   it("reviews the exact server plan and retries an unchanged failed issuance with one idempotency key", async () => {

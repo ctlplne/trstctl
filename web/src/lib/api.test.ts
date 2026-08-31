@@ -539,12 +539,22 @@ describe("exported API surface census", () => {
       [Symbol.toPrimitive]: () => "item/id",
     };
     type GenericOperation = (...args: unknown[]) => Promise<unknown>;
+    // Cancellable reads have a real signal parameter, not another options bag.
+    // Execute them too; do not weaken AbortSignal validation or skip the census.
+    const signal = new AbortController().signal;
+    const readInputs: Record<string, unknown[]> = {
+      certificateHealth: [signal],
+      auditEvents: [optionBag, signal],
+      exportAudit: [optionBag, signal],
+      downloadAuditExport: [optionBag, "ndjson", signal],
+    };
 
     for (const [name, member] of Object.entries(api)) {
       const before = transport.mock.calls.length;
       const operation = member as unknown as GenericOperation;
-      await expect(operation(universalInput, optionBag, "operator reason"), `api.${name}`).resolves.not.toBeUndefined();
+      await expect(operation(...(readInputs[name] ?? [universalInput, optionBag, "operator reason"])), `api.${name}`).resolves.not.toBeUndefined();
       expect(transport.mock.calls.length, `api.${name} bypassed the shared fetch seam`).toBeGreaterThan(before);
+      if (readInputs[name]) expect(transport.mock.calls.at(-1)?.[1]?.signal, `api.${name} lost cancellation`).toBeInstanceOf(AbortSignal);
     }
 
     expect(downloadClick).toHaveBeenCalledOnce();

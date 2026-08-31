@@ -494,11 +494,14 @@ describe("dedicated approvals inbox", () => {
 
     await screen.findByRole("heading", { name: "Change history" });
     await waitFor(() =>
-      expect(apiMock.auditEvents).toHaveBeenCalledWith({
-        type: "identity.approval",
-        q: "jit-1 issue",
-        limit: 50,
-      }),
+      expect(apiMock.auditEvents).toHaveBeenCalledWith(
+        {
+          type: "identity.approval",
+          q: "jit-1 issue",
+          limit: 50,
+        },
+        expect.any(AbortSignal),
+      ),
     );
   });
 });

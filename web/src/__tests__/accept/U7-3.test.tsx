@@ -39,6 +39,6 @@ describe("U7-3 policy decisions from the audit stream", () => {
     expect(await screen.findByText("policy.decision")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Policy decisions" }));
-    await waitFor(() => expect(apiMock.auditEvents).toHaveBeenCalledWith(expect.objectContaining({ type: "policy.decision" })));
+    await waitFor(() => expect(apiMock.auditEvents).toHaveBeenCalledWith(expect.objectContaining({ type: "policy.decision" }), expect.any(AbortSignal)));
   });
 });

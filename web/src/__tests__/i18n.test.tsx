@@ -1365,8 +1365,13 @@ describe("i18n boundary", () => {
       // registered-identity counts, minute/hour deadlines, attested replacement,
       // and custody unknowns without invented explanations. Machine-authored
       // es/de remain FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "914892293ae066b90e5898ee11bb42cd1778da82148f31ec00431c08185d68d7",
-      "de-DE": "2806ba2dce16e762a5063dcda54f61017f4f979a45653117832c334648bbd579",
+      // g103 live-QA repair: three expiry snapshot messages distinguish observed,
+      // refreshing and unavailable totals; audit explains server-owned tool scope
+      // and preserved filters, with explicit feature/action/supporting-area labels.
+      // Placeholders and the 30-second cadence remain exact. Machine-authored
+      // es/de are FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "0b601a5a79bb2f94680b3cacdfc0865bf58185f927a24e104d8fa73174bf1f51",
+      "de-DE": "7540822e617f6a7f5c9d456389c51089a6f37efe6c2fe996562b6084c270e634",
     });
   });
 

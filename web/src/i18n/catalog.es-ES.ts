@@ -390,7 +390,11 @@ const esESCatalog = {
   "moduleKpi.view": "Ver →",
   "audit.moduleScope.label": "Filtrado a {module}",
   "audit.moduleScope.clear": "Quitar filtro de módulo",
-  "audit.moduleScope.note": "Un solo flujo de auditoría, filtrado a este módulo. Quítalo para ver todos los eventos.",
+  "audit.moduleScope.note":
+    "Un solo flujo de auditoría, filtrado por el servidor para esta herramienta. Al quitar la herramienta, se conservan los demás filtros.",
+  "audit.filter.feature": "ID de función",
+  "audit.filter.action": "Acción",
+  "audit.scope.platformIntegrations": "Plataforma e integraciones",
   // F9 audit review — Machine-authored, FLAG FOR HUMAN REVIEW.
   "audit.hash.heading": "Cobertura de hashes",
   "audit.hash.empty": "No hay eventos en esta ventana de auditoría.",
@@ -1798,6 +1802,12 @@ const esESCatalog = {
   "certificateCockpit.answer.clear": "Ningún certificado cargado necesita una acción según la evidencia disponible actualmente.",
   "certificateCockpit.metric.ownerGaps": "Brechas de responsabilidad (cargadas)",
   "certificateCockpit.metrics.label": "Métricas del ciclo de vida de certificados",
+  "certificateCockpit.snapshot.observed":
+    "Totales del servidor observados el {time}. Se actualizan cada 30 segundos mientras esta pestaña está visible y cuando vence un certificado mostrado.",
+  "certificateCockpit.snapshot.refreshing":
+    "Actualizando los totales de vencimiento. Las cifras mostradas corresponden a la instantánea anterior del servidor.",
+  "certificateCockpit.snapshot.unavailable":
+    "Los totales de vencimiento no están disponibles. El inventario sigue siendo utilizable; los totales se volverán a comprobar automáticamente.",
   "certificateCockpit.renewalFailure.one": "1 renovación falló",
   "certificateCockpit.renewalFailure.many": "{count} renovaciones fallaron",
   "certificateCockpit.deploymentFailure.one": "1 despliegue falló la verificación",

@@ -80,6 +80,16 @@ walkthrough doc.
 
 ### Certificate lifecycle command center (`/certificates`)
 
+Expiry totals come from the server, not a count of the currently loaded page.
+They refresh every 30 seconds while the tab is visible, immediately on return,
+and when a displayed active certificate expires. The cockpit shows the server
+observation time; during refresh it identifies the previous snapshot, and after
+a failed refresh it marks totals unavailable rather than leaving a reassuring
+zero. Reads time out after 15 seconds and overlapping refreshes share one request.
+The issuance result, workload history, inventory dates and certificate detail use
+the active display time zone. Exact UTC validity remains available on the time
+elements and is never changed in the certificate itself.
+
 The certificate inventory is also a CLM dashboard: alongside the tenant-scoped,
 cursor-paginated, expiry-filtered table it renders issuer/profile/team/environment
 filters with URL-resident state, a Team column, estate-wide expiry/source health,
@@ -403,6 +413,18 @@ the newest or complete history. **Search activity** opens the filters, event row
 exact event detail. Signatures and export, plus collector delivery, remain in two
 separate closed sections until requested. This keeps the default page calm without
 removing tenant-scoped evidence or operational controls.
+
+The tool chip is a server-side filter, not a word search. Workloads & Machines
+includes trust configuration, attestation, issuance, SPIFFE, SSH, agents, and
+related workload-certificate lifecycle events; it does not mean “contains ssh.”
+The tool, feature ID, action, text, time window and as-of sequence intersect
+before the result limit. Search, signed bundles and all file-export formats use
+the same applied filters. Clearing the tool keeps other filters; Reset removes
+all filters, and browser Back restores the previous URL and scope. A failed or
+still-loading search cannot export an older successful scope. Changing scope
+cancels its pending reads and export, so late evidence cannot replace the current
+view. These browser reads have a 15-second timeout; Apply filters retries a
+failed read without weakening authorization.
 
 The event explorer filters the tamper-evident stream and exports a signed evidence
 bundle. Its plain search is case-insensitive across event type, privacy-filtered

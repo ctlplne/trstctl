@@ -342,8 +342,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"profiles", "restore-preview"}, Method: "POST", Path: "/api/v1/profiles/{name}/versions/{version}/restore/preview", Body: bodyFile, Summary: "Review restoring a historical certificate-profile version without changing state"},
 	{Name: []string{"profiles", "restore"}, Method: "POST", Path: "/api/v1/profiles/{name}/versions/{version}/restore", Body: bodyFile, Summary: "Restore a historical certificate profile as one new active version"},
 
-	{Name: []string{"audit", "events"}, Method: "GET", Path: "/api/v1/audit/events", Query: []string{"type", "since", "until", "as_of", "q", "limit"}, Summary: "Query the audit log"},
-	{Name: []string{"audit", "export"}, Method: "GET", Path: "/api/v1/audit/export", Query: []string{"type", "since", "until", "as_of", "q", "limit", "format"}, Summary: "Export a signed audit bundle or record stream"},
+	{Name: []string{"audit", "events"}, Method: "GET", Path: "/api/v1/audit/events", Query: []string{"tool", "feature_id", "action", "type", "since", "until", "as_of", "q", "limit"}, Summary: "Query the audit log"},
+	{Name: []string{"audit", "export"}, Method: "GET", Path: "/api/v1/audit/export", Query: []string{"tool", "feature_id", "action", "type", "since", "until", "as_of", "q", "limit", "format"}, Summary: "Export a signed audit bundle or record stream"},
 	{Name: []string{"audit", "verification-keys"}, Method: "GET", Path: "/api/v1/audit/verification-keys", Summary: "Download and pin public keys for offline audit verification"},
 	{Name: []string{"audit", "feeds", "set"}, Method: "PUT", Path: "/api/v1/audit/feeds/{id}", Body: bodyFile, Summary: "Configure a durable native Splunk HEC or Sentinel audit feed"},
 	{Name: []string{"audit", "feeds", "preview"}, Method: "POST", Path: "/api/v1/audit/feeds/{id}/preview", Body: bodyFile, ReadOnly: true, Summary: "Validate and explain an exact audit feed without writing state or contacting the collector"},
