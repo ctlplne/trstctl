@@ -43,6 +43,10 @@ func (a *API) bulkRevoke(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, errStatus(http.StatusBadRequest, "invalid revocation reason: use an RFC 5280 reason such as keyCompromise or unspecified")
 		}
 		principal, _ := r.Context().Value(principalCtxKey).(authz.Principal)
+		if req.CertificateIDs != nil {
+			req.Reason = reason
+			return a.revokeSelectedCertificates(ctx, tenantID, idempotencyKey, r.URL.EscapedPath(), principal, req)
+		}
 		result, err := a.orch.BulkRevokeAuthorized(ctx, tenantID, orchestrator.BulkRevokeRequest{
 			IDs:      bulkRevokeIDs(req),
 			OwnerID:  strings.TrimSpace(req.OwnerID),

@@ -101,8 +101,15 @@ const servedTestTenant = "11111111-1111-1111-1111-111111111111"
 // newServedHarness boots the full server with the given protocol config and a real
 // signer, returning an httptest.Server serving the assembled handler. PostgreSQL is
 // a shared package fixture reset per test; NATS, signer state, and sockets stay
-// per-test so process-boundary behavior remains isolated.
+// per-test; this verifies transport assembly, not separate address spaces.
 func newServedHarness(t *testing.T, protocols config.Protocols, opts ...func(*Deps)) *servedHarness {
+	t.Helper()
+	return newServedHarnessWithEventOptions(t, protocols, nil, opts...)
+}
+
+// Only test callers may shorten the broker's duplicate window. Production and
+// ordinary served tests keep the default; durability must survive either case.
+func newServedHarnessWithEventOptions(t *testing.T, protocols config.Protocols, eventOptions []events.OpenOption, opts ...func(*Deps)) *servedHarness {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("boots embedded PostgreSQL + a signer; skipped in -short")
@@ -115,15 +122,15 @@ func newServedHarness(t *testing.T, protocols config.Protocols, opts ...func(*De
 	if protocols.RAKeyFile == "" && (protocols.SCEP.Enabled || protocols.CMP.Enabled) {
 		protocols.RAKeyFile = filepath.Join(dir, "protocol-ra.key")
 	}
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(dir, "nats")})
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(dir, "nats")}, eventOptions...)
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
 	}
 	t.Cleanup(func() { _ = log.Close() })
 
-	// A REAL signer: a persistent signing server over a UDS, dialed by a client wired
-	// as the SignerProvider. The issuing CA key is generated INSIDE this signer
-	// (AN-4); the control plane never holds it.
+	// Real signing transport and persistent key store over a UDS. This harness
+	// runs the signer server in a goroutine, so it does NOT prove AN-4 address-space
+	// isolation. Installed separate-process/container qualification must prove it.
 	kekW, err := kek.LoadOrCreate(filepath.Join(dir, "kek.bin"))
 	if err != nil {
 		t.Fatalf("kek: %v", err)

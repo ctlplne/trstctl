@@ -197,7 +197,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"revocation", "rogue-certificates"}, Method: "GET", Path: "/api/v1/revocation/rogue-certificates", Summary: "List rogue and non-compliant certificate detection findings"},
 	{Name: []string{"revocation", "ct-submit"}, Method: "POST", Path: "/api/v1/revocation/ct-submissions", Body: bodyFile, Summary: "Queue precertificate and certificate submission to Certificate Transparency logs"},
 	{Name: []string{"certificates", "get"}, Method: "GET", Path: "/api/v1/certificates/{id}", Summary: "Get an inventoried certificate"},
-	{Name: []string{"certificates", "bulk-revoke"}, Method: "POST", Path: "/api/v1/certificates/bulk-revoke", Body: bodyFile, Summary: "Bulk revoke certificate identities by id or criteria"},
+	{Name: []string{"certificates", "bulk-revoke"}, Method: "POST", Path: "/api/v1/certificates/bulk-revoke", Body: bodyFile, Summary: "Revoke exact certificates or explicitly selected lifecycle identities"},
 
 	{Name: []string{"workloads", "attester-trust-sources", "create"}, Method: "POST", Path: "/api/v1/workloads/attester-trust-sources", Body: bodyFile, Summary: "Create a tenant workload attester trust source"},
 	{Name: []string{"workloads", "attester-trust-sources", "list"}, Method: "GET", Path: "/api/v1/workloads/attester-trust-sources", Summary: "List tenant workload attester trust sources"},

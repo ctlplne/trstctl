@@ -5158,10 +5158,13 @@
       "BulkRevokeRequest": {
         "properties": {
           "certificate_ids": {
+            "description": "Exact certificate inventory IDs, not lifecycle identity IDs. Do not combine with ids, identity_ids or identity criteria. Requires a verified served issuing authority; unsupported issuers fail per item without switching CA. removeFromCRL is not a revocation action.",
             "items": {
               "format": "uuid",
               "type": "string"
             },
+            "maxItems": 100,
+            "minItems": 1,
             "type": "array"
           },
           "identity_ids": {
@@ -35830,7 +35833,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Bulk revoke certificate identities by id or criteria",
+        "summary": "Revoke exact certificates or explicitly selected lifecycle identities",
         "x-trstctl-permission": "identities:write"
       }
     },

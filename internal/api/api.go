@@ -99,6 +99,7 @@ type API struct {
 	caHierarchy                CAHierarchyService
 	edgeDelegations            EdgeDelegationService
 	externalCAs                ExternalCAService
+	certRevocationAuthority    CertificateRevocationAuthorityResolver
 	attestedIssuer             AttestedIssuerService
 	sshWorkflow                SSHWorkflowService
 	broker                     BrokerService
@@ -216,6 +217,7 @@ type config struct {
 	caHierarchy                 CAHierarchyService
 	edgeDelegations             EdgeDelegationService
 	externalCAs                 ExternalCAService
+	certRevocationAuthority     CertificateRevocationAuthorityResolver
 	attestedIssuer              AttestedIssuerService
 	sshWorkflow                 SSHWorkflowService
 	broker                      BrokerService
@@ -507,6 +509,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		caHierarchy:                 cfg.caHierarchy,
 		edgeDelegations:             cfg.edgeDelegations,
 		externalCAs:                 cfg.externalCAs,
+		certRevocationAuthority:     cfg.certRevocationAuthority,
 		attestedIssuer:              cfg.attestedIssuer,
 		sshWorkflow:                 cfg.sshWorkflow,
 		broker:                      cfg.broker,
@@ -1139,7 +1142,7 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/breakglass/reconcile", opID: "reconcileBreakglass", summary: "Verify break-glass bundles and reconcile them into audit", handler: a.reconcileBreakglass, reqSchema: "BreakglassReconcileRequest", resSchema: "BreakglassReconcileResponse", successCode: "200", mutation: true, perm: authz.CertsIssue},
 
 		{method: "POST", path: "/api/v1/certificates", opID: "ingestCertificate", summary: "Ingest a certificate into the inventory", handler: a.ingestCertificate, reqSchema: "CertificateIngest", resSchema: "Certificate", successCode: "201", mutation: true, perm: authz.CertsWrite},
-		{method: "POST", path: "/api/v1/certificates/bulk-revoke", opID: "bulkRevokeCertificates", summary: "Bulk revoke certificate identities by id or criteria", handler: a.bulkRevoke, reqSchema: "BulkRevokeRequest", resSchema: "BulkRevokeResult", successCode: "200", mutation: true, perm: authz.IdentitiesWrite},
+		{method: "POST", path: "/api/v1/certificates/bulk-revoke", opID: "bulkRevokeCertificates", summary: "Revoke exact certificates or explicitly selected lifecycle identities", handler: a.bulkRevoke, reqSchema: "BulkRevokeRequest", resSchema: "BulkRevokeResult", successCode: "200", mutation: true, perm: authz.IdentitiesWrite},
 		{method: "GET", path: "/api/v1/certificates", opID: "listCertificates", summary: "Query the certificate inventory", handler: a.listCertificates, query: certQuery, resSchema: "CertificateList", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/certificates/health", opID: "getCertificateHealth", summary: "Get estate-wide certificate expiry and source health", handler: a.getCertificateHealth, resSchema: "CertificateHealthDashboard", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/revocation/crls", opID: "listCRLDistributions", summary: "List published full, sharded, and delta CRL distribution artifacts", handler: a.listCRLDistributions, resSchema: "CRLDistributionList", successCode: "200", perm: authz.CertsRead},

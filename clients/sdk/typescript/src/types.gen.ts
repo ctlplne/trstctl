@@ -1520,7 +1520,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Bulk revoke certificate identities by id or criteria */
+        /** Revoke exact certificates or explicitly selected lifecycle identities */
         post: operations["bulkRevokeCertificates"];
         delete?: never;
         options?: never;
@@ -7390,6 +7390,7 @@ export interface components {
             status: "revoked" | "skipped" | "failed";
         };
         BulkRevokeRequest: {
+            /** @description Exact certificate inventory IDs, not lifecycle identity IDs. Do not combine with ids, identity_ids or identity criteria. Requires a verified served issuing authority; unsupported issuers fail per item without switching CA. removeFromCRL is not a revocation action. */
             certificate_ids?: string[];
             identity_ids?: string[];
             ids?: string[];

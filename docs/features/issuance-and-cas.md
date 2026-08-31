@@ -412,6 +412,37 @@ When dual control is required, the bulk request cannot supply the exact one-use
 approval for each identity and is refused. Use the individual reviewed revocation
 workflow below; a standing approval does not authorize a bulk action.
 
+To select actual inventory certificates rather than lifecycle identities, send
+`certificate_ids` with 1–100 UUIDs and a named `reason`. An empty array is invalid.
+Do not combine this field with `ids`, `identity_ids`, owner/issuer filters, kind,
+or status. The same authorization, policy and approval restrictions apply, even
+when no certificate matches. `removeFromCRL` is an unhold operation, not a valid
+reason for this exact-certificate revocation command.
+
+The exact path verifies the public certificate's signature against the served
+issuing CA and requires an existing tenant-scoped issuer record. It does not guess
+from an issuer name or serial, revoke same-owner siblings, or substitute the
+internal CA for an external issuer. This path currently handles leaves issued by
+the running server's issuing authority. Other authorities return an explicit
+per-item unsupported result; use their documented revocation path. HTTP 200 can
+contain failed items, so always inspect the returned counts and items.
+
+One retained `certificate.revocation.batch.applied` command records the exact
+selection and outcome. Its projection updates certificate inventory, the CA's
+revocation record and a `revocation.crl.publish` outbox intent in the same database
+transaction. If inventory and issuer disagree, it reconciles them while preserving
+the issuer's first revocation time and reason. `revoked` therefore includes a
+reconciled record; it is not a count of newly revoked serials at the CA. `skipped`
+means inventory and the issuer already agree that the certificate is revoked.
+
+Reuse the same `Idempotency-Key` for the same authenticated route and request.
+Retries recover the original result from retained events even after the HTTP
+result cache expires or an append succeeds before the database transaction fails.
+Changing the selection or reason under that key returns `409`. CRL publication is
+asynchronous: a committed result is not proof that publication or a relying-party
+check succeeded. Follow the delivery outcome, verify signed CRL/OCSP data, and test
+a client configured to enforce revocation before declaring containment complete.
+
 For one managed certificate, **Certificates → CRL & CT → Revocation center** is the
 safe operator path. It is a three-step journey: choose the X.509 identity and factual
 RFC 5280 reason; fetch an effect-free server preview; then type the exact credential

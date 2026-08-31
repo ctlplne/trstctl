@@ -858,14 +858,15 @@ func componentSchemas() map[string]*Schema {
 	}, "capability", "ready", "identity_id", "identity_name", "identity_kind", "owner_id", "from", "to", "expected_version", "event_type", "side_effect", "request_fingerprint", "required_permission", "prerequisites", "preview_writes", "preview_external_effects", "execution_writes", "execution_external_effects", "verification_steps", "warnings", "guidance")
 	revocationReasons := []string{"unspecified", "keyCompromise", "caCompromise", "affiliationChanged", "superseded", "cessationOfOperation", "certificateHold", "removeFromCRL", "privilegeWithdrawn", "aaCompromise"}
 	bulkRevokeReq := object(map[string]*Schema{
-		"ids":             {Type: "array", Items: uuid()},
-		"identity_ids":    {Type: "array", Items: uuid()},
-		"certificate_ids": {Type: "array", Items: uuid()},
-		"owner_id":        uuid(),
-		"issuer_id":       uuid(),
-		"kind":            {Type: "string", Enum: identityKinds},
-		"status":          {Type: "string", Enum: []string{"requested", "issued", "deployed", "renewing", "renewal_failed", "revoked", "retired"}},
-		"reason":          {Type: "string", Enum: revocationReasons},
+		"ids":          {Type: "array", Items: uuid()},
+		"identity_ids": {Type: "array", Items: uuid()},
+		"certificate_ids": {Type: "array", Items: uuid(), MinItems: 1, MaxItems: projections.MaxCertificateRevocationBatch,
+			Description: "Exact certificate inventory IDs, not lifecycle identity IDs. Do not combine with ids, identity_ids or identity criteria. Requires a verified served issuing authority; unsupported issuers fail per item without switching CA. removeFromCRL is not a revocation action."},
+		"owner_id":  uuid(),
+		"issuer_id": uuid(),
+		"kind":      {Type: "string", Enum: identityKinds},
+		"status":    {Type: "string", Enum: []string{"requested", "issued", "deployed", "renewing", "renewal_failed", "revoked", "retired"}},
+		"reason":    {Type: "string", Enum: revocationReasons},
 	}, "reason")
 	bulkRevokeItem := object(map[string]*Schema{
 		"id":     uuid(),

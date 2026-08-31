@@ -257,6 +257,8 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		return d.handleRenew(ctx, m)
 	case "revocation.publish":
 		return d.handleRevoke(ctx, m)
+	case store.CertificateCRLPublicationDestination:
+		return d.handleCertificateCRLPublication(ctx, m)
 	case "connector.deploy":
 		return d.handleDeploy(ctx, m)
 	case orchestrator.DestinationFleetReissuanceBatch:

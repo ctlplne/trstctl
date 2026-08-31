@@ -3279,6 +3279,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCertificateRecorded:                      {1: true, CertificateApprovalEventSchemaVersion: true},
 	EventCertificateCustodyAttested:               {1: true},
 	EventCertificateRevoked:                       {1: true},
+	EventCertificateRevocationBatchApplied:        {1: true},
 	EventCertificateSuperseded:                    {1: true},
 	EventCAIssuedCertificate:                      {1: true},
 	EventCACertificateRevoked:                     {1: true},
@@ -4055,6 +4056,8 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			return nil
 		}
 		return p.store.RevokeIssuedCertTx(ctx, tx, e.TenantID, pl.CAID, pl.Serial, pl.ReasonCode, revokedAt)
+	case EventCertificateRevocationBatchApplied:
+		return p.applyCertificateRevocationBatchTx(ctx, tx, e)
 	case EventCertificateSuperseded:
 		var pl CertificateSuperseded
 		if err := decode(e, &pl); err != nil {

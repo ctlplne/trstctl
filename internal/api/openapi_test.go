@@ -97,6 +97,22 @@ func TestOpenAPISpecGeneratedAndValid(t *testing.T) {
 	}
 }
 
+func TestOpenAPIExactCertificateRevocationExplainsBoundedSelection(t *testing.T) {
+	doc := fetchSpec(t)
+	schemas := doc["components"].(map[string]any)["schemas"].(map[string]any)
+	properties := schemas["BulkRevokeRequest"].(map[string]any)["properties"].(map[string]any)
+	selection := properties["certificate_ids"].(map[string]any)
+	if selection["minItems"] != float64(1) || selection["maxItems"] != float64(100) {
+		t.Fatalf("exact certificate selection must declare 1–100 items: %v", selection)
+	}
+	description, _ := selection["description"].(string)
+	for _, required := range []string{"not lifecycle identity IDs", "Do not combine", "unsupported issuers", "without switching CA", "removeFromCRL"} {
+		if !strings.Contains(description, required) {
+			t.Errorf("exact certificate contract omits %q", required)
+		}
+	}
+}
+
 func TestOpenAPISecretRotationReportsQueuedDeferredAndUnavailableModesTruthfully(t *testing.T) {
 	doc := fetchSpec(t)
 	components := doc["components"].(map[string]any)
