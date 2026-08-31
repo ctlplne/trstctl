@@ -143,8 +143,22 @@ Ephemeral approval checks the exact signed URI, public key, approved CA and
 lifetime, then checks that the URI's tenant and method match the retained event.
 Its versioned subject decoder reverses only canonical mappings: it rejects unknown
 versions, a different issuance route and alternate spellings. Historical unreserved
-subjects remain literal. This check preserves old command meaning; it does not
-turn an old approval into permission for a new tenant-bound credential.
+subjects keep their original meaning, including punctuation and the old per-segment
+URL escaping. That compatibility reader is used only for retained approval and
+projection evidence; new signing and TLS identity extraction still require strict
+SPIFFE syntax. The exact signed URI digest remains checked, so decoding two old
+spellings to the same subject does not let either replace the other's approved
+certificate. No certificate bytes, approval digests or event times are rewritten.
+An old approval cannot authorize a new tenant-bound credential.
+
+Legacy recovery is deliberately bounded: canonical trust domain, at most 2,048
+URI bytes, no userinfo, port, query, fragment, empty/relative path segment or
+escaped slash within a segment. It never accepts the reserved namespace or an
+encoded/relative alias through the legacy path. Unsupported older records remain
+an explicit migration blocker; do not skip them, broaden trust, rewrite signed
+identities or silently drop events to make replay green. Supported records are
+tested through real database/event-log rebuild, including expired credentials and
+retention-cleared approval evidence.
 
 The verified original subject stays unchanged in responses, audit and durable
 history; encoding is not encryption. Never put secrets in an identity subject.

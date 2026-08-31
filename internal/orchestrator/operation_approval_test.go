@@ -3,6 +3,7 @@
 package orchestrator_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -846,6 +847,16 @@ func TestApprovedIdentityIssuanceRejectsProfileUpdateBeforeLifecycleAppend(t *te
 }
 
 func TestApprovedCertificateConsumesAuthorityAndRebuildsExactlyOnce(t *testing.T) {
+	for _, legacy := range []bool{false, true} {
+		name := "canonical"
+		if legacy {
+			name = "legacy-punctuation"
+		}
+		t.Run(name, func(t *testing.T) { testApprovedCertificateConsumesAuthorityAndRebuildsExactlyOnce(t, legacy) })
+	}
+}
+
+func testApprovedCertificateConsumesAuthorityAndRebuildsExactlyOnce(t *testing.T, legacy bool) {
 	const approvalTestCAID = "70146825-e5d7-48f6-ab79-168365686a09"
 	s := newStore(t)
 	resetOrchestratorOperationApprovals(t, s)
@@ -877,9 +888,12 @@ func TestApprovedCertificateConsumesAuthorityAndRebuildsExactlyOnce(t *testing.T
 		t.Fatalf("generate approved leaf key: %v", err)
 	}
 	defer leafKey.Destroy()
-	const spiffeID = "spiffe://served.test/workload-7"
+	spiffeID, approvedSubject := "spiffe://served.test/workload-7", "workload-7"
+	if legacy {
+		spiffeID, approvedSubject = "spiffe://served.test/repo:org/project%3Fref=main", "repo:org/project?ref=main"
+	}
 	const certificateTTL = 3 * time.Second
-	binding, err := ephemerallib.NewApprovalBinding(approvalTestCAID, caDER, "workload-7", "test", "workload-7",
+	binding, err := ephemerallib.NewApprovalBinding(approvalTestCAID, caDER, "workload-7", "test", approvedSubject,
 		[]string{"selector:test"}, leafKey.Public().DER, spiffeID, certificateTTL)
 	if err != nil {
 		t.Fatalf("build certificate approval binding: %v", err)
@@ -921,7 +935,7 @@ func TestApprovedCertificateConsumesAuthorityAndRebuildsExactlyOnce(t *testing.T
 	// Mint after the immutable approval exists, exactly like the served issuance
 	// path. Minting first makes the certificate's lifetime start before the
 	// authority window, so the production validator correctly refuses it.
-	certificateDER, err := crypto.SignSVID(caDER, caKey, leafKey.Public().DER, spiffeID, certificateTTL)
+	certificateDER, err := signApprovedCertificateFixture(caDER, caKey, leafKey, spiffeID, certificateTTL, legacy)
 	if err != nil {
 		t.Fatalf("sign approved certificate after approval: %v", err)
 	}
@@ -962,7 +976,7 @@ func TestApprovedCertificateConsumesAuthorityAndRebuildsExactlyOnce(t *testing.T
 	// record path, not whether that unrelated negative control consumed most of a
 	// three-second fixture lifetime. The binding, key, SPIFFE ID, CA, and TTL are
 	// unchanged; only the signer-owned serial and issuance clock advance.
-	certificateDER, err = crypto.SignSVID(caDER, caKey, leafKey.Public().DER, spiffeID, certificateTTL)
+	certificateDER, err = signApprovedCertificateFixture(caDER, caKey, leafKey, spiffeID, certificateTTL, legacy)
 	if err != nil {
 		t.Fatalf("refresh approved certificate after metadata control: %v", err)
 	}
@@ -1007,7 +1021,8 @@ func TestApprovedCertificateConsumesAuthorityAndRebuildsExactlyOnce(t *testing.T
 		t.Fatalf("rebuilt approval = (%+v, %v), want consumed by %s", rebuiltRequest, err, wantEventID)
 	}
 	rebuiltCertificate, err := s.GetCertificateByFingerprint(ctx, tenantA, certificate.Fingerprint)
-	if err != nil || rebuiltCertificate.ID != first.ID {
+	if err != nil || rebuiltCertificate.ID != first.ID || !bytes.Equal(rebuiltCertificate.CertificateDER, certificateDER) ||
+		len(rebuiltCertificate.SANs) != 1 || rebuiltCertificate.SANs[0] != spiffeID {
 		t.Fatalf("rebuilt certificate = (%+v, %v), want id %s", rebuiltCertificate, err, first.ID)
 	}
 	if wait := time.Until(na.Add(100 * time.Millisecond)); wait > 0 {
@@ -1090,6 +1105,16 @@ func TestApprovedCertificateConsumesAuthorityAndRebuildsExactlyOnce(t *testing.T
 }
 
 func TestApprovedCertificateColdRebuildSurvivesRewrittenApprovalEvidence(t *testing.T) {
+	for _, legacy := range []bool{false, true} {
+		name := "canonical"
+		if legacy {
+			name = "legacy-punctuation"
+		}
+		t.Run(name, func(t *testing.T) { testApprovedCertificateColdRebuildSurvivesRewrittenApprovalEvidence(t, legacy) })
+	}
+}
+
+func testApprovedCertificateColdRebuildSurvivesRewrittenApprovalEvidence(t *testing.T, legacy bool) {
 	const approvalTestCAID = "38d24371-1101-4c86-b4de-0b974bee24b5"
 	s := newStore(t)
 	resetOrchestratorOperationApprovals(t, s)
@@ -1127,14 +1152,17 @@ func TestApprovedCertificateColdRebuildSurvivesRewrittenApprovalEvidence(t *test
 		t.Fatalf("generate rewrite test leaf key: %v", err)
 	}
 	defer leafKey.Destroy()
-	const spiffeID = "spiffe://served.test/retained-workload"
+	spiffeID, approvedSubject := "spiffe://served.test/retained-workload", "retained-workload"
+	if legacy {
+		spiffeID, approvedSubject = "spiffe://served.test/repo:org/project%3Fref=main", "repo:org/project?ref=main"
+	}
 	// This fixture proves retained-event recovery, not near-expiry behavior. A
 	// ten-minute lifetime keeps the certificate valid while the race+coverage
 	// suite deliberately contends on the shared PostgreSQL test instance; the
 	// separate ephemeral approval tests retain the exact lifetime boundaries.
 	const certificateTTL = 10 * time.Minute
 	binding, err := ephemerallib.NewApprovalBinding(approvalTestCAID, caDER, "retained-workload", "test",
-		"retained-workload", []string{"selector:retained"}, leafKey.Public().DER, spiffeID, certificateTTL)
+		approvedSubject, []string{"selector:retained"}, leafKey.Public().DER, spiffeID, certificateTTL)
 	if err != nil {
 		t.Fatalf("build rewrite test binding: %v", err)
 	}
@@ -1160,7 +1188,7 @@ func TestApprovedCertificateColdRebuildSurvivesRewrittenApprovalEvidence(t *test
 	// workflow. Signing before approval made the later target-event clock
 	// correctly reject a certificate minted outside the authority window and hid
 	// the cold-rebuild assertions this fixture exists to prove.
-	certificateDER, err := crypto.SignSVID(caDER, caKey, leafKey.Public().DER, spiffeID, certificateTTL)
+	certificateDER, err := signApprovedCertificateFixture(caDER, caKey, leafKey, spiffeID, certificateTTL, legacy)
 	if err != nil {
 		t.Fatalf("sign rewrite test certificate after approval: %v", err)
 	}
@@ -1239,7 +1267,8 @@ func TestApprovedCertificateColdRebuildSurvivesRewrittenApprovalEvidence(t *test
 		t.Fatalf("rebuilt rewritten approval = (%+v, %v), want consumed with no evidence", rebuiltRequest, err)
 	}
 	rebuiltCertificate, err := s.GetCertificateByFingerprint(ctx, tenantA, info.SHA256Fingerprint)
-	if err != nil || rebuiltCertificate.ID != recorded.ID {
+	if err != nil || rebuiltCertificate.ID != recorded.ID || !bytes.Equal(rebuiltCertificate.CertificateDER, certificateDER) ||
+		len(rebuiltCertificate.SANs) != 1 || rebuiltCertificate.SANs[0] != spiffeID {
 		t.Fatalf("rebuilt rewritten certificate = (%+v, %v), want id %s", rebuiltCertificate, err, recorded.ID)
 	}
 }
@@ -1478,4 +1507,21 @@ func TestCodeSigningColdRebuildKeepsConflictingApprovalUnconsumed(t *testing.T) 
 	if err != nil || !ok || operationA.RequestHash != requestHashA {
 		t.Fatalf("authoritative operation A after rejected rebuild = (%+v, %t, %v)", operationA, ok, err)
 	}
+}
+
+// signApprovedCertificateFixture uses the ordinary nonreserved CSR boundary
+// solely to model a pre-canonical historical certificate. Production automatic
+// issuance must still reject the same legacy URI. No signer or parser is relaxed.
+func signApprovedCertificateFixture(caDER []byte, caKey, leafKey crypto.DigestSigner, spiffeID string, ttl time.Duration, legacy bool) ([]byte, error) {
+	if !legacy {
+		return crypto.SignSVID(caDER, caKey, leafKey.Public().DER, spiffeID, ttl)
+	}
+	if _, err := crypto.SignSVID(caDER, caKey, leafKey.Public().DER, spiffeID, ttl); err == nil {
+		return nil, errors.New("strict automatic issuance accepted a legacy URI")
+	}
+	csr, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{URIs: []string{spiffeID}}, leafKey)
+	if err != nil {
+		return nil, err
+	}
+	return crypto.SignLeafFromCSRWithProfile(caDER, caKey, csr, ttl, crypto.LeafProfile{})
 }

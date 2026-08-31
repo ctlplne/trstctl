@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -242,8 +243,10 @@ func svidExtKeyUsages(usages []string) bool {
 
 // SubjectFromSPIFFEID returns the original attestation subject. Versioned
 // automatic identities have a tenant/route/method prefix and reversible segment
-// encoding. Historical unreserved identities retain their literal path meaning.
-// This decoder never converts an old approval into authority for a new identity.
+// encoding. Historical unreserved identities retain their original decoded path.
+// This is a retained-evidence reader, not a validator for new issuance or TLS.
+// ValidateCertificate separately binds the exact URI, key, CA, subject and time;
+// this decoder never converts an old approval into authority for a new identity.
 func SubjectFromSPIFFEID(raw string) (string, error) {
 	_, _, subject, err := ephemeralIdentitySubject(raw)
 	return subject, err
@@ -252,7 +255,11 @@ func SubjectFromSPIFFEID(raw string) (string, error) {
 func ephemeralIdentitySubject(raw string) (tenantID, method, subject string, err error) {
 	id, err := crypto.ParseSPIFFEID(raw)
 	if err != nil {
-		return "", "", "", err
+		legacySubject, legacyErr := retainedLegacySubject(raw)
+		if legacyErr != nil {
+			return "", "", "", err
+		}
+		return "", "", legacySubject, nil
 	}
 	subjectPath := strings.TrimPrefix(id.Path, "/")
 	if subjectPath == "" {
@@ -281,4 +288,36 @@ func ephemeralIdentitySubject(raw string) (tenantID, method, subject string, err
 		}
 	}
 	return tenant.String(), method, strings.Join(subjectParts, "/"), nil
+}
+
+// retainedLegacySubject recovers punctuation and per-segment URL escaping used
+// before canonical workload names. It cannot read the reserved namespace or an
+// alias of it. New SignSVID and SPIFFEIDFromCert still use the strict parser.
+// The exact signed URI digest remains authoritative: decoding is not permission
+// to substitute another spelling or reuse an old approval for a scoped name.
+func retainedLegacySubject(raw string) (string, error) {
+	if len(raw) > crypto.MaxSPIFFEIDLength || !strings.HasPrefix(raw, "spiffe://") ||
+		strings.ContainsAny(raw, "?#") || crypto.IsReservedWorkloadSPIFFEID(raw) {
+		return "", errors.New("ephemeral: unsupported retained identity")
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.User != nil || u.Opaque != "" || u.Host == "" ||
+		u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
+		return "", errors.New("ephemeral: invalid retained identity URI")
+	}
+	// Compatibility is limited to the old path spelling. It does not accept
+	// noncanonical trust domains, ports, userinfo, queries or fragments.
+	if _, err := crypto.ParseSPIFFEID("spiffe://" + u.Host); err != nil {
+		return "", errors.New("ephemeral: invalid retained identity trust domain")
+	}
+	escaped := strings.TrimPrefix(u.EscapedPath(), "/")
+	parts := strings.Split(escaped, "/")
+	for i, part := range parts {
+		parts[i], err = url.PathUnescape(part)
+		if err != nil || parts[i] == "" || parts[i] == "." || parts[i] == ".." ||
+			strings.Contains(parts[i], "/") {
+			return "", errors.New("ephemeral: ambiguous retained identity subject")
+		}
+	}
+	return strings.Join(parts, "/"), nil
 }

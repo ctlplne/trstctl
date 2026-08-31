@@ -15,7 +15,14 @@ const approvalTestTenant = "11111111-1111-4111-8111-111111111111"
 
 func FuzzSubjectFromSPIFFEID(f *testing.F) {
 	const prefix = "spiffe://approval.test/_trstctl/v1/tenant/" + approvalTestTenant + "/ephemeral/method/k8s_sat/subject/"
-	for _, seed := range []string{"", "spiffe://approval.test/ns/default/sa/web", prefix + "ns/default/sa/web", prefix + "trstctl-hex-613a62", prefix + "trstctl-hex-612f62", prefix + "trstctl-hex-776562"} {
+	for _, seed := range []string{
+		"", "spiffe://approval.test/ns/default/sa/web",
+		"spiffe://approval.test/repo:org/project%3Fref=main",
+		"spiffe://approval.test/a%252Fb", "spiffe://approval.test/%C3%A9",
+		"spiffe://approval.test/a%2Fb", "spiffe://approval.test/x/../_trstctl/old:name",
+		prefix + "ns/default/sa/web", prefix + "trstctl-hex-613a62",
+		prefix + "trstctl-hex-612f62", prefix + "trstctl-hex-776562", prefix + "repo%3Aorg",
+	} {
 		f.Add(seed)
 	}
 	f.Fuzz(func(t *testing.T, raw string) {
