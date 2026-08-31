@@ -147,7 +147,18 @@ func (s *Server) IssueEphemeralCredential(ctx context.Context, tenantID, idempot
 	if s.ephemeralIssuer == nil {
 		return api.EphemeralCredential{}, api.ErrEphemeralUnavailable
 	}
-	return s.ephemeralIssuer.IssueEphemeralCredential(ctx, tenantID, idempotencyKey, requester, req)
+	credential, err := s.ephemeralIssuer.IssueEphemeralCredential(ctx, tenantID, idempotencyKey, requester, req)
+	if err != nil {
+		return api.EphemeralCredential{}, err
+	}
+	// Pending approval and effect-free preview never publish or sign a CRL.
+	// An issued result must finish publication, including on exact recovery.
+	if credential.State == api.EphemeralStateIssued {
+		if err := s.ensureIssuedCredentialCRL(ctx, tenantID); err != nil {
+			return api.EphemeralCredential{}, err
+		}
+	}
+	return credential, nil
 }
 
 func (s *Server) PreviewEphemeralCredential(ctx context.Context, tenantID, requester string, req api.EphemeralCredentialRequest) (api.EphemeralCredentialPreview, error) {
@@ -347,10 +358,12 @@ func (s *ephemeralIssuerService) PreviewEphemeralCredential(ctx context.Context,
 		IssuanceWrites: []string{
 			"Consume one approved request and append one canonical certificate-issued event.",
 			"Project the short-lived certificate and record the idempotent issuance result.",
+			"Publish the issuing CA's initial certificate revocation list, or refresh it when due, before reporting successful issuance.",
 		},
 		IssuanceExternalEffects: []string{},
 		IssuanceSignerCalls: []string{
 			"Ask the isolated signer to sign one X.509-SVID with the effective TTL after fresh attestation verification and approval validation.",
+			"Sign the public certificate revocation list when it is missing or due for refresh; this does not sign another workload certificate.",
 		},
 		Steps: []string{
 			"Submit this exact request. trstctl verifies the proof, opens a bound approval request, and does not call the signer.",
@@ -361,6 +374,7 @@ func (s *ephemeralIssuerService) PreviewEphemeralCredential(ctx context.Context,
 		RecoverySteps: []string{
 			"If submission is retried with the same idempotency key, trstctl returns the original pending result instead of opening another approval.",
 			"After approval, resubmit the exact request with a fresh idempotency key; retries recover the one canonical certificate.",
+			"If initial revocation-list publication fails after the approved certificate was recorded, retry the unchanged issuance command. trstctl recovers that certificate and completes publication without another leaf signature.",
 			"If the approval expires or the proof changes, start a new request_id and review a new preview.",
 		},
 		DataHandling: []string{

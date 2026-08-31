@@ -662,6 +662,15 @@ trstctl-cli --idempotency-key jit-1-approve ephemeral approve <approval_request_
 trstctl-cli --idempotency-key jit-1-issue ephemeral issue -f jit-request.json
 ```
 
+Successful approval-gated issuance also completes the issuing CA's initial signed
+revocation list, or refreshes it when due, before returning the credential.
+Preview, pending submission and approval alone do not sign a leaf or a CRL.
+If CRL signing fails after the approved leaf is recorded, the request returns an
+error without a certificate body. Retry the unchanged issuance command: trstctl
+recovers the same approved certificate and completes publication without signing
+another leaf. Anonymous CRL reads only return existing bytes; they never trigger
+signing. The API/CLI preview lists this publication step and its recovery behavior.
+
 The first call returns `state: "awaiting_approval"` and no certificate; the approved
 call returns `state: "issued"` with a certificate whose `not_after` is clamped by the
 TTL policy. Replaying either key returns the same response without opening another
