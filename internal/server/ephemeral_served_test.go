@@ -617,6 +617,7 @@ type servedEphemeralResponse struct {
 	CredentialID      string             `json:"credential_id"`
 	CertificateID     string             `json:"certificate_id"`
 	CertificatePEM    string             `json:"certificate_pem"`
+	SPIFFEID          string             `json:"spiffe_id"`
 	RequiredApprovals int                `json:"required_approvals"`
 	Approvals         int                `json:"approvals"`
 	ExpiresAt         time.Time          `json:"expires_at"`

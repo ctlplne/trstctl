@@ -41,8 +41,8 @@ func TestServedEphemeralIdentitiesAndApprovalsAreTenantIsolated(t *testing.T) {
 		}
 		body := map[string]any{"request_id": "same-request-name", "method": "k8s_sat", "payload_base64": base64.StdEncoding.EncodeToString([]byte(fixture.SAT)), "public_key_pem": servedAttestedPublicKeyPEM(t), "ttl_seconds": 60}
 		pending := servedEphemeralIssue(t, h, requester, "same-approval-request-key", body, http.StatusAccepted)
-		if pending.CertificatePEM != "" {
-			t.Fatal("pending approval emitted a credential")
+		if pending.CertificatePEM != "" || pending.SPIFFEID != "" {
+			t.Fatal("pending approval emitted a credential or claimed a signed workload identity")
 		}
 		status, denied := secretsReqKey(t, h, http.MethodPost, "/api/v1/ephemeral/"+pending.ApprovalRequestID+"/approvals", otherApprover, "cross-tenant-approval", map[string]any{
 			"action": "issue", "request_id": pending.ApprovalRequestID, "intent_digest": pending.IntentDigest,
@@ -66,6 +66,10 @@ func TestServedEphemeralIdentitiesAndApprovalsAreTenantIsolated(t *testing.T) {
 		}
 		certs = append(certs, stockIdentityCertificate{DER: block.Bytes, CA: h.srv.ephemeralIssuer.caCertDER, TrustDomain: "served.test"})
 		expectedIDs = append(expectedIDs, "spiffe://served.test/_trstctl/v1/tenant/"+tenant+"/ephemeral/method/k8s_sat/subject/ns/default/sa/web")
+		assertSignedWorkloadIDHandoff(t, issued.CertificatePEM, issued.SPIFFEID, expectedIDs[len(expectedIDs)-1])
+		if replayed.SPIFFEID != issued.SPIFFEID {
+			t.Fatal("approved replay changed the signed workload identity handoff")
+		}
 	}
 	results := runStockIdentityChecks(t, nil, certs)
 	if len(results.Certificates) != len(expectedIDs) {
@@ -135,6 +139,7 @@ func TestServedWorkloadIdentitiesAreTenantIsolated(t *testing.T) {
 			var response struct {
 				CertificatePEM string `json:"certificate_pem"`
 				CertificateID  string `json:"certificate_id"`
+				SPIFFEID       string `json:"spiffe_id"`
 			}
 			if status != http.StatusCreated || json.Unmarshal(raw, &response) != nil {
 				t.Fatalf("%s tenant index %d issuance: HTTP %d", surface, i, status)
@@ -153,6 +158,15 @@ func TestServedWorkloadIdentitiesAreTenantIsolated(t *testing.T) {
 				kind += "/agent/agent-7"
 			}
 			expectedIDs = append(expectedIDs, "spiffe://served.test/_trstctl/v1/tenant/"+tenant+"/"+kind+"/method/k8s_sat/subject/ns/qa/sa/clock-reader")
+			assertSignedWorkloadIDHandoff(t, response.CertificatePEM, response.SPIFFEID, expectedIDs[len(expectedIDs)-1])
+			replayStatus, replayRaw := secretsReqKey(t, h, http.MethodPost, route, request.token, "tenant-isolation-"+surface, request.body)
+			var replay struct {
+				SPIFFEID       string `json:"spiffe_id"`
+				CertificatePEM string `json:"certificate_pem"`
+			}
+			if replayStatus != http.StatusCreated || json.Unmarshal(replayRaw, &replay) != nil || replay.SPIFFEID != response.SPIFFEID || replay.CertificatePEM != response.CertificatePEM {
+				t.Fatal("exact issuance replay changed the signed identity or certificate")
+			}
 			if i == 0 {
 				certificateA = response.CertificateID
 			}
@@ -184,4 +198,19 @@ func TestServedWorkloadIdentitiesAreTenantIsolated(t *testing.T) {
 		}
 	}
 	t.Logf("public issuing CA DER SHA256: %s", crypto.SHA256Hex(h.srv.agentBroker.caCertDER))
+}
+
+func assertSignedWorkloadIDHandoff(t *testing.T, certificatePEM, advertised, expected string) {
+	t.Helper()
+	block, rest := pem.Decode([]byte(certificatePEM))
+	if block == nil || block.Type != "CERTIFICATE" || len(rest) != 0 {
+		t.Fatal("signed identity handoff requires the actual single public certificate")
+	}
+	actual, err := crypto.SPIFFEIDFromCert(block.Bytes)
+	if err != nil || actual != expected {
+		t.Fatalf("actual signed certificate has the wrong workload identity: %v", err)
+	}
+	if advertised == "" || advertised != actual {
+		t.Fatal("API spiffe_id is missing or disagrees with the actual signed certificate; the friendly subject is not the full identity")
+	}
 }

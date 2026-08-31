@@ -17,6 +17,7 @@ import (
 
 type servedBrokerHistoryItem struct {
 	CertificateID string                `json:"certificate_id"`
+	SPIFFEID      string                `json:"spiffe_id"`
 	State         string                `json:"state"`
 	StateReason   string                `json:"state_reason"`
 	MetadataState string                `json:"metadata_state"`
@@ -67,6 +68,11 @@ func TestServedBrokerHistoryIsDurableBoundedTenantScopedAndReadOnly(t *testing.T
 		t.Fatalf("history is not bounded and timestamped: %+v", page)
 	}
 	one := page.Items[0]
+	wantID := "spiffe://served.test/_trstctl/v1/tenant/" + h.tenant + "/broker/agent/agent-7/method/stub_broker/subject/agent-7"
+	assertSignedWorkloadIDHandoff(t, first.CertificatePEM, first.SPIFFEID, wantID)
+	if one.SPIFFEID != wantID {
+		t.Fatal("history list omitted the exact signed workload ID")
+	}
 	if one.State != "valid" || one.StateReason == "" || one.MetadataState != "recorded" || one.Issuance == nil || one.Issuance.AgentID != "agent-7" || len(one.Issuance.Scopes) != 1 || one.Issuance.Scopes[0] != "tool:inventory.read" {
 		t.Fatalf("history lost original issuance or validity meaning: %+v", one)
 	}
@@ -84,6 +90,9 @@ func TestServedBrokerHistoryIsDurableBoundedTenantScopedAndReadOnly(t *testing.T
 	raw := read("/api/v1/broker/agent-identities/"+first.CertificateID, reader, http.StatusOK)
 	if err := json.Unmarshal(raw, &detail); err != nil || detail.CertificateID != first.CertificateID || detail.Issuance == nil {
 		t.Fatalf("detail lost durable identity: %v", err)
+	}
+	if detail.SPIFFEID != wantID {
+		t.Fatal("history detail omitted or reconstructed the signed workload ID")
 	}
 	for _, forbidden := range []string{"certificate_pem", "certificate_der", "issuance_request_binding", "issuance_idempotency_key", "broker-history-first", "payload_base64", "task_envelope_base64"} {
 		if strings.Contains(string(raw), forbidden) {
@@ -109,7 +118,7 @@ func TestServedBrokerHistoryIsDurableBoundedTenantScopedAndReadOnly(t *testing.T
 	if err := h.srv.agentBroker.orch.RevokeCertificate(t.Context(), h.tenant, cert.Fingerprint, cert.Serial, "test compromise", time.Now().UTC()); err != nil {
 		t.Fatal(err)
 	}
-	if err := json.Unmarshal(read("/api/v1/broker/agent-identities?state=revoked&method=stub_broker&q=agent-7", reader, http.StatusOK), &page); err != nil || len(page.Items) != 1 || page.Items[0].CertificateID != first.CertificateID || page.Items[0].State != "revoked" {
+	if err := json.Unmarshal(read("/api/v1/broker/agent-identities?state=revoked&method=stub_broker&q=agent-7", reader, http.StatusOK), &page); err != nil || len(page.Items) != 1 || page.Items[0].CertificateID != first.CertificateID || page.Items[0].State != "revoked" || page.Items[0].SPIFFEID != wantID {
 		t.Fatalf("filtered history did not read the shared revocation state: %v", err)
 	}
 	// History belongs to the inventory, not the optional signing service.

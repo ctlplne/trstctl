@@ -26,6 +26,7 @@ type brokerHistoryItem struct {
 	CertificateID      string                `json:"certificate_id"`
 	Fingerprint        string                `json:"fingerprint"`
 	CertificateSubject string                `json:"certificate_subject"`
+	SPIFFEID           string                `json:"spiffe_id,omitempty"`
 	Serial             string                `json:"serial"`
 	CurrentOwnerID     *string               `json:"current_owner_id,omitempty"`
 	NotBefore          *time.Time            `json:"not_before,omitempty"`
@@ -183,7 +184,8 @@ func brokerHistoryResponse(row store.BrokerCertificate, now time.Time, projectio
 		metadataState = "recorded"
 	}
 	return brokerHistoryItem{CertificateID: row.CertificateID, Fingerprint: row.Fingerprint, CertificateSubject: row.CertificateSubject,
-		Serial: row.Serial, CurrentOwnerID: row.CurrentOwnerID, NotBefore: row.NotBefore, NotAfter: row.NotAfter, RecordedAt: row.RecordedAt,
+		SPIFFEID: row.SPIFFEID,
+		Serial:   row.Serial, CurrentOwnerID: row.CurrentOwnerID, NotBefore: row.NotBefore, NotAfter: row.NotAfter, RecordedAt: row.RecordedAt,
 		LifecycleStatus: row.Status, State: row.State, StateReason: reason, MetadataState: metadataState, Issuance: row.Issuance, GeneratedAt: now, ProjectionState: projectionState}
 }
 

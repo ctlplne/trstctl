@@ -93,6 +93,7 @@ describe("ephemeral credential workflow", () => {
       })
       .mockResolvedValueOnce({
         state: "issued",
+        spiffe_id: "spiffe://workloads.example.test/_trstctl/v1/tenant/11111111-1111-4111-8111-111111111111/ephemeral/method/k8s_sat/subject/workload-7",
         request_id: "jit-browser-test",
         approval_request_id: "approval-7",
         intent_digest: "c".repeat(64),
@@ -125,12 +126,31 @@ describe("ephemeral credential workflow", () => {
     expect(await screen.findByRole("heading", { name: "Waiting for a different approver" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open approval queue" })).toHaveAttribute("href", "/approvals");
     expect(screen.getByText("approval-7")).toBeInTheDocument();
+    expect(screen.queryByText("Signed workload ID")).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Check approval and issue" }));
     expect(await screen.findByRole("heading", { name: "Temporary certificate issued" })).toBeInTheDocument();
     expect(screen.getByText(/private key never enters trstctl/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByText("Signed workload ID"));
+    expect(
+      screen.getByText("spiffe://workloads.example.test/_trstctl/v1/tenant/11111111-1111-4111-8111-111111111111/ephemeral/method/k8s_sat/subject/workload-7"),
+    ).toBeVisible();
     expect(apiMock.requestEphemeralCredential).toHaveBeenCalledTimes(2);
     expect(apiMock.requestEphemeralCredential.mock.calls[1]).toEqual(apiMock.requestEphemeralCredential.mock.calls[0]);
+  });
+
+  it("does not label an unknown issuance state as success or offer its unconfirmed identity", async () => {
+    apiMock.requestEphemeralCredential.mockResolvedValue({ state: "new-server-state", spiffe_id: "spiffe://unconfirmed.test/workload" });
+    renderWorkflow();
+    await enterRequest();
+    await screen.findByRole("heading", { name: "Ready to send for approval" });
+    await userEvent.click(screen.getByRole("button", { name: "Send for approval" }));
+    expect(await screen.findByText("Issuance outcome is unconfirmed")).toBeInTheDocument();
+    expect(screen.queryByText("Temporary certificate issued")).not.toBeInTheDocument();
+    expect(screen.queryByText("Signed workload ID")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Check approval and issue" })).not.toBeInTheDocument();
+    expect(screen.queryByText("spiffe://unconfirmed.test/workload")).not.toBeInTheDocument();
+    expect(apiMock.requestEphemeralCredential).toHaveBeenCalledTimes(1);
   });
 
   it("shows server blockers and keeps submission disabled", async () => {

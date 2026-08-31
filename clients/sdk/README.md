@@ -38,9 +38,19 @@ live ServeMux
   --(scripts/gen-sdk.sh / make sdk)-->    Go SDK + TypeScript SDK + Python SDK + Java SDK
 ```
 
-If the backend changes a field, the golden changes, `TestSDKSpecPinnedToGolden`
-goes red until you re-run `make sdk`, and the regenerated types make `go build` /
-`tsc` flag any code that used a now-missing field.
+If the backend changes a field, the golden changes and `TestSDKSpecPinnedToGolden`
+goes red until you re-run `make sdk`. TypeScript generates field-level types and
+Python generates TypedDicts. Java generates a schema-name index, not field-level
+models; its generic `request` returns decoded response maps. Go's supported types
+and resource helpers are curated by hand, and its full generated model reference
+is build-ignored. Regeneration alone does not add new callable Go or Java helpers.
+
+For broker, attested and ephemeral workload issuance, CLI output and the generic
+TypeScript/Python/Java request methods preserve the optional `spiffe_id` field.
+It is the full certificate-derived identity, not the friendly subject. Older
+saved responses can omit it. See [the workload handoff contract](../../docs/features/workload-identity.md#hand-the-signed-identity-to-the-receiving-service).
+The supported Go SDK does not yet expose these workload routes or a public
+generic request method; that remains a client-parity gap.
 
 ## Regenerate
 

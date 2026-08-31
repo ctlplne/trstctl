@@ -505,6 +505,7 @@ func (s *attestedIssuerService) finish(ctx context.Context, tenantID string, ver
 	s.emitIssued(ctx, tenantID, att, ttl, info.NotAfter, minted)
 	return api.AttestedSVID{
 		CertificatePEM: string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})),
+		SPIFFEID:       certificateSPIFFEID(certDER),
 		CredentialID:   credentialID,
 		Subject:        att.Subject,
 		NotAfter:       info.NotAfter,

@@ -125,6 +125,7 @@ type BrokerAgentIdentity struct {
 	CredentialID       string             `json:"credential_id"`
 	CertificateID      string             `json:"certificate_id"`
 	CertificatePEM     string             `json:"certificate_pem"`
+	SPIFFEID           string             `json:"spiffe_id,omitempty"`
 	Scopes             []string           `json:"scopes"`
 	NotAfter           time.Time          `json:"not_after"`
 	Attestation        attest.Attestation `json:"attestation"`

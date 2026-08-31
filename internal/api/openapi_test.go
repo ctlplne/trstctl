@@ -113,6 +113,37 @@ func TestOpenAPIExactCertificateRevocationExplainsBoundedSelection(t *testing.T)
 	}
 }
 
+func TestOpenAPISignedWorkloadIDIsOptionalCertificateEvidenceNotRequestAuthority(t *testing.T) {
+	doc := fetchSpec(t)
+	schemas := doc["components"].(map[string]any)["schemas"].(map[string]any)
+	for _, name := range []string{"BrokerAgentIdentity", "AttestedSVID", "EphemeralCredential", "BrokerAgentIdentityHistory"} {
+		schema := asMap(schemas[name])
+		identity := asMap(asMap(schema["properties"])["spiffe_id"])
+		if identity["type"] != "string" || identity["format"] != "uri" {
+			t.Fatalf("%s lacks the exact signed URI contract", name)
+		}
+		for _, required := range asStrings(schema["required"]) {
+			if required == "spiffe_id" {
+				t.Fatalf("%s breaks saved responses or pending issuance by requiring spiffe_id", name)
+			}
+		}
+		description, _ := identity["description"].(string)
+		for _, phrase := range []string{"read from this certificate", "not the friendly", "chain", "validity", "revocation", "entire ID", "older saved response", "never infer"} {
+			if !strings.Contains(description, phrase) {
+				t.Errorf("%s handoff omits %q", name, phrase)
+			}
+		}
+	}
+	for _, name := range []string{"BrokerAgentIdentityRequest", "AttestedSVIDRequest", "EphemeralCredentialRequest", "BrokerAgentIdentityPreview", "AttestedSVIDPreview", "EphemeralCredentialPreview"} {
+		if schemas[name] == nil {
+			t.Fatalf("missing schema %s", name)
+		}
+		if asMap(asMap(schemas[name])["properties"])["spiffe_id"] != nil {
+			t.Fatalf("%s implies a supplied or unissued identity is signed authority", name)
+		}
+	}
+}
+
 func TestOpenAPISecretRotationReportsQueuedDeferredAndUnavailableModesTruthfully(t *testing.T) {
 	doc := fetchSpec(t)
 	components := doc["components"].(map[string]any)

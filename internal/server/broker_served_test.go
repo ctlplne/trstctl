@@ -143,6 +143,7 @@ type servedBrokerIssueResponse struct {
 	CredentialID   string    `json:"credential_id"`
 	CertificateID  string    `json:"certificate_id"`
 	CertificatePEM string    `json:"certificate_pem"`
+	SPIFFEID       string    `json:"spiffe_id"`
 	Scopes         []string  `json:"scopes"`
 	NotAfter       time.Time `json:"not_after"`
 }

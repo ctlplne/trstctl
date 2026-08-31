@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { CheckCircle2, Clipboard, Clock3, RotateCcw, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { CapabilityActionNotice } from "@/components/CapabilityTruth";
+import { WorkloadIdentityHandoff } from "@/components/WorkloadIdentityHandoff";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -296,6 +297,16 @@ function Result({
 }) {
   const { t } = useTranslation();
   const pending = result.state === "awaiting_approval";
+  if (!pending && result.state !== "issued") {
+    return (
+      <ErrorState title={t("workloads.ephemeral.unknownTitle")}>
+        <p>{t("workloads.ephemeral.unknownBody")}</p>
+        <Link to="/audit" className="underline">
+          {t("workloads.attested.openAudit")}
+        </Link>
+      </ErrorState>
+    );
+  }
   return (
     <div className="grid gap-4" aria-live="polite">
       <section
@@ -334,6 +345,7 @@ function Result({
         </div>
       ) : (
         <div className="grid gap-3">
+          <WorkloadIdentityHandoff spiffeID={result.spiffe_id} />
           {result.certificate_pem ? (
             <details className="rounded-panel border border-border p-3">
               <summary className="cursor-pointer font-medium">{t("workloads.ephemeral.certificateDisclosure")}</summary>

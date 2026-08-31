@@ -93,6 +93,42 @@ refused. There is no implicit clock-skew allowance: keep the issuer and trstctl
 clocks synchronized. Legacy non-expiring Kubernetes tokens are not supported by
 this projected-token proof path. These are proof checks, not certificate renewal.
 
+#### Hand the signed identity to the receiving service
+
+After broker, attested or approved ephemeral issuance, open **Signed workload ID**
+in the result. The same disclosure is available in a broker certificate's durable
+history record. It shows and copies the complete SPIFFE URI, including tenant,
+issuance route and proof method. The friendly verified `subject` is not a substitute
+for that full identity. Opening the disclosure or copying the value changes no
+trust rules and makes no API mutation.
+
+The API returns optional `spiffe_id` metadata read from the actual certificate,
+not reconstructed from the request or today's owner. The CLI preserves it in JSON
+output for `broker agent-identities issue`, `workloads attested-issuance`,
+`ephemeral issue`, and broker history `list`/`get`. The generated TypeScript and
+Python contracts include the same optional field. Java's generic `request` returns
+it unchanged in the response map; Java's generated schema-name index is not a
+field-level model. The supported Go SDK currently exposes a smaller curated
+owner/identity/inventory surface; it does not
+yet provide these workload methods. Do not mistake its build-ignored model
+reference for a callable workload client.
+
+Preview and pending approval do **not** return a signed ID. A saved response from
+an older version can omit the field even if its certificate is recoverable; exact
+idempotency replay keeps that original response unchanged. Missing, malformed or
+noncanonical retained certificate data also leaves the field unavailable. Broker
+history exposes it only when the stored leaf matches the record's SHA-256
+fingerprint. No friendly label is silently promoted into a signed identity.
+
+At the receiving service, verify the certificate chain, validity window and
+revocation status, **then authorize the entire expected SPIFFE ID**. The JSON field
+is a handoff convenience, not proof that a connection is authorized or that an old
+certificate is still valid. Inspect the actual leaf with the intended consumer.
+Never wildcard the tenant path or accept any certificate merely because its CA is
+trusted. Before replacing an existing credential, review exact-ID access rules and
+follow the upgrade precautions below. This page does not rotate a CA or change
+consumer policy for you.
+
 #### Exact identity names and upgrade safety
 
 A SPIFFE name is an authorization input, not a display label. trstctl now requires

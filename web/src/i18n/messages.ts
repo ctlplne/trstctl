@@ -388,6 +388,10 @@ export const messages = {
     defaultMessage: "Copied to clipboard",
     description: "Screen-reader announcement after a credential chip value is copied.",
   },
+  "credentialChip.copyFailed": {
+    defaultMessage: "Copy failed. Select the full value shown here and copy it manually.",
+    description: "Visible clipboard failure; the chip now reveals its full value for manual copying.",
+  },
   "graph.view.zoomIn": {
     defaultMessage: "Zoom in",
     description: "Accessible label for the graph map zoom-in control.",
@@ -15046,6 +15050,31 @@ export const messages = {
     description: "Ephemeral private-key boundary statement.",
   },
   "workloads.ephemeral.startAnother": { defaultMessage: "Start another request", description: "Reset ephemeral credential wizard action." },
+  "workloads.ephemeral.unknownTitle": {
+    defaultMessage: "Issuance outcome is unconfirmed",
+    description: "An unknown server state must not be shown as an issued credential.",
+  },
+  "workloads.ephemeral.unknownBody": {
+    defaultMessage:
+      "The server returned a state this console cannot interpret. Check the request in the audit log before retrying. No certificate or identity is confirmed here.",
+    description: "Safe recovery for an unknown issuance state; do not repeat the mutation blindly.",
+  },
+  "workloads.signedIdentity.title": { defaultMessage: "Signed workload ID", description: "Disclosure of the exact SPIFFE URI in the issued certificate." },
+  "workloads.signedIdentity.instructions": {
+    defaultMessage:
+      "This is the full SPIFFE ID read from the certificate. The receiving service must verify the certificate chain, validity dates and revocation status, then authorize this entire ID. Trusting the CA alone does not authorize this workload.",
+    description: "Exact signed-ID handoff; displaying an identity is not an authorization or current-validity decision.",
+  },
+  "workloads.signedIdentity.unavailable": {
+    defaultMessage:
+      "This response does not include a canonical signed ID. Older saved responses or missing certificate data may omit it. Inspect the certificate before granting access; do not substitute the friendly subject shown above.",
+    description: "Explicit absence without reconstructing a workload identity from mutable or friendly metadata.",
+  },
+  "workloads.signedIdentity.cutover": {
+    defaultMessage:
+      "Before replacing a credential, review the receiving service’s exact-ID access rules. This page does not change those rules or your trusted CA.",
+    description: "Existing consumers need an explicit reviewed identity cutover; the console does not silently migrate trust.",
+  },
   "workloads.ephemeral.recovery": { defaultMessage: "Safe retry and recovery", description: "Ephemeral recovery guidance title." },
   "workloads.kubernetesCSR.heading": {
     defaultMessage: "Kubernetes CertificateSigningRequest controller",

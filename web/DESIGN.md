@@ -45,7 +45,9 @@ the same change.
    `loading`, which renders the spinner and sets `aria-busy`.
 4. **Credential material renders as a `CredentialChip`.** Fingerprints,
    serials, node IDs, tokens: DM Mono, middle-truncated, copyable. Never nest
-   it inside another interactive element.
+   it inside another interactive element. Inside deliberate exact-evidence
+   disclosure, `fullValue` wraps the complete identifier without truncation;
+   use it for signed workload IDs whose whole value must be authorized.
 5. **Digits align, data is mono (S-C9).** All tables inherit `tabular-nums`;
    standalone numerals opt in with the utility class, and inline data values
    in sans copy (counts, TTLs, serials, timestamps) render through `Num`.

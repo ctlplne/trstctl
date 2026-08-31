@@ -13,6 +13,8 @@ export const brokerPreviewFixture: BrokerAgentIdentityPreview = {
 export const brokerHistoryFixture: BrokerAgentIdentityHistory = {
   certificate_id: "11111111-1111-1111-1111-111111111111",
   certificate_subject: "spiffe://example.test/agent/build-1",
+  spiffe_id:
+    "spiffe://example.test/_trstctl/v1/tenant/11111111-1111-4111-8111-111111111111/broker/agent/agent-build-1/method/k8s_sat/subject/ns/default/sa/build",
   fingerprint: "a".repeat(64),
   serial: "01",
   recorded_at: "2026-08-31T12:00:00Z",

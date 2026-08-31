@@ -16,6 +16,7 @@ vi.mock("@/lib/api", async (orig) => {
 const issued = {
   credential_id: "cred-attested-1",
   subject: "ns/default/sa/web",
+  spiffe_id: "spiffe://workloads.example.test/_trstctl/v1/tenant/11111111-1111-4111-8111-111111111111/attested/method/k8s_sat/subject/ns/default/sa/web",
   not_after: "2026-08-30T20:10:00Z",
   certificate_pem: "-----BEGIN CERTIFICATE-----\nPUBLIC-CERTIFICATE\n-----END CERTIFICATE-----",
   attestation: { id: "att-1", method: "k8s_sat", subject: "ns/default/sa/web", selectors: ["ns:default"], verified_at: "2026-08-30T20:00:00Z" },
@@ -66,6 +67,7 @@ describe("attested SVID workflow", () => {
     expect(screen.queryByDisplayValue("c2VjcmV0LXByb29m")).not.toBeInTheDocument();
     expect(screen.queryByText(/PUBLIC-KEY|PUBLIC-CERTIFICATE/)).not.toBeInTheDocument();
     expect(apiMock.issueAttestedSVID).not.toHaveBeenCalled();
+    expect(screen.queryByText("Signed workload ID")).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Verify proof and issue" }));
     expect(await screen.findByText("Signer temporarily unavailable")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Retry exact issuance" }));
@@ -75,9 +77,24 @@ describe("attested SVID workflow", () => {
     expect(apiMock.issueAttestedSVID.mock.calls[0][1]).toEqual(expect.any(String));
     expect(screen.queryByDisplayValue("c2VjcmV0LXByb29m")).not.toBeInTheDocument();
     expect(screen.queryByText(/PUBLIC-KEY|PUBLIC-CERTIFICATE/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByText("Signed workload ID"));
+    expect(screen.getByText(issued.spiffe_id)).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: "Start another request" }));
     expect(screen.getByLabelText("Attestation proof payload (base64)")).toHaveValue("");
     expect(screen.getByLabelText("Workload public key")).toHaveValue("");
+    expect(screen.queryByText(issued.spiffe_id)).not.toBeInTheDocument();
+  });
+
+  it("does not reconstruct a signed identity from an older response's friendly subject", async () => {
+    apiMock.issueAttestedSVID.mockResolvedValue({ ...issued, spiffe_id: undefined });
+    renderWorkflow();
+    await enterRequest();
+    await screen.findByRole("heading", { name: "Ready to verify and issue" });
+    await userEvent.click(screen.getByRole("button", { name: "Verify proof and issue" }));
+    await userEvent.click(await screen.findByText("Signed workload ID"));
+    expect(screen.getByText(/does not include a canonical signed ID/)).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Copy Signed workload ID" })).not.toBeInTheDocument();
+    expect(screen.queryByText(issued.spiffe_id)).not.toBeInTheDocument();
   });
 
   it.each([

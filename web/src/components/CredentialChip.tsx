@@ -22,6 +22,7 @@ export function CredentialChip({
   label = "identifier",
   head,
   tail,
+  fullValue = false,
   className,
 }: {
   value: string;
@@ -29,23 +30,32 @@ export function CredentialChip({
   label?: string;
   head?: number;
   tail?: number;
+  /** Only inside deliberate exact-evidence disclosure: wrap the whole value. */
+  fullValue?: boolean;
   className?: string;
 }) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
   const timer = useRef<number>();
 
   useEffect(() => () => window.clearTimeout(timer.current), []);
+  useEffect(() => {
+    window.clearTimeout(timer.current);
+    setCopied(false);
+    setCopyFailed(false);
+  }, [value]);
 
   async function copyValue() {
     try {
       await navigator.clipboard.writeText(value);
+      setCopyFailed(false);
       setCopied(true);
       window.clearTimeout(timer.current);
       timer.current = window.setTimeout(() => setCopied(false), 1600);
     } catch {
-      // Clipboard unavailable (permissions or insecure context): leave the
-      // full value reachable via the title attribute instead of failing loud.
+      setCopied(false);
+      setCopyFailed(true);
     }
   }
 
@@ -54,11 +64,12 @@ export function CredentialChip({
       data-credential-chip
       className={cn(
         "inline-flex max-w-full items-center gap-1 rounded-control border border-border bg-muted/60 px-1.5 py-0.5 font-mono text-caption text-foreground",
+        (fullValue || copyFailed) && "items-start",
         className,
       )}
     >
-      <span title={value} className="truncate">
-        {middleTruncate(value, head, tail)}
+      <span title={value} className={fullValue || copyFailed ? "min-w-0 whitespace-normal break-all" : "truncate"}>
+        {fullValue || copyFailed ? value : middleTruncate(value, head, tail)}
       </span>
       <button
         type="button"
@@ -68,8 +79,8 @@ export function CredentialChip({
       >
         {copied ? <Check className="h-3 w-3 text-status-success" aria-hidden="true" /> : <Copy className="h-3 w-3" aria-hidden="true" />}
       </button>
-      <span role="status" className="sr-only">
-        {copied ? t("credentialChip.copied") : ""}
+      <span role="status" className={copyFailed ? "font-sans text-caption" : "sr-only"}>
+        {copyFailed ? t("credentialChip.copyFailed") : copied ? t("credentialChip.copied") : ""}
       </span>
     </span>
   );

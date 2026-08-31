@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -51,7 +52,7 @@ func TestBrokerHistoryValidityBoundariesFiltersAndLegacyGaps(t *testing.T) {
 			t.Fatal(err)
 		}
 		got, err := s.GetBrokerCertificate(ctx, tenantA, id, now)
-		if err != nil || got.State != tc.want || got.Issuance != nil {
+		if err != nil || got.State != tc.want || got.Issuance != nil || got.SPIFFEID != "" {
 			t.Fatalf("%s: state=%s metadata=%v err=%v", tc.name, got.State, got.Issuance, err)
 		}
 		if _, err := s.GetBrokerCertificate(ctx, tenantB, id, now); !errors.Is(err, pgx.ErrNoRows) {
@@ -150,3 +151,81 @@ func TestBrokerHistoryKeysetKeepsTimeTiesAndExcludesOtherInventory(t *testing.T)
 }
 
 func timePtr(value time.Time) *time.Time { return &value }
+
+func TestBrokerHistorySignedIDComesOnlyFromFingerprintBoundCanonicalLeaf(t *testing.T) {
+	s := newStore(t)
+	ctx := t.Context()
+	for _, tenant := range []string{tenantA, tenantB} {
+		if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenant, Name: "Signed identity fixture"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer key.Destroy()
+	ca, err := crypto.SelfSignedCACert(key, "history-extraction-fixture", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonical := "spiffe://history.test/retained/exact-identity"
+	leaf, err := crypto.SignSVID(ca, key, key.Public().DER, canonical, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	csr, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{URIs: []string{"spiffe://history.test/legacy%2Fidentity"}}, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy, err := crypto.SignLeafFromCSR(ca, key, csr, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, tc := range []struct {
+		name, fingerprint, want string
+		der                     []byte
+	}{
+		{"canonical", crypto.SHA256Hex(leaf), canonical, leaf},
+		{"missing", "missing-leaf", "", []byte{}},
+		{"malformed", crypto.SHA256Hex([]byte("malformed")), "", []byte("malformed")},
+		{"fingerprint-mismatch", "wrong-fingerprint", "", leaf},
+		{"legacy-noncanonical", crypto.SHA256Hex(legacy), "", legacy},
+		{"no-uri", crypto.SHA256Hex(ca), "", ca},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			id := uuid(tenantA, 89000+i)
+			// Deliberately incomplete/corrupt historical fixtures, not a product
+			// mutation path. A friendly subject must never fill missing evidence.
+			if _, err := s.SystemPool().Exec(ctx, `INSERT INTO certificates
+				(id, tenant_id, fingerprint, subject, source, issuance_idempotency_key, certificate_der)
+				VALUES ($1, $2, $3, 'spiffe://wrong.test/friendly-subject', 'broker:k8s_sat', $4, $5)`,
+				id, tenantA, tc.fingerprint, "broker-issue:signed-id-"+tc.name, tc.der); err != nil {
+				t.Fatal(err)
+			}
+			row, err := s.GetBrokerCertificate(ctx, tenantA, id, time.Now())
+			if err != nil || row.SPIFFEID != tc.want {
+				t.Fatalf("signed identity=%q want=%q err=%v", row.SPIFFEID, tc.want, err)
+			}
+			if _, err := s.GetBrokerCertificate(ctx, tenantB, id, time.Now()); !errors.Is(err, pgx.ErrNoRows) {
+				t.Fatalf("neighbor could read signed identity: %v", err)
+			}
+			rows, err := s.ListBrokerCertificatesPage(ctx, tenantA, store.BrokerHistoryFilter{AfterID: store.ZeroUUID, Limit: 10}, time.Now())
+			if err != nil {
+				t.Fatal(err)
+			}
+			found := false
+			for _, listed := range rows {
+				if listed.CertificateID == id {
+					found = true
+					if listed.SPIFFEID != tc.want {
+						t.Fatal("list/detail signed identity disagree")
+					}
+				}
+			}
+			if !found {
+				t.Fatal("missing signed identity silently removed a historical record")
+			}
+		})
+	}
+}

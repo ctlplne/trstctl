@@ -36,6 +36,21 @@ export const CustomTruncation: Story = {
   },
 };
 
+export const ExactIdentityAfterDisclosure: Story = {
+  args: {
+    value: "spiffe://workloads.example.test/_trstctl/v1/tenant/11111111-1111-4111-8111-111111111111/attested/method/k8s_sat/subject/ns/payments/sa/api",
+    label: "Signed workload ID",
+    fullValue: true,
+  },
+  decorators: [
+    (Story) => (
+      <div className="max-w-xs">
+        <Story />
+      </div>
+    ),
+  ],
+};
+
 export const InTableContext: Story = {
   args: { value: "SHA256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b", label: "fingerprint" },
   render: () => (

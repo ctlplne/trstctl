@@ -35,6 +35,35 @@ func mutationBindingRequestWithBody(subject, method, path, body string) *http.Re
 	return req.WithContext(context.WithValue(req.Context(), principalCtxKey, principal))
 }
 
+func TestMutateWorkloadReplayKeepsLegacySignedIDOmission(t *testing.T) {
+	// Exercise the shared HTTP response recorder, not a signer mock. A saved
+	// pre-field response must remain byte-identical after the response schema
+	// grows; filling a missing ID from a new issuance would break AN-5.
+	for _, path := range []string{"/api/v1/broker/agent-identities", "/api/v1/workloads/attested-issuance", "/api/v1/ephemeral"} {
+		t.Run(path, func(t *testing.T) {
+			a := New(nil, orchestrator.NewMemoryIdempotency(), nil)
+			request := func() *http.Request {
+				return mutationBindingRequestWithBody("same-operator", http.MethodPost, path, `{"method":"k8s_sat"}`)
+			}
+			first := httptest.NewRecorder()
+			a.mutate(first, request(), "retained-workload-result", func(context.Context, string) (int, any, error) {
+				return http.StatusCreated, map[string]string{"subject": "friendly-subject", "certificate_pem": "retained-public-certificate"}, nil
+			})
+			if first.Code != http.StatusCreated || strings.Contains(first.Body.String(), "spiffe_id") {
+				t.Fatal("legacy response fixture did not retain the optional-field omission")
+			}
+			replay := httptest.NewRecorder()
+			a.mutate(replay, request(), "retained-workload-result", func(context.Context, string) (int, any, error) {
+				t.Fatal("cached replay tried to issue or rebuild signed identity metadata")
+				return 0, nil, nil
+			})
+			if replay.Code != first.Code || replay.Body.String() != first.Body.String() {
+				t.Fatal("legacy workload response was rewritten on replay")
+			}
+		})
+	}
+}
+
 func TestMutateFallbackBindingPreventsCrossRouteAndPrincipalReplay(t *testing.T) {
 	for _, tc := range []struct {
 		name    string

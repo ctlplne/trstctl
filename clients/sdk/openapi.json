@@ -3644,6 +3644,11 @@
             "format": "date-time",
             "type": "string"
           },
+          "spiffe_id": {
+            "description": "Exact canonical SPIFFE URI read from this certificate, not the friendly attestation subject. Receiving services must verify the certificate chain, validity and revocation and authorize this entire ID. Omitted for pending issuance, missing/noncanonical retained certificate data or an older saved response; never infer an identity from the subject when absent.",
+            "format": "uri",
+            "type": "string"
+          },
           "subject": {
             "type": "string"
           }
@@ -4731,6 +4736,11 @@
             },
             "type": "array"
           },
+          "spiffe_id": {
+            "description": "Exact canonical SPIFFE URI read from this certificate, not the friendly attestation subject. Receiving services must verify the certificate chain, validity and revocation and authorize this entire ID. Omitted for pending issuance, missing/noncanonical retained certificate data or an older saved response; never infer an identity from the subject when absent.",
+            "format": "uri",
+            "type": "string"
+          },
           "subject": {
             "type": "string"
           },
@@ -4808,6 +4818,11 @@
             "type": "string"
           },
           "serial": {
+            "type": "string"
+          },
+          "spiffe_id": {
+            "description": "Exact canonical SPIFFE URI read from this certificate, not the friendly attestation subject. Receiving services must verify the certificate chain, validity and revocation and authorize this entire ID. Omitted for pending issuance, missing/noncanonical retained certificate data or an older saved response; never infer an identity from the subject when absent.",
+            "format": "uri",
             "type": "string"
           },
           "state": {
@@ -12965,6 +12980,11 @@
           },
           "required_approvals": {
             "type": "integer"
+          },
+          "spiffe_id": {
+            "description": "Exact canonical SPIFFE URI read from this certificate, not the friendly attestation subject. Receiving services must verify the certificate chain, validity and revocation and authorize this entire ID. Omitted for pending issuance, missing/noncanonical retained certificate data or an older saved response; never infer an identity from the subject when absent.",
+            "format": "uri",
+            "type": "string"
           },
           "state": {
             "enum": [

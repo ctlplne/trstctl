@@ -58,6 +58,7 @@ func (r *attestedSVIDJSON) wipeSecrets() {
 
 type AttestedSVID struct {
 	CertificatePEM string             `json:"certificate_pem"`
+	SPIFFEID       string             `json:"spiffe_id,omitempty"`
 	CredentialID   string             `json:"credential_id"`
 	Subject        string             `json:"subject"`
 	NotAfter       time.Time          `json:"not_after"`

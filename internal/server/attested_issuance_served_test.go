@@ -373,6 +373,7 @@ func servedAttestedPublicKeyPEM(t *testing.T) string {
 
 type servedAttestedIssueResponse struct {
 	CertificatePEM string    `json:"certificate_pem"`
+	SPIFFEID       string    `json:"spiffe_id"`
 	CredentialID   string    `json:"credential_id"`
 	Subject        string    `json:"subject"`
 	NotAfter       time.Time `json:"not_after"`
@@ -406,6 +407,7 @@ func servedAttestedIssue(t *testing.T, h *servedHarness, token, idemKey, method 
 
 func assertServedAttestedSVID(t *testing.T, h *servedHarness, got servedAttestedIssueResponse, wantURI string) {
 	t.Helper()
+	assertSignedWorkloadIDHandoff(t, got.CertificatePEM, got.SPIFFEID, wantURI)
 	if got.CertificatePEM == "" || got.CredentialID == "" || got.NotAfter.IsZero() {
 		t.Fatalf("attested SVID response missing certificate/id/expiry: %+v", got)
 	}

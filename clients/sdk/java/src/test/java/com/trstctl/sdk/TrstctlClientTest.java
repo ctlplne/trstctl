@@ -7,6 +7,7 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -17,11 +18,54 @@ public final class TrstctlClientTest {
     testIssueAndSecretRoundTripSendsAuthTenantAndIdempotency();
     testProblemErrorParsesRetryAfterAndRetries();
     testRetryPreservesGeneratedMutationIdempotency();
+    testWorkloadHandoffPreservesExactSignedIDAndAbsentLegacyField();
   }
 
   private static void testGeneratedSchemaMetadataIsCommitted() {
     check(!OpenApiSchemas.NAMES.isEmpty(), "OpenApiSchemas names are generated");
     check(OpenApiSchemas.NAMES.contains("Problem"), "OpenApiSchemas includes the Problem schema");
+  }
+
+  private static void testWorkloadHandoffPreservesExactSignedIDAndAbsentLegacyField() throws Exception {
+    String id = "spiffe://served.test/_trstctl/v1/tenant/11111111-1111-4111-8111-111111111111/attested/method/k8s_sat/subject/ns/QA/sa/Web";
+    AtomicReference<Map<String, Object>> response = new AtomicReference<>();
+    AtomicReference<String> method = new AtomicReference<>();
+    AtomicReference<String> path = new AtomicReference<>();
+    AtomicReference<String> key = new AtomicReference<>();
+    AtomicInteger calls = new AtomicInteger();
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext("/", exchange -> {
+      calls.incrementAndGet();
+      method.set(exchange.getRequestMethod());
+      path.set(exchange.getRequestURI().getPath());
+      key.set(exchange.getRequestHeaders().getFirst("Idempotency-Key"));
+      write(exchange, 200, Json.stringify(response.get()));
+    });
+    server.start();
+    try {
+      TrstctlClient client = TrstctlClient.builder().baseUrl("http://127.0.0.1:" + server.getAddress().getPort()).maxAttempts(1).build();
+      for (String[] route : new String[][] {
+          {"POST", "/api/v1/broker/agent-identities"},
+          {"POST", "/api/v1/workloads/attested-issuance"},
+          {"POST", "/api/v1/ephemeral"},
+          {"GET", "/api/v1/broker/agent-identities/certificate-7"},
+          {"GET", "/api/v1/broker/agent-identities"}}) {
+        for (boolean retained : new boolean[] {false, true}) {
+          // Transport fixtures; served tests inspect independently signed leaves.
+          Map<String, Object> row = retained ? Map.of("subject", "friendly-label") : Map.of("subject", "friendly-label", "spiffe_id", id);
+          boolean list = route[0].equals("GET") && route[1].endsWith("agent-identities");
+          response.set(list ? Map.of("items", List.of(row), "next_cursor", "") : row);
+          int before = calls.get();
+          Object got = client.request(route[0], route[1], route[0].equals("POST") ? Map.of() : null, Map.of(), null);
+          check(response.get().equals(got), "signed ID and absent legacy field are unchanged");
+          check(calls.get() == before + 1, "one exact request");
+          check(route[0].equals(method.get()) && route[1].equals(path.get()), "workload route unchanged");
+          check((key.get() != null) == route[0].equals("POST"), "read versus mutation idempotency unchanged");
+        }
+      }
+    } finally {
+      server.stop(0);
+    }
   }
 
   private static void testIssueAndSecretRoundTripSendsAuthTenantAndIdempotency() throws Exception {

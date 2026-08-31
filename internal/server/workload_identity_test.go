@@ -7,11 +7,48 @@ import (
 	"strings"
 	"testing"
 	"testing/quick"
+	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
 )
 
 const workloadIdentityTestTenant = "11111111-1111-4111-8111-111111111111"
+
+func TestCertificateSPIFFEIDHandoffDoesNotRewriteRetainedIdentities(t *testing.T) {
+	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer key.Destroy()
+	ca, err := crypto.SelfSignedCACert(key, "handoff-fixture", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ uri, want string }{
+		{"spiffe://retained.test/Old/Exact_ID", "spiffe://retained.test/Old/Exact_ID"},
+		{"spiffe://retained.test/old%2Fidentity", ""},
+		{"https://retained.test/not-a-workload", ""},
+	} {
+		t.Run(tc.uri, func(t *testing.T) {
+			csr, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{URIs: []string{tc.uri}}, key)
+			if err != nil {
+				t.Fatal(err)
+			}
+			leaf, err := crypto.SignLeafFromCSR(ca, key, csr, time.Minute)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := certificateSPIFFEID(leaf); got != tc.want {
+				t.Fatalf("handoff rewrote historical identity: got %q want %q", got, tc.want)
+			}
+		})
+	}
+	for _, der := range [][]byte{nil, []byte("malformed"), ca} {
+		if certificateSPIFFEID(der) != "" {
+			t.Fatal("invented a signed identity without an unambiguous canonical URI")
+		}
+	}
+}
 
 func testWorkloadIdentityPrefix(domain, surface string) string {
 	prefix := "spiffe://" + domain + "/_trstctl/v1/tenant/" + workloadIdentityTestTenant + "/" + surface

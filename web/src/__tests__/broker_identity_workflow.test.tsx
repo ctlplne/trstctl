@@ -22,6 +22,7 @@ vi.mock("@/auth/AuthProvider", () => ({ useAuth: () => ({ user: { tenant_id: ses
 const issued = {
   certificate_id: brokerHistoryFixture.certificate_id,
   subject: brokerHistoryFixture.certificate_subject,
+  spiffe_id: brokerHistoryFixture.spiffe_id,
   not_after: brokerHistoryFixture.not_after!,
   certificate_pem: "PUBLIC-CERTIFICATE-NOT-FOR-DOM",
   attestation: { claims: { proof: "RAW-PROOF-NOT-FOR-DOM" } },
@@ -60,6 +61,8 @@ describe("durable broker operator workflow", () => {
     const drawer = screen.getByRole("dialog", { name: "Agent certificate record" });
     expect(await within(drawer).findByText("Facts recorded at issuance")).toBeInTheDocument();
     expect(within(drawer).getByText("tool:inventory.read")).toBeInTheDocument();
+    await userEvent.click(within(drawer).getByText("Signed workload ID"));
+    expect(within(drawer).getByText(brokerHistoryFixture.spiffe_id!)).toBeVisible();
     expect(apiMock.brokerAgentIdentity).toHaveBeenCalledWith(brokerHistoryFixture.certificate_id, expect.any(AbortSignal));
     expect(apiMock.issueBrokerAgentIdentity).not.toHaveBeenCalled();
     expect(screen.queryByLabelText("Broker proof payload (base64)")).not.toBeInTheDocument();
@@ -74,6 +77,7 @@ describe("durable broker operator workflow", () => {
     render(<Harness />);
     await enterRequest();
     expect(screen.queryByDisplayValue("cHJvb2Y=")).not.toBeInTheDocument();
+    expect(screen.queryByText("Signed workload ID")).not.toBeInTheDocument();
     expect(apiMock.issueBrokerAgentIdentity).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole("button", { name: "Verify proof and issue" }));
     expect(await screen.findByText(/The response did not confirm the outcome/)).toBeInTheDocument();
@@ -85,9 +89,12 @@ describe("durable broker operator workflow", () => {
     expect(apiMock.issueBrokerAgentIdentity.mock.calls[1]).toEqual(apiMock.issueBrokerAgentIdentity.mock.calls[0]);
     expect(apiMock.issueBrokerAgentIdentity.mock.calls[0][1]).toEqual(expect.any(String));
     expect(screen.queryByText(/PUBLIC-CERTIFICATE-NOT-FOR-DOM|RAW-PROOF-NOT-FOR-DOM/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByText("Signed workload ID"));
+    expect(screen.getByText(issued.spiffe_id!)).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: "Start another request" }));
     expect(screen.getByLabelText("Broker proof payload (base64)")).toHaveValue("");
     expect(screen.getByLabelText("Task envelope (base64, optional)")).toHaveValue("");
+    expect(screen.queryByText(issued.spiffe_id!)).not.toBeInTheDocument();
   });
 
   it("requires an explicit warning acknowledgment before discarding an uncertain retry", async () => {
@@ -129,12 +136,16 @@ describe("durable broker operator workflow", () => {
       ...brokerHistoryFixture,
       metadata_state: "unavailable",
       issuance: undefined,
+      spiffe_id: undefined,
       projection_state: "catching_up",
     });
     render(<Harness entry={`/workloads?broker_id=${brokerHistoryFixture.certificate_id}`} />);
     expect(await screen.findByText(/Original issuance facts are unavailable/)).toBeInTheDocument();
     expect(screen.getByText(/Projection is catching up/)).toBeInTheDocument();
     expect(screen.queryByText("Owner at issuance")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByText("Signed workload ID"));
+    expect(screen.getByText(/does not include a canonical signed ID/)).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Copy Signed workload ID" })).not.toBeInTheDocument();
   });
 
   it("keeps query context across server-side filtering and fails closed on unknown filter states", async () => {
@@ -170,6 +181,7 @@ describe("durable broker operator workflow", () => {
     view.rerender(<Harness />);
     await act(async () => finish(issued));
     expect(screen.queryByText("Certificate issuance recorded")).not.toBeInTheDocument();
+    expect(screen.queryByText(issued.spiffe_id!)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Request agent identity" })).toBeInTheDocument();
   });
 });

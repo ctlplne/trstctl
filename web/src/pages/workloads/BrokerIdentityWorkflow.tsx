@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { CapabilityActionNotice } from "@/components/CapabilityTruth";
 import { CredentialChip } from "@/components/CredentialChip";
+import { WorkloadIdentityHandoff } from "@/components/WorkloadIdentityHandoff";
 import { Dialog } from "@/components/Dialog";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StepShell } from "@/components/wizard/StepShell";
@@ -25,7 +26,7 @@ import { BrokerPlanReview } from "./BrokerPlanReview";
 
 const defaultValues = { agent: "", method: "k8s_sat", scopes: "", ttl: "0", proof: "", publicKey: "", task: "" };
 type FormValues = typeof defaultValues;
-type Receipt = Pick<BrokerAgentIdentity, "certificate_id" | "subject" | "not_after">;
+type Receipt = Pick<BrokerAgentIdentity, "certificate_id" | "subject" | "not_after" | "spiffe_id">;
 
 /** The session key drops both the form and late async results across a tenant
  * or actor change. No proof, task body, key or request is put in a query key,
@@ -166,7 +167,7 @@ function BrokerWorkspace({ scope }: { scope: string }) {
       const result = await api.issueBrokerAgentIdentity(exactCommand.current, retryKey.current);
       if (!alive.current) return;
       certificate.current = result.certificate_pem;
-      setReceipt({ certificate_id: result.certificate_id, subject: result.subject, not_after: result.not_after });
+      setReceipt({ certificate_id: result.certificate_id, subject: result.subject, not_after: result.not_after, spiffe_id: result.spiffe_id });
       exactCommand.current = null;
       retryKey.current = null;
       setRecoveryLabel(null);
@@ -338,6 +339,7 @@ function BrokerWorkspace({ scope }: { scope: string }) {
                   </div>
                 </dl>
                 <CredentialChip value={receipt.certificate_id} label={t("broker.certificateID")} />
+                <WorkloadIdentityHandoff spiffeID={receipt.spiffe_id} />
                 {error ? <p role="alert">{error}</p> : null}
                 <div className="flex flex-wrap gap-2">
                   <Button type="button" variant="outline" onClick={() => void copyCertificate()}>

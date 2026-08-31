@@ -54,6 +54,37 @@ function problem(status, body, headers = {}) {
   });
 }
 
+test("workload handoff preserves exact signed IDs and absent legacy fields", async () => {
+  const { TrstctlClient } = await loadSdk();
+  const id = "spiffe://served.test/_trstctl/v1/tenant/11111111-1111-4111-8111-111111111111/attested/method/k8s_sat/subject/ns/QA/sa/Web";
+  for (const [method, route, list] of [
+    ["POST", "/api/v1/broker/agent-identities", false],
+    ["POST", "/api/v1/workloads/attested-issuance", false],
+    ["POST", "/api/v1/ephemeral", false],
+    ["GET", "/api/v1/broker/agent-identities/certificate-7", false],
+    ["GET", "/api/v1/broker/agent-identities", true],
+  ]) {
+    for (const retained of [false, true]) {
+      // Transport fixture only; served tests independently inspect real leaves.
+      const row = { subject: "friendly-label", ...(retained ? {} : { spiffe_id: id }) };
+      const body = list ? { items: [row], next_cursor: "" } : row;
+      let calls = 0;
+      const client = new TrstctlClient({
+        baseUrl: "https://served.test", token: "fixture-token", retry: { maxAttempts: 1 },
+        fetch: async (url, init) => {
+          calls++;
+          assert.equal(new URL(url).pathname, route);
+          assert.equal(init.method, method);
+          assert.equal(Boolean(init.headers["Idempotency-Key"]), method === "POST");
+          return json(200, body);
+        },
+      });
+      assert.deepEqual(await client.request(route, { method, ...(method === "POST" ? { body: {} } : {}) }), body);
+      assert.equal(calls, 1);
+    }
+  }
+});
+
 test("auth, tenant, idempotency, and core resources use the served paths", async () => {
   const { TrstctlClient } = await loadSdk();
   const calls = [];

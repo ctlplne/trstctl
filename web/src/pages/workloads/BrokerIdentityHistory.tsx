@@ -1,6 +1,7 @@
 import { useSearchParams, Link } from "react-router-dom";
 import { CapabilityActionNotice } from "@/components/CapabilityTruth";
 import { CredentialChip } from "@/components/CredentialChip";
+import { WorkloadIdentityHandoff } from "@/components/WorkloadIdentityHandoff";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DetailDrawer } from "@/components/DetailDrawer";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
@@ -240,6 +241,7 @@ export function BrokerIdentityHistory({ scope }: { scope: string }) {
             ) : (
               <p className="border-s-2 border-status-warning ps-3 text-sm">{t("broker.metadataMissingBody")}</p>
             )}
+            <WorkloadIdentityHandoff key={row.certificate_id} spiffeID={row.spiffe_id} />
             <details>
               <summary className="cursor-pointer text-sm font-medium">{t("workloads.attested.exactEvidence")}</summary>
               <dl className="mt-3 grid gap-3">

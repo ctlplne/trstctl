@@ -13,6 +13,7 @@ class Handler(BaseHTTPRequestHandler):
     calls: list[dict[str, Any]] = []
     secret_value = "initial-fixture-value"
     version = 1
+    workload_response: dict[str, Any] = {}
 
     def log_message(self, fmt: str, *args: Any) -> None:
         return
@@ -58,6 +59,9 @@ class Handler(BaseHTTPRequestHandler):
         if not self._authorized():
             self._send(401, {"title": "unauthorized"})
             return
+        if self.path in ("/api/v1/broker/agent-identities", "/api/v1/broker/agent-identities/certificate-7"):
+            self._send(200, Handler.workload_response)
+            return
         if self.path == "/api/v1/secrets/store":
             self._send(200, {"items": [{"name": "sdk/python/password", "version": Handler.version}]})
             return
@@ -71,6 +75,9 @@ class Handler(BaseHTTPRequestHandler):
         self._capture(body)
         if not self._authorized():
             self._send(401, {"title": "unauthorized"})
+            return
+        if self.path in ("/api/v1/broker/agent-identities", "/api/v1/workloads/attested-issuance", "/api/v1/ephemeral"):
+            self._send(201, Handler.workload_response)
             return
         if self.path == "/api/v1/secrets/pki":
             self._send(201, {"serial": "01", "common_name": body["common_name"], "certificate": "-----BEGIN CERTIFICATE-----", "private_key": "-----BEGIN PRIVATE KEY-----"})
@@ -144,6 +151,30 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(raised.exception.http_status, 429)
         self.assertEqual(raised.exception.title, "rate limited")
         self.assertEqual(raised.exception.retry_after_seconds, 7)
+
+    def test_workload_handoff_preserves_exact_signed_id_and_absent_legacy_field(self) -> None:
+        identity = "spiffe://served.test/_trstctl/v1/tenant/11111111-1111-4111-8111-111111111111/attested/method/k8s_sat/subject/ns/QA/sa/Web"
+        client = TrstctlClient(base_url=self.base_url, token="test-token", retry={"max_attempts": 1})
+        for method, path, is_list in (
+            ("POST", "/api/v1/broker/agent-identities", False),
+            ("POST", "/api/v1/workloads/attested-issuance", False),
+            ("POST", "/api/v1/ephemeral", False),
+            ("GET", "/api/v1/broker/agent-identities/certificate-7", False),
+            ("GET", "/api/v1/broker/agent-identities", True),
+        ):
+            for retained in (False, True):
+                with self.subTest(method=method, path=path, retained=retained):
+                    # Transport fixture only, not an attestation/signing proof.
+                    row = {"subject": "friendly-label"}
+                    if not retained:
+                        row["spiffe_id"] = identity
+                    Handler.workload_response = {"items": [row], "next_cursor": ""} if is_list else row
+                    before = len(Handler.calls)
+                    got = client.request(method, path, body={} if method == "POST" else None)
+                    self.assertEqual(got, Handler.workload_response)
+                    self.assertEqual(len(Handler.calls), before + 1)
+                    self.assertEqual(Handler.calls[-1]["path"], path)
+                    self.assertEqual(bool(Handler.calls[-1]["idempotency"]), method == "POST")
 
 
 if __name__ == "__main__":

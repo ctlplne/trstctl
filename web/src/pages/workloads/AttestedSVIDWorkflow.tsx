@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import { CheckCircle2, Clipboard, RotateCcw, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { CapabilityActionNotice } from "@/components/CapabilityTruth";
+import { WorkloadIdentityHandoff } from "@/components/WorkloadIdentityHandoff";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -25,7 +26,7 @@ const methods: Array<{ value: AttestedSVIDRequest["method"]; labelKey: MessageKe
   { value: "tpm", labelKey: "workloads.attestation.methodTpmQuote" },
 ];
 
-type ResultMetadata = Pick<AttestedSVID, "credential_id" | "subject" | "not_after">;
+type ResultMetadata = Pick<AttestedSVID, "credential_id" | "subject" | "not_after" | "spiffe_id">;
 
 export function AttestedSVIDWorkflow({
   onIssued,
@@ -108,7 +109,7 @@ export function AttestedSVIDWorkflow({
       const value = await api.issueAttestedSVID(request, retryKey.current);
       onIssued(value);
       certificate.current = value.certificate_pem;
-      setResult({ credential_id: value.credential_id, subject: value.subject, not_after: value.not_after });
+      setResult({ credential_id: value.credential_id, subject: value.subject, not_after: value.not_after, spiffe_id: value.spiffe_id });
       setPayload("");
       setPublicKey("");
       // The exact request key contains proof bytes. Drop the reviewed request
@@ -267,6 +268,7 @@ export function AttestedSVIDWorkflow({
               <Fact label={t("workloads.attested.subject")} value={result.subject} />
             </dl>
             <p className="text-sm text-muted-foreground">{t("workloads.ephemeral.noPrivateKey")}</p>
+            <WorkloadIdentityHandoff spiffeID={result.spiffe_id} />
             {issueError ? (
               <p role="alert" className="text-sm text-muted-foreground">
                 {issueError}

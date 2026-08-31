@@ -1374,8 +1374,12 @@ describe("i18n boundary", () => {
       // unknown history/freshness, same-key retries and new-request warning;
       // removed eight obsolete session-only broker messages from every locale.
       // Machine-authored es/de translations require human review before release.
-      "es-ES": "a6908f6f960e05b356c580e1b39d9aa604e1dcf279f06287f3dcf44847fe8b1b",
-      "de-DE": "792344f8e5c77b88e1ddf7fa79c35fe0461c1b7de720c8a85248c7abd1b32122",
+      // G111 signed-ID handoff: reviewed exact whole-ID authorization, missing
+      // legacy evidence, explicit trust cutover, unknown issuance and clipboard
+      // failure copy in both catalogs. Machine-authored es/de — FLAGGED FOR
+      // HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "c68045f8515e70b84fcf0ab2efc266d07fcdc557345d72cc5c23ad2c72b15532",
+      "de-DE": "ed5c4a7b042dfafb888fb05f1830c66fc9e94e91807e7192dee75ab173515409",
     });
   });
 

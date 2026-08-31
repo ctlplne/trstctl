@@ -293,6 +293,7 @@ const deDECatalog = {
   "shell.accountMenu": "Konto und Einstellungen",
   "credentialChip.copy": "{label} kopieren",
   "credentialChip.copied": "In die Zwischenablage kopiert",
+  "credentialChip.copyFailed": "Kopieren fehlgeschlagen. Markieren Sie den hier vollständig angezeigten Wert und kopieren Sie ihn manuell.",
   "graph.view.zoomIn": "Vergrößern",
   "graph.view.zoomOut": "Verkleinern",
   "graph.view.resetView": "Ansicht zurücksetzen",
@@ -7853,6 +7854,16 @@ const deDECatalog = {
   "workloads.ephemeral.copied": "Zertifikat kopiert",
   "workloads.ephemeral.copyCertificate": "Zertifikat kopieren",
   "workloads.ephemeral.noPrivateKey": "Nur das öffentliche Zertifikat wird zurückgegeben. Der private Schlüssel gelangt nie zu trstctl oder auf diese Seite.",
+  "workloads.ephemeral.unknownTitle": "Das Ausstellungsergebnis ist unbestätigt",
+  "workloads.ephemeral.unknownBody":
+    "Der Server hat einen Status zurückgegeben, den diese Konsole nicht interpretieren kann. Prüfen Sie die Anfrage vor einem erneuten Versuch im Auditprotokoll. Hier wird weder ein Zertifikat noch eine Identität bestätigt.",
+  "workloads.signedIdentity.title": "Signierte Workload-ID",
+  "workloads.signedIdentity.instructions":
+    "Dies ist die vollständige SPIFFE-ID aus dem Zertifikat. Der empfangende Dienst muss Zertifikatskette, Gültigkeitsdaten und Widerrufsstatus prüfen und anschließend diese gesamte ID autorisieren. Allein das Vertrauen in die CA autorisiert diesen Workload nicht.",
+  "workloads.signedIdentity.unavailable":
+    "Diese Antwort enthält keine kanonische signierte ID. In älteren gespeicherten Antworten oder bei fehlenden Zertifikatsdaten kann sie fehlen. Prüfen Sie das Zertifikat, bevor Sie Zugriff gewähren; ersetzen Sie die ID nicht durch den oben angezeigten beschreibenden Betreff.",
+  "workloads.signedIdentity.cutover":
+    "Prüfen Sie vor dem Ersetzen eines Zugangsnachweises die Zugriffsregeln für exakte IDs des empfangenden Dienstes. Diese Seite ändert weder diese Regeln noch Ihre vertrauenswürdige CA.",
   "workloads.ephemeral.startAnother": "Weitere Anforderung starten",
   "workloads.ephemeral.recovery": "Sichere Wiederholung und Wiederherstellung",
   "identities.automation.eyebrow": "Kontinuierlicher Schutz",

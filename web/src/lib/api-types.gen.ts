@@ -898,6 +898,7 @@ export interface AttestedSVID {
   certificate_pem: string;
   credential_id: string;
   not_after: string;
+  spiffe_id?: string;
   subject: string;
 }
 
@@ -1170,6 +1171,7 @@ export interface BrokerAgentIdentity {
   node_id: string;
   not_after: string;
   scopes: string[];
+  spiffe_id?: string;
   subject: string;
   task_envelope_digest?: string;
 }
@@ -1188,6 +1190,7 @@ export interface BrokerAgentIdentityHistory {
   projection_state: "current" | "catching_up" | "blocked" | "unknown";
   recorded_at: string;
   serial: string;
+  spiffe_id?: string;
   state: "valid" | "not_yet_valid" | "expired" | "revoked" | "superseded" | "unknown";
   state_reason: string;
 }
@@ -3184,6 +3187,7 @@ export interface EphemeralCredential {
   not_after?: string;
   request_id: string;
   required_approvals: number;
+  spiffe_id?: string;
   state: "awaiting_approval" | "issued";
   subject: string;
 }

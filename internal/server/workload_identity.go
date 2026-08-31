@@ -85,3 +85,16 @@ func workloadIdentitySegment(segment string) (string, error) {
 func ephemeralSPIFFEID(trustDomain, tenantID, method, subject string) (string, error) {
 	return workloadSPIFFEID(trustDomain, workloadIdentityScope{TenantID: tenantID, Method: method, Kind: "ephemeral"}, subject)
 }
+
+// certificateSPIFFEID is presentation metadata, not an authorization decision.
+// Read the actual leaf; never rebuild its identity from today's tenant, method
+// or friendly subject. Older retained credentials can have noncanonical URI
+// syntax. Keep their exact recovery behavior and leave this optional field
+// unavailable instead of inventing an alias or relaxing the strict parser.
+func certificateSPIFFEID(der []byte) string {
+	id, err := crypto.SPIFFEIDFromCert(der)
+	if err != nil {
+		return ""
+	}
+	return id
+}

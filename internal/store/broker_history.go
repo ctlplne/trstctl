@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // BrokerCertificateStates is the canonical operator-state vocabulary. SQL derives
@@ -37,6 +39,7 @@ type BrokerCertificate struct {
 	CertificateID      string
 	Fingerprint        string
 	CertificateSubject string
+	SPIFFEID           string
 	Serial             string
 	CurrentOwnerID     *string
 	NotBefore          *time.Time
@@ -57,11 +60,24 @@ type BrokerHistoryFilter struct {
 }
 
 const brokerHistoryColumns = `id::text, fingerprint, subject, serial, owner_id::text,
-	not_before, not_after, created_at, status, broker_issuance`
+	not_before, not_after, created_at, status, broker_issuance, certificate_der`
 
 func scanBrokerCertificate(row pgx.Row, item *BrokerCertificate) error {
-	return row.Scan(&item.CertificateID, &item.Fingerprint, &item.CertificateSubject, &item.Serial,
-		&item.CurrentOwnerID, &item.NotBefore, &item.NotAfter, &item.RecordedAt, &item.Status, &item.Issuance, &item.State)
+	var certificateDER []byte
+	if err := row.Scan(&item.CertificateID, &item.Fingerprint, &item.CertificateSubject, &item.Serial,
+		&item.CurrentOwnerID, &item.NotBefore, &item.NotAfter, &item.RecordedAt, &item.Status, &item.Issuance, &certificateDER, &item.State); err != nil {
+		return err
+	}
+	item.SPIFFEID = ""
+	// Extract from the exact fingerprint-bound public leaf, not its friendly
+	// subject or mutable owner. Retained/erased/noncanonical history stays
+	// readable without inventing a replacement identity. Do not return DER.
+	if len(certificateDER) > 0 && crypto.SHA256Hex(certificateDER) == item.Fingerprint {
+		if id, err := crypto.SPIFFEIDFromCert(certificateDER); err == nil {
+			item.SPIFFEID = id
+		}
+	}
+	return nil
 }
 
 // ListBrokerCertificatesPage uses a newest-first (recorded time, id) keyset, not

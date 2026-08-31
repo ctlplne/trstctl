@@ -3704,8 +3704,10 @@ func componentSchemas() map[string]*Schema {
 		"public_key_pem": str(),
 		"ttl_seconds":    {Type: "integer"},
 	}, "method", "payload_base64", "public_key_pem")
+	certificateSPIFFEID := &Schema{Type: "string", Format: "uri", Description: "Exact canonical SPIFFE URI read from this certificate, not the friendly attestation subject. Receiving services must verify the certificate chain, validity and revocation and authorize this entire ID. Omitted for pending issuance, missing/noncanonical retained certificate data or an older saved response; never infer an identity from the subject when absent."}
 	attestedSVID := object(map[string]*Schema{
 		"certificate_pem": str(),
+		"spiffe_id":       certificateSPIFFEID,
 		"credential_id":   str(),
 		"subject":         str(),
 		"not_after":       timestamp(),
@@ -3990,6 +3992,7 @@ func componentSchemas() map[string]*Schema {
 	brokerProjectionState := &Schema{Type: "string", Enum: []string{"current", "catching_up", "blocked", "unknown"}, Description: "Coarse projection freshness; no cross-tenant counts or error details are disclosed."}
 	brokerIdentityHistory := object(map[string]*Schema{
 		"certificate_id": uuid(), "fingerprint": str(), "certificate_subject": str(), "serial": str(), "current_owner_id": uuid(),
+		"spiffe_id":  certificateSPIFFEID,
 		"not_before": timestamp(), "not_after": timestamp(), "recorded_at": timestamp(), "lifecycle_status": str(),
 		"state": {Type: "string", Enum: store.BrokerCertificateStates()}, "state_reason": str(),
 		"metadata_state": {Type: "string", Enum: []string{"recorded", "unavailable"}, Description: "Unavailable means original facts were not recorded or were removed by privacy policy; never inferred from a current request or owner."},
@@ -4006,6 +4009,7 @@ func componentSchemas() map[string]*Schema {
 		"credential_id":   str(),
 		"certificate_id":  uuid(),
 		"certificate_pem": str(),
+		"spiffe_id":       certificateSPIFFEID,
 		"scopes":          {Type: "array", Items: str()},
 		"not_after":       timestamp(),
 		"attestation":     ref("Attestation"),
@@ -4072,6 +4076,7 @@ func componentSchemas() map[string]*Schema {
 		"credential_id":       str(),
 		"certificate_id":      uuid(),
 		"certificate_pem":     str(),
+		"spiffe_id":           certificateSPIFFEID,
 		"required_approvals":  {Type: "integer"},
 		"approvals":           {Type: "integer"},
 		"expires_at":          timestamp(),

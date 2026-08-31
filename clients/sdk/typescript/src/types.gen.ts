@@ -6988,6 +6988,11 @@ export interface components {
             credential_id: string;
             /** Format: date-time */
             not_after: string;
+            /**
+             * Format: uri
+             * @description Exact canonical SPIFFE URI read from this certificate, not the friendly attestation subject. Receiving services must verify the certificate chain, validity and revocation and authorize this entire ID. Omitted for pending issuance, missing/noncanonical retained certificate data or an older saved response; never infer an identity from the subject when absent.
+             */
+            spiffe_id?: string;
             subject: string;
         };
         AttestedSVIDPreview: {
@@ -7277,6 +7282,11 @@ export interface components {
             /** Format: date-time */
             not_after: string;
             scopes: string[];
+            /**
+             * Format: uri
+             * @description Exact canonical SPIFFE URI read from this certificate, not the friendly attestation subject. Receiving services must verify the certificate chain, validity and revocation and authorize this entire ID. Omitted for pending issuance, missing/noncanonical retained certificate data or an older saved response; never infer an identity from the subject when absent.
+             */
+            spiffe_id?: string;
             subject: string;
             task_envelope_digest?: string;
         };
@@ -7308,6 +7318,11 @@ export interface components {
             /** Format: date-time */
             recorded_at: string;
             serial: string;
+            /**
+             * Format: uri
+             * @description Exact canonical SPIFFE URI read from this certificate, not the friendly attestation subject. Receiving services must verify the certificate chain, validity and revocation and authorize this entire ID. Omitted for pending issuance, missing/noncanonical retained certificate data or an older saved response; never infer an identity from the subject when absent.
+             */
+            spiffe_id?: string;
             /** @enum {string} */
             state: "valid" | "not_yet_valid" | "expired" | "revoked" | "superseded" | "unknown";
             state_reason: string;
@@ -9402,6 +9417,11 @@ export interface components {
             not_after?: string;
             request_id: string;
             required_approvals: number;
+            /**
+             * Format: uri
+             * @description Exact canonical SPIFFE URI read from this certificate, not the friendly attestation subject. Receiving services must verify the certificate chain, validity and revocation and authorize this entire ID. Omitted for pending issuance, missing/noncanonical retained certificate data or an older saved response; never infer an identity from the subject when absent.
+             */
+            spiffe_id?: string;
             /** @enum {string} */
             state: "awaiting_approval" | "issued";
             subject: string;

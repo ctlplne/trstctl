@@ -286,6 +286,7 @@ const esESCatalog = {
   "shell.accountMenu": "Cuenta y preferencias",
   "credentialChip.copy": "Copiar {label}",
   "credentialChip.copied": "Copiado al portapapeles",
+  "credentialChip.copyFailed": "No se pudo copiar. Seleccione el valor completo que se muestra aquí y cópielo manualmente.",
   "graph.view.zoomIn": "Acercar",
   "graph.view.zoomOut": "Alejar",
   "graph.view.resetView": "Restablecer vista",
@@ -7801,6 +7802,16 @@ const esESCatalog = {
   "workloads.ephemeral.copied": "Certificado copiado",
   "workloads.ephemeral.copyCertificate": "Copiar certificado",
   "workloads.ephemeral.noPrivateKey": "Solo se devuelve el certificado público. La clave privada nunca entra en trstctl ni en esta página.",
+  "workloads.ephemeral.unknownTitle": "El resultado de la emisión no está confirmado",
+  "workloads.ephemeral.unknownBody":
+    "El servidor devolvió un estado que esta consola no puede interpretar. Compruebe la solicitud en el registro de auditoría antes de reintentar. Aquí no se confirma ningún certificado ni identidad.",
+  "workloads.signedIdentity.title": "ID firmado de la carga de trabajo",
+  "workloads.signedIdentity.instructions":
+    "Este es el ID SPIFFE completo leído del certificado. El servicio receptor debe verificar la cadena de certificados, las fechas de validez y el estado de revocación, y después autorizar este ID completo. Confiar solo en la CA no autoriza esta carga de trabajo.",
+  "workloads.signedIdentity.unavailable":
+    "Esta respuesta no incluye un ID firmado canónico. Las respuestas guardadas antiguas o la falta de datos del certificado pueden omitirlo. Inspeccione el certificado antes de conceder acceso; no sustituya el ID por el sujeto descriptivo mostrado arriba.",
+  "workloads.signedIdentity.cutover":
+    "Antes de reemplazar una credencial, revise las reglas de acceso por ID exacto del servicio receptor. Esta página no cambia esas reglas ni su CA de confianza.",
   "workloads.ephemeral.startAnother": "Iniciar otra solicitud",
   "workloads.ephemeral.recovery": "Reintento y recuperación seguros",
   "identities.automation.eyebrow": "Protección continua",
