@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"strings"
 
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/store"
 )
 
 type bulkRevokeRequest struct {
@@ -40,14 +42,33 @@ func (a *API) bulkRevoke(w http.ResponseWriter, r *http.Request) {
 		if !crypto.IsValidRevocationReason(reason) {
 			return 0, nil, errStatus(http.StatusBadRequest, "invalid revocation reason: use an RFC 5280 reason such as keyCompromise or unspecified")
 		}
-		result, err := a.orch.BulkRevoke(ctx, tenantID, orchestrator.BulkRevokeRequest{
+		principal, _ := r.Context().Value(principalCtxKey).(authz.Principal)
+		result, err := a.orch.BulkRevokeAuthorized(ctx, tenantID, orchestrator.BulkRevokeRequest{
 			IDs:      bulkRevokeIDs(req),
 			OwnerID:  strings.TrimSpace(req.OwnerID),
 			IssuerID: strings.TrimSpace(req.IssuerID),
 			Kind:     strings.TrimSpace(req.Kind),
 			Status:   strings.TrimSpace(req.Status),
 			Reason:   reason,
+		}, func(ctx context.Context, identity store.Identity) error {
+			var resourceAttrs map[string]string
+			if a.gate.ABAC != nil {
+				var err error
+				resourceAttrs, err = a.identityABACResourceAttrs(ctx, tenantID, identity.ID)
+				if err != nil {
+					return err
+				}
+				resourceAttrs["transition.to"] = string(orchestrator.StateRevoked)
+			}
+			// Bulk input carries no exact per-target approval authority. The gate
+			// must therefore refuse when dual control is required; it must never
+			// turn a standing approval boolean into reusable revocation authority.
+			return a.gate.check(ctx, principal, tenantID, identity.ID, orchestrator.StateRevoked, resourceAttrs)
 		})
+		var gateErr *gateError
+		if errors.As(err, &gateErr) {
+			return 0, nil, errStatus(gateErr.status, gateErr.detail)
+		}
 		if errors.Is(err, orchestrator.ErrBulkRevokeEmptyCriteria) {
 			return 0, nil, errStatus(http.StatusBadRequest, "at least one identity id or criterion is required")
 		}

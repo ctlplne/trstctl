@@ -404,6 +404,14 @@ Modified` so relying parties don't refetch an unchanged CRL. `GET
 /api/v1/revocation/crls` / `trstctl-cli revocation crls` and the Certificates console
 expose the same distribution state (full CRL, shards, delta base, freshness window).
 
+Bulk identity revocation requires both `identities:write` and the privileged
+`certs:issue` authority. Every selected identity must pass the lifecycle policy and
+attribute-based restrictions before any selected identity is changed. A denial is
+not partial success: no revocation intent is queued for the selected batch.
+When dual control is required, the bulk request cannot supply the exact one-use
+approval for each identity and is refused. Use the individual reviewed revocation
+workflow below; a standing approval does not authorize a bulk action.
+
 For one managed certificate, **Certificates → CRL & CT → Revocation center** is the
 safe operator path. It is a three-step journey: choose the X.509 identity and factual
 RFC 5280 reason; fetch an effect-free server preview; then type the exact credential

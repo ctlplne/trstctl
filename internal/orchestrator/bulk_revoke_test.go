@@ -4,6 +4,7 @@ package orchestrator_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/google/uuid"
@@ -12,6 +13,43 @@ import (
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
+
+func TestBulkRevokeAuthorizesWholeSelectionBeforeAnyMutation(t *testing.T) {
+	st := newStore(t)
+	log := openLog(t)
+	orch := orchestrator.NewOrchestrator(log, st, orchestrator.NewOutbox(st))
+	ctx := context.Background()
+	mustRegisterTenant(t, st, tenantA)
+	owner, err := orch.CreateOwner(ctx, tenantA, "team", "bulk-gate", "lab@example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := issuedIdentity(t, ctx, st, orch, tenantA, owner.ID, "allowed.example.test")
+	second := issuedIdentity(t, ctx, st, orch, tenantA, owner.ID, "denied.example.test")
+	denied := errors.New("the second target is not authorized")
+	checks := 0
+	_, err = orch.BulkRevokeAuthorized(ctx, tenantA, orchestrator.BulkRevokeRequest{
+		IDs: []string{first.ID, second.ID}, Reason: "keyCompromise",
+	}, func(_ context.Context, identity store.Identity) error {
+		checks++
+		if identity.ID == second.ID {
+			return denied
+		}
+		return nil
+	})
+	if !errors.Is(err, denied) || checks != 2 {
+		t.Fatalf("preflight did not inspect both exact targets: checks=%d error=%v", checks, err)
+	}
+	for _, id := range []string{first.ID, second.ID} {
+		identity, err := st.GetIdentity(ctx, tenantA, id)
+		if err != nil || identity.Status != string(orchestrator.StateIssued) {
+			t.Fatalf("authorization denial mutated %s: status=%s error=%v", id, identity.Status, err)
+		}
+	}
+	if got := countOutboxDestination(t, st, tenantA, "revocation.publish"); got != 0 {
+		t.Fatalf("authorization denial left %d revocation outbox intents", got)
+	}
+}
 
 func TestBulkRevokeMixedSetIsIdempotentAndTenantScoped(t *testing.T) {
 	st := newStore(t)

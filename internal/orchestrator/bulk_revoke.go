@@ -45,6 +45,21 @@ type BulkRevokeItem struct {
 // item is the normal lifecycle transition, so it appends the existing immutable
 // event and enqueues the existing revocation outbox intent (AN-2/AN-6).
 func (o *Orchestrator) BulkRevoke(ctx context.Context, tenantID string, req BulkRevokeRequest) (BulkRevokeResult, error) {
+	return o.bulkRevoke(ctx, tenantID, req, nil)
+}
+
+// BulkRevokeAuthorized checks every resolved target before changing any target.
+// The API supplies its same privileged-scope, policy and approval gate used by
+// individual revocation. A denied member must not leave earlier members revoked.
+// Internal callers may use BulkRevoke after applying their own command authority.
+func (o *Orchestrator) BulkRevokeAuthorized(ctx context.Context, tenantID string, req BulkRevokeRequest, authorize func(context.Context, store.Identity) error) (BulkRevokeResult, error) {
+	if authorize == nil {
+		return BulkRevokeResult{}, errors.New("orchestrator: bulk revocation authorization is required")
+	}
+	return o.bulkRevoke(ctx, tenantID, req, authorize)
+}
+
+func (o *Orchestrator) bulkRevoke(ctx context.Context, tenantID string, req BulkRevokeRequest, authorize func(context.Context, store.Identity) error) (BulkRevokeResult, error) {
 	if !req.hasSelectors() {
 		return BulkRevokeResult{}, ErrBulkRevokeEmptyCriteria
 	}
@@ -58,6 +73,13 @@ func (o *Orchestrator) BulkRevoke(ctx context.Context, tenantID string, req Bulk
 	idents, result, err := o.resolveBulkRevokeIdentities(ctx, tenantID, req)
 	if err != nil {
 		return BulkRevokeResult{}, err
+	}
+	if authorize != nil {
+		for _, ident := range idents {
+			if err := authorize(ctx, ident); err != nil {
+				return BulkRevokeResult{}, err
+			}
+		}
 	}
 	for _, ident := range idents {
 		result.TotalMatched++
