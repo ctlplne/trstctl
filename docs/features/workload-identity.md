@@ -93,6 +93,50 @@ refused. There is no implicit clock-skew allowance: keep the issuer and trstctl
 clocks synchronized. Legacy non-expiring Kubernetes tokens are not supported by
 this projected-token proof path. These are proof checks, not certificate renewal.
 
+#### Exact identity names and upgrade safety
+
+A SPIFFE name is an authorization input, not a display label. trstctl now requires
+canonical lowercase `spiffe://` and trust-domain text, preserves path case, and
+rejects ports, queries, fragments, percent escapes and empty or relative path
+segments. Its limits are 255 bytes for the trust domain and 2,048 bytes for the
+complete identity. The signer and certificate identity reader use the same grammar;
+the reader also refuses a certificate with more than one URI SAN. This is strict
+canonical-input behavior, not automatic normalization of URI aliases. See the
+[SPIFFE identity specification](https://github.com/spiffe/spiffe/blob/main/standards/SPIFFE-ID.md).
+
+Attested and ephemeral issuance preserve valid subject path segments. Brokered
+issuance adds the reserved `/agent/` namespace. A subject segment containing
+punctuation outside the SPIFFE alphabet is encoded as `trstctl-hex-` followed by
+lowercase hexadecimal bytes. Literal segments already starting with `trstctl-hex-`
+are encoded too, so a workload cannot choose an encoded-looking subject to take
+another workload's name. For non-broker issuance, an initial `agent` segment is
+also encoded, keeping the automatic naming routes separate. Empty, `.` and `..`
+segments are rejected rather than stripped or cleaned.
+
+| Verified subject | Attested / ephemeral path | Broker path |
+| --- | --- | --- |
+| `ns/qa/sa/web` | `/ns/qa/sa/web` | `/agent/ns/qa/sa/web` |
+| `a:b` | `/trstctl-hex-613a62` | `/agent/trstctl-hex-613a62` |
+| `agent/worker` | `/trstctl-hex-6167656e74/worker` | `/agent/agent/worker` |
+
+The verified original subject stays unchanged in responses, audit and durable
+history; encoding is not encryption. Never put secrets in an identity subject.
+These names do not add permissions or replace tenant-scoped attestor trust and
+broker policy. Operators must still allocate non-overlapping identities across
+trusted proof issuers and manually registered Workload API entries.
+
+**Upgrading an exact-name consumer:** earlier broker certificates could contain
+`ns%2Fqa%2Fsa%2Fweb`; standard SPIFFE clients reject that name. Punctuation-bearing
+subjects and the reserved-prefix cases also change under the corrected mapping.
+Inspect existing pins before rollout. Issue a new credential with a new issuance
+idempotency key, verify its chain and exact URI using the intended consumer, and
+replace the old exact-name pin deliberately. Do not wildcard the path, disable
+verification or alias the old identity automatically. Existing history and old
+certificate bytes are not rewritten; retrying an old command recovers its old
+result, not a renamed credential. Rotate or revoke the old certificate and prove
+the new connection before retiring the old deployment. No automatic relying-party
+policy migration is performed.
+
 The lifetime uses the server default for a nonpositive value and is capped at the
 server maximum before conversion to a Go duration, including very large integer
 inputs. The console accepts nonnegative whole seconds and shows any adjustment.

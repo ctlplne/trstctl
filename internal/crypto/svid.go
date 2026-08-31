@@ -7,8 +7,13 @@ import (
 	"crypto/x509"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 )
+
+// MaxSPIFFEIDLength is our wire-size limit, including scheme, trust domain and
+// path. SPIFFE requires support through 2048 bytes and discourages longer IDs.
+const MaxSPIFFEIDLength = 2048
 
 // SignSVID issues an X.509-SVID (SPIFFE) leaf certificate: its only SAN is the
 // SPIFFE ID URI, and it carries the key usage SPIFFE requires (digitalSignature
@@ -87,27 +92,67 @@ func SPIFFEIDFromCert(certDER []byte) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("crypto: parse SVID: %w", err)
 	}
-	for _, u := range c.URIs {
-		if u.Scheme == "spiffe" {
-			return u.String(), nil
-		}
+	if len(c.URIs) != 1 {
+		return "", fmt.Errorf("crypto: SVID certificate must contain exactly one URI SAN")
 	}
-	return "", fmt.Errorf("crypto: no SPIFFE ID URI SAN in certificate")
+	id, err := ParseSPIFFEID(c.URIs[0].String())
+	if err != nil {
+		return "", err
+	}
+	return id.String(), nil
 }
 
-// ParseSPIFFEID validates a SPIFFE ID (spiffe://<trust-domain>/<path>) and
-// returns it as a *url.URL. A SPIFFE ID with no scheme, no trust domain, a
-// query, or a fragment is rejected per the SPIFFE specification.
+// ParseSPIFFEID accepts canonical SPIFFE wire identities. The scheme and trust
+// domain must already be lowercase; the path keeps its case. We do not decode,
+// trim, normalize or clean an identity used in exact authorization comparisons.
+// The byte grammar rejects percent escapes, ports, queries (even empty ones),
+// fragments, userinfo and empty/relative path segments before URL construction.
+// This intentionally requires canonical input, like the stock go-spiffe parser,
+// rather than accepting alternative casing permitted by generic URI parsing.
 func ParseSPIFFEID(id string) (*url.URL, error) {
-	u, err := url.Parse(id)
-	if err != nil {
-		return nil, fmt.Errorf("crypto: invalid SPIFFE ID %q: %w", id, err)
+	if len(id) > MaxSPIFFEIDLength {
+		return nil, fmt.Errorf("crypto: SPIFFE ID exceeds %d bytes", MaxSPIFFEIDLength)
 	}
-	if u.Scheme != "spiffe" || u.Host == "" {
-		return nil, fmt.Errorf("crypto: invalid SPIFFE ID %q: want spiffe://trust-domain/path", id)
+	rest, ok := strings.CutPrefix(id, "spiffe://")
+	if !ok {
+		return nil, fmt.Errorf("crypto: SPIFFE ID requires the canonical spiffe:// scheme")
 	}
-	if u.RawQuery != "" || u.Fragment != "" || u.User != nil {
-		return nil, fmt.Errorf("crypto: SPIFFE ID %q must not carry query, fragment, or userinfo", id)
+	domain, suffix, hasPath := strings.Cut(rest, "/")
+	if len(domain) == 0 || len(domain) > 255 {
+		return nil, fmt.Errorf("crypto: SPIFFE trust domain must contain 1–255 bytes")
 	}
-	return u, nil
+	for i := range len(domain) {
+		c := domain[i]
+		if c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '.' || c == '-' || c == '_' {
+			continue
+		}
+		return nil, fmt.Errorf("crypto: SPIFFE trust domain requires lowercase letters, digits, dots, dashes or underscores")
+	}
+	path := ""
+	if hasPath {
+		for _, segment := range strings.Split(suffix, "/") {
+			if err := ValidateSPIFFEPathSegment(segment); err != nil {
+				return nil, err
+			}
+		}
+		path = "/" + suffix
+	}
+	return &url.URL{Scheme: "spiffe", Host: domain, Path: path}, nil
+}
+
+// ValidateSPIFFEPathSegment checks one segment without URI normalization or a
+// synthetic trust domain. Constructors use the same grammar as the signer;
+// ParseSPIFFEID separately bounds the length of the complete wire identity.
+func ValidateSPIFFEPathSegment(segment string) error {
+	if segment == "" || segment == "." || segment == ".." {
+		return fmt.Errorf("crypto: SPIFFE path must not contain empty or relative segments")
+	}
+	for i := range len(segment) {
+		c := segment[i]
+		if c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '.' || c == '-' || c == '_' {
+			continue
+		}
+		return fmt.Errorf("crypto: SPIFFE path requires letters, digits, dots, dashes or underscores")
+	}
+	return nil
 }

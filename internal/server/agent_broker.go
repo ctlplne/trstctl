@@ -9,7 +9,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"net/url"
 	"strings"
 	"time"
 	"trstctl.com/trstctl/internal/config"
@@ -531,19 +530,7 @@ func brokerOwnerID(tenantID, agentID string) string {
 }
 
 func brokerSPIFFEID(trustDomain, subject string) (string, error) {
-	trustDomain = strings.TrimSpace(trustDomain)
-	subject = strings.Trim(subject, "/")
-	if trustDomain == "" {
-		return "", errors.New("trust domain is required")
-	}
-	if subject == "" {
-		return "", errors.New("attestation subject is required")
-	}
-	id := "spiffe://" + trustDomain + "/agent/" + url.PathEscape(subject)
-	if _, err := crypto.ParseSPIFFEID(id); err != nil {
-		return "", err
-	}
-	return id, nil
+	return workloadSPIFFEID(trustDomain, "agent", subject)
 }
 
 func brokerAuditor(log *events.Log) auditsink.Auditor {

@@ -25,8 +25,22 @@ func FuzzParseSPIFFEID(f *testing.F) {
 	f.Add("")
 	f.Add("://bad")
 	f.Add("spiffe://")
+	f.Add("spiffe://example.org/ns%2Fqa")
+	f.Add("spiffe://example.org:443/a")
+	f.Add("spiffe://example.org/a/../b")
+	f.Add("spiffe://example.org/a?")
 	f.Fuzz(func(t *testing.T, id string) {
-		_, _ = ParseSPIFFEID(id)
+		u, err := ParseSPIFFEID(id)
+		if err != nil {
+			return
+		}
+		if u.String() != id || len(id) > MaxSPIFFEIDLength || u.RawPath != "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.User != nil || u.Opaque != "" {
+			t.Fatal("accepted SPIFFE identity is not an unchanged canonical wire value")
+		}
+		again, err := ParseSPIFFEID(u.String())
+		if err != nil || *again != *u {
+			t.Fatal("canonical SPIFFE parser is not stable")
+		}
 	})
 }
 

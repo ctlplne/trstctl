@@ -59,7 +59,9 @@ func TestSignSVIDRejectsBadID(t *testing.T) {
 	caDER, _ := SelfSignedCACert(ca, "CA", time.Hour)
 	leaf, _ := GenerateLockedKey(ECDSAP256)
 	defer leaf.Destroy()
-	for _, bad := range []string{"https://example.org/x", "spiffe:///path", "not a uri", "spiffe://example.org/p?q=1"} {
+	for _, bad := range []string{"https://example.org/x", "spiffe:///path", "not a uri", "spiffe://example.org/p?q=1",
+		"spiffe://example.org/agent/ns%2Fqa%2Fsa%2Freader", "spiffe://example.org/a:b",
+		"spiffe://example.org/a/../b", "spiffe://example.org:443/a", "spiffe://example.org/a?", "spiffe://example.org/a#"} {
 		if _, err := SignSVID(caDER, ca, leaf.Public().DER, bad, time.Hour); err == nil {
 			t.Errorf("SignSVID accepted invalid SPIFFE ID %q", bad)
 		}

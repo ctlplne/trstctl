@@ -9,7 +9,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -534,26 +533,7 @@ func (s *attestedIssuerService) emitIssued(ctx context.Context, tenantID string,
 }
 
 func attestedSPIFFEID(trustDomain, subject string) (string, error) {
-	trustDomain = strings.TrimSpace(trustDomain)
-	subject = strings.Trim(subject, "/")
-	if trustDomain == "" {
-		return "", errors.New("trust domain is required")
-	}
-	if subject == "" {
-		return "", errors.New("attestation subject is required")
-	}
-	parts := strings.Split(subject, "/")
-	for i, part := range parts {
-		if part == "" {
-			return "", fmt.Errorf("attestation subject %q contains an empty path segment", subject)
-		}
-		parts[i] = url.PathEscape(part)
-	}
-	id := "spiffe://" + trustDomain + "/" + strings.Join(parts, "/")
-	if _, err := crypto.ParseSPIFFEID(id); err != nil {
-		return "", err
-	}
-	return id, nil
+	return workloadSPIFFEID(trustDomain, "", subject)
 }
 
 func attestedIssuanceAuditor(log *events.Log) auditsink.Auditor {
