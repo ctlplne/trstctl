@@ -931,25 +931,26 @@ type IdentityCreated struct {
 // backward-compatible — older v1 events without it decode to nil — so the schema
 // version is unchanged.
 type CertificateRecorded struct {
-	ID                     string     `json:"id"`
-	CAID                   string     `json:"ca_id,omitempty"`
-	OwnerID                *string    `json:"owner_id"`
-	Subject                string     `json:"subject"`
-	SANs                   []string   `json:"sans"`
-	Issuer                 string     `json:"issuer"`
-	Serial                 string     `json:"serial"`
-	Fingerprint            string     `json:"fingerprint"`
-	KeyAlgorithm           string     `json:"key_algorithm"`
-	NotBefore              *time.Time `json:"not_before"`
-	NotAfter               *time.Time `json:"not_after"`
-	DeploymentLocation     string     `json:"deployment_location"`
-	Source                 string     `json:"source"`
-	ReplacesID             *string    `json:"replaces_id,omitempty"`
-	CertificateDER         []byte     `json:"certificate_der,omitempty"`
-	CertificatePEM         []byte     `json:"certificate_pem,omitempty"`
-	IssuanceResponse       []byte     `json:"issuance_response,omitempty"`
-	IssuanceIdempotencyKey string     `json:"issuance_idempotency_key,omitempty"`
-	IssuanceRequestBinding string     `json:"issuance_request_binding,omitempty"`
+	ID                     string                `json:"id"`
+	CAID                   string                `json:"ca_id,omitempty"`
+	OwnerID                *string               `json:"owner_id"`
+	Subject                string                `json:"subject"`
+	SANs                   []string              `json:"sans"`
+	Issuer                 string                `json:"issuer"`
+	Serial                 string                `json:"serial"`
+	Fingerprint            string                `json:"fingerprint"`
+	KeyAlgorithm           string                `json:"key_algorithm"`
+	NotBefore              *time.Time            `json:"not_before"`
+	NotAfter               *time.Time            `json:"not_after"`
+	DeploymentLocation     string                `json:"deployment_location"`
+	Source                 string                `json:"source"`
+	ReplacesID             *string               `json:"replaces_id,omitempty"`
+	CertificateDER         []byte                `json:"certificate_der,omitempty"`
+	CertificatePEM         []byte                `json:"certificate_pem,omitempty"`
+	IssuanceResponse       []byte                `json:"issuance_response,omitempty"`
+	IssuanceIdempotencyKey string                `json:"issuance_idempotency_key,omitempty"`
+	IssuanceRequestBinding string                `json:"issuance_request_binding,omitempty"`
+	BrokerIssuance         *store.BrokerIssuance `json:"broker_issuance,omitempty"`
 	// Approval and ApprovalBinding are present only on schema v3. The projector
 	// recomputes the binding from the public certificate before consuming the
 	// exact request/digest in the same PostgreSQL transaction as the row.
@@ -3992,7 +3993,8 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			Source: pl.Source, CertificateDER: pl.CertificateDER, CertificatePEM: pl.CertificatePEM,
 			IssuanceResponse:       pl.IssuanceResponse,
 			IssuanceIdempotencyKey: pl.IssuanceIdempotencyKey, IssuanceRequestBinding: pl.IssuanceRequestBinding,
-			ReplacesID: pl.ReplacesID, CreatedAt: e.Time,
+			BrokerIssuance: pl.BrokerIssuance,
+			ReplacesID:     pl.ReplacesID, CreatedAt: e.Time,
 			// B5/B2: the custody claim is projected like any other field, so a
 			// Rebuild() reproduces it. Without this the column stayed empty no
 			// matter what the issuing path recorded.

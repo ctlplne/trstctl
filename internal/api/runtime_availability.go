@@ -45,8 +45,14 @@ func (a *API) runtimeRouteAvailability(r route) (bool, string) {
 	case "getSSHStatus", "recordSSHTrustRollout", "previewSSHCertificate", "issueSSHCertificate", "issueAttestedSSHUserCert", "revokeSSHCertificate", "retireSSHHost":
 		return runtimeDependency(a.sshWorkflow != nil,
 			"The SSH certificate workflow is not configured in this deployment.")
-	case "issueBrokerAgentIdentity":
-		return runtimeDependency(a.broker != nil,
+	case "issueBrokerAgentIdentity", "previewBrokerAgentIdentity":
+		configured := a.broker != nil
+		// The assembled server is attached before optional issuance services
+		// are built. Its non-nil wrapper alone is not runtime availability.
+		if source, ok := a.broker.(interface{ BrokerIdentityAvailable() bool }); ok {
+			configured = source.BrokerIdentityAvailable()
+		}
+		return runtimeDependency(configured,
 			"The short-lived agent identity broker is not configured in this deployment.")
 	case "previewEphemeralCredential", "issueEphemeralCredential", "approveEphemeralCredential":
 		return runtimeDependency(a.ephemeral != nil,

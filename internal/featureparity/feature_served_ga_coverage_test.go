@@ -3,6 +3,7 @@
 package featureparity
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -523,12 +524,11 @@ func TestTRACE025WorkloadAttestationRowSplitsServedGAFromRoadmapResidual(t *test
 	}
 }
 
-// TestTRACE026AIAgentBrokerRowSplitsServedGAFromRoadmapResidual locks the
-// remediation for TRACE-026. The policy-gated broker issuance API, CLI, and
-// metadata-safe Workloads workflow belong in the GA denominator; the richer
-// tenant-wide broker history console remains visible as a roadmap residual and
-// must not be hidden inside a conditional F61 row.
-func TestTRACE026AIAgentBrokerRowSplitsServedGAFromRoadmapResidual(t *testing.T) {
+// TestTRACE026AIAgentBrokerRowNamesHistoryAndQualificationBoundary keeps
+// the served broker in the GA denominator without treating source tests as
+// installed-product qualification. History is now implemented, so the old
+// assertion that it must remain a roadmap item would itself be semantic drift.
+func TestTRACE026AIAgentBrokerRowNamesHistoryAndQualificationBoundary(t *testing.T) {
 	catalog, err := Load()
 	if err != nil {
 		t.Fatalf("load feature parity catalog: %v", err)
@@ -565,6 +565,11 @@ func TestTRACE026AIAgentBrokerRowSplitsServedGAFromRoadmapResidual(t *testing.T)
 	}
 	for _, wantRef := range []string{
 		"internal/server/broker_served_test.go",
+		"internal/server/broker_preview_served_test.go",
+		"internal/server/broker_history_served_test.go",
+		"internal/server/broker_recovery_security_test.go",
+		"internal/store/broker_history_test.go",
+		"web/src/__tests__/broker_identity_workflow.test.tsx",
 		"internal/api/openapi_golden_test.go",
 		"internal/cli/cli_test.go",
 		"internal/featureparity/feature_served_ga_coverage_test.go",
@@ -581,10 +586,21 @@ func TestTRACE026AIAgentBrokerRowSplitsServedGAFromRoadmapResidual(t *testing.T)
 		}
 	}
 
-	residual := strings.ToLower(strings.Join([]string{f61.TargetMapping, f61.AcceptanceTest}, "\n"))
-	for _, want := range []string{"roadmap residual", "broker history"} {
-		if !strings.Contains(residual, want) {
-			t.Errorf("TRACE-026: F61 must explicitly park tenant-wide broker history as a roadmap residual; missing %q in %q", want, residual)
+	for _, want := range []string{"previewBrokerAgentIdentity", "listBrokerAgentIdentities", "getBrokerAgentIdentity", "issueBrokerAgentIdentity"} {
+		if !slices.Contains(f61.APISurface, want) {
+			t.Errorf("TRACE-026: F61 must retain operator API %q", want)
+		}
+	}
+	current := strings.ToLower(f61.CurrentMapping)
+	for _, want := range []string{"durable", "history", "preview", "retry"} {
+		if !strings.Contains(current, want) {
+			t.Errorf("TRACE-026: implemented console description is missing %q", want)
+		}
+	}
+	qualification := strings.ToLower(strings.Join([]string{f61.TargetMapping, f61.AcceptanceTest}, "\n"))
+	for _, want := range []string{"fresh-image", "browser", "restart", "revocation"} {
+		if !strings.Contains(qualification, want) {
+			t.Errorf("TRACE-026: F61 must name installed-product proof and shared recovery; missing %q in %q", want, qualification)
 		}
 	}
 }

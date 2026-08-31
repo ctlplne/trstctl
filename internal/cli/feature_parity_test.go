@@ -256,8 +256,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// read raises it to 419 so headless and browser operators share one oracle.
 	// F51's effect-free TSA readiness command raises it to 420.
 	// F30's exact, effect-free attested issuance preview raises it to 421.
-	if len(out) != 421 {
-		t.Fatalf("CLI commands = %d, want 421", len(out))
+	// F61 adds the read-only agent-identity preview; issuance remains separate.
+	// F61 adds read-only durable history list and certificate detail commands.
+	if len(out) != 424 {
+		t.Fatalf("CLI commands = %d, want 424", len(out))
 	}
 	return out
 }

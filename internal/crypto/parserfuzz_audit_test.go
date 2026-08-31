@@ -78,6 +78,7 @@ func TestEveryUntrustedParserIsFuzzed(t *testing.T) {
 	// were left unfuzzed (FUZZ-001/002). Require those CMS boundary targets by
 	// NAME so dropping one trips this guard, not just deleting the whole file.
 	requireFuzzFuncByName(t, ".", map[string]string{
+		"FuzzParsePublicKeyPEM":  "exact single public-key PEM used by broker and workload issuance (verify.go)",
 		"FuzzParseSCEPRequest":   "SCEP pkiMessage CMS (scep.go ParseSCEPRequest)",
 		"FuzzParseSCEPResponse":  "SCEP CertRep CMS (scep.go ParseSCEPResponse) — shares the FUZZ-001 decoder",
 		"FuzzVerifyCMSSignature": "cloud IID CMS (verify.go VerifyCMSSignature) — parses untrusted bytes pre-verification",

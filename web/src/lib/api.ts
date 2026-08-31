@@ -102,6 +102,9 @@ import type {
   BreakglassReconcileRequest,
   BreakglassReconcileResponse,
   BrokerAgentIdentity as GenBrokerAgentIdentity,
+  BrokerAgentIdentityHistory,
+  BrokerAgentIdentityHistoryList,
+  BrokerAgentIdentityPreview,
   BrokerAgentIdentityRequest,
   BulkRevokeRequest,
   BulkRevokeResult,
@@ -577,6 +580,14 @@ export type Attestation = GenAttestation;
 export type AttestedSVID = GenAttestedSVID;
 export type AttestedSVIDPreview = GenAttestedSVIDPreview;
 export type BrokerAgentIdentity = GenBrokerAgentIdentity;
+export type { BrokerAgentIdentityHistory, BrokerAgentIdentityHistoryList, BrokerAgentIdentityPreview };
+export interface BrokerHistoryQuery {
+  limit?: number;
+  cursor?: string;
+  q?: string;
+  method?: string;
+  state?: BrokerAgentIdentityHistory["state"];
+}
 export type CBOMAsset = GenCBOMAsset;
 export type {
   PQCMigrationCampaign,
@@ -2261,7 +2272,10 @@ export interface Api {
   startPQCMigration(input: PQCMigrationRequest): Promise<PQCMigrationRun>;
   getPQCMigrationProgress(runId: string): Promise<PQCMigrationProgress>;
   rollbackPQCMigration(runId: string, assetIds: string[], reason: string): Promise<PQCMigrationRollback>;
-  issueBrokerAgentIdentity(input: BrokerAgentIdentityRequest): Promise<BrokerAgentIdentity>;
+  previewBrokerAgentIdentity(input: BrokerAgentIdentityRequest): Promise<BrokerAgentIdentityPreview>;
+  issueBrokerAgentIdentity(input: BrokerAgentIdentityRequest, idempotencyKey?: string): Promise<BrokerAgentIdentity>;
+  brokerAgentIdentities(options?: BrokerHistoryQuery, signal?: AbortSignal): Promise<BrokerAgentIdentityHistoryList>;
+  brokerAgentIdentity(id: string, signal?: AbortSignal): Promise<BrokerAgentIdentityHistory>;
   workloadAttesterTrustSources(): Promise<WorkloadAttesterTrustSourceList>;
   createWorkloadAttesterTrustSource(input: WorkloadAttesterTrustSourceRequest): Promise<WorkloadAttesterTrustSource>;
   updateWorkloadAttesterTrustSource(id: string, input: WorkloadAttesterTrustSourceRequest): Promise<WorkloadAttesterTrustSource>;
@@ -2805,7 +2819,11 @@ const liveApi: Api = {
       asset_ids: assetIds,
       reason,
     }),
-  issueBrokerAgentIdentity: (input) => mutate<BrokerAgentIdentity>("POST", "/api/v1/broker/agent-identities", input),
+  previewBrokerAgentIdentity: (input) => postRead<BrokerAgentIdentityPreview>("/api/v1/broker/agent-identities/preview", input),
+  issueBrokerAgentIdentity: (input, idempotencyKey) => mutate<BrokerAgentIdentity>("POST", "/api/v1/broker/agent-identities", input, idempotencyKey),
+  brokerAgentIdentities: (options, signal) =>
+    req<BrokerAgentIdentityHistoryList>(`/api/v1/broker/agent-identities${brokerHistoryQueryString(options)}`, { signal }),
+  brokerAgentIdentity: (id, signal) => req<BrokerAgentIdentityHistory>(`/api/v1/broker/agent-identities/${encodeURIComponent(id)}`, { signal }),
   workloadAttesterTrustSources: () => req<WorkloadAttesterTrustSourceList>("/api/v1/workloads/attester-trust-sources"),
   createWorkloadAttesterTrustSource: (input) => mutate<WorkloadAttesterTrustSource>("POST", "/api/v1/workloads/attester-trust-sources", input),
   updateWorkloadAttesterTrustSource: (id, input) =>
@@ -2973,6 +2991,15 @@ function apiTokensQueryString(options?: { limit?: number; cursor?: string; subje
   if (options?.includeRevoked) qs.set("include_revoked", "true");
   const suffix = qs.toString();
   return suffix ? `?${suffix}` : "";
+}
+
+function brokerHistoryQueryString(options?: BrokerHistoryQuery): string {
+  const query = new URLSearchParams();
+  if (options?.limit !== undefined) query.set("limit", String(options.limit));
+  for (const key of ["cursor", "q", "method", "state"] as const) {
+    if (options?.[key]) query.set(key, options[key]);
+  }
+  return query.size ? `?${query}` : "";
 }
 
 function pageQueryString(options?: { limit?: number; cursor?: string }, scopedId?: string, scopedKey = "identity_id"): string {

@@ -1023,10 +1023,45 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Read durable broker-issued certificate history, newest first, without proof or recovery-key disclosure */
+        get: operations["listBrokerAgentIdentities"];
         put?: never;
         /** Issue a policy-gated short-lived identity for an AI/MCP agent */
         post: operations["issueBrokerAgentIdentity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/broker/agent-identities/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review exact agent identity inputs and bounded lifetime without verifying proof or issuing */
+        post: operations["previewBrokerAgentIdentity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/broker/agent-identities/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one broker certificate's original issuance facts and shared lifecycle state */
+        get: operations["getBrokerAgentIdentity"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -7245,6 +7280,88 @@ export interface components {
             subject: string;
             task_envelope_digest?: string;
         };
+        BrokerAgentIdentityHistory: {
+            /** Format: uuid */
+            certificate_id: string;
+            certificate_subject: string;
+            /** Format: uuid */
+            current_owner_id?: string;
+            fingerprint: string;
+            /** Format: date-time */
+            generated_at: string;
+            issuance?: components["schemas"]["BrokerIssuanceFacts"];
+            lifecycle_status: string;
+            /**
+             * @description Unavailable means original facts were not recorded or were removed by privacy policy; never inferred from a current request or owner.
+             * @enum {string}
+             */
+            metadata_state: "recorded" | "unavailable";
+            /** Format: date-time */
+            not_after?: string;
+            /** Format: date-time */
+            not_before?: string;
+            /**
+             * @description Coarse projection freshness; no cross-tenant counts or error details are disclosed.
+             * @enum {string}
+             */
+            projection_state: "current" | "catching_up" | "blocked" | "unknown";
+            /** Format: date-time */
+            recorded_at: string;
+            serial: string;
+            /** @enum {string} */
+            state: "valid" | "not_yet_valid" | "expired" | "revoked" | "superseded" | "unknown";
+            state_reason: string;
+        };
+        BrokerAgentIdentityHistoryList: {
+            /** Format: date-time */
+            generated_at: string;
+            /**
+             * @description Issued certificates only, not a complete refusal/failed-attempt feed. Use tenant audit evidence for attempts.
+             * @enum {string}
+             */
+            history_scope: "broker_issued_certificates";
+            items: components["schemas"]["BrokerAgentIdentityHistory"][];
+            next_cursor: string;
+            /**
+             * @description Coarse projection freshness; no cross-tenant counts or error details are disclosed.
+             * @enum {string}
+             */
+            projection_state: "current" | "catching_up" | "blocked" | "unknown";
+        };
+        BrokerAgentIdentityPreview: {
+            agent_id: string;
+            attestation_verification: string;
+            blockers: string[];
+            capability: string;
+            data_handling: string[];
+            default_ttl_seconds: number;
+            effect_free: boolean;
+            effective_ttl_seconds: number;
+            execution_external_effects: string[];
+            execution_signer_calls: string[];
+            execution_writes: string[];
+            max_ttl_seconds: number;
+            method: string;
+            payload_sha256: string;
+            policy_evaluation: string;
+            preview_external_effects: string[];
+            preview_signer_calls: string[];
+            preview_writes: string[];
+            public_key_sha256: string;
+            ready: boolean;
+            recovery_steps: string[];
+            requested_ttl_seconds: number;
+            requester: string;
+            required_permission: string;
+            scopes: string[];
+            steps: string[];
+            supported_methods: string[];
+            task_envelope_sha256: string;
+            task_envelope_verification: string;
+            trust_domain: string;
+            ttl_clamped: boolean;
+            ttl_defaulted: boolean;
+        };
         BrokerAgentIdentityRequest: {
             agent_id: string;
             method: string;
@@ -7253,6 +7370,17 @@ export interface components {
             scopes: string[];
             task_envelope_base64?: string;
             ttl_seconds?: number;
+        };
+        BrokerIssuanceFacts: {
+            agent_id: string;
+            effective_ttl_seconds: number;
+            method: string;
+            /** Format: uuid */
+            owner_id: string;
+            requested_ttl_seconds: number;
+            scopes: string[];
+            subject: string;
+            task_envelope_digest?: string;
         };
         BulkRevokeItem: {
             error?: string;
@@ -16504,6 +16632,55 @@ export interface operations {
             };
         };
     };
+    listBrokerAgentIdentities: {
+        parameters: {
+            query?: {
+                /** @description maximum items per page (1-100, default 20) */
+                limit?: number;
+                /** @description opaque newest-first recorded-time/id cursor from the preceding page; reset when filters change */
+                cursor?: string;
+                /** @description literal case-insensitive agent, subject, certificate ID, fingerprint or serial search; at most 200 characters */
+                q?: string;
+                /** @description exact original attestation method; unknown legacy metadata is not guessed */
+                method?: string;
+                /** @description valid, not_yet_valid, expired, revoked, superseded or unknown; computed by the server */
+                state?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            "": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrokerAgentIdentityHistoryList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     issueBrokerAgentIdentity: {
         parameters: {
             query?: never;
@@ -16527,6 +16704,88 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BrokerAgentIdentity"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewBrokerAgentIdentity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrokerAgentIdentityRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            "": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrokerAgentIdentityPreview"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getBrokerAgentIdentity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            "": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrokerAgentIdentityHistory"];
                 };
             };
             /** @description client error */

@@ -1644,6 +1644,79 @@ BrokerAgentIdentity = TypedDict(
     total=False,
 )
 
+BrokerAgentIdentityHistory = TypedDict(
+    'BrokerAgentIdentityHistory',
+    {
+        'certificate_id': str,
+        'certificate_subject': str,
+        'current_owner_id': str,
+        'fingerprint': str,
+        'generated_at': str,
+        'issuance': dict[str, Any],
+        'lifecycle_status': str,
+        'metadata_state': str,
+        'not_after': str,
+        'not_before': str,
+        'projection_state': str,
+        'recorded_at': str,
+        'serial': str,
+        'state': str,
+        'state_reason': str,
+    },
+    total=False,
+)
+
+BrokerAgentIdentityHistoryList = TypedDict(
+    'BrokerAgentIdentityHistoryList',
+    {
+        'generated_at': str,
+        'history_scope': str,
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+        'projection_state': str,
+    },
+    total=False,
+)
+
+BrokerAgentIdentityPreview = TypedDict(
+    'BrokerAgentIdentityPreview',
+    {
+        'agent_id': str,
+        'attestation_verification': str,
+        'blockers': list[str],
+        'capability': str,
+        'data_handling': list[str],
+        'default_ttl_seconds': int,
+        'effect_free': bool,
+        'effective_ttl_seconds': int,
+        'execution_external_effects': list[str],
+        'execution_signer_calls': list[str],
+        'execution_writes': list[str],
+        'max_ttl_seconds': int,
+        'method': str,
+        'payload_sha256': str,
+        'policy_evaluation': str,
+        'preview_external_effects': list[str],
+        'preview_signer_calls': list[str],
+        'preview_writes': list[str],
+        'public_key_sha256': str,
+        'ready': bool,
+        'recovery_steps': list[str],
+        'requested_ttl_seconds': int,
+        'requester': str,
+        'required_permission': str,
+        'scopes': list[str],
+        'steps': list[str],
+        'supported_methods': list[str],
+        'task_envelope_sha256': str,
+        'task_envelope_verification': str,
+        'trust_domain': str,
+        'ttl_clamped': bool,
+        'ttl_defaulted': bool,
+    },
+    total=False,
+)
+
 BrokerAgentIdentityRequest = TypedDict(
     'BrokerAgentIdentityRequest',
     {
@@ -1654,6 +1727,21 @@ BrokerAgentIdentityRequest = TypedDict(
         'scopes': list[str],
         'task_envelope_base64': str,
         'ttl_seconds': int,
+    },
+    total=False,
+)
+
+BrokerIssuanceFacts = TypedDict(
+    'BrokerIssuanceFacts',
+    {
+        'agent_id': str,
+        'effective_ttl_seconds': int,
+        'method': str,
+        'owner_id': str,
+        'requested_ttl_seconds': int,
+        'scopes': list[str],
+        'subject': str,
+        'task_envelope_digest': str,
     },
     total=False,
 )

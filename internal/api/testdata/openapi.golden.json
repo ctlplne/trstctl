@@ -4751,6 +4751,308 @@
         ],
         "type": "object"
       },
+      "BrokerAgentIdentityHistory": {
+        "properties": {
+          "certificate_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "certificate_subject": {
+            "type": "string"
+          },
+          "current_owner_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "issuance": {
+            "$ref": "#/components/schemas/BrokerIssuanceFacts"
+          },
+          "lifecycle_status": {
+            "type": "string"
+          },
+          "metadata_state": {
+            "description": "Unavailable means original facts were not recorded or were removed by privacy policy; never inferred from a current request or owner.",
+            "enum": [
+              "recorded",
+              "unavailable"
+            ],
+            "type": "string"
+          },
+          "not_after": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "not_before": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "projection_state": {
+            "description": "Coarse projection freshness; no cross-tenant counts or error details are disclosed.",
+            "enum": [
+              "current",
+              "catching_up",
+              "blocked",
+              "unknown"
+            ],
+            "type": "string"
+          },
+          "recorded_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "serial": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "valid",
+              "not_yet_valid",
+              "expired",
+              "revoked",
+              "superseded",
+              "unknown"
+            ],
+            "type": "string"
+          },
+          "state_reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "certificate_id",
+          "fingerprint",
+          "certificate_subject",
+          "serial",
+          "recorded_at",
+          "lifecycle_status",
+          "state",
+          "state_reason",
+          "metadata_state",
+          "generated_at",
+          "projection_state"
+        ],
+        "type": "object"
+      },
+      "BrokerAgentIdentityHistoryList": {
+        "properties": {
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "history_scope": {
+            "description": "Issued certificates only, not a complete refusal/failed-attempt feed. Use tenant audit evidence for attempts.",
+            "enum": [
+              "broker_issued_certificates"
+            ],
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BrokerAgentIdentityHistory"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          },
+          "projection_state": {
+            "description": "Coarse projection freshness; no cross-tenant counts or error details are disclosed.",
+            "enum": [
+              "current",
+              "catching_up",
+              "blocked",
+              "unknown"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor",
+          "generated_at",
+          "projection_state",
+          "history_scope"
+        ],
+        "type": "object"
+      },
+      "BrokerAgentIdentityPreview": {
+        "properties": {
+          "agent_id": {
+            "type": "string"
+          },
+          "attestation_verification": {
+            "type": "string"
+          },
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "data_handling": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "default_ttl_seconds": {
+            "type": "integer"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "effective_ttl_seconds": {
+            "type": "integer"
+          },
+          "execution_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "execution_signer_calls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "execution_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "max_ttl_seconds": {
+            "type": "integer"
+          },
+          "method": {
+            "type": "string"
+          },
+          "payload_sha256": {
+            "type": "string"
+          },
+          "policy_evaluation": {
+            "type": "string"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_signer_calls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "public_key_sha256": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "recovery_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "requested_ttl_seconds": {
+            "type": "integer"
+          },
+          "requester": {
+            "type": "string"
+          },
+          "required_permission": {
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "supported_methods": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "task_envelope_sha256": {
+            "type": "string"
+          },
+          "task_envelope_verification": {
+            "type": "string"
+          },
+          "trust_domain": {
+            "type": "string"
+          },
+          "ttl_clamped": {
+            "type": "boolean"
+          },
+          "ttl_defaulted": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "capability",
+          "ready",
+          "effect_free",
+          "method",
+          "requester",
+          "trust_domain",
+          "supported_methods",
+          "requested_ttl_seconds",
+          "effective_ttl_seconds",
+          "default_ttl_seconds",
+          "max_ttl_seconds",
+          "ttl_defaulted",
+          "ttl_clamped",
+          "required_permission",
+          "attestation_verification",
+          "payload_sha256",
+          "public_key_sha256",
+          "preview_writes",
+          "preview_external_effects",
+          "preview_signer_calls",
+          "execution_writes",
+          "execution_external_effects",
+          "execution_signer_calls",
+          "steps",
+          "blockers",
+          "recovery_steps",
+          "data_handling",
+          "agent_id",
+          "scopes",
+          "policy_evaluation",
+          "task_envelope_verification",
+          "task_envelope_sha256"
+        ],
+        "type": "object"
+      },
       "BrokerAgentIdentityRequest": {
         "properties": {
           "agent_id": {
@@ -4784,6 +5086,48 @@
           "payload_base64",
           "public_key_pem",
           "scopes"
+        ],
+        "type": "object"
+      },
+      "BrokerIssuanceFacts": {
+        "properties": {
+          "agent_id": {
+            "type": "string"
+          },
+          "effective_ttl_seconds": {
+            "type": "integer"
+          },
+          "method": {
+            "type": "string"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "requested_ttl_seconds": {
+            "type": "integer"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "task_envelope_digest": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent_id",
+          "subject",
+          "method",
+          "owner_id",
+          "scopes",
+          "requested_ttl_seconds",
+          "effective_ttl_seconds"
         ],
         "type": "object"
       },
@@ -33360,6 +33704,93 @@
       }
     },
     "/api/v1/broker/agent-identities": {
+      "get": {
+        "operationId": "listBrokerAgentIdentities",
+        "parameters": [
+          {
+            "description": "maximum items per page (1-100, default 20)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque newest-first recorded-time/id cursor from the preceding page; reset when filters change",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "literal case-insensitive agent, subject, certificate ID, fingerprint or serial search; at most 200 characters",
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "exact original attestation method; unknown legacy metadata is not guessed",
+            "in": "query",
+            "name": "method",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "valid, not_yet_valid, expired, revoked, superseded or unknown; computed by the server",
+            "in": "query",
+            "name": "state",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrokerAgentIdentityHistoryList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Read durable broker-issued certificate history, newest first, without proof or recovery-key disclosure",
+        "x-trstctl-permission": "certs:read"
+      },
       "post": {
         "operationId": "issueBrokerAgentIdentity",
         "parameters": [
@@ -33425,6 +33856,121 @@
         ],
         "summary": "Issue a policy-gated short-lived identity for an AI/MCP agent",
         "x-trstctl-permission": "certs:issue"
+      }
+    },
+    "/api/v1/broker/agent-identities/preview": {
+      "post": {
+        "operationId": "previewBrokerAgentIdentity",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BrokerAgentIdentityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrokerAgentIdentityPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Review exact agent identity inputs and bounded lifetime without verifying proof or issuing",
+        "x-trstctl-permission": "certs:issue"
+      }
+    },
+    "/api/v1/broker/agent-identities/{id}": {
+      "get": {
+        "operationId": "getBrokerAgentIdentity",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrokerAgentIdentityHistory"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Read one broker certificate's original issuance facts and shared lifecycle state",
+        "x-trstctl-permission": "certs:read"
       }
     },
     "/api/v1/ca/authorities": {

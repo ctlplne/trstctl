@@ -106,6 +106,12 @@ const cover004FeatureIds = [
 const partialUiEvidencePattern =
   /\b(?:observe|basic|passive|thin|disclosure)\s*:|\b(?:api\/cli(?:\s+served)?|cli\/api|hand-?off|handoff|fixture|unavailable state|backend-gap|gap disclosure)\b/i;
 
+function currentUiEvidence(item: FeatureMapBacklog["items"][number] | undefined): string[] {
+  // A future target is a plan, never proof that the operator can use the UI now.
+  // It may correctly call for API/CLI qualification of an existing GUI workflow.
+  return [item?.current_frontend_mapping ?? "", ...(item?.facet_evidence?.ui?.evidence ?? [])].filter(Boolean);
+}
+
 function servedFeatureMap(): FeatureMapBacklog {
   for (const candidate of ["internal/featureparity/feature-map-backlog.json", "../internal/featureparity/feature-map-backlog.json"]) {
     try {
@@ -242,12 +248,42 @@ describe("route-level product surface parity", () => {
       expect(surface?.kind, `${featureId} GUI surface must be an operator workflow`).toBe("operate");
       expect(surface?.evidence ?? "", `${featureId} GUI surface evidence must not be partial`).not.toMatch(partialUiEvidencePattern);
 
-      const evidence = [item?.current_frontend_mapping ?? "", item?.target_gui_mapping ?? "", ...(ui?.evidence ?? [])].filter(Boolean);
+      const evidence = currentUiEvidence(item);
       expect(evidence.length, `${featureId} UI cell must cite concrete route evidence`).toBeGreaterThan(0);
       for (const value of evidence) {
         expect(value, `${featureId} UI evidence must not use partial labels`).not.toMatch(partialUiEvidencePattern);
       }
     }
+  });
+
+  it("never counts a future GUI target as current UI evidence", () => {
+    expect(
+      currentUiEvidence({
+        feature_id: "guard-negative-control",
+        feature: "Unimplemented workflow",
+        target_gui_mapping: "A complete guided operator workflow with durable history and recovery is planned.",
+      }),
+    ).toEqual([]);
+    expect(
+      currentUiEvidence({
+        feature_id: "guard-negative-control",
+        feature: "Headless workflow",
+        current_frontend_mapping: "API/CLI served; the console is a handoff only.",
+        target_gui_mapping: "A complete guided operator workflow is planned.",
+      })[0],
+    ).toMatch(partialUiEvidencePattern);
+  });
+
+  it("does not mistake planned API/CLI verification for an API-only current UI", () => {
+    const evidence = currentUiEvidence({
+      feature_id: "guard-positive-control",
+      feature: "Implemented workflow awaiting installed-product qualification",
+      current_frontend_mapping: "operate: guided preview, explicit issuance, durable history and guarded recovery at /workloads.",
+      target_gui_mapping: "Qualification pending: fresh-image API/CLI, browser and preserved-volume restart proof.",
+      facet_evidence: { ui: { evidence: ["The Workloads console offers tenant-scoped list/detail and exact request review."] } },
+    });
+    expect(evidence).toHaveLength(2);
+    for (const value of evidence) expect(value).not.toMatch(partialUiEvidencePattern);
   });
 
   it("rejects feature-map UI and a11y evidence for absent app routes", () => {

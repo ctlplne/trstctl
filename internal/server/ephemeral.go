@@ -635,31 +635,7 @@ func (s *ephemeralIssuerService) availableMethods(ctx context.Context, tenantID 
 }
 
 func (s *ephemeralIssuerService) attestorsForMethod(ctx context.Context, tenantID, method string) ([]attest.Attestor, error) {
-	var candidates []attest.Attestor
-	for _, a := range s.attestors {
-		if a != nil && a.Method() == method {
-			candidates = append(candidates, a)
-		}
-	}
-	sources, err := s.store.ListEnabledWorkloadAttesterTrustSources(ctx, tenantID, method)
-	if err != nil {
-		return nil, err
-	}
-	for _, source := range sources {
-		a, err := attestorFromTrustSource(source)
-		if err != nil {
-			return nil, err
-		}
-		candidates = append(candidates, a)
-	}
-	switch len(candidates) {
-	case 0:
-		return nil, nil
-	case 1:
-		return candidates, nil
-	default:
-		return []attest.Attestor{multiAttestor{method: method, attestors: candidates}}, nil
-	}
+	return resolveWorkloadAttestors(ctx, s.store, s.attestors, tenantID, method)
 }
 
 func (s *ephemeralIssuerService) ensureEphemeralApprovalRequest(ctx context.Context, tenantID, requester string, req api.EphemeralCredentialRequest, att attest.Attestation) (store.OperationApprovalRequest, error) {

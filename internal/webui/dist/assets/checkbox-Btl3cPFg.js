@@ -1,1 +1,0 @@
-import{g as e,h as t,t as n,v as r}from"./utils-CxpOg3jJ.js";var i=r(e(),1),a=t(),o=(0,i.forwardRef)(function({className:e,...t},r){return(0,a.jsx)(`input`,{ref:r,type:`checkbox`,className:n(`h-4 w-4 shrink-0 rounded border-border`,e),...t})});export{o as t};

@@ -3,10 +3,13 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Workloads } from "@/pages/Workloads";
+import { AppQueryProvider } from "@/lib/query";
+import { brokerHistoryPage } from "../support/brokerIdentity";
 import { attestedPreviewFixture } from "../support/attestedSVID";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
+    brokerAgentIdentities: vi.fn(),
     kubernetesCSRSupport: vi.fn(),
     kubernetesTrustBundles: vi.fn(),
     workloadAttesterTrustSources: vi.fn(),
@@ -27,7 +30,9 @@ vi.mock("@/lib/api", async (orig) => {
 function renderWorkloads() {
   return render(
     <MemoryRouter>
-      <Workloads />
+      <AppQueryProvider>
+        <Workloads />
+      </AppQueryProvider>
     </MemoryRouter>,
   );
 }
@@ -35,6 +40,7 @@ function renderWorkloads() {
 describe("JOURNEY-001 workload owner attested onboarding", () => {
   beforeEach(() => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
+    apiMock.brokerAgentIdentities.mockReset().mockResolvedValue(brokerHistoryPage([]));
     apiMock.kubernetesCSRSupport.mockResolvedValue(kubernetesCSRSupportFixture());
     apiMock.kubernetesTrustBundles.mockResolvedValue(kubernetesTrustBundleFixture());
     apiMock.workloadAttesterTrustSources.mockResolvedValue({ items: [] });
@@ -132,7 +138,7 @@ describe("JOURNEY-001 workload owner attested onboarding", () => {
 
     await user.click(screen.getByRole("button", { name: "Revoke" }));
     expect(apiMock.revokeWorkloadAttesterTrustSource).toHaveBeenCalledWith("trust-source-1", { reason: "workload owner offboarding" });
-    expect(await screen.findByText("Revoked")).toBeInTheDocument();
+    expect(await within(trustSourceRow!).findByText("Revoked")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Offboard" }));
     expect(apiMock.deleteWorkloadAttesterTrustSource).toHaveBeenCalledWith("trust-source-1");

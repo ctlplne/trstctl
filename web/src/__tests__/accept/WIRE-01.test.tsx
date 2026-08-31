@@ -3,9 +3,12 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Workloads } from "@/pages/Workloads";
+import { AppQueryProvider } from "@/lib/query";
+import { brokerHistoryPage } from "../support/brokerIdentity";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
+    brokerAgentIdentities: vi.fn(),
     kubernetesCSRSupport: vi.fn(),
     kubernetesTrustBundles: vi.fn(),
     issueDynamicLease: vi.fn(),
@@ -22,7 +25,9 @@ vi.mock("@/lib/api", async (orig) => {
 function renderWorkloads() {
   return render(
     <MemoryRouter>
-      <Workloads />
+      <AppQueryProvider>
+        <Workloads />
+      </AppQueryProvider>
     </MemoryRouter>,
   );
 }
@@ -31,6 +36,7 @@ describe("WIRE-01 Workloads dynamic lease wiring", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     for (const mock of Object.values(apiMock)) mock.mockReset();
+    apiMock.brokerAgentIdentities.mockReset().mockResolvedValue(brokerHistoryPage([]));
     apiMock.kubernetesCSRSupport.mockResolvedValue(kubernetesCSRSupportFixture());
     apiMock.kubernetesTrustBundles.mockResolvedValue(kubernetesTrustBundleFixture());
     apiMock.issueDynamicLease.mockResolvedValue({

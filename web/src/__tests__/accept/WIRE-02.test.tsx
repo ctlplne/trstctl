@@ -5,14 +5,18 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Workloads } from "@/pages/Workloads";
+import { AppQueryProvider } from "@/lib/query";
+import { brokerHistoryPage, brokerHistoryFixture, brokerPreviewFixture } from "../support/brokerIdentity";
 import { attestedPreviewFixture } from "../support/attestedSVID";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
+    brokerAgentIdentities: vi.fn(),
     kubernetesCSRSupport: vi.fn(),
     kubernetesTrustBundles: vi.fn(),
     workloadAttesterTrustSources: vi.fn(),
     issueBrokerAgentIdentity: vi.fn(),
+    previewBrokerAgentIdentity: vi.fn(),
     issueAttestedSVID: vi.fn(),
     previewAttestedSVID: vi.fn(),
     issueDynamicLease: vi.fn(),
@@ -29,7 +33,9 @@ vi.mock("@/lib/api", async (orig) => {
 function renderWorkloads() {
   return render(
     <MemoryRouter>
-      <Workloads />
+      <AppQueryProvider>
+        <Workloads />
+      </AppQueryProvider>
     </MemoryRouter>,
   );
 }
@@ -38,6 +44,8 @@ describe("WIRE-02 Workloads broker and attestation wiring", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     for (const mock of Object.values(apiMock)) mock.mockReset();
+    apiMock.brokerAgentIdentities.mockReset().mockResolvedValue(brokerHistoryPage([brokerHistoryFixture]));
+    apiMock.previewBrokerAgentIdentity.mockResolvedValue({ ...brokerPreviewFixture, method: "github_oidc", scopes: ["mcp:read-only", "secrets:read:ci"] });
     apiMock.kubernetesCSRSupport.mockResolvedValue(kubernetesCSRSupportFixture());
     apiMock.kubernetesTrustBundles.mockResolvedValue(kubernetesTrustBundleFixture());
     apiMock.workloadAttesterTrustSources.mockResolvedValue({
@@ -95,21 +103,35 @@ describe("WIRE-02 Workloads broker and attestation wiring", () => {
     const user = userEvent.setup();
     renderWorkloads();
 
+    await user.click(screen.getByRole("button", { name: "Request agent identity" }));
+    await user.type(screen.getByLabelText("Agent ID"), "agent-build-1");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Broker method" }), "github_oidc");
+    await user.type(screen.getByLabelText("Broker scopes"), "mcp:read-only, secrets:read:ci");
+    await user.clear(screen.getByLabelText("Broker TTL seconds"));
+    await user.type(screen.getByLabelText("Broker TTL seconds"), "900");
     await user.type(screen.getByLabelText("Broker proof payload (base64)"), "YnJva2VyLXByb29m");
     await user.type(screen.getByLabelText("Broker public key"), "-----BEGIN PUBLIC KEY-----\nBROKER\n-----END PUBLIC KEY-----");
-    await user.click(screen.getByRole("button", { name: "Issue broker identity" }));
+    const broker = screen.getByRole("region", { name: "AI-agent / NHI broker" });
+    await user.click(within(broker).getByRole("button", { name: "Preview request" }));
+    await within(broker).findByRole("heading", { name: "Ready to verify and issue" });
+    expect(apiMock.issueBrokerAgentIdentity).not.toHaveBeenCalled();
+    await user.click(within(broker).getByRole("button", { name: "Verify proof and issue" }));
+    await screen.findByRole("heading", { name: "Certificate issuance recorded" });
 
-    expect(apiMock.issueBrokerAgentIdentity).toHaveBeenCalledWith({
-      agent_id: "agent-build-1",
-      method: "github_oidc",
-      payload_base64: "YnJva2VyLXByb29m",
-      public_key_pem: "-----BEGIN PUBLIC KEY-----\nBROKER\n-----END PUBLIC KEY-----",
-      scopes: ["mcp:read-only", "secrets:read:ci"],
-      ttl_seconds: 900,
-    });
+    expect(apiMock.issueBrokerAgentIdentity).toHaveBeenCalledWith(
+      {
+        agent_id: "agent-build-1",
+        method: "github_oidc",
+        payload_base64: "YnJva2VyLXByb29m",
+        public_key_pem: "-----BEGIN PUBLIC KEY-----\nBROKER\n-----END PUBLIC KEY-----",
+        scopes: ["mcp:read-only", "secrets:read:ci"],
+        ttl_seconds: 900,
+      },
+      expect.any(String),
+    );
 
-    const brokerRow = await screen.findByRole("row", { name: /agent-build-1 spiffe:\/\/tenant\/ai\/build-agent/i });
-    expect(within(brokerRow).getByText("mcp:read-only, secrets:read:ci")).toBeInTheDocument();
+    const brokerRow = await screen.findByRole("row", { name: /agent-build-1 spiffe:\/\/example.test\/agent\/build-1/i });
+    expect(within(brokerRow).getByText("Within validity window")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Issue attested SVID" }));
     const attestationPayload = screen.getByLabelText("Attestation proof payload (base64)");

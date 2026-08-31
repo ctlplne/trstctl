@@ -124,7 +124,10 @@ import (
 // state into the event-derived read model and gained their last-event ordering
 // fields. A v34 payload has no segment rows, so restoring it above sequence zero
 // would turn a declared blind-spot denominator into a reassuring empty page.
-const SnapshotFormatVersion = 35
+// Bumped to 36 when original broker issuance facts joined the certificate row.
+// Older snapshots lack these facts and must replay instead of claiming complete
+// history at a checkpoint that already skips the corresponding issuance events.
+const SnapshotFormatVersion = 36
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 

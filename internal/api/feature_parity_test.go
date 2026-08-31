@@ -211,8 +211,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// F6's effect-free lifecycle automation plan raises it to 407, and F51's
 	// effect-free timestamp-authority qualification posture raises it to 408.
 	// F30 adds an effect-free attested-SVID preview; execution remains separate.
-	if len(out) != 409 {
-		t.Fatalf("OpenAPI operationIds = %d, want 409", len(out))
+	// F61 adds a permission-gated, effect-free broker preview to the same feature.
+	// F61 adds independent durable history list/detail reads, not new mutations.
+	if len(out) != 412 {
+		t.Fatalf("OpenAPI operationIds = %d, want 412", len(out))
 	}
 	return out
 }

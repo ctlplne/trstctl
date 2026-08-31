@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -22,6 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/broker"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/ephemeral"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/graph"
@@ -119,9 +121,9 @@ func newAgentBrokerService(d agentBrokerDeps) (*agentBrokerService, error) {
 		}
 		methods[a.Method()] = struct{}{}
 	}
-	if len(methods) == 0 {
-		return nil, errors.New("server: agent broker enabled without attestors")
-	}
+	// Production tenants configure public verification trust through the shared
+	// workload trust API. An empty process-level list is not a startup error;
+	// every request still requires enabled trust belonging to its own tenant.
 	if cfg.DefaultTTL <= 0 {
 		cfg.DefaultTTL = defaultBrokerCredentialTTL
 	}
@@ -164,6 +166,10 @@ func newAgentBrokerService(d agentBrokerDeps) (*agentBrokerService, error) {
 	}, nil
 }
 
+// BrokerIdentityAvailable reports process configuration after startup completes.
+// Tenant trust and request authorization are still checked on preview/issuance.
+func (s *Server) BrokerIdentityAvailable() bool { return s.agentBroker != nil }
+
 func (s *Server) IssueBrokerAgentIdentity(ctx context.Context, tenantID, idempotencyKey string, req api.BrokerAgentIdentityRequest) (api.BrokerAgentIdentity, error) {
 	if s.agentBroker == nil {
 		return api.BrokerAgentIdentity{}, api.ErrBrokerUnavailable
@@ -205,7 +211,7 @@ func (s *agentBrokerService) IssueBrokerAgentIdentity(ctx context.Context, tenan
 	if err := s.validate(tenantID, idempotencyKey, req); err != nil {
 		return api.BrokerAgentIdentity{}, err
 	}
-	taskDigest, err := s.bindTaskEnvelope(ctx, tenantID, req)
+	binding, err := brokerCommandBinding(ctx, tenantID, req)
 	if err != nil {
 		return api.BrokerAgentIdentity{}, err
 	}
@@ -214,34 +220,36 @@ func (s *agentBrokerService) IssueBrokerAgentIdentity(ctx context.Context, tenan
 	if err != nil {
 		return api.BrokerAgentIdentity{}, err
 	}
+	if len(recovered) > 1 {
+		return api.BrokerAgentIdentity{}, fmt.Errorf("%w: more than one broker certificate is recorded for this command", orchestrator.ErrIdempotencyConflict)
+	}
+	if len(recovered) == 1 && (recovered[0].BrokerIssuance == nil ||
+		!crypto.ConstantTimeEqual([]byte(recovered[0].IssuanceRequestBinding), []byte(binding))) {
+		// The HTTP result cache is intentionally temporary. The certificate's
+		// command binding is not: do not relabel an old certificate after cache
+		// eviction, or guess missing legacy/privacy-retained-away issuance facts.
+		return api.BrokerAgentIdentity{}, fmt.Errorf("%w: original broker command cannot be matched; inspect the existing certificate before starting a new command", orchestrator.ErrIdempotencyConflict)
+	}
+	attestors, err := resolveWorkloadAttestors(ctx, s.store, s.attestors, tenantID, strings.TrimSpace(req.Method))
+	if err != nil {
+		return api.BrokerAgentIdentity{}, fmt.Errorf("%w: resolve tenant attestation trust: %v", api.ErrBrokerInvalid, err)
+	}
+	if len(attestors) == 0 {
+		return api.BrokerAgentIdentity{}, fmt.Errorf("%w: attestation method %q is not configured for this tenant", api.ErrBrokerInvalid, req.Method)
+	}
+	taskDigest, err := s.bindTaskEnvelope(ctx, tenantID, req)
+	if err != nil {
+		return api.BrokerAgentIdentity{}, err
+	}
 	if len(recovered) > 0 {
-		if len(recovered) != 1 {
-			return api.BrokerAgentIdentity{}, fmt.Errorf("server: broker issuance key %q recovered %d certificates, want 1", idemKey, len(recovered))
-		}
-		att, err := s.verifyAndAuthorize(ctx, tenantID, req)
-		if err != nil {
-			return api.BrokerAgentIdentity{}, err
-		}
-		ownerID := brokerOwnerID(tenantID, req.AgentID)
-		if _, err := s.orch.EnsureOwner(ctx, tenantID, ownerID, store.OwnerWorkload, req.AgentID, ""); err != nil {
-			return api.BrokerAgentIdentity{}, err
-		}
-		resp, err := brokerResponseFromCertificate(req.AgentID, ownerID, req.Scopes, recovered[0], att)
-		if err != nil {
-			return api.BrokerAgentIdentity{}, err
-		}
-		// A replay of a task-scoped issuance re-reports the same binding: the
-		// envelope was re-verified above, so an expired one now refuses rather
-		// than silently returning the old credential.
-		resp.TaskEnvelopeDigest = hex.EncodeToString(taskDigest)
-		return resp, nil
+		return s.reverifyRecoveredBrokerIdentity(ctx, tenantID, req, recovered[0], taskDigest)
 	}
 
 	ownerID := brokerOwnerID(tenantID, req.AgentID)
 	bGraph := graph.New()
 	verifier, err := attest.NewVerifier(attest.Config{
 		TenantID:  tenantID,
-		Attestors: s.attestors,
+		Attestors: attestors,
 		Audit:     s.audit,
 		Graph:     bGraph,
 	})
@@ -253,7 +261,9 @@ func (s *agentBrokerService) IssueBrokerAgentIdentity(ctx context.Context, tenan
 		Verifier: verifier,
 		Sign:     s.sign(),
 		Policy: ephemeral.TTLPolicy{
-			Default: s.defaultTTL,
+			// This issuer is request-local. Carry the exact policy-bounded request
+			// lifetime into its signing policy instead of silently using the default.
+			Default: s.ttl(req.TTLSeconds),
 			Max:     s.maxTTL,
 		},
 		Idem:  ephemeral.NewMemoryIdempotencer(),
@@ -306,6 +316,16 @@ func (s *agentBrokerService) IssueBrokerAgentIdentity(ctx context.Context, tenan
 		KeyAlgorithm: info.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
 		Source: "broker:" + identity.Attestation.Method, CertificateDER: append([]byte(nil), identity.CertDER...),
 		IssuanceIdempotencyKey: idemKey,
+		IssuanceRequestBinding: binding,
+		BrokerIssuance: &store.BrokerIssuance{
+			AgentID: identity.AgentID, Subject: identity.Subject, Method: identity.Attestation.Method,
+			OwnerID: owner.ID, Scopes: append([]string(nil), identity.Scopes...),
+			TaskEnvelopeDigest: hex.EncodeToString(taskDigest), RequestedTTLSeconds: req.TTLSeconds,
+			EffectiveTTLSeconds: int64(s.ttl(req.TTLSeconds) / time.Second),
+		},
+		// The agent supplied only its public key. Do not invent a storage,
+		// exportability, or hardware-security claim for the unseen private key.
+		KeyOrigin: string(custody.OriginRequester),
 	})
 	if err != nil {
 		return api.BrokerAgentIdentity{}, err
@@ -313,13 +333,69 @@ func (s *agentBrokerService) IssueBrokerAgentIdentity(ctx context.Context, tenan
 	resp := brokerResponseFromIdentity(owner.ID, identity, recorded.ID)
 	if len(taskDigest) > 0 {
 		resp.TaskEnvelopeDigest = hex.EncodeToString(taskDigest)
-		// AN-2: the binding is durable in the audit chain, which is the record
-		// of what was authorized — not a field a later read could lose.
+		// The certificate.recorded event above is authoritative for this binding.
+		// This additional audit notification is not the recovery source of truth.
 		_ = auditsink.Emit(ctx, s.audit, nil, "broker.agent_identity.task_bound", tenantID,
 			[]byte(fmt.Sprintf(`{"agent_id":%q,"credential_id":%q,"task_envelope_digest":%q}`,
 				req.AgentID, identity.CredentialID, resp.TaskEnvelopeDigest)))
 	}
 	return resp, nil
+}
+
+// The caller has already matched the durable authenticated-command binding and
+// rechecked tenant trust and any task gate. This stage rechecks current proof and
+// scope policy before returning the original public certificate; it never signs.
+func (s *agentBrokerService) reverifyRecoveredBrokerIdentity(ctx context.Context, tenantID string, req api.BrokerAgentIdentityRequest, certificate store.Certificate, taskDigest []byte) (api.BrokerAgentIdentity, error) {
+	facts := certificate.BrokerIssuance
+	if facts == nil {
+		return api.BrokerAgentIdentity{}, fmt.Errorf("%w: original broker issuance facts are unavailable", orchestrator.ErrIdempotencyConflict)
+	}
+	att, err := s.verifyAndAuthorize(ctx, tenantID, req)
+	if err != nil {
+		return api.BrokerAgentIdentity{}, err
+	}
+	if att.Subject != facts.Subject || att.Method != facts.Method || hex.EncodeToString(taskDigest) != facts.TaskEnvelopeDigest {
+		return api.BrokerAgentIdentity{}, fmt.Errorf("%w: current verification no longer matches the recorded broker identity or task", api.ErrBrokerRejected)
+	}
+	resp, err := brokerResponseFromCertificate(facts.AgentID, facts.OwnerID, facts.Scopes, certificate, att)
+	if err != nil {
+		return api.BrokerAgentIdentity{}, err
+	}
+	// The supplied task was reverified, so an expired envelope refuses rather
+	// than silently returning the old credential with a guessed binding.
+	resp.TaskEnvelopeDigest = facts.TaskEnvelopeDigest
+	return resp, nil
+}
+
+// Only public command dimensions and one-way proof digests are serialized.
+// The authenticated principal comes from the server context, never JSON input.
+// This supplements (does not replace) the HTTP recorder's exact-body binding.
+func brokerCommandBinding(ctx context.Context, tenantID string, req api.BrokerAgentIdentityRequest) (string, error) {
+	principal, err := api.AuthenticatedPrincipalSubject(ctx)
+	if err != nil {
+		return "", err
+	}
+	canonical, err := json.Marshal(struct {
+		Purpose            string   `json:"purpose"`
+		TenantID           string   `json:"tenant_id"`
+		Requester          string   `json:"requester"`
+		AgentID            string   `json:"agent_id"`
+		Method             string   `json:"method"`
+		Scopes             []string `json:"scopes"`
+		TTLSeconds         int64    `json:"ttl_seconds"`
+		PayloadSHA256      string   `json:"payload_sha256"`
+		PublicKeySHA256    string   `json:"public_key_sha256"`
+		TaskEnvelopeSHA256 string   `json:"task_envelope_sha256"`
+	}{
+		Purpose: "trstctl.broker-issue.v1", TenantID: tenantID, Requester: principal,
+		AgentID: req.AgentID, Method: req.Method, Scopes: req.Scopes, TTLSeconds: req.TTLSeconds,
+		PayloadSHA256: crypto.SHA256Hex(req.Payload), PublicKeySHA256: crypto.SHA256Hex(req.PublicKeyDER),
+		TaskEnvelopeSHA256: crypto.SHA256Hex(req.TaskEnvelope),
+	})
+	if err != nil {
+		return "", err
+	}
+	return crypto.SHA256Hex(canonical), nil
 }
 
 func (s *agentBrokerService) validate(tenantID, idempotencyKey string, req api.BrokerAgentIdentityRequest) error {
@@ -336,13 +412,24 @@ func (s *agentBrokerService) validate(tenantID, idempotencyKey string, req api.B
 		return fmt.Errorf("%w: public key is required", api.ErrBrokerInvalid)
 	}
 	method := strings.TrimSpace(req.Method)
-	if _, ok := s.methods[method]; !ok {
+	if _, ok := s.methods[method]; !ok && !supportedAttestedIssuanceMethod(method) {
 		return fmt.Errorf("%w: unknown attestation method %q", api.ErrBrokerInvalid, method)
 	}
 	if len(req.Scopes) == 0 {
 		return fmt.Errorf("%w: at least one scope is required", api.ErrBrokerInvalid)
 	}
 	return nil
+}
+
+func (s *agentBrokerService) ttl(seconds int64) time.Duration {
+	if seconds <= 0 {
+		return s.defaultTTL
+	}
+	// Clamp before multiplying: an untrusted int64 must never wrap a duration.
+	if seconds > int64(s.maxTTL/time.Second) {
+		return s.maxTTL
+	}
+	return time.Duration(seconds) * time.Second
 }
 
 func (s *agentBrokerService) verifyAndAuthorize(ctx context.Context, tenantID string, req api.BrokerAgentIdentityRequest) (attest.Attestation, error) {
@@ -365,9 +452,16 @@ func (s *agentBrokerService) verifyAndAuthorize(ctx context.Context, tenantID st
 			[]byte(fmt.Sprintf(`{"agent_id":%q,"reason":%q}`, req.AgentID, dec.Reason)))
 		return attest.Attestation{}, fmt.Errorf("%w: policy denied agent %q: %s", api.ErrBrokerRejected, req.AgentID, dec.Reason)
 	}
+	attestors, err := resolveWorkloadAttestors(ctx, s.store, s.attestors, tenantID, strings.TrimSpace(req.Method))
+	if err != nil {
+		return attest.Attestation{}, fmt.Errorf("%w: resolve tenant trust: %v", api.ErrBrokerInvalid, err)
+	}
+	if len(attestors) == 0 {
+		return attest.Attestation{}, fmt.Errorf("%w: no enabled attestation trust for this tenant", api.ErrBrokerInvalid)
+	}
 	verifier, err := attest.NewVerifier(attest.Config{
 		TenantID:  tenantID,
-		Attestors: s.attestors,
+		Attestors: attestors,
 		Audit:     s.audit,
 	})
 	if err != nil {

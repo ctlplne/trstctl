@@ -9,12 +9,12 @@ import { Button } from "@/components/ui/button";
 import { Num } from "@/components/typography";
 import { EphemeralCredentialWorkflow } from "@/pages/workloads/EphemeralCredentialWorkflow";
 import { AttestedSVIDWorkflow } from "@/pages/workloads/AttestedSVIDWorkflow";
+import { BrokerIdentityWorkflow } from "@/pages/workloads/BrokerIdentityWorkflow";
 import {
   api,
   type Agent,
   type Attestation,
   type AttestedSVID,
-  type BrokerAgentIdentity,
   type ConnectorDelivery,
   type ContextualRiskPriority,
   type DynamicLease,
@@ -33,9 +33,6 @@ import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
 
 type SafeAttestation = Pick<Attestation, "id" | "method" | "selectors" | "subject" | "verified_at">;
-type BrokerIdentityRow = Pick<BrokerAgentIdentity, "agent_id" | "certificate_id" | "credential_id" | "node_id" | "not_after" | "scopes" | "subject"> & {
-  attestation: SafeAttestation;
-};
 type AttestedSVIDRow = Pick<AttestedSVID, "credential_id" | "not_after" | "subject"> & { attestation: SafeAttestation };
 type TrustSourceMethod = WorkloadAttesterTrustSourceRequest["method"];
 type TrustSourceStatusLabels = { revoked: string; disabled: string; enabled: string };
@@ -130,12 +127,11 @@ export function Workloads() {
   const [role, setRole] = useState("readonly-reporting");
   const [ttlSeconds, setTtlSeconds] = useState(1200);
   const [leases, setLeases] = useState<DynamicLease[]>([]);
-  const [brokerIdentities, setBrokerIdentities] = useState<BrokerIdentityRow[]>([]);
   const [attestedSVIDs, setAttestedSVIDs] = useState<AttestedSVIDRow[]>([]);
   const [attesterTrustSources, setAttesterTrustSources] = useState<WorkloadAttesterTrustSource[]>([]);
   const [trustSourceMethod, setTrustSourceMethod] = useState<TrustSourceMethod>("k8s_sat");
   const [rotateTrustSourceID, setRotateTrustSourceID] = useState("");
-  const [showTrustSourceSetup, setShowTrustSourceSetup] = useState(false);
+  const [showTrustSourceSetup, setShowTrustSourceSetup] = useState(() => searchParams.get("workflow") === "attester-trust");
   const [showTrustSourceRotation, setShowTrustSourceRotation] = useState(false);
   const [showAttestedIssue, setShowAttestedIssue] = useState(() => searchParams.get("workflow") === "attested");
   const [csrSupport, setCSRSupport] = useState<KubernetesCSRSupport | null>(null);
@@ -157,7 +153,6 @@ export function Workloads() {
   });
   const [overviewLoading, setOverviewLoading] = useState(true);
   const [leaseError, setLeaseError] = useState<string | null>(null);
-  const [brokerError, setBrokerError] = useState<string | null>(null);
   const [attestationFailures, setAttestationFailures] = useState<AttestationFailure[]>([]);
   const [trustSourceError, setTrustSourceError] = useState<string | null>(null);
   const [csrSupportError, setCSRSupportError] = useState<string | null>(null);
@@ -165,6 +160,10 @@ export function Workloads() {
   const trustSourceLoadErrorFallback = t("workloads.attestation.loadErrorFallback");
   const enabledTrustSources = attesterTrustSources.filter((source) => source.enabled && !source.revoked_at);
   const hasEnabledTrustSource = enabledTrustSources.length > 0;
+
+  useEffect(() => {
+    if (searchParams.get("workflow") === "attester-trust") setShowTrustSourceSetup(true);
+  }, [searchParams]);
 
   useEffect(() => {
     let active = true;
@@ -244,11 +243,6 @@ export function Workloads() {
     setLeases((current) => [metadata, ...current.filter((item) => item.id !== metadata.id)]);
   }
 
-  function upsertBrokerIdentity(identity: BrokerAgentIdentity) {
-    const metadata = brokerIdentityMetadataOnly(identity);
-    setBrokerIdentities((current) => [metadata, ...current.filter((item) => item.credential_id !== metadata.credential_id)]);
-  }
-
   function upsertAttestedSVID(svid: AttestedSVID) {
     const metadata = attestedSVIDMetadataOnly(svid);
     setAttestedSVIDs((current) => [metadata, ...current.filter((item) => item.credential_id !== metadata.credential_id)]);
@@ -291,31 +285,6 @@ export function Workloads() {
       upsertLease(await api.revokeDynamicLease(leaseId));
     } catch (err) {
       setLeaseError(apiProblemMessage(err, "Could not revoke lease"));
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function issueBrokerIdentity(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    setBusy("broker");
-    setBrokerError(null);
-    try {
-      upsertBrokerIdentity(
-        await api.issueBrokerAgentIdentity({
-          agent_id: formString(data, "agent_id"),
-          method: formString(data, "method"),
-          payload_base64: formString(data, "payload_base64"),
-          public_key_pem: formString(data, "public_key_pem"),
-          scopes: parseScopes(formString(data, "scopes")),
-          ttl_seconds: formNumber(data, "ttl_seconds"),
-        }),
-      );
-      form.reset();
-    } catch (err) {
-      setBrokerError(apiProblemMessage(err, "Could not issue broker identity"));
     } finally {
       setBusy(null);
     }
@@ -1240,102 +1209,7 @@ export function Workloads() {
         </UnavailableState>
       </section>
 
-      <details className="group border-y border-border py-3">
-        <summary className="cursor-pointer font-semibold text-foreground marker:text-muted-foreground">{t("workloads.advanced.brokerSummary")}</summary>
-        <div className="mt-3">
-          <section aria-labelledby="broker-heading" className="grid gap-3 border-y border-border py-4">
-            <div>
-              <h2 id="broker-heading" className="text-title font-semibold">
-                {translateNow("source.ai.agent.nhi.broker.3c610aca90")}
-              </h2>
-              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.a.broker.turns.an.agent.identity.plus.poli.5efe1642ad")}</p>
-            </div>
-            <form aria-labelledby="broker-issue-heading" className="ui-panel grid gap-3 p-comfortable" onSubmit={issueBrokerIdentity}>
-              <div>
-                <h3 id="broker-issue-heading" className="text-title font-semibold">
-                  {translateNow("source.issue.broker.identity.a95ac0066b")}
-                </h3>
-                <p className="mt-1 text-sm text-muted-foreground">{translateNow("source.proof.payloads.are.submitted.directly.and.893894a52b")}</p>
-              </div>
-              <div className="grid gap-3 md:grid-cols-[1fr_12rem_1fr_8rem]">
-                <label className="grid gap-1 text-sm font-medium">
-                  {translateNow("source.agent.id.510bce732d")}
-                  <input className="ui-input" name="agent_id" defaultValue="agent-build-1" required />
-                </label>
-                <label className="grid gap-1 text-sm font-medium">
-                  {translateNow("source.broker.method.86e0708911")}
-                  <input className="ui-input" name="method" defaultValue="github_oidc" required />
-                </label>
-                <label className="grid gap-1 text-sm font-medium">
-                  {translateNow("source.broker.scopes.60ad7540e2")}
-                  <input className="ui-input" name="scopes" defaultValue="mcp:read-only, secrets:read:ci" required />
-                </label>
-                <label className="grid gap-1 text-sm font-medium">
-                  {translateNow("source.broker.ttl.seconds.7112a719ce")}
-                  <input className="ui-input" type="number" min={60} max={86400} name="ttl_seconds" defaultValue={900} />
-                </label>
-              </div>
-              <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
-                <label className="grid gap-1 text-sm font-medium">
-                  {translateNow("source.broker.proof.payload.base64.caf8633720")}
-                  <textarea className="ui-input min-h-20 font-mono text-xs" name="payload_base64" required />
-                </label>
-                <label className="grid gap-1 text-sm font-medium">
-                  {translateNow("source.broker.public.key.a2341b0f4e")}
-                  <textarea className="ui-input min-h-20 font-mono text-xs" name="public_key_pem" required />
-                </label>
-                <Button type="submit" className="self-end" disabled={busy === "broker"}>
-                  {busy === "broker" ? <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
-                  {translateNow("source.issue.broker.identity.a95ac0066b")}
-                </Button>
-              </div>
-            </form>
-            {brokerError && <ErrorState title={translateNow("source.broker.identity.failed.90cf96d503")}>{brokerError}</ErrorState>}
-            <div className="ui-panel overflow-x-auto">
-              <table className="ui-table min-w-[58rem]">
-                <caption className="sr-only">{translateNow("source.ai.agent.broker.identities.6ec86399a3")}</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">{translateNow("source.agent.11b39c9377")}</th>
-                    <th scope="col">{translateNow("source.subject.6897128384")}</th>
-                    <th scope="col">{translateNow("source.scopes.0d5644ff52")}</th>
-                    <th scope="col">{translateNow("source.method.52a0f9b65b")}</th>
-                    <th scope="col">{translateNow("source.verified.4f7838402f")}</th>
-                    <th scope="col">{translateNow("source.expires.f6725f3af0")}</th>
-                    <th scope="col">{translateNow("source.audit.ids.e1133f2a79")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {brokerIdentities.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="text-muted-foreground">
-                        {translateNow("source.no.broker.identity.has.been.issued.in.this.7bb702b9db")}
-                      </td>
-                    </tr>
-                  ) : (
-                    brokerIdentities.map((identity) => (
-                      <tr key={identity.credential_id} className="align-top">
-                        <td className="font-medium">{identity.agent_id}</td>
-                        <td>{identity.subject}</td>
-                        <td>{identity.scopes.join(", ")}</td>
-                        <td>{identity.attestation.method}</td>
-                        <td>{formatDate(identity.attestation.verified_at)}</td>
-                        <td>{formatDate(identity.not_after)}</td>
-                        <td className="font-mono text-xs">
-                          {identity.certificate_id} / {identity.credential_id} / {identity.node_id}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <UnavailableState title={translateNow("source.broker.history.isn.t.in.the.console.yet.7fc4ef9d7d")}>
-              {translateNow("source.the.broker.api.issues.a.single.identity.pe.7e53bfbe2b")}
-            </UnavailableState>
-          </section>
-        </div>
-      </details>
+      <BrokerIdentityWorkflow />
     </section>
   );
 }
@@ -1348,19 +1222,6 @@ function leaseMetadataOnly(lease: DynamicLease): DynamicLease {
     state: lease.state,
     issued_at: lease.issued_at,
     expires_at: lease.expires_at,
-  };
-}
-
-function brokerIdentityMetadataOnly(identity: BrokerAgentIdentity): BrokerIdentityRow {
-  return {
-    agent_id: identity.agent_id,
-    subject: identity.subject,
-    scopes: [...identity.scopes],
-    not_after: identity.not_after,
-    certificate_id: identity.certificate_id,
-    credential_id: identity.credential_id,
-    node_id: identity.node_id,
-    attestation: attestationMetadataOnly(identity.attestation),
   };
 }
 
@@ -1513,16 +1374,4 @@ export function AttesterBreakdown({ rows, failures }: { rows: AttestedSVIDRow[];
       ) : null}
     </div>
   );
-}
-
-function formNumber(data: FormData, name: string): number | undefined {
-  const value = Number(formString(data, name));
-  return Number.isFinite(value) && value > 0 ? value : undefined;
-}
-
-function parseScopes(value: string): string[] {
-  return value
-    .split(",")
-    .map((scope) => scope.trim())
-    .filter(Boolean);
 }

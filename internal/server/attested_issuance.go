@@ -215,11 +215,15 @@ func (s *attestedIssuerService) PreviewAttestedSVID(ctx context.Context, tenantI
 }
 
 func (s *attestedIssuerService) availableMethods(ctx context.Context, tenantID string) ([]string, error) {
-	methods := make(map[string]struct{}, len(s.methods))
-	for method := range s.methods {
+	return availableWorkloadAttestationMethods(ctx, s.store, s.methods, tenantID)
+}
+
+func availableWorkloadAttestationMethods(ctx context.Context, st *store.Store, processMethods map[string]struct{}, tenantID string) ([]string, error) {
+	methods := make(map[string]struct{}, len(processMethods))
+	for method := range processMethods {
 		methods[method] = struct{}{}
 	}
-	sources, err := s.store.ListWorkloadAttesterTrustSources(ctx, tenantID)
+	sources, err := st.ListWorkloadAttesterTrustSources(ctx, tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -338,14 +342,23 @@ func (s *attestedIssuerService) ttl(seconds int64) time.Duration {
 }
 
 func (s *attestedIssuerService) attestorsForMethod(ctx context.Context, tenantID, method string) ([]attest.Attestor, error) {
+	return resolveWorkloadAttestors(ctx, s.store, s.attestors, tenantID, method)
+}
+
+// resolveWorkloadAttestors is shared by direct, approved and brokered issuance.
+// Only enabled public trust in the requesting tenant participates in verification.
+func resolveWorkloadAttestors(ctx context.Context, st *store.Store, processAttestors []attest.Attestor, tenantID, method string) ([]attest.Attestor, error) {
+	if strings.TrimSpace(tenantID) == "" {
+		return nil, errors.New("tenant is required to resolve workload attestation trust")
+	}
 	var candidates []attest.Attestor
-	for _, a := range s.attestors {
+	for _, a := range processAttestors {
 		if a != nil && a.Method() == method {
 			candidates = append(candidates, a)
 		}
 	}
-	if s.store != nil {
-		sources, err := s.store.ListEnabledWorkloadAttesterTrustSources(ctx, tenantID, method)
+	if st != nil {
+		sources, err := st.ListEnabledWorkloadAttesterTrustSources(ctx, tenantID, method)
 		if err != nil {
 			return nil, err
 		}

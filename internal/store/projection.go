@@ -410,6 +410,9 @@ func (s *Store) ApplyIdentityCreatedTx(ctx context.Context, tx pgx.Tx, it Identi
 // creation and predecessor retirement are one replay step, so a crash or replay
 // before a later lifecycle/audit event cannot leave two active certificates.
 func (s *Store) ApplyCertificateRecordedTx(ctx context.Context, tx pgx.Tx, c Certificate) error {
+	if err := validateBrokerIssuance(c); err != nil {
+		return err
+	}
 	sans := c.SANs
 	if sans == nil {
 		sans = []string{}
@@ -471,7 +474,10 @@ func (s *Store) ApplyCertificateRecordedTx(ctx context.Context, tx pgx.Tx, c Cer
 		        issuance_idempotency_key = CASE WHEN $16::text <> '' THEN $16 ELSE issuance_idempotency_key END,
 		        issuance_request_binding = CASE WHEN $17::text <> '' THEN $17 ELSE issuance_request_binding END,
 		        replaces_id = $18
-		  WHERE tenant_id = $1 AND fingerprint = $7`,
+		  WHERE tenant_id = $1 AND fingerprint = $7
+		    AND (issuance_idempotency_key NOT LIKE 'broker-issue:%'
+		      OR (($16::text = '' OR issuance_idempotency_key = $16)
+		        AND ($17::text = '' OR issuance_request_binding = $17)))`,
 		c.TenantID, c.OwnerID, c.Subject, sans, c.Issuer, c.Serial, c.Fingerprint,
 		c.KeyAlgorithm, c.NotBefore, c.NotAfter, c.DeploymentLocation, c.Source, certDER, certPEM, issuanceResponse,
 		c.IssuanceIdempotencyKey, c.IssuanceRequestBinding, c.ReplacesID)
@@ -490,6 +496,9 @@ func (s *Store) ApplyCertificateRecordedTx(ctx context.Context, tx pgx.Tx, c Cer
 			return queryErr
 		}
 		return fmt.Errorf("certificate event reuses id %s outside tenant %s or references an unavailable row", c.ID, c.TenantID)
+	}
+	if err := applyBrokerIssuanceTx(ctx, tx, c); err != nil {
+		return err
 	}
 	if c.ReplacesID == nil || *c.ReplacesID == "" {
 		return nil

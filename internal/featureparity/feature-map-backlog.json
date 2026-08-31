@@ -10017,27 +10017,39 @@
             "priority": 64,
             "served_state": "served",
             "backend_status": "served policy-gated AI/MCP agent identity broker workflow: POST /api/v1/broker/agent-identities verifies attestation, evaluates policy before signing, honors Idempotency-Key replay, mints a short-lived signer-backed X.509-SVID, records certificate.recorded, emits agent.identity.issued or agent.identity.refused, and projects the owner/credential edge into the graph",
-            "current_frontend_mapping": "operate: Workloads at /workloads serves AI-agent broker identity issuance with attestation payload, public key, allowed scopes, TTL, issued credential metadata, and audit-safe result handling.",
-            "target_gui_mapping": "Roadmap residual: tenant-wide broker history console for issued agent identities, search/filtering, revocation controls, audit trail, and replay-safe operator actions beyond the served metadata-safe Workloads workflow.",
-            "acceptance_test": "Served GA acceptance is TestServedAIAgentBrokerIssuesPolicyGatedCredentialIntoGraph plus OpenAPI/CLI parity for /api/v1/broker/agent-identities; roadmap residual is the tenant-wide broker history console beyond the served metadata-safe Workloads workflow.",
+            "current_frontend_mapping": "operate: Workloads at /workloads reads durable tenant broker history with literal search, original-method and server-state filters, a detail deep link, and shared revocation/audit links. Its guided request reviews an exact effect-free server preview before explicit issuance; an uncertain retry retains the unchanged body and recovery key until an acknowledged reset.",
+            "target_gui_mapping": "Implemented in source: durable broker history and guided preview/issue/retry. Qualification pending: exact-candidate fresh-image API/CLI, browser, tenant refusal, expiry and preserved-volume restart proof. Revocation uses the shared certificate control plane; a broker-specific one-call revocation action is not claimed.",
+            "acceptance_test": "TestServedAIAgentBrokerIssuesPolicyGatedCredentialIntoGraph plus broker preview/history/recovery served tests, OpenAPI/CLI parity and broker_identity_workflow.test.tsx prove source behavior. Full closure also requires exact-candidate fresh-image, browser, expiry, shared revocation and restart receipts; source tests alone are not completion.",
             "source_docs": [
                 "docs/features/workload-identity.md"
             ],
             "source_backend": [
                 "internal/broker",
                 "internal/server/agent_broker.go",
-                "internal/api/broker.go"
+                "internal/api/broker.go",
+                "internal/api/broker_history.go",
+                "internal/server/broker_preview.go",
+                "internal/store/broker_history.go"
             ],
             "source_frontend": [
-                "web/src/pages/Workloads.tsx"
+                "web/src/pages/Workloads.tsx",
+                "web/src/pages/workloads/BrokerIdentityWorkflow.tsx",
+                "web/src/pages/workloads/BrokerIdentityHistory.tsx",
+                "web/src/pages/workloads/BrokerPlanReview.tsx"
             ],
             "status": "closed",
             "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation. B-7 lets the broker's single-hop path carry an AGID-05 task envelope: the request accepts task_envelope_base64 and the response returns the bound task_envelope_digest. Verification is the licensed gate (requester signature over canonical bytes against an operator-provisioned trust store the caller cannot inject into, plus expiry); an envelope supplied to a build with no gate is REFUSED rather than downgraded to an unscoped credential. Covered by TestBrokerTaskEnvelopeGate* (ee) and TestBrokerRefusesTaskEnvelopeWithoutLicensedGate (core).",
             "api_surface": [
+                "previewBrokerAgentIdentity",
+                "listBrokerAgentIdentities",
+                "getBrokerAgentIdentity",
                 "issueBrokerAgentIdentity"
             ],
             "api_na": "",
             "cli_surface": [
+                "broker agent-identities preview",
+                "broker agent-identities list",
+                "broker agent-identities get",
                 "broker agent-identities issue"
             ],
             "cli_na": "",
@@ -10060,18 +10072,24 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: operate: Workloads at /workloads serves AI-agent broker identity issuance with attestation payload, public key, allowed scopes, TTL, issued credential metadata, and audit-safe result handling.",
-                        "target_gui_mapping: Roadmap residual: tenant-wide broker history console for issued agent identities, search/filtering, revocation controls, audit trail, and replay-safe operator actions beyond the served metadata-safe Workloads workflow."
+                        "Workloads reads server-owned durable broker history with tenant-isolated list/detail, literal search and original-method/state filters. Missing metadata and projection lag remain visible.",
+                        "The guided console reviews the exact effect-free preview, submits explicit issuance, clears proof after success, and retains an unchanged request/key after an uncertain response. Starting a different request requires acknowledging that issuance may already have happened.",
+                        "Fresh-image browser, preserved-volume restart and shared revocation qualification remain required; source component tests alone do not promote F61 to a complete vertical slice."
                     ],
                     "refs": [
                         "web/src/pages/Workloads.tsx",
+                        "web/src/pages/workloads/BrokerIdentityWorkflow.tsx",
+                        "web/src/pages/workloads/BrokerIdentityHistory.tsx",
+                        "web/src/pages/workloads/BrokerPlanReview.tsx",
                         "web/src/lib/navigation.ts",
                         "web/src/App.tsx"
                     ]
                 },
                 "cli": {
                     "evidence": [
-                        "CLI command: broker agent-identities issue"
+                        "CLI command: broker agent-identities issue",
+                        "CLI command: broker agent-identities preview performs a read-only POST without an Idempotency-Key.",
+                        "CLI commands: broker agent-identities list and get read durable history with certs:read and do not sign, mutate, or reserve a recovery key."
                     ],
                     "refs": [
                         "internal/cli/command.go",
@@ -10080,7 +10098,9 @@
                 },
                 "api": {
                     "evidence": [
-                        "OpenAPI operationId: issueBrokerAgentIdentity"
+                        "OpenAPI operationId: issueBrokerAgentIdentity",
+                        "OpenAPI operationId: previewBrokerAgentIdentity describes exact inputs, tenant trust and bounded lifetime without verifying proof or changing state.",
+                        "OpenAPI operationIds: listBrokerAgentIdentities and getBrokerAgentIdentity return server-calculated state, original issuance facts and coarse projection freshness, not proof, certificate bodies or internal request bindings."
                     ],
                     "refs": [
                         "internal/api/api.go",
@@ -10090,14 +10110,19 @@
                 },
                 "test": {
                     "evidence": [
-                        "acceptance_test: Served GA acceptance is TestServedAIAgentBrokerIssuesPolicyGatedCredentialIntoGraph plus OpenAPI/CLI parity for /api/v1/broker/agent-identities; roadmap residual is the tenant-wide broker history console beyond the served metadata-safe Workloads workflow.",
-                        "TRACE-026 guard: TestTRACE026AIAgentBrokerRowSplitsServedGAFromRoadmapResidual keeps F61 in the served GA denominator only when the policy-gated broker workflow and explicit broker-history roadmap residual are both present.",
+                        "Broker preview/history/recovery served tests and the guided console regression prove source behavior; exact-candidate fresh-image browser/restart receipts remain required for full closure.",
+                        "TRACE-026 guard: TestTRACE026AIAgentBrokerRowNamesHistoryAndQualificationBoundary retains served GA accounting while requiring accurate history/preview/retry coverage and explicit installed-product qualification obligations.",
                         "TestServedAIAgentBrokerIssuesPolicyGatedCredentialIntoGraph drives the assembled HTTP API, idempotent replay, policy denial, event emission, and graph projection.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
                         "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
                     ],
                     "refs": [
                         "internal/server/broker_served_test.go",
+                        "internal/server/broker_preview_served_test.go",
+                        "internal/server/broker_history_served_test.go",
+                        "internal/server/broker_recovery_security_test.go",
+                        "internal/store/broker_history_test.go",
+                        "web/src/__tests__/broker_identity_workflow.test.tsx",
                         "internal/api/openapi_golden_test.go",
                         "internal/cli/cli_test.go",
                         "internal/featureparity/feature_facet_coverage_test.go",
@@ -10118,7 +10143,8 @@
                 "rbac": {
                     "evidence": [
                         "feature authz manifest maps api_surface operation issueBrokerAgentIdentity to route permission certs:issue.",
-                        "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded broker issuance."
+                        "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded broker issuance.",
+                        "History list/detail require certs:read independently of certs:issue and remain available when the broker issuer is disabled. Served tests reject neighbor-tenant detail reads and callers without read permission."
                     ],
                     "refs": [
                         "internal/api/api.go",
@@ -10171,7 +10197,7 @@
             "ga_served_scope": "in_ga",
             "ga_scope_reason": "",
             "contract": {
-                "purpose": "Lets an operator understand and safely use ai-agent / nhi identity broker while tenant, policy, and security authority remain on the server.",
+                "purpose": "Give an agent a short-lived identity only after proof and policy checks, then inspect its durable issuance history and recover uncertain requests without quietly issuing twice.",
                 "tool": "workloads_machines",
                 "classification": "primary",
                 "release_blocking": true,
@@ -10183,7 +10209,11 @@
                 ],
                 "permission_authority": "internal/api route registry and feature authorization manifest",
                 "edition": "core",
-                "dependencies": [],
+                "dependencies": [
+                    "Issuance: configured broker, enabled tenant attestation trust, scope policy, trust domain and isolated signer-backed CA.",
+                    "History: certs:read and the shared certificate projection; broker issuance may be disabled independently.",
+                    "Optional task envelope: attached licensed verification gate; absence refuses the envelope rather than dropping its restriction."
+                ],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
                 "maturity": "partial_workflow",
@@ -10208,11 +10238,11 @@
                     },
                     "preview": {
                         "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "reason": "Effect-free server preview and guided review are implemented and source-tested. Exact-candidate fresh-image browser proof is still required."
                     },
                     "execute": {
                         "status": "missing",
-                        "reason": "No complete console execution path is proved for this capability."
+                        "reason": "Explicit console issuance, permission checks and durable readback are implemented and source-tested. Live API/CLI/browser issuance on the fresh candidate is still required."
                     },
                     "observe": {
                         "status": "complete",
@@ -10222,7 +10252,7 @@
                     },
                     "recover": {
                         "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "reason": "Same-command retry, guarded reset and durable recovery are implemented and source-tested. Fresh-image browser recovery, shared revocation and preserved-volume restart proof are still required."
                     },
                     "verify": {
                         "status": "complete",

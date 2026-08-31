@@ -3,6 +3,8 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Workloads } from "@/pages/Workloads";
+import { AppQueryProvider } from "@/lib/query";
+import { brokerHistoryPage } from "./support/brokerIdentity";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -10,6 +12,7 @@ const { apiMock } = vi.hoisted(() => ({
     connectorDeliveries: vi.fn(),
     contextualRiskPriorities: vi.fn(),
     identities: vi.fn(),
+    brokerAgentIdentities: vi.fn(),
     kubernetesCSRSupport: vi.fn(),
     kubernetesTrustBundles: vi.fn(),
     rotationRuns: vi.fn(),
@@ -27,13 +30,16 @@ vi.mock("@/lib/api", async (orig) => {
 function renderWorkloads() {
   return render(
     <MemoryRouter>
-      <Workloads />
+      <AppQueryProvider>
+        <Workloads />
+      </AppQueryProvider>
     </MemoryRouter>,
   );
 }
 
 describe("workload identity disclosure surface", () => {
   beforeEach(() => {
+    apiMock.brokerAgentIdentities.mockReset().mockResolvedValue(brokerHistoryPage([]));
     apiMock.kubernetesCSRSupport.mockReset().mockResolvedValue(kubernetesCSRSupportFixture());
     apiMock.kubernetesTrustBundles.mockReset().mockResolvedValue(kubernetesTrustBundleFixture());
     apiMock.workloadAttesterTrustSources.mockReset().mockResolvedValue({ items: [] });
@@ -151,7 +157,9 @@ describe("workload identity disclosure surface", () => {
   it("opens only a blank review workflow from an attested replacement link", async () => {
     render(
       <MemoryRouter initialEntries={["/workloads?workflow=attested"]}>
-        <Workloads />
+        <AppQueryProvider>
+          <Workloads />
+        </AppQueryProvider>
       </MemoryRouter>,
     );
     expect(await screen.findByRole("button", { name: "Issue attested SVID" })).toHaveAttribute("aria-expanded", "true");
@@ -252,14 +260,15 @@ describe("workload identity disclosure surface", () => {
 
     expect(await screen.findByRole("heading", { level: 1, name: "Workloads & Machines" })).toBeInTheDocument();
     expect(screen.getByText("AI-agent / NHI broker")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Issue broker identity" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Agent ID")).toHaveValue("agent-build-1");
-    expect(screen.getByLabelText("Broker method")).toHaveValue("github_oidc");
-    expect(screen.getByLabelText("Broker scopes")).toHaveValue("mcp:read-only, secrets:read:ci");
+    expect(await screen.findByText("No certificates match this view")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Request agent identity" }));
+    expect(screen.getByLabelText("Agent ID")).toHaveValue("");
+    expect(screen.getByRole("combobox", { name: "Broker method" })).toHaveValue("k8s_sat");
+    expect(screen.getByLabelText("Broker scopes")).toHaveValue("");
     expect(screen.getByLabelText("Broker proof payload (base64)")).toBeInTheDocument();
     expect(screen.getByLabelText("Broker public key")).toBeInTheDocument();
-    expect(screen.getByText("No broker identity has been issued in this browser session.")).toBeInTheDocument();
-    expect(screen.getByText("Broker history isn't in the console yet")).toBeInTheDocument();
+    expect(screen.queryByText("No broker identity has been issued in this browser session.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Broker history isn't in the console yet")).not.toBeInTheDocument();
     expect(screen.queryByText("AI agent broker lifecycle fixture")).not.toBeInTheDocument();
     expect(screen.queryByText("credential lease audit event")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /approve agent|mint token/i })).not.toBeInTheDocument();

@@ -316,16 +316,129 @@ AI-agent identity broker is a dedicated issuance surface that (1) evaluates a
 `agent.identity.refused` and signs nothing; (2) issues an attested, short-lived
 credential via the ephemeral issuer; (3) records the agent and its credential in the
 graph so you can ask **blast radius** ("everything this agent can reach") *before*
-trusting it. A tenant-wide broker history and one-call revocation console remain a
-roadmap residual, not part of the served GA claim.
+trusting it. The source now includes tenant-wide durable broker history and guided
+preview, issuance and retry. Installed-product qualification remains pending as
+described below. Revocation uses the shared certificate control plane; there is no
+separate broker-specific one-call revocation action.
 
 Served when the agent broker is configured, at `POST /api/v1/broker/agent-identities`:
-the operator supplies the trust domain, attestors, Rego policy module, and
-signer-backed issuing CA. A request carries the agent id, attestation method, proof
+the operator supplies the trust domain, Rego policy module, and signer-backed
+issuing CA. Public attestation trust is configured for each tenant through
+`/api/v1/workloads/attester-trust-sources`; normal configuration does not require
+in-process attestors. Enabling the broker without tenant trust is allowed, but
+issuance remains blocked until matching enabled trust exists. A request carries the agent id, attestation method, proof
 payload, public key, requested scopes, and optional TTL; trstctl verifies the proof,
 evaluates policy before signing, mints a short-lived X.509-SVID through the isolated
 signer, records `certificate.recorded`, and projects the agent-to-credential edge into
 the graph. Denies emit `agent.identity.refused` and return no credential.
+
+#### Broker review and safety boundaries
+
+`POST /api/v1/broker/agent-identities/preview` and
+`trstctl-cli broker agent-identities preview -f broker-request.json` review the same
+request before issuance. Both require `certs:issue`; the read-only preview does
+not send or reserve an `Idempotency-Key`. It returns the agent, scopes, trust
+domain, enabled methods, effective lifetime, safe input digests, and recovery
+steps. It never calls policy, the proof verifier, the licensed task gate, or the
+signer, and does not append events or write mutation state.
+
+**Ready means configured, not authorized.** Issuance still verifies fresh proof,
+checks current tenant trust and scope policy, and refuses invalid, expired, or
+revoked trust. A supplied `task_envelope_base64` requires the licensed task gate;
+a deployment without that gate refuses it instead of silently dropping its task
+restriction. Preview exposes this as a blocker without consuming task proof.
+Requested scopes are issuance-policy inputs: the certificate proves identity,
+while each receiving service must enforce its own access policy.
+
+The default lifetime is ten minutes and the default maximum is one hour unless
+the operator configures tighter or different bounds. A nonpositive request uses
+the configured default; an over-maximum request is capped before integer-to-duration
+conversion. The effective lifetime reaches the actual signer. Review the returned
+deadline, not only the requested number. Input must contain exactly one valid,
+header-free PKIX `PUBLIC KEY` PEM block; duplicate keys, leading or trailing junk,
+and private-key blocks are rejected.
+
+New broker issuances record requester key origin through `certificate.recorded`.
+The workload supplied only a public key, so storage and exportability remain
+unrecorded. Existing custody records are not backfilled by guessing. The API keeps
+encoded and decoded proof/task bytes in wipeable buffers and clears them on
+success, refusal, and partial decoding errors. Request files and browser inputs
+still need protection: never log them or commit them to source control.
+
+#### Broker retries after cache retention
+
+New issuances keep their original agent ID, verified subject and method, scope
+list, original owner ID, requested/effective lifetime, and optional verified task
+digest in the same `certificate.recorded` event as the public certificate. They
+remain one certificate in the shared inventory. Rediscovery may update where that
+certificate was observed or who owns it now; it cannot rewrite these issuance facts.
+Raw attestation proof, task-envelope contents, and private keys are not added to
+this record.
+
+The event also keeps a one-way fingerprint of the authenticated requester and
+command. After the short-lived HTTP result cache expires, a retry must still
+match that original command. A changed requester, agent, method, scopes, lifetime,
+public key, proof, or task envelope returns `409`, not a relabeled old certificate.
+The matching retry rechecks current trust, policy, proof, and any task gate before
+returning the original certificate; it does not sign again. Changed verification
+results are refused. A missing database projection can be recovered from the event.
+
+Legacy certificates without these facts, or records whose facts were removed by
+privacy policy, cannot safely be reconstructed from a new request. Once their
+cached response is gone, recovery refuses them. Inspect the existing certificate
+and its expiry before deciding whether a genuinely new issuance is needed. Never
+change recovery keys repeatedly just to make an uncertain operation appear green.
+Subject export/erasure includes broker metadata, retention clears it, and snapshot
+restore/event replay preserve the recorded state. An old snapshot without the new
+fields must replay history rather than claim that history is complete.
+
+#### Durable broker history and the guided console
+
+`GET /api/v1/broker/agent-identities` and `GET /api/v1/broker/agent-identities/{id}`
+read the shared certificate inventory with `certs:read`. They remain available
+when new broker issuance is disabled. These reads do not consume proof, sign,
+revoke, or reserve recovery keys. They never return certificate bodies, raw proof,
+task contents, or internal command bindings.
+
+```sh
+trstctl-cli broker agent-identities list --limit 20 --state expired
+trstctl-cli broker agent-identities list --q agent-7 --method k8s_sat
+trstctl-cli broker agent-identities get <certificate_id>
+```
+
+Pages are newest first, with an opaque `next_cursor`; pass it as `--cursor` to
+continue. Limits are 1–100, search is literal and at most 200 characters, and a
+method filter matches the recorded original method, not a later discovery label.
+The server calculates one state vocabulary for display and filtering: `valid`,
+`not_yet_valid`, `expired`, `revoked`, `superseded`, or `unknown`. `NotAfter` is an
+exclusive deadline: exactly at that time the certificate is expired. Revoked and
+replaced records keep those states even after expiry. `valid` means the projected
+lifecycle is active and the validity window contains the server's check time;
+it does not grant access at a receiving service.
+
+Every response gives `generated_at` and coarse `projection_state`: `current`,
+`catching_up`, `blocked`, or `unknown`. A projection is the database view built
+from immutable events. A lagging or blocked view may not yet contain newer
+revocations. Missing issuance metadata says `unavailable`; it is not a claim that
+the certificate never had an owner or scopes. Failed/refused attempts belong in
+the audit trail, not this list of issued certificates.
+
+On **Workloads & Machines**, the broker section reads this durable history before
+opening a new request. **Request agent identity** leads through input, server
+preview, explicit issuance, and durable readback. The form includes the optional
+task envelope rather than silently omitting it. After an uncertain response,
+**Retry exact issuance** preserves the body and `Idempotency-Key`; editing is
+locked. Starting a different request requires acknowledging that a certificate
+may already exist. Clearing the form does not cancel or revoke an issuance.
+Successful issuance clears proof and task input; the public certificate is only
+copied on an explicit action. A page reload loses retry inputs, so inspect the
+inventory and audit trail before starting again. The shared revocation center is
+linked; a broker-specific one-call revoke is not claimed.
+
+The source now contains this API/CLI/console workflow. Release qualification still
+requires its fresh-image, browser, restart and negative-security receipts; focused
+component tests alone do not complete the F61 vertical slice. The new Spanish and
+German operator copy is machine-authored and requires human review before release.
 
 ### In the console
 

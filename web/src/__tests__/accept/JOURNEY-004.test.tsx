@@ -191,4 +191,20 @@ describe("JOURNEY-004 full persona journey smoke", () => {
       expect(apiMock.me).toHaveBeenCalled();
     }
   });
+
+  it("takes agent issuance to the broker journey with preview, issue and durable readback", () => {
+    const cell = journeySmokeMatrix.find((item) => item.persona === "agent_ci_principal" && item.step === "issue");
+    expect(cell?.uiRoute).toBe("/workloads");
+    expect(cell?.apiPaths).toEqual(["/api/v1/broker/agent-identities/preview", "/api/v1/broker/agent-identities", "/api/v1/broker/agent-identities/{id}"]);
+    expect(cell?.cliCommands).toEqual([
+      "trstctl-cli broker agent-identities preview",
+      "trstctl-cli broker agent-identities issue",
+      "trstctl-cli broker agent-identities list",
+      "trstctl-cli broker agent-identities get",
+    ]);
+    expect(cell?.docs).toContain("docs/features/workload-identity.md");
+    // Source-route coverage is not installed-product qualification. The canonical
+    // F61 maturity remains partial until fresh-image browser/restart proof exists.
+    expect(cell?.status).toBe("partial");
+  });
 });

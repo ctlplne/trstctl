@@ -247,14 +247,15 @@ type PrivacyIdentityRecord struct {
 
 // PrivacyCertificateRecord is one certificate row whose subject/SAN matches.
 type PrivacyCertificateRecord struct {
-	Fingerprint        string    `json:"fingerprint"`
-	Subject            string    `json:"subject"`
-	SANs               []string  `json:"sans"`
-	Serial             string    `json:"serial"`
-	Issuer             string    `json:"issuer"`
-	DeploymentLocation string    `json:"deployment_location"`
-	Source             string    `json:"source"`
-	CreatedAt          time.Time `json:"created_at"`
+	BrokerIssuance     *BrokerIssuance `json:"broker_issuance,omitempty"`
+	Fingerprint        string          `json:"fingerprint"`
+	Subject            string          `json:"subject"`
+	SANs               []string        `json:"sans"`
+	Serial             string          `json:"serial"`
+	Issuer             string          `json:"issuer"`
+	DeploymentLocation string          `json:"deployment_location"`
+	Source             string          `json:"source"`
+	CreatedAt          time.Time       `json:"created_at"`
 }
 
 // PrivacySSHKeyRecord is one SSH key row whose comment/location matches.
@@ -415,17 +416,18 @@ func (s *Store) SelectPrivacySubjectExport(ctx context.Context, tenantID, subjec
 
 		// Certificates (matched by subject, SAN, deployment location, or source).
 		rows, err = tx.Query(ctx,
-			`SELECT fingerprint, subject, sans, serial, issuer, deployment_location, source, created_at
+			`SELECT fingerprint, subject, sans, serial, issuer, deployment_location, source, created_at, broker_issuance
 				  FROM certificates
 				  WHERE tenant_id = $1
-				    AND (subject = $2 OR subject = 'CN=' || $2 OR $2 = ANY(sans) OR deployment_location = $2 OR source = $2)
+				    AND (subject = $2 OR subject = 'CN=' || $2 OR $2 = ANY(sans) OR deployment_location = $2 OR source = $2
+				      OR position($2 in coalesce(broker_issuance::text, '')) > 0)
 				  ORDER BY fingerprint`, tenantID, subject)
 		if err != nil {
 			return err
 		}
 		for rows.Next() {
 			var r PrivacyCertificateRecord
-			if err := rows.Scan(&r.Fingerprint, &r.Subject, &r.SANs, &r.Serial, &r.Issuer, &r.DeploymentLocation, &r.Source, &r.CreatedAt); err != nil {
+			if err := rows.Scan(&r.Fingerprint, &r.Subject, &r.SANs, &r.Serial, &r.Issuer, &r.DeploymentLocation, &r.Source, &r.CreatedAt, &r.BrokerIssuance); err != nil {
 				rows.Close()
 				return err
 			}
@@ -685,7 +687,8 @@ func (s *Store) selectPrivacySubjectErasureTx(
 	certificateFingerprints, err := selectStrings(ctx, tx,
 		`SELECT fingerprint FROM certificates
 			  WHERE tenant_id = $1
-			    AND (subject = $2 OR subject = 'CN=' || $2 OR $2 = ANY(sans) OR deployment_location = $2 OR source = $2)
+			    AND (subject = $2 OR subject = 'CN=' || $2 OR $2 = ANY(sans) OR deployment_location = $2 OR source = $2
+			      OR position($2 in coalesce(broker_issuance::text, '')) > 0)
 			  ORDER BY fingerprint`, tenantID, subject)
 	if err != nil {
 		return err
@@ -1052,7 +1055,7 @@ func (s *Store) ApplyPrivacySubjectErasedTx(ctx context.Context, tx pgx.Tx, e Pr
 			    SET subject = 'erased:' || left(fingerprint, 12),
 			        sans = '{}'::text[],
 			        deployment_location = '',
-			        source = ''
+			        source = '', broker_issuance = NULL
 			  WHERE tenant_id = $1 AND fingerprint = ANY($2::text[])`,
 		e.TenantID, certificateFingerprints); err != nil {
 		return err
@@ -1325,9 +1328,9 @@ func (s *Store) ApplyPrivacyRetentionEnforcedTx(ctx context.Context, tx pgx.Tx, 
 		    SET subject = 'retained:' || left(fingerprint, 12),
 		        sans = '{}'::text[],
 		        deployment_location = '',
-		        source = ''
+		        source = '', broker_issuance = NULL
 		  WHERE tenant_id = $1
-		    AND (subject NOT LIKE 'retained:%' OR cardinality(sans) > 0 OR deployment_location <> '' OR source <> '')
+		    AND (subject NOT LIKE 'retained:%' OR cardinality(sans) > 0 OR deployment_location <> '' OR source <> '' OR broker_issuance IS NOT NULL)
 		    AND (
 		          (status IN ('revoked', 'superseded')
 		           AND COALESCE(revoked_at, renewed_at, not_after, created_at) < $2)
@@ -3517,7 +3520,7 @@ func countPrivacyRetentionRows(ctx context.Context, tx pgx.Tx, tenantID string, 
 		"certificates": {
 			sql: `SELECT count(*) FROM certificates
 			       WHERE tenant_id = $1
-			         AND (subject NOT LIKE 'retained:%' OR cardinality(sans) > 0 OR deployment_location <> '' OR source <> '')
+			         AND (subject NOT LIKE 'retained:%' OR cardinality(sans) > 0 OR deployment_location <> '' OR source <> '' OR broker_issuance IS NOT NULL)
 			         AND (
 			               (status IN ('revoked', 'superseded')
 			                AND COALESCE(revoked_at, renewed_at, not_after, created_at) < $2)

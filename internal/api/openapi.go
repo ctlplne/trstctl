@@ -10,6 +10,7 @@ import (
 	"trstctl.com/trstctl/internal/issuancerequest"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/servedstatus"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // The minimal subset of OpenAPI 3.1 the platform needs to describe its REST
@@ -3966,6 +3967,37 @@ func componentSchemas() map[string]*Schema {
 		// authorized task. Present-but-unverifiable is refused, never ignored.
 		"task_envelope_base64": str(),
 	}, "agent_id", "method", "payload_base64", "public_key_pem", "scopes")
+	// Broker review uses the same effect-free lifetime/proof vocabulary as
+	// attested issuance, plus exact scope policy and optional task-gate state.
+	brokerPreviewProperties := make(map[string]*Schema, len(attestedSVIDPreview.Properties)+5)
+	for name, property := range attestedSVIDPreview.Properties {
+		brokerPreviewProperties[name] = property
+	}
+	brokerPreviewProperties["agent_id"] = str()
+	brokerPreviewProperties["scopes"] = &Schema{Type: "array", Items: str()}
+	brokerPreviewProperties["policy_evaluation"] = str()
+	brokerPreviewProperties["task_envelope_verification"] = str()
+	brokerPreviewProperties["task_envelope_sha256"] = str()
+	brokerPreviewRequired := append([]string(nil), attestedSVIDPreview.Required...)
+	brokerPreviewRequired = append(brokerPreviewRequired, "agent_id", "scopes", "policy_evaluation", "task_envelope_verification", "task_envelope_sha256")
+	brokerAgentIdentityPreview := object(brokerPreviewProperties, brokerPreviewRequired...)
+	brokerIssuanceFacts := object(map[string]*Schema{
+		"agent_id": str(), "subject": str(), "method": str(), "owner_id": uuid(),
+		"scopes": {Type: "array", Items: str()}, "task_envelope_digest": str(),
+		"requested_ttl_seconds": {Type: "integer"}, "effective_ttl_seconds": {Type: "integer"},
+	}, "agent_id", "subject", "method", "owner_id", "scopes", "requested_ttl_seconds", "effective_ttl_seconds")
+	brokerProjectionState := &Schema{Type: "string", Enum: []string{"current", "catching_up", "blocked", "unknown"}, Description: "Coarse projection freshness; no cross-tenant counts or error details are disclosed."}
+	brokerIdentityHistory := object(map[string]*Schema{
+		"certificate_id": uuid(), "fingerprint": str(), "certificate_subject": str(), "serial": str(), "current_owner_id": uuid(),
+		"not_before": timestamp(), "not_after": timestamp(), "recorded_at": timestamp(), "lifecycle_status": str(),
+		"state": {Type: "string", Enum: store.BrokerCertificateStates()}, "state_reason": str(),
+		"metadata_state": {Type: "string", Enum: []string{"recorded", "unavailable"}, Description: "Unavailable means original facts were not recorded or were removed by privacy policy; never inferred from a current request or owner."},
+		"issuance":       ref("BrokerIssuanceFacts"), "generated_at": timestamp(), "projection_state": brokerProjectionState,
+	}, "certificate_id", "fingerprint", "certificate_subject", "serial", "recorded_at", "lifecycle_status", "state", "state_reason", "metadata_state", "generated_at", "projection_state")
+	brokerIdentityHistoryList := object(map[string]*Schema{
+		"items": {Type: "array", Items: ref("BrokerAgentIdentityHistory")}, "next_cursor": str(), "generated_at": timestamp(),
+		"projection_state": brokerProjectionState, "history_scope": {Type: "string", Enum: []string{"broker_issued_certificates"}, Description: "Issued certificates only, not a complete refusal/failed-attempt feed. Use tenant audit evidence for attempts."},
+	}, "items", "next_cursor", "generated_at", "projection_state", "history_scope")
 	brokerAgentIdentity := object(map[string]*Schema{
 		"agent_id":        str(),
 		"node_id":         str(),
@@ -5952,6 +5984,10 @@ func componentSchemas() map[string]*Schema {
 		"SSHHostRetireRequest":                     sshHostRetireReq,
 		"SSHHostRetirement":                        sshHostRetirement,
 		"BrokerAgentIdentityRequest":               brokerAgentIdentityReq,
+		"BrokerAgentIdentityPreview":               brokerAgentIdentityPreview,
+		"BrokerIssuanceFacts":                      brokerIssuanceFacts,
+		"BrokerAgentIdentityHistory":               brokerIdentityHistory,
+		"BrokerAgentIdentityHistoryList":           brokerIdentityHistoryList,
 		"BrokerAgentIdentity":                      brokerAgentIdentity,
 		"EphemeralCredentialRequest":               ephemeralCredentialReq,
 		"EphemeralCredentialPreview":               ephemeralCredentialPreview,

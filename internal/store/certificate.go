@@ -36,6 +36,7 @@ type Certificate struct {
 	IssuanceResponse       []byte
 	IssuanceIdempotencyKey string
 	IssuanceRequestBinding string
+	BrokerIssuance         *BrokerIssuance
 	// KeyOrigin, KeyStorage, KeyExportable and KeyGeneratedBy record where this
 	// certificate's private key was generated and what holds it (epic B5).
 	// Empty means UNRECORDED, which is a distinct answer from any observation —
@@ -363,7 +364,7 @@ const certificateColumns = `id::text, tenant_id::text, owner_id::text, subject, 
         certificate_der, issuance_idempotency_key, created_at,
         status, replaces_id::text, revoked_at, revocation_reason, renewed_at, alerted_at,
         key_origin, key_storage, key_exportable, key_generated_by,
-        observed_by, observed_kind, last_seen_at`
+        observed_by, observed_kind, last_seen_at, issuance_request_binding, broker_issuance`
 
 func scanCertificate(row pgx.Row, c *Certificate) error {
 	return row.Scan(&c.ID, &c.TenantID, &c.OwnerID, &c.Subject, &c.SANs, &c.Issuer, &c.Serial,
@@ -376,7 +377,7 @@ func scanCertificate(row pgx.Row, c *Certificate) error {
 		// C3: provenance. Which source last confirmed this certificate exists,
 		// and when — distinct from created_at, which only says when trstctl
 		// first recorded it.
-		&c.ObservedBy, &c.ObservedKind, &c.LastSeenAt)
+		&c.ObservedBy, &c.ObservedKind, &c.LastSeenAt, &c.IssuanceRequestBinding, &c.BrokerIssuance)
 }
 
 // GetCertificate loads a certificate in its tenant context.

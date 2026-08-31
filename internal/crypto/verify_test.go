@@ -5,6 +5,7 @@ package crypto
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/pem"
 	"testing"
 )
 
@@ -24,6 +25,36 @@ func TestParsePublicKeyPEMClassifiesAndRejectsTrailingData(t *testing.T) {
 	}
 	if _, err := ParsePublicKeyPEM(append(pemBytes, []byte("second trust object")...)); err == nil {
 		t.Fatal("ParsePublicKeyPEM accepted trailing trust material")
+	}
+}
+
+func TestParsePublicKeyPEMRejectsSkippedMaterialAndHeaders(t *testing.T) {
+	key, err := GenerateLockedKey(ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer key.Destroy()
+	public := MarshalPublicKeyPEM(key.Public().DER)
+	for name, input := range map[string][]byte{
+		"leading-junk":          append([]byte("unexpected leading material\n"), public...),
+		"malformed-first-block": append([]byte("-----BEGIN PUBLIC KEY-----\nnot a key\n-----END PUBLIC KEY-----\n"), public...),
+		"two-valid-keys":        append(append([]byte(nil), public...), public...),
+		"pem-header":            pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Headers: map[string]string{"Untrusted": "ignored"}, Bytes: key.Public().DER}),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := ParsePublicKeyPEM(input); err == nil {
+				t.Fatal("ambiguous public-key material accepted")
+			}
+		})
+	}
+	for _, input := range [][]byte{
+		append(append([]byte(" \t\r\n"), public...), []byte(" \r\n")...),
+		bytes.ReplaceAll(public, []byte("\n"), []byte("\r\n")),
+	} {
+		got, err := ParsePublicKeyPEM(input)
+		if err != nil || !bytes.Equal(got.DER, key.Public().DER) {
+			t.Fatalf("ordinary whitespace or CRLF key rejected: %v", err)
+		}
 	}
 }
 

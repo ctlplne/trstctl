@@ -160,6 +160,14 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/issuance_request_binding", opaque), privacyRule("/key_origin", opaque),
 		privacyRule("/key_storage", opaque), privacyRule("/key_exportable", opaque),
 		privacyRule("/key_generated_by", opaque),
+		privacyRule("/broker_issuance/agent_id", token),
+		privacyRule("/broker_issuance/subject", token),
+		privacyRule("/broker_issuance/method", opaque),
+		privacyRule("/broker_issuance/owner_id", opaque),
+		privacyRule("/broker_issuance/scopes/*", token),
+		privacyRule("/broker_issuance/task_envelope_digest", opaque),
+		privacyRule("/broker_issuance/requested_ttl_seconds", opaque),
+		privacyRule("/broker_issuance/effective_ttl_seconds", opaque),
 	)
 	certificateCustodyAttested := privacyRules(
 		privacyRule("/fingerprint", opaque), privacyRule("/key_origin", opaque),
@@ -905,29 +913,30 @@ type privacyDynamicSecretOperationCompletedV2 struct {
 }
 
 type privacyCertificateRecordedV1 struct {
-	ID                     string     `json:"id"`
-	CAID                   string     `json:"ca_id,omitempty"`
-	OwnerID                *string    `json:"owner_id"`
-	Subject                string     `json:"subject"`
-	SANs                   []string   `json:"sans"`
-	Issuer                 string     `json:"issuer"`
-	Serial                 string     `json:"serial"`
-	Fingerprint            string     `json:"fingerprint"`
-	KeyAlgorithm           string     `json:"key_algorithm"`
-	NotBefore              *time.Time `json:"not_before"`
-	NotAfter               *time.Time `json:"not_after"`
-	DeploymentLocation     string     `json:"deployment_location"`
-	Source                 string     `json:"source"`
-	ReplacesID             *string    `json:"replaces_id,omitempty"`
-	CertificateDER         []byte     `json:"certificate_der,omitempty"`
-	CertificatePEM         []byte     `json:"certificate_pem,omitempty"`
-	IssuanceResponse       []byte     `json:"issuance_response,omitempty"`
-	IssuanceIdempotencyKey string     `json:"issuance_idempotency_key,omitempty"`
-	IssuanceRequestBinding string     `json:"issuance_request_binding,omitempty"`
-	KeyOrigin              string     `json:"key_origin,omitempty"`
-	KeyStorage             string     `json:"key_storage,omitempty"`
-	KeyExportable          string     `json:"key_exportable,omitempty"`
-	KeyGeneratedBy         string     `json:"key_generated_by,omitempty"`
+	ID                     string                `json:"id"`
+	CAID                   string                `json:"ca_id,omitempty"`
+	OwnerID                *string               `json:"owner_id"`
+	Subject                string                `json:"subject"`
+	SANs                   []string              `json:"sans"`
+	Issuer                 string                `json:"issuer"`
+	Serial                 string                `json:"serial"`
+	Fingerprint            string                `json:"fingerprint"`
+	KeyAlgorithm           string                `json:"key_algorithm"`
+	NotBefore              *time.Time            `json:"not_before"`
+	NotAfter               *time.Time            `json:"not_after"`
+	DeploymentLocation     string                `json:"deployment_location"`
+	Source                 string                `json:"source"`
+	ReplacesID             *string               `json:"replaces_id,omitempty"`
+	CertificateDER         []byte                `json:"certificate_der,omitempty"`
+	CertificatePEM         []byte                `json:"certificate_pem,omitempty"`
+	IssuanceResponse       []byte                `json:"issuance_response,omitempty"`
+	IssuanceIdempotencyKey string                `json:"issuance_idempotency_key,omitempty"`
+	IssuanceRequestBinding string                `json:"issuance_request_binding,omitempty"`
+	BrokerIssuance         *store.BrokerIssuance `json:"broker_issuance,omitempty"`
+	KeyOrigin              string                `json:"key_origin,omitempty"`
+	KeyStorage             string                `json:"key_storage,omitempty"`
+	KeyExportable          string                `json:"key_exportable,omitempty"`
+	KeyGeneratedBy         string                `json:"key_generated_by,omitempty"`
 }
 
 type privacySubjectErasedV1 struct {

@@ -301,10 +301,16 @@ export const journeySmokeMatrix: readonly JourneySmokeCell[] = [
     acceptance: ["JOURNEY-002", "JOURNEY-004"],
   }),
   served("agent_ci_principal", "issue", {
-    route: "integrate",
-    apiPaths: ["/api/v1/identities", "/api/v1/identities/{id}/transitions"],
-    cliCommands: ["trstctl-cli identities create", "trstctl-cli identities transition issued"],
-    docs: docs.integration,
+    route: "workloads",
+    apiPaths: ["/api/v1/broker/agent-identities/preview", "/api/v1/broker/agent-identities", "/api/v1/broker/agent-identities/{id}"],
+    cliCommands: [
+      "trstctl-cli broker agent-identities preview",
+      "trstctl-cli broker agent-identities issue",
+      "trstctl-cli broker agent-identities list",
+      "trstctl-cli broker agent-identities get",
+    ],
+    docs: ["docs/features/workload-identity.md", ...docs.integration],
+    status: "partial",
   }),
   served("agent_ci_principal", "rotate", {
     route: "operations",

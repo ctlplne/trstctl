@@ -24,8 +24,16 @@ import (
 // helper so callers never parse RSA/ECDSA/Ed25519 material outside internal/crypto
 // (AN-3), and so an unsupported key fails at startup rather than at first use.
 func ParsePublicKeyPEM(pemBytes []byte) (PublicKey, error) {
-	blk, rest := pem.Decode(bytes.TrimSpace(pemBytes))
-	if blk == nil || blk.Type != "PUBLIC KEY" {
+	input := bytes.TrimSpace(pemBytes)
+	// pem.Decode scans ahead past junk and even malformed blocks. Trust input
+	// must name one unambiguous key, not whichever later block happens to parse.
+	if !bytes.HasPrefix(input, []byte("-----BEGIN PUBLIC KEY-----")) ||
+		bytes.Count(input, []byte("-----BEGIN ")) != 1 ||
+		bytes.Count(input, []byte("-----END ")) != 1 {
+		return PublicKey{}, fmt.Errorf("crypto: expected one PUBLIC KEY PEM block without leading material")
+	}
+	blk, rest := pem.Decode(input)
+	if blk == nil || blk.Type != "PUBLIC KEY" || len(blk.Headers) != 0 {
 		return PublicKey{}, fmt.Errorf("crypto: expected one PUBLIC KEY PEM block")
 	}
 	if len(bytes.TrimSpace(rest)) != 0 {

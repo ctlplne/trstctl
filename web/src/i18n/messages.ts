@@ -12,6 +12,174 @@ export type Locale = (typeof supportedLocales)[number];
 export type MessageValues = Record<string, number | string>;
 
 export const messages = {
+  "broker.description": {
+    defaultMessage:
+      "Give an agent a short-lived identity, then track its certificate in the shared inventory. The server verifies proof and policy before signing.",
+    description: "F61 guided broker issuance and durable inventory: description.",
+  },
+  "broker.start": { defaultMessage: "Request agent identity", description: "F61 guided broker issuance and durable inventory: start." },
+  "broker.requestBody": {
+    defaultMessage: "Name the agent, request only needed scopes, and supply workload proof plus its public key.",
+    description: "F61 guided broker issuance and durable inventory: requestBody.",
+  },
+  "broker.reviewBody": {
+    defaultMessage: "This checks configuration, not permission to sign. Proof, scope policy and any task envelope are verified only when you issue.",
+    description: "F61 guided broker issuance and durable inventory: reviewBody.",
+  },
+  "broker.prove": { defaultMessage: "Read back the certificate", description: "F61 guided broker issuance and durable inventory: prove." },
+  "broker.proveBody": {
+    defaultMessage:
+      "The issuance response is not a live status check. Open the durable record to inspect current validity, revocation and original issuance facts.",
+    description: "F61 guided broker issuance and durable inventory: proveBody.",
+  },
+  "broker.progress": { defaultMessage: "Agent identity request progress", description: "F61 guided broker issuance and durable inventory: progress." },
+  "broker.scopesHelp": {
+    defaultMessage: "Comma-separated policy inputs, not automatic access grants. Each receiving service must still enforce its own access rules.",
+    description: "F61 guided broker issuance and durable inventory: scopesHelp.",
+  },
+  "broker.task": { defaultMessage: "Task envelope (base64, optional)", description: "F61 guided broker issuance and durable inventory: task." },
+  "broker.taskHelp": {
+    defaultMessage:
+      "Paste an authorized task envelope only when this deployment has the licensed verification gate. Unsupported envelopes are refused, never silently ignored.",
+    description: "F61 guided broker issuance and durable inventory: taskHelp.",
+  },
+  "broker.inputSafety": {
+    defaultMessage:
+      "Keep the private key on the workload. Proof and task text stay only in this form's memory until success or an explicit reset; they are not saved for a page reload.",
+    description: "F61 guided broker issuance and durable inventory: inputSafety.",
+  },
+  "broker.configureTrust": { defaultMessage: "Configure workload trust", description: "F61 guided broker issuance and durable inventory: configureTrust." },
+  "broker.form.required": { defaultMessage: "This field is required.", description: "F61 guided broker issuance and durable inventory: form.required." },
+  "broker.form.base64": {
+    defaultMessage: "Use standard base64, including padding when required.",
+    description: "F61 guided broker issuance and durable inventory: form.base64.",
+  },
+  "broker.form.scopesError": {
+    defaultMessage: "Separate non-empty scopes with commas.",
+    description: "F61 guided broker issuance and durable inventory: form.scopesError.",
+  },
+  "broker.form.ttlError": {
+    defaultMessage: "Enter a whole number of seconds, or 0 for the server default.",
+    description: "F61 guided broker issuance and durable inventory: form.ttlError.",
+  },
+  "broker.form.publicKeyError": {
+    defaultMessage: "Paste exactly one PUBLIC KEY PEM block. Never paste a private key.",
+    description: "F61 guided broker issuance and durable inventory: form.publicKeyError.",
+  },
+  "broker.issue.failed": {
+    defaultMessage: "The broker request needs attention",
+    description: "F61 guided broker issuance and durable inventory: issue.failed.",
+  },
+  "broker.issue.uncertain": {
+    defaultMessage:
+      "The response did not confirm the outcome. This does not prove issuance failed. Check the durable inventory and audit trail, then retry the unchanged request with the retained key.",
+    description: "F61 guided broker issuance and durable inventory: issue.uncertain.",
+  },
+  "broker.retryHelp": {
+    defaultMessage: "This request is locked for an exact retry. A new request needs an explicit reset; it may create a second certificate.",
+    description: "F61 guided broker issuance and durable inventory: retryHelp.",
+  },
+  "broker.recoveryKey": { defaultMessage: "Idempotency-Key for this request", description: "F61 guided broker issuance and durable inventory: recoveryKey." },
+  "broker.differentRequest": {
+    defaultMessage: "Start a different request",
+    description: "F61 guided broker issuance and durable inventory: differentRequest.",
+  },
+  "broker.abandonWarning": {
+    defaultMessage:
+      "First inspect the inventory and audit trail. Clearing this form loses its exact retry inputs but does not cancel or revoke anything already issued. A new request can mint another certificate.",
+    description: "F61 guided broker issuance and durable inventory: abandonWarning.",
+  },
+  "broker.reviewedOutcome": {
+    defaultMessage: "I checked the previous outcome and understand a new request may issue another certificate.",
+    description: "F61 guided broker issuance and durable inventory: reviewedOutcome.",
+  },
+  "broker.clearRequest": { defaultMessage: "Clear inputs and start again", description: "F61 guided broker issuance and durable inventory: clearRequest." },
+  "broker.issued": { defaultMessage: "Certificate issuance recorded", description: "F61 guided broker issuance and durable inventory: issued." },
+  "broker.openRecord": { defaultMessage: "Open durable record", description: "F61 guided broker issuance and durable inventory: openRecord." },
+  "broker.certificateID": { defaultMessage: "Certificate ID", description: "F61 guided broker issuance and durable inventory: certificateID." },
+  "broker.taskCheck": { defaultMessage: "Task-envelope verification", description: "F61 guided broker issuance and durable inventory: taskCheck." },
+  "broker.taskDigest": { defaultMessage: "Task-envelope SHA-256", description: "F61 guided broker issuance and durable inventory: taskDigest." },
+  "broker.noTask": { defaultMessage: "No task envelope recorded", description: "F61 guided broker issuance and durable inventory: noTask." },
+  "broker.history.title": { defaultMessage: "Issued agent certificates", description: "F61 guided broker issuance and durable inventory: history.title." },
+  "broker.history.scope": {
+    defaultMessage:
+      "Durable broker-issued certificates from this tenant's shared inventory, not a browser-session list. Failed or refused requests belong in the audit trail.",
+    description: "F61 guided broker issuance and durable inventory: history.scope.",
+  },
+  "broker.history.search": { defaultMessage: "Search agent or certificate", description: "F61 guided broker issuance and durable inventory: history.search." },
+  "broker.history.state": { defaultMessage: "Certificate state", description: "F61 guided broker issuance and durable inventory: history.state." },
+  "broker.history.allStates": { defaultMessage: "All certificate states", description: "F61 guided broker issuance and durable inventory: history.allStates." },
+  "broker.history.invalidFilter": {
+    defaultMessage: "Choose a supported certificate state.",
+    description: "F61 guided broker issuance and durable inventory: history.invalidFilter.",
+  },
+  "broker.history.methodHelp": {
+    defaultMessage: "Exact original method, or leave blank for all methods. Unknown historical methods are not guessed.",
+    description: "F61 guided broker issuance and durable inventory: history.methodHelp.",
+  },
+  "broker.history.asOf": { defaultMessage: "Server check: {at}.", description: "F61 guided broker issuance and durable inventory: history.asOf." },
+  "broker.history.empty": {
+    defaultMessage: "No certificates match this view",
+    description: "F61 guided broker issuance and durable inventory: history.empty.",
+  },
+  "broker.history.failed": {
+    defaultMessage: "Certificate history could not be read",
+    description: "F61 guided broker issuance and durable inventory: history.failed.",
+  },
+  "broker.history.readFailure": {
+    defaultMessage:
+      "This is not an empty inventory. Check your read permission and server health, then refresh. No issuance or revocation was attempted by this read.",
+    description: "F61 guided broker issuance and durable inventory: history.readFailure.",
+  },
+  "broker.history.refresh": { defaultMessage: "Refresh history", description: "F61 guided broker issuance and durable inventory: history.refresh." },
+  "broker.history.newest": { defaultMessage: "Newest records", description: "F61 guided broker issuance and durable inventory: history.newest." },
+  "broker.history.older": { defaultMessage: "Older records", description: "F61 guided broker issuance and durable inventory: history.older." },
+  "broker.state.valid": { defaultMessage: "Within validity window", description: "F61 guided broker issuance and durable inventory: state.valid." },
+  "broker.state.notYetValid": { defaultMessage: "Not yet valid", description: "F61 guided broker issuance and durable inventory: state.notYetValid." },
+  "broker.state.expired": { defaultMessage: "Expired", description: "F61 guided broker issuance and durable inventory: state.expired." },
+  "broker.state.revoked": { defaultMessage: "Revoked", description: "F61 guided broker issuance and durable inventory: state.revoked." },
+  "broker.state.superseded": { defaultMessage: "Replaced", description: "F61 guided broker issuance and durable inventory: state.superseded." },
+  "broker.state.unknown": { defaultMessage: "State unknown", description: "F61 guided broker issuance and durable inventory: state.unknown." },
+  "broker.freshness.current": {
+    defaultMessage: "Projection caught up when checked.",
+    description: "F61 guided broker issuance and durable inventory: freshness.current.",
+  },
+  "broker.freshness.catchingUp": {
+    defaultMessage: "Projection is catching up; newer events may not appear yet.",
+    description: "F61 guided broker issuance and durable inventory: freshness.catchingUp.",
+  },
+  "broker.freshness.blocked": {
+    defaultMessage: "Projection is blocked. Treat this inventory as incomplete until recovery.",
+    description: "F61 guided broker issuance and durable inventory: freshness.blocked.",
+  },
+  "broker.freshness.unknown": {
+    defaultMessage: "Projection freshness could not be confirmed.",
+    description: "F61 guided broker issuance and durable inventory: freshness.unknown.",
+  },
+  "broker.metadataUnavailable": {
+    defaultMessage: "Not recorded or no longer retained",
+    description: "F61 guided broker issuance and durable inventory: metadataUnavailable.",
+  },
+  "broker.metadataMissingBody": {
+    defaultMessage:
+      "Original issuance facts are unavailable. This may be an older record or data removed by privacy policy; the console will not reconstruct agent, scopes or owner from later observations.",
+    description: "F61 guided broker issuance and durable inventory: metadataMissingBody.",
+  },
+  "broker.record.title": { defaultMessage: "Agent certificate record", description: "F61 guided broker issuance and durable inventory: record.title." },
+  "broker.record.description": {
+    defaultMessage: "Original issuance facts and current certificate state, read from the same shared inventory.",
+    description: "F61 guided broker issuance and durable inventory: record.description.",
+  },
+  "broker.record.loading": {
+    defaultMessage: "Reading the durable certificate record…",
+    description: "F61 guided broker issuance and durable inventory: record.loading.",
+  },
+  "broker.openRevocation": { defaultMessage: "Open revocation center", description: "F61 guided broker issuance and durable inventory: openRevocation." },
+  "broker.validFrom": { defaultMessage: "Valid from", description: "F61 guided broker issuance and durable inventory: validFrom." },
+  "broker.originalFacts": { defaultMessage: "Facts recorded at issuance", description: "F61 guided broker issuance and durable inventory: originalFacts." },
+  "broker.originalOwner": { defaultMessage: "Owner at issuance", description: "F61 guided broker issuance and durable inventory: originalOwner." },
+  "broker.currentOwner": { defaultMessage: "Current inventory owner", description: "F61 guided broker issuance and durable inventory: currentOwner." },
+  "broker.fingerprint": { defaultMessage: "Certificate fingerprint", description: "F61 guided broker issuance and durable inventory: fingerprint." },
   "app.error.heading": {
     defaultMessage: "This page stopped unexpectedly",
     description: "Heading shown when an unhandled UI render error reaches the application boundary.",
@@ -18252,11 +18420,6 @@ export const messages = {
     defaultMessage: ">90d",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Dashboard.tsx.",
   },
-  "source.a.broker.turns.an.agent.identity.plus.poli.5efe1642ad": {
-    defaultMessage:
-      "A broker turns an agent identity plus policy into a short credential lease. Submit proof once, then render only returned identity metadata.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Workloads.tsx.",
-  },
   "source.a.password.shared.secret.or.opaque.credent.b98b0c5e45": {
     defaultMessage: "A password, shared secret, or opaque credential identity tracked separately from certificate inventory.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Identities.tsx.",
@@ -18548,10 +18711,6 @@ export const messages = {
     defaultMessage: "Audit evidence",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx, src/pages/Risk.tsx.",
   },
-  "source.audit.ids.e1133f2a79": {
-    defaultMessage: "Audit IDs",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Workloads.tsx.",
-  },
   "source.audit.log.e4d36f9a4e": {
     defaultMessage: "Audit log",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Assistant.tsx.",
@@ -18647,14 +18806,6 @@ export const messages = {
   "source.break.glass.help.9f8fde42af": {
     defaultMessage: "Break-glass help",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Incidents.tsx.",
-  },
-  "source.broker.history.isn.t.in.the.console.yet.7fc4ef9d7d": {
-    defaultMessage: "Broker history isn't in the console yet",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Workloads.tsx.",
-  },
-  "source.broker.identity.failed.90cf96d503": {
-    defaultMessage: "Broker identity failed",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Workloads.tsx.",
   },
   "source.broker.method.86e0708911": {
     defaultMessage: "Broker method",
@@ -19953,10 +20104,6 @@ export const messages = {
     defaultMessage: "Issue attested SSH user certificate",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/SSHTrust.tsx.",
   },
-  "source.issue.broker.identity.a95ac0066b": {
-    defaultMessage: "Issue broker identity",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Workloads.tsx.",
-  },
   "source.issue.certificate.ff84c7ec37": {
     defaultMessage: "Issue certificate",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Wizard.tsx.",
@@ -20420,10 +20567,6 @@ export const messages = {
   "source.no.attributes.returned.for.this.node.5b22b96afd": {
     defaultMessage: "No attributes returned for this node.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
-  },
-  "source.no.broker.identity.has.been.issued.in.this.7bb702b9db": {
-    defaultMessage: "No broker identity has been issued in this browser session.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Workloads.tsx.",
   },
   "source.no.cbom.assets.returned.yet.6164e1adf5": {
     defaultMessage: "No CBOM assets returned yet",
@@ -21730,10 +21873,6 @@ export const messages = {
     defaultMessage: "Rule version unavailable",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Profiles.tsx.",
   },
-  "source.proof.payloads.are.submitted.directly.and.893894a52b": {
-    defaultMessage: "Proof payloads are submitted directly and cleared after the broker returns identity metadata.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Workloads.tsx.",
-  },
   "source.protocol.cf0883343f": {
     defaultMessage: "Protocol",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Protocols.tsx.",
@@ -23014,11 +23153,6 @@ export const messages = {
   "source.the.agent.row.remains.as.an.offboarded.tom.42a25faa10": {
     defaultMessage: "The agent row remains as an offboarded tombstone, and future mTLS RPCs from this agent are rejected.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Agents.tsx.",
-  },
-  "source.the.broker.api.issues.a.single.identity.pe.7e53bfbe2b": {
-    defaultMessage:
-      "The broker API issues a single identity per request. A tenant-wide broker history list is not available in the browser contract yet, so this table shows identities returned during this session.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Workloads.tsx.",
   },
   "source.the.browser.never.chooses.a.tenant.id.thro.091c4e9bb3": {
     defaultMessage:

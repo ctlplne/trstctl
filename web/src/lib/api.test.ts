@@ -547,6 +547,8 @@ describe("exported API surface census", () => {
       auditEvents: [optionBag, signal],
       exportAudit: [optionBag, signal],
       downloadAuditExport: [optionBag, "ndjson", signal],
+      brokerAgentIdentities: [optionBag, signal],
+      brokerAgentIdentity: ["certificate/id", signal],
     };
 
     for (const [name, member] of Object.entries(api)) {
@@ -575,6 +577,8 @@ describe("exported API surface census", () => {
       // F30: exact trust configuration, key/proof digests, and lifetime bounds;
       // no attestation verification, signing, event append, or durable write.
       "/api/v1/workloads/attested-issuance/preview",
+      // F61 preview reads public trust and digests, with no verification or signing.
+      "/api/v1/broker/agent-identities/preview",
       // F43: validates and normalizes one SSH public-key certificate request
       // without allocating a serial, appending an event, changing the KRL, or
       // calling the isolated signer.

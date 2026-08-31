@@ -8,6 +8,83 @@ import type { MessageKey } from "@/i18n/messages";
  * error, so every new message key still ships with its translation in the
  * same commit. */
 const esESCatalog = {
+  "broker.description":
+    "Dé una identidad de corta duración a un agente y siga su certificado en el inventario compartido. El servidor verifica la prueba y la política antes de firmar.",
+  "broker.start": "Solicitar identidad de agente",
+  "broker.requestBody": "Nombre el agente, solicite solo los ámbitos necesarios y aporte la prueba de la carga de trabajo y su clave pública.",
+  "broker.reviewBody":
+    "Esto comprueba la configuración, no el permiso para firmar. La prueba, la política de ámbitos y el sobre de tarea se verifican solo al emitir.",
+  "broker.prove": "Consultar el certificado emitido",
+  "broker.proveBody":
+    "La respuesta de emisión no comprueba el estado actual. Abra el registro persistente para ver validez, revocación y datos originales de emisión.",
+  "broker.progress": "Progreso de solicitud de identidad de agente",
+  "broker.scopesHelp": "Entradas de política separadas por comas, no permisos automáticos. Cada servicio receptor debe aplicar sus propias reglas de acceso.",
+  "broker.task": "Sobre de tarea (base64, opcional)",
+  "broker.taskHelp":
+    "Pegue un sobre de tarea autorizado solo si este despliegue tiene la verificación con licencia. Los sobres no admitidos se rechazan, nunca se ignoran.",
+  "broker.inputSafety":
+    "Mantenga la clave privada en la carga de trabajo. La prueba y la tarea solo permanecen en la memoria del formulario hasta el éxito o un borrado explícito; no se guardan para recargar la página.",
+  "broker.configureTrust": "Configurar confianza de cargas de trabajo",
+  "broker.form.required": "Este campo es obligatorio.",
+  "broker.form.base64": "Use base64 estándar, con relleno cuando sea necesario.",
+  "broker.form.scopesError": "Separe ámbitos no vacíos con comas.",
+  "broker.form.ttlError": "Introduzca segundos enteros, o 0 para el valor predeterminado del servidor.",
+  "broker.form.publicKeyError": "Pegue exactamente un bloque PEM PUBLIC KEY. Nunca pegue una clave privada.",
+  "broker.issue.failed": "La solicitud del intermediario requiere atención",
+  "broker.issue.uncertain":
+    "La respuesta no confirmó el resultado. Esto no demuestra que la emisión fallara. Revise el inventario persistente y la auditoría; después, reintente la solicitud sin cambios con la clave conservada.",
+  "broker.retryHelp":
+    "Esta solicitud está bloqueada para un reintento exacto. Una nueva solicitud requiere un borrado explícito y podría crear otro certificado.",
+  "broker.recoveryKey": "Idempotency-Key de esta solicitud",
+  "broker.differentRequest": "Iniciar otra solicitud",
+  "broker.abandonWarning":
+    "Revise primero el inventario y la auditoría. Borrar el formulario elimina los datos del reintento exacto, pero no cancela ni revoca lo ya emitido. Una nueva solicitud puede emitir otro certificado.",
+  "broker.reviewedOutcome": "He revisado el resultado anterior y entiendo que otra solicitud podría emitir otro certificado.",
+  "broker.clearRequest": "Borrar datos y empezar de nuevo",
+  "broker.issued": "Emisión de certificado registrada",
+  "broker.openRecord": "Abrir registro persistente",
+  "broker.certificateID": "ID del certificado",
+  "broker.taskCheck": "Verificación del sobre de tarea",
+  "broker.taskDigest": "SHA-256 del sobre de tarea",
+  "broker.noTask": "No se registró un sobre de tarea",
+  "broker.history.title": "Certificados de agente emitidos",
+  "broker.history.scope":
+    "Certificados emitidos por el intermediario en el inventario compartido de este tenant, no una lista de sesión. Las solicitudes fallidas o rechazadas están en la auditoría.",
+  "broker.history.search": "Buscar agente o certificado",
+  "broker.history.state": "Estado del certificado",
+  "broker.history.allStates": "Todos los estados",
+  "broker.history.invalidFilter": "Elija un estado de certificado admitido.",
+  "broker.history.methodHelp": "Método original exacto, o vacío para todos. No se deducen métodos históricos desconocidos.",
+  "broker.history.asOf": "Comprobación del servidor: {at}.",
+  "broker.history.empty": "Ningún certificado coincide con esta vista",
+  "broker.history.failed": "No se pudo leer el historial de certificados",
+  "broker.history.readFailure":
+    "Esto no significa que el inventario esté vacío. Revise su permiso de lectura y el estado del servidor, y actualice. Esta consulta no intentó emitir ni revocar nada.",
+  "broker.history.refresh": "Actualizar historial",
+  "broker.history.newest": "Registros más recientes",
+  "broker.history.older": "Registros anteriores",
+  "broker.state.valid": "Dentro del período de validez",
+  "broker.state.notYetValid": "Aún no válido",
+  "broker.state.expired": "Caducado",
+  "broker.state.revoked": "Revocado",
+  "broker.state.superseded": "Reemplazado",
+  "broker.state.unknown": "Estado desconocido",
+  "broker.freshness.current": "La proyección estaba actualizada al comprobarla.",
+  "broker.freshness.catchingUp": "La proyección se está actualizando; puede que los eventos nuevos aún no aparezcan.",
+  "broker.freshness.blocked": "La proyección está bloqueada. Considere este inventario incompleto hasta la recuperación.",
+  "broker.freshness.unknown": "No se pudo confirmar la actualidad de la proyección.",
+  "broker.metadataUnavailable": "No registrado o ya no conservado",
+  "broker.metadataMissingBody":
+    "Los datos originales de emisión no están disponibles. Puede ser un registro antiguo o datos eliminados por privacidad; la consola no reconstruirá agente, ámbitos ni propietario a partir de observaciones posteriores.",
+  "broker.record.title": "Registro de certificado de agente",
+  "broker.record.description": "Datos originales de emisión y estado actual del certificado, leídos del mismo inventario compartido.",
+  "broker.record.loading": "Leyendo el registro persistente del certificado…",
+  "broker.openRevocation": "Abrir centro de revocación",
+  "broker.validFrom": "Válido desde",
+  "broker.originalFacts": "Datos registrados al emitir",
+  "broker.originalOwner": "Propietario al emitir",
+  "broker.currentOwner": "Propietario actual del inventario",
+  "broker.fingerprint": "Huella del certificado",
   "app.error.heading": "Esta página se detuvo de forma inesperada",
   "app.error.description":
     "La pantalla falló, pero esto no eliminó certificados, eventos ni datos del servidor. Recargue una vez. Si vuelve a ocurrir, anote la dirección de esta página y la hora, y cree un paquete de soporte redactado.",
@@ -5362,8 +5439,6 @@ const esESCatalog = {
   "source.7.30d.59a2cd28cb": "7–30d",
   "source.7d.bf8cc07ad6": "<7d",
   "source.90d.3ba89ead35": ">90d",
-  "source.a.broker.turns.an.agent.identity.plus.poli.5efe1642ad":
-    "Un bróker convierte una identidad de agente y una política en una concesión de credenciales de corta duración. Envíe la prueba una vez y muestre únicamente los metadatos de identidad devueltos.",
   "source.a.password.shared.secret.or.opaque.credent.b98b0c5e45":
     "Una identidad de contraseña, secreto compartido o credencial opaca que se rastrea por separado del inventario de certificados.",
   "source.a.safe.rollout.names.the.candidate.ca.targ.fdf82b1ab9":
@@ -5449,7 +5524,6 @@ const esESCatalog = {
   "source.attributes.4b0ed88f7d": "Attributes",
   "source.audit.and.key.boundary.1ff2138216": "Límite de auditoría y claves",
   "source.audit.evidence.74dbcfd2a3": "Evidencia de auditoría",
-  "source.audit.ids.e1133f2a79": "IDs de auditoría",
   "source.audit.log.e4d36f9a4e": "Registro de auditoría",
   "source.audit.stream.22c7391e55": "flujo de auditoría",
   "source.audit.trail.c1ada08ce1": "Pista de auditoría",
@@ -5474,8 +5548,6 @@ const esESCatalog = {
   "source.blast.radius.unavailable.8114fa5306": "Radio de impacto no disponible",
   "source.bootstrap.token.2996dc8b78": "Token de arranque",
   "source.break.glass.help.9f8fde42af": "Ayuda de emergencia",
-  "source.broker.history.isn.t.in.the.console.yet.7fc4ef9d7d": "El historial del bróker aún no está en la consola",
-  "source.broker.identity.failed.90cf96d503": "La identidad del bróker ha fallado",
   "source.broker.method.86e0708911": "Método del bróker",
   "source.broker.proof.payload.base64.caf8633720": "Carga útil del comprobante del bróker (base64)",
   "source.broker.public.key.a2341b0f4e": "Clave pública del bróker",
@@ -5815,7 +5887,6 @@ const esESCatalog = {
   "source.issue.api.key.3cdf19cbb9": "Emitir clave API",
   "source.issue.attested.ssh.cert.fba31f1beb": "Emitir certificado SSH atestado",
   "source.issue.attested.ssh.user.certificate.f7e0f6ef66": "Emitir certificado de usuario SSH atestado",
-  "source.issue.broker.identity.a95ac0066b": "Emitir identidad de bróker",
   "source.issue.certificate.ff84c7ec37": "Emitir certificado",
   "source.issue.deploy.or.renew.an.identity.to.produ.722d26ac6c": "Emitir, desplegar o renovar una identidad para generar evidencia respaldada por la outbox.",
   "source.issue.dynamic.lease.7f0d0fe084": "Emitir lease dinamico",
@@ -5934,7 +6005,6 @@ const esESCatalog = {
   "source.no.active.profiles.d3f9395f41": "No hay perfiles activos",
   "source.no.attested.svid.has.been.issued.in.this.b.8fee10fc2a": "No se ha emitido ningún SVID con atestación en esta sesión del navegador.",
   "source.no.attributes.returned.for.this.node.5b22b96afd": "No se han devuelto atributos para este nodo.",
-  "source.no.broker.identity.has.been.issued.in.this.7bb702b9db": "No se ha emitido ninguna identidad de bróker en esta sesión del navegador.",
   "source.no.cbom.assets.returned.yet.6164e1adf5": "Aún no se han devuelto activos CBOM",
   "source.no.cbom.readiness.assets.returned.yet.e6abce03d0": "Aún no se han devuelto activos de preparación CBOM",
   "source.no.ceremony.loaded.3e9d28986c": "No se ha cargado ninguna ceremonia",
@@ -6173,8 +6243,6 @@ const esESCatalog = {
   "source.profile.name.d3663280e1": "Nombre de la regla",
   "source.profile.rejected.e9c8593d8e": "Regla rechazada",
   "source.profile.version.unavailable.ec6a0646c4": "Versión de regla no disponible",
-  "source.proof.payloads.are.submitted.directly.and.893894a52b":
-    "Los payloads de prueba se envían directamente y se borran cuando el bróker devuelve los metadatos de identidad.",
   "source.protocol.cf0883343f": "Protocol",
   "source.protocol.register.6109f4cf46": "Registro de protocolos",
   "source.protocol.responder.status.e57eff8ebc": "Estado del respondedor de protocolo",
@@ -6492,8 +6560,6 @@ const esESCatalog = {
   "source.test.login.c5e0ad20c3": "Probar inicio de sesión",
   "source.the.agent.row.remains.as.an.offboarded.tom.42a25faa10":
     "La fila del agente se conserva como registro de baja y se rechazan las futuras RPC mTLS de este agente.",
-  "source.the.broker.api.issues.a.single.identity.pe.7e53bfbe2b":
-    "La API del bróker emite una única identidad por solicitud. La lista de historial del bróker a nivel de inquilino aún no está disponible en el contrato del navegador, por lo que esta tabla muestra las identidades devueltas durante esta sesión.",
   "source.the.browser.never.chooses.a.tenant.id.thro.091c4e9bb3":
     "El navegador nunca elige un ID de inquilino a través de una ruta, cadena de consulta o campo de formulario. La sesión del backend o el token de API lo proporciona, y RLS de PostgreSQL lo aplica por debajo de la API.",
   "source.the.cbom.scanner.inventories.algorithms.ke.94de5272b7":

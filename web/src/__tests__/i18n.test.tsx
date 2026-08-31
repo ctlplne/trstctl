@@ -1370,8 +1370,12 @@ describe("i18n boundary", () => {
       // and preserved filters, with explicit feature/action/supporting-area labels.
       // Placeholders and the 30-second cadence remain exact. Machine-authored
       // es/de are FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "0b601a5a79bb2f94680b3cacdfc0865bf58185f927a24e104d8fa73174bf1f51",
-      "de-DE": "7540822e617f6a7f5c9d456389c51089a6f37efe6c2fe996562b6084c270e634",
+      // F61 g104: reviewed explicit preview-versus-authorization language,
+      // unknown history/freshness, same-key retries and new-request warning;
+      // removed eight obsolete session-only broker messages from every locale.
+      // Machine-authored es/de translations require human review before release.
+      "es-ES": "a6908f6f960e05b356c580e1b39d9aa604e1dcf279f06287f3dcf44847fe8b1b",
+      "de-DE": "792344f8e5c77b88e1ddf7fa79c35fe0461c1b7de720c8a85248c7abd1b32122",
     });
   });
 

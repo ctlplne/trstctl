@@ -1174,6 +1174,67 @@ export interface BrokerAgentIdentity {
   task_envelope_digest?: string;
 }
 
+export interface BrokerAgentIdentityHistory {
+  certificate_id: string;
+  certificate_subject: string;
+  current_owner_id?: string;
+  fingerprint: string;
+  generated_at: string;
+  issuance?: BrokerIssuanceFacts;
+  lifecycle_status: string;
+  metadata_state: "recorded" | "unavailable";
+  not_after?: string;
+  not_before?: string;
+  projection_state: "current" | "catching_up" | "blocked" | "unknown";
+  recorded_at: string;
+  serial: string;
+  state: "valid" | "not_yet_valid" | "expired" | "revoked" | "superseded" | "unknown";
+  state_reason: string;
+}
+
+export interface BrokerAgentIdentityHistoryList {
+  generated_at: string;
+  history_scope: "broker_issued_certificates";
+  items: BrokerAgentIdentityHistory[];
+  next_cursor: string;
+  projection_state: "current" | "catching_up" | "blocked" | "unknown";
+}
+
+export interface BrokerAgentIdentityPreview {
+  agent_id: string;
+  attestation_verification: string;
+  blockers: string[];
+  capability: string;
+  data_handling: string[];
+  default_ttl_seconds: number;
+  effect_free: boolean;
+  effective_ttl_seconds: number;
+  execution_external_effects: string[];
+  execution_signer_calls: string[];
+  execution_writes: string[];
+  max_ttl_seconds: number;
+  method: string;
+  payload_sha256: string;
+  policy_evaluation: string;
+  preview_external_effects: string[];
+  preview_signer_calls: string[];
+  preview_writes: string[];
+  public_key_sha256: string;
+  ready: boolean;
+  recovery_steps: string[];
+  requested_ttl_seconds: number;
+  requester: string;
+  required_permission: string;
+  scopes: string[];
+  steps: string[];
+  supported_methods: string[];
+  task_envelope_sha256: string;
+  task_envelope_verification: string;
+  trust_domain: string;
+  ttl_clamped: boolean;
+  ttl_defaulted: boolean;
+}
+
 export interface BrokerAgentIdentityRequest {
   agent_id: string;
   method: string;
@@ -1182,6 +1243,17 @@ export interface BrokerAgentIdentityRequest {
   scopes: string[];
   task_envelope_base64?: string;
   ttl_seconds?: number;
+}
+
+export interface BrokerIssuanceFacts {
+  agent_id: string;
+  effective_ttl_seconds: number;
+  method: string;
+  owner_id: string;
+  requested_ttl_seconds: number;
+  scopes: string[];
+  subject: string;
+  task_envelope_digest?: string;
 }
 
 export interface BulkRevokeItem {

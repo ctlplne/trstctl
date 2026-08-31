@@ -1806,6 +1806,8 @@ func certificateRecordedPayload(id string, in store.Certificate, approval *store
 		DeploymentLocation: in.DeploymentLocation, Source: in.Source,
 		CertificateDER:         in.CertificateDER,
 		IssuanceIdempotencyKey: in.IssuanceIdempotencyKey,
+		IssuanceRequestBinding: in.IssuanceRequestBinding,
+		BrokerIssuance:         in.BrokerIssuance,
 		KeyOrigin:              in.KeyOrigin,
 		KeyStorage:             in.KeyStorage,
 		KeyExportable:          in.KeyExportable,

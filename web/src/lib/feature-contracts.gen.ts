@@ -3578,7 +3578,7 @@ export const canonicalCapabilities = [
     "phase": "P2",
     "priority": 64,
     "contract": {
-      "purpose": "Lets an operator understand and safely use ai-agent / nhi identity broker while tenant, policy, and security authority remain on the server.",
+      "purpose": "Give an agent a short-lived identity only after proof and policy checks, then inspect its durable issuance history and recover uncertain requests without quietly issuing twice.",
       "tool": "workloads_machines",
       "classification": "primary",
       "releaseBlocking": true,
@@ -3590,7 +3590,11 @@ export const canonicalCapabilities = [
       ],
       "permissionAuthority": "internal/api route registry and feature authorization manifest",
       "edition": "core",
-      "dependencies": [],
+      "dependencies": [
+        "Issuance: configured broker, enabled tenant attestation trust, scope policy, trust domain and isolated signer-backed CA.",
+        "History: certs:read and the shared certificate projection; broker issuance may be disabled independently.",
+        "Optional task envelope: attached licensed verification gate; absence refuses the envelope rather than dropping its restriction."
+      ],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
       "maturity": "partial_workflow",
@@ -3615,11 +3619,11 @@ export const canonicalCapabilities = [
         },
         "preview": {
           "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "reason": "Effect-free server preview and guided review are implemented and source-tested. Exact-candidate fresh-image browser proof is still required."
         },
         "execute": {
           "status": "missing",
-          "reason": "No complete console execution path is proved for this capability."
+          "reason": "Explicit console issuance, permission checks and durable readback are implemented and source-tested. Live API/CLI/browser issuance on the fresh candidate is still required."
         },
         "observe": {
           "status": "complete",
@@ -3629,7 +3633,7 @@ export const canonicalCapabilities = [
         },
         "recover": {
           "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "reason": "Same-command retry, guarded reset and durable recovery are implemented and source-tested. Fresh-image browser recovery, shared revocation and preserved-volume restart proof are still required."
         },
         "verify": {
           "status": "complete",

@@ -12,6 +12,85 @@ import type { MessageKey } from "@/i18n/messages";
  * clause turns a missing key into a type error, so every new message key
  * ships with an es-ES AND a de-DE entry from the same commit. */
 const deDECatalog = {
+  "broker.description":
+    "Geben Sie einem Agenten eine kurzlebige Identität und verfolgen Sie sein Zertifikat im gemeinsamen Inventar. Der Server prüft Nachweis und Richtlinie vor dem Signieren.",
+  "broker.start": "Agentenidentität anfordern",
+  "broker.requestBody":
+    "Benennen Sie den Agenten, fordern Sie nur benötigte Berechtigungsbereiche an und geben Sie Workload-Nachweis und öffentlichen Schlüssel an.",
+  "broker.reviewBody":
+    "Dies prüft die Konfiguration, nicht die Erlaubnis zum Signieren. Nachweis, Bereichsrichtlinie und Aufgabenumschlag werden erst bei der Ausstellung geprüft.",
+  "broker.prove": "Zertifikat nachlesen",
+  "broker.proveBody":
+    "Die Ausstellungsantwort ist keine aktuelle Statusprüfung. Öffnen Sie den dauerhaften Datensatz für Gültigkeit, Widerruf und ursprüngliche Ausstellungsdaten.",
+  "broker.progress": "Fortschritt der Agentenidentitätsanfrage",
+  "broker.scopesHelp":
+    "Kommagetrennte Richtlinieneingaben, keine automatischen Zugriffsrechte. Jeder empfangende Dienst muss seine eigenen Zugriffsregeln durchsetzen.",
+  "broker.task": "Aufgabenumschlag (Base64, optional)",
+  "broker.taskHelp":
+    "Fügen Sie einen autorisierten Aufgabenumschlag nur bei lizenzierter Prüfung ein. Nicht unterstützte Umschläge werden abgelehnt, niemals stillschweigend ignoriert.",
+  "broker.inputSafety":
+    "Der private Schlüssel bleibt beim Workload. Nachweis und Aufgabentext bleiben nur bis zum Erfolg oder ausdrücklichen Zurücksetzen im Formularspeicher; sie werden nicht für ein Neuladen gespeichert.",
+  "broker.configureTrust": "Workload-Vertrauen konfigurieren",
+  "broker.form.required": "Dieses Feld ist erforderlich.",
+  "broker.form.base64": "Verwenden Sie Standard-Base64, bei Bedarf mit Auffüllzeichen.",
+  "broker.form.scopesError": "Trennen Sie nicht leere Berechtigungsbereiche durch Kommas.",
+  "broker.form.ttlError": "Geben Sie ganze Sekunden ein, oder 0 für den Serverstandard.",
+  "broker.form.publicKeyError": "Fügen Sie genau einen PUBLIC KEY-PEM-Block ein. Niemals einen privaten Schlüssel.",
+  "broker.issue.failed": "Die Broker-Anfrage erfordert Aufmerksamkeit",
+  "broker.issue.uncertain":
+    "Die Antwort bestätigt das Ergebnis nicht. Das beweist keinen Ausstellungsfehler. Prüfen Sie Inventar und Audit-Protokoll und wiederholen Sie dann die unveränderte Anfrage mit dem beibehaltenen Schlüssel.",
+  "broker.retryHelp":
+    "Diese Anfrage ist für eine identische Wiederholung gesperrt. Eine neue Anfrage erfordert ausdrückliches Zurücksetzen und kann ein zweites Zertifikat erzeugen.",
+  "broker.recoveryKey": "Idempotency-Key dieser Anfrage",
+  "broker.differentRequest": "Andere Anfrage beginnen",
+  "broker.abandonWarning":
+    "Prüfen Sie zuerst Inventar und Audit-Protokoll. Das Leeren verwirft die Eingaben für die identische Wiederholung, storniert oder widerruft aber nichts bereits Ausgestelltes. Eine neue Anfrage kann ein weiteres Zertifikat ausstellen.",
+  "broker.reviewedOutcome": "Ich habe das vorige Ergebnis geprüft und verstehe, dass eine neue Anfrage ein weiteres Zertifikat ausstellen kann.",
+  "broker.clearRequest": "Eingaben leeren und neu beginnen",
+  "broker.issued": "Zertifikatsausstellung aufgezeichnet",
+  "broker.openRecord": "Dauerhaften Datensatz öffnen",
+  "broker.certificateID": "Zertifikat-ID",
+  "broker.taskCheck": "Prüfung des Aufgabenumschlags",
+  "broker.taskDigest": "SHA-256 des Aufgabenumschlags",
+  "broker.noTask": "Kein Aufgabenumschlag aufgezeichnet",
+  "broker.history.title": "Ausgestellte Agentenzertifikate",
+  "broker.history.scope":
+    "Dauerhafte Broker-Zertifikate im gemeinsamen Inventar dieses Mandanten, keine Browser-Sitzungsliste. Fehlgeschlagene oder abgelehnte Anfragen stehen im Audit-Protokoll.",
+  "broker.history.search": "Agent oder Zertifikat suchen",
+  "broker.history.state": "Zertifikatszustand",
+  "broker.history.allStates": "Alle Zertifikatszustände",
+  "broker.history.invalidFilter": "Wählen Sie einen unterstützten Zertifikatszustand.",
+  "broker.history.methodHelp": "Exakte ursprüngliche Methode; leer lassen für alle. Unbekannte historische Methoden werden nicht erraten.",
+  "broker.history.asOf": "Serverprüfung: {at}.",
+  "broker.history.empty": "Keine Zertifikate für diese Ansicht",
+  "broker.history.failed": "Zertifikatsverlauf konnte nicht gelesen werden",
+  "broker.history.readFailure":
+    "Das bedeutet kein leeres Inventar. Prüfen Sie Leserechte und Serverzustand und aktualisieren Sie. Dieser Lesezugriff hat keine Ausstellung oder Sperrung versucht.",
+  "broker.history.refresh": "Verlauf aktualisieren",
+  "broker.history.newest": "Neueste Datensätze",
+  "broker.history.older": "Ältere Datensätze",
+  "broker.state.valid": "Innerhalb des Gültigkeitszeitraums",
+  "broker.state.notYetValid": "Noch nicht gültig",
+  "broker.state.expired": "Abgelaufen",
+  "broker.state.revoked": "Widerrufen",
+  "broker.state.superseded": "Ersetzt",
+  "broker.state.unknown": "Zustand unbekannt",
+  "broker.freshness.current": "Projektion war bei der Prüfung aktuell.",
+  "broker.freshness.catchingUp": "Die Projektion holt auf; neuere Ereignisse fehlen möglicherweise noch.",
+  "broker.freshness.blocked": "Die Projektion ist blockiert. Dieses Inventar ist bis zur Wiederherstellung unvollständig.",
+  "broker.freshness.unknown": "Aktualität der Projektion konnte nicht bestätigt werden.",
+  "broker.metadataUnavailable": "Nicht aufgezeichnet oder nicht mehr aufbewahrt",
+  "broker.metadataMissingBody":
+    "Ursprüngliche Ausstellungsdaten fehlen. Es kann ein älterer Datensatz oder eine Datenschutzlöschung sein; die Konsole rekonstruiert Agent, Bereiche oder Eigentümer nicht aus späteren Beobachtungen.",
+  "broker.record.title": "Agentenzertifikat-Datensatz",
+  "broker.record.description": "Ursprüngliche Ausstellungsdaten und aktueller Zertifikatszustand aus demselben gemeinsamen Inventar.",
+  "broker.record.loading": "Dauerhafter Zertifikatsdatensatz wird gelesen…",
+  "broker.openRevocation": "Widerrufszentrale öffnen",
+  "broker.validFrom": "Gültig ab",
+  "broker.originalFacts": "Bei Ausstellung aufgezeichnete Daten",
+  "broker.originalOwner": "Eigentümer bei Ausstellung",
+  "broker.currentOwner": "Aktueller Inventareigentümer",
+  "broker.fingerprint": "Zertifikatsfingerabdruck",
   "app.error.heading": "Diese Seite wurde unerwartet beendet",
   "app.error.description":
     "Die Anzeige ist fehlgeschlagen, aber dadurch wurden keine Zertifikate, Ereignisse oder Serverdaten gelöscht. Laden Sie die Seite einmal neu. Falls es erneut passiert, notieren Sie Seitenadresse und Uhrzeit und erstellen Sie ein redigiertes Support-Bundle.",
@@ -5391,8 +5470,6 @@ const deDECatalog = {
   "source.7.30d.59a2cd28cb": "7–30d",
   "source.7d.bf8cc07ad6": "<7d",
   "source.90d.3ba89ead35": ">90d",
-  "source.a.broker.turns.an.agent.identity.plus.poli.5efe1642ad":
-    "Ein Broker wandelt eine Agentenidentität und eine Richtlinie in eine kurzlebige Berechtigungsvergabe um. Übermitteln Sie den Nachweis einmalig und zeigen Sie nur die zurückgegebenen Identitätsmetadaten an.",
   "source.a.password.shared.secret.or.opaque.credent.b98b0c5e45":
     "Eine Identität für ein Kennwort, ein Shared Secret oder undurchsichtige Zugangsdaten, die separat vom Zertifikatsinventar verfolgt wird.",
   "source.a.safe.rollout.names.the.candidate.ca.targ.fdf82b1ab9":
@@ -5478,7 +5555,6 @@ const deDECatalog = {
   "source.attributes.4b0ed88f7d": "Attributes",
   "source.audit.and.key.boundary.1ff2138216": "Audit- und Schlüsselgrenze",
   "source.audit.evidence.74dbcfd2a3": "Auditnachweis",
-  "source.audit.ids.e1133f2a79": "Audit-IDs",
   "source.audit.log.e4d36f9a4e": "Auditprotokoll",
   "source.audit.stream.22c7391e55": "Audit-Stream",
   "source.audit.trail.c1ada08ce1": "Audit-Trail",
@@ -5503,8 +5579,6 @@ const deDECatalog = {
   "source.blast.radius.unavailable.8114fa5306": "Auswirkungsradius nicht verfügbar",
   "source.bootstrap.token.2996dc8b78": "Bootstrap-Token",
   "source.break.glass.help.9f8fde42af": "Notfall-Hilfe",
-  "source.broker.history.isn.t.in.the.console.yet.7fc4ef9d7d": "Broker-Verlauf ist noch nicht in der Konsole verfügbar",
-  "source.broker.identity.failed.90cf96d503": "Broker-Identität fehlgeschlagen",
   "source.broker.method.86e0708911": "Broker-Methode",
   "source.broker.proof.payload.base64.caf8633720": "Nachweis-Nutzlast des Brokers (base64)",
   "source.broker.public.key.a2341b0f4e": "Öffentlicher Broker-Schlüssel",
@@ -5848,7 +5922,6 @@ const deDECatalog = {
   "source.issue.api.key.3cdf19cbb9": "API-Schlüssel ausstellen",
   "source.issue.attested.ssh.cert.fba31f1beb": "Attestiertes SSH-Zertifikat ausstellen",
   "source.issue.attested.ssh.user.certificate.f7e0f6ef66": "Attestiertes SSH-Benutzerzertifikat ausstellen",
-  "source.issue.broker.identity.a95ac0066b": "Broker-Identität ausstellen",
   "source.issue.certificate.ff84c7ec37": "Zertifikat ausstellen",
   "source.issue.deploy.or.renew.an.identity.to.produ.722d26ac6c":
     "Eine Identität ausstellen, bereitstellen oder erneuern, um durch die Outbox gestützte Nachweise zu erzeugen.",
@@ -5970,7 +6043,6 @@ const deDECatalog = {
   "source.no.active.profiles.d3f9395f41": "Keine aktiven Profile",
   "source.no.attested.svid.has.been.issued.in.this.b.8fee10fc2a": "In dieser Browsersitzung wurde keine attestierte SVID ausgestellt.",
   "source.no.attributes.returned.for.this.node.5b22b96afd": "Für diesen Knoten wurden keine Attribute zurückgegeben.",
-  "source.no.broker.identity.has.been.issued.in.this.7bb702b9db": "In dieser Browsersitzung wurde keine Broker-Identität ausgestellt.",
   "source.no.cbom.assets.returned.yet.6164e1adf5": "Noch keine CBOM-Assets zurückgegeben",
   "source.no.cbom.readiness.assets.returned.yet.e6abce03d0": "Noch keine CBOM-Bereitschafts-Assets zurückgegeben",
   "source.no.ceremony.loaded.3e9d28986c": "Keine Zeremonie geladen",
@@ -6212,8 +6284,6 @@ const deDECatalog = {
   "source.profile.name.d3663280e1": "Regelname",
   "source.profile.rejected.e9c8593d8e": "Regel abgelehnt",
   "source.profile.version.unavailable.ec6a0646c4": "Regelversion nicht verfügbar",
-  "source.proof.payloads.are.submitted.directly.and.893894a52b":
-    "Nachweis-Payloads werden direkt übermittelt und gelöscht, nachdem der Broker die Identitätsmetadaten zurückgegeben hat.",
   "source.protocol.cf0883343f": "Protocol",
   "source.protocol.register.6109f4cf46": "Protokollregister",
   "source.protocol.responder.status.e57eff8ebc": "Status des Protokollresponders",
@@ -6531,8 +6601,6 @@ const deDECatalog = {
   "source.test.login.c5e0ad20c3": "Anmeldung testen",
   "source.the.agent.row.remains.as.an.offboarded.tom.42a25faa10":
     "Die Agentenzeile bleibt als stillgelegter Tombstone-Datensatz erhalten, und zukünftige mTLS-RPCs dieses Agenten werden abgelehnt.",
-  "source.the.broker.api.issues.a.single.identity.pe.7e53bfbe2b":
-    "Die Broker-API stellt pro Anfrage eine einzelne Identität aus. Eine tenantweite Broker-Historienliste ist im Browser-Vertrag noch nicht verfügbar, daher zeigt diese Tabelle die während dieser Sitzung zurückgegebenen Identitäten.",
   "source.the.browser.never.chooses.a.tenant.id.thro.091c4e9bb3":
     "Der Browser wählt niemals eine Tenant-ID über eine Route, eine Abfragezeichenfolge oder ein Formularfeld aus. Die Backend-Sitzung oder das API-Token stellt sie bereit, und PostgreSQL RLS setzt sie unterhalb der API durch.",
   "source.the.cbom.scanner.inventories.algorithms.ke.94de5272b7":

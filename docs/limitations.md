@@ -3739,11 +3739,17 @@ This is a deliberate, documented trust boundary, not an accident.
   evaluates policy before signing, mints a short-lived X.509-SVID, records
   `certificate.recorded`, emits `agent.identity.issued` or
   `agent.identity.refused`, and projects the agent-to-credential edge into
-  the graph. The React Workloads page submits broker proof fields to the
-  served route, clears them after issue, and stores only returned metadata
-  in browser state; a tenant-wide broker history list remains a roadmap
-  residual, so use REST/CLI automation and audit search for durable broker
-  evidence.
+  the graph. The Workloads page now has an effect-free server preview,
+  explicit issuance, unchanged-request retry after uncertain delivery, and
+  durable broker history with search, state/method filters and detail readback.
+  History requires `certs:read` independently of issuance. It shows original
+  public issuance facts and projection freshness, never raw proof, task text or
+  internal recovery bindings. Missing or privacy-erased facts remain explicitly
+  unavailable. Clearing or reloading the form is not cancellation: inspect
+  history and audit before choosing a new recovery key. Revocation uses shared
+  certificate controls. Fresh-image API/CLI/browser, negative-security and
+  preserved-volume restart qualification is still required before this source
+  workflow can be called a complete F61 vertical slice.
 - Ephemeral / JIT issuance: effect-free `POST /api/v1/ephemeral/preview` and
   mutating `POST /api/v1/ephemeral` are served when
   ephemeral issuance is enabled with approval TTL/threshold, trust domain, and
