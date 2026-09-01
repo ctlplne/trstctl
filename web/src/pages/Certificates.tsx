@@ -45,6 +45,15 @@ import { LifecycleCockpit } from "@/components/certs/LifecycleCockpit";
 import type { GridViewPrimitive } from "@/lib/gridViews";
 import { revocationReasons } from "@/lib/revocation";
 import { RevocationCenter } from "@/pages/certificates/RevocationCenter";
+import {
+  certificateEnvironment,
+  certificateProfile,
+  certificateTeamID,
+  certificateTeamLabel,
+  effectiveOwnershipLabel,
+  ownerIsReachable,
+  teamFacetOptions,
+} from "@/pages/certificates/certificateInventory";
 import { AppQueryProvider, useApiQuery, useHasAppQueryProvider } from "@/lib/query";
 import { useAuth } from "@/auth/AuthProvider";
 
@@ -1945,81 +1954,4 @@ function uniqueOptions(values: Array<string | undefined>, selected: FacetFilter)
   const set = new Set(values.map((value) => value?.trim()).filter((value): value is string => Boolean(value)));
   if (selected !== "all") set.add(selected);
   return Array.from(set).sort((left, right) => left.localeCompare(right));
-}
-
-function certificateRecord(c: Certificate): Record<string, unknown> {
-  return c as unknown as Record<string, unknown>;
-}
-
-function certificateAttributes(c: Certificate): Record<string, unknown> {
-  const value = certificateRecord(c).attributes;
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
-}
-
-function firstString(c: Certificate, keys: string[]): string {
-  const record = certificateRecord(c);
-  const attrs = certificateAttributes(c);
-  for (const key of keys) {
-    const value = record[key] ?? attrs[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-  return "";
-}
-
-function certificateProfile(c: Certificate): string {
-  return firstString(c, ["profile_name", "profile", "certificate_profile_name", "certificate_profile_id"]);
-}
-
-function certificateEnvironment(c: Certificate): string {
-  const explicit = firstString(c, ["environment", "env"]);
-  if (explicit) return explicit;
-  const location = c.deployment_location?.toLowerCase() ?? "";
-  for (const candidate of ["production", "prod", "staging", "stage", "development", "dev"]) {
-    if (new RegExp(`(^|[^a-z])${candidate}([^a-z]|$)`).test(location)) return candidate;
-  }
-  return "";
-}
-
-function certificateTeamID(c: Certificate, ownerByID: Map<string, Owner>): string {
-  const explicit = firstString(c, ["team_id"]);
-  if (explicit) return explicit;
-  if (c.owner_id && ownerByID.get(c.owner_id)?.kind === "team") return c.owner_id;
-  return "";
-}
-
-function certificateTeamLabel(c: Certificate, ownerByID: Map<string, Owner>): string {
-  const explicitName = firstString(c, ["team_name", "team"]);
-  if (explicitName) return explicitName;
-  const teamID = certificateTeamID(c, ownerByID);
-  if (!teamID) return "";
-  return ownerByID.get(teamID)?.name || teamID;
-}
-
-function ownerIsReachable(owner: Owner): boolean {
-  return Boolean(owner.email?.trim() || owner.escalation_chain.some((entry) => entry.trim()));
-}
-
-function effectiveOwnershipLabel(owner: Owner): string {
-  if (!owner.ownership_complete) return translateNow("certificateCockpit.detail.incomplete");
-  if (!owner.ownership_current) return translateNow("certificateCockpit.detail.notCurrent");
-  if (!owner.ownership_attested) return translateNow("certificateCockpit.detail.notAttested");
-  return translateNow("certificateCockpit.detail.current");
-}
-
-function teamFacetOptions(
-  certificates: Certificate[],
-  ownerByID: Map<string, Owner>,
-  owners: Owner[],
-  selected: FacetFilter,
-): Array<{ value: string; label: string }> {
-  const options = new Map<string, string>();
-  for (const owner of owners) {
-    if (owner.kind === "team") options.set(owner.id, owner.name || owner.id);
-  }
-  for (const certificate of certificates) {
-    const teamID = certificateTeamID(certificate, ownerByID);
-    if (teamID) options.set(teamID, certificateTeamLabel(certificate, ownerByID) || teamID);
-  }
-  if (selected !== "all" && !options.has(selected)) options.set(selected, selected);
-  return Array.from(options, ([value, label]) => ({ value, label })).sort((left, right) => left.label.localeCompare(right.label));
 }
