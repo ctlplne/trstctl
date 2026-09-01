@@ -3581,7 +3581,7 @@ export const canonicalCapabilities = [
       "purpose": "Give an agent a short-lived identity only after proof and policy checks, then inspect its durable issuance history and recover uncertain requests without quietly issuing twice.",
       "tool": "workloads_machines",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/workloads",
       "navigationEntrypoints": [
         "tool navigation",
@@ -3597,7 +3597,7 @@ export const canonicalCapabilities = [
       ],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -3618,12 +3618,24 @@ export const canonicalCapabilities = [
           ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "Effect-free server preview and guided review are implemented and source-tested. Exact-candidate fresh-image browser proof is still required."
+          "status": "complete",
+          "evidence": [
+            "internal/server/broker_preview_served_test.go",
+            "web/src/pages/workloads/BrokerIdentityWorkflow.tsx",
+            "web/src/pages/workloads/BrokerPlanReview.tsx",
+            "web/src/__tests__/broker_identity_workflow.test.tsx",
+            "retained exact-candidate receipt: artifacts/g126-f61-browser-qualification.json"
+          ]
         },
         "execute": {
-          "status": "missing",
-          "reason": "Explicit console issuance, permission checks and durable readback are implemented and source-tested. Live API/CLI/browser issuance on the fresh candidate is still required."
+          "status": "complete",
+          "evidence": [
+            "internal/server/broker_served_test.go",
+            "web/src/pages/workloads/BrokerIdentityWorkflow.tsx",
+            "web/src/__tests__/broker_identity_workflow.test.tsx",
+            "retained exact-candidate receipt: artifacts/g126-f61-browser-qualification.json",
+            "retained exact-candidate receipt: artifacts/g126-f61-cli-readback-r2.json"
+          ]
         },
         "observe": {
           "status": "complete",
@@ -3632,13 +3644,26 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Same-command retry, guarded reset and durable recovery are implemented and source-tested. Fresh-image browser recovery, shared revocation and preserved-volume restart proof are still required."
+          "status": "complete",
+          "evidence": [
+            "internal/server/broker_recovery_security_test.go",
+            "web/src/pages/workloads/BrokerIdentityWorkflow.tsx",
+            "web/src/pages/workloads/BrokerIdentityHistory.tsx",
+            "web/src/pages/certificates/RevocationCenter.tsx",
+            "web/src/__tests__/broker_identity_workflow.test.tsx",
+            "web/src/__tests__/revocation_center.test.tsx",
+            "retained exact-candidate receipt: artifacts/g126-f61-browser-qualification.json",
+            "retained exact-candidate receipt: artifacts/g126-f61-preserved-restart-r5.json"
+          ]
         },
         "verify": {
           "status": "complete",
           "evidence": [
-            "internal/server/broker_served_test.go"
+            "internal/server/broker_served_test.go",
+            "internal/server/broker_history_served_test.go",
+            "retained exact-candidate receipt: artifacts/g126-f61-postbrowser-api.json",
+            "retained exact-candidate receipt: artifacts/g126-f61-responsive-browser-matrix.json",
+            "retained exact-candidate receipt: artifacts/g126-f61-preserved-restart-r5.json"
           ]
         },
         "automate": {
@@ -3651,8 +3676,8 @@ export const canonicalCapabilities = [
       },
       "owner": "identity",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "6bccffc1344ee5125171e926a23276c14d2e3cd3",
+      "freshness": "2026-09-01"
     }
   },
   {

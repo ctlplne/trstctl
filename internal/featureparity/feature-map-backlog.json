@@ -10017,9 +10017,9 @@
             "priority": 64,
             "served_state": "served",
             "backend_status": "served policy-gated AI/MCP agent identity broker workflow: POST /api/v1/broker/agent-identities verifies attestation, evaluates policy before signing, honors Idempotency-Key replay, mints a short-lived signer-backed X.509-SVID, records certificate.recorded, emits agent.identity.issued or agent.identity.refused, and projects the owner/credential edge into the graph",
-            "current_frontend_mapping": "operate: Workloads at /workloads reads durable tenant broker history with literal search, original-method and server-state filters, a detail deep link, and shared revocation/audit links. Its guided request reviews an exact effect-free server preview before explicit issuance; an uncertain retry retains the unchanged body and recovery key until an acknowledged reset.",
-            "target_gui_mapping": "Implemented in source: durable broker history and guided preview/issue/retry. Qualification pending: exact-candidate fresh-image API/CLI, browser, tenant refusal, expiry and preserved-volume restart proof. Revocation uses the shared certificate control plane; a broker-specific one-call revocation action is not claimed.",
-            "acceptance_test": "TestServedAIAgentBrokerIssuesPolicyGatedCredentialIntoGraph plus broker preview/history/recovery served tests, OpenAPI/CLI parity and broker_identity_workflow.test.tsx prove source behavior. Full closure also requires exact-candidate fresh-image, browser, expiry, shared revocation and restart receipts; source tests alone are not completion.",
+            "current_frontend_mapping": "operate and recover: Workloads at /workloads reads durable tenant broker history with literal search, original-method and server-state filters, an exact certificate detail deep link, and shared revocation/audit links. Its guided request reviews an exact effect-free server preview before explicit issuance; an uncertain retry retains the unchanged body and recovery key until an acknowledged reset. Subjectless shared certificate records use the full exact certificate ID as the visible target and typed revocation confirmation.",
+            "target_gui_mapping": "Delivered vertical slice: effect-free preview, explicit policy-gated issue, durable history, exact-command retry, guarded reset, exact shared revocation, audit/CRL verification, API/CLI automation, responsive browser readback, and preserved-volume restart. Roadmap residual: a broker-specific one-call revocation action; the delivered workflow deliberately reuses the shared certificate control plane.",
+            "acceptance_test": "Served broker preview/history/recovery tests, TestServedAIAgentBrokerIssuesPolicyGatedCredentialIntoGraph, OpenAPI/CLI parity, broker_identity_workflow.test.tsx, and revocation_center.test.tsx prove source behavior. Exact-candidate g126 receipts prove fresh-image browser preview/issue/history/shared revocation, empty-subject confirmation negatives, public API and native CLI parity, tenant/proof-time/idempotency controls, audit/CRL readback, Chromium and WebKit 390x844 containment, and preserved-volume restart. Firefox remains an explicit external supported-browser wall and is not claimed green.",
             "source_docs": [
                 "docs/features/workload-identity.md"
             ],
@@ -10074,7 +10074,7 @@
                     "evidence": [
                         "Workloads reads server-owned durable broker history with tenant-isolated list/detail, literal search and original-method/state filters. Missing metadata and projection lag remain visible.",
                         "The guided console reviews the exact effect-free preview, submits explicit issuance, clears proof after success, and retains an unchanged request/key after an uncertain response. Starting a different request requires acknowledging that issuance may already have happened.",
-                        "Fresh-image browser, preserved-volume restart and shared revocation qualification remain required; source component tests alone do not promote F61 to a complete vertical slice."
+                        "Exact-candidate g126 browser, API, CLI, shared revocation, audit/CRL, responsive, and preserved-volume restart receipts close the installed-product boundary. Firefox remains a separately tracked external browser-runtime wall rather than an inferred pass."
                     ],
                     "refs": [
                         "web/src/pages/Workloads.tsx",
@@ -10110,7 +10110,7 @@
                 },
                 "test": {
                     "evidence": [
-                        "Broker preview/history/recovery served tests and the guided console regression prove source behavior; exact-candidate fresh-image browser/restart receipts remain required for full closure.",
+                        "Broker preview/history/recovery served tests and guided console regressions prove source behavior; exact-candidate g126 browser, API, CLI, revocation, audit/CRL and preserved-restart receipts prove the installed vertical slice.",
                         "TRACE-026 guard: TestTRACE026AIAgentBrokerRowNamesHistoryAndQualificationBoundary retains served GA accounting while requiring accurate history/preview/retry coverage and explicit installed-product qualification obligations.",
                         "TestServedAIAgentBrokerIssuesPolicyGatedCredentialIntoGraph drives the assembled HTTP API, idempotent replay, policy denial, event emission, and graph projection.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
@@ -10200,7 +10200,7 @@
                 "purpose": "Give an agent a short-lived identity only after proof and policy checks, then inspect its durable issuance history and recover uncertain requests without quietly issuing twice.",
                 "tool": "workloads_machines",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/workloads",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -10216,7 +10216,7 @@
                 ],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -10237,12 +10237,24 @@
                         ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "Effect-free server preview and guided review are implemented and source-tested. Exact-candidate fresh-image browser proof is still required."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/server/broker_preview_served_test.go",
+                            "web/src/pages/workloads/BrokerIdentityWorkflow.tsx",
+                            "web/src/pages/workloads/BrokerPlanReview.tsx",
+                            "web/src/__tests__/broker_identity_workflow.test.tsx",
+                            "retained exact-candidate receipt: artifacts/g126-f61-browser-qualification.json"
+                        ]
                     },
                     "execute": {
-                        "status": "missing",
-                        "reason": "Explicit console issuance, permission checks and durable readback are implemented and source-tested. Live API/CLI/browser issuance on the fresh candidate is still required."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/server/broker_served_test.go",
+                            "web/src/pages/workloads/BrokerIdentityWorkflow.tsx",
+                            "web/src/__tests__/broker_identity_workflow.test.tsx",
+                            "retained exact-candidate receipt: artifacts/g126-f61-browser-qualification.json",
+                            "retained exact-candidate receipt: artifacts/g126-f61-cli-readback-r2.json"
+                        ]
                     },
                     "observe": {
                         "status": "complete",
@@ -10251,13 +10263,26 @@
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Same-command retry, guarded reset and durable recovery are implemented and source-tested. Fresh-image browser recovery, shared revocation and preserved-volume restart proof are still required."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/server/broker_recovery_security_test.go",
+                            "web/src/pages/workloads/BrokerIdentityWorkflow.tsx",
+                            "web/src/pages/workloads/BrokerIdentityHistory.tsx",
+                            "web/src/pages/certificates/RevocationCenter.tsx",
+                            "web/src/__tests__/broker_identity_workflow.test.tsx",
+                            "web/src/__tests__/revocation_center.test.tsx",
+                            "retained exact-candidate receipt: artifacts/g126-f61-browser-qualification.json",
+                            "retained exact-candidate receipt: artifacts/g126-f61-preserved-restart-r5.json"
+                        ]
                     },
                     "verify": {
                         "status": "complete",
                         "evidence": [
-                            "internal/server/broker_served_test.go"
+                            "internal/server/broker_served_test.go",
+                            "internal/server/broker_history_served_test.go",
+                            "retained exact-candidate receipt: artifacts/g126-f61-postbrowser-api.json",
+                            "retained exact-candidate receipt: artifacts/g126-f61-responsive-browser-matrix.json",
+                            "retained exact-candidate receipt: artifacts/g126-f61-preserved-restart-r5.json"
                         ]
                     },
                     "automate": {
@@ -10270,8 +10295,8 @@
                 },
                 "owner": "identity",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "6bccffc1344ee5125171e926a23276c14d2e3cd3",
+                "freshness": "2026-09-01"
             }
         },
         {
