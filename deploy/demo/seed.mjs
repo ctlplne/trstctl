@@ -13,8 +13,8 @@ if (!["https:", "http:"].includes(serverURL.protocol) || serverURL.username || s
 const server = serverURL.origin;
 const demoURL = process.env.TRSTCTL_DEMO_URL || "https://127.0.0.1:9443";
 const bootstrapTokenFile = process.env.TRSTCTL_DEMO_BOOTSTRAP_TOKEN_FILE || "/seed-state/bootstrap.token";
-const seedVersion = "demo-seed-v2";
-const migratableSeedVersions = new Set(["demo-seed-v1"]);
+const seedVersion = "demo-seed-v3";
+const migratableSeedVersions = new Set(["demo-seed-v1", "demo-seed-v2"]);
 const seedCheckpointSubject = "trstctl-demo-seed-checkpoint";
 const demoDiscoverySegment = {
   name: "demo-control-plane",
@@ -83,6 +83,60 @@ function buildDemoHistory() {
     { key: "scep-intune-mobile-7d", name: "scep-intune-mobile-7d", spec: { max_validity: "168h", scep: { challenge: "intune-jws", replay_cache: "required" } }, daysAgo: 52 },
     { key: "ssh-host-12h", name: "ssh-host-12h", spec: { max_validity: "12h", ssh: { principals: "hostnames", renewal: "agent" } }, daysAgo: 23 },
   ];
+  // These are truthful, non-secret setup records for the presenter path. They
+  // deliberately do not fabricate an agent, a contacted target, or a successful
+  // delivery. A live pitch must replace the demo hostnames and credential
+  // references with an operator-owned lab and retain independent readback.
+  const connectorTargets = [
+    {
+      key: "apache-payments",
+      name: "Apache payments web tier (prepared, not contacted)",
+      connector: "apache",
+      config: {
+        proof_state: "prepared_not_contacted",
+        required_agent_role: "host",
+        target_host: "apache-payments.demo.trstctl.local",
+        certificate_path: "/etc/apache2/tls/payments.crt",
+        private_key_path: "/etc/apache2/tls/payments.key",
+        reload_profile: "apachectl-graceful",
+        credential_ref: "secret://connectors/demo/apache-payments",
+        verification_address: "https://apache-payments.demo.trstctl.local:8443",
+      },
+      daysAgo: 44,
+    },
+    {
+      key: "iis-portal",
+      name: "IIS customer portal (prepared, not contacted)",
+      connector: "iis",
+      config: {
+        proof_state: "prepared_not_contacted",
+        required_agent_role: "host",
+        target_host: "iis-portal.demo.trstctl.local",
+        binding: "*:443:iis-portal.demo.trstctl.local",
+        certificate_store: "WebHosting",
+        application_id: "demo-iis-portal",
+        credential_ref: "secret://connectors/demo/iis-portal",
+        verification_address: "https://iis-portal.demo.trstctl.local",
+      },
+      daysAgo: 37,
+    },
+    {
+      key: "f5-edge",
+      name: "F5 edge HA pair (prepared, API-double proof only)",
+      connector: "f5",
+      config: {
+        proof_state: "prepared_not_contacted",
+        required_agent_role: "network",
+        management_endpoint: "https://f5-edge-a.demo.trstctl.local",
+        ha_peer_endpoint: "https://f5-edge-b.demo.trstctl.local",
+        client_ssl_profile: "/Common/demo-edge-clientssl",
+        virtual_server: "/Common/demo-edge-https",
+        credential_ref: "secret://connectors/demo/f5-edge",
+        verification_address: "https://edge.demo.trstctl.local",
+      },
+      daysAgo: 31,
+    },
+  ];
   const managedIdentities = [
     { key: "payments-api", ownerKey: "payments", name: "payments-api.demo.trstctl.local", targetState: "deployed", profile: "service-mtls-30d", protocol: "acme", deployment: "k8s/payments/deployment/payments-api", connector: "envoy", daysAgo: 168 },
     { key: "edge-gateway", ownerKey: "edge", name: "edge-gateway.demo.trstctl.local", targetState: "deployed", profile: "service-mtls-30d", protocol: "acme", deployment: "edge/traefik/gateway", connector: "traefik", daysAgo: 151 },
@@ -92,6 +146,9 @@ function buildDemoHistory() {
     { key: "iot-est-gateway", ownerKey: "iot", name: "iot-est-gateway.demo.trstctl.local", targetState: "deployed", profile: "est-serverkeygen-iot-24h", protocol: "est", deployment: "factory-floor/gateway-17", connector: "caddy", daysAgo: 63 },
     { key: "warehouse-mtls", ownerKey: "data", name: "warehouse-mtls.demo.trstctl.local", targetState: "deployed", profile: "service-mtls-30d", protocol: "acme", deployment: "warehouse/envoy/mtls", connector: "envoy", daysAgo: 41 },
     { key: "shadow-cleanup", ownerKey: "security", name: "shadow-cleanup.demo.trstctl.local", targetState: "revoked", profile: "acme-trust-authenticated-90d", protocol: "acme", deployment: "secops/remediation/shadow-cleanup", connector: "shell-ca", daysAgo: 16, revocationReason: "privilegeWithdrawn" },
+    { key: "apache-pitch", ownerKey: "payments", name: "apache-payments.demo.trstctl.local", targetState: "issued", profile: "service-mtls-30d", protocol: "acme", deployment: "apache-payments:/etc/apache2/tls", connector: "apache", connectorTargetKey: "apache-payments", daysAgo: 42 },
+    { key: "iis-pitch", ownerKey: "platform", name: "iis-portal.demo.trstctl.local", targetState: "issued", profile: "service-mtls-30d", protocol: "acme", deployment: "iis-portal:WebHosting/*:443", connector: "iis", connectorTargetKey: "iis-portal", daysAgo: 35 },
+    { key: "f5-pitch", ownerKey: "edge", name: "edge.demo.trstctl.local", targetState: "issued", profile: "service-mtls-30d", protocol: "acme", deployment: "f5-edge:/Common/demo-edge-clientssl", connector: "f5", connectorTargetKey: "f5-edge", daysAgo: 29 },
   ];
   const importedCertificates = [
     { key: "legacy-db", ownerKey: "platform", commonName: "legacy-db.demo.trstctl.local", validDays: 7, deploymentLocation: "legacy-db-01:/etc/tls/server.crt", source: "import:cmdb", observedDaysAgo: 173 },
@@ -133,6 +190,7 @@ function buildDemoHistory() {
   for (const member of members) add("audit", `member upserted: ${member.subject}`, member.daysAgo);
   for (const owner of owners) add("audit", `owner created: ${owner.key}`, owner.daysAgo);
   for (const profile of profiles) add("audit", `profile published: ${profile.name}`, profile.daysAgo);
+  for (const target of connectorTargets) add("connector targets", `connector target prepared without contact: ${target.name}`, target.daysAgo, { connector: target.connector, proof_state: target.config.proof_state });
   for (const identity of managedIdentities) {
     add("managed certificates", `identity requested: ${identity.name}`, identity.daysAgo, { protocol: identity.protocol });
     add("managed certificates", `certificate issued: ${identity.name}`, Math.max(identity.daysAgo - 1, 0), { profile: identity.profile });
@@ -146,7 +204,7 @@ function buildDemoHistory() {
   }
   for (const token of agentTokens) add("agents", `agent enrollment token minted: ${token.key}`, token.daysAgo);
   for (const notification of notifications) add("notifications", `notification planned: ${notification.key}`, notification.daysAgo, { severity: notification.severity });
-  return { members, owners, profiles, managedIdentities, importedCertificates, discoverySources, agentTokens, notifications, events };
+  return { members, owners, profiles, connectorTargets, managedIdentities, importedCertificates, discoverySources, agentTokens, notifications, events };
 }
 
 function manualDiscoveryFindings() {
@@ -162,8 +220,10 @@ function plannedAPICalls(history) {
     ...history.members.map((m) => `PUT /api/v1/access/members/${m.subject}`),
     ...history.owners.map(() => "POST /api/v1/owners"),
     ...history.profiles.map(() => "POST /api/v1/profiles"),
+    ...history.connectorTargets.map(() => "POST /api/v1/connectors/targets"),
     "POST /api/v1/issuers",
     ...history.managedIdentities.flatMap(() => ["POST /api/v1/identities", "POST /api/v1/identities/{id}/transitions"]),
+    ...history.managedIdentities.filter((identity) => identity.connectorTargetKey).map(() => "POST /api/v1/identities/{id}/connector-target"),
     ...history.importedCertificates.map(() => "POST /api/v1/certificates"),
     "POST /api/v1/secrets/store",
     "PUT /api/v1/secrets/store/{name}",
@@ -222,6 +282,7 @@ function checkSeedPlan() {
     "discovered certificates",
     "jobs and runs",
     "deploys",
+    "connector targets",
     "audit",
     "notifications",
   ];
@@ -237,7 +298,7 @@ function checkSeedPlan() {
   if (history.events.length < 50) {
     throw new Error(`demo history has ${history.events.length} events; want at least 50`);
   }
-  for (const route of ["POST /api/v1/issuers", "POST /api/v1/certificates", "POST /api/v1/discovery/runs", "GET /api/v1/notifications"]) {
+  for (const route of ["POST /api/v1/issuers", "POST /api/v1/connectors/targets", "POST /api/v1/identities/{id}/connector-target", "POST /api/v1/certificates", "POST /api/v1/discovery/runs", "GET /api/v1/notifications"]) {
     if (!calls.includes(route)) {
       throw new Error(`demo seed plan does not cover ${route}`);
     }
@@ -245,7 +306,7 @@ function checkSeedPlan() {
   assertNoCommittedSecretMaterial();
   console.log("trstctl demo seed check passed");
   console.log(`  180-day history: ${history.events.length} planned events from ${daysAgo(maxAge)} to ${demoNow.toISOString()}`);
-  console.log("  surfaces: issuers, agents, managed certificates, discovered certificates, jobs and runs, deploys, audit, notifications");
+  console.log("  surfaces: issuers, agents, managed certificates, discovered certificates, jobs and runs, deploys, connector targets, audit, notifications");
   console.log(`  served API calls: ${calls.length} planned calls, all mutations carry stable idempotency keys`);
   console.log("  no secret material: source scan passed; demo secret values are generated at runtime");
 }
@@ -403,6 +464,7 @@ function seedManifest(history) {
     members: history.members.map(({ key, subject, body }) => ({ key, subject, body })),
     owners: history.owners.map(({ key, body }) => ({ key, body })),
     profiles: history.profiles.map(({ key, name, spec }) => ({ key, name, spec })),
+    connector_targets: history.connectorTargets.map(({ daysAgo: _daysAgo, ...target }) => target),
     identities: history.managedIdentities.map(({ daysAgo: _daysAgo, ...identity }) => identity),
     imported_certificates: history.importedCertificates.map(({ observedDaysAgo: _observedDaysAgo, ...certificate }) => certificate),
     discovery_segment: demoDiscoverySegment,
@@ -637,7 +699,34 @@ async function ensureIssuer(issuerItems) {
   return created;
 }
 
-async function ensureIdentity(item, ownerID, issuerID, identityItems) {
+async function ensureConnectorTarget(target, targetItems) {
+  const existing = findUniqueLogicalRecord(
+    targetItems,
+    (candidate) => candidate.name === target.name,
+    `connector target ${target.name}`,
+  );
+  const expected = {
+    name: target.name,
+    connector: target.connector,
+    config: stableSeedSemantics(target.config),
+  };
+  if (existing) {
+    return assertFields(
+      { ...existing, config: stableSeedSemantics(existing.config) },
+      expected,
+      `connector target ${target.name}`,
+    );
+  }
+  const created = await api("POST", "/api/v1/connectors/targets", {
+    name: target.name,
+    connector: target.connector,
+    config: { ...target.config, demo_observed_at: daysAgo(target.daysAgo) },
+  }, stableKey(`connector-target-${target.key}`));
+  targetItems.push(created);
+  return created;
+}
+
+async function ensureIdentity(item, ownerID, issuerID, identityItems, connectorTarget) {
   const attributes = {
     environment: item.key.includes("legacy") ? "legacy" : "production",
     dns_names: [item.name],
@@ -654,7 +743,18 @@ async function ensureIdentity(item, ownerID, issuerID, identityItems) {
     `identity ${item.name}`,
   );
   if (existing) {
-    return assertFields({ ...existing, attributes: stableSeedSemantics(existing.attributes) }, {
+    const observedAttributes = stableSeedSemantics(existing.attributes);
+    if (connectorTarget) {
+      if (observedAttributes.connector_target_id !== undefined && observedAttributes.connector_target_id !== connectorTarget.id) {
+        throw new Error(`identity ${item.name} is bound to an unexpected connector target`);
+      }
+      if (observedAttributes.connector_target_name !== undefined && observedAttributes.connector_target_name !== connectorTarget.name) {
+        throw new Error(`identity ${item.name} names an unexpected connector target`);
+      }
+      delete observedAttributes.connector_target_id;
+      delete observedAttributes.connector_target_name;
+    }
+    return assertFields({ ...existing, attributes: observedAttributes }, {
       kind: "x509_certificate",
       name: item.name,
       owner_id: ownerID,
@@ -838,6 +938,7 @@ async function collectSeedInventory(history, resolved) {
   const secretsResponse = await api("GET", "/api/v1/secrets/store?limit=100");
   const secrets = Array.isArray(secretsResponse?.items) ? secretsResponse.items : [];
   const sources = await listAll("/api/v1/discovery/sources");
+  const connectorTargets = await listAll("/api/v1/connectors/targets");
   const coverage = await api("GET", "/api/v1/discovery/coverage");
   const segments = Array.isArray(coverage?.segments) ? coverage.segments : [];
 
@@ -872,6 +973,16 @@ async function collectSeedInventory(history, resolved) {
       if (!row) throw new Error(`completed seed is missing issuer ${name}`);
       return { id: row.id, kind: row.kind, name: row.name, internal: row.internal };
     }),
+    connector_targets: history.connectorTargets.map((definition) => {
+      const row = findUniqueLogicalRecord(connectorTargets, (candidate) => candidate.name === definition.name, `connector target ${definition.name}`);
+      if (!row) throw new Error(`completed seed is missing connector target ${definition.name}`);
+      assertFields(
+        { ...row, config: stableSeedSemantics(row.config) },
+        { connector: definition.connector, config: stableSeedSemantics(definition.config) },
+        `connector target ${definition.name}`,
+      );
+      return { key: definition.key, id: row.id, name: row.name, connector: row.connector, config: stableSeedSemantics(row.config) };
+    }),
     identities: history.managedIdentities.map((definition) => {
       const row = findUniqueLogicalRecord(identities, (candidate) => candidate.name === definition.name, `identity ${definition.name}`);
       if (!row) throw new Error(`completed seed is missing identity ${definition.name}`);
@@ -892,6 +1003,10 @@ async function collectSeedInventory(history, resolved) {
             connector: definition.connector,
             profile: definition.profile,
             protocol: definition.protocol,
+            ...(definition.connectorTargetKey ? {
+              connector_target_id: resolved?.connectorTargets?.[definition.connectorTargetKey]?.id || row.attributes?.connector_target_id,
+              connector_target_name: resolved?.connectorTargets?.[definition.connectorTargetKey]?.name || row.attributes?.connector_target_name,
+            } : {}),
           }),
         },
         `identity ${definition.name}`,
@@ -1062,6 +1177,12 @@ async function main() {
   const issuerItems = await listAll("/api/v1/issuers");
   const issuer = await ensureIssuer(issuerItems);
 
+  const connectorTargetItems = await listAll("/api/v1/connectors/targets");
+  const connectorTargets = {};
+  for (const target of history.connectorTargets) {
+    connectorTargets[target.key] = await ensureConnectorTarget(target, connectorTargetItems);
+  }
+
   const identityItems = await listAll("/api/v1/identities");
   const identities = {};
   let issuedIdentityCount = 0;
@@ -1070,9 +1191,18 @@ async function main() {
     if (!ownerID) {
       throw new Error(`demo owner ${item.ownerKey} was not created`);
     }
-    identities[item.key] = await ensureIdentity(item, ownerID, issuer.id, identityItems);
+    const connectorTarget = item.connectorTargetKey ? connectorTargets[item.connectorTargetKey] : undefined;
+    if (item.connectorTargetKey && !connectorTarget) {
+      throw new Error(`demo connector target ${item.connectorTargetKey} was not created`);
+    }
+    identities[item.key] = await ensureIdentity(item, ownerID, issuer.id, identityItems, connectorTarget);
     issuedIdentityCount += 1;
     await advanceIdentity(item, identities[item.key], Math.min(issuedIdentityCount, 6));
+    if (connectorTarget) {
+      identities[item.key] = await api("POST", `/api/v1/identities/${identities[item.key].id}/connector-target`, {
+        target_id: connectorTarget.id,
+      }, stableKey(`identity-${item.key}-connector-target`));
+    }
   }
 
   await pollCertificates(Math.min(history.managedIdentities.length, 6));
@@ -1233,7 +1363,7 @@ async function main() {
   const findings = await api("GET", "/api/v1/discovery/findings?limit=100");
   const notifications = await api("GET", "/api/v1/notifications?limit=100");
 
-  const inventory = await collectSeedInventory(history, { owners, issuer });
+  const inventory = await collectSeedInventory(history, { owners, issuer, connectorTargets });
   await writeSeedCheckpoint(history, inventory);
   const committedCheckpoint = await readSeedCheckpoint(history);
   if (!committedCheckpoint) {

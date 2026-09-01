@@ -850,12 +850,43 @@ func TestDemoSeedCheckModeCoversHistoryAndSurfaces(t *testing.T) {
 		"discovered certificates",
 		"jobs and runs",
 		"deploys",
+		"connector targets",
 		"audit",
 		"notifications",
 		"no secret material",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("demo seed --check output missing %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestDemoSeedPreparesTruthfulConnectorPitchTargets(t *testing.T) {
+	body := read(t, "seed.mjs")
+	for _, want := range []string{
+		`const seedVersion = "demo-seed-v3"`,
+		`name: "Apache payments web tier (prepared, not contacted)"`,
+		`name: "IIS customer portal (prepared, not contacted)"`,
+		`name: "F5 edge HA pair (prepared, API-double proof only)"`,
+		`proof_state: "prepared_not_contacted"`,
+		`required_agent_role: "host"`,
+		`required_agent_role: "network"`,
+		`"POST /api/v1/connectors/targets"`,
+		`"POST /api/v1/identities/{id}/connector-target"`,
+		`async function ensureConnectorTarget`,
+		`connector_targets: history.connectorTargets.map`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("demo seed is missing truthful connector-pitch marker %q", want)
+		}
+	}
+	for _, forbidden := range []string{
+		`proof_state: "verified"`,
+		`proof_state: "deployed"`,
+		`hardware_tested: true`,
+	} {
+		if strings.Contains(body, forbidden) {
+			t.Errorf("demo seed overstates connector proof with %q", forbidden)
 		}
 	}
 }

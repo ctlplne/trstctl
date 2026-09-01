@@ -26,6 +26,10 @@ func TestDemoPresenterTracksKeepProofAndPrerequisitesVisible(t *testing.T) {
 		"No silent switch to the built-in CA", "No zero-downtime claim",
 		"one stable idempotency key", "Do not paste private keys",
 		"Management readback is not traffic-path verification",
+		"Prepared connector targets are not contacted targets.",
+		"zero enrolled agents",
+		"No alert channel is configured in the shipped seed",
+		"The lifecycle issuer is not a pre-created CA hierarchy",
 	} {
 		if !strings.Contains(page, marker) {
 			t.Errorf("presenter guide is missing %q", marker)
