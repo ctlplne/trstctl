@@ -15,6 +15,7 @@ import (
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/attest"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/sshkeys"
 	"trstctl.com/trstctl/internal/events"
 	sshca "trstctl.com/trstctl/internal/protocols/ssh"
@@ -26,6 +27,8 @@ const (
 	eventSSHHostRetired          = "ssh.host.retired"
 	defaultSSHCertificateTTL     = time.Hour
 	maxSSHCertificateTTL         = 24 * time.Hour
+	defaultAttestedSSHUserTTL    = 15 * time.Minute
+	maxAttestedSSHUserTTL        = time.Hour
 )
 
 func (s *Server) SSHStatus(ctx context.Context, tenantID string) (api.SSHStatus, error) {
@@ -404,63 +407,190 @@ func cloneSSHStringMap(input map[string]string) map[string]string {
 	return out
 }
 
-func (s *Server) IssueAttestedSSHUserCert(ctx context.Context, tenantID, idempotencyKey string, req api.SSHAttestedUserCertRequest) (api.SSHAttestedUserCert, error) {
+type normalizedAttestedSSHUserCert struct {
+	sp                   *sshProtocol
+	attestors            []attest.Attestor
+	method               string
+	supportedMethods     []string
+	publicKey            []byte
+	publicKeyType        string
+	publicKeyFingerprint string
+	authorityFingerprint string
+	keyID                string
+	approver             string
+	principals           []string
+	sourceAddresses      []string
+	forceCommand         string
+	criticalOptions      map[string]string
+	requestedTTLSeconds  int64
+	effectiveTTL         time.Duration
+	ttlDefaulted         bool
+	ttlClamped           bool
+	blockers             []string
+}
+
+func (s *Server) PreviewAttestedSSHUserCert(ctx context.Context, tenantID string, req api.SSHAttestedUserCertRequest) (api.SSHAttestedUserCertPreview, error) {
+	plan, err := s.normalizeAttestedSSHUserCert(ctx, tenantID, req)
+	if err != nil {
+		return api.SSHAttestedUserCertPreview{}, err
+	}
+	return api.SSHAttestedUserCertPreview{
+		Capability: "F45", Ready: len(plan.blockers) == 0, EffectFree: true,
+		Method: plan.method, SupportedMethods: append([]string(nil), plan.supportedMethods...),
+		KeyID: plan.keyID, Approver: plan.approver, Principals: append([]string(nil), plan.principals...),
+		SourceAddresses: append([]string(nil), plan.sourceAddresses...), ForceCommand: plan.forceCommand,
+		RequestedTTLSeconds: plan.requestedTTLSeconds, EffectiveTTLSeconds: int64(plan.effectiveTTL / time.Second),
+		TTLDefaulted: plan.ttlDefaulted, TTLClamped: plan.ttlClamped,
+		PublicKeyType: plan.publicKeyType, PublicKeyFingerprint: plan.publicKeyFingerprint,
+		AuthorityFingerprint: plan.authorityFingerprint, RequiredPermission: "certs:issue",
+		AttestationVerification: "execution_only", PayloadSHA256: crypto.SHA256Hex(req.Payload),
+		PreviewWrites: []string{}, PreviewExternalEffects: []string{}, PreviewSignerCalls: []string{},
+		ExecutionWrites: []string{
+			"Record tenant-scoped attestation verification and SSH certificate issuance audit evidence.",
+			"Record the idempotent HTTP result so an unchanged retry returns the original certificate.",
+		},
+		ExecutionExternalEffects: []string{},
+		ExecutionSignerCalls: []string{
+			"Ask the isolated signer to sign one short-lived SSH user certificate after proof, approver, principal, and session constraints pass.",
+		},
+		Blockers: append([]string(nil), plan.blockers...),
+		RecoverySteps: []string{
+			"If the response is lost or the server returns a temporary error, retry the exact request with the same Idempotency-Key. trstctl returns the original result instead of signing twice.",
+			"If proof verification fails, obtain fresh proof or repair the tenant trust source, then build a new preview. Never disable verification to continue.",
+			"If the signer is unavailable, restore the isolated signer and retry the unchanged request with the same Idempotency-Key.",
+			"If access must be removed after issuance, revoke the certificate by serial or key ID and distribute the updated /ssh/krl artifact.",
+		},
+		DataHandling: []string{
+			"The preview returns a SHA-256 proof digest, never the raw proof. Decoded proof buffers are wiped after the response.",
+			"Proof verification happens only during issuance so preview cannot consume one-time evidence or create verification audit events.",
+			"Only the public SSH key enters trstctl; the matching private key remains with the requester.",
+		},
+	}, nil
+}
+
+func (s *Server) normalizeAttestedSSHUserCert(ctx context.Context, tenantID string, req api.SSHAttestedUserCertRequest) (normalizedAttestedSSHUserCert, error) {
 	sp, err := s.sshWorkflowProtocol(tenantID)
 	if err != nil {
-		return api.SSHAttestedUserCert{}, err
+		return normalizedAttestedSSHUserCert{}, err
 	}
+	plan := normalizedAttestedSSHUserCert{sp: sp, criticalOptions: map[string]string{}, requestedTTLSeconds: req.TTLSeconds}
+	if s.attestedIssuance == nil {
+		return normalizedAttestedSSHUserCert{}, fmt.Errorf("%w: attestors are not configured", api.ErrSSHWorkflowUnavailable)
+	}
+	plan.supportedMethods, err = s.sshWorkflowAttestorMethods(ctx, tenantID)
+	if err != nil {
+		return normalizedAttestedSSHUserCert{}, fmt.Errorf("%w: list attester trust sources: %v", api.ErrSSHWorkflowUnavailable, err)
+	}
+
+	method := strings.TrimSpace(req.Method)
+	plan.method = method
+	if method == "" {
+		plan.blockers = append(plan.blockers, "Choose an attestation method configured for this tenant.")
+	} else {
+		plan.attestors, err = s.attestedIssuance.attestorsForMethod(ctx, tenantID, method)
+		if err != nil {
+			return normalizedAttestedSSHUserCert{}, fmt.Errorf("%w: list attester trust sources: %v", api.ErrSSHWorkflowUnavailable, err)
+		}
+		if len(plan.attestors) == 0 {
+			plan.blockers = append(plan.blockers, fmt.Sprintf("Attestation method %q is not configured for this tenant.", method))
+		}
+	}
+	if len(req.Payload) == 0 {
+		plan.blockers = append(plan.blockers, "Provide the attestation proof before issuing.")
+	}
+
+	plan.publicKey = []byte(strings.TrimSpace(req.PublicKey))
+	switch {
+	case len(plan.publicKey) == 0:
+		plan.blockers = append(plan.blockers, "Provide one valid OpenSSH public key. Keep the matching private key outside trstctl.")
+	case len(plan.publicKey) > 32<<10:
+		plan.blockers = append(plan.blockers, "The SSH public key is too large.")
+	default:
+		keyInfo, parseErr := sshkeys.ParsePublicKey(plan.publicKey)
+		if parseErr != nil {
+			plan.blockers = append(plan.blockers, "Provide one valid OpenSSH public key in authorized_keys form.")
+		} else {
+			plan.publicKeyType = keyInfo.Type
+			plan.publicKeyFingerprint = keyInfo.FingerprintSHA256
+		}
+	}
+
+	plan.keyID = strings.TrimSpace(req.KeyID)
+	if plan.keyID != "" && !validAttestedSSHText(plan.keyID, 256) {
+		plan.blockers = append(plan.blockers, "Key ID must be at most 256 characters and contain no control characters.")
+	}
+	plan.approver = strings.TrimSpace(req.Approver)
+	if !validAttestedSSHText(plan.approver, 256) {
+		plan.blockers = append(plan.blockers, "Name a distinct approver using at most 256 characters and no control characters.")
+	}
+	principals, principalErr := normalizeAttestedSSHList(req.Principals, 64, 256)
+	if principalErr != nil {
+		plan.blockers = append(plan.blockers, "Principals must contain at most 64 unique values; each value must be at most 256 characters with no control characters.")
+	} else {
+		plan.principals = principals
+	}
+	if len(req.SourceAddresses) > 0 {
+		sourceAddress, sourceErr := normalizeSSHSourceAddresses(strings.Join(req.SourceAddresses, ","))
+		if sourceErr != nil {
+			plan.blockers = append(plan.blockers, strings.TrimPrefix(sourceErr.Error(), api.ErrSSHWorkflowInvalid.Error()+": "))
+		} else {
+			plan.sourceAddresses = strings.Split(sourceAddress, ",")
+			plan.criticalOptions["source-address"] = sourceAddress
+		}
+	}
+	plan.forceCommand = strings.TrimSpace(req.ForceCommand)
+	if plan.forceCommand != "" {
+		if !validAttestedSSHText(plan.forceCommand, 1024) {
+			plan.blockers = append(plan.blockers, "Force command must be at most 1,024 characters and contain no control characters.")
+		} else {
+			plan.criticalOptions["force-command"] = plan.forceCommand
+		}
+	}
+	plan.ttlDefaulted = req.TTLSeconds <= 0
+	effectiveTTLSeconds := req.TTLSeconds
+	if plan.ttlDefaulted {
+		effectiveTTLSeconds = int64(defaultAttestedSSHUserTTL / time.Second)
+	}
+	plan.ttlClamped = effectiveTTLSeconds > int64(maxAttestedSSHUserTTL/time.Second)
+	if plan.ttlClamped {
+		effectiveTTLSeconds = int64(maxAttestedSSHUserTTL / time.Second)
+	}
+	plan.effectiveTTL = time.Duration(effectiveTTLSeconds) * time.Second
+
+	authorityKey, err := sp.AuthorityKey()
+	if err != nil {
+		return normalizedAttestedSSHUserCert{}, fmt.Errorf("%w: authority key unavailable: %v", api.ErrSSHWorkflowUnavailable, err)
+	}
+	authorityInfo, err := sshkeys.ParsePublicKey(authorityKey)
+	if err != nil {
+		return normalizedAttestedSSHUserCert{}, fmt.Errorf("%w: authority key is invalid", api.ErrSSHWorkflowUnavailable)
+	}
+	plan.authorityFingerprint = authorityInfo.FingerprintSHA256
+	return plan, nil
+}
+
+func (s *Server) IssueAttestedSSHUserCert(ctx context.Context, tenantID, idempotencyKey string, req api.SSHAttestedUserCertRequest) (api.SSHAttestedUserCert, error) {
 	if strings.TrimSpace(idempotencyKey) == "" {
 		return api.SSHAttestedUserCert{}, fmt.Errorf("%w: idempotency key is required", api.ErrSSHWorkflowInvalid)
 	}
-	method := strings.TrimSpace(req.Method)
-	if method == "" {
-		return api.SSHAttestedUserCert{}, fmt.Errorf("%w: method is required", api.ErrSSHWorkflowInvalid)
-	}
-	if s.attestedIssuance == nil {
-		return api.SSHAttestedUserCert{}, fmt.Errorf("%w: attestors are not configured", api.ErrSSHWorkflowUnavailable)
-	}
-	attestors, err := s.attestedIssuance.attestorsForMethod(ctx, tenantID, method)
+	plan, err := s.normalizeAttestedSSHUserCert(ctx, tenantID, req)
 	if err != nil {
-		return api.SSHAttestedUserCert{}, fmt.Errorf("%w: list attester trust sources: %v", api.ErrSSHWorkflowInvalid, err)
+		return api.SSHAttestedUserCert{}, err
 	}
-	if len(attestors) == 0 {
-		return api.SSHAttestedUserCert{}, fmt.Errorf("%w: no enabled trust source for attestation method %q", api.ErrSSHWorkflowInvalid, method)
-	}
-	if strings.TrimSpace(req.PublicKey) == "" {
-		return api.SSHAttestedUserCert{}, fmt.Errorf("%w: public_key is required", api.ErrSSHWorkflowInvalid)
-	}
-	approver := strings.TrimSpace(req.Approver)
-	if approver == "" {
-		return api.SSHAttestedUserCert{}, fmt.Errorf("%w: approver is required", api.ErrSSHWorkflowInvalid)
-	}
-	principals := compactStrings(req.Principals)
-	sourceAddresses := compactStrings(req.SourceAddresses)
-	forceCommand := strings.TrimSpace(req.ForceCommand)
-	criticalOptions := map[string]string{}
-	if len(sourceAddresses) > 0 {
-		criticalOptions["source-address"] = strings.Join(sourceAddresses, ",")
-	}
-	if forceCommand != "" {
-		criticalOptions["force-command"] = forceCommand
+	if len(plan.blockers) > 0 {
+		return api.SSHAttestedUserCert{}, fmt.Errorf("%w: %s", api.ErrSSHWorkflowInvalid, plan.blockers[0])
 	}
 	verifier, err := attest.NewVerifier(attest.Config{
 		TenantID:  tenantID,
-		Attestors: attestors,
+		Attestors: plan.attestors,
 		Audit:     attestedIssuanceAuditor(s.eventLogForSSHWorkflow()),
 	})
 	if err != nil {
 		return api.SSHAttestedUserCert{}, fmt.Errorf("%w: verifier is invalid: %v", api.ErrSSHWorkflowInvalid, err)
 	}
-	ttl := time.Duration(req.TTLSeconds) * time.Second
-	if ttl <= 0 {
-		ttl = 15 * time.Minute
-	}
-	if ttl > time.Hour {
-		ttl = time.Hour
-	}
 	issuer, err := sshca.NewAttestedUserCertIssuer(sshca.AttestedConfig{
 		TenantID: tenantID,
-		CA:       sp.CA(),
+		CA:       plan.sp.CA(),
 		Verifier: verifier,
 		Profile: sshca.Profile{
 			Name:           "served-ssh-attested",
@@ -470,25 +600,25 @@ func (s *Server) IssueAttestedSSHUserCert(ctx context.Context, tenantID, idempot
 				"permit-pty": "",
 			},
 		},
-		TTL:   ttl,
+		TTL:   plan.effectiveTTL,
 		Audit: attestedIssuanceAuditor(s.eventLogForSSHWorkflow()),
 	})
 	if err != nil {
 		return api.SSHAttestedUserCert{}, fmt.Errorf("%w: %v", api.ErrSSHWorkflowInvalid, err)
 	}
 	issued, att, err := issuer.Issue(ctx, sshca.AttestedRequest{
-		Method:           method,
+		Method:           plan.method,
 		Payload:          req.Payload,
-		SubjectPublicKey: []byte(req.PublicKey),
-		KeyID:            strings.TrimSpace(req.KeyID),
-		Approver:         approver,
-		Principals:       principals,
-		CriticalOptions:  criticalOptions,
+		SubjectPublicKey: plan.publicKey,
+		KeyID:            plan.keyID,
+		Approver:         plan.approver,
+		Principals:       plan.principals,
+		CriticalOptions:  plan.criticalOptions,
 	})
 	if err != nil {
 		return api.SSHAttestedUserCert{}, fmt.Errorf("%w: %v", api.ErrSSHWorkflowRejected, err)
 	}
-	responsePrincipals := principals
+	responsePrincipals := plan.principals
 	if len(responsePrincipals) == 0 {
 		responsePrincipals = []string{att.Subject}
 	}
@@ -499,11 +629,39 @@ func (s *Server) IssueAttestedSSHUserCert(ctx context.Context, tenantID, idempot
 		Subject:         att.Subject,
 		Principals:      responsePrincipals,
 		ValidBefore:     issued.ValidBefore.UTC().Format(time.RFC3339),
-		Approver:        approver,
-		SourceAddresses: sourceAddresses,
-		ForceCommand:    forceCommand,
+		Approver:        plan.approver,
+		SourceAddresses: plan.sourceAddresses,
+		ForceCommand:    plan.forceCommand,
 		Attestation:     att,
 	}, nil
+}
+
+func validAttestedSSHText(value string, maxLen int) bool {
+	return value != "" && len(value) <= maxLen && utf8.ValidString(value) && strings.IndexFunc(value, unicode.IsControl) < 0
+}
+
+func normalizeAttestedSSHList(values []string, maxItems, maxLen int) ([]string, error) {
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, raw := range values {
+		value := strings.TrimSpace(raw)
+		if value == "" {
+			continue
+		}
+		if !validAttestedSSHText(value, maxLen) {
+			return nil, api.ErrSSHWorkflowInvalid
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	if len(out) > maxItems {
+		return nil, api.ErrSSHWorkflowInvalid
+	}
+	sort.Strings(out)
+	return out, nil
 }
 
 func (s *Server) RevokeSSHCertificate(ctx context.Context, tenantID, idempotencyKey string, req api.SSHRevokeCertificateRequest) (api.SSHStatus, error) {

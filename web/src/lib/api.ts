@@ -410,6 +410,7 @@ import type {
   TenantKeyDomainSealReceipt,
   TenantKeyDomainStatus,
   SSHAttestedUserCert,
+  SSHAttestedUserCertPreview,
   SSHAttestedUserCertRequest,
   SSHCertificate,
   SSHCertificatePreview,
@@ -1017,6 +1018,7 @@ export type {
   TenantKeyDomainSealReceipt,
   TenantKeyDomainStatus,
   SSHAttestedUserCert,
+  SSHAttestedUserCertPreview,
   SSHAttestedUserCertRequest,
   SSHCertificate,
   SSHCertificatePreview,
@@ -2289,7 +2291,8 @@ export interface Api {
   recordSSHTrustRollout(input: SSHTrustRolloutRequest): Promise<SSHTrustRollout>;
   previewSSHCertificate(input: SSHCertificateRequest): Promise<SSHCertificatePreview>;
   issueSSHCertificate(input: SSHCertificateRequest): Promise<SSHCertificate>;
-  issueAttestedSSHUserCert(input: SSHAttestedUserCertRequest): Promise<SSHAttestedUserCert>;
+  previewAttestedSSHUserCert(input: SSHAttestedUserCertRequest): Promise<SSHAttestedUserCertPreview>;
+  issueAttestedSSHUserCert(input: SSHAttestedUserCertRequest, idempotencyKey?: string): Promise<SSHAttestedUserCert>;
   revokeSSHCertificate(input: SSHRevokeCertificateRequest): Promise<SSHStatus>;
   retireSSHHost(input: SSHHostRetireRequest): Promise<SSHHostRetirement>;
   protocolStatuses(): Promise<ProtocolRuntimeStatusList>;
@@ -2840,7 +2843,8 @@ const liveApi: Api = {
   recordSSHTrustRollout: (input) => mutate<SSHTrustRollout>("POST", "/api/v1/ssh/trust-rollouts", input),
   previewSSHCertificate: (input) => postRead<SSHCertificatePreview>("/api/v1/ssh/certificates/preview", input),
   issueSSHCertificate: (input) => mutate<SSHCertificate>("POST", "/api/v1/ssh/certificates", input),
-  issueAttestedSSHUserCert: (input) => mutate<SSHAttestedUserCert>("POST", "/api/v1/ssh/attested-user-certs", input),
+  previewAttestedSSHUserCert: (input) => postRead<SSHAttestedUserCertPreview>("/api/v1/ssh/attested-user-certs/preview", input),
+  issueAttestedSSHUserCert: (input, idempotencyKey) => mutate<SSHAttestedUserCert>("POST", "/api/v1/ssh/attested-user-certs", input, idempotencyKey),
   revokeSSHCertificate: (input) => mutate<SSHStatus>("POST", "/api/v1/ssh/certificates/revoke", input),
   retireSSHHost: (input) => mutate<SSHHostRetirement>("POST", "/api/v1/ssh/hosts/retire", input),
   protocolStatuses: async () => ({

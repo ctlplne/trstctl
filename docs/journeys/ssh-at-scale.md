@@ -155,12 +155,29 @@ mutation stays in the operator-confirmed agent path.
    TTL. Every issuance is an immutable `ssh.attested_cert.issued` event. See [SSH](../features/ssh.md).
 
    ```sh
+   export TRSTCTL_IDEMPOTENCY_KEY="ssh-jit-deployer-$(date -u +%Y%m%dT%H%M%SZ)"
+   trstctl ssh preview-attested-user \
+     --method k8s_sat \
+     --payload-base64 "$K8S_SAT_B64" \
+     --public-key "$(cat ~/.ssh/id_ed25519.pub)" \
+     --key-id jit-deployer \
+     --ttl-seconds 900 \
+     --approver ssh-approver \
+     --principals web \
+     --source-addresses 10.0.0.0/24 \
+     --force-command /usr/local/bin/deploy
+
+   # After reviewing the exact effect-free plan, execute the same body.
    trstctl ssh issue-attested-user \
      --method k8s_sat \
      --payload-base64 "$K8S_SAT_B64" \
      --public-key "$(cat ~/.ssh/id_ed25519.pub)" \
      --key-id jit-deployer \
-     --ttl-seconds 900
+     --ttl-seconds 900 \
+     --approver ssh-approver \
+     --principals web \
+     --source-addresses 10.0.0.0/24 \
+     --force-command /usr/local/bin/deploy
    ```
 
    -> the user connects normally and `sshd` validates the certificate against
@@ -168,7 +185,9 @@ mutation stays in the operator-confirmed agent path.
    certificate's principals come from the verified attestation (the caller
    cannot request extras), and the private key stays with the user — never in
    trstctl. The attestation-gated issuer is served through the SSH workflow
-   API, CLI, and UI.
+   API, CLI, and UI. If the response is lost, rerun the unchanged issue command
+   with the same `TRSTCTL_IDEMPOTENCY_KEY`; a changed command is refused rather
+   than replaying unrelated certificate output.
 
 6. Pull a certificate back before it expires. Revoking it puts its serial on the SSH
    CA's key-revocation list, served in OpenSSH binary format at `/ssh/krl`, which a

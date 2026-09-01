@@ -42,7 +42,7 @@ func (a *API) runtimeRouteAvailability(r route) (bool, string) {
 	case "previewAttestedSVID", "issueAttestedSVID":
 		return runtimeDependency(a.attestedIssuer != nil,
 			"Attested workload issuance is not configured in this deployment.")
-	case "getSSHStatus", "recordSSHTrustRollout", "previewSSHCertificate", "issueSSHCertificate", "issueAttestedSSHUserCert", "revokeSSHCertificate", "retireSSHHost":
+	case "getSSHStatus", "recordSSHTrustRollout", "previewSSHCertificate", "issueSSHCertificate", "previewAttestedSSHUserCert", "issueAttestedSSHUserCert", "revokeSSHCertificate", "retireSSHHost":
 		return runtimeDependency(a.sshWorkflow != nil,
 			"The SSH certificate workflow is not configured in this deployment.")
 	case "issueBrokerAgentIdentity", "previewBrokerAgentIdentity":

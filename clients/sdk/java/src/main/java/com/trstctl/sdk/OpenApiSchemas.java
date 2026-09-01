@@ -609,6 +609,7 @@ public final class OpenApiSchemas {
       "SPIFFEQualification",
       "SPIFFEQualificationCheck",
       "SSHAttestedUserCert",
+      "SSHAttestedUserCertPreview",
       "SSHAttestedUserCertRequest",
       "SSHCertificate",
       "SSHCertificatePreview",

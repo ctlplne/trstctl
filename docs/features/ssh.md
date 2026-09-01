@@ -101,11 +101,24 @@ profile), and binds the attestation via an immutable `ssh.attested_cert.issued` 
 access short-lived and provably tied to a specific CI job or cloud instance — no standing
 keys.
 
-That issuer is served at `POST /api/v1/ssh/attested-user-certs` and by `trstctl ssh
+Review the exact request first with
+`POST /api/v1/ssh/attested-user-certs/preview` or
+`trstctl ssh preview-attested-user`. The preview reads tenant trust, validates and
+normalizes the public key, approver, principals, lifetime, source addresses, and
+forced command, then returns proof and key fingerprints, the isolated-signer action,
+and recovery instructions. It performs no proof verification, write, external call,
+audit emission, or signer call; proof verification remains execution-only because a
+proof may contain one-time evidence.
+
+Execution is served at `POST /api/v1/ssh/attested-user-certs` and by `trstctl ssh
 issue-attested-user`; the request carries an attestation method, base64 payload, SSH
 public key, approver, optional key ID, principals, TTL, source-address allowlist, and
 force-command policy. The response is the certificate plus serial, key ID, expiry,
 constraints, and the attestation record — the private key never crosses the API or UI.
+The console retains one request-scoped idempotency key after an uncertain response;
+its **Retry unchanged request** action recovers the original result instead of signing
+again. For CLI recovery, set `TRSTCTL_IDEMPOTENCY_KEY` to a stable value and reuse the
+same command body. A changed request with that key is rejected with HTTP 409.
 
 ## Use it
 
@@ -212,9 +225,11 @@ trstctl ssh retire-host --host edge-1.internal --reason 'replaced'
   `TrustedUserCAKeys` / `@cert-authority`), `KRL.RevokeSerial`, `KRL.Distribute`.
 - **Served API/CLI:** `POST /api/v1/ssh/certificates/preview`,
   `POST /api/v1/ssh/certificates`, `GET /api/v1/ssh/status`,
-  `POST /api/v1/ssh/trust-rollouts`, `POST /api/v1/ssh/attested-user-certs`,
+  `POST /api/v1/ssh/trust-rollouts`,
+  `POST /api/v1/ssh/attested-user-certs/preview`,
+  `POST /api/v1/ssh/attested-user-certs`,
   `POST /api/v1/ssh/certificates/revoke`, `POST /api/v1/ssh/hosts/retire`;
-  `trstctl ssh preview|issue|status|trust-rollout|issue-attested-user|revoke|retire-host`.
+  `trstctl ssh preview|issue|status|trust-rollout|preview-attested-user|issue-attested-user|revoke|retire-host`.
 - **Agent config:** `SSHDConfigPath`, `TrustedUserCAKeysPath`,
   `AllowUnconfirmedRemoval` (default false).
 - **Attested issuance:** `AttestedUserCertIssuer.Issue` (method+payload → cert).

@@ -8045,6 +8045,74 @@ export const messages = {
     defaultMessage: "approver {approver} | principals {principals} | source {source} | force {force}",
     description: "Summary of applied constraints returned with an issued attested SSH user certificate.",
   },
+  "sshTrust.attested.previewAction": {
+    defaultMessage: "Review exact plan",
+    description: "Build the effect-free F45 attested SSH certificate preview.",
+  },
+  "sshTrust.attested.previewing": {
+    defaultMessage: "Checking the exact SSH access plan…",
+    description: "F45 attested SSH preview progress.",
+  },
+  "sshTrust.attested.previewFailedTitle": {
+    defaultMessage: "Plan review failed",
+    description: "F45 attested SSH preview failure title.",
+  },
+  "sshTrust.attested.previewFailedFallback": {
+    defaultMessage: "Could not review this SSH access request.",
+    description: "F45 attested SSH preview failure fallback.",
+  },
+  "sshTrust.attested.planLabel": {
+    defaultMessage: "Exact attestation-gated SSH access plan",
+    description: "Accessible label for the F45 effect-free plan.",
+  },
+  "sshTrust.attested.readyTitle": {
+    defaultMessage: "Ready to verify and issue",
+    description: "F45 plan ready title.",
+  },
+  "sshTrust.attested.blockedTitle": {
+    defaultMessage: "Fix these items before issuing",
+    description: "F45 blocked plan title.",
+  },
+  "sshTrust.attested.effectFree": {
+    defaultMessage: "No writes, external calls, audit events, or signer calls happened during this review.",
+    description: "F45 effect-free preview boundary.",
+  },
+  "sshTrust.attested.publicKeyFingerprint": {
+    defaultMessage: "Public-key fingerprint",
+    description: "F45 reviewed public-key fingerprint.",
+  },
+  "sshTrust.attested.authorityFingerprint": {
+    defaultMessage: "Signing authority fingerprint",
+    description: "F45 reviewed SSH authority fingerprint.",
+  },
+  "sshTrust.attested.issueAction": {
+    defaultMessage: "Verify proof and issue SSH certificate",
+    description: "Explicit F45 execution action after exact review.",
+  },
+  "sshTrust.attested.issuing": {
+    defaultMessage: "Verifying proof and issuing…",
+    description: "F45 execution progress.",
+  },
+  "sshTrust.attested.retryAction": {
+    defaultMessage: "Retry unchanged request",
+    description: "F45 recovery action that reuses the original idempotency key.",
+  },
+  "sshTrust.attested.uncertainResponse": {
+    defaultMessage: "The response was uncertain. Retry the unchanged request so trstctl can return the original result instead of issuing twice.",
+    description: "F45 safe recovery guidance after a server-side or transport failure.",
+  },
+  "sshTrust.attested.issueFailedTitle": {
+    defaultMessage: "SSH access request did not complete",
+    description: "F45 issuance failure title.",
+  },
+  "sshTrust.attested.issueFailedFallback": {
+    defaultMessage: "Could not issue this SSH access certificate.",
+    description: "F45 issuance failure fallback.",
+  },
+  "sshTrust.attested.issuedTitle": {
+    defaultMessage: "SSH access certificate issued",
+    description: "F45 issuance result title.",
+  },
   "sshTrust.fleet.heading": {
     defaultMessage: "Standing SSH access inventory",
     description: "Heading for agent-reported standing SSH access.",
@@ -20241,10 +20309,6 @@ export const messages = {
   "source.issue.api.key.3cdf19cbb9": {
     defaultMessage: "Issue API key",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
-  "source.issue.attested.ssh.cert.fba31f1beb": {
-    defaultMessage: "Issue attested SSH cert",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/SSHTrust.tsx.",
   },
   "source.issue.attested.ssh.user.certificate.f7e0f6ef66": {
     defaultMessage: "Issue attested SSH user certificate",

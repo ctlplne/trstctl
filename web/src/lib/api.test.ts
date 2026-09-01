@@ -583,6 +583,9 @@ describe("exported API surface census", () => {
       // without allocating a serial, appending an event, changing the KRL, or
       // calling the isolated signer.
       "/api/v1/ssh/certificates/preview",
+      // F45: hashes and normalizes the exact attested SSH request without
+      // verifying one-time proof, emitting audit evidence, or calling the signer.
+      "/api/v1/ssh/attested-user-certs/preview",
       // F69: validates the exact provider, domain, policy, reference shape,
       // runtime, and resolver without generating a probe, writing, signing, or
       // contacting DNS/the provider.

@@ -15,7 +15,7 @@ import (
 
 func runSSH(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) error {
 	if len(args) < 1 {
-		return errors.New("usage: trstctl ssh <status|fleet|trust-rollout|preview|issue|issue-attested-user|revoke|retire-host>")
+		return errors.New("usage: trstctl ssh <status|fleet|trust-rollout|preview|issue|preview-attested-user|issue-attested-user|revoke|retire-host>")
 	}
 	cfg, err := connectorCLIConfigFromEnv(getenv)
 	if err != nil {
@@ -88,19 +88,35 @@ func runSSH(ctx context.Context, args []string, getenv func(string) string, stdo
 			mutation = false
 		}
 		return connectorCLIRequest(ctx, stdout, cfg, http.MethodPost, path, body, mutation)
-	case "issue-attested-user":
-		fs := flag.NewFlagSet("trstctl ssh issue-attested-user", flag.ContinueOnError)
+	case "preview-attested-user", "issue-attested-user":
+		command := args[0]
+		fs := flag.NewFlagSet("trstctl ssh "+command, flag.ContinueOnError)
 		fs.SetOutput(stderr)
 		method := fs.String("method", "", "attestation method")
 		payload := fs.String("payload-base64", "", "attestation payload as standard base64")
 		publicKey := fs.String("public-key", "", "subject SSH public key in authorized_keys form")
 		keyID := fs.String("key-id", "", "SSH certificate key id")
 		ttl := fs.Int64("ttl-seconds", 0, "requested TTL in seconds")
+		approver := fs.String("approver", "", "distinct approver identity")
+		principals := fs.String("principals", "", "comma-separated principals that must be bound to the verified attestation")
+		sourceAddresses := fs.String("source-addresses", "", "comma-separated source IP addresses or CIDRs")
+		forceCommand := fs.String("force-command", "", "command the SSH server must force for this certificate")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
-		body := map[string]any{"method": *method, "payload_base64": *payload, "public_key": *publicKey, "key_id": *keyID, "ttl_seconds": *ttl}
-		return connectorCLIRequest(ctx, stdout, cfg, http.MethodPost, "/api/v1/ssh/attested-user-certs", body, true)
+		body := map[string]any{
+			"method": *method, "payload_base64": *payload, "public_key": *publicKey,
+			"key_id": *keyID, "ttl_seconds": *ttl, "approver": *approver,
+			"principals": splitCSV(*principals), "source_addresses": splitCSV(*sourceAddresses),
+			"force_command": *forceCommand,
+		}
+		path := "/api/v1/ssh/attested-user-certs"
+		mutation := true
+		if command == "preview-attested-user" {
+			path += "/preview"
+			mutation = false
+		}
+		return connectorCLIRequest(ctx, stdout, cfg, http.MethodPost, path, body, mutation)
 	case "revoke":
 		fs := flag.NewFlagSet("trstctl ssh revoke", flag.ContinueOnError)
 		fs.SetOutput(stderr)

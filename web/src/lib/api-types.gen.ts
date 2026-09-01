@@ -6192,6 +6192,38 @@ export interface SSHAttestedUserCert {
   valid_before: string;
 }
 
+export interface SSHAttestedUserCertPreview {
+  approver: string;
+  attestation_verification: "execution_only";
+  authority_fingerprint: string;
+  blockers: string[];
+  capability: string;
+  data_handling: string[];
+  effect_free: boolean;
+  effective_ttl_seconds: number;
+  execution_external_effects: string[];
+  execution_signer_calls: string[];
+  execution_writes: string[];
+  force_command: string;
+  key_id: string;
+  method: string;
+  payload_sha256: string;
+  preview_external_effects: string[];
+  preview_signer_calls: string[];
+  preview_writes: string[];
+  principals: string[];
+  public_key_fingerprint: string;
+  public_key_type: string;
+  ready: boolean;
+  recovery_steps: string[];
+  requested_ttl_seconds: number;
+  required_permission: string;
+  source_addresses: string[];
+  supported_methods: string[];
+  ttl_clamped: boolean;
+  ttl_defaulted: boolean;
+}
+
 export interface SSHAttestedUserCertRequest {
   approver: string;
   force_command?: string;

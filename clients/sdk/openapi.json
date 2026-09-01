@@ -25049,6 +25049,168 @@
         ],
         "type": "object"
       },
+      "SSHAttestedUserCertPreview": {
+        "properties": {
+          "approver": {
+            "type": "string"
+          },
+          "attestation_verification": {
+            "enum": [
+              "execution_only"
+            ],
+            "type": "string"
+          },
+          "authority_fingerprint": {
+            "type": "string"
+          },
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "data_handling": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "effective_ttl_seconds": {
+            "type": "integer"
+          },
+          "execution_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "execution_signer_calls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "execution_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "force_command": {
+            "type": "string"
+          },
+          "key_id": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "payload_sha256": {
+            "type": "string"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_signer_calls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "principals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "public_key_fingerprint": {
+            "type": "string"
+          },
+          "public_key_type": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "recovery_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "requested_ttl_seconds": {
+            "type": "integer"
+          },
+          "required_permission": {
+            "type": "string"
+          },
+          "source_addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "supported_methods": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ttl_clamped": {
+            "type": "boolean"
+          },
+          "ttl_defaulted": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "capability",
+          "ready",
+          "effect_free",
+          "method",
+          "supported_methods",
+          "key_id",
+          "approver",
+          "principals",
+          "source_addresses",
+          "force_command",
+          "requested_ttl_seconds",
+          "effective_ttl_seconds",
+          "ttl_defaulted",
+          "ttl_clamped",
+          "public_key_type",
+          "public_key_fingerprint",
+          "authority_fingerprint",
+          "required_permission",
+          "attestation_verification",
+          "payload_sha256",
+          "preview_writes",
+          "preview_external_effects",
+          "preview_signer_calls",
+          "execution_writes",
+          "execution_external_effects",
+          "execution_signer_calls",
+          "blockers",
+          "recovery_steps",
+          "data_handling"
+        ],
+        "type": "object"
+      },
       "SSHAttestedUserCertRequest": {
         "properties": {
           "approver": {
@@ -53394,6 +53556,63 @@
           }
         ],
         "summary": "Issue an attestation-gated SSH user certificate",
+        "x-trstctl-permission": "certs:issue"
+      }
+    },
+    "/api/v1/ssh/attested-user-certs/preview": {
+      "post": {
+        "operationId": "previewAttestedSSHUserCert",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SSHAttestedUserCertRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SSHAttestedUserCertPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Review an exact attestation-gated SSH user certificate request without side effects",
         "x-trstctl-permission": "certs:issue"
       }
     },

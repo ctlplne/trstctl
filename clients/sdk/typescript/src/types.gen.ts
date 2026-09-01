@@ -5673,6 +5673,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ssh/attested-user-certs/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review an exact attestation-gated SSH user certificate request without side effects */
+        post: operations["previewAttestedSSHUserCert"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ssh/certificates": {
         parameters: {
             query?: never;
@@ -12562,6 +12579,38 @@ export interface components {
             subject: string;
             /** Format: date-time */
             valid_before: string;
+        };
+        SSHAttestedUserCertPreview: {
+            approver: string;
+            /** @enum {string} */
+            attestation_verification: "execution_only";
+            authority_fingerprint: string;
+            blockers: string[];
+            capability: string;
+            data_handling: string[];
+            effect_free: boolean;
+            effective_ttl_seconds: number;
+            execution_external_effects: string[];
+            execution_signer_calls: string[];
+            execution_writes: string[];
+            force_command: string;
+            key_id: string;
+            method: string;
+            payload_sha256: string;
+            preview_external_effects: string[];
+            preview_signer_calls: string[];
+            preview_writes: string[];
+            principals: string[];
+            public_key_fingerprint: string;
+            public_key_type: string;
+            ready: boolean;
+            recovery_steps: string[];
+            requested_ttl_seconds: number;
+            required_permission: string;
+            source_addresses: string[];
+            supported_methods: string[];
+            ttl_clamped: boolean;
+            ttl_defaulted: boolean;
         };
         SSHAttestedUserCertRequest: {
             approver: string;
@@ -30189,6 +30238,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SSHAttestedUserCert"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewAttestedSSHUserCert: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SSHAttestedUserCertRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSHAttestedUserCertPreview"];
                 };
             };
             /** @description client error */

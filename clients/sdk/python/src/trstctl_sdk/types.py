@@ -8578,6 +8578,42 @@ SSHAttestedUserCert = TypedDict(
     total=False,
 )
 
+SSHAttestedUserCertPreview = TypedDict(
+    'SSHAttestedUserCertPreview',
+    {
+        'approver': str,
+        'attestation_verification': str,
+        'authority_fingerprint': str,
+        'blockers': list[str],
+        'capability': str,
+        'data_handling': list[str],
+        'effect_free': bool,
+        'effective_ttl_seconds': int,
+        'execution_external_effects': list[str],
+        'execution_signer_calls': list[str],
+        'execution_writes': list[str],
+        'force_command': str,
+        'key_id': str,
+        'method': str,
+        'payload_sha256': str,
+        'preview_external_effects': list[str],
+        'preview_signer_calls': list[str],
+        'preview_writes': list[str],
+        'principals': list[str],
+        'public_key_fingerprint': str,
+        'public_key_type': str,
+        'ready': bool,
+        'recovery_steps': list[str],
+        'requested_ttl_seconds': int,
+        'required_permission': str,
+        'source_addresses': list[str],
+        'supported_methods': list[str],
+        'ttl_clamped': bool,
+        'ttl_defaulted': bool,
+    },
+    total=False,
+)
+
 SSHAttestedUserCertRequest = TypedDict(
     'SSHAttestedUserCertRequest',
     {

@@ -12,6 +12,7 @@ const { apiMock } = vi.hoisted(() => ({
     recordSSHTrustRollout: vi.fn(),
     previewSSHCertificate: vi.fn(),
     issueSSHCertificate: vi.fn(),
+    previewAttestedSSHUserCert: vi.fn(),
     issueAttestedSSHUserCert: vi.fn(),
     revokeSSHCertificate: vi.fn(),
     retireSSHHost: vi.fn(),
@@ -111,6 +112,37 @@ describe("SSH trust served workflow surface", () => {
       extensions: {},
       authority_fingerprint: "SHA256:authority",
       krl_version: 7,
+    });
+    apiMock.previewAttestedSSHUserCert.mockResolvedValue({
+      capability: "F45",
+      ready: true,
+      effect_free: true,
+      method: "k8s_sat",
+      supported_methods: ["k8s_sat"],
+      key_id: "jit-deployer",
+      approver: "ssh-approver",
+      principals: ["web"],
+      source_addresses: ["10.0.0.0/24"],
+      force_command: "/usr/local/bin/deploy",
+      requested_ttl_seconds: 900,
+      effective_ttl_seconds: 900,
+      ttl_defaulted: false,
+      ttl_clamped: false,
+      public_key_type: "ssh-ed25519",
+      public_key_fingerprint: "SHA256:ssh-subject",
+      authority_fingerprint: "SHA256:ssh-authority",
+      required_permission: "certs:issue",
+      attestation_verification: "execution_only",
+      payload_sha256: "proof-digest",
+      preview_writes: [],
+      preview_external_effects: [],
+      preview_signer_calls: [],
+      execution_writes: ["record attestation verification and issuance audit evidence"],
+      execution_external_effects: [],
+      execution_signer_calls: ["sign one short-lived SSH user certificate"],
+      blockers: [],
+      recovery_steps: ["Retry the exact request with the same Idempotency-Key if the response is lost."],
+      data_handling: ["The preview returns only a digest of the proof and never the proof itself."],
     });
     apiMock.issueAttestedSSHUserCert.mockResolvedValue({
       certificate: "ssh-rsa-cert-v01@openssh.com AAAA",
@@ -337,7 +369,28 @@ describe("SSH trust served workflow surface", () => {
     await user.click(within(chooser).getByRole("button", { name: "Request SSH access" }));
     await user.type(screen.getByLabelText("Attestation payload base64"), "eyJzdWIiOiJzYSJ9");
     await user.type(screen.getByLabelText("SSH public key"), "ssh-ed25519 AAAATEST user@example.test");
-    await user.click(screen.getByRole("button", { name: "Issue attested SSH cert" }));
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+
+    await waitFor(() =>
+      expect(apiMock.previewAttestedSSHUserCert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: "k8s_sat",
+          payload_base64: "eyJzdWIiOiJzYSJ9",
+          public_key: "ssh-ed25519 AAAATEST user@example.test",
+          ttl_seconds: 900,
+          approver: "ssh-approver",
+          principals: ["web"],
+          source_addresses: ["10.0.0.0/24"],
+          force_command: "/usr/local/bin/deploy",
+        }),
+      ),
+    );
+    expect(apiMock.issueAttestedSSHUserCert).not.toHaveBeenCalled();
+    expect(await screen.findByRole("heading", { name: "Ready to verify and issue" })).toBeInTheDocument();
+    expect(screen.getByText("No writes, external calls, audit events, or signer calls happened during this review.")).toBeInTheDocument();
+    expect(screen.getByText("Retry the exact request with the same Idempotency-Key if the response is lost.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Verify proof and issue SSH certificate" }));
 
     await waitFor(() =>
       expect(apiMock.issueAttestedSSHUserCert).toHaveBeenCalledWith(
@@ -351,6 +404,7 @@ describe("SSH trust served workflow surface", () => {
           source_addresses: ["10.0.0.0/24"],
           force_command: "/usr/local/bin/deploy",
         }),
+        expect.any(String),
       ),
     );
     expect(screen.getByLabelText("Attestation payload base64")).toHaveValue("");
@@ -379,5 +433,45 @@ describe("SSH trust served workflow surface", () => {
     );
     expect(await screen.findByText("edge-1.internal:retired")).toBeInTheDocument();
     expect(screen.queryByText(/BEGIN OPENSSH PRIVATE KEY/)).not.toBeInTheDocument();
+  });
+
+  it("recovers an uncertain attested issuance with the same request and idempotency key", async () => {
+    apiMock.issueAttestedSSHUserCert
+      .mockRejectedValueOnce(new ApiError(503, JSON.stringify({ title: "Service Unavailable", status: 503, detail: "response lost after signing" })))
+      .mockResolvedValueOnce({
+        certificate: "ssh-rsa-cert-v01@openssh.com AAAA",
+        serial: 42,
+        key_id: "jit-deployer",
+        subject: "system:serviceaccount:default:deployer",
+        principals: ["web"],
+        approver: "ssh-approver",
+        source_addresses: ["10.0.0.0/24"],
+        force_command: "/usr/local/bin/deploy",
+        valid_before: "2026-06-27T10:15:00Z",
+        attestation: { id: "att-1", method: "k8s_sat", subject: "system:serviceaccount:default:deployer", selectors: [], verified_at: "2026-06-27T10:00:00Z" },
+      });
+    const user = userEvent.setup();
+    renderSSHTrust();
+
+    const chooser = (await screen.findByRole("heading", { name: "Choose what you want to do" })).closest("section") as HTMLElement;
+    await user.click(within(chooser).getByRole("button", { name: "Request SSH access" }));
+    await user.type(screen.getByLabelText("Attestation payload base64"), "eyJzdWIiOiJzYSJ9");
+    await user.type(screen.getByLabelText("SSH public key"), "ssh-ed25519 AAAATEST user@example.test");
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    await user.click(await screen.findByRole("button", { name: "Verify proof and issue SSH certificate" }));
+
+    expect(
+      await screen.findByText("The response was uncertain. Retry the unchanged request so trstctl can return the original result instead of issuing twice."),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Attestation payload base64")).toHaveValue("eyJzdWIiOiJzYSJ9");
+    expect(screen.getByLabelText("SSH public key")).toHaveValue("ssh-ed25519 AAAATEST user@example.test");
+    await user.click(screen.getByRole("button", { name: "Retry unchanged request" }));
+
+    await waitFor(() => expect(apiMock.issueAttestedSSHUserCert).toHaveBeenCalledTimes(2));
+    const first = apiMock.issueAttestedSSHUserCert.mock.calls[0];
+    const second = apiMock.issueAttestedSSHUserCert.mock.calls[1];
+    expect(second[0]).toEqual(first[0]);
+    expect(second[1]).toBe(first[1]);
+    expect(await screen.findByRole("heading", { name: "SSH access certificate issued" })).toBeInTheDocument();
   });
 });

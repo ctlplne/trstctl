@@ -12,6 +12,7 @@ import (
 
 	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/attest"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 var (
@@ -29,6 +30,7 @@ type SSHWorkflowService interface {
 	RecordSSHTrustRollout(ctx context.Context, tenantID, idempotencyKey string, req SSHTrustRolloutRequest) (SSHTrustRollout, error)
 	PreviewSSHCertificate(ctx context.Context, tenantID string, req SSHCertificateRequest) (SSHCertificatePreview, error)
 	IssueSSHCertificate(ctx context.Context, tenantID, idempotencyKey string, req SSHCertificateRequest) (SSHCertificate, error)
+	PreviewAttestedSSHUserCert(ctx context.Context, tenantID string, req SSHAttestedUserCertRequest) (SSHAttestedUserCertPreview, error)
 	IssueAttestedSSHUserCert(ctx context.Context, tenantID, idempotencyKey string, req SSHAttestedUserCertRequest) (SSHAttestedUserCert, error)
 	RevokeSSHCertificate(ctx context.Context, tenantID, idempotencyKey string, req SSHRevokeCertificateRequest) (SSHStatus, error)
 	RetireSSHHost(ctx context.Context, tenantID, idempotencyKey string, req SSHHostRetireRequest) (SSHHostRetirement, error)
@@ -77,7 +79,6 @@ type SSHTrustRollout struct {
 type SSHAttestedUserCertRequest struct {
 	Method          string   `json:"method"`
 	Payload         []byte   `json:"-"`
-	PayloadBase64   string   `json:"payload_base64"`
 	PublicKey       string   `json:"public_key"`
 	KeyID           string   `json:"key_id,omitempty"`
 	TTLSeconds      int64    `json:"ttl_seconds,omitempty"`
@@ -85,6 +86,77 @@ type SSHAttestedUserCertRequest struct {
 	Principals      []string `json:"principals,omitempty"`
 	SourceAddresses []string `json:"source_addresses,omitempty"`
 	ForceCommand    string   `json:"force_command,omitempty"`
+}
+
+// sshAttestedUserCertJSON keeps bearer proof bytes in wipeable buffers at the
+// HTTP boundary. PublicKey is public OpenSSH material; the matching private key
+// never enters this process.
+type sshAttestedUserCertJSON struct {
+	Method          string          `json:"method"`
+	PayloadBase64   secretJSONBytes `json:"payload_base64"`
+	PublicKey       string          `json:"public_key"`
+	KeyID           string          `json:"key_id,omitempty"`
+	TTLSeconds      int64           `json:"ttl_seconds,omitempty"`
+	Approver        string          `json:"approver"`
+	Principals      []string        `json:"principals,omitempty"`
+	SourceAddresses []string        `json:"source_addresses,omitempty"`
+	ForceCommand    string          `json:"force_command,omitempty"`
+}
+
+func (r *sshAttestedUserCertJSON) wipeSecrets() {
+	r.PayloadBase64.wipe()
+	r.PayloadBase64 = nil
+}
+
+func sshAttestedUserCertRequestFromJSON(req sshAttestedUserCertJSON) (SSHAttestedUserCertRequest, error) {
+	defer req.PayloadBase64.wipe()
+	payload := make([]byte, base64.StdEncoding.DecodedLen(len(req.PayloadBase64)))
+	n, err := base64.StdEncoding.Decode(payload, req.PayloadBase64)
+	if err != nil || n == 0 {
+		secret.Wipe(payload)
+		return SSHAttestedUserCertRequest{}, errStatus(http.StatusBadRequest, "payload_base64 must be non-empty standard base64")
+	}
+	return SSHAttestedUserCertRequest{
+		Method: strings.TrimSpace(req.Method), Payload: payload[:n], PublicKey: req.PublicKey,
+		KeyID: req.KeyID, TTLSeconds: req.TTLSeconds, Approver: req.Approver,
+		Principals: append([]string(nil), req.Principals...), SourceAddresses: append([]string(nil), req.SourceAddresses...),
+		ForceCommand: req.ForceCommand,
+	}, nil
+}
+
+// SSHAttestedUserCertPreview is the exact, effect-free F45 plan. Proof
+// verification remains execution-only because a verifier may consume one-time
+// evidence or emit audit records.
+type SSHAttestedUserCertPreview struct {
+	Capability               string   `json:"capability"`
+	Ready                    bool     `json:"ready"`
+	EffectFree               bool     `json:"effect_free"`
+	Method                   string   `json:"method"`
+	SupportedMethods         []string `json:"supported_methods"`
+	KeyID                    string   `json:"key_id"`
+	Approver                 string   `json:"approver"`
+	Principals               []string `json:"principals"`
+	SourceAddresses          []string `json:"source_addresses"`
+	ForceCommand             string   `json:"force_command"`
+	RequestedTTLSeconds      int64    `json:"requested_ttl_seconds"`
+	EffectiveTTLSeconds      int64    `json:"effective_ttl_seconds"`
+	TTLDefaulted             bool     `json:"ttl_defaulted"`
+	TTLClamped               bool     `json:"ttl_clamped"`
+	PublicKeyType            string   `json:"public_key_type"`
+	PublicKeyFingerprint     string   `json:"public_key_fingerprint"`
+	AuthorityFingerprint     string   `json:"authority_fingerprint"`
+	RequiredPermission       string   `json:"required_permission"`
+	AttestationVerification  string   `json:"attestation_verification"`
+	PayloadSHA256            string   `json:"payload_sha256"`
+	PreviewWrites            []string `json:"preview_writes"`
+	PreviewExternalEffects   []string `json:"preview_external_effects"`
+	PreviewSignerCalls       []string `json:"preview_signer_calls"`
+	ExecutionWrites          []string `json:"execution_writes"`
+	ExecutionExternalEffects []string `json:"execution_external_effects"`
+	ExecutionSignerCalls     []string `json:"execution_signer_calls"`
+	Blockers                 []string `json:"blockers"`
+	RecoverySteps            []string `json:"recovery_steps"`
+	DataHandling             []string `json:"data_handling"`
 }
 
 type SSHAttestedUserCert struct {
@@ -262,6 +334,43 @@ func (a *API) recordSSHTrustRollout(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// previewAttestedSSHUserCert reads tenant trust and normalizes the exact request
+// without verifying proof, writing state, emitting audit evidence, or calling the
+// signer. Verification remains part of the explicit mutation because proofs may
+// be one-time credentials.
+func (a *API) previewAttestedSSHUserCert(w http.ResponseWriter, r *http.Request) {
+	if a.sshWorkflow == nil {
+		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "ssh workflow is not enabled"))
+		return
+	}
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problem.New(http.StatusUnauthorized, "missing or invalid tenant"))
+		return
+	}
+	var wire sshAttestedUserCertJSON
+	defer wire.wipeSecrets()
+	if err := decodeJSON(r, &wire); err != nil {
+		a.writeProblem(w, problem.New(http.StatusBadRequest, err.Error()))
+		return
+	}
+	req, err := sshAttestedUserCertRequestFromJSON(wire)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	defer secret.Wipe(req.Payload)
+	preview, err := a.sshWorkflow.PreviewAttestedSSHUserCert(r.Context(), tenantID, req)
+	if err != nil {
+		if a.writeSSHWorkflowError(w, err) {
+			return
+		}
+		a.writeProblem(w, problem.New(http.StatusInternalServerError, err.Error()))
+		return
+	}
+	a.writeJSON(w, http.StatusOK, preview)
+}
+
 //trstctl:mutation
 func (a *API) issueAttestedSSHUserCert(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
@@ -269,15 +378,16 @@ func (a *API) issueAttestedSSHUserCert(w http.ResponseWriter, r *http.Request) {
 		if a.sshWorkflow == nil {
 			return 0, nil, ErrSSHWorkflowUnavailable
 		}
-		var req SSHAttestedUserCertRequest
-		if err := decodeJSON(r, &req); err != nil {
+		var wire sshAttestedUserCertJSON
+		defer wire.wipeSecrets()
+		if err := decodeJSON(r, &wire); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
-		payload, err := base64.StdEncoding.DecodeString(strings.TrimSpace(req.PayloadBase64))
-		if err != nil || len(payload) == 0 {
-			return 0, nil, errStatus(http.StatusBadRequest, "payload_base64 must be non-empty standard base64")
+		req, err := sshAttestedUserCertRequestFromJSON(wire)
+		if err != nil {
+			return 0, nil, err
 		}
-		req.Payload = payload
+		defer secret.Wipe(req.Payload)
 		out, err := a.sshWorkflow.IssueAttestedSSHUserCert(ctx, tenantID, idempotencyKey, req)
 		return http.StatusCreated, out, err
 	})

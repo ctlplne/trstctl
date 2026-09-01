@@ -213,8 +213,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// F30 adds an effect-free attested-SVID preview; execution remains separate.
 	// F61 adds a permission-gated, effect-free broker preview to the same feature.
 	// F61 adds independent durable history list/detail reads, not new mutations.
-	if len(out) != 412 {
-		t.Fatalf("OpenAPI operationIds = %d, want 412", len(out))
+	// F45 adds an exact, effect-free attested SSH user-certificate preview.
+	if len(out) != 413 {
+		t.Fatalf("OpenAPI operationIds = %d, want 413", len(out))
 	}
 	return out
 }

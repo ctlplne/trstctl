@@ -94,7 +94,7 @@ func TestServedSSHAtScaleJourneyJOURNEY002EndToEnd(t *testing.T) {
 	dir := t.TempDir()
 	keyPath := filepath.Join(dir, "id_ed25519")
 	pubAuthorizedKeys := genSSHKey(t, keyPath)
-	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/ssh/attested-user-certs", token, "journey-002-issue", map[string]any{
+	attestedRequest := map[string]any{
 		"method":           "k8s_sat",
 		"payload_base64":   base64.StdEncoding.EncodeToString([]byte(trust.SAT)),
 		"public_key":       string(pubAuthorizedKeys),
@@ -104,7 +104,49 @@ func TestServedSSHAtScaleJourneyJOURNEY002EndToEnd(t *testing.T) {
 		"principals":       []string{"web"},
 		"source_addresses": []string{"10.0.0.0/24"},
 		"force_command":    "/usr/local/bin/deploy",
-	})
+	}
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/ssh/attested-user-certs/preview", token, "", attestedRequest)
+	if status != http.StatusOK {
+		t.Fatalf("preview attested SSH user cert: status %d body %s", status, body)
+	}
+	var preview struct {
+		Capability              string   `json:"capability"`
+		Ready                   bool     `json:"ready"`
+		EffectFree              bool     `json:"effect_free"`
+		Method                  string   `json:"method"`
+		Approver                string   `json:"approver"`
+		Principals              []string `json:"principals"`
+		SourceAddresses         []string `json:"source_addresses"`
+		ForceCommand            string   `json:"force_command"`
+		RequestedTTLSeconds     int64    `json:"requested_ttl_seconds"`
+		EffectiveTTLSeconds     int64    `json:"effective_ttl_seconds"`
+		AttestationVerification string   `json:"attestation_verification"`
+		PayloadSHA256           string   `json:"payload_sha256"`
+		PublicKeyFingerprint    string   `json:"public_key_fingerprint"`
+		PreviewWrites           []string `json:"preview_writes"`
+		PreviewSignerCalls      []string `json:"preview_signer_calls"`
+		RecoverySteps           []string `json:"recovery_steps"`
+	}
+	if err := json.Unmarshal(body, &preview); err != nil {
+		t.Fatalf("decode attested SSH preview: %v (%s)", err, body)
+	}
+	if preview.Capability != "F45" || !preview.Ready || !preview.EffectFree || preview.Method != "k8s_sat" || preview.Approver != "ssh-approver" {
+		t.Fatalf("bad attested SSH preview: %+v", preview)
+	}
+	if preview.RequestedTTLSeconds != 600 || preview.EffectiveTTLSeconds != 600 || preview.AttestationVerification != "execution_only" {
+		t.Fatalf("attested SSH preview did not preserve exact lifetime/gate: %+v", preview)
+	}
+	if len(preview.Principals) != 1 || preview.Principals[0] != "web" || len(preview.SourceAddresses) != 1 || preview.SourceAddresses[0] != "10.0.0.0/24" || preview.ForceCommand != "/usr/local/bin/deploy" {
+		t.Fatalf("attested SSH preview did not preserve exact constraints: %+v", preview)
+	}
+	if preview.PayloadSHA256 == "" || preview.PublicKeyFingerprint == "" || len(preview.PreviewWrites) != 0 || len(preview.PreviewSignerCalls) != 0 || len(preview.RecoverySteps) == 0 {
+		t.Fatalf("attested SSH preview omitted effect-free or recovery evidence: %+v", preview)
+	}
+	if h.hasEvent(t, "attestation.verified") || h.hasEvent(t, "ssh.attested_cert.issued") {
+		t.Fatal("effect-free attested SSH preview emitted issuance evidence")
+	}
+
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/ssh/attested-user-certs", token, "journey-002-issue", attestedRequest)
 	if status != http.StatusCreated {
 		t.Fatalf("issue attested SSH user cert: status %d body %s", status, body)
 	}
@@ -129,6 +171,19 @@ func TestServedSSHAtScaleJourneyJOURNEY002EndToEnd(t *testing.T) {
 	}
 	if len(issued.SourceAddresses) != 1 || issued.SourceAddresses[0] != "10.0.0.0/24" || issued.ForceCommand != "/usr/local/bin/deploy" {
 		t.Fatalf("attested SSH response did not preserve session constraints: %+v", issued)
+	}
+	status, replayBody := secretsReqKey(t, h, http.MethodPost, "/api/v1/ssh/attested-user-certs", token, "journey-002-issue", attestedRequest)
+	if status != http.StatusCreated || !bytes.Equal(body, replayBody) {
+		t.Fatalf("unchanged attested SSH retry did not recover the original result: status %d first=%s replay=%s", status, body, replayBody)
+	}
+	conflictingRequest := make(map[string]any, len(attestedRequest))
+	for key, value := range attestedRequest {
+		conflictingRequest[key] = value
+	}
+	conflictingRequest["ttl_seconds"] = 601
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/ssh/attested-user-certs", token, "journey-002-issue", conflictingRequest)
+	if status != http.StatusConflict {
+		t.Fatalf("changed attested SSH retry should conflict: status %d body %s", status, body)
 	}
 	parsed, _, _, _, err := xssh.ParseAuthorizedKey([]byte(issued.Certificate))
 	if err != nil {

@@ -10862,7 +10862,7 @@
             "backend_status": "served attestation-gated SSH user cert workflow: POST /api/v1/ssh/attested-user-certs and trstctl ssh issue-attested-user verify attestation, require a distinct approver, validate requested principals against attestation claims, cap TTL, apply source-address and force-command critical options, return an OpenSSH user certificate without private key material, and emit attestation.verified plus ssh.attested_cert.issued",
             "current_frontend_mapping": "operate: SSHTrust at /ssh serves attestation-gated SSH user cert issuance with method, payload, public key, TTL, approver, principals, source-address and force-command constraints, plus issued cert retrieval.",
             "target_gui_mapping": "No GA roadmap residual: the SSHTrust route already serves attestation evidence, approver, principal, TTL, source-address and force-command constraints, and issued cert retrieval without exposing private key material.",
-            "acceptance_test": "Served GA acceptance is TestServedSSHAtScaleJourneyJOURNEY002EndToEnd plus web/src/__tests__/ssh_trust.test.tsx and OpenAPI/CLI parity for issueAttestedSSHUserCert/ssh issue-attested-user; the workflow rejects expired attestations and self-approval while issuing only attestation-bound principals with source-address and force-command constraints.",
+            "acceptance_test": "Served GA acceptance is TestServedSSHAtScaleJourneyJOURNEY002EndToEnd plus web/src/__tests__/ssh_trust.test.tsx and OpenAPI/CLI parity for previewAttestedSSHUserCert/issueAttestedSSHUserCert and ssh preview-attested-user/ssh issue-attested-user; the workflow rejects expired attestations and self-approval while issuing only attestation-bound principals with source-address and force-command constraints.",
             "source_docs": [
                 "docs/features/ssh.md"
             ],
@@ -10877,10 +10877,12 @@
             "status": "closed",
             "notes": "Closed by route-level feature-map evidence; JOURNEY-002 wires the library attested SSH issuer through the served API, CLI, and console request flow. TRACE-029 promotes F45 into the served GA denominator because the complete served workflow is wired and tested. Test evidence: internal/server/ssh_journey_served_test.go verifies approved issuance, expired attestation denial, self-approval denial, attestation.verified, ssh.attested_cert.issued, OpenSSH principals, source-address, and force-command critical options; web/src/__tests__/ssh_trust.test.tsx covers the attested issue request without exposing private key material.",
             "api_surface": [
+                "previewAttestedSSHUserCert",
                 "issueAttestedSSHUserCert"
             ],
             "api_na": "",
             "cli_surface": [
+                "ssh preview-attested-user",
                 "ssh issue-attested-user"
             ],
             "cli_na": "",
@@ -10913,6 +10915,7 @@
                 },
                 "cli": {
                     "evidence": [
+                        "CLI command: ssh preview-attested-user",
                         "CLI command: ssh issue-attested-user"
                     ],
                     "refs": [
@@ -10923,6 +10926,7 @@
                 },
                 "api": {
                     "evidence": [
+                        "OpenAPI operationId: previewAttestedSSHUserCert",
                         "OpenAPI operationId: issueAttestedSSHUserCert"
                     ],
                     "refs": [
@@ -10937,7 +10941,7 @@
                         "internal/server/ssh_journey_served_test.go proves attested SSH issuance is served, preserves approver/principal/session constraints in the issued OpenSSH certificate, rejects expired attestation and self-approval, and emits attestation.verified plus ssh.attested_cert.issued.",
                         "web/src/__tests__/ssh_trust.test.tsx covers the attested issue form and verifies private key material is not rendered.",
                         "TRACE-029 guard: TestTRACE029AttestedSSHUserCertRowPromotedToServedGA keeps F45 in the served GA denominator only when the attested SSH cert API, CLI, and console workflow evidence are present.",
-                        "OpenAPI/CLI parity tests keep issueAttestedSSHUserCert and ssh issue-attested-user wired to the served route.",
+                        "OpenAPI/CLI parity tests keep previewAttestedSSHUserCert/issueAttestedSSHUserCert and ssh preview-attested-user/ssh issue-attested-user wired to the served routes.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
                         "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
                     ],

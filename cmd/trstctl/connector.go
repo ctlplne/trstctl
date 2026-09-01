@@ -22,9 +22,10 @@ import (
 var connectorHTTPClient = http.DefaultClient
 
 type connectorCLIConfig struct {
-	baseURL string
-	token   string
-	tenant  string
+	baseURL        string
+	token          string
+	tenant         string
+	idempotencyKey string
 }
 
 func runConnector(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) error {
@@ -161,10 +162,11 @@ func connectorCLIConfigFromEnv(getenv func(string) string) (connectorCLIConfig, 
 	baseURL := strings.TrimRight(strings.TrimSpace(firstEnv(getenv, "TRSTCTL_URL", "TRSTCTL_API_URL")), "/")
 	token := strings.TrimSpace(firstEnv(getenv, "TRSTCTL_TOKEN", "TRSTCTL_API_TOKEN"))
 	tenant := strings.TrimSpace(getenv("TRSTCTL_TENANT"))
+	idempotencyKey := strings.TrimSpace(getenv("TRSTCTL_IDEMPOTENCY_KEY"))
 	if baseURL == "" || token == "" || tenant == "" {
 		return connectorCLIConfig{}, errors.New("connector CLI requires TRSTCTL_URL, TRSTCTL_TOKEN, and TRSTCTL_TENANT")
 	}
-	return connectorCLIConfig{baseURL: baseURL, token: token, tenant: tenant}, nil
+	return connectorCLIConfig{baseURL: baseURL, token: token, tenant: tenant, idempotencyKey: idempotencyKey}, nil
 }
 
 func firstEnv(getenv func(string) string, keys ...string) string {
@@ -195,7 +197,11 @@ func connectorCLIRequest(ctx context.Context, stdout io.Writer, cfg connectorCLI
 		req.Header.Set("Content-Type", "application/json")
 	}
 	if mutation {
-		req.Header.Set("Idempotency-Key", "cli-"+time.Now().UTC().Format("20060102T150405Z")+"-"+randomHex8())
+		idempotencyKey := cfg.idempotencyKey
+		if idempotencyKey == "" {
+			idempotencyKey = "cli-" + time.Now().UTC().Format("20060102T150405Z") + "-" + randomHex8()
+		}
+		req.Header.Set("Idempotency-Key", idempotencyKey)
 	}
 	resp, err := connectorHTTPClient.Do(req) // #nosec G704 -- CLI calling the operator-specified connector base URL; their own target (CWE-918)
 	if err != nil {

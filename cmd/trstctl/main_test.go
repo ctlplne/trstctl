@@ -169,9 +169,10 @@ func TestConnectorTargetCLIUsesServedAPI(t *testing.T) {
 	}))
 	defer ts.Close()
 	env := envFunc(map[string]string{
-		"TRSTCTL_URL":    ts.URL,
-		"TRSTCTL_TOKEN":  "tok",
-		"TRSTCTL_TENANT": "11111111-1111-1111-1111-111111111111",
+		"TRSTCTL_URL":             ts.URL,
+		"TRSTCTL_TOKEN":           "tok",
+		"TRSTCTL_TENANT":          "11111111-1111-1111-1111-111111111111",
+		"TRSTCTL_IDEMPOTENCY_KEY": "ssh-journey-recovery-1",
 	})
 
 	var stdout, stderr bytes.Buffer
@@ -188,7 +189,7 @@ func TestConnectorTargetCLIUsesServedAPI(t *testing.T) {
 		t.Fatalf("requests = %+v, want create, bind, deploy", seen)
 	}
 	for _, got := range seen {
-		if got.Auth != "Bearer tok" || got.Tenant != "11111111-1111-1111-1111-111111111111" || got.Idem == "" {
+		if got.Auth != "Bearer tok" || got.Tenant != "11111111-1111-1111-1111-111111111111" || got.Idem != "ssh-journey-recovery-1" {
 			t.Fatalf("bad auth/tenant/idempotency headers: %+v", got)
 		}
 	}
@@ -230,6 +231,8 @@ func TestSSHCLIUsesServedJourneyAPI(t *testing.T) {
 		case "/api/v1/ssh/certificates":
 			w.WriteHeader(http.StatusCreated)
 			_, _ = io.WriteString(w, `{"certificate":"ssh-cert","certificate_type":"host","serial":8,"key_id":"edge-1"}`)
+		case "/api/v1/ssh/attested-user-certs/preview":
+			_, _ = io.WriteString(w, `{"capability":"F45","ready":true,"effect_free":true,"method":"k8s_sat","key_id":"kid"}`)
 		case "/api/v1/ssh/attested-user-certs":
 			_, _ = io.WriteString(w, `{"certificate":"ssh-cert","serial":7,"key_id":"kid","subject":"sa"}`)
 		case "/api/v1/ssh/certificates/revoke":
@@ -260,7 +263,11 @@ func TestSSHCLIUsesServedJourneyAPI(t *testing.T) {
 	if err := run(context.Background(), []string{"ssh", "issue", "--type", "host", "--public-key", "ssh-ed25519 AAAA", "--key-id", "edge-1", "--principals", "edge-1.internal", "--ttl-seconds", "3600"}, env, &stdout, &stderr); err != nil {
 		t.Fatalf("ssh issue: %v", err)
 	}
-	if err := run(context.Background(), []string{"ssh", "issue-attested-user", "--method", "k8s_sat", "--payload-base64", "cHJvb2Y=", "--public-key", "ssh-ed25519 AAAA", "--key-id", "kid", "--ttl-seconds", "600"}, env, &stdout, &stderr); err != nil {
+	attestedArgs := []string{"--method", "k8s_sat", "--payload-base64", "cHJvb2Y=", "--public-key", "ssh-ed25519 AAAA", "--key-id", "kid", "--ttl-seconds", "600", "--approver", "ssh-approver", "--principals", "web", "--source-addresses", "10.0.0.0/24", "--force-command", "/usr/local/bin/deploy"}
+	if err := run(context.Background(), append([]string{"ssh", "preview-attested-user"}, attestedArgs...), env, &stdout, &stderr); err != nil {
+		t.Fatalf("ssh preview-attested-user: %v", err)
+	}
+	if err := run(context.Background(), append([]string{"ssh", "issue-attested-user"}, attestedArgs...), env, &stdout, &stderr); err != nil {
 		t.Fatalf("ssh issue-attested-user: %v", err)
 	}
 	if err := run(context.Background(), []string{"ssh", "revoke", "--serial", "7", "--reason", "operator"}, env, &stdout, &stderr); err != nil {
@@ -269,15 +276,15 @@ func TestSSHCLIUsesServedJourneyAPI(t *testing.T) {
 	if err := run(context.Background(), []string{"ssh", "retire-host", "--host", "edge-1", "--source", "source-1", "--run", "run-1", "--reason", "replaced"}, env, &stdout, &stderr); err != nil {
 		t.Fatalf("ssh retire-host: %v", err)
 	}
-	if len(seen) != 7 {
-		t.Fatalf("requests = %+v, want status, fleet, preview, direct issue, attested issue, revoke, retire", seen)
+	if len(seen) != 8 {
+		t.Fatalf("requests = %+v, want status, fleet, direct preview, direct issue, attested preview, attested issue, revoke, retire", seen)
 	}
-	for _, got := range []requestSeen{seen[0], seen[1], seen[2]} {
+	for _, got := range []requestSeen{seen[0], seen[1], seen[2], seen[4]} {
 		if got.Idem != "" {
 			t.Fatalf("SSH read sent idempotency key: %+v", got)
 		}
 	}
-	for _, got := range seen[3:] {
+	for _, got := range []requestSeen{seen[3], seen[5], seen[6], seen[7]} {
 		if got.Auth != "Bearer tok" || got.Tenant != "11111111-1111-1111-1111-111111111111" || got.Idem == "" {
 			t.Fatalf("bad auth/tenant/idempotency headers: %+v", got)
 		}
@@ -291,14 +298,17 @@ func TestSSHCLIUsesServedJourneyAPI(t *testing.T) {
 	if seen[3].Path != "/api/v1/ssh/certificates" || seen[3].Payload["key_id"] != "edge-1" {
 		t.Fatalf("bad direct issue request: %+v", seen[3])
 	}
-	if seen[4].Payload["method"] != "k8s_sat" || seen[4].Payload["payload_base64"] != "cHJvb2Y=" {
-		t.Fatalf("bad attested issue request: %+v", seen[4])
+	if seen[4].Path != "/api/v1/ssh/attested-user-certs/preview" || seen[4].Payload["approver"] != "ssh-approver" {
+		t.Fatalf("bad attested preview request: %+v", seen[4])
 	}
-	if seen[5].Payload["serial"].(float64) != 7 {
-		t.Fatalf("bad revoke request: %+v", seen[5])
+	if seen[5].Payload["method"] != "k8s_sat" || seen[5].Payload["payload_base64"] != "cHJvb2Y=" || seen[5].Payload["force_command"] != "/usr/local/bin/deploy" {
+		t.Fatalf("bad attested issue request: %+v", seen[5])
 	}
-	if seen[6].Payload["host"] != "edge-1" || seen[6].Payload["run_id"] != "run-1" {
-		t.Fatalf("bad retire request: %+v", seen[6])
+	if seen[6].Payload["serial"].(float64) != 7 {
+		t.Fatalf("bad revoke request: %+v", seen[6])
+	}
+	if seen[7].Payload["host"] != "edge-1" || seen[7].Payload["run_id"] != "run-1" {
+		t.Fatalf("bad retire request: %+v", seen[7])
 	}
 }
 

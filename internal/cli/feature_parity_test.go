@@ -258,8 +258,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// F30's exact, effect-free attested issuance preview raises it to 421.
 	// F61 adds the read-only agent-identity preview; issuance remains separate.
 	// F61 adds read-only durable history list and certificate detail commands.
-	if len(out) != 424 {
-		t.Fatalf("CLI commands = %d, want 424", len(out))
+	// F45 adds the read-only attested SSH user-certificate preview command.
+	if len(out) != 425 {
+		t.Fatalf("CLI commands = %d, want 425", len(out))
 	}
 	return out
 }

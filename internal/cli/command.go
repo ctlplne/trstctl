@@ -212,6 +212,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"ssh", "trust-rollout"}, Method: "POST", Path: "/api/v1/ssh/trust-rollouts", Body: bodyFile, Summary: "Record SSH trust rollout status from the agent-safe workflow"},
 	{Name: []string{"ssh", "preview"}, Method: "POST", Path: "/api/v1/ssh/certificates/preview", Body: bodyFile, ReadOnly: true, Summary: "Review an exact SSH host or user certificate request without side effects"},
 	{Name: []string{"ssh", "issue"}, Method: "POST", Path: "/api/v1/ssh/certificates", Body: bodyFile, Summary: "Issue a reviewed SSH host or user certificate"},
+	{Name: []string{"ssh", "preview-attested-user"}, Method: "POST", Path: "/api/v1/ssh/attested-user-certs/preview", Body: bodyFile, ReadOnly: true, Summary: "Review an exact attestation-gated SSH user certificate request without side effects"},
 	{Name: []string{"ssh", "issue-attested-user"}, Method: "POST", Path: "/api/v1/ssh/attested-user-certs", Body: bodyFile, Summary: "Issue an attestation-gated SSH user certificate"},
 	{Name: []string{"ssh", "revoke"}, Method: "POST", Path: "/api/v1/ssh/certificates/revoke", Body: bodyFile, Summary: "Revoke an SSH certificate and publish KRL status"},
 	{Name: []string{"ssh", "retire-host"}, Method: "POST", Path: "/api/v1/ssh/hosts/retire", Body: bodyFile, Summary: "Record SSH host retirement evidence"},

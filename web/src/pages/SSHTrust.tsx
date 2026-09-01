@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
@@ -8,7 +8,9 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import {
   api,
+  ApiError,
   type SSHAttestedUserCert,
+  type SSHAttestedUserCertPreview,
   type SSHAttestedUserCertRequest,
   type SSHFleetInventory,
   type SSHHostRetirement,
@@ -90,6 +92,12 @@ export function SSHTrust() {
   const [actionResult, setActionResult] = useState<string | null>(null);
   const [rollout, setRollout] = useState<SSHTrustRollout | null>(null);
   const [issuedCert, setIssuedCert] = useState<SSHAttestedUserCert | null>(null);
+  const [attestedReview, setAttestedReview] = useState<{ requestKey: string; plan: SSHAttestedUserCertPreview } | null>(null);
+  const [attestedPreviewing, setAttestedPreviewing] = useState(false);
+  const [attestedIssuing, setAttestedIssuing] = useState(false);
+  const [attestedPreviewError, setAttestedPreviewError] = useState<string | null>(null);
+  const [attestedIssueError, setAttestedIssueError] = useState<string | null>(null);
+  const attestedRetryKey = useRef<string | null>(null);
   const [retirement, setRetirement] = useState<SSHHostRetirement | null>(null);
   const [sourceId, setSourceId] = useState("");
   const [hosts, setHosts] = useState("edge-1.internal");
@@ -159,6 +167,24 @@ export function SSHTrust() {
     }
   }, [attestors, method]);
 
+  const attestedRequest = useMemo<SSHAttestedUserCertRequest>(
+    () => ({
+      method,
+      payload_base64: payloadBase64.trim(),
+      public_key: publicKey.trim(),
+      key_id: keyId.trim() || undefined,
+      ttl_seconds: numericOrUndefined(ttlSeconds),
+      approver: approver.trim(),
+      principals: splitHosts(principals),
+      source_addresses: splitHosts(sourceAddresses),
+      force_command: forceCommand.trim() || undefined,
+    }),
+    [approver, forceCommand, keyId, method, payloadBase64, principals, publicKey, sourceAddresses, ttlSeconds],
+  );
+  const attestedRequestKey = JSON.stringify(attestedRequest);
+  const exactAttestedPlan = attestedReview?.requestKey === attestedRequestKey ? attestedReview.plan : null;
+  const attestedInputValid = Boolean(attestedRequest.payload_base64 && attestedRequest.public_key && attestedRequest.approver && attestors.length > 0);
+
   const recordRollout = async (event: FormEvent) => {
     event.preventDefault();
     try {
@@ -180,20 +206,32 @@ export function SSHTrust() {
     }
   };
 
-  const issueAttested = async (event: FormEvent) => {
+  const previewAttested = async (event: FormEvent) => {
     event.preventDefault();
+    if (!attestedInputValid || attestedPreviewing || attestedIssuing) return;
+    setAttestedPreviewing(true);
+    setAttestedPreviewError(null);
+    setAttestedIssueError(null);
+    setIssuedCert(null);
+    attestedRetryKey.current = null;
     try {
-      const result = await api.issueAttestedSSHUserCert({
-        method,
-        payload_base64: payloadBase64,
-        public_key: publicKey,
-        key_id: keyId || undefined,
-        ttl_seconds: numericOrUndefined(ttlSeconds),
-        approver: approver.trim(),
-        principals: splitHosts(principals),
-        source_addresses: splitHosts(sourceAddresses),
-        force_command: forceCommand.trim() || undefined,
-      });
+      const plan = await api.previewAttestedSSHUserCert(attestedRequest);
+      setAttestedReview({ requestKey: attestedRequestKey, plan });
+    } catch (err) {
+      setAttestedReview(null);
+      setAttestedPreviewError(apiProblemMessage(err, t("sshTrust.attested.previewFailedFallback")));
+    } finally {
+      setAttestedPreviewing(false);
+    }
+  };
+
+  const issueAttested = async () => {
+    if (!exactAttestedPlan?.ready || !exactAttestedPlan.effect_free || attestedIssuing) return;
+    setAttestedIssuing(true);
+    setAttestedIssueError(null);
+    try {
+      attestedRetryKey.current ??= globalThis.crypto.randomUUID();
+      const result = await api.issueAttestedSSHUserCert(attestedRequest, attestedRetryKey.current);
       setIssuedCert(result);
       setRevokeSerial(String(result.serial));
       setRevokeKeyId(result.key_id || "");
@@ -202,10 +240,18 @@ export function SSHTrust() {
       // cannot recover the attestation payload.
       setPayloadBase64("");
       setPublicKey("");
+      setAttestedReview(null);
+      attestedRetryKey.current = null;
       setActionResult(`ssh-cert:${result.serial}`);
       await loadStatus();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setAttestedIssueError(
+        err instanceof ApiError && err.status >= 500
+          ? t("sshTrust.attested.uncertainResponse")
+          : apiProblemMessage(err, t("sshTrust.attested.issueFailedFallback")),
+      );
+    } finally {
+      setAttestedIssuing(false);
     }
   };
 
@@ -497,7 +543,7 @@ export function SSHTrust() {
               <form
                 aria-label={translateNow("source.issue.attested.ssh.user.certificate.f7e0f6ef66")}
                 className="ui-panel grid gap-3 md:grid-cols-3"
-                onSubmit={(event) => void issueAttested(event)}
+                onSubmit={(event) => void previewAttested(event)}
               >
                 <label className="grid gap-1 text-sm">
                   {translateNow("source.attestation.method.1f0610be7c")}
@@ -550,11 +596,94 @@ export function SSHTrust() {
                   {translateNow("source.ssh.public.key.c9be6a369e")}
                   <textarea className="ui-input min-h-24 font-mono text-xs" value={publicKey} onChange={(event) => setPublicKey(event.target.value)} required />
                 </label>
-                <Button className="md:col-span-3" type="submit" disabled={attestors.length === 0}>
-                  {translateNow("source.issue.attested.ssh.cert.fba31f1beb")}
+                <Button className="md:col-span-3" type="submit" disabled={!attestedInputValid || attestedPreviewing || attestedIssuing}>
+                  {attestedPreviewing ? t("sshTrust.attested.previewing") : t("sshTrust.attested.previewAction")}
                 </Button>
+                {attestedPreviewError ? (
+                  <ErrorState title={t("sshTrust.attested.previewFailedTitle")}>
+                    <p>{attestedPreviewError}</p>
+                  </ErrorState>
+                ) : null}
+                {exactAttestedPlan ? (
+                  <section
+                    className="grid gap-4 rounded-panel border border-border bg-muted/25 p-comfortable md:col-span-3"
+                    aria-label={t("sshTrust.attested.planLabel")}
+                  >
+                    <div>
+                      <h3 className="font-semibold">
+                        {exactAttestedPlan.ready && exactAttestedPlan.effect_free ? t("sshTrust.attested.readyTitle") : t("sshTrust.attested.blockedTitle")}
+                      </h3>
+                      <p className="mt-1 text-sm text-muted-foreground">{t("sshTrust.attested.effectFree")}</p>
+                    </div>
+                    <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      <div>
+                        <dt className="text-caption text-muted-foreground">{t("workloads.ephemeral.effectiveTTL")}</dt>
+                        <dd className="mt-1 font-mono text-sm">{t("workloads.ephemeral.seconds", { count: exactAttestedPlan.effective_ttl_seconds })}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-caption text-muted-foreground">{t("workloads.attested.permission")}</dt>
+                        <dd className="mt-1 font-mono text-sm">{exactAttestedPlan.required_permission}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-caption text-muted-foreground">{t("sshTrust.attested.publicKeyFingerprint")}</dt>
+                        <dd className="mt-1 break-all font-mono text-xs">{exactAttestedPlan.public_key_fingerprint}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-caption text-muted-foreground">{t("sshTrust.attested.approver")}</dt>
+                        <dd className="mt-1 break-words font-mono text-sm">{exactAttestedPlan.approver}</dd>
+                      </div>
+                    </dl>
+                    <p className="text-sm text-muted-foreground">{t("workloads.attested.proofDeferred")}</p>
+                    {exactAttestedPlan.blockers.length ? (
+                      <section>
+                        <h4 className="text-sm font-semibold">{t("workloads.ephemeral.blockers")}</h4>
+                        <ul className="mt-2 list-disc space-y-1 ps-5 text-sm text-muted-foreground">
+                          {exactAttestedPlan.blockers.map((item) => (
+                            <li key={item}>{item}</li>
+                          ))}
+                        </ul>
+                      </section>
+                    ) : null}
+                    <section>
+                      <h4 className="text-sm font-semibold">{t("workloads.ephemeral.recovery")}</h4>
+                      <ul className="mt-2 list-disc space-y-1 ps-5 text-sm text-muted-foreground">
+                        {exactAttestedPlan.recovery_steps.map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    </section>
+                    <details className="rounded-panel border border-border p-3">
+                      <summary className="cursor-pointer text-sm font-medium">{t("workloads.attested.exactEvidence")}</summary>
+                      <dl className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <dt className="text-caption text-muted-foreground">{t("workloads.ephemeral.proofDigest")}</dt>
+                          <dd className="mt-1 break-all font-mono text-xs">{exactAttestedPlan.payload_sha256}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-caption text-muted-foreground">{t("sshTrust.attested.authorityFingerprint")}</dt>
+                          <dd className="mt-1 break-all font-mono text-xs">{exactAttestedPlan.authority_fingerprint}</dd>
+                        </div>
+                      </dl>
+                    </details>
+                    {attestedIssueError ? <ErrorState title={t("sshTrust.attested.issueFailedTitle")}>{attestedIssueError}</ErrorState> : null}
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        onClick={() => void issueAttested()}
+                        disabled={!exactAttestedPlan.ready || !exactAttestedPlan.effect_free || attestedIssuing}
+                      >
+                        {attestedIssuing
+                          ? t("sshTrust.attested.issuing")
+                          : attestedIssueError
+                            ? t("sshTrust.attested.retryAction")
+                            : t("sshTrust.attested.issueAction")}
+                      </Button>
+                    </div>
+                  </section>
+                ) : null}
                 {issuedCert && (
                   <div className="grid gap-2 md:col-span-3">
+                    <h3 className="font-semibold">{t("sshTrust.attested.issuedTitle")}</h3>
                     <p className="font-mono text-xs text-muted-foreground">
                       {translateNow("source.serial.0144b1defc")} {issuedCert.serial} {translateNow("source.subject.5dcd66f2ed")} {issuedCert.subject}{" "}
                       {translateNow("source.valid.before.8b8acd434a")} {issuedCert.valid_before}
