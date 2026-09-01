@@ -10859,9 +10859,9 @@
             "phase": "P2",
             "priority": 66,
             "served_state": "served",
-            "backend_status": "served attestation-gated SSH user cert workflow: POST /api/v1/ssh/attested-user-certs and trstctl ssh issue-attested-user verify attestation, require a distinct approver, validate requested principals against attestation claims, cap TTL, apply source-address and force-command critical options, return an OpenSSH user certificate without private key material, and emit attestation.verified plus ssh.attested_cert.issued",
-            "current_frontend_mapping": "operate: SSHTrust at /ssh serves attestation-gated SSH user cert issuance with method, payload, public key, TTL, approver, principals, source-address and force-command constraints, plus issued cert retrieval.",
-            "target_gui_mapping": "No GA roadmap residual: the SSHTrust route already serves attestation evidence, approver, principal, TTL, source-address and force-command constraints, and issued cert retrieval without exposing private key material.",
+            "backend_status": "served recoverable attestation-gated SSH user cert workflow: POST /api/v1/ssh/attested-user-certs/preview is exact and effect-free; POST /api/v1/ssh/attested-user-certs and trstctl ssh issue-attested-user verify attestation, require a distinct approver, validate requested principals against attestation claims, cap TTL, apply source-address and force-command critical options, return an OpenSSH user certificate without private key material, preserve idempotent recovery across signer/control restart, and emit attestation.verified plus ssh.attested_cert.issued",
+            "current_frontend_mapping": "operate: SSHTrust at /ssh serves attestation-gated SSH user cert issuance with stable labeled inputs, an exact effect-free review of lifetime, permission, fingerprints, signer call and recovery, unchanged-request retry after signer outage, and the issued constrained certificate without retaining proof or public-key form values.",
+            "target_gui_mapping": "No GA roadmap residual: the SSHTrust route serves the complete Discover, Understand, Configure, Preview, Execute, Observe, Recover, Verify, and Automate slice for attestation-gated short-lived SSH user certificates.",
             "acceptance_test": "Served GA acceptance is TestServedSSHAtScaleJourneyJOURNEY002EndToEnd plus web/src/__tests__/ssh_trust.test.tsx and OpenAPI/CLI parity for previewAttestedSSHUserCert/issueAttestedSSHUserCert and ssh preview-attested-user/ssh issue-attested-user; the workflow rejects expired attestations and self-approval while issuing only attestation-bound principals with source-address and force-command constraints.",
             "source_docs": [
                 "docs/features/ssh.md"
@@ -10875,7 +10875,7 @@
                 "web/src/pages/SSHTrust.tsx"
             ],
             "status": "closed",
-            "notes": "Closed by route-level feature-map evidence; JOURNEY-002 wires the library attested SSH issuer through the served API, CLI, and console request flow. TRACE-029 promotes F45 into the served GA denominator because the complete served workflow is wired and tested. Test evidence: internal/server/ssh_journey_served_test.go verifies approved issuance, expired attestation denial, self-approval denial, attestation.verified, ssh.attested_cert.issued, OpenSSH principals, source-address, and force-command critical options; web/src/__tests__/ssh_trust.test.tsx covers the attested issue request without exposing private key material.",
+            "notes": "Complete vertical slice closed on exact g132 candidate 6691de6022931d73b8d881706137683365748c93. JOURNEY-002, OpenAPI/CLI parity, and SSHTrust cover the served workflow. The exact-candidate receipt qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g132-f45-live-r2.json proves strict pinned-CA API/CLI operation, effect-free preview during a physical signer outage, fail-closed execution, byte-identical same-key recovery, changed-body conflict, denial controls, real process restart persistence, independent OpenSSH inspection, revocation, and KRL enforcement. The browser receipt qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g132-f45-browser-live.receipt.json proves ready review, retained unchanged retry after signer outage, successful recovery, sensitive-field clearing, zero console errors/warnings, and desktop/mobile rendering. The preserved g131 crash and g132 harness failures prove the QA oracle rejected broken product and evidence states rather than manufacturing green output.",
             "api_surface": [
                 "previewAttestedSSHUserCert",
                 "issueAttestedSSHUserCert"
@@ -11027,7 +11027,7 @@
                 "purpose": "Lets an operator understand and safely use attestation-gated short-lived ssh user certs while tenant, policy, and security authority remain on the server.",
                 "tool": "workloads_machines",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/ssh",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -11039,7 +11039,7 @@
                 "dependencies": [],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -11060,8 +11060,17 @@
                         ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "POST /api/v1/ssh/attested-user-certs/preview is an exact, effect-free server oracle.",
+                            "OpenAPI operationId: previewAttestedSSHUserCert",
+                            "CLI command: ssh preview-attested-user",
+                            "web/src/pages/SSHTrust.tsx",
+                            "Ready-plan UI renders lifetime, permission, fingerprints, signer calls, blockers, and recovery before issuance.",
+                            "internal/server/ssh_journey_served_test.go",
+                            "Served journey asserts a ready preview serializes blockers as [] rather than null.",
+                            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g132-f45-live-r2.json proves preview remains available with the isolated signer physically stopped and creates no audit mutation."
+                        ]
                     },
                     "execute": {
                         "status": "complete",
@@ -11077,8 +11086,15 @@
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/SSHTrust.tsx",
+                            "Console recovery retains the exact request and idempotency key after a retryable signer outage and exposes Retry unchanged request.",
+                            "internal/server/ssh_workflow_error_test.go",
+                            "Served recovery separates retryable signer/crypto transport failure from denied requests.",
+                            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g132-f45-browser-live.receipt.json proves the live console recovers after a physical signer stop without losing the request.",
+                            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g132-f45-live-r2.json proves byte-identical same-key replay before and after real signer/control restarts and revokes all qualification certificates."
+                        ]
                     },
                     "verify": {
                         "status": "complete",
@@ -11089,15 +11105,17 @@
                     "automate": {
                         "status": "complete",
                         "evidence": [
+                            "OpenAPI operationId: previewAttestedSSHUserCert",
                             "OpenAPI operationId: issueAttestedSSHUserCert",
+                            "CLI command: ssh preview-attested-user",
                             "CLI command: ssh issue-attested-user"
                         ]
                     }
                 },
                 "owner": "identity",
-                "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "target_checkpoint": "maintain",
+                "candidate_sha": "6691de6022931d73b8d881706137683365748c93",
+                "freshness": "2026-09-01"
             }
         },
         {

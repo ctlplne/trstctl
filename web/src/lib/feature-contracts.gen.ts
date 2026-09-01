@@ -3885,7 +3885,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use attestation-gated short-lived ssh user certs while tenant, policy, and security authority remain on the server.",
       "tool": "workloads_machines",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/ssh",
       "navigationEntrypoints": [
         "tool navigation",
@@ -3897,7 +3897,7 @@ export const canonicalCapabilities = [
       "dependencies": [],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -3918,8 +3918,17 @@ export const canonicalCapabilities = [
           ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "POST /api/v1/ssh/attested-user-certs/preview is an exact, effect-free server oracle.",
+            "OpenAPI operationId: previewAttestedSSHUserCert",
+            "CLI command: ssh preview-attested-user",
+            "web/src/pages/SSHTrust.tsx",
+            "Ready-plan UI renders lifetime, permission, fingerprints, signer calls, blockers, and recovery before issuance.",
+            "internal/server/ssh_journey_served_test.go",
+            "Served journey asserts a ready preview serializes blockers as [] rather than null.",
+            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g132-f45-live-r2.json proves preview remains available with the isolated signer physically stopped and creates no audit mutation."
+          ]
         },
         "execute": {
           "status": "complete",
@@ -3935,8 +3944,15 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/SSHTrust.tsx",
+            "Console recovery retains the exact request and idempotency key after a retryable signer outage and exposes Retry unchanged request.",
+            "internal/server/ssh_workflow_error_test.go",
+            "Served recovery separates retryable signer/crypto transport failure from denied requests.",
+            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g132-f45-browser-live.receipt.json proves the live console recovers after a physical signer stop without losing the request.",
+            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g132-f45-live-r2.json proves byte-identical same-key replay before and after real signer/control restarts and revokes all qualification certificates."
+          ]
         },
         "verify": {
           "status": "complete",
@@ -3947,15 +3963,17 @@ export const canonicalCapabilities = [
         "automate": {
           "status": "complete",
           "evidence": [
+            "OpenAPI operationId: previewAttestedSSHUserCert",
             "OpenAPI operationId: issueAttestedSSHUserCert",
+            "CLI command: ssh preview-attested-user",
             "CLI command: ssh issue-attested-user"
           ]
         }
       },
       "owner": "identity",
-      "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "targetCheckpoint": "maintain",
+      "candidateSHA": "6691de6022931d73b8d881706137683365748c93",
+      "freshness": "2026-09-01"
     }
   },
   {

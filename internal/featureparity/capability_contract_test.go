@@ -210,6 +210,51 @@ func TestEmbeddedEnrollmentIsACompleteWorkloadsLifecycle(t *testing.T) {
 	}
 }
 
+func TestAttestedSSHUserCertificatesAreACompleteRecoverableVerticalSlice(t *testing.T) {
+	catalog, err := Load()
+	if err != nil {
+		t.Fatalf("load feature parity catalog: %v", err)
+	}
+	var found *Item
+	for i := range catalog.Items {
+		if catalog.Items[i].FeatureID == "F45" {
+			found = &catalog.Items[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatal("F45 is missing from the canonical capability catalog")
+	}
+	contract := found.Contract
+	if contract.Tool != ToolWorkloadsMachines {
+		t.Fatalf("F45 tool = %q, want %q", contract.Tool, ToolWorkloadsMachines)
+	}
+	if contract.Maturity != MaturityCompleteVerticalSlice || contract.ReleaseBlocking {
+		t.Fatalf("F45 maturity/release_blocking = %q/%t, want complete_vertical_slice/false", contract.Maturity, contract.ReleaseBlocking)
+	}
+	for name, stage := range map[string]StageRecord{
+		"preview":  contract.Stages.Preview,
+		"execute":  contract.Stages.Execute,
+		"recover":  contract.Stages.Recover,
+		"verify":   contract.Stages.Verify,
+		"automate": contract.Stages.Automate,
+	} {
+		if stage.Status != StageComplete || len(stage.Evidence) == 0 {
+			t.Errorf("F45 %s stage = %q with %d evidence items, want complete with evidence", name, stage.Status, len(stage.Evidence))
+		}
+	}
+	for _, want := range []string{"previewAttestedSSHUserCert", "issueAttestedSSHUserCert"} {
+		if !containsExactString(found.APISurface, want) {
+			t.Errorf("F45 api_surface is missing %q", want)
+		}
+	}
+	for _, want := range []string{"ssh preview-attested-user", "ssh issue-attested-user"} {
+		if !containsExactString(found.CLISurface, want) {
+			t.Errorf("F45 cli_surface is missing %q", want)
+		}
+	}
+}
+
 func containsExactString(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {
