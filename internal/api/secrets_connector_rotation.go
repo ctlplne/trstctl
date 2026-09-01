@@ -40,6 +40,128 @@ func isConnectorSecretRotation(provider string) bool {
 		strings.TrimSpace(strings.TrimPrefix(provider, secretConnectorRotationPrefix)) != ""
 }
 
+func normalizeSecretRotationRequest(req *secretRotationRequest) error {
+	req.Provider = strings.TrimSpace(req.Provider)
+	req.Key = strings.TrimSpace(req.Key)
+	req.OldRef = strings.TrimSpace(req.OldRef)
+	req.Target = strings.TrimSpace(req.Target)
+	req.RemoteKey = strings.TrimSpace(req.RemoteKey)
+	if req.Provider == "" || req.Key == "" || req.OldRef == "" {
+		return errStatus(http.StatusBadRequest, "provider, key, and old_ref are required")
+	}
+	return nil
+}
+
+// previewStaticSecretRotation describes the exact connector-backed mutation
+// without generating replacement material, opening a connector, writing an
+// event/outbox row, or changing the application-secret store. Unsupported
+// provider modes return a blocked plan so operators can review why execution is
+// unavailable without triggering the mutation route.
+func (a *API) previewStaticSecretRotation(w http.ResponseWriter, r *http.Request) {
+	if a.secrets == nil {
+		a.writeProblem(w, secretsDisabledProblem())
+		return
+	}
+	var req secretRotationRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	if err := normalizeSecretRotationRequest(&req); err != nil {
+		a.writeError(w, err)
+		return
+	}
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+
+	canonical := struct {
+		Domain     string `json:"domain"`
+		TenantID   string `json:"tenant_id"`
+		Provider   string `json:"provider"`
+		Key        string `json:"key"`
+		OldRef     string `json:"old_ref"`
+		Target     string `json:"target,omitempty"`
+		RemoteKey  string `json:"remote_key,omitempty"`
+		TTLSeconds *int   `json:"ttl_seconds,omitempty"`
+	}{
+		Domain: "trstctl.api.secret-rotation-preview.f37.v1", TenantID: tenantID,
+		Provider: req.Provider, Key: req.Key, OldRef: req.OldRef,
+		Target: req.Target, RemoteKey: req.RemoteKey, TTLSeconds: req.TTLSeconds,
+	}
+	encoded, err := json.Marshal(canonical)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	fingerprint := "sha256:" + crypto.SHA256Hex(encoded)
+	secret.Wipe(encoded)
+	plan := secretRotationPreviewResponse{
+		Capability: "F37", EffectFree: true,
+		Provider: req.Provider, Key: req.Key, OldRef: req.OldRef,
+		RequiredPermission: "secrets:write", RequestFingerprint: fingerprint,
+		Blockers: []string{}, PreviewWrites: []string{}, PreviewExternalEffects: []string{},
+		ExecuteExternalEffects: []string{},
+		ExecuteWrites: []string{
+			"append one immutable secret.rotated event",
+			"project one sealed successor in the tenant secret store",
+			"commit one sealed connector-delivery job and outbox intent in the same transaction",
+		},
+		RecoverySteps: []string{
+			"retry the same command with the same Idempotency-Key after a transient failure",
+			"inspect the durable connector delivery receipt before changing the command",
+			"keep the predecessor version available for point-in-time recovery",
+		},
+		DataHandling: "Preview reads tenant-scoped secret metadata only; it never decrypts, generates, returns, logs, or sends secret material.",
+	}
+	if !isConnectorSecretRotation(req.Provider) {
+		blocker := manualStaticRotationUnavailableDetail
+		if strings.HasPrefix(req.Provider, secretDynamicLeaseRotationPrefix) {
+			blocker = dynamicLeaseRotationUnavailableDetail
+		}
+		plan.Blockers = append(plan.Blockers, blocker)
+		a.writeJSON(w, http.StatusOK, plan)
+		return
+	}
+	if req.TTLSeconds != nil {
+		plan.Blockers = append(plan.Blockers, "ttl_seconds is unsupported for connector rotation")
+	}
+	targetID, remoteKey, targetErr := connectorSecretRotationTarget(req)
+	if targetErr != nil {
+		plan.Blockers = append(plan.Blockers, connectorRotationTargetRequiredDetail)
+	} else {
+		plan.Target = targetID
+		plan.RemoteKey = remoteKey
+		plan.ExecuteExternalEffects = []string{"send the generated successor value to connector target " + targetID + " at remote key " + remoteKey}
+		if a.secrets.syncTargets(tenantID)[targetID] == nil {
+			plan.Blockers = append(plan.Blockers, connectorRotationTargetUnavailableDetail)
+		}
+	}
+	oldVersion, versionErr := parseSecretVersionRef(req.OldRef)
+	if versionErr != nil {
+		plan.Blockers = append(plan.Blockers, connectorRotationOldRefInvalidDetail)
+	}
+	current, getErr := a.secrets.be.Store.GetSecret(r.Context(), tenantID, req.Key)
+	if getErr != nil {
+		if errors.Is(getErr, store.ErrSecretNotFound) {
+			plan.Blockers = append(plan.Blockers, "application secret was not found")
+		} else {
+			a.writeError(w, getErr)
+			return
+		}
+	} else {
+		plan.CurrentVersion = current.Version
+		plan.NextVersion = current.Version + 1
+		if versionErr == nil && current.Version != oldVersion {
+			plan.Blockers = append(plan.Blockers, connectorRotationOldRefStaleDetail)
+		}
+	}
+	plan.Ready = len(plan.Blockers) == 0
+	a.writeJSON(w, http.StatusOK, plan)
+}
+
 func unavailableDirectSecretRotationRequestBinding(principal string, req secretRotationRequest) (string, error) {
 	operation := "static-secret.rotation.unavailable"
 	if strings.HasPrefix(req.Provider, secretDynamicLeaseRotationPrefix) {

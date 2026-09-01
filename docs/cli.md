@@ -224,7 +224,7 @@ exhaustive subcommand list:
 | `scale`                            | High-volume orchestration and multi-region HA issuance posture (`orchestration` · `ha-issuance`)                                                             |
 | `secrets store`                    | Stored secrets: put, list, get, history, recover, update, delete (`put` · `list` · `get` · `history` · `recover` · `update` · `delete`); bulk import is unavailable until an atomic event-sourced batch command exists |
 | `secrets leases`                   | Dynamic secret leases: issue, get, renew, revoke (`issue` · `get` · `renew` · `revoke`)                                                                      |
-| `secrets rotations`                | Queue worker-owned connector rotation; static and dynamic provider modes fail closed before effects (`run`)                                                   |
+| `secrets rotations`                | Effect-free exact review, then worker-owned connector rotation; static and dynamic provider modes fail closed before effects (`preview` · `run`)               |
 | `secrets rotation-schedules`       | Scheduled connector rotations with bounded durable due-run receipts (`create` · `list` · `run-due`)                                                          |
 | `secrets syncs`                    | Push a stored secret to an external sync target (`run` · `targets`)                                                                                          |
 | `secrets scans`                    | Gitleaks scanning: CI runs, repository/third-party webhooks, local pre-commit and staged-diff (`run` · `repositories` · `repositories webhook` · `third-party` · `third-party ingest` · `staged-diff` · `pre-commit install`) |
@@ -714,7 +714,12 @@ printf '{"key_id":"<rotated-key-id>","action":"zeroize"}' | trstctl-cli --idempo
 printf '{"key_id":"<rotated-key-id>","action":"zeroize"}' | trstctl-cli --idempotency-key kms-key-1-zeroize-approve-b managed-keys approve -f -
 printf '{"key_id":"<rotated-key-id>"}' | trstctl-cli --idempotency-key kms-key-1-zeroize managed-keys zeroize -f - --force
 
-# Run worker-queued connector rotation.
+# Review the exact plan first. Preview has no Idempotency-Key because it makes no
+# writes, generates no secret material, and contacts no connector.
+printf '{"provider":"connector:ci","key":"db/password","old_ref":"version:2","remote_key":"DB_PASSWORD"}' \
+  | trstctl-cli secrets rotations preview -f -
+
+# Run the reviewed worker-queued connector rotation with an Idempotency-Key.
 printf '{"provider":"connector:ci","key":"db/password","old_ref":"version:2","remote_key":"DB_PASSWORD"}' \
   | trstctl-cli --idempotency-key connector-rotation-1 secrets rotations run -f -
 

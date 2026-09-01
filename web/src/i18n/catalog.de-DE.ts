@@ -791,6 +791,25 @@ const deDECatalog = {
     "Erstellen Sie einen Zeitplan mit connector:<ziel>; die Zustellung erfolgt über die Worker-Warteschlange und kann nach einem Absturz fortgesetzt werden.",
   "secrets.rotation.connectorOnly":
     "Die manuelle Provider-Rotation erfordert derzeit connector:<ziel>. Statische und Dynamic-Lease-Provider bleiben nicht verfügbar, bis ein dauerhafter Worker jede Effekt- und Rollback-Phase übernimmt.",
+  // F37 machine-authored translations — FLAGGED FOR HUMAN REVIEW BEFORE RELEASE.
+  "secrets.rotation.previewAction": "Rotationsplan prüfen",
+  "secrets.rotation.previewLabel": "Prüfung der Secret-Rotation",
+  "secrets.rotation.previewReady": "Genauer Rotationsplan",
+  "secrets.rotation.previewBlocked": "Rotation kann noch nicht ausgeführt werden",
+  "secrets.rotation.previewNoEffects":
+    "Die Vorschau hat nichts geschrieben und keine externen Systeme kontaktiert. Erst die Ausführung dieses geprüften Plans ändert etwas.",
+  "secrets.rotation.previewStale": "Eingaben wurden nach der Prüfung geändert. Prüfen Sie den Plan vor der Ausführung erneut.",
+  "secrets.rotation.ready": "Bereit",
+  "secrets.rotation.blocked": "Blockiert",
+  "secrets.rotation.versionChange": "Versionsänderung",
+  "secrets.rotation.versionTransition": "v{current} → v{next}",
+  "secrets.rotation.destination": "Connector-Ziel",
+  "secrets.rotation.permission": "Erforderliche Berechtigung",
+  "secrets.rotation.fingerprint": "Plan-Fingerabdruck",
+  "secrets.rotation.blockersHeading": "Warum die Ausführung blockiert ist",
+  "secrets.rotation.executionChanges": "Was die Ausführung ändert",
+  "secrets.rotation.recoveryHeading": "So funktioniert die Wiederherstellung",
+  "secrets.rotation.executeReviewed": "Geprüfte Rotation ausführen",
   "secrets.rotation.scheduleConnectorOnly":
     "Geplante Rotation erfordert derzeit einen Provider im Format connector:<ziel>. Statische und Dynamic-Lease-Provider bleiben nicht verfügbar.",
   "secrets.rotation.scheduleProviderPlaceholder": "connector:ci",
@@ -6456,7 +6475,6 @@ const deDECatalog = {
   "source.run.ea64488842": "run:",
   "source.run.graph.query.3e99f2000a": "Graphabfrage ausführen",
   "source.run.id.26d3e7aaac": "Ausführungs-ID",
-  "source.run.rotation.399dcb292b": "Rotation ausführen",
   "source.run.scan.68ac7da5df": "Scan ausführen",
   "source.run.secret.scan.89f2ed7a1b": "Secret-Scan ausführen",
   "source.run.uuid.0b1b6844cb": "Ausführungs-UUID",

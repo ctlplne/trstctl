@@ -577,6 +577,9 @@ describe("exported API surface census", () => {
       // F30: exact trust configuration, key/proof digests, and lifetime bounds;
       // no attestation verification, signing, event append, or durable write.
       "/api/v1/workloads/attested-issuance/preview",
+      // F37: reads tenant-scoped secret version and connector configuration
+      // only; it generates no successor, writes no state, and contacts no target.
+      "/api/v1/secrets/rotations/preview",
       // F61 preview reads public trust and digests, with no verification or signing.
       "/api/v1/broker/agent-identities/preview",
       // F43: validates and normalizes one SSH public-key certificate request

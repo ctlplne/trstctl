@@ -5031,6 +5031,20 @@ func componentSchemas() map[string]*Schema {
 		"rollback_attempted": {Type: "boolean"}, "rollback_failed": {Type: "boolean"},
 		"rollback_error": str(), "failed_phase": str(), "error": str(),
 	}, "key", "old_ref", "new_ref", "completed", "queued", "rolled_back", "rollback_attempted", "rollback_failed")
+	secretRotationPreview := object(map[string]*Schema{
+		"capability": {Type: "string", Enum: []string{"F37"}},
+		"ready":      {Type: "boolean"}, "effect_free": {Type: "boolean"},
+		"provider": str(), "key": str(), "old_ref": str(), "target": str(), "remote_key": str(),
+		"current_version": {Type: "integer"}, "next_version": {Type: "integer"},
+		"required_permission": str(), "request_fingerprint": str(),
+		"blockers":                 {Type: "array", Items: str()},
+		"preview_writes":           {Type: "array", Items: str()},
+		"preview_external_effects": {Type: "array", Items: str()},
+		"execute_writes":           {Type: "array", Items: str()},
+		"execute_external_effects": {Type: "array", Items: str()},
+		"recovery_steps":           {Type: "array", Items: str()},
+		"secret_data_handling":     str(),
+	}, "capability", "ready", "effect_free", "provider", "key", "old_ref", "required_permission", "request_fingerprint", "blockers", "preview_writes", "preview_external_effects", "execute_writes", "execute_external_effects", "recovery_steps", "secret_data_handling")
 	secretRotationScheduleProvider := str()
 	secretRotationScheduleProvider.Description = "connector:<target> only. Static and dynamic-lease schedules fail closed with 503 before persistence because their provider phases do not yet have a durable worker command."
 	secretRotationScheduleReq := object(map[string]*Schema{
@@ -6275,6 +6289,7 @@ func componentSchemas() map[string]*Schema {
 		"SecretValue":                        secretValue,
 		"SecretRotationRequest":              secretRotationReq,
 		"SecretRotation":                     secretRotation,
+		"SecretRotationPreview":              secretRotationPreview,
 		"SecretRotationScheduleRequest":      secretRotationScheduleReq,
 		"SecretRotationSchedule":             secretRotationSchedule,
 		"SecretRotationScheduleList":         list("SecretRotationSchedule"),

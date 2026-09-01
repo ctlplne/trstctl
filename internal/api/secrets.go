@@ -373,6 +373,28 @@ type secretRotationRequest struct {
 	TTLSeconds *int   `json:"ttl_seconds,omitempty"`
 }
 
+type secretRotationPreviewResponse struct {
+	Capability             string   `json:"capability"`
+	Ready                  bool     `json:"ready"`
+	EffectFree             bool     `json:"effect_free"`
+	Provider               string   `json:"provider"`
+	Key                    string   `json:"key"`
+	OldRef                 string   `json:"old_ref"`
+	Target                 string   `json:"target,omitempty"`
+	RemoteKey              string   `json:"remote_key,omitempty"`
+	CurrentVersion         int      `json:"current_version,omitempty"`
+	NextVersion            int      `json:"next_version,omitempty"`
+	RequiredPermission     string   `json:"required_permission"`
+	RequestFingerprint     string   `json:"request_fingerprint"`
+	Blockers               []string `json:"blockers"`
+	PreviewWrites          []string `json:"preview_writes"`
+	PreviewExternalEffects []string `json:"preview_external_effects"`
+	ExecuteWrites          []string `json:"execute_writes"`
+	ExecuteExternalEffects []string `json:"execute_external_effects"`
+	RecoverySteps          []string `json:"recovery_steps"`
+	DataHandling           string   `json:"secret_data_handling"`
+}
+
 type secretRotationResponse struct {
 	Key               string `json:"key"`
 	OldRef            string `json:"old_ref"`
@@ -909,13 +931,8 @@ func (a *API) rotateStaticSecret(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
 		return
 	}
-	req.Provider = strings.TrimSpace(req.Provider)
-	req.Key = strings.TrimSpace(req.Key)
-	req.OldRef = strings.TrimSpace(req.OldRef)
-	req.Target = strings.TrimSpace(req.Target)
-	req.RemoteKey = strings.TrimSpace(req.RemoteKey)
-	if req.Provider == "" || req.Key == "" || req.OldRef == "" {
-		a.writeError(w, errStatus(http.StatusBadRequest, "provider, key, and old_ref are required"))
+	if err := normalizeSecretRotationRequest(&req); err != nil {
+		a.writeError(w, err)
 		return
 	}
 	if isConnectorSecretRotation(req.Provider) {

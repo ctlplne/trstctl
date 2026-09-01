@@ -501,6 +501,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"secrets", "leases", "get"}, Method: "GET", Path: "/api/v1/secrets/leases/{lease_id}", Summary: "Get dynamic secret lease metadata"},
 	{Name: []string{"secrets", "leases", "renew"}, Method: "POST", Path: "/api/v1/secrets/leases/{lease_id}/renew", Body: bodyFile, Summary: "Renew a dynamic secret lease"},
 	{Name: []string{"secrets", "leases", "revoke"}, Method: "POST", Path: "/api/v1/secrets/leases/{lease_id}/revoke", Summary: "Revoke a dynamic secret lease"},
+	{Name: []string{"secrets", "rotations", "preview"}, Method: "POST", Path: "/api/v1/secrets/rotations/preview", Body: bodyFile, ReadOnly: true, Summary: "Review the exact effect-free connector:<target> rotation plan"},
 	{Name: []string{"secrets", "rotations", "run"}, Method: "POST", Path: "/api/v1/secrets/rotations", Body: bodyFile, Summary: "Queue a worker-owned connector:<target> secret rotation"},
 	{Name: []string{"secrets", "rotation-schedules", "create"}, Method: "POST", Path: "/api/v1/secrets/rotation-schedules", Body: bodyFile, Summary: "Create a scheduled connector:<target> secret rotation"},
 	{Name: []string{"secrets", "rotation-schedules", "list"}, Method: "GET", Path: "/api/v1/secrets/rotation-schedules", Query: []string{"limit", "cursor"}, Summary: "List scheduled secret rotations"},

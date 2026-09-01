@@ -386,6 +386,7 @@ import type {
   SecretRotateRequest,
   SecretRotation,
   SecretRotationDueRun,
+  SecretRotationPreview,
   SecretRotationRequest,
   SecretRotationSchedule,
   SecretRotationScheduleList,
@@ -994,6 +995,7 @@ export type {
   SecretRotateRequest,
   SecretRotation,
   SecretRotationDueRun,
+  SecretRotationPreview,
   SecretRotationRequest,
   SecretRotationSchedule,
   SecretRotationScheduleList,
@@ -2249,6 +2251,7 @@ export interface Api {
   privacyArchiveAttestations(options?: { limit?: number; cursor?: string; subjectRef?: string }): Promise<PrivacyArchiveErasureAttestationList>;
   recordPrivacyArchiveAttestation(input: PrivacyArchiveErasureAttestationRequest): Promise<PrivacyArchiveErasureAttestation>;
   remediationOwnerActions(ownerId?: string): Promise<OwnerRemediationQueue>;
+  previewSecretRotation(input: SecretRotationRequest): Promise<SecretRotationPreview>;
   runSecretRotation(input: SecretRotationRequest): Promise<SecretRotation>;
   createSecretRotationSchedule(input: SecretRotationScheduleRequest): Promise<SecretRotationSchedule>;
   secretRotationSchedules(options?: { limit?: number; cursor?: string }): Promise<SecretRotationScheduleList>;
@@ -2792,6 +2795,7 @@ const liveApi: Api = {
   recordPrivacyArchiveAttestation: (input) => mutate<PrivacyArchiveErasureAttestation>("POST", "/api/v1/privacy/archive-erasure-attestations", input),
   remediationOwnerActions: (ownerId) =>
     req<OwnerRemediationQueue>(`/api/v1/remediation/owner-actions${ownerId ? `?owner_id=${encodeURIComponent(ownerId)}` : ""}`),
+  previewSecretRotation: (input) => postRead<SecretRotationPreview>("/api/v1/secrets/rotations/preview", input),
   runSecretRotation: (input) => mutate<SecretRotation>("POST", "/api/v1/secrets/rotations", input),
   createSecretRotationSchedule: (input) => mutate<SecretRotationSchedule>("POST", "/api/v1/secrets/rotation-schedules", input),
   secretRotationSchedules: (options) => req<SecretRotationScheduleList>(`/api/v1/secrets/rotation-schedules${pageQueryString(options)}`),

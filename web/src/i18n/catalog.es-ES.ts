@@ -776,6 +776,25 @@ const esESCatalog = {
     "Cree un programa connector:<destino>; la entrega se pone en la cola del trabajador y puede reanudarse tras un fallo.",
   "secrets.rotation.connectorOnly":
     "La rotación manual de proveedor requiere actualmente connector:<destino>. Los proveedores estáticos y de arrendamientos dinámicos siguen sin estar disponibles hasta que un trabajador duradero controle cada fase de efecto y reversión.",
+  // F37 machine-authored translations — FLAGGED FOR HUMAN REVIEW BEFORE RELEASE.
+  "secrets.rotation.previewAction": "Revisar el plan de rotación",
+  "secrets.rotation.previewLabel": "Revisión de la rotación del secreto",
+  "secrets.rotation.previewReady": "Plan de rotación exacto",
+  "secrets.rotation.previewBlocked": "La rotación aún no puede ejecutarse",
+  "secrets.rotation.previewNoEffects":
+    "La vista previa no realizó escrituras ni contactó sistemas externos. Nada cambia hasta que ejecute este plan revisado.",
+  "secrets.rotation.previewStale": "Las entradas cambiaron después de la revisión. Revise el plan de nuevo antes de ejecutarlo.",
+  "secrets.rotation.ready": "Listo",
+  "secrets.rotation.blocked": "Bloqueado",
+  "secrets.rotation.versionChange": "Cambio de versión",
+  "secrets.rotation.versionTransition": "v{current} → v{next}",
+  "secrets.rotation.destination": "Destino del conector",
+  "secrets.rotation.permission": "Permiso requerido",
+  "secrets.rotation.fingerprint": "Huella del plan",
+  "secrets.rotation.blockersHeading": "Por qué está bloqueada la ejecución",
+  "secrets.rotation.executionChanges": "Qué cambiará la ejecución",
+  "secrets.rotation.recoveryHeading": "Cómo funciona la recuperación",
+  "secrets.rotation.executeReviewed": "Ejecutar la rotación revisada",
   "secrets.rotation.scheduleConnectorOnly":
     "La rotación programada requiere actualmente un proveedor connector:<destino>. Los proveedores estáticos y de arrendamientos dinámicos siguen sin estar disponibles.",
   "secrets.rotation.scheduleProviderPlaceholder": "connector:ci",
@@ -6412,7 +6431,6 @@ const esESCatalog = {
   "source.run.ea64488842": "run:",
   "source.run.graph.query.3e99f2000a": "Ejecutar consulta de grafo",
   "source.run.id.26d3e7aaac": "ID de ejecución",
-  "source.run.rotation.399dcb292b": "Ejecutar rotación",
   "source.run.scan.68ac7da5df": "Ejecutar análisis",
   "source.run.secret.scan.89f2ed7a1b": "Ejecutar análisis de Secrets",
   "source.run.uuid.0b1b6844cb": "UUID de ejecución",

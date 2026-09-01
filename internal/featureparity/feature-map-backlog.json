@@ -14483,8 +14483,8 @@
             "phase": "P1",
             "priority": 32,
             "served_state": "conditional",
-            "backend_status": "conditional: served native-store rotation, worker-queued connector rotation, and connector-only schedules with durable exact due-edge commands, deterministic resume/reconcile, bounded scanning, cached truthful partial failure, verified terminal-command retention, and explicit deferral evidence; manual static/dynamic rotation and static/dynamic schedule creation fail closed before unsupported effects",
-            "current_frontend_mapping": "operate: Secrets at /secrets - manual native-store rotate/delete plus worker-queued connector rotation; the console accepts only connector:<target> for provider rotation and schedules, omits unsupported TTL, rejects static and dynamic-lease providers, distinguishes queued from completed, lists each deferred schedule ID/reason/due time/error, and clears stale run/deferred evidence when a tick fails",
+            "backend_status": "conditional: served effect-free exact preview, native-store rotation, worker-queued connector rotation, and connector-only schedules with durable exact due-edge commands, deterministic resume/reconcile, bounded scanning, cached truthful partial failure, verified terminal-command retention, and explicit deferral evidence; manual static/dynamic rotation and static/dynamic schedule creation fail closed before unsupported effects",
+            "current_frontend_mapping": "operate: Secrets at /secrets - manual native-store rotate/delete plus effect-free preview and reviewed execution for worker-queued connector rotation; the console invalidates stale plans, explains server blockers, omits unsupported TTL, distinguishes queued from completed, lists each deferred schedule ID/reason/due time/error, and clears stale run/deferred evidence when a tick fails",
             "target_gui_mapping": "Secret rotation UI for manual rotate, schedule, version history, rollback, owner, last rotation, and downstream sync status.",
             "acceptance_test": "Served tests cover native-store rotation; zero-effect fail-closed manual static and dynamic-lease rotation; worker-queued connector rotation; connector-only schedule creation; zero-effect disabling of inherited non-connector schedules; durable exact due-edge claim across overlap, crash, restart, and rebuild; version-2 due-tuple replay under decreasing producer clocks; rollback on a missed schedule CAS; monotonic reverse replay; bounded scanning past deferred rows; byte-identical same-key partial-503 replay with no child re-execution and new-key reconciliation; verified terminal-command retention; and truthful localized UI evidence that is cleared on failure.",
             "source_docs": [
@@ -14492,6 +14492,7 @@
             ],
             "source_backend": [
                 "/api/v1/secrets/store/{name}",
+                "/api/v1/secrets/rotations/preview",
                 "/api/v1/secrets/rotations",
                 "/api/v1/secrets/rotation-schedules",
                 "/api/v1/secrets/rotation-schedules/run-due",
@@ -14507,6 +14508,7 @@
             "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
             "api_surface": [
                 "rotateSecret",
+                "previewStaticSecretRotation",
                 "rotateStaticSecret",
                 "createSecretRotationSchedule",
                 "listSecretRotationSchedules",
@@ -14515,6 +14517,7 @@
             "api_na": "",
             "cli_surface": [
                 "secrets store update",
+                "secrets rotations preview",
                 "secrets rotations run",
                 "secrets rotation-schedules create",
                 "secrets rotation-schedules list",
@@ -14533,7 +14536,7 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: operate: Secrets at /secrets - manual native-store rotate/delete plus worker-queued connector rotation; the console accepts only connector:<target> for provider rotation and schedules, omits unsupported TTL, rejects static and dynamic-lease providers, distinguishes queued from completed, lists each deferred schedule ID/reason/due time/error, and clears stale run/deferred evidence when a tick fails",
+                        "current_frontend_mapping: operate: Secrets at /secrets - manual native-store rotate/delete plus effect-free preview and reviewed execution for worker-queued connector rotation; the console invalidates stale plans, explains server blockers, omits unsupported TTL, distinguishes queued from completed, lists each deferred schedule ID/reason/due time/error, and clears stale run/deferred evidence when a tick fails",
                         "target_gui_mapping: Secret rotation UI for manual rotate, schedule, version history, rollback, owner, last rotation, and downstream sync status."
                     ],
                     "refs": [
@@ -14545,7 +14548,7 @@
                 },
                 "cli": {
                     "evidence": [
-                        "CLI commands: secrets store update, secrets rotations run, secrets rotation-schedules create, secrets rotation-schedules list, secrets rotation-schedules run-due; manual secrets rotations run accepts connector:<target> only, static and dynamic-lease providers perform no effect, and schedule creation accepts connector:<target> only"
+                        "CLI commands: secrets store update, secrets rotations preview, secrets rotations run, secrets rotation-schedules create, secrets rotation-schedules list, secrets rotation-schedules run-due; preview is read-only and carries no Idempotency-Key, manual execution accepts connector:<target> only, static and dynamic-lease providers perform no effect, and schedule creation accepts connector:<target> only"
                     ],
                     "refs": [
                         "internal/cli/command.go",
@@ -14554,7 +14557,7 @@
                 },
                 "api": {
                     "evidence": [
-                        "OpenAPI operationIds: rotateSecret, rotateStaticSecret, createSecretRotationSchedule, listSecretRotationSchedules, runDueSecretRotationSchedules; SecretRotationRequest retains target and remote_key, rejects connector ttl_seconds with 400, and returns the cached request-bound 503 for static/dynamic-lease providers regardless of ttl_seconds before effects; schedule creation is connector-only, and due-run responses expose complete/partial truth, the failed schedule/system error, bounded scan/run limits, reconciled runs, and exact deferred schedule evidence"
+                        "OpenAPI operationIds: rotateSecret, previewStaticSecretRotation, rotateStaticSecret, createSecretRotationSchedule, listSecretRotationSchedules, runDueSecretRotationSchedules; previewStaticSecretRotation returns an exact effect-free F37 plan with zero writes/external effects, current and next versions, blockers, execution effects, recovery steps, secret handling, and a tenant-bound request fingerprint; SecretRotationRequest retains target and remote_key, rejects connector ttl_seconds on execution, and returns the cached request-bound 503 for static/dynamic-lease providers regardless of ttl_seconds before effects; schedule creation is connector-only, and due-run responses expose complete/partial truth, the failed schedule/system error, bounded scan/run limits, reconciled runs, and exact deferred schedule evidence"
                     ],
                     "refs": [
                         "internal/api/testdata/openapi.golden.json",
@@ -14589,7 +14592,7 @@
                 },
                 "rbac": {
                     "evidence": [
-                        "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: rotateSecret, rotateStaticSecret, createSecretRotationSchedule, listSecretRotationSchedules, runDueSecretRotationSchedules",
+                        "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: rotateSecret, previewStaticSecretRotation, rotateStaticSecret, createSecretRotationSchedule, listSecretRotationSchedules, runDueSecretRotationSchedules",
                         "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
                     ],
                     "refs": [
@@ -14716,11 +14719,13 @@
                         "status": "complete",
                         "evidence": [
                             "OpenAPI operationId: rotateSecret",
+                            "OpenAPI operationId: previewStaticSecretRotation",
                             "OpenAPI operationId: rotateStaticSecret",
                             "OpenAPI operationId: createSecretRotationSchedule",
                             "OpenAPI operationId: listSecretRotationSchedules",
                             "OpenAPI operationId: runDueSecretRotationSchedules",
                             "CLI command: secrets store update",
+                            "CLI command: secrets rotations preview",
                             "CLI command: secrets rotations run",
                             "CLI command: secrets rotation-schedules create",
                             "CLI command: secrets rotation-schedules list",

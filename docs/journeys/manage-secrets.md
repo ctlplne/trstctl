@@ -198,16 +198,19 @@ today (see [Current limitations](../limitations.md) and
    `Idempotency-Key` and the rotate succeeds. The requester cannot approve their own
    request.
 
-   Beyond in-store version rotation, the provider route currently runs only
-   connector-backed rotation (`secrets rotations run` with
+   Beyond in-store version rotation, first review the exact effect-free plan with
+   `secrets rotations preview`. It reads metadata only, performs no writes, contacts
+   no connector, and needs no `Idempotency-Key`. The provider route currently runs
+   only connector-backed rotation (`secrets rotations run` with
    `provider":"connector:<target>"`, atomically
    committing the local version plus sealed outbox command and returning
    `queued:true` until the worker delivers) — plus event-sourced schedules
    (`POST /api/v1/secrets/rotation-schedules`, then `/run-due`). Every
    response is metadata-only; no variant returns the new credential value.
-   Static providers such as `postgresql` and `dynamic-lease:<backend>` deliberately
-   return a stable `503` before any provider effect until their complete effect and
-   rollback chains share one durable worker command.
+   Static providers such as `postgresql` and `dynamic-lease:<backend>` appear as
+   explicit blockers in preview and deliberately return a stable `503` from execution
+   before any provider effect until their complete effect and rollback chains share
+   one durable worker command.
    Payload shapes and the rotation-mode taxonomy are on the
    [Secrets feature page](../features/secrets.md).
 

@@ -350,6 +350,10 @@ describe("i18n boundary", () => {
       // labels, calm delivery summaries, and progressive exact evidence.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
       // release.
+      // F37 re-pin: the effect-free rotation review, stale-plan warning,
+      // execution boundary, recovery explanation, and exact plan labels are
+      // translated. Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION
+      // REVIEW before release.
       // QA product g13 re-pin: the Spanish tool-health explanation now says
       // "the system" instead of the ordinary Spanish word that the source-debt
       // oracle reads as an English marker. Meaning and fail-honest tone reviewed.
@@ -1393,8 +1397,8 @@ describe("i18n boundary", () => {
       // broker records deliberately fall back to their non-empty certificate
       // ID. Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW
       // BEFORE RELEASE.
-      "es-ES": "f0719f98e3eee5e5ff8aa3cbbb3976728b75766d2487b325b2854483eeb58e83",
-      "de-DE": "fc92e1060d18ae1adc268579677d17628c6cb78405f1117d1f701ec3b614a12c",
+      "es-ES": "aa733c54f4c737b2f9b58c038a2bfa218ae8b39f6a8706f7ba9ef68d55f14915",
+      "de-DE": "ab9423a687e4fc4c947fcead723e6634fe0ba92cfe2bf64073ac2e72f30ce91c",
     });
   });
 

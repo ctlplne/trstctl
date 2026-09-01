@@ -189,7 +189,17 @@ same custody model and retains `pki/issue` only as the legacy equivalent.
 The repository contains a four-phase static-provider engine (stage, cutover, verify,
 retire), but that engine keeps staged authority in process memory and cannot recover
 an ACK-loss crash between provider effects. The served API therefore does not invoke
-it. `POST /api/v1/secrets/rotations` currently accepts only `connector:<target>` and
+it. Before execution, `POST /api/v1/secrets/rotations/preview` returns an exact,
+effect-free F37 plan. It reads only tenant-scoped secret metadata and configuration:
+it generates no successor value, decrypts no secret, writes no event or outbox row,
+and contacts no connector. The plan reports current/next versions, the resolved
+connector destination, required permission, a tenant-bound request fingerprint,
+execution effects, recovery steps, and explicit blockers. The console and
+`trstctl-cli secrets rotations preview` use this plan without an Idempotency-Key;
+changing console inputs invalidates the review. Only a ready, still-current review
+reveals the separate execution action.
+
+`POST /api/v1/secrets/rotations` currently accepts only `connector:<target>` and
 commits one application-secret event plus its sealed outbox intent before returning
 queued, non-secret evidence. Manual static-provider and dynamic-lease requests return
 `503` before stage, issue, cutover, delivery, verification, rollback, revoke, or
@@ -220,6 +230,12 @@ or partial tick. An otherwise well-formed response with an unknown run, rollback
 deferred, or system error is treated as a malformed scheduler failure; neither its
 error nor its problem detail is displayed. This keeps a stale cache or damaged
 proxy from turning rejected provider text back into operator-visible copy.
+
+The manual connector form is review-first. A blocked preview explains why a provider
+or reference cannot run; a ready preview states what the mutation will write, which
+external connector it will contact, how secret material is handled, and how to retry
+or recover. Preview and execute remain separate server calls so viewing a plan can
+never become an accidental rotation.
 
 Each `run-due` idempotency key owns one durable PostgreSQL tick. The tick freezes
 `due_through` from the outer idempotency row's database `created_at`, the UUID-ring

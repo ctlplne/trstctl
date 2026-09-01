@@ -1380,6 +1380,25 @@ func TestConnectorRotationCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	}
 }
 
+func TestConnectorRotationPreviewCommandSendsBodyWithoutIdempotencyKey(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, 200, `{"capability":"F37","ready":true,"effect_free":true,"provider":"connector:ci","key":"db/reporting","old_ref":"version:1","target":"ci","remote_key":"DB_PASSWORD","current_version":1,"next_version":2,"required_permission":"secrets:write","request_fingerprint":"sha256:plan","blockers":[],"preview_writes":[],"preview_external_effects":[],"execute_writes":["event"],"execute_external_effects":["connector"],"recovery_steps":["retry"],"secret_data_handling":"metadata only"}`, &cap)
+	body := `{"provider":"connector:ci","key":"db/reporting","old_ref":"version:1","remote_key":"DB_PASSWORD"}`
+	code, _, _ := run(t, []string{"secrets", "rotations", "preview", "-f", "-"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, body)
+	if code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+	if cap.Method != "POST" || cap.Path != "/api/v1/secrets/rotations/preview" {
+		t.Errorf("request = %s %s", cap.Method, cap.Path)
+	}
+	if strings.TrimSpace(string(cap.Body)) != body {
+		t.Errorf("body = %q, want %q", cap.Body, body)
+	}
+	if cap.Header.Get("Idempotency-Key") != "" {
+		t.Error("effect-free connector rotation preview must not send an Idempotency-Key")
+	}
+}
+
 func TestSecretRotationScheduleCommandsSendPathsAndIdempotencyKeys(t *testing.T) {
 	var createCap capture
 	srv := mockServer(t, 201, `{"id":"11111111-1111-1111-1111-111111111111","name":"reporting-hourly","provider":"connector:ci","key":"db/reporting","old_ref":"version:1","interval_seconds":3600,"enabled":true,"next_run_at":"2026-07-01T00:00:00Z","last_run_status":"","created_at":"2026-07-01T00:00:00Z","updated_at":"2026-07-01T00:00:00Z"}`, &createCap)

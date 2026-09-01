@@ -15,6 +15,7 @@ const { apiMock } = vi.hoisted(() => ({
     getSecret: vi.fn(),
     getSecretWithToken: vi.fn(),
     rotateSecret: vi.fn(),
+    previewSecretRotation: vi.fn(),
     runSecretRotation: vi.fn(),
     createSecretRotationSchedule: vi.fn(),
     secretRotationSchedules: vi.fn(),
@@ -203,6 +204,27 @@ function primeSecretsMocks() {
   apiMock.getSecret.mockResolvedValue({ name: "app/db/password", value: "SUPER-SECRET", version: 3 });
   apiMock.getSecretWithToken.mockResolvedValue({ name: "app/db/password", value: "WORKLOAD-SECRET", version: 3 });
   apiMock.rotateSecret.mockResolvedValue({ name: "app/db/password", version: 4, updated_at: "2026-06-19T11:00:00Z" });
+  apiMock.previewSecretRotation.mockImplementation(async (input: { provider: string; key: string; old_ref: string; target?: string; remote_key?: string }) => ({
+    capability: "F37",
+    ready: input.provider.startsWith("connector:"),
+    effect_free: true,
+    provider: input.provider,
+    key: input.key,
+    old_ref: input.old_ref,
+    target: input.target || input.provider.replace(/^connector:/, ""),
+    remote_key: input.remote_key || input.key,
+    current_version: 3,
+    next_version: 4,
+    required_permission: "secrets:write",
+    request_fingerprint: "sha256:f37-preview-fixture",
+    blockers: input.provider.startsWith("connector:") ? [] : ["This provider does not yet have a durable worker-owned rotation path."],
+    preview_writes: [],
+    preview_external_effects: [],
+    execute_writes: ["append one immutable event", "project one sealed successor", "commit one connector outbox intent"],
+    execute_external_effects: ["deliver the successor to the connector target"],
+    recovery_steps: ["retry the same command", "inspect delivery evidence", "recover the predecessor version"],
+    secret_data_handling: "Preview reads metadata only and never decrypts or sends secret material.",
+  }));
   apiMock.runSecretRotation.mockResolvedValue({
     key: "app/db/password",
     old_ref: "version:3",
@@ -1025,21 +1047,33 @@ describe("secrets surface", () => {
     await user.type(rotationForm.getByLabelText("Key"), "app/db/password");
     await user.type(rotationForm.getByLabelText("Old reference"), "version:3");
     await user.type(rotationForm.getByLabelText("Provider"), "dynamic-lease:postgresql");
-    await user.click(rotationForm.getByRole("button", { name: /run rotation/i }));
-    expect(await screen.findByText(/manual provider rotation currently requires connector:<target>/i)).toBeInTheDocument();
+    await user.click(rotationForm.getByRole("button", { name: /review rotation plan/i }));
+    expect(await screen.findByText(/this provider does not yet have a durable worker-owned rotation path/i)).toBeInTheDocument();
     expect(apiMock.runSecretRotation).not.toHaveBeenCalled();
 
     await user.clear(rotationForm.getByLabelText("Provider"));
     await user.type(rotationForm.getByLabelText("Provider"), "postgresql");
-    await user.click(rotationForm.getByRole("button", { name: /run rotation/i }));
-    expect(await screen.findByText(/static and dynamic-lease providers stay unavailable/i)).toBeInTheDocument();
+    await user.click(rotationForm.getByRole("button", { name: /review rotation plan/i }));
+    expect(await screen.findByText(/this provider does not yet have a durable worker-owned rotation path/i)).toBeInTheDocument();
     expect(apiMock.runSecretRotation).not.toHaveBeenCalled();
 
     await user.clear(rotationForm.getByLabelText("Provider"));
     await user.type(rotationForm.getByLabelText("Provider"), "connector:ci");
     await user.type(rotationForm.getByLabelText("Sync target (optional)"), "ci");
     await user.type(rotationForm.getByLabelText("Remote key (optional)"), "DATABASE_PASSWORD");
-    await user.click(rotationForm.getByRole("button", { name: /run rotation/i }));
+    await user.click(rotationForm.getByRole("button", { name: /review rotation plan/i }));
+    await waitFor(() =>
+      expect(apiMock.previewSecretRotation).toHaveBeenLastCalledWith({
+        key: "app/db/password",
+        old_ref: "version:3",
+        provider: "connector:ci",
+        target: "ci",
+        remote_key: "DATABASE_PASSWORD",
+      }),
+    );
+    expect(apiMock.runSecretRotation).not.toHaveBeenCalled();
+    expect(await screen.findByText(/preview made no writes and contacted no external systems/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /run reviewed rotation/i }));
     await waitFor(() =>
       expect(apiMock.runSecretRotation).toHaveBeenCalledWith({
         key: "app/db/password",

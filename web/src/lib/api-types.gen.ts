@@ -6640,6 +6640,28 @@ export interface SecretRotationDueRun {
   system_error?: string;
 }
 
+export interface SecretRotationPreview {
+  blockers: string[];
+  capability: "F37";
+  current_version?: number;
+  effect_free: boolean;
+  execute_external_effects: string[];
+  execute_writes: string[];
+  key: string;
+  next_version?: number;
+  old_ref: string;
+  preview_external_effects: string[];
+  preview_writes: string[];
+  provider: string;
+  ready: boolean;
+  recovery_steps: string[];
+  remote_key?: string;
+  request_fingerprint: string;
+  required_permission: string;
+  secret_data_handling: string;
+  target?: string;
+}
+
 export interface SecretRotationRequest {
   key: string;
   old_ref: string;

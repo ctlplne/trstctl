@@ -5256,6 +5256,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/rotations/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview the exact effect-free F37 connector secret-rotation plan */
+        post: operations["previewStaticSecretRotation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/scans": {
         parameters: {
             query?: never;
@@ -13046,6 +13063,28 @@ export interface components {
             scanned: number;
             /** @description Non-secret fail-stop detail. A 503 envelope is cached by the outer Idempotency-Key; retry with the same key is byte-identical and executes no child again. Use a new key to continue after repair. */
             system_error?: string;
+        };
+        SecretRotationPreview: {
+            blockers: string[];
+            /** @enum {string} */
+            capability: "F37";
+            current_version?: number;
+            effect_free: boolean;
+            execute_external_effects: string[];
+            execute_writes: string[];
+            key: string;
+            next_version?: number;
+            old_ref: string;
+            preview_external_effects: string[];
+            preview_writes: string[];
+            provider: string;
+            ready: boolean;
+            recovery_steps: string[];
+            remote_key?: string;
+            request_fingerprint: string;
+            required_permission: string;
+            secret_data_handling: string;
+            target?: string;
         };
         SecretRotationRequest: {
             key: string;
@@ -28945,6 +28984,48 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewStaticSecretRotation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretRotationRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretRotationPreview"];
                 };
             };
             /** @description client error */

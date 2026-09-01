@@ -650,6 +650,7 @@ public final class OpenApiSchemas {
       "SecretRotateRequest",
       "SecretRotation",
       "SecretRotationDueRun",
+      "SecretRotationPreview",
       "SecretRotationRequest",
       "SecretRotationSchedule",
       "SecretRotationScheduleDeferred",

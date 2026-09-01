@@ -9190,6 +9190,32 @@ SecretRotationDueRun = TypedDict(
     total=False,
 )
 
+SecretRotationPreview = TypedDict(
+    'SecretRotationPreview',
+    {
+        'blockers': list[str],
+        'capability': str,
+        'current_version': int,
+        'effect_free': bool,
+        'execute_external_effects': list[str],
+        'execute_writes': list[str],
+        'key': str,
+        'next_version': int,
+        'old_ref': str,
+        'preview_external_effects': list[str],
+        'preview_writes': list[str],
+        'provider': str,
+        'ready': bool,
+        'recovery_steps': list[str],
+        'remote_key': str,
+        'request_fingerprint': str,
+        'required_permission': str,
+        'secret_data_handling': str,
+        'target': str,
+    },
+    total=False,
+)
+
 SecretRotationRequest = TypedDict(
     'SecretRotationRequest',
     {

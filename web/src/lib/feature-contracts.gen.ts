@@ -5235,11 +5235,13 @@ export const canonicalCapabilities = [
           "status": "complete",
           "evidence": [
             "OpenAPI operationId: rotateSecret",
+            "OpenAPI operationId: previewStaticSecretRotation",
             "OpenAPI operationId: rotateStaticSecret",
             "OpenAPI operationId: createSecretRotationSchedule",
             "OpenAPI operationId: listSecretRotationSchedules",
             "OpenAPI operationId: runDueSecretRotationSchedules",
             "CLI command: secrets store update",
+            "CLI command: secrets rotations preview",
             "CLI command: secrets rotations run",
             "CLI command: secrets rotation-schedules create",
             "CLI command: secrets rotation-schedules list",

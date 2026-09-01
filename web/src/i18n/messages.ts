@@ -1849,6 +1849,41 @@ export const messages = {
       "Manual provider rotation currently requires connector:<target>. Static and dynamic-lease providers stay unavailable until one durable worker owns every effect and rollback phase.",
     description: "Secret rotation form: connector-only fail-closed validation.",
   },
+  "secrets.rotation.previewAction": {
+    defaultMessage: "Review rotation plan",
+    description: "F37 effect-free connector rotation preview action.",
+  },
+  "secrets.rotation.previewLabel": {
+    defaultMessage: "Secret rotation review",
+    description: "F37 accessible label for the exact connector rotation preview.",
+  },
+  "secrets.rotation.previewReady": {
+    defaultMessage: "Exact rotation plan",
+    description: "F37 ready preview heading.",
+  },
+  "secrets.rotation.previewBlocked": {
+    defaultMessage: "Rotation cannot run yet",
+    description: "F37 blocked preview heading.",
+  },
+  "secrets.rotation.previewNoEffects": {
+    defaultMessage: "Preview made no writes and contacted no external systems. Nothing changes until you run this reviewed plan.",
+    description: "F37 effect-free boundary explanation.",
+  },
+  "secrets.rotation.previewStale": {
+    defaultMessage: "Inputs changed after review. Review the plan again before execution.",
+    description: "F37 stale preview safety notice.",
+  },
+  "secrets.rotation.ready": { defaultMessage: "Ready", description: "F37 preview ready badge." },
+  "secrets.rotation.blocked": { defaultMessage: "Blocked", description: "F37 preview blocked badge." },
+  "secrets.rotation.versionChange": { defaultMessage: "Version change", description: "F37 preview version transition label." },
+  "secrets.rotation.versionTransition": { defaultMessage: "v{current} → v{next}", description: "F37 preview current-to-next version value." },
+  "secrets.rotation.destination": { defaultMessage: "Connector destination", description: "F37 preview connector and remote-key label." },
+  "secrets.rotation.permission": { defaultMessage: "Permission required", description: "F37 preview required permission label." },
+  "secrets.rotation.fingerprint": { defaultMessage: "Plan fingerprint", description: "F37 preview immutable request fingerprint label." },
+  "secrets.rotation.blockersHeading": { defaultMessage: "Why execution is blocked", description: "F37 preview blocker list heading." },
+  "secrets.rotation.executionChanges": { defaultMessage: "What execution will change", description: "F37 preview mutation and external-effects heading." },
+  "secrets.rotation.recoveryHeading": { defaultMessage: "How recovery works", description: "F37 preview recovery steps heading." },
+  "secrets.rotation.executeReviewed": { defaultMessage: "Run reviewed rotation", description: "F37 explicit execution action after review." },
   "secrets.rotation.scheduleConnectorOnly": {
     defaultMessage: "Scheduled rotation currently requires a connector:<target> provider. Static and dynamic-lease providers remain unavailable.",
     description: "Secret rotation schedule form: connector-only fail-closed validation.",
@@ -22526,10 +22561,6 @@ export const messages = {
   },
   "source.run.id.26d3e7aaac": {
     defaultMessage: "Run ID",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
-  "source.run.rotation.399dcb292b": {
-    defaultMessage: "Run rotation",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
   "source.run.scan.68ac7da5df": {

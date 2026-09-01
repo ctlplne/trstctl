@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -29,6 +30,114 @@ import (
 	"trstctl.com/trstctl/internal/secretsync"
 	"trstctl.com/trstctl/internal/store"
 )
+
+func TestServedConnectorSecretRotationPreviewF37IsExactAndEffectFree(t *testing.T) {
+	connector := newRotationCapturePusher()
+	h := newServedHarness(t, config.Protocols{},
+		withSecretsEnabled(t, nil),
+		func(d *Deps) {
+			d.SecretSyncTargets = map[string]*secretsync.Target{
+				"ci": secretsync.NewCITarget(connector),
+			}
+		},
+	)
+	registerServedTenant(t, h, "served connector rotation preview tenant")
+	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok,
+		map[string]any{"name": "rotation/preview", "value": "preview-source-value"})
+	if status != http.StatusCreated {
+		t.Fatalf("create preview source secret: status %d body %s", status, body)
+	}
+	connector.put("rotation/preview", []byte("preview-source-value"))
+	sequenceBefore, err := h.log.LastSequence(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	previewBody, err := json.Marshal(map[string]any{
+		"provider": "connector:ci", "key": "rotation/preview", "old_ref": "version:1",
+		"target": "ignored-because-provider-is-authoritative", "remote_key": "ROTATION_PREVIEW",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req, err := http.NewRequest(http.MethodPost, h.ts.URL+"/api/v1/secrets/rotations/preview", bytes.NewReader(previewBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+tok)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := h.ts.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, err = io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("preview connector rotation: status %d body %s", resp.StatusCode, body)
+	}
+	var preview struct {
+		Capability             string   `json:"capability"`
+		Ready                  bool     `json:"ready"`
+		EffectFree             bool     `json:"effect_free"`
+		Provider               string   `json:"provider"`
+		Target                 string   `json:"target"`
+		RemoteKey              string   `json:"remote_key"`
+		CurrentVersion         int      `json:"current_version"`
+		NextVersion            int      `json:"next_version"`
+		RequiredPermission     string   `json:"required_permission"`
+		RequestFingerprint     string   `json:"request_fingerprint"`
+		Blockers               []string `json:"blockers"`
+		PreviewWrites          []string `json:"preview_writes"`
+		PreviewExternalEffects []string `json:"preview_external_effects"`
+		ExecuteWrites          []string `json:"execute_writes"`
+		ExecuteExternalEffects []string `json:"execute_external_effects"`
+		RecoverySteps          []string `json:"recovery_steps"`
+		SecretDataHandling     string   `json:"secret_data_handling"`
+	}
+	if err := json.Unmarshal(body, &preview); err != nil {
+		t.Fatalf("decode connector rotation preview: %v (%s)", err, body)
+	}
+	if preview.Capability != "F37" || !preview.Ready || !preview.EffectFree || preview.Provider != "connector:ci" ||
+		preview.Target != "ci" || preview.RemoteKey != "ROTATION_PREVIEW" || preview.CurrentVersion != 1 || preview.NextVersion != 2 ||
+		preview.RequiredPermission != "secrets:write" || preview.RequestFingerprint == "" {
+		t.Fatalf("connector rotation preview = %+v, want exact ready F37 plan", preview)
+	}
+	if preview.Blockers == nil || len(preview.Blockers) != 0 || preview.PreviewWrites == nil || len(preview.PreviewWrites) != 0 ||
+		preview.PreviewExternalEffects == nil || len(preview.PreviewExternalEffects) != 0 || len(preview.ExecuteWrites) < 3 ||
+		len(preview.ExecuteExternalEffects) != 1 || len(preview.RecoverySteps) < 3 || preview.SecretDataHandling == "" {
+		t.Fatalf("connector rotation preview evidence = %+v, want empty preview effects and explicit execution/recovery", preview)
+	}
+	sequenceAfterReady, err := h.log.LastSequence(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(body, []byte("preview-source-value")) || connector.successfulPushes("rotation/preview") != 0 || sequenceAfterReady != sequenceBefore {
+		t.Fatalf("effect-free preview leaked or mutated: body=%s pushes=%d", body, connector.successfulPushes("rotation/preview"))
+	}
+	current, err := h.store.GetSecret(t.Context(), h.tenant, "rotation/preview")
+	if err != nil || current.Version != 1 {
+		t.Fatalf("preview changed current secret: current=%+v err=%v", current, err)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/secrets/rotations/preview", tok,
+		map[string]any{"provider": "postgresql", "key": "rotation/preview", "old_ref": "version:1"})
+	if status != http.StatusOK || !bytes.Contains(body, []byte(`"ready":false`)) ||
+		!bytes.Contains(body, []byte("manual static-provider rotation is unavailable")) ||
+		!bytes.Contains(body, []byte(`"execute_external_effects":[]`)) {
+		t.Fatalf("unsupported provider preview: status %d body %s, want effect-free blocker", status, body)
+	}
+	sequenceAfterBlocked, err := h.log.LastSequence(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sequenceAfterBlocked != sequenceBefore || connector.successfulPushes("rotation/preview") != 0 {
+		t.Fatal("blocked preview produced a rotation effect")
+	}
+}
 
 // TestServedManualStaticSecretRotationFailsClosedBeforeProviderEffect proves the
 // request path cannot enter an in-memory stage/cutover/rollback chain. A future

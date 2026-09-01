@@ -53,6 +53,8 @@ import {
   type SecretMeta,
   type SecretRepositoryScanPosture,
   type SecretRotation,
+  type SecretRotationPreview,
+  type SecretRotationRequest,
   type SecretRotationSchedule,
   type SecretRotationScheduleRun,
   type SecretScan,
@@ -338,6 +340,23 @@ export function Secrets() {
   const [rotationRunBusy, setRotationRunBusy] = useState(false);
   const [rotationRunError, setRotationRunError] = useState<string | null>(null);
   const [rotationRun, setRotationRun] = useState<SecretRotation | null>(null);
+  const [rotationPreview, setRotationPreview] = useState<{
+    requestKey: string;
+    request: SecretRotationRequest;
+    plan: SecretRotationPreview;
+  } | null>(null);
+  const rotationRequest = useMemo<SecretRotationRequest>(
+    () => ({
+      key: rotationRunKey.trim(),
+      old_ref: rotationRunOldRef.trim(),
+      provider: rotationRunProvider.trim(),
+      ...(rotationRunTarget.trim() ? { target: rotationRunTarget.trim() } : {}),
+      ...(rotationRunRemoteKey.trim() ? { remote_key: rotationRunRemoteKey.trim() } : {}),
+    }),
+    [rotationRunKey, rotationRunOldRef, rotationRunProvider, rotationRunRemoteKey, rotationRunTarget],
+  );
+  const rotationRequestKey = JSON.stringify(rotationRequest);
+  const reviewedRotation = rotationPreview?.requestKey === rotationRequestKey ? rotationPreview : null;
 
   const [rotationSchedules, setRotationSchedules] = useState<SecretRotationSchedule[] | null>(null);
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
@@ -1262,28 +1281,31 @@ export function Secrets() {
     event.preventDefault();
     setRotationRunError(null);
     setRotationRun(null);
+    setRotationPreview(null);
     setRotationRunBusy(true);
     try {
-      const key = rotationRunKey.trim();
-      const oldRef = rotationRunOldRef.trim();
-      const provider = rotationRunProvider.trim();
-      if (!key) throw new Error("Key is required");
-      if (!oldRef) throw new Error("Old reference is required");
-      if (!provider) throw new Error("Provider is required");
-      if (!provider.startsWith("connector:") || provider.slice("connector:".length).trim() === "") {
-        throw new Error(t("secrets.rotation.connectorOnly"));
-      }
-      setRotationRun(
-        await api.runSecretRotation({
-          key,
-          old_ref: oldRef,
-          provider,
-          ...(rotationRunTarget.trim() ? { target: rotationRunTarget.trim() } : {}),
-          ...(rotationRunRemoteKey.trim() ? { remote_key: rotationRunRemoteKey.trim() } : {}),
-        }),
-      );
+      if (!rotationRequest.key) throw new Error("Key is required");
+      if (!rotationRequest.old_ref) throw new Error("Old reference is required");
+      if (!rotationRequest.provider) throw new Error("Provider is required");
+      const plan = await api.previewSecretRotation(rotationRequest);
+      setRotationPreview({ requestKey: rotationRequestKey, request: rotationRequest, plan });
     } catch (err) {
-      setRotationRunError(apiProblemMessage(err, "Could not run secret rotation"));
+      setRotationRunError(apiProblemMessage(err, "Could not preview secret rotation"));
+    } finally {
+      setRotationRunBusy(false);
+    }
+  }
+
+  async function runReviewedRollbackRotation() {
+    if (!reviewedRotation?.plan.ready) return;
+    setRotationRunError(null);
+    setRotationRun(null);
+    setRotationRunBusy(true);
+    try {
+      setRotationRun(await api.runSecretRotation(reviewedRotation.request));
+      setRotationPreview(null);
+    } catch (err) {
+      setRotationRunError(apiProblemMessage(err, "Could not run reviewed secret rotation"));
     } finally {
       setRotationRunBusy(false);
     }
@@ -1847,11 +1869,99 @@ export function Secrets() {
                   </label>
                   <div className="md:col-span-2 xl:col-span-3">
                     <Button type="submit" disabled={rotationRunBusy || Boolean(loadError)}>
-                      {rotationRunBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RotateCw className="h-4 w-4" aria-hidden="true" />}
-                      {translateNow("source.run.rotation.399dcb292b")}
+                      {rotationRunBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
+                      {t("secrets.rotation.previewAction")}
                     </Button>
                   </div>
                 </form>
+                {rotationPreview && !reviewedRotation && (
+                  <p role="status" className="rounded-control border border-status-warning/30 bg-status-warning/10 px-3 py-2 text-sm text-status-warning">
+                    {t("secrets.rotation.previewStale")}
+                  </p>
+                )}
+                {reviewedRotation && (
+                  <section aria-label={t("secrets.rotation.previewLabel")} className="grid gap-4 rounded-control border border-border bg-background p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h4 className="font-semibold text-foreground">
+                          {reviewedRotation.plan.ready ? t("secrets.rotation.previewReady") : t("secrets.rotation.previewBlocked")}
+                        </h4>
+                        <p className="mt-1 text-sm text-muted-foreground">{t("secrets.rotation.previewNoEffects")}</p>
+                      </div>
+                      <span
+                        className={
+                          reviewedRotation.plan.ready
+                            ? "rounded-full bg-status-success/10 px-2.5 py-1 text-xs font-semibold text-status-success"
+                            : "rounded-full bg-risk-critical/10 px-2.5 py-1 text-xs font-semibold text-risk-critical"
+                        }
+                      >
+                        {reviewedRotation.plan.ready ? t("secrets.rotation.ready") : t("secrets.rotation.blocked")}
+                      </span>
+                    </div>
+                    <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+                      <div>
+                        <dt className="font-medium text-muted-foreground">{t("secrets.rotation.versionChange")}</dt>
+                        <dd className="font-mono text-xs">
+                          {t("secrets.rotation.versionTransition", {
+                            current: reviewedRotation.plan.current_version ?? "—",
+                            next: reviewedRotation.plan.next_version ?? "—",
+                          })}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="font-medium text-muted-foreground">{translateNow("source.provider.472590ae97")}</dt>
+                        <dd className="break-all font-mono text-xs">{reviewedRotation.plan.provider}</dd>
+                      </div>
+                      <div>
+                        <dt className="font-medium text-muted-foreground">{t("secrets.rotation.destination")}</dt>
+                        <dd className="break-all font-mono text-xs">
+                          {reviewedRotation.plan.target || "—"} / {reviewedRotation.plan.remote_key || "—"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="font-medium text-muted-foreground">{t("secrets.rotation.permission")}</dt>
+                        <dd className="font-mono text-xs">{reviewedRotation.plan.required_permission}</dd>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <dt className="font-medium text-muted-foreground">{t("secrets.rotation.fingerprint")}</dt>
+                        <dd className="break-all font-mono text-xs">{reviewedRotation.plan.request_fingerprint}</dd>
+                      </div>
+                    </dl>
+                    <p className="rounded-control border border-status-info/30 bg-status-info/10 px-3 py-2 text-sm text-status-info">
+                      {reviewedRotation.plan.secret_data_handling}
+                    </p>
+                    {reviewedRotation.plan.blockers.length > 0 && (
+                      <div>
+                        <h5 className="text-sm font-semibold text-risk-critical">{t("secrets.rotation.blockersHeading")}</h5>
+                        <ul className="mt-1 list-disc space-y-1 ps-5 text-sm text-risk-critical">
+                          {reviewedRotation.plan.blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div>
+                        <h5 className="text-sm font-semibold text-foreground">{t("secrets.rotation.executionChanges")}</h5>
+                        <ul className="mt-1 list-disc space-y-1 ps-5 text-sm text-muted-foreground">
+                          {[...reviewedRotation.plan.execute_writes, ...reviewedRotation.plan.execute_external_effects].map((effect) => <li key={effect}>{effect}</li>)}
+                        </ul>
+                      </div>
+                      <div>
+                        <h5 className="text-sm font-semibold text-foreground">{t("secrets.rotation.recoveryHeading")}</h5>
+                        <ol className="mt-1 list-decimal space-y-1 ps-5 text-sm text-muted-foreground">
+                          {reviewedRotation.plan.recovery_steps.map((step) => <li key={step}>{step}</li>)}
+                        </ol>
+                      </div>
+                    </div>
+                    {reviewedRotation.plan.ready && (
+                      <div>
+                        <Button type="button" onClick={() => void runReviewedRollbackRotation()} disabled={rotationRunBusy}>
+                          {rotationRunBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RotateCw className="h-4 w-4" aria-hidden="true" />}
+                          {t("secrets.rotation.executeReviewed")}
+                        </Button>
+                      </div>
+                    )}
+                  </section>
+                )}
                 {rotationRunError && <ErrorState title={t("parity.rollbackSafeRotationFailed_5f1a57")}>{rotationRunError}</ErrorState>}
                 {rotationRun && (
                   <div role="status" className="grid gap-2 rounded-control border border-border bg-background p-3 text-sm">
