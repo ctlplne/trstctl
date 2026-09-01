@@ -147,9 +147,9 @@ function buildDemoHistory() {
     { key: "iot-est-gateway", ownerKey: "iot", name: "iot-est-gateway.demo.trstctl.local", targetState: "deployed", profile: "est-serverkeygen-iot-24h", protocol: "est", deployment: "factory-floor/gateway-17", connector: "caddy", daysAgo: 63 },
     { key: "warehouse-mtls", ownerKey: "data", name: "warehouse-mtls.demo.trstctl.local", targetState: "deployed", profile: "service-mtls-30d", protocol: "acme", deployment: "warehouse/envoy/mtls", connector: "envoy", daysAgo: 41 },
     { key: "shadow-cleanup", ownerKey: "security", name: "shadow-cleanup.demo.trstctl.local", targetState: "revoked", profile: "acme-trust-authenticated-90d", protocol: "acme", deployment: "secops/remediation/shadow-cleanup", connector: "shell-ca", daysAgo: 16, revocationReason: "privilegeWithdrawn" },
-    { key: "apache-pitch", ownerKey: "payments", name: "apache-payments.demo.trstctl.local", targetState: "issued", profile: "service-mtls-30d", protocol: "acme", deployment: "apache-payments:/etc/apache2/tls", connector: "apache", daysAgo: 42 },
-    { key: "iis-pitch", ownerKey: "platform", name: "iis-portal.demo.trstctl.local", targetState: "issued", profile: "service-mtls-30d", protocol: "acme", deployment: "iis-portal:WebHosting/*:443", connector: "iis", daysAgo: 35 },
-    { key: "f5-pitch", ownerKey: "edge", name: "edge.demo.trstctl.local", targetState: "issued", profile: "service-mtls-30d", protocol: "acme", deployment: "f5-edge:/Common/demo-edge-clientssl", connector: "f5", daysAgo: 29 },
+    { key: "apache-pitch", ownerKey: "payments", name: "apache-payments.demo.trstctl.local", targetState: "issued", profile: "service-mtls-30d", protocol: "acme", deployment: "apache-payments:/etc/apache2/tls", preparedConnector: "apache", daysAgo: 42 },
+    { key: "iis-pitch", ownerKey: "platform", name: "iis-portal.demo.trstctl.local", targetState: "issued", profile: "service-mtls-30d", protocol: "acme", deployment: "iis-portal:WebHosting/*:443", preparedConnector: "iis", daysAgo: 35 },
+    { key: "f5-pitch", ownerKey: "edge", name: "edge.demo.trstctl.local", targetState: "issued", profile: "service-mtls-30d", protocol: "acme", deployment: "f5-edge:/Common/demo-edge-clientssl", preparedConnector: "f5", daysAgo: 29 },
   ];
   const importedCertificates = [
     { key: "legacy-db", ownerKey: "platform", commonName: "legacy-db.demo.trstctl.local", validDays: 7, deploymentLocation: "legacy-db-01:/etc/tls/server.crt", source: "import:cmdb", observedDaysAgo: 173 },
@@ -748,7 +748,11 @@ async function ensureIdentity(item, ownerID, issuerID, identityItems) {
     demo_lane: "live-clickthrough",
     demo_observed_at: daysAgo(item.daysAgo),
     deployment_location: item.deployment,
-    connector: item.connector,
+    ...(item.connector ? { connector: item.connector } : {}),
+    ...(item.preparedConnector ? {
+      intended_connector: item.preparedConnector,
+      proof_state: "prepared_not_contacted",
+    } : {}),
     profile: item.profile,
     protocol: item.protocol,
   };
@@ -1004,7 +1008,11 @@ async function collectSeedInventory(history, resolved) {
             dns_names: [definition.name],
             demo_lane: "live-clickthrough",
             deployment_location: definition.deployment,
-            connector: definition.connector,
+            ...(definition.connector ? { connector: definition.connector } : {}),
+            ...(definition.preparedConnector ? {
+              intended_connector: definition.preparedConnector,
+              proof_state: "prepared_not_contacted",
+            } : {}),
             profile: definition.profile,
             protocol: definition.protocol,
           }),
