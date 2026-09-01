@@ -179,7 +179,10 @@ export function BrokerIdentityHistory({ scope }: { scope: string }) {
         onClose={() => setParam("broker_id", "")}
         actions={
           <>
-            <Link to="/certificates?tab=crlct" className={buttonVariants({ variant: "outline" })}>
+            <Link
+              to={`/certificates?tab=crlct&certificate_id=${encodeURIComponent(row?.certificate_id ?? selectedID)}`}
+              className={buttonVariants({ variant: "outline" })}
+            >
               {t("broker.openRevocation")}
             </Link>
             <Link to="/audit?feature=F61" className={buttonVariants({ variant: "outline" })}>

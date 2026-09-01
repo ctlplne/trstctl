@@ -983,6 +983,28 @@ function CertificateWorkspace() {
     });
   }
 
+  function recordExactCertificateRevocation(updated: Certificate) {
+    setCertificates((current) => current.map((certificate) => (certificate.id === updated.id ? updated : certificate)));
+    toast({
+      kind: "success",
+      title: t("certificates.revocation.certificateAccepted"),
+      description: t("certificates.revocation.description"),
+    });
+    healthQuery.refetch();
+    void Promise.all([
+      settleOptional(() => api.certificatePage({ limit, expiringBefore: expiringBefore(expiry) })),
+      settleOptional(() => api.crlDistributions()),
+      settleOptional(() => api.revocationHealth()),
+    ]).then(([page, nextCRLs, nextRevocationHealth]) => {
+      if (page) {
+        setCertificates(page.items ?? []);
+        setNextCursor(page.next_cursor || undefined);
+      }
+      if (nextCRLs) setCRLDistributions(nextCRLs.items ?? []);
+      if (nextRevocationHealth) setRevocationHealth(nextRevocationHealth);
+    });
+  }
+
   const ownerByID = useMemo(() => new Map(owners.map((owner) => [owner.id, owner])), [owners]);
   const identityByCN = useMemo(() => {
     const map = new Map<string, Identity>();
@@ -1245,7 +1267,15 @@ function CertificateWorkspace() {
           )}
           {tab === "crlct" && (
             <div {...tabPanelProps("certs", "crlct")} className="grid gap-4">
-              <RevocationCenter identities={identities} health={revocationHealth} distributions={crlDistributions} onRevoked={recordReviewedRevocation} />
+              <RevocationCenter
+                certificates={certificates}
+                targetCertificateID={searchParams.get("certificate_id") ?? undefined}
+                identities={identities}
+                health={revocationHealth}
+                distributions={crlDistributions}
+                onCertificateRevoked={recordExactCertificateRevocation}
+                onRevoked={recordReviewedRevocation}
+              />
               {revocationHealth && <RevocationHealthPanel health={revocationHealth} />}
               <CRLDistributionPanel distributions={crlDistributions} />
               <section aria-labelledby="ct-launch-heading" className="border-y border-border py-4">

@@ -66,6 +66,10 @@ describe("durable broker operator workflow", () => {
     expect(apiMock.brokerAgentIdentity).toHaveBeenCalledWith(brokerHistoryFixture.certificate_id, expect.any(AbortSignal));
     expect(apiMock.issueBrokerAgentIdentity).not.toHaveBeenCalled();
     expect(screen.queryByLabelText("Broker proof payload (base64)")).not.toBeInTheDocument();
+    expect(within(drawer).getByRole("link", { name: "Open revocation center" })).toHaveAttribute(
+      "href",
+      `/certificates?tab=crlct&certificate_id=${brokerHistoryFixture.certificate_id}`,
+    );
     await userEvent.click(within(drawer).getByRole("button", { name: "Close" }));
     expect(await screen.findByRole("row", { name: /agent-build-1.*Within validity window/ })).toBeInTheDocument();
   });

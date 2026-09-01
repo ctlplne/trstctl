@@ -1692,10 +1692,11 @@ const deDECatalog = {
   "certificates.crl.deltaBase": "Basis #{base}",
   "certificates.revocation.heading": "Widerrufszentrale",
   "certificates.revocation.description":
-    "Beenden Sie das Vertrauen in ein verwaltetes Zertifikat sicher. trstctl erklärt zuerst das exakte versionsgebundene Ereignis, die eingereihte Veröffentlichung, betroffene Systeme und den Nachweis. Bis zur Bestätigung ändert sich nichts.",
+    "Beenden Sie sicher das Vertrauen in ein Zertifikat. trstctl liest zuerst den exakten Datensatz erneut, erklärt Veröffentlichung und Nachweis und bestätigt danach den dauerhaften Widerrufszustand. Bis zur Bestätigung ändert sich nichts.",
   "certificates.revocation.progress": "Widerrufsfortschritt",
   "certificates.revocation.configureTitle": "Zugangsdaten und Grund auswählen",
-  "certificates.revocation.configureDescription": "Wählen Sie die verwaltete X.509-Identität und den RFC-5280-Grund, den vertrauende Systeme erhalten.",
+  "certificates.revocation.configureDescription":
+    "Wählen Sie eine verwaltete Lebenszyklusidentität oder einen exakten Zertifikatsdatensatz und dann den RFC-5280-Grund, den vertrauende Systeme erhalten.",
   "certificates.revocation.reviewTitle": "Exakten Plan prüfen",
   "certificates.revocation.reviewDescription":
     "Prüfen Sie serverbestimmte Schreibvorgänge, asynchrone Veröffentlichung, Auswirkungsradius und Verifizierungsschritte, bevor Sie etwas autorisieren.",
@@ -1710,8 +1711,22 @@ const deDECatalog = {
   "certificates.revocation.reviewLoading": "Exakter Plan wird geprüft…",
   "certificates.revocation.continueAction": "Weiter zur Bestätigung",
   "certificates.revocation.previewFailed": "Exakte Widerrufsvorschau fehlgeschlagen",
-  "certificates.revocation.empty": "Keine verwaltete X.509-Identität befindet sich derzeit in einem widerrufbaren Zustand.",
+  "certificates.revocation.empty": "Keine X.509-Identität und kein Zertifikatsdatensatz ist derzeit zum Widerruf verfügbar.",
+  "certificates.revocation.lifecycleGroup": "Verwaltete Lebenszyklusidentitäten",
+  "certificates.revocation.recordsGroup": "Exakte Zertifikatsdatensätze",
+  "certificates.revocation.recordOption": "exakter Zertifikatsdatensatz",
+  "certificates.revocation.linkedLoading": "Exakt verknüpftes Zertifikat wird geladen…",
+  "certificates.revocation.linkedFailed": "Das exakt verknüpfte Zertifikat konnte nicht geladen werden",
+  "certificates.revocation.linkedMismatch": "Der Server gab ein anderes Zertifikat als die exakt verknüpfte ID zurück.",
+  "certificates.revocation.alreadyRevoked":
+    "Dieses exakte Zertifikat wird bereits als widerrufen angezeigt. Öffnen Sie den Auditnachweis, statt es erneut zu senden.",
   "certificates.revocation.noChanges": "Es wurden keine Änderungen vorgenommen",
+  "certificates.revocation.certificateReviewGuidance":
+    "Dieser auswirkungsfreie Lesevorgang hat das exakte mandantenbezogene Zertifikat geladen. Bei der Ausführung wird nur diese Zertifikats-ID gesendet; Richtlinien- und Genehmigungsprüfungen laufen weiterhin auf dem Server.",
+  "certificates.revocation.recordTitle": "Exakter Zertifikatsdatensatz",
+  "certificates.revocation.recordID": "Zertifikats-ID",
+  "certificates.revocation.recordState": "Aktueller Zertifikatsstatus",
+  "certificates.revocation.certificateEffect": "Ein exaktes Zertifikat",
   "certificates.revocation.owner": "Verantwortliche Stelle",
   "certificates.revocation.version": "Lebenszyklusversion",
   "certificates.revocation.effect": "Eingereihte Veröffentlichung",
@@ -1726,7 +1741,15 @@ const deDECatalog = {
   "certificates.revocation.prerequisites": "Vor der Ausführung",
   "certificates.revocation.writes": "Was geschrieben und veröffentlicht wird",
   "certificates.revocation.proof": "So wird es nachgewiesen",
+  "certificates.revocation.certificateBefore":
+    "Das exakte Zertifikat wird weiterhin als {status} angezeigt. trstctl prüft es unmittelbar vor der Ausführung erneut.",
+  "certificates.revocation.certificateWrite": "Ein mandantenbezogenes Widerrufsereignis anhängen, das nur Zertifikat {id} auswählt.",
+  "certificates.revocation.certificatePublish":
+    "Die signierte CRL und den OCSP-Zustand des Ausstellers über die konfigurierte Widerrufsautorität aktualisieren.",
+  "certificates.revocation.certificateProof": "Zertifikat {id} erneut lesen und für den aktuellen Status widerrufen verlangen.",
+  "certificates.revocation.certificateAudit": "Das unveränderliche Mandanten-Auditereignis und die Verbreitungsnachweise öffnen.",
   "certificates.revocation.fingerprint": "Exakter Anfrage-Fingerabdruck",
+  "certificates.revocation.certificateFingerprint": "SHA-256-Fingerabdruck des Zertifikats",
   "certificates.revocation.confirmRegion": "Unwiderruflichen Widerruf bestätigen",
   "certificates.revocation.irreversibleTitle": "Dies kann nicht rückgängig gemacht werden",
   "certificates.revocation.irreversibleBody":
@@ -1735,7 +1758,11 @@ const deDECatalog = {
   "certificates.revocation.executeAction": "Geprüfte Zugangsdaten widerrufen",
   "certificates.revocation.executeFailed": "Widerruf fehlgeschlagen",
   "certificates.revocation.verifyFailed": "Die Serverantwort hat den widerrufenen Lebenszykluszustand nicht bestätigt.",
+  "certificates.revocation.reviewStale":
+    "Das Zertifikat hat sich nach der Prüfung geändert. Gehen Sie zurück und prüfen Sie den aktuellen Datensatz vor dem Widerruf.",
+  "certificates.revocation.certificateVerifyFailed": "Das exakte Zertifikat wurde nach der Ausführung nicht als widerrufen bestätigt.",
   "certificates.revocation.accepted": "Widerruf angenommen; die Identität wird jetzt als widerrufen angezeigt.",
+  "certificates.revocation.certificateAccepted": "Widerruf angenommen; das exakte Zertifikat wird jetzt als widerrufen angezeigt.",
   "certificates.revocation.auditLink": "Unveränderlichen Auditnachweis öffnen",
   "certificates.revocation.graphLink": "Betroffene Systeme öffnen",
   "certificates.revocation.propagationUnknown": "Der Verbreitungszustand ist unbekannt, weil keine signierte Beobachtung geladen wurde.",

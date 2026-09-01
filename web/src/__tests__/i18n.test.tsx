@@ -1383,8 +1383,13 @@ describe("i18n boundary", () => {
       // verified destination, and identity/connector mismatches explain the
       // refusal without implying any work was queued. Machine-authored es/de —
       // FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "c48635692955f366d911e313f18118e99bf7781b3a177d84ca07fe0c0cb368d1",
-      "de-DE": "9cc6a854ac1a609377809a3abe11a1314d62ddcc0f7bea4b30da37c1b3387083",
+      // F61 g124 recovery re-pin: the revocation center distinguishes managed
+      // lifecycle identities from exact certificate records, preserves the
+      // deep-linked certificate ID, and explains live-state re-checks and
+      // durable verification without internal "served" jargon. Machine-authored
+      // es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "7db6ed92b26482f562ad8016b47f84683f333e2797b6d8353885d5dbc692ddaf",
+      "de-DE": "d15eaba9f177f7c40cef67161a720a093c0135cf4904db013b94bc9f4d912227",
     });
   });
 

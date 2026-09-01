@@ -4951,7 +4951,7 @@ export const messages = {
   },
   "certificates.revocation.description": {
     defaultMessage:
-      "Safely stop one managed certificate from being trusted. trstctl first explains the exact version-bound event, queued publication, affected systems, and proof. Nothing changes until you confirm.",
+      "Safely stop one certificate from being trusted. trstctl first re-reads the exact record, explains the publication and proof, then verifies the durable revoked state. Nothing changes until you confirm.",
     description: "ELI5 explanation of the revocation center and its effect-free review boundary.",
   },
   "certificates.revocation.progress": { defaultMessage: "Revocation progress", description: "Accessible label for revocation-center progress." },
@@ -4960,7 +4960,7 @@ export const messages = {
     description: "First revocation-center step title.",
   },
   "certificates.revocation.configureDescription": {
-    defaultMessage: "Choose the managed X.509 identity and the RFC 5280 reason relying parties will receive.",
+    defaultMessage: "Choose a managed lifecycle identity or an exact certificate record, then choose the RFC 5280 reason relying parties will receive.",
     description: "First revocation-center step description.",
   },
   "certificates.revocation.reviewTitle": { defaultMessage: "Review exact plan", description: "Second revocation-center step title." },
@@ -4994,10 +4994,50 @@ export const messages = {
     description: "Context prefix when the effect-free preview cannot be loaded.",
   },
   "certificates.revocation.empty": {
-    defaultMessage: "No managed X.509 identity is currently in a revocable lifecycle state.",
-    description: "Empty state when the revocation center has no eligible identity.",
+    defaultMessage: "No X.509 identity or certificate record is currently available for revocation.",
+    description: "Empty state when the revocation center has no eligible identity or exact certificate record.",
+  },
+  "certificates.revocation.lifecycleGroup": {
+    defaultMessage: "Managed lifecycle identities",
+    description: "Selector group for event-sourced managed identities.",
+  },
+  "certificates.revocation.recordsGroup": {
+    defaultMessage: "Exact certificate records",
+    description: "Selector group for shared certificate inventory records.",
+  },
+  "certificates.revocation.recordOption": {
+    defaultMessage: "exact certificate record",
+    description: "Suffix that distinguishes a certificate record from a lifecycle identity.",
+  },
+  "certificates.revocation.linkedLoading": {
+    defaultMessage: "Loading the exact linked certificate…",
+    description: "Selector state while resolving a deep-linked certificate ID.",
+  },
+  "certificates.revocation.linkedFailed": {
+    defaultMessage: "The exact linked certificate could not be loaded",
+    description: "Fail-closed error prefix for a missing or inaccessible linked certificate.",
+  },
+  "certificates.revocation.linkedMismatch": {
+    defaultMessage: "The server returned a different certificate than the exact linked ID.",
+    description: "Fail-closed error for a mismatched certificate detail response.",
+  },
+  "certificates.revocation.alreadyRevoked": {
+    defaultMessage: "This exact certificate already reads revoked. Open its audit evidence instead of submitting it again.",
+    description: "Fail-closed guidance for a certificate that is already revoked.",
   },
   "certificates.revocation.noChanges": { defaultMessage: "No changes were made", description: "Assurance at the top of an effect-free revocation preview." },
+  "certificates.revocation.certificateReviewGuidance": {
+    defaultMessage:
+      "This effect-free read loaded the exact tenant-scoped certificate. Execution will send only this certificate ID; policy and approval checks still run on the server.",
+    description: "Assurance for an exact certificate revocation review.",
+  },
+  "certificates.revocation.recordTitle": { defaultMessage: "Exact certificate record", description: "Title for the exact certificate review facts." },
+  "certificates.revocation.recordID": { defaultMessage: "Certificate ID", description: "Exact certificate UUID label." },
+  "certificates.revocation.recordState": {
+    defaultMessage: "Current certificate status",
+    description: "Certificate status label in an exact revocation review.",
+  },
+  "certificates.revocation.certificateEffect": { defaultMessage: "One exact certificate", description: "Effect summary for certificate-ID revocation." },
   "certificates.revocation.owner": { defaultMessage: "Credential owner", description: "Owner field label in a revocation preview." },
   "certificates.revocation.version": { defaultMessage: "Lifecycle version", description: "Version-fence field label in a revocation preview." },
   "certificates.revocation.effect": { defaultMessage: "Queued publication", description: "Outbox effect field label in a revocation preview." },
@@ -5030,7 +5070,31 @@ export const messages = {
   "certificates.revocation.prerequisites": { defaultMessage: "Before it runs", description: "Revocation preview prerequisite list heading." },
   "certificates.revocation.writes": { defaultMessage: "What it writes and publishes", description: "Revocation preview execution list heading." },
   "certificates.revocation.proof": { defaultMessage: "How to prove it", description: "Revocation preview verification list heading." },
+  "certificates.revocation.certificateBefore": {
+    defaultMessage: "The exact certificate still reads {status}. trstctl re-checks it immediately before execution.",
+    description: "Live-state prerequisite for exact certificate revocation.",
+  },
+  "certificates.revocation.certificateWrite": {
+    defaultMessage: "Append one tenant-scoped revocation event selecting only certificate {id}.",
+    description: "Durable write description for exact certificate revocation.",
+  },
+  "certificates.revocation.certificatePublish": {
+    defaultMessage: "Update the issuer's signed CRL and OCSP status through the configured revocation authority.",
+    description: "Publication effect for exact certificate revocation.",
+  },
+  "certificates.revocation.certificateProof": {
+    defaultMessage: "Read certificate {id} again and require its current status to be revoked.",
+    description: "Post-write verification for exact certificate revocation.",
+  },
+  "certificates.revocation.certificateAudit": {
+    defaultMessage: "Open the immutable tenant audit event and propagation evidence.",
+    description: "Audit verification for exact certificate revocation.",
+  },
   "certificates.revocation.fingerprint": { defaultMessage: "Exact request fingerprint", description: "Revocation preview fingerprint label." },
+  "certificates.revocation.certificateFingerprint": {
+    defaultMessage: "Certificate SHA-256 fingerprint",
+    description: "Public certificate fingerprint label in the exact record review.",
+  },
   "certificates.revocation.confirmRegion": {
     defaultMessage: "Confirm irreversible revocation",
     description: "Accessible label for the typed revocation confirmation region.",
@@ -5051,9 +5115,21 @@ export const messages = {
     defaultMessage: "The server response did not verify the revoked lifecycle state.",
     description: "Fail-closed error when the execution response is not revoked.",
   },
+  "certificates.revocation.reviewStale": {
+    defaultMessage: "The certificate changed after review. Go back and review the current record before revoking it.",
+    description: "Fail-closed stale review error.",
+  },
+  "certificates.revocation.certificateVerifyFailed": {
+    defaultMessage: "The exact certificate did not verify as revoked after execution.",
+    description: "Fail-closed post-write certificate verification error.",
+  },
   "certificates.revocation.accepted": {
     defaultMessage: "Revocation accepted and the identity now reads revoked.",
     description: "Success state after the response verifies the revoked identity projection.",
+  },
+  "certificates.revocation.certificateAccepted": {
+    defaultMessage: "Revocation accepted and the exact certificate now reads revoked.",
+    description: "Verified success state for certificate-ID revocation.",
   },
   "certificates.revocation.auditLink": { defaultMessage: "Open immutable audit evidence", description: "Link from successful revocation to its audit events." },
   "certificates.revocation.graphLink": { defaultMessage: "Open affected systems", description: "Link from successful revocation to the credential graph." },

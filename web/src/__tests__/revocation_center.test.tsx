@@ -6,6 +6,8 @@ import { RevocationCenter } from "@/pages/certificates/RevocationCenter";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
+    bulkRevokeCertificates: vi.fn(),
+    getCertificate: vi.fn(),
     graphBlastRadius: vi.fn(),
     previewIdentityTransition: vi.fn(),
     transitionIdentity: vi.fn(),
@@ -52,6 +54,20 @@ const plan = {
   verification_steps: ["Confirm the immutable identity.revoked audit event."],
   warnings: [],
   guidance: "This preview performed no write and contacted no external system.",
+};
+
+const brokerCertificate = {
+  id: "11111111-1111-1111-1111-111111111111",
+  tenant_id: "tenant-a",
+  subject: "spiffe://example.test/agent/build-1",
+  fingerprint: "b".repeat(64),
+  serial: "0a",
+  issuer: "trstctl-qa-intermediate",
+  status: "active" as const,
+  not_before: "2026-08-31T12:00:00Z",
+  not_after: "2026-08-31T12:10:00Z",
+  owner_id: "owner-build",
+  source: "agent-broker",
 };
 
 function renderCenter() {
@@ -145,5 +161,142 @@ describe("RevocationCenter", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("preview service unavailable");
     expect(apiMock.transitionIdentity).not.toHaveBeenCalled();
     expect(screen.getByRole("heading", { name: "Choose credential and reason" })).toBeInTheDocument();
+  });
+
+  it("recovers an exact broker certificate from a durable deep link without inventing a lifecycle identity", async () => {
+    const revoked = {
+      ...brokerCertificate,
+      status: "revoked" as const,
+      revoked_at: "2026-09-01T13:50:00Z",
+      revocation_reason: "cessationOfOperation",
+    };
+    apiMock.getCertificate
+      .mockReset()
+      .mockResolvedValueOnce(brokerCertificate)
+      .mockResolvedValueOnce(brokerCertificate)
+      .mockResolvedValueOnce(brokerCertificate)
+      .mockResolvedValueOnce(revoked);
+    apiMock.graphBlastRadius.mockReset().mockResolvedValue({
+      node: { id: `cert:${brokerCertificate.id}`, kind: "certificate", name: brokerCertificate.subject },
+      affected: [],
+      by_kind: {},
+      paths: [],
+    });
+    apiMock.bulkRevokeCertificates.mockReset().mockResolvedValue({
+      items: [{ id: brokerCertificate.id, status: "revoked" }],
+      total_matched: 1,
+      total_revoked: 1,
+      total_skipped: 0,
+      total_failed: 0,
+    });
+    apiMock.previewIdentityTransition.mockReset();
+    apiMock.transitionIdentity.mockReset();
+    const onCertificateRevoked = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <RevocationCenter
+          certificates={[]}
+          targetCertificateID={brokerCertificate.id}
+          identities={[]}
+          health={null}
+          distributions={[]}
+          onCertificateRevoked={onCertificateRevoked}
+        />
+      </MemoryRouter>,
+    );
+
+    await screen.findByRole("option", { name: `${brokerCertificate.subject} · active · exact certificate record` });
+    expect(screen.getByLabelText("Managed certificate")).toHaveValue(`certificate:${brokerCertificate.id}`);
+    expect(screen.queryByText("No managed X.509 identity is currently in a revocable lifecycle state.")).not.toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("RFC 5280 reason"), "cessationOfOperation");
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+
+    await waitFor(() => expect(apiMock.getCertificate).toHaveBeenCalledTimes(2));
+    expect(apiMock.graphBlastRadius).toHaveBeenCalledWith(`cert:${brokerCertificate.id}`);
+    expect(apiMock.bulkRevokeCertificates).not.toHaveBeenCalled();
+    expect(apiMock.previewIdentityTransition).not.toHaveBeenCalled();
+    expect(await screen.findByText("Exact certificate record")).toBeInTheDocument();
+    expect(screen.getByText(brokerCertificate.id)).toBeInTheDocument();
+    expect(screen.getByText(brokerCertificate.fingerprint)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Continue to confirmation" }));
+    const confirmation = screen.getByRole("region", { name: "Confirm irreversible revocation" });
+    await user.type(within(confirmation).getByLabelText("Type the credential name"), brokerCertificate.subject);
+    await user.click(within(confirmation).getByRole("button", { name: "Revoke reviewed credential" }));
+
+    await waitFor(() =>
+      expect(apiMock.bulkRevokeCertificates).toHaveBeenCalledWith({ certificate_ids: [brokerCertificate.id], reason: "cessationOfOperation" }),
+    );
+    expect(apiMock.getCertificate).toHaveBeenCalledTimes(4);
+    expect(apiMock.transitionIdentity).not.toHaveBeenCalled();
+    expect(onCertificateRevoked).toHaveBeenCalledWith(revoked);
+    expect(await screen.findByRole("status")).toHaveTextContent("Revocation accepted and the exact certificate now reads revoked.");
+    expect(screen.getByRole("link", { name: "Open immutable audit evidence" })).toHaveAttribute(
+      "href",
+      `/audit?type=certificate.revocation.batch.applied&q=${brokerCertificate.id}`,
+    );
+  });
+
+  it("fails closed when a linked certificate is already revoked", async () => {
+    apiMock.getCertificate.mockReset().mockResolvedValue({ ...brokerCertificate, status: "revoked" });
+    apiMock.bulkRevokeCertificates.mockReset();
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <RevocationCenter certificates={[]} targetCertificateID={brokerCertificate.id} identities={[]} health={null} distributions={[]} />
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByText("This exact certificate already reads revoked. Open its audit evidence instead of submitting it again."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Review exact plan" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    expect(apiMock.bulkRevokeCertificates).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when the linked certificate is missing or outside the caller tenant", async () => {
+    apiMock.getCertificate.mockReset().mockRejectedValue(new Error("certificate not found"));
+    apiMock.bulkRevokeCertificates.mockReset();
+
+    render(
+      <MemoryRouter>
+        <RevocationCenter certificates={[]} targetCertificateID={brokerCertificate.id} identities={[]} health={null} distributions={[]} />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("certificate not found");
+    expect(screen.getByRole("button", { name: "Review exact plan" })).toBeDisabled();
+    expect(apiMock.bulkRevokeCertificates).not.toHaveBeenCalled();
+  });
+
+  it("requires a new review when the exact certificate changes before execution", async () => {
+    apiMock.getCertificate
+      .mockReset()
+      .mockResolvedValueOnce(brokerCertificate)
+      .mockResolvedValueOnce(brokerCertificate)
+      .mockResolvedValueOnce({ ...brokerCertificate, fingerprint: "c".repeat(64) });
+    apiMock.graphBlastRadius.mockReset().mockResolvedValue({ node: null, affected: [], by_kind: {}, paths: [] });
+    apiMock.bulkRevokeCertificates.mockReset();
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <RevocationCenter certificates={[]} targetCertificateID={brokerCertificate.id} identities={[]} health={null} distributions={[]} />
+      </MemoryRouter>,
+    );
+
+    await screen.findByRole("option", { name: `${brokerCertificate.subject} · active · exact certificate record` });
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    await user.click(await screen.findByRole("button", { name: "Continue to confirmation" }));
+    const confirmation = screen.getByRole("region", { name: "Confirm irreversible revocation" });
+    await user.type(within(confirmation).getByLabelText("Type the credential name"), brokerCertificate.subject);
+    await user.click(within(confirmation).getByRole("button", { name: "Revoke reviewed credential" }));
+
+    expect(await within(confirmation).findByRole("alert")).toHaveTextContent("The certificate changed after review");
+    expect(apiMock.bulkRevokeCertificates).not.toHaveBeenCalled();
   });
 });
