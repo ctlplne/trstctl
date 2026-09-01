@@ -14486,7 +14486,7 @@
             "backend_status": "conditional: served effect-free exact preview, native-store rotation, worker-queued connector rotation, and connector-only schedules with durable exact due-edge commands, deterministic resume/reconcile, bounded scanning, cached truthful partial failure, verified terminal-command retention, and explicit deferral evidence; manual static/dynamic rotation and static/dynamic schedule creation fail closed before unsupported effects",
             "current_frontend_mapping": "operate: Secrets at /secrets - manual native-store rotate/delete plus effect-free preview and reviewed execution for worker-queued connector rotation; the console invalidates stale plans, explains server blockers, omits unsupported TTL, distinguishes queued from completed, lists each deferred schedule ID/reason/due time/error, and clears stale run/deferred evidence when a tick fails",
             "target_gui_mapping": "Secret rotation UI for manual rotate, schedule, version history, rollback, owner, last rotation, and downstream sync status.",
-            "acceptance_test": "Served tests cover native-store rotation; zero-effect fail-closed manual static and dynamic-lease rotation; worker-queued connector rotation; connector-only schedule creation; zero-effect disabling of inherited non-connector schedules; durable exact due-edge claim across overlap, crash, restart, and rebuild; version-2 due-tuple replay under decreasing producer clocks; rollback on a missed schedule CAS; monotonic reverse replay; bounded scanning past deferred rows; byte-identical same-key partial-503 replay with no child re-execution and new-key reconciliation; verified terminal-command retention; and truthful localized UI evidence that is cleared on failure.",
+            "acceptance_test": "Served tests prove an exact effect-free preview with zero event, secret-version, connector, or audit mutation; API and CLI preview parity without an Idempotency-Key; stale-plan invalidation in the GUI; native-store rotation; zero-effect fail-closed manual static and dynamic-lease rotation; worker-queued connector rotation; connector-only schedule creation; zero-effect disabling of inherited non-connector schedules; durable exact due-edge claim across overlap, crash, restart, and rebuild; version-2 due-tuple replay under decreasing producer clocks; rollback on a missed schedule CAS; monotonic reverse replay; bounded scanning past deferred rows; byte-identical same-key partial-503 replay with no child re-execution and new-key reconciliation; verified terminal-command retention; and truthful localized UI evidence that is cleared on failure.",
             "source_docs": [
                 "docs/features/secrets.md"
             ],
@@ -14505,7 +14505,7 @@
                 "web/src/pages/secrets/SecretsPageParts.tsx"
             ],
             "status": "closed",
-            "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+            "notes": "Complete vertical slice closed on exact g134 candidate ea418340d85b45473a419077fb4a8053471a6ce8. The server-owned F37 preview returns a tenant-bound fingerprint, resolved versions/destination/permission, empty non-null preview writes/effects, explicit execution effects, recovery steps, blockers, and secret-handling boundaries. The exact-candidate receipt qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g134-f37-live-r5.json proves strict pinned-CA API and real CLI parity, no preview event/version/connector/audit mutation, one worker-owned delivery, byte-identical replay, changed-command conflict, audit projection, and fixture cleanup. The browser receipt qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g134-f37-browser.json proves review-first execution, stale-plan invalidation, v2 observation, retained v1 recovery history, exact one-call delivery, zero console errors/warnings, mobile rendering without horizontal overflow, and cleanup. Preserved failed receipts record the Docker permission boundary, receiver-schema assertion, pagination assertion, and incorrectly packaged control-plane-as-CLI artifact instead of hiding QA-oracle failures.",
             "api_surface": [
                 "rotateSecret",
                 "previewStaticSecretRotation",
@@ -14566,7 +14566,7 @@
                 },
                 "test": {
                     "evidence": [
-                        "acceptance_test: Served tests cover native-store rotation; zero-effect fail-closed manual static and dynamic-lease rotation; worker-queued connector rotation; connector-only schedule creation; zero-effect disabling of inherited non-connector schedules; durable exact due-edge claim across overlap, crash, restart, and rebuild; version-2 due-tuple replay under decreasing producer clocks; rollback on a missed schedule CAS; monotonic reverse replay; bounded scanning past deferred rows; byte-identical same-key partial-503 replay with no child re-execution and new-key reconciliation; verified terminal-command retention; and truthful localized UI evidence that is cleared on failure.",
+                        "acceptance_test: TestServedConnectorSecretRotationPreviewF37IsExactAndEffectFree proves ready and blocked plans, zero event/version/connector mutation, and explicit execution/recovery evidence; exact g134 API/CLI and browser receipts prove the served deployment preserves that boundary before one worker-owned delivery.",
                         "TestServedManualStaticSecretRotationFailsClosedBeforeProviderEffect proves a configured static rotator receives zero calls and same-key retries return the stable 503; TestServedSecretRotationCoversConnectorAndDynamicBackendsTRACE008 proves connector:ci returns queued before worker delivery, rejects every supplied static/connector rotation TTL, and proves dynamic-lease:postgresql returns a stable 503 without provider issuance/revocation, connector delivery, lifecycle events, or outbox work.",
                         "Scheduled-rotation served tests prove one durable exact due-edge owner across overlapping runners, lease-based crash resume, retained-terminal reconciliation after restart/rebuild, reverse-replay monotonicity, later-row progress after four explicit deferral classes, zero-effect unsupported historical schedules, and byte-identical same-key partial-503 replay with new-key continuation.",
                         "Terminal-command GC tests prove only an older event-derived row with an advanced schedule and newer command is deleted, version-2 replay advances from exact due_at under decreasing producer clocks, a full projection rebuild does not recreate or execute that edge, a missed schedule CAS rolls back command terminalization, and the successor cadence still progresses while the newest lineage fence remains.",
@@ -14575,6 +14575,8 @@
                     ],
                     "refs": [
                         "internal/server/secrets_rotation_served_test.go",
+                        "internal/cli/cli_test.go",
+                        "internal/featureparity/capability_contract_test.go",
                         "internal/featureparity/feature_facet_coverage_test.go",
                         "web/src/__tests__/route_parity.test.ts",
                         "web/src/__tests__/feature_coverage.test.tsx"
@@ -14651,7 +14653,7 @@
                 "purpose": "Lets an operator understand and safely use secret rotation engine while tenant, policy, and security authority remain on the server.",
                 "tool": "secrets",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/secrets",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -14665,7 +14667,7 @@
                 ],
                 "side_effects": "mixed",
                 "secret_data_handling": "The parity contract contains metadata only. Product workflows may reveal a value once, but reports and evidence never contain the value.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -14686,8 +14688,18 @@
                         ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "POST /api/v1/secrets/rotations/preview returns the exact effect-free server plan without an Idempotency-Key.",
+                            "OpenAPI operationId: previewStaticSecretRotation",
+                            "CLI command: secrets rotations preview",
+                            "web/src/pages/Secrets.tsx",
+                            "Ready and blocked plans render before execution; changed inputs invalidate the stale review and remove its execution action.",
+                            "internal/server/secrets_rotation_served_test.go",
+                            "TestServedConnectorSecretRotationPreviewF37IsExactAndEffectFree proves preview causes zero events, version changes, or connector calls.",
+                            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g134-f37-live-r5.json proves strict pinned-CA API/CLI parity and unchanged audit, secret version, and receiver count after ready and blocked previews.",
+                            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g134-f37-browser.json proves exact-plan rendering, stale-review invalidation, one reviewed execution, v2 readback, recovery history, and zero browser errors/warnings."
+                        ]
                     },
                     "execute": {
                         "status": "complete",
@@ -14735,8 +14747,8 @@
                 },
                 "owner": "secrets",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "ea418340d85b45473a419077fb4a8053471a6ce8",
+                "freshness": "2026-09-01"
             }
         },
         {

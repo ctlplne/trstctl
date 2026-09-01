@@ -5167,7 +5167,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use secret rotation engine while tenant, policy, and security authority remain on the server.",
       "tool": "secrets",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/secrets",
       "navigationEntrypoints": [
         "tool navigation",
@@ -5181,7 +5181,7 @@ export const canonicalCapabilities = [
       ],
       "sideEffects": "mixed",
       "secretDataHandling": "The parity contract contains metadata only. Product workflows may reveal a value once, but reports and evidence never contain the value.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -5202,8 +5202,18 @@ export const canonicalCapabilities = [
           ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "POST /api/v1/secrets/rotations/preview returns the exact effect-free server plan without an Idempotency-Key.",
+            "OpenAPI operationId: previewStaticSecretRotation",
+            "CLI command: secrets rotations preview",
+            "web/src/pages/Secrets.tsx",
+            "Ready and blocked plans render before execution; changed inputs invalidate the stale review and remove its execution action.",
+            "internal/server/secrets_rotation_served_test.go",
+            "TestServedConnectorSecretRotationPreviewF37IsExactAndEffectFree proves preview causes zero events, version changes, or connector calls.",
+            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g134-f37-live-r5.json proves strict pinned-CA API/CLI parity and unchanged audit, secret version, and receiver count after ready and blocked previews.",
+            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g134-f37-browser.json proves exact-plan rendering, stale-review invalidation, one reviewed execution, v2 readback, recovery history, and zero browser errors/warnings."
+          ]
         },
         "execute": {
           "status": "complete",
@@ -5251,8 +5261,8 @@ export const canonicalCapabilities = [
       },
       "owner": "secrets",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "ea418340d85b45473a419077fb4a8053471a6ce8",
+      "freshness": "2026-09-01"
     }
   },
   {

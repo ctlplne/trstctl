@@ -255,6 +255,61 @@ func TestAttestedSSHUserCertificatesAreACompleteRecoverableVerticalSlice(t *test
 	}
 }
 
+func TestSecretRotationIsACompleteReviewFirstVerticalSlice(t *testing.T) {
+	catalog, err := Load()
+	if err != nil {
+		t.Fatalf("load feature parity catalog: %v", err)
+	}
+	var found *Item
+	for i := range catalog.Items {
+		if catalog.Items[i].FeatureID == "F37" {
+			found = &catalog.Items[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatal("F37 secret rotation row is missing")
+	}
+	contract := found.Contract
+	if contract.Tool != ToolSecrets {
+		t.Fatalf("F37 tool = %q, want %q", contract.Tool, ToolSecrets)
+	}
+	if contract.Maturity != MaturityCompleteVerticalSlice || contract.ReleaseBlocking {
+		t.Fatalf("F37 maturity/release_blocking = %q/%t, want complete_vertical_slice/false", contract.Maturity, contract.ReleaseBlocking)
+	}
+	for name, stage := range map[string]StageRecord{
+		"discover":   contract.Stages.Discover,
+		"understand": contract.Stages.Understand,
+		"configure":  contract.Stages.Configure,
+		"preview":    contract.Stages.Preview,
+		"execute":    contract.Stages.Execute,
+		"observe":    contract.Stages.Observe,
+		"recover":    contract.Stages.Recover,
+		"verify":     contract.Stages.Verify,
+		"automate":   contract.Stages.Automate,
+	} {
+		if stage.Status != StageComplete || len(stage.Evidence) == 0 {
+			t.Errorf("F37 %s stage = %q with %d evidence items, want complete with evidence", name, stage.Status, len(stage.Evidence))
+		}
+	}
+	for _, want := range []string{"previewStaticSecretRotation", "rotateStaticSecret"} {
+		if !containsExactString(found.APISurface, want) {
+			t.Errorf("F37 api_surface is missing %q", want)
+		}
+	}
+	for _, want := range []string{"secrets rotations preview", "secrets rotations run"} {
+		if !containsExactString(found.CLISurface, want) {
+			t.Errorf("F37 cli_surface is missing %q", want)
+		}
+	}
+	previewEvidence := strings.ToLower(strings.Join(contract.Stages.Preview.Evidence, "\n"))
+	for _, want := range []string{"effect-free", "zero events", "stale-review", "g134-f37-live-r5.json", "g134-f37-browser.json"} {
+		if !strings.Contains(previewEvidence, want) {
+			t.Errorf("F37 preview evidence must mention %q, got %q", want, previewEvidence)
+		}
+	}
+}
+
 func containsExactString(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {
