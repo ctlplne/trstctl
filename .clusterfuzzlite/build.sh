@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ClusterFuzzLite / OSS-Fuzz build script for trstctl's Go native fuzz targets
 # (FUZZ-003). It discovers every `func FuzzXxx(f *testing.F)` under ./internal and ./ee and
-# compiles it into a libFuzzer binary via the base image's compile_go_fuzzer, so
+# compiles it into a libFuzzer binary via the base image's native-Go helper, so
 # the OSS-Fuzz-family runner can fuzz each one continuously and accumulate a corpus.
 #
 # Discovery is automatic so a newly-added FuzzXxx is fuzzed without editing this
@@ -16,8 +16,10 @@ grep -rE '^func Fuzz[A-Za-z0-9_]+\(' --include='*_test.go' ./internal ./ee | whi
 	file="${line%%:func *}"
 	fn="$(printf '%s\n' "$line" | sed -E 's/.*:func (Fuzz[A-Za-z0-9_]+)\(.*/\1/')"
 	dir="$(dirname "$file")"
-	# Module-qualified import path for compile_go_fuzzer.
+	# Native Go fuzz functions live in *_test.go. compile_go_fuzzer is the legacy
+	# helper for production-package entrypoints and cannot resolve them; v2 is the
+	# OSS-Fuzz helper specifically for func FuzzXxx(*testing.F).
 	pkg="trstctl.com/trstctl/${dir#./}"
 	echo "compiling ${pkg} ${fn}"
-	compile_go_fuzzer "${pkg}" "${fn}" "${fn}"
+	compile_native_go_fuzzer_v2 "${pkg}" "${fn}" "${fn}"
 done

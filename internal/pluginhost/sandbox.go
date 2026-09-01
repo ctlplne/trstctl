@@ -9,7 +9,7 @@ import (
 	"io"
 	"net"
 	"os"
-	"path"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -127,7 +127,7 @@ func (s *sandbox) resolve(cap Capability, p string) (*os.Root, string, error) {
 		return nil, "", fmt.Errorf("pluginhost: %s is granted without a path prefix; "+
 			"the WASM sandbox requires a prefix to contain the operation under (see WithPathPrefix)", cap)
 	}
-	clean := path.Clean(p)
+	clean := filepath.Clean(p)
 	for _, fr := range s.fs[cap] {
 		if !pathPrefixAllows(fr.prefix, clean) {
 			continue
@@ -135,14 +135,11 @@ func (s *sandbox) resolve(cap Capability, p string) (*os.Root, string, error) {
 		if fr.err != nil {
 			return nil, "", fr.err
 		}
-		pc := path.Clean(fr.prefix)
-		var rel string
-		if pc == "/" {
-			rel = strings.TrimPrefix(clean, "/")
-		} else {
-			rel = strings.TrimPrefix(strings.TrimPrefix(clean, pc), "/")
+		rel, err := filepath.Rel(filepath.Clean(fr.prefix), clean)
+		if err != nil || filepath.IsAbs(rel) || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			continue
 		}
-		if rel == "" {
+		if rel == "." {
 			return nil, "", fmt.Errorf("pluginhost: %q is the grant root itself, not a file within it", p)
 		}
 		return fr.root, rel, nil

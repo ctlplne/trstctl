@@ -80,6 +80,33 @@ func TestGitleaksConfigHasNoPathBasedTestSourceExemption(t *testing.T) {
 	}
 }
 
+// TestGitleaksHistoricalGeneratedIdentifierPinsAreExact guards the narrow
+// repository-history exceptions discovered by the G114 full-history scan. Each
+// match was inspected at its introducing commit: they are OpenAPI operation IDs,
+// an i18n review sentence, or compiled journey translation lookup keys—not
+// credentials. Exact commit/path/rule/line fingerprints keep every new match red.
+func TestGitleaksHistoricalGeneratedIdentifierPinsAreExact(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	ignore := readRepoFile(t, root, ".gitleaksignore")
+	for _, fingerprint := range []string{
+		"8f2698b4c27b1d546835acc9c04361fcecedb613:internal/featureparity/feature-map-backlog.json:generic-api-key:6605",
+		"8f2698b4c27b1d546835acc9c04361fcecedb613:web/src/lib/feature-contracts.gen.ts:generic-api-key:2311",
+		"b53d74a08d7a875e7ec5b6b04f1ec030e1eddc5e:internal/featureparity/feature-map-backlog.json:generic-api-key:6325",
+		"b53d74a08d7a875e7ec5b6b04f1ec030e1eddc5e:internal/featureparity/feature-map-backlog.json:generic-api-key:6360",
+		"b53d74a08d7a875e7ec5b6b04f1ec030e1eddc5e:web/src/lib/feature-contracts.gen.ts:generic-api-key:2196",
+		"b53d74a08d7a875e7ec5b6b04f1ec030e1eddc5e:web/src/lib/feature-contracts.gen.ts:generic-api-key:2231",
+		"eb40c95d82f3e04ea78cfbaecdb3a48c0bc67378:internal/featureparity/feature-map-backlog.json:generic-api-key:6050",
+		"eb40c95d82f3e04ea78cfbaecdb3a48c0bc67378:web/src/lib/feature-contracts.gen.ts:generic-api-key:2114",
+		"42512cbd29fac11c5623b7340bb49d4f849ecca7:web/src/__tests__/i18n.test.tsx:generic-api-key:1212",
+		"71515d76e72ab82a766f29d84a67d22716b07fbc:internal/webui/dist/assets/Journeys-Y8YkXAnJ.js:generic-api-key:8",
+		"71515d76e72ab82a766f29d84a67d22716b07fbc:internal/webui/dist/assets/Journeys-Y8YkXAnJ.js:generic-api-key:13",
+	} {
+		if got := strings.Count(ignore, fingerprint); got != 1 {
+			t.Errorf("inspected historical false-positive fingerprint %q occurs %d times, want exactly once", fingerprint, got)
+		}
+	}
+}
+
 // TestServedGitleaksScanDetectsPlantedSecretInTestSource is the BEHAVIOURAL SF.1
 // acceptance for test sources, and the direct counterpart of
 // TestServedGitleaksScanDetectsPlantedSecret (internal/server), which proves the

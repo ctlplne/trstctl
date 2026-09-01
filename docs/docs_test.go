@@ -2517,7 +2517,7 @@ func TestFuzzSmokeInventoryIsAutoDiscoveredAndCIWired(t *testing.T) {
 	clusterFuzzBuild := read(t, "../.clusterfuzzlite/build.sh")
 	for _, want := range []string{
 		"grep -rE '^func Fuzz[A-Za-z0-9_]+\\(' --include='*_test.go' ./internal ./ee",
-		"compile_go_fuzzer \"${pkg}\" \"${fn}\" \"${fn}\"",
+		"compile_native_go_fuzzer_v2 \"${pkg}\" \"${fn}\" \"${fn}\"",
 	} {
 		if !strings.Contains(clusterFuzzBuild, want) {
 			t.Errorf("FUZZ-010: ClusterFuzzLite build script no longer contains %q; hosted fuzz builds may miss targets", want)

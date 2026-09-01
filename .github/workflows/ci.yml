@@ -212,6 +212,8 @@ jobs:
           bash scripts/ci/profile-zlint_selftest.sh
           bash scripts/ci/check-compose-images-pinned_selftest.sh
           bash scripts/ci/install-web-deps_selftest.sh
+          bash scripts/ci/install-openbao_selftest.sh
+          bash scripts/ci/install-openssl-pqc_selftest.sh
           bash scripts/ci/check-base-pinned.sh .
           bash scripts/ci/check-compose-images-pinned.sh .
 
@@ -229,6 +231,12 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: true
+
+      # The wiring census deliberately switches GOPROXY off while it inspects the
+      # shipped dependency closure. Warm the module cache first so that offline
+      # proof checks product wiring rather than the state of a fresh runner cache.
+      - name: Prefetch dependencies for the offline census
+        run: go mod download
 
       - name: Run the shipped-binary Definition-of-Done census
         run: make dod-gate
@@ -372,14 +380,9 @@ jobs:
           cache: true
 
       - name: Install pinned OpenBao CLI
-        run: |
-          set -euo pipefail
-          arch="$(uname -m)"; case "$arch" in x86_64) arch=amd64;; aarch64) arch=arm64;; esac
-          url="https://github.com/openbao/openbao/releases/download/v${OPENBAO_VERSION}/bao_${OPENBAO_VERSION}_Linux_${arch}.tar.gz"
-          curl -sSL -o /tmp/bao.tgz "$url"
-          tar -C /usr/local/bin -xzf /tmp/bao.tgz bao
-          sudo ln -sf /usr/local/bin/bao /usr/local/bin/vault
-          vault version
+        env:
+          TRSTCTL_OPENBAO_INSTALL_DIR: ${{ runner.temp }}/openbao-bin
+        run: scripts/ci/install-openbao.sh
 
       - name: Vault-compat acceptance (non-skipped)
         run: make vault-compat-gate
@@ -402,6 +405,11 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: true
+
+      - name: Install checksum-pinned ML-DSA-capable OpenSSL
+        env:
+          TRSTCTL_OPENSSL_INSTALL_DIR: ${{ runner.temp }}/openssl-pqc
+        run: scripts/ci/install-openssl-pqc.sh
 
       - name: ee/ unit tests (coverage floor)
         run: make ee-test
@@ -447,6 +455,11 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: true
+
+      # make reproducible-check exports OCI layouts. The runner's legacy Docker
+      # driver cannot perform that export; a pinned Buildx builder can.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       - name: Reproducible rebuild check
         run: make reproducible-check
@@ -652,7 +665,7 @@ jobs:
           cache-dependency-path: web/package-lock.json
 
       - name: Install npm audit scanner (pinned)
-        run: npm install -g npm@${NPM_AUDIT_VERSION}
+        run: npm install -g "npm@${NPM_AUDIT_VERSION}"
 
       # Go is needed for the embedded-UI release gate + the committed-bundle
       # freshness check below (the bundle the binary embeds is in this repo).
@@ -863,7 +876,7 @@ jobs:
           node-version: 22
 
       - name: Install npm audit scanner (pinned)
-        run: npm install -g npm@${NPM_AUDIT_VERSION}
+        run: npm install -g "npm@${NPM_AUDIT_VERSION}"
 
       # npm dependency trees are outside go.sum. The SDK generator is a devDependency
       # used by scripts/gen-sdk.sh and the Pulumi IaC example resolves @pulumi/pulumi
@@ -1017,6 +1030,15 @@ jobs:
         with:
           version: 1.47.2
           setup_only: true
+
+      # actions/checkout leaves pull-request jobs on a detached merge commit and
+      # does not create a local `main` branch. Buf's .git module resolver requires
+      # that exact local ref, so materialize it from the freshly fetched remote.
+      - name: Materialize the protected main baseline
+        run: |
+          git fetch --no-tags --force origin +refs/heads/main:refs/remotes/origin/main
+          git branch --force main refs/remotes/origin/main
+          git rev-parse --verify refs/heads/main
 
       # Lint the signer proto and fail the build on a wire-incompatible change to the
       # control-plane↔signer gRPC contract (AN-4): a removed/renumbered field, a
@@ -1687,6 +1709,14 @@ jobs:
           check-latest: true
           cache: true
 
+      # Ubuntu's stock OpenSSL predates standardized ML-DSA. The shared installer
+      # pins and verifies the same capable client used by the EE interoperability
+      # tests, so both gates exercise one reviewed external oracle.
+      - name: Install checksum-pinned ML-DSA-capable OpenSSL
+        env:
+          TRSTCTL_OPENSSL_INSTALL_DIR: ${{ runner.temp }}/openssl-pqc
+        run: scripts/ci/install-openssl-pqc.sh
+
       - name: Require ML-DSA-capable stock OpenSSL
         run: |
           set -euo pipefail
@@ -1782,8 +1812,8 @@ jobs:
       - name: Wait for the control plane
         working-directory: .
         run: |
-          for i in $(seq 1 60); do
-            curl -skf https://localhost:9443/ >/dev/null && exit 0
+          for _ in $(seq 1 60); do
+            curl -skf https://127.0.0.1:9443/ >/dev/null && exit 0
             sleep 5
           done
           echo "demo stack did not become ready" >&2

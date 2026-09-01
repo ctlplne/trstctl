@@ -968,7 +968,7 @@ func TestSupplyChainIsScannedPinnedAndRecorded(t *testing.T) {
 	// counts by severity.
 	mustContainAll(t, "ci.yml npm SCA", ci,
 		`NPM_AUDIT_VERSION: "11.16.0"`,
-		"npm install -g npm@${NPM_AUDIT_VERSION}",
+		`npm install -g "npm@${NPM_AUDIT_VERSION}"`,
 		"npm audit",
 		"TRSTCTL_NPM_AUDIT_EXPECTED_VERSION",
 		"TRSTCTL_NPM_AUDIT_RECEIPT",
@@ -985,7 +985,7 @@ func TestSupplyChainIsScannedPinnedAndRecorded(t *testing.T) {
 	// (3) The embedded-postgres runtime binary is given provenance and a scan: a
 	// committed manifest pins the version + source, and CI verifies its checksum.
 	manifest := repoFile(t, "deploy", "supply-chain", "embedded-postgres.json")
-	mustContainAll(t, "embedded-postgres manifest", manifest, "16.14.0", "sha256")
+	mustContainAll(t, "embedded-postgres manifest", manifest, "16.15.0", "sha256")
 	mustContainAll(t, "embedded-postgres scanner receipt policy", manifest,
 		"receiptArtifact", "embedded-postgres-trivy-receipt", "failOnFixableHighOrCritical",
 		"PostgreSQL Global Development Group CVE Numbering Authority", "exactVersionRequired",
@@ -999,6 +999,7 @@ func TestSupplyChainIsScannedPinnedAndRecorded(t *testing.T) {
 		"TRSTCTL_EMBEDDED_PG_SCAN_DIR", "embedded-postgres-trivy-receipt", "if-no-files-found: error")
 	verifyPG := repoFile(t, "scripts", "supply-chain", "verify-embedded-postgres.sh")
 	mustContainAll(t, "embedded-postgres Docker Trivy DB receipt path", verifyPG,
+		"--list-all-pkgs",
 		`trivy_cache="$archWorkdir/trivy-cache"`,
 		`-v "${trivy_cache}:/root/.cache/trivy"`,
 		`-v "${trivy_cache}:/root/.cache/trivy:ro" "$TRIVY_IMAGE" --version >"$trivy_version_out"`,

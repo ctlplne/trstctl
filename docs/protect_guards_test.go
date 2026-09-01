@@ -3555,7 +3555,7 @@ func TestSupplyChainStrengthGuardsStayRequired(t *testing.T) {
 		`"linux-amd64"`,
 		`"linux-arm64v8"`,
 		`"darwin-arm64v8"`,
-		`const bundledPGVersion = "16.14.0"`,
+		`const bundledPGVersion = "16.15.0"`,
 	)
 	verifyPG := read(t, "../internal/server/bundled_pg_verify.go")
 	check("internal/server/bundled_pg_verify.go", verifyPG,
@@ -4071,7 +4071,7 @@ func TestTestTrackStrengthGuardsStayRequired(t *testing.T) {
 	cflBuild := read(t, "../.clusterfuzzlite/build.sh")
 	check(".clusterfuzzlite/build.sh", cflBuild,
 		`grep -rE '^func Fuzz[A-Za-z0-9_]+\(' --include='*_test.go' ./internal`,
-		"compile_go_fuzzer",
+		"compile_native_go_fuzzer_v2",
 		"pkg=\"trstctl.com/trstctl/${dir#./}\"",
 	)
 

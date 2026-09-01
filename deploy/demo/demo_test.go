@@ -72,11 +72,26 @@ func TestDemoComposeIsSeparatePrepopulatedStack(t *testing.T) {
 	if got := stringValue(cp.Build["target"]); got != "demo" {
 		t.Fatalf("demo trstctl build target = %q, want demo", got)
 	}
-	if !contains(cp.Ports, "127.0.0.1:9443:8443") || contains(cp.Ports, "127.0.0.1:19081:19081") {
-		t.Fatalf("demo trstctl ports = %v, want only the loopback browser/API port 127.0.0.1:9443:8443", cp.Ports)
+	for _, want := range []string{
+		"127.0.0.1:9443:8443",
+		"127.0.0.1:29443:9443",
+		"127.0.0.1:29444:9444",
+	} {
+		if !contains(cp.Ports, want) {
+			t.Fatalf("demo trstctl ports = %v, missing loopback-only publication %s", cp.Ports, want)
+		}
+	}
+	if contains(cp.Ports, "127.0.0.1:19081:19081") {
+		t.Fatalf("demo trstctl ports = %v, OIDC port belongs only to demo-oidc", cp.Ports)
 	}
 	for k, want := range map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE":               "/data/ca/agent-ca.crt",
+		"TRSTCTL_AGENT_CHANNEL_PUBLIC_ADDRESS":             "localhost:29443",
+		"TRSTCTL_AGENT_CHANNEL_SERVER_NAME":                "localhost",
+		"TRSTCTL_AGENT_CHANNEL_HTTP_RENEWAL_ADDR":          ":9444",
+		"TRSTCTL_RATE_LIMIT_ENABLED":                       "true",
+		"TRSTCTL_RATE_LIMIT_REQUESTS":                      "10000",
+		"TRSTCTL_RATE_LIMIT_WINDOW":                        "1m",
 		"TRSTCTL_CA_CERT_FILE":                             "/data/ca/issuing-ca.crt",
 		"TRSTCTL_CA_PUBLIC_CERT_FILE":                      "/public-trust/issuing-ca.crt",
 		"TRSTCTL_AUTH_OIDC_ENABLED":                        "true",
@@ -611,6 +626,22 @@ func TestDemoDocsKeepCommandsDistinct(t *testing.T) {
 	ops := read(t, "..", "docker", "docker-compose.yml")
 	if strings.Contains(ops, "demo-seed") || strings.Contains(ops, "trstctl-demo") || strings.Contains(ops, "19081:19081") {
 		t.Fatal("operational/eval compose picked up demo-only services or ports")
+	}
+}
+
+func TestDemoBrowserTestsUseTheOIDCCanonicalOrigin(t *testing.T) {
+	playwright := read(t, "..", "..", "web", "playwright.config.ts")
+	workflow := read(t, "..", "..", ".github", "workflows", "ci.yml")
+	for label, body := range map[string]string{
+		"Playwright default": playwright,
+		"CI readiness URL":   workflow,
+	} {
+		if !strings.Contains(body, "https://127.0.0.1:9443") {
+			t.Fatalf("%s must use the exact demo OIDC origin so the host-scoped pre-login cookie survives the callback", label)
+		}
+		if strings.Contains(body, "https://localhost:9443") {
+			t.Fatalf("%s uses localhost, but the demo OIDC callback is allowlisted on 127.0.0.1", label)
+		}
 	}
 }
 

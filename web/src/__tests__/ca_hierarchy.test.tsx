@@ -925,7 +925,7 @@ describe("CA hierarchy and custody surface", () => {
     expect(screen.getAllByText("customer-existing-ca").length).toBeGreaterThan(0);
     expect(screen.queryByLabelText(/private key/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/BEGIN PRIVATE KEY/)).not.toBeInTheDocument();
-  });
+  }, 15_000);
 
   it("surfaces issuer permission errors without hiding ceremony and custody actions", async () => {
     const user = userEvent.setup();

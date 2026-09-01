@@ -34,13 +34,14 @@ export async function signIn(page: Page): Promise<void> {
   });
 }
 
-/** The five spaces and, for each, the sidebar row that proves the scoped
- * sidebar rendered. Labels mirror the space registry (src/lib/navigation.ts);
- * if the carve changes, this table changes with it. */
+/** The six task-first tools and, for each, the sidebar row that proves the
+ * scoped sidebar rendered. Labels mirror the space registry
+ * (src/lib/navigation.ts); if the carve changes, this table changes with it. */
 export const spaceSmoke = [
-  { space: "Certificates & PKI", row: "Certificate authorities" },
-  { space: "Secrets", row: "Machine access" },
-  { space: "Workload & SSH", row: "SSH trust" },
-  { space: "Posture & response", row: "Credential graph" },
-  { space: "Platform", row: "Audit" },
+  { space: "Discover", row: "Discover" },
+  { space: "Certificates", row: "Certificates" },
+  { space: "Workloads & Machines", row: "Workloads & Machines" },
+  { space: "Secrets", row: "Automatic secret sources" },
+  { space: "Software Trust", row: "Software Trust" },
+  { space: "Operations", row: "Operations" },
 ] as const;

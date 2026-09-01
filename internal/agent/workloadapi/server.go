@@ -111,6 +111,9 @@ func New(up Upstream, onIssue func(string, []string)) *Server {
 // restrictive umask: this endpoint is an identity oracle for every workload on
 // the host, so who can reach it IS the access control.
 func (s *Server) Serve(ctx context.Context, socketPath string) error {
+	if !peerAttestationSupported() {
+		return ErrAttestationUnsupported
+	}
 	if err := PrepareSocket(socketPath); err != nil {
 		return err
 	}

@@ -4,11 +4,9 @@ package discovery
 
 import (
 	"context"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 
 	cryptoboundary "trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -75,6 +73,7 @@ func (s *PrivateKeySource) Discover(ctx context.Context) ([]PrivateKeyFound, err
 			if perr != nil {
 				return nil
 			}
+			restricted, metadata := privateKeyPermissionState(path, fi)
 			out = append(out, PrivateKeyFound{
 				Source:           SourcePrivateKey,
 				Location:         path,
@@ -83,11 +82,8 @@ func (s *PrivateKeySource) Discover(ctx context.Context) ([]PrivateKeyFound, err
 				Fingerprint:      info.FingerprintSHA256,
 				FingerprintBasis: info.FingerprintBasis,
 				Encrypted:        info.Encrypted,
-				Restricted:       privateKeyModeRestricted(fi.Mode()),
-				Metadata: map[string]string{
-					"file_mode": fmt.Sprintf("%04o", fi.Mode().Perm()),
-					"platform":  runtime.GOOS,
-				},
+				Restricted:       restricted,
+				Metadata:         metadata,
 			})
 			return nil
 		})
@@ -96,11 +92,4 @@ func (s *PrivateKeySource) Discover(ctx context.Context) ([]PrivateKeyFound, err
 		}
 	}
 	return out, nil
-}
-
-func privateKeyModeRestricted(mode fs.FileMode) bool {
-	if runtime.GOOS == "windows" {
-		return true
-	}
-	return mode.Perm()&0o077 == 0
 }

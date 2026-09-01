@@ -4,7 +4,7 @@ package pluginhost
 
 import (
 	"net"
-	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -108,8 +108,8 @@ func (g Grant) PathPrefixes(cap Capability) []string {
 //     port accepts any port. Exactness is the point: a prefix match would let
 //     "example.com.attacker.example" through a grant for "example.com", and a
 //     suffix match would let "evil-example.com" through.
-//   - Every other capability constrains a slash-separated resource path. Both
-//     sides are path.Clean'd — so "/etc/nginx/certs/../../root/x" is resolved
+//   - Every other capability constrains a platform-native resource path. Both
+//     sides are filepath.Clean'd — so "/etc/nginx/certs/../../root/x" is resolved
 //     before it is compared — and the match must land on a separator boundary,
 //     so a grant for "/etc/nginx/certs" denies "/etc/nginx/certs-evil/x".
 //
@@ -154,12 +154,13 @@ func pathPrefixAllows(prefix, resource string) bool {
 		// narrowed to an empty path must not become a grant over every path.
 		return false
 	}
-	p := path.Clean(prefix)
-	r := path.Clean(resource)
-	if p == "/" {
-		return strings.HasPrefix(r, "/")
+	p := filepath.Clean(prefix)
+	r := filepath.Clean(resource)
+	rel, err := filepath.Rel(p, r)
+	if err != nil {
+		return false
 	}
-	return r == p || strings.HasPrefix(r, p+"/")
+	return rel == "." || (!filepath.IsAbs(rel) && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
 
 // authorityAllows reports whether resource names the one network authority the

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/crypto/secretfile"
 )
 
 const localCommandOutputLimit = 64 << 10
@@ -163,6 +164,10 @@ func (o *localOps) WriteFile(path string, data []byte) error {
 		_ = tmp.Close()
 		return err
 	}
+	if err := secretfile.SecurePrivateFile(tmpName); err != nil {
+		_ = tmp.Close()
+		return err
+	}
 	if _, err := tmp.Write(data); err != nil {
 		_ = tmp.Close()
 		return err
@@ -177,16 +182,7 @@ func (o *localOps) WriteFile(path string, data []byte) error {
 	if err := os.Rename(tmpName, clean); err != nil {
 		return err
 	}
-	dir, err := os.Open(parent) // #nosec G304 -- operator-configured local-ops connector path; local file deploy is the feature (CWE-22)
-	if err != nil {
-		return err
-	}
-	err = dir.Sync()
-	closeErr := dir.Close()
-	if err != nil {
-		return err
-	}
-	return closeErr
+	return syncLocalDirectory(parent)
 }
 
 // RemoveLocalFile removes one exact regular file inside operator-approved roots
@@ -227,16 +223,7 @@ func RemoveLocalFile(cfg LocalOpsConfig, path string, expected []byte) error {
 	if err := os.Remove(clean); err != nil {
 		return err
 	}
-	dir, err := os.Open(filepath.Dir(clean)) // #nosec G304 -- clean is confined to operator-approved local roots above (CWE-22)
-	if err != nil {
-		return err
-	}
-	syncErr := dir.Sync()
-	closeErr := dir.Close()
-	if syncErr != nil {
-		return syncErr
-	}
-	return closeErr
+	return syncLocalDirectory(filepath.Dir(clean))
 }
 
 func (o *localOps) Exec(name string, args []string) error {

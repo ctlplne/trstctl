@@ -7,6 +7,7 @@ import (
 	"encoding/pem"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -45,8 +46,15 @@ func TestPrivateKeySourceDiscoversMetadataOnly(t *testing.T) {
 	if got.Source != SourcePrivateKey || got.Location != keyPath || got.Format != "PKCS8" || got.Algorithm != cryptoboundary.ECDSAP256 || got.Fingerprint == "" {
 		t.Fatalf("private-key finding = %+v, want classified ECDSA-P256 fixture", got)
 	}
-	if !got.Restricted || got.Metadata["file_mode"] != "0600" {
-		t.Fatalf("private-key file metadata = restricted %v metadata %+v, want restricted 0600", got.Restricted, got.Metadata)
+	if !got.Restricted {
+		t.Fatalf("private-key file metadata = restricted %v metadata %+v, want platform custody to be private", got.Restricted, got.Metadata)
+	}
+	if runtime.GOOS == "windows" {
+		if got.Metadata["permission_model"] != "windows_dacl" || got.Metadata["file_mode"] != "" {
+			t.Fatalf("Windows private-key metadata = %+v, want DACL authority without misleading POSIX mode", got.Metadata)
+		}
+	} else if got.Metadata["permission_model"] != "posix_mode" || got.Metadata["file_mode"] != "0600" {
+		t.Fatalf("private-key file metadata = %+v, want restricted 0600 POSIX mode", got.Metadata)
 	}
 	for k, v := range got.Metadata {
 		if strings.Contains(v, "PRIVATE KEY") {

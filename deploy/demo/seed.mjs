@@ -13,11 +13,15 @@ if (!["https:", "http:"].includes(serverURL.protocol) || serverURL.username || s
 const server = serverURL.origin;
 const demoURL = process.env.TRSTCTL_DEMO_URL || "https://127.0.0.1:9443";
 const bootstrapTokenFile = process.env.TRSTCTL_DEMO_BOOTSTRAP_TOKEN_FILE || "/seed-state/bootstrap.token";
-const seedVersion = "demo-seed-v1";
+const seedVersion = "demo-seed-v2";
+const migratableSeedVersions = new Set(["demo-seed-v1"]);
 const seedCheckpointSubject = "trstctl-demo-seed-checkpoint";
 const demoDiscoverySegment = {
   name: "demo-control-plane",
-  ranges: ["compose:trstctl:8443"],
+  // Segment declarations describe the approved host/address denominator; ports
+  // belong to the source target. Keeping those concepts separate lets the
+  // server prove that trstctl:8443 is inside this exact hostname boundary.
+  ranges: ["trstctl"],
   staleness_hours: 24,
 };
 const checkMode = process.argv.includes("--check");
@@ -101,7 +105,11 @@ function buildDemoHistory() {
     { key: "postfix-edge", ownerKey: "edge", commonName: "postfix-edge.demo.trstctl.local", validDays: 45, deploymentLocation: "mail/postfix-edge:/etc/postfix/tls.crt", source: "discovery:manual", observedDaysAgo: 11 },
   ];
   const discoverySources = [
-    { key: "control-plane", name: "demo-control-plane-tls", kind: "network", config: { targets: ["trstctl:8443"], segment: "demo-control-plane" }, dryRun: true, daysAgo: 159 },
+    // Network scans are relay-owned. The pre-populated stack deliberately leaves
+    // this source configured-but-blocked until the evaluator enrolls a network-
+    // role agent; queuing a fake "dry run" without an eligible relay would turn a
+    // missing deployment prerequisite into misleading green history.
+    { key: "control-plane", name: "demo-control-plane-tls", kind: "network", config: { targets: ["trstctl:8443"], segment: "demo-control-plane" }, run: false, daysAgo: 159 },
     { key: "manual-shadow", name: "manual-shadow-inventory", kind: "manual", config: { findings: manualDiscoveryFindings() }, dryRun: false, daysAgo: 147 },
     { key: "ct-watch", name: "public-ct-watch", kind: "ct_log", config: { logs: ["https://ct.googleapis.com/logs/argon2026/"], watched_domains: ["demo.trstctl.local"], max_batch: 25 }, dryRun: true, daysAgo: 99 },
     { key: "cloud-certs", name: "aws-acm-and-gcp-certs", kind: "cloud_certificate", config: { providers: [{ provider: "aws-acm", region: "us-east-1", access_key_id_ref: "env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID", secret_access_key_ref: "env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY" }, { provider: "gcp-certmanager", project: "acme-demo", location: "us-central1", token_ref: "env:TRSTCTL_DISCOVERY_GCP_TOKEN" }] }, run: false, daysAgo: 73 },
@@ -408,6 +416,22 @@ function checkpointSource(manifestDigest, inventoryDigest) {
   return `${seedVersion}:complete:${manifestDigest}:${inventoryDigest}`;
 }
 
+function checkpointDisposition(source, manifestDigest) {
+  if (typeof source !== "string") return { kind: "conflict" };
+  const parts = source.split(":");
+  if (parts.length !== 4 || parts[1] !== "complete" ||
+      !/^[0-9a-f]{64}$/.test(parts[2]) || !/^[0-9a-f]{64}$/.test(parts[3])) {
+    return { kind: "conflict" };
+  }
+  if (parts[0] === seedVersion && parts[2] === manifestDigest) {
+    return { kind: "current", inventoryDigest: parts[3] };
+  }
+  if (migratableSeedVersions.has(parts[0])) {
+    return { kind: "migrate", previousVersion: parts[0] };
+  }
+  return { kind: "conflict" };
+}
+
 async function listAll(path, maximum = 1000) {
   const items = [];
   let cursor = "";
@@ -457,17 +481,17 @@ async function readSeedCheckpoint(history) {
     return null;
   }
   const manifestDigest = seedInventoryDigest(seedManifest(history));
-  const prefix = `${seedVersion}:complete:${manifestDigest}:`;
-  if (checkpoint.status !== "active" || typeof checkpoint.source !== "string" || !checkpoint.source.startsWith(prefix)) {
+  const disposition = checkpointDisposition(checkpoint.source, manifestDigest);
+  if (checkpoint.status !== "active" || disposition.kind === "conflict") {
     throw new Error(
       `preserved demo seed checkpoint conflicts with ${seedVersion}; bump the seed version or reset the demo volumes`,
     );
   }
-  const inventoryDigest = checkpoint.source.slice(prefix.length);
-  if (!/^[0-9a-f]{64}$/.test(inventoryDigest)) {
-    throw new Error("preserved demo seed checkpoint has an invalid inventory digest");
+  if (disposition.kind === "migrate") {
+    console.log(`trstctl demo seed upgrading ${disposition.previousVersion} to ${seedVersion}`);
+    return null;
   }
-  return { ...checkpoint, manifest_digest: manifestDigest, inventory_digest: inventoryDigest };
+  return { ...checkpoint, manifest_digest: manifestDigest, inventory_digest: disposition.inventoryDigest };
 }
 
 async function writeSeedCheckpoint(history, inventory) {
@@ -1254,6 +1278,7 @@ function seedCompletionSummary({ url, tenant, plannedEvents, owners, certificate
 export {
   advanceIdentity,
   checkpointSource,
+  checkpointDisposition,
   findUniqueLogicalRecord,
   seedInventoryDigest,
   seedCompletionSummary,

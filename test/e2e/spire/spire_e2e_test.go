@@ -70,6 +70,14 @@ func TestSPIREServerMintsSVIDChainedToTrstctlUpstreamAuthority(t *testing.T) {
 	// collect its logs. The cleanup below still removes the run-owned container.
 	run(t, ctx, "docker", "run", "-d",
 		"--name", name,
+		// Keep the mounted 0700 directories and 0600 token/CA/config files private,
+		// while making them readable to the process in the container. Running as
+		// the host test UID/GID avoids weakening those filesystem permissions.
+		"--user", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()),
+		// SPIRE and go-plugin create UDS files below /tmp. Give only this process a
+		// private, non-executable tmpfs instead of making the image's root-owned /tmp
+		// world writable. /tmp/out remains the narrower nested evidence bind mount.
+		"--tmpfs", fmt.Sprintf("/tmp:rw,noexec,nosuid,nodev,mode=0700,uid=%d,gid=%d", os.Getuid(), os.Getgid()),
 		"--add-host", "host.docker.internal:host-gateway",
 		"-v", confDir+":/opt/spire/conf/server:ro",
 		"-v", pluginDir+":/opt/spire/plugins:ro",

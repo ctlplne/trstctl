@@ -5,7 +5,9 @@ package crypto_test
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -88,5 +90,15 @@ else:
 	if err := os.WriteFile(path, []byte(body), 0o700); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 		t.Fatalf("write external KMS helper: %v", err)
 	}
-	return path
+	if runtime.GOOS != "windows" {
+		return path
+	}
+	python, err := exec.LookPath("python")
+	if err != nil {
+		python, err = exec.LookPath("python3")
+	}
+	if err != nil {
+		t.Fatalf("find Python interpreter for Windows external-KMS fixture: %v", err)
+	}
+	return python + " " + path
 }

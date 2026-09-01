@@ -81,15 +81,15 @@ func NewHostRollbackStore(root, tenantID string) (*HostRollbackStore, error) {
 	if err := os.MkdirAll(clean, 0o700); err != nil {
 		return nil, fmt.Errorf("relay: create host rollback directory: %w", err)
 	}
+	if err := secretfile.SecurePrivateDirectory(clean); err != nil {
+		return nil, fmt.Errorf("relay: secure host rollback directory: %w", err)
+	}
 	info, err := os.Lstat(clean)
 	if err != nil {
 		return nil, fmt.Errorf("relay: inspect host rollback directory: %w", err)
 	}
 	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
 		return nil, errors.New("relay: host rollback directory is not a real directory")
-	}
-	if info.Mode().Perm()&0o077 != 0 {
-		return nil, fmt.Errorf("relay: host rollback directory mode %o exposes predecessor state", info.Mode().Perm())
 	}
 	keyPath := filepath.Join(clean, hostRollbackKeyFile)
 	raw, err := secretfile.LoadOrCreate(keyPath, func() ([]byte, error) {
@@ -292,6 +292,9 @@ func writeHostRollbackStateAtomic(path string, ciphertext []byte) (err error) {
 		_ = os.Remove(tmpName)
 	}()
 	if err := tmp.Chmod(0o600); err != nil {
+		return err
+	}
+	if err := secretfile.SecurePrivateFile(tmpName); err != nil {
 		return err
 	}
 	if _, err := tmp.Write(ciphertext); err != nil {

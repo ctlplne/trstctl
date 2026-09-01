@@ -157,6 +157,12 @@ services:
       # the advertised tokens mean something.
       TRSTCTL_AGENT_CHANNEL_ENABLED: "true"
       TRSTCTL_AGENT_CHANNEL_ADDR: ":9443"
+      # Publish the exact host-side endpoint embedded in every enrollment
+      # response. The blank evaluation stack owns 19443/19444, so the demo uses
+      # a separate pair and both stacks can stay live during a walkthrough.
+      TRSTCTL_AGENT_CHANNEL_PUBLIC_ADDRESS: "localhost:29443"
+      TRSTCTL_AGENT_CHANNEL_SERVER_NAME: "localhost"
+      TRSTCTL_AGENT_CHANNEL_HTTP_RENEWAL_ADDR: ":9444"
       # The signer key and its public trust anchor must cross the same container
       # recreation boundary. The key is in signerkeys; this certificate is in the
       # shared persistent /data volume (AUD-100).
@@ -190,6 +196,12 @@ services:
       TRSTCTL_BULKHEAD_PROTOCOLS_QUEUE: "256"
       TRSTCTL_BULKHEAD_AGENT_WORKERS: "16"
       TRSTCTL_BULKHEAD_AGENT_QUEUE: "1024"
+      # Keep the PostgreSQL-backed limiter enabled in the loopback-only demo,
+      # but size its burst for the supported three-browser qualification
+      # matrix. The production default remains 600 requests/minute.
+      TRSTCTL_RATE_LIMIT_ENABLED: "true"
+      TRSTCTL_RATE_LIMIT_REQUESTS: "10000"
+      TRSTCTL_RATE_LIMIT_WINDOW: "1m"
       TRSTCTL_SIGNER_MODE: external
       TRSTCTL_SIGNER_SOCKET: /run/trstctl/signer.sock
       TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER: "true"
@@ -269,6 +281,9 @@ services:
     ports:
       # Automatic demo administration is safe only on the same workstation.
       - "127.0.0.1:9443:8443"
+      # Agent gRPC and current-certificate mTLS renewal are also loopback-only.
+      - "127.0.0.1:29443:9443"
+      - "127.0.0.1:29444:9444"
     healthcheck:
       test: ["CMD", "/usr/local/bin/trstctl", "--health-check"]
       interval: 10s

@@ -102,7 +102,11 @@ case "$TRIVY_IMAGE" in
     exit 1
     ;;
 esac
-scan_args=(rootfs --severity HIGH,CRITICAL --ignore-unfixed --no-progress --format json --exit-code 0)
+# JSON reports omit clean packages unless --list-all-pkgs is explicit. Without
+# it, a real scan of the Zonky wrapper reports zero inventory even though Trivy
+# recognized the exact Maven coordinate. The receipt deliberately rejects an
+# empty inventory, so keep this flag coupled to that non-vacuity oracle.
+scan_args=(rootfs --severity HIGH,CRITICAL --ignore-unfixed --no-progress --format json --list-all-pkgs --exit-code 0)
 receipt_dir="${TRSTCTL_EMBEDDED_PG_SCAN_DIR:-$archWorkdir/scan-receipt}"
 mkdir -p "$receipt_dir"
 receipt_dir="$(cd "$receipt_dir" && pwd)"

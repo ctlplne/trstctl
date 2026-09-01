@@ -26,7 +26,8 @@ policy. `scripts/supply-chain/verify-embedded-postgres.sh` enforces it:
 2. Computes its SHA-256 and fails the build if the jar or inner `.txz` hash
    changes for the pinned version. The trust-on-first-use bootstrap is complete;
    empty pins are a hard failure.
-3. Extracts and Trivy-scans the binaries (HIGH/CRITICAL, ignore-unfixed), then
+3. Extracts and Trivy-scans the binaries (HIGH/CRITICAL, ignore-unfixed, with
+   all recognized packages retained in JSON even when clean), then
    evaluates the exact pin against a fresh official PostgreSQL CNA catalog.
    Each `embedded-postgres-trivy-receipt-<arch>` artifact retains raw Trivy JSON,
    Trivy/DB metadata, the raw official page and hash, normalized advisories, and

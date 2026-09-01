@@ -17,11 +17,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
 	boundarycrypto "trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secretfile"
 )
 
 // ServerCert is a control-plane server's TLS material — its certificate and key,
@@ -117,6 +117,9 @@ func LoadOrCreateSelfSignedServerCert(stateFile string, hosts []string, ttl time
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("mtls: create persistent internal TLS directory: %w", err)
 	}
+	if err := secretfile.SecurePrivateDirectory(dir); err != nil {
+		return nil, fmt.Errorf("mtls: secure persistent internal TLS directory: %w", err)
+	}
 	generated, err := SelfSignedServerCert(hosts, ttl)
 	if err != nil {
 		return nil, err
@@ -153,6 +156,9 @@ func LoadOrCreateSelfSignedServerCert(stateFile string, hosts []string, ttl time
 	if err := tmp.Chmod(0o600); err != nil {
 		return nil, closeWithError(err)
 	}
+	if err := secretfile.SecurePrivateFile(tmpName); err != nil {
+		return nil, closeWithError(err)
+	}
 	if _, err := tmp.Write(combined); err != nil {
 		return nil, closeWithError(err)
 	}
@@ -181,18 +187,7 @@ func LoadOrCreateSelfSignedServerCert(stateFile string, hosts []string, ttl time
 // This local stdlib-only copy is intentional: packages inside internal/crypto
 // cannot import a platform helper from outside the sacred crypto boundary.
 func syncStateDirectory(path string) error {
-	// Windows does not expose directory handles that os.File.Sync can flush.
-	// The state file itself was synced before publication; skip only the
-	// directory-entry flush that Windows cannot perform.
-	if runtime.GOOS == "windows" {
-		return nil
-	}
-	dir, err := os.Open(path) // #nosec G304 -- parent of the validated internal TLS state path (CWE-22)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = dir.Close() }()
-	return dir.Sync()
+	return syncMTLSDirectory(path)
 }
 
 // PublishServerTrust publishes a certificate-only PEM that clients can mount or
@@ -216,8 +211,12 @@ func PublishServerTrust(trustFile string, trustPEM []byte) error {
 		if !info.Mode().IsRegular() {
 			return errors.New("mtls: public internal TLS trust is not a regular file")
 		}
-		if info.Mode().Perm()&0o022 != 0 {
-			return fmt.Errorf("mtls: public internal TLS trust permissions are writable by group or other: %04o", info.Mode().Perm())
+		tamperSafe, err := secretfile.PublicFileTamperSafe(trustFile)
+		if err != nil {
+			return fmt.Errorf("mtls: inspect public internal TLS trust custody: %w", err)
+		}
+		if !tamperSafe {
+			return errors.New("mtls: public internal TLS trust permissions allow untrusted mutation")
 		}
 		raw, err := os.ReadFile(trustFile) // #nosec G304 -- operator-selected public certificate path, validated as a regular file (CWE-22)
 		if err != nil {
@@ -251,6 +250,9 @@ func PublishServerTrust(trustFile string, trustPEM []byte) error {
 		return in
 	}
 	if err := tmp.Chmod(0o644); err != nil {
+		return closeWithError(err)
+	}
+	if err := secretfile.SecurePublicFile(tmpName); err != nil {
 		return closeWithError(err)
 	}
 	if _, err := tmp.Write(trustPEM); err != nil {
@@ -305,8 +307,12 @@ func loadSelfSignedServerState(stateFile string) (*ServerCert, error) {
 	if !info.Mode().IsRegular() {
 		return nil, errors.New("mtls: persistent internal TLS state is not a regular file")
 	}
-	if info.Mode().Perm()&0o077 != 0 {
-		return nil, fmt.Errorf("mtls: persistent internal TLS state permissions are %04o, want 0600 or stricter", info.Mode().Perm())
+	private, err := secretfile.IsPrivate(stateFile)
+	if err != nil {
+		return nil, fmt.Errorf("mtls: inspect persistent internal TLS state custody: %w", err)
+	}
+	if !private {
+		return nil, errors.New("mtls: persistent internal TLS state permissions are not private")
 	}
 	raw, err := os.ReadFile(stateFile) // #nosec G304 -- operator-selected internal TLS state path, validated as a private regular file (CWE-22)
 	if err != nil {

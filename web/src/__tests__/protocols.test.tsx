@@ -1434,11 +1434,14 @@ describe("protocol surface", () => {
     expect(command).not.toMatch(/BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY|password=|secret=/i);
   });
 
-  it("automatically proves SPIFFE UDS readiness and keeps recovery effect-free", async () => {
+  it("runs the effect-free SPIFFE UDS readiness check only when the operator asks", async () => {
     const user = userEvent.setup();
     await renderProtocols();
 
     const panel = screen.getByRole("region", { name: "SPIFFE workload identity readiness" });
+    expect(apiMock.spiffeQualification).not.toHaveBeenCalled();
+    expect(within(panel).getByText("What this check will inspect")).toBeInTheDocument();
+    await user.click(within(panel).getByRole("button", { name: "Run safe SPIFFE check" }));
     await waitFor(() => expect(apiMock.spiffeQualification).toHaveBeenCalledTimes(1));
     expect(await within(panel).findAllByText("SPIFFE is ready for a workload client")).toHaveLength(1);
     expect(within(panel).getByText("workloads.example.test")).toBeInTheDocument();

@@ -33,13 +33,7 @@ func TestPersistentSelfSignedServerCertReusesOnePrivateState(t *testing.T) {
 	if !bytes.Equal(first.TrustPEM, second.TrustPEM) {
 		t.Fatal("reloading the same state path rotated the explicitly pinned server identity")
 	}
-	info, err := os.Stat(stateFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := info.Mode().Perm(); got != 0o600 {
-		t.Fatalf("persistent internal TLS state mode = %04o, want 0600", got)
-	}
+	assertPrivateStateCustody(t, stateFile)
 	raw, err := os.ReadFile(stateFile) // #nosec G304 -- test-owned path under t.TempDir (CWE-22)
 	if err != nil {
 		t.Fatal(err)
@@ -78,13 +72,7 @@ func TestPublishServerTrustWritesOnlyThePublicCertificateAndFailsClosed(t *testi
 	if bytes.Contains(raw, []byte("PRIVATE KEY")) {
 		t.Fatal("published trust file exposed private key material")
 	}
-	info, err := os.Stat(trustFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := info.Mode().Perm(); got != 0o644 {
-		t.Fatalf("published trust mode = %04o, want 0644", got)
-	}
+	assertPublicTrustCustody(t, trustFile)
 	if err := mtls.PublishServerTrust(trustFile, cert.TrustPEM); err != nil {
 		t.Fatalf("idempotent trust publication: %v", err)
 	}
@@ -110,9 +98,7 @@ func TestPersistentSelfSignedServerCertFailsClosedOnUnsafeState(t *testing.T) {
 	if !bytes.Equal(before, after) {
 		t.Fatal("failed-closed load modified corrupted operator-visible state")
 	}
-	if err := os.Chmod(stateFile, 0o644); err != nil { // #nosec G302 -- deliberate over-permissive negative fixture (CWE-276)
-		t.Fatal(err)
-	}
+	makePrivateStateUnsafe(t, stateFile)
 	if _, err := mtls.LoadOrCreateSelfSignedServerCert(stateFile, []string{"localhost"}, time.Hour); err == nil || !strings.Contains(err.Error(), "permissions") {
 		t.Fatalf("over-permissive persistent TLS state error = %v, want permissions refusal", err)
 	}

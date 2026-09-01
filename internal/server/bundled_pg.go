@@ -30,7 +30,7 @@ func bundledPort(cfg config.Postgres) int {
 
 // startBundledPostgres delivers the PRD "bundled single-node Postgres for eval"
 // (R4.5): it starts a managed PostgreSQL using the SAME pinned binary the tests and
-// the supply-chain manifest record (bundledPGVersion = 16.14.0, see
+// the supply-chain manifest record (bundledPGVersion = 16.15.0, see
 // deploy/supply-chain/embedded-postgres.json), and returns a loopback DSN plus a
 // stop function. The control plane connects as the bootstrap superuser, but the
 // store drops to the non-superuser `trstctl_app` role per transaction (SET LOCAL

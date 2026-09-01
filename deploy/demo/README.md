@@ -32,6 +32,17 @@ Use that exact `127.0.0.1` browser URL. The blank stack uses `localhost`, and
 the distinct loopback hostnames keep both host-scoped SSO cookies valid in one
 browser profile even though the ports already differ.
 
+The demo also publishes its mTLS agent channel at `localhost:29443` and its
+current-certificate renewal listener at `localhost:29444`. Both are loopback-only.
+The separate blank evaluation stack uses `19443` and `19444`, so its agents and the
+demo agents can operate side by side without sharing a listener or trust boundary.
+
+The real PostgreSQL-backed tenant rate limiter remains enabled. Its demo-only
+burst is 10,000 requests per minute so the supported Chromium, Firefox, and
+WebKit qualification matrix can exercise every live route without throttling
+itself. This does not change the production default of 600 requests per minute;
+operators should size that production boundary for their own tenant traffic.
+
 The seed job creates a 180-day realistic history: owners, members, profiles, an
 internal CA catalog row, real signer-issued X.509 inventory, imported and
 discovered certificates with different expiries, stored secrets, a dynamic PKI
@@ -42,7 +53,9 @@ audit-producing lifecycle transitions, and notification-facing preview rows.
 The seed is a convergent, versioned migration. It first reads each logical
 resource, refuses duplicate or same-name/different-policy preserved data, and
 advances lifecycle state only when that transition is still needed. Its final
-event-sourced member is the durable `demo-seed-v1` completion checkpoint. The
+event-sourced member is the durable `demo-seed-v2` completion checkpoint. A
+valid v1 checkpoint is migrated in place; malformed or unknown checkpoint
+versions still fail closed instead of guessing. The
 bootstrap bearer needed to inspect preserved state lives in the non-public
 `seedstate` volume as a mode-0600 file; it is never printed and is not part of
 signer or KEK custody.

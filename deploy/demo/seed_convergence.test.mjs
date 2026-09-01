@@ -6,6 +6,7 @@ import test from "node:test";
 import {
   advanceIdentity,
   checkpointSource,
+  checkpointDisposition,
   findUniqueLogicalRecord,
   seedInventoryDigest,
   seedCompletionSummary,
@@ -106,7 +107,17 @@ test("AUD-66 checkpoint digest is deterministic and binds manifest plus inventor
   const changed = seedInventoryDigest({ version: 1, owners: [{ id: "a" }, { id: "b" }] });
   assert.equal(first, same);
   assert.notEqual(first, changed);
-  assert.equal(checkpointSource(first, changed), `demo-seed-v1:complete:${first}:${changed}`);
+  assert.equal(checkpointSource(first, changed), `demo-seed-v2:complete:${first}:${changed}`);
+  assert.deepEqual(
+    checkpointDisposition(`demo-seed-v2:complete:${first}:${changed}`, first),
+    { kind: "current", inventoryDigest: changed },
+  );
+  assert.deepEqual(
+    checkpointDisposition(`demo-seed-v1:complete:${first}:${changed}`, first),
+    { kind: "migrate", previousVersion: "demo-seed-v1" },
+  );
+  assert.deepEqual(checkpointDisposition(`demo-seed-v3:complete:${first}:${changed}`, first), { kind: "conflict" });
+  assert.deepEqual(checkpointDisposition(`demo-seed-v1:complete:not-a-digest:${changed}`, first), { kind: "conflict" });
 
   const firstObservation = stableSeedSemantics({
     discovery_sources: [{ config: { findings: [{ ref: "edge:443", metadata: { observed_at: "2025-01-01T00:00:00Z" } }] } }],

@@ -66,6 +66,14 @@ func Create(path string, data []byte) error {
 	if err != nil {
 		return err
 	}
+	// POSIX mode bits do not restrict an NTFS ACL. Tighten the newly-created,
+	// still-empty file before secret bytes are written; other platforms enforce
+	// the equivalent owner-only mode through the same helper.
+	if err := securePrivateFilePermissions(path); err != nil {
+		_ = f.Close()
+		_ = os.Remove(path)
+		return err
+	}
 	n, werr := f.Write(data)
 	cerr := f.Close()
 	if werr != nil {
@@ -138,7 +146,7 @@ func validateParents(path string) error {
 
 func validateParentMode(path string, info os.FileInfo) error {
 	if !supportsUnixModeCustody() {
-		return nil
+		return validateNonUnixParent(path, info)
 	}
 	perm := info.Mode().Perm()
 	if perm&0o022 != 0 {
@@ -175,7 +183,7 @@ func validateFile(path string, info os.FileInfo) error {
 		return fmt.Errorf("secretfile: %s is not a regular file", path)
 	}
 	if !supportsUnixModeCustody() {
-		return nil
+		return validateNonUnixFile(path, info)
 	}
 	perm := mode.Perm()
 	if perm&0o111 != 0 {
@@ -202,6 +210,72 @@ func validateFile(path string, info os.FileInfo) error {
 		return nil
 	}
 	return fmt.Errorf("secretfile: %s owner uid %d does not match process uid %d or root", path, own.uid, euid)
+}
+
+// SecurePrivateDirectory applies the platform's real owner-only custody model
+// to an existing directory. On Windows that means a protected NTFS DACL, not
+// Go FileMode bits.
+func SecurePrivateDirectory(path string) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return fmt.Errorf("secretfile: %s is not a real directory", path)
+	}
+	return securePrivateDirectoryPermissions(path)
+}
+
+// SecurePrivateFile applies the platform's real owner-only custody model to an
+// existing regular, non-symlink file.
+func SecurePrivateFile(path string) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return fmt.Errorf("secretfile: %s is not a regular non-symlink file", path)
+	}
+	return securePrivateFilePermissions(path)
+}
+
+// IsPrivate reports whether the platform authority permits only the owner,
+// the local system, and administrators to read the named regular file.
+func IsPrivate(path string) (bool, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return false, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return false, nil
+	}
+	return privateFilePermissions(path, info)
+}
+
+// SecurePublicFile makes a public certificate readable by local users while
+// keeping mutation confined to the owner, system, and administrators.
+func SecurePublicFile(path string) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return fmt.Errorf("secretfile: %s is not a regular non-symlink file", path)
+	}
+	return securePublicFilePermissions(path)
+}
+
+// PublicFileTamperSafe reports whether broad principals can read but cannot
+// mutate a public certificate file.
+func PublicFileTamperSafe(path string) (bool, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return false, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return false, nil
+	}
+	return publicFilePermissions(path, info)
 }
 
 func processHasGroup(gid int) bool {

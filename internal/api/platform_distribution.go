@@ -141,21 +141,21 @@ func buildPlatformDistributionStatus() platformDistributionStatus {
 		SupportedHostArchives: []platformHostArchive{
 			{
 				OSArch:          "linux-amd64",
-				PostgresVersion: "16.14.0",
+				PostgresVersion: "16.15.0",
 				RuntimePin:      "deploy/supply-chain/embedded-postgres.json",
 				RuntimeCheck:    "cached embedded-postgres .txz SHA-256 is verified before startup",
 				EvaluationOnly:  true,
 			},
 			{
 				OSArch:          "linux-arm64v8",
-				PostgresVersion: "16.14.0",
+				PostgresVersion: "16.15.0",
 				RuntimePin:      "deploy/supply-chain/embedded-postgres.json",
 				RuntimeCheck:    "cached embedded-postgres .txz SHA-256 is verified before startup",
 				EvaluationOnly:  true,
 			},
 			{
 				OSArch:          "darwin-arm64v8",
-				PostgresVersion: "16.14.0",
+				PostgresVersion: "16.15.0",
 				RuntimePin:      "deploy/supply-chain/embedded-postgres.json",
 				RuntimeCheck:    "cached embedded-postgres .txz SHA-256 is verified before startup",
 				EvaluationOnly:  true,

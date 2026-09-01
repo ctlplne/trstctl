@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -47,7 +47,7 @@ function isSPIFFEQualification(value: unknown): value is SPIFFEQualification {
 export function SPIFFEOperatorPanel({ onResult }: { onResult?: (result: SPIFFEQualification) => void }) {
   const { t } = useTranslation();
   const [result, setResult] = useState<SPIFFEQualification | null>(null);
-  const [running, setRunning] = useState(true);
+  const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const runCheck = useCallback(async () => {
@@ -65,10 +65,6 @@ export function SPIFFEOperatorPanel({ onResult }: { onResult?: (result: SPIFFEQu
       setRunning(false);
     }
   }, [onResult]);
-
-  useEffect(() => {
-    void runCheck();
-  }, [runCheck]);
 
   return (
     <Card

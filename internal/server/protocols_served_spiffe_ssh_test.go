@@ -369,16 +369,18 @@ func runServedGoSpiffeClient(t *testing.T, endpoint string) servedGoSpiffeResult
 	defer cancel()
 	cmd := exec.CommandContext(runCtx, goBin, "run", ".", endpoint) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Dir = clientDir
-	out, err := cmd.CombinedOutput()
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
 	if runCtx.Err() != nil {
-		t.Fatalf("go-spiffe client timed out:\n%s", out)
+		t.Fatalf("go-spiffe client timed out:\nstdout:\n%s\nstderr:\n%s", out, stderr.Bytes())
 	}
 	if err != nil {
-		t.Fatalf("go-spiffe client failed against served UDS: %v\n%s", err, out)
+		t.Fatalf("go-spiffe client failed against served UDS: %v\nstdout:\n%s\nstderr:\n%s", err, out, stderr.Bytes())
 	}
 	var result servedGoSpiffeResult
 	if err := json.Unmarshal(out, &result); err != nil {
-		t.Fatalf("decode go-spiffe client output: %v\n%s", err, out)
+		t.Fatalf("decode go-spiffe client output: %v\nstdout:\n%s\nstderr:\n%s", err, out, stderr.Bytes())
 	}
 	return result
 }
@@ -397,16 +399,18 @@ func runServedGoSpiffeJWTClient(t *testing.T, endpoint string) servedGoSpiffeRes
 	defer cancel()
 	cmd := exec.CommandContext(runCtx, goBin, "run", ".", endpoint, "jwt") // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	cmd.Dir = clientDir
-	out, err := cmd.CombinedOutput()
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
 	if runCtx.Err() != nil {
-		t.Fatalf("go-spiffe JWT client timed out:\n%s", out)
+		t.Fatalf("go-spiffe JWT client timed out:\nstdout:\n%s\nstderr:\n%s", out, stderr.Bytes())
 	}
 	if err != nil {
-		t.Fatalf("go-spiffe JWT client failed against served UDS: %v\n%s", err, out)
+		t.Fatalf("go-spiffe JWT client failed against served UDS: %v\nstdout:\n%s\nstderr:\n%s", err, out, stderr.Bytes())
 	}
 	var result servedGoSpiffeResult
 	if err := json.Unmarshal(out, &result); err != nil {
-		t.Fatalf("decode go-spiffe JWT client output: %v\n%s", err, out)
+		t.Fatalf("decode go-spiffe JWT client output: %v\nstdout:\n%s\nstderr:\n%s", err, out, stderr.Bytes())
 	}
 	return result
 }

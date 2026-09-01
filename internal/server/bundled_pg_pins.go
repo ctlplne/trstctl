@@ -20,12 +20,12 @@ package server
 // segment, i.e. `<os>-<arch>` where <arch> follows the library's naming
 // (amd64, arm64v8, …) — see archiveArch().
 var bundledPGTxzSHA256 = map[string]string{
-	// PostgreSQL 16.14.0, linux/amd64 — the single-node/eval default.
-	"linux-amd64": "77eac54dd8e936ca817420c59c6251e5a07c1ad140941270999c18126c027c02",
-	// PostgreSQL 16.14.0, linux/arm64 (zonky names it arm64v8).
-	"linux-arm64v8": "5883cd9540dd138ff594463b705d164b23bbfb650468a232aa2730371728f9fe",
-	// PostgreSQL 16.14.0, darwin/arm64 (zonky names it arm64v8).
-	"darwin-arm64v8": "bc34c59637702d73d7bad7e17620c33be6fd219a28609eb26fdb36b85e6f89fd",
+	// PostgreSQL 16.15.0, linux/amd64 — the single-node/eval default.
+	"linux-amd64": "bda67fe32e23b049c25db4b98132d154a4fa824c44e1bd8fd01b0236f4676c24",
+	// PostgreSQL 16.15.0, linux/arm64 (zonky names it arm64v8).
+	"linux-arm64v8": "e66afbea65a143aa6cda8d5a56c2aea9985d1d9649dfb29ba487363844fd1f81",
+	// PostgreSQL 16.15.0, darwin/arm64 (zonky names it arm64v8).
+	"darwin-arm64v8": "07f29aed5baae53962b0ab80c901763b490b5692cf6a730cb3ece6bf455567af",
 }
 
 // bundledPGVersion is the pinned PostgreSQL version. It must equal
@@ -41,4 +41,4 @@ var bundledPGTxzSHA256 = map[string]string{
 // check would find nothing at the pinned path, take the documented cold-cache
 // (false, nil) branch, and start an unverified binary. One source of truth keeps
 // SUPPLY-003 from silently degrading into a no-op.
-const bundledPGVersion = "16.14.0"
+const bundledPGVersion = "16.15.0"

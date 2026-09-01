@@ -72,6 +72,7 @@ func TestSupply101VulnScansStayRequired(t *testing.T) {
 
 	verifyPG := read(t, "../scripts/supply-chain/verify-embedded-postgres.sh")
 	requireAllContained(t, "AUD-80", "verify-embedded-postgres.sh", verifyPG,
+		"--list-all-pkgs",
 		"https://www.postgresql.org/support/security/${postgres_major}/",
 		"postgresql-security-catalog.py",
 		"$security_catalog",
@@ -301,12 +302,12 @@ func TestFuzz006SmokeAndOSSFuzzStayReal(t *testing.T) {
 	)
 
 	// The continuous-fuzzing (ClusterFuzzLite / OSS-Fuzz) build must exist and compile
-	// the discovered targets via compile_go_fuzzer.
+	// the discovered testing.F targets via the native Go v2 helper.
 	if _, err := os.Stat(filepath.FromSlash("../.clusterfuzzlite/project.yaml")); err != nil {
 		t.Error("FUZZ-006: .clusterfuzzlite/project.yaml is missing; OSS-Fuzz build is no longer present")
 	}
 	requireAllContained(t, "FUZZ-006", ".clusterfuzzlite/build.sh", read(t, "../.clusterfuzzlite/build.sh"),
-		"compile_go_fuzzer",
+		"compile_native_go_fuzzer_v2",
 		`grep -rE '^func Fuzz[A-Za-z0-9_]+\(' --include='*_test.go' ./internal`,
 	)
 }

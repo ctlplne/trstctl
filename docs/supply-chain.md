@@ -149,12 +149,12 @@ digest in `deploy/docker/Dockerfile.postgres`. The upstream Alpine packages scan
 clean, but its unused `gosu` helper was built with a vulnerable Go toolchain. Our
 three-line derivative removes that helper and starts directly as the existing
 non-root `postgres` account (UID/GID 70, preserving earlier Compose volumes); it
-downloads and installs nothing else. That does not
-repair or conceal the bundled path described below: its vendor wrapper remains on
-16.14.0, and the supply-chain gate stays red when the official PostgreSQL catalog
-reports a HIGH/CRITICAL advisory fixed after that exact pin.
+downloads and installs nothing else. That does not repair or conceal the bundled
+path described below. Its vendor wrapper is pinned independently, and the
+supply-chain gate stays red whenever the official PostgreSQL catalog reports a
+HIGH/CRITICAL advisory fixed after that exact pin.
 
-The `embedded-postgres` dependency downloads a real PostgreSQL 16.14.0 binary
+The `embedded-postgres` dependency downloads a real PostgreSQL 16.15.0 binary
 from Maven Central at runtime — outside `go.sum`. It backs both the
 integration tests and the served single-node/eval path that starts bundled
 PostgreSQL, so its provenance is committed and enforced at runtime, not
@@ -164,7 +164,9 @@ merely scanned in CI:
   Maven coordinates, source URLs, and a committed per-arch SHA-256 pin for
   both the Maven jar and the inner `.txz` archive, covering linux/amd64,
   linux/arm64, and darwin/arm64. The pin is populated, so the gate is a
-  hard fail, not a no-op.
+  hard fail, not a no-op. The 16.15.0 pins were captured only after Maven
+  Central published all three architectures; each jar matched its Maven
+  SHA-256 sidecar and each inner `.txz` was hashed independently.
 - The served binary carries the same per-arch pins and enforces them at
   runtime: before starting bundled PostgreSQL it verifies the cached `.txz`
   against the committed pin and refuses to start a tampered or MITM'd
@@ -186,7 +188,10 @@ merely scanned in CI:
 - The receipt also records INVENTORY COVERAGE, because severity counts alone
   cannot tell "scanned the binary and found nothing" apart from "scanned
   nothing" — both read as `high=0 critical=0`.
-  `coverage.packages_inventoried` is how many packages the report listed,
+  Trivy runs with `--list-all-pkgs`, because its JSON output otherwise omits
+  recognized packages with no matching vulnerability and makes a real clean
+  inventory look empty. `coverage.packages_inventoried` is how many packages
+  the report listed,
   `coverage.pinned_version_evidence[]` names the package(s) carrying the
   pinned server version and the Trivy Results block each came from, and
   `coverage.postgres_server_package_inventoried` says whether Trivy actually

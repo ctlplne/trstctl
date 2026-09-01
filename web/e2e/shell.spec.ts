@@ -11,7 +11,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("Home shows the worklists and the rail lists every space", async ({ page }) => {
-  const rail = page.getByRole("navigation", { name: /spaces/i });
+  const rail = page.getByRole("navigation", { name: "Tools" });
   await expect(rail.getByRole("button", { name: "Home" })).toHaveAttribute("aria-current", "true");
   for (const { space } of spaceSmoke) {
     await expect(rail.getByRole("button", { name: space })).toBeVisible();
@@ -40,18 +40,21 @@ test("mobile first-run shows only the current step and its nearest context", asy
 
   await expect(page.getByRole("heading", { level: 1, name: "Set up trstctl" })).toBeVisible();
   await expect(page).toHaveTitle(/^Set up trstctl · trstctl$/);
-  await expect(page.getByTestId("full-step-progress")).toBeHidden();
+  const full = page.getByTestId("full-step-progress");
+  await expect(full).not.toHaveAttribute("open");
+  await expect(full.getByRole("list")).toBeHidden();
+  await expect(full.getByText("View all setup steps")).toBeVisible();
   const compact = page.getByTestId("compact-step-progress");
   await expect(compact).toBeVisible();
   await expect(compact.getByRole("listitem")).toHaveCount(2);
-  await expect(compact).toContainText("Connect issuer");
+  await expect(compact).toContainText("Check signing");
   await expect(compact).toContainText("Enable protocols");
   await expect(compact).not.toContainText("Complete");
 });
 
 for (const { space, row } of spaceSmoke) {
   test(`rail switch into ${space} scopes the sidebar`, async ({ page }) => {
-    const rail = page.getByRole("navigation", { name: /spaces/i });
+    const rail = page.getByRole("navigation", { name: "Tools" });
     await rail.getByRole("button", { name: space }).click();
     await expect(rail.getByRole("button", { name: space })).toHaveAttribute("aria-current", "true");
     await expect(page.getByRole("navigation", { name: /primary/i }).getByRole("link", { name: new RegExp(row, "i") })).toBeVisible();
@@ -68,11 +71,11 @@ test("command palette opens, groups by space, and jumps", async ({ page }) => {
     .first()
     .click();
   await expect(page).toHaveURL(/\/ssh$/);
-  await expect(page.getByRole("heading", { level: 1, name: /ssh trust/i })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "SSH access" })).toBeVisible();
 });
 
 test("legacy /secrets?tab= deep links redirect to the workspace routes", async ({ page }) => {
   await page.goto("/secrets?tab=engines");
   await expect(page).toHaveURL(/\/secrets\/engines$/);
-  await expect(page.getByRole("heading", { level: 1, name: /secret engines/i })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Automatic secret sources" })).toBeVisible();
 });

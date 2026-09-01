@@ -59,6 +59,15 @@ func renewJob(t *testing.T, intent relay.DeployIntent) relay.Job {
 	return relay.Job{JobID: 77, Kind: relay.KindEndpointRenew, Attempt: 1, Payload: payload}
 }
 
+func renewTargetConfig(t *testing.T, certPath, keyPath string) json.RawMessage {
+	t.Helper()
+	payload, err := json.Marshal(map[string]string{"cert_path": certPath, "key_path": keyPath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return payload
+}
+
 // The request that leaves the host carries a public key and names, and nothing
 // else. This is the whole epic, tested at the wire.
 func TestTheRenewalRequestThatLeavesTheHostCarriesNoPrivateKey(t *testing.T) {
@@ -72,7 +81,7 @@ func TestTheRenewalRequestThatLeavesTheHostCarriesNoPrivateKey(t *testing.T) {
 		Target:            "web01",
 		SubjectCommonName: "api.example.test",
 		SubjectDNSNames:   []string{"api.example.test"},
-		TargetConfig:      json.RawMessage(`{"cert_path":"` + filepath.Join(dir, "c.pem") + `","key_path":"` + filepath.Join(dir, "k.pem") + `"}`),
+		TargetConfig:      renewTargetConfig(t, filepath.Join(dir, "c.pem"), filepath.Join(dir, "k.pem")),
 	})}
 
 	if _, err := relay.RunOnceWithHost(context.Background(), ch, http.DefaultClient,
@@ -120,7 +129,7 @@ func TestARefusedSignatureInstallsNothing(t *testing.T) {
 		Connector:         "nginx",
 		Target:            "web01",
 		SubjectCommonName: "api.example.test",
-		TargetConfig:      json.RawMessage(`{"cert_path":"` + certPath + `","key_path":"` + keyPath + `"}`),
+		TargetConfig:      renewTargetConfig(t, certPath, keyPath),
 	})}
 
 	executed, err := relay.RunOnceWithHost(context.Background(), ch, http.DefaultClient,

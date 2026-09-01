@@ -3,7 +3,7 @@
   "module": "github.com/fergusstrange/embedded-postgres",
   "moduleVersion": "v1.29.0",
   "modulePatch": "third_party/embedded-postgres is compiled inside the root module: it replaces the startup/health-check lib/pq connector with github.com/jackc/pgx/v5/stdlib, requires the Maven checksum sidecar, and routes SHA-256 through internal/crypto; see PATCHES.md and the shipped dependency-closure gate.",
-  "postgresVersion": "16.14.0",
+  "postgresVersion": "16.15.0",
   "pinnedBy": "internal/server/bundled_pg_pins.go — bundledPGVersion plus the per-arch txz_sha256 map. internal/server/bundled_pg.go passes bundledPGVersion straight to embeddedpostgres.Version(), so the version that is downloaded, the version in the cache filename, and the version this manifest pins cannot diverge. SCOPE: the integration tests still request the library constant embeddedpostgres.V16 (frozen at 16.4.0 in v1.29.0); they are CI-only, never run on an operator host, and are NOT covered by this manifest.",
   "runtimeEnforced": true,
   "shippedInReleaseImage": false,
@@ -11,36 +11,36 @@
     "registry": "Maven Central",
     "group": "io.zonky.test.postgres",
     "artifact": "embedded-postgres-binaries-<os>-<arch>",
-    "version": "16.14.0",
-    "urlTemplate": "https://repo1.maven.org/maven2/io/zonky/test/postgres/embedded-postgres-binaries-<os>-<arch>/16.14.0/embedded-postgres-binaries-<os>-<arch>-16.14.0.jar"
+    "version": "16.15.0",
+    "urlTemplate": "https://repo1.maven.org/maven2/io/zonky/test/postgres/embedded-postgres-binaries-<os>-<arch>/16.15.0/embedded-postgres-binaries-<os>-<arch>-16.15.0.jar"
   },
   "checksum": {
     "algorithm": "sha256",
-    "sha256": "3278331b124b46fb9f8bea30c7ff3bd6227a3934dad38a6ddb625eb7dcfa8ca8",
+    "sha256": "653abc065c682b85d3da50168fb95dc524bd85426cdec9ce3695a550ef431df2",
     "subject": "linux-amd64 jar (the production single-node/eval default)",
     "policy": "committed pin (TOFU completed): scripts/supply-chain/verify-embedded-postgres.sh verifies the downloaded jar against this value on every CI run and FAILS the build on any change; internal/server/startBundledPostgres verifies the cached .txz against archives[].txz_sha256 below before starting PostgreSQL, so a tampered or MITM'd binary is refused at runtime (SUPPLY-003)."
   },
   "archives": [
     {
       "arch": "linux-amd64",
-      "jar_sha256": "3278331b124b46fb9f8bea30c7ff3bd6227a3934dad38a6ddb625eb7dcfa8ca8",
-      "txz_sha256": "77eac54dd8e936ca817420c59c6251e5a07c1ad140941270999c18126c027c02",
+      "jar_sha256": "653abc065c682b85d3da50168fb95dc524bd85426cdec9ce3695a550ef431df2",
+      "txz_sha256": "bda67fe32e23b049c25db4b98132d154a4fa824c44e1bd8fd01b0236f4676c24",
       "txz_name": "postgres-linux-x86_64.txz",
-      "jarUrl": "https://repo1.maven.org/maven2/io/zonky/test/postgres/embedded-postgres-binaries-linux-amd64/16.14.0/embedded-postgres-binaries-linux-amd64-16.14.0.jar"
+      "jarUrl": "https://repo1.maven.org/maven2/io/zonky/test/postgres/embedded-postgres-binaries-linux-amd64/16.15.0/embedded-postgres-binaries-linux-amd64-16.15.0.jar"
     },
     {
       "arch": "linux-arm64v8",
-      "jar_sha256": "482f5ccdb15f68f4bfe524a5b9df734e169db9d1d29c32a513af44ac9efc127a",
-      "txz_sha256": "5883cd9540dd138ff594463b705d164b23bbfb650468a232aa2730371728f9fe",
+      "jar_sha256": "f846a9989d686b7977d6eca9bc9d8b2b69e3f70c7eb60e032197d9c574a6136c",
+      "txz_sha256": "e66afbea65a143aa6cda8d5a56c2aea9985d1d9649dfb29ba487363844fd1f81",
       "txz_name": "postgres-linux-arm_64.txz",
-      "jarUrl": "https://repo1.maven.org/maven2/io/zonky/test/postgres/embedded-postgres-binaries-linux-arm64v8/16.14.0/embedded-postgres-binaries-linux-arm64v8-16.14.0.jar"
+      "jarUrl": "https://repo1.maven.org/maven2/io/zonky/test/postgres/embedded-postgres-binaries-linux-arm64v8/16.15.0/embedded-postgres-binaries-linux-arm64v8-16.15.0.jar"
     },
     {
       "arch": "darwin-arm64v8",
-      "jar_sha256": "d5d84a7e5103ade5557898fcf51affae69778be559bf9ba44819714c0d68e541",
-      "txz_sha256": "bc34c59637702d73d7bad7e17620c33be6fd219a28609eb26fdb36b85e6f89fd",
+      "jar_sha256": "65b953905f0a4d46030767a6b44a52360170d69a7985f1b02aa435f2f6256a83",
+      "txz_sha256": "07f29aed5baae53962b0ab80c901763b490b5692cf6a730cb3ece6bf455567af",
       "txz_name": "postgres-darwin-arm_64.txz",
-      "jarUrl": "https://repo1.maven.org/maven2/io/zonky/test/postgres/embedded-postgres-binaries-darwin-arm64v8/16.14.0/embedded-postgres-binaries-darwin-arm64v8-16.14.0.jar"
+      "jarUrl": "https://repo1.maven.org/maven2/io/zonky/test/postgres/embedded-postgres-binaries-darwin-arm64v8/16.15.0/embedded-postgres-binaries-darwin-arm64v8-16.15.0.jar"
     }
   ],
   "scan": {
@@ -60,7 +60,7 @@
     },
     "receiptArtifact": "embedded-postgres-trivy-receipt-<arch>",
     "policy": "recorded CI gate: scripts/supply-chain/verify-embedded-postgres.sh writes the raw Trivy report/version metadata, the raw official PostgreSQL security page, its normalized exact-version catalog, and embedded-postgres-trivy-receipt.json for every archives[] architecture. Trivy must explicitly name the server package or a fresh official catalog must independently cover the exact pin. Fixable Trivy HIGH/CRITICAL findings, absent/stale/mismatched authority, or an official HIGH/CRITICAL advisory fixed after the pin fail. The checksum and runtime provenance checks remain independent hard gates.",
-    "lastResult": "On 2026-08-13 the live official PostgreSQL 16 catalog matched 16 HIGH advisories against pinned 16.14.0, all fixed in 16.15. The repaired gate correctly reports fail. Maven Central had not yet published the Zonky 16.15.0 wrapper artifacts, so no reviewable per-architecture replacement hashes existed."
+    "lastResult": "On 2026-09-01 the live official PostgreSQL 16 catalog was evaluated against pinned 16.15.0 after Maven Central published all three supported Zonky wrapper architectures. Each JAR was verified against its Maven SHA-256 sidecar and each inner TXZ was independently hashed before these pins were committed."
   },
-  "notes": "PostgreSQL 16.14.0 remains the pinned embedded binary, but it is not security-current: PostgreSQL 16.15 was released on 2026-08-13. The official catalog now makes that lag a hard red gate instead of treating a checksum-valid Maven wrapper as clean vulnerability evidence. The pin cannot move until io.zonky.test.postgres publishes 16.15.0 for all three supported host architectures and their jar/inner-TXZ hashes are reviewed. This is the EVALUATION datastore, not the production one — production runs TRSTCTL_POSTGRES_MODE=external against an operator-owned PostgreSQL — but it is the first binary a new operator executes, so the vulnerability gate does not downgrade its assurance. A PostgreSQL 16 minor update keeps the on-disk format, and the cache filename is versioned. The jar and inner .txz pins are independent provenance controls; the runtime verifies the cached .txz before starting PostgreSQL. This dependency is NOT bundled in the shipped distroless image; it is fetched on first run of the bundled single-node/eval path."
+  "notes": "PostgreSQL 16.15.0 is the pinned embedded binary. The previous 16.14.0 pin became security-stale when PostgreSQL 16.15 was released on 2026-08-13; the authoritative catalog kept the gate red until io.zonky.test.postgres published all three supported wrappers on 2026-08-26. This is the EVALUATION datastore, not the production one — production runs TRSTCTL_POSTGRES_MODE=external against an operator-owned PostgreSQL — but it is the first binary a new operator executes, so the vulnerability gate does not downgrade its assurance. A PostgreSQL 16 minor update keeps the on-disk format, and the cache filename is versioned. The JAR and inner TXZ pins are independent provenance controls; the runtime verifies the cached TXZ before starting PostgreSQL. This dependency is NOT bundled in the shipped distroless image; it is fetched on first run of the bundled single-node/eval path."
 }

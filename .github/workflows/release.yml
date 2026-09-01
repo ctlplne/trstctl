@@ -118,7 +118,7 @@ jobs:
           node-version: 22
 
       - name: Install npm audit scanner (pinned)
-        run: npm install -g npm@${NPM_AUDIT_VERSION}
+        run: npm install -g "npm@${NPM_AUDIT_VERSION}"
 
       - name: Install embedded-postgres verifier tools
         run: sudo apt-get update && sudo apt-get install -y curl jq python3 unzip
@@ -365,9 +365,11 @@ jobs:
           build_ref="$(scripts/ci/resolve-pinned-base.sh "golang:${go_version}-bookworm" "${go_key}" golang)"
           runtime_ref="$(scripts/ci/resolve-pinned-base.sh gcr.io/distroless/static-debian12:nonroot \
             DISTROLESS_STATIC_DEBIAN12_NONROOT gcr.io/distroless/static-debian12)"
-          echo "web_ref=${web_ref}" >> "$GITHUB_OUTPUT"
-          echo "build_ref=${build_ref}" >> "$GITHUB_OUTPUT"
-          echo "runtime_ref=${runtime_ref}" >> "$GITHUB_OUTPUT"
+          {
+            echo "web_ref=${web_ref}"
+            echo "build_ref=${build_ref}"
+            echo "runtime_ref=${runtime_ref}"
+          } >> "$GITHUB_OUTPUT"
           echo ">> pinned Node web-builder base: ${web_ref}"
           echo ">> pinned Go builder base: ${build_ref}"
           echo ">> pinned distroless runtime base: ${runtime_ref}"
