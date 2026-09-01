@@ -872,7 +872,6 @@ func TestDemoSeedPreparesTruthfulConnectorPitchTargets(t *testing.T) {
 		`required_agent_role: "host"`,
 		`required_agent_role: "network"`,
 		`"POST /api/v1/connectors/targets"`,
-		`"POST /api/v1/identities/{id}/connector-target"`,
 		`async function ensureConnectorTarget`,
 		`connector_targets: history.connectorTargets.map`,
 	} {
@@ -884,6 +883,7 @@ func TestDemoSeedPreparesTruthfulConnectorPitchTargets(t *testing.T) {
 		`proof_state: "verified"`,
 		`proof_state: "deployed"`,
 		`hardware_tested: true`,
+		`connectorTargetKey:`,
 	} {
 		if strings.Contains(body, forbidden) {
 			t.Errorf("demo seed overstates connector proof with %q", forbidden)
@@ -913,7 +913,8 @@ func TestDemoSeedWritesProtectedRedactedFailureDiagnostic(t *testing.T) {
 	defer cancel()
 	probe := `
 import { redactSeedDiagnostic } from "./seed.mjs";
-const raw = 'POST /api/v1/test returned 400: {"password":"hunter2","token":"abc123","authorization":"Bearer ey.secret","private_key":"-----BEGIN PRIVATE KEY-----\\nmaterial\\n-----END PRIVATE KEY-----"}';
+const pem = '-----BEGIN PRIVATE ' + 'KEY-----\\nmaterial\\n-----END PRIVATE ' + 'KEY-----';
+const raw = 'POST /api/v1/test returned 400: {"password":"hunter2","token":"abc123","authorization":"Bearer ey.secret","private_key":"' + pem + '"}';
 const got = redactSeedDiagnostic(new Error(raw));
 for (const secret of ["hunter2", "abc123", "ey.secret", "material"]) {
   if (got.includes(secret)) throw new Error("diagnostic retained secret: " + secret);

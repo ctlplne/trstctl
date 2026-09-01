@@ -147,9 +147,9 @@ function buildDemoHistory() {
     { key: "iot-est-gateway", ownerKey: "iot", name: "iot-est-gateway.demo.trstctl.local", targetState: "deployed", profile: "est-serverkeygen-iot-24h", protocol: "est", deployment: "factory-floor/gateway-17", connector: "caddy", daysAgo: 63 },
     { key: "warehouse-mtls", ownerKey: "data", name: "warehouse-mtls.demo.trstctl.local", targetState: "deployed", profile: "service-mtls-30d", protocol: "acme", deployment: "warehouse/envoy/mtls", connector: "envoy", daysAgo: 41 },
     { key: "shadow-cleanup", ownerKey: "security", name: "shadow-cleanup.demo.trstctl.local", targetState: "revoked", profile: "acme-trust-authenticated-90d", protocol: "acme", deployment: "secops/remediation/shadow-cleanup", connector: "shell-ca", daysAgo: 16, revocationReason: "privilegeWithdrawn" },
-    { key: "apache-pitch", ownerKey: "payments", name: "apache-payments.demo.trstctl.local", targetState: "issued", profile: "service-mtls-30d", protocol: "acme", deployment: "apache-payments:/etc/apache2/tls", connector: "apache", connectorTargetKey: "apache-payments", daysAgo: 42 },
-    { key: "iis-pitch", ownerKey: "platform", name: "iis-portal.demo.trstctl.local", targetState: "issued", profile: "service-mtls-30d", protocol: "acme", deployment: "iis-portal:WebHosting/*:443", connector: "iis", connectorTargetKey: "iis-portal", daysAgo: 35 },
-    { key: "f5-pitch", ownerKey: "edge", name: "edge.demo.trstctl.local", targetState: "issued", profile: "service-mtls-30d", protocol: "acme", deployment: "f5-edge:/Common/demo-edge-clientssl", connector: "f5", connectorTargetKey: "f5-edge", daysAgo: 29 },
+    { key: "apache-pitch", ownerKey: "payments", name: "apache-payments.demo.trstctl.local", targetState: "issued", profile: "service-mtls-30d", protocol: "acme", deployment: "apache-payments:/etc/apache2/tls", connector: "apache", daysAgo: 42 },
+    { key: "iis-pitch", ownerKey: "platform", name: "iis-portal.demo.trstctl.local", targetState: "issued", profile: "service-mtls-30d", protocol: "acme", deployment: "iis-portal:WebHosting/*:443", connector: "iis", daysAgo: 35 },
+    { key: "f5-pitch", ownerKey: "edge", name: "edge.demo.trstctl.local", targetState: "issued", profile: "service-mtls-30d", protocol: "acme", deployment: "f5-edge:/Common/demo-edge-clientssl", connector: "f5", daysAgo: 29 },
   ];
   const importedCertificates = [
     { key: "legacy-db", ownerKey: "platform", commonName: "legacy-db.demo.trstctl.local", validDays: 7, deploymentLocation: "legacy-db-01:/etc/tls/server.crt", source: "import:cmdb", observedDaysAgo: 173 },
@@ -224,7 +224,6 @@ function plannedAPICalls(history) {
     ...history.connectorTargets.map(() => "POST /api/v1/connectors/targets"),
     "POST /api/v1/issuers",
     ...history.managedIdentities.flatMap(() => ["POST /api/v1/identities", "POST /api/v1/identities/{id}/transitions"]),
-    ...history.managedIdentities.filter((identity) => identity.connectorTargetKey).map(() => "POST /api/v1/identities/{id}/connector-target"),
     ...history.importedCertificates.map(() => "POST /api/v1/certificates"),
     "POST /api/v1/secrets/store",
     "PUT /api/v1/secrets/store/{name}",
@@ -314,7 +313,7 @@ function checkSeedPlan() {
   if (history.events.length < 50) {
     throw new Error(`demo history has ${history.events.length} events; want at least 50`);
   }
-  for (const route of ["POST /api/v1/issuers", "POST /api/v1/connectors/targets", "POST /api/v1/identities/{id}/connector-target", "POST /api/v1/certificates", "POST /api/v1/discovery/runs", "GET /api/v1/notifications"]) {
+  for (const route of ["POST /api/v1/issuers", "POST /api/v1/connectors/targets", "POST /api/v1/certificates", "POST /api/v1/discovery/runs", "GET /api/v1/notifications"]) {
     if (!calls.includes(route)) {
       throw new Error(`demo seed plan does not cover ${route}`);
     }
@@ -742,7 +741,7 @@ async function ensureConnectorTarget(target, targetItems) {
   return created;
 }
 
-async function ensureIdentity(item, ownerID, issuerID, identityItems, connectorTarget) {
+async function ensureIdentity(item, ownerID, issuerID, identityItems) {
   const attributes = {
     environment: item.key.includes("legacy") ? "legacy" : "production",
     dns_names: [item.name],
@@ -759,18 +758,7 @@ async function ensureIdentity(item, ownerID, issuerID, identityItems, connectorT
     `identity ${item.name}`,
   );
   if (existing) {
-    const observedAttributes = stableSeedSemantics(existing.attributes);
-    if (connectorTarget) {
-      if (observedAttributes.connector_target_id !== undefined && observedAttributes.connector_target_id !== connectorTarget.id) {
-        throw new Error(`identity ${item.name} is bound to an unexpected connector target`);
-      }
-      if (observedAttributes.connector_target_name !== undefined && observedAttributes.connector_target_name !== connectorTarget.name) {
-        throw new Error(`identity ${item.name} names an unexpected connector target`);
-      }
-      delete observedAttributes.connector_target_id;
-      delete observedAttributes.connector_target_name;
-    }
-    return assertFields({ ...existing, attributes: observedAttributes }, {
+    return assertFields({ ...existing, attributes: stableSeedSemantics(existing.attributes) }, {
       kind: "x509_certificate",
       name: item.name,
       owner_id: ownerID,
@@ -1019,10 +1007,6 @@ async function collectSeedInventory(history, resolved) {
             connector: definition.connector,
             profile: definition.profile,
             protocol: definition.protocol,
-            ...(definition.connectorTargetKey ? {
-              connector_target_id: resolved?.connectorTargets?.[definition.connectorTargetKey]?.id || row.attributes?.connector_target_id,
-              connector_target_name: resolved?.connectorTargets?.[definition.connectorTargetKey]?.name || row.attributes?.connector_target_name,
-            } : {}),
           }),
         },
         `identity ${definition.name}`,
@@ -1207,18 +1191,9 @@ async function main() {
     if (!ownerID) {
       throw new Error(`demo owner ${item.ownerKey} was not created`);
     }
-    const connectorTarget = item.connectorTargetKey ? connectorTargets[item.connectorTargetKey] : undefined;
-    if (item.connectorTargetKey && !connectorTarget) {
-      throw new Error(`demo connector target ${item.connectorTargetKey} was not created`);
-    }
-    identities[item.key] = await ensureIdentity(item, ownerID, issuer.id, identityItems, connectorTarget);
+    identities[item.key] = await ensureIdentity(item, ownerID, issuer.id, identityItems);
     issuedIdentityCount += 1;
     await advanceIdentity(item, identities[item.key], Math.min(issuedIdentityCount, 6));
-    if (connectorTarget) {
-      identities[item.key] = await api("POST", `/api/v1/identities/${identities[item.key].id}/connector-target`, {
-        target_id: connectorTarget.id,
-      }, stableKey(`identity-${item.key}-connector-target`));
-    }
   }
 
   await pollCertificates(Math.min(history.managedIdentities.length, 6));
