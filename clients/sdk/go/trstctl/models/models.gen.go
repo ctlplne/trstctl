@@ -11,7 +11,8 @@
 //
 // The supported Go surface is therefore the hand-written, dependency-free
 // transport and curated structs in the parent package (client.go, resources.go,
-// iterator.go) — they decode the same wire shapes the generator would emit.
+// workloads.go, iterator.go) — they decode the same wire shapes the generator
+// would emit.
 //
 // If you specifically need the full generated model set, run the blessed config
 // and accept the extra dependency in a CONSUMER module of your own:

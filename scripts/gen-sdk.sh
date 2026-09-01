@@ -133,7 +133,7 @@ fi
 # Step 4 (OPT-IN only): regenerate the full Go model set via oapi-codegen.
 #
 # The supported Go surface is the hand-written, dependency-free transport
-# (client.go / resources.go / iterator.go) plus curated structs — it imports
+# (client.go / resources.go / workloads.go / iterator.go) plus curated structs — it imports
 # nothing outside the standard library (see clients/sdk/go/go.mod). oapi-codegen's
 # output, by contrast, imports github.com/oapi-codegen/runtime, which would break
 # that stdlib-only guarantee. So this step is NOT run by default and the

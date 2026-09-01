@@ -23,6 +23,12 @@
 //   - Cursor pagination: List* methods return an (items, next_cursor) page, and
 //     a generic Iterator follows next_cursor so callers can range over every
 //     item without juggling cursors by hand.
+//   - Workload proof custody: broker, attested-SVID, and ephemeral requests take
+//     caller-owned []byte proof/task inputs. SDK-owned JSON and per-attempt body
+//     copies are wiped, and proof-bearing calls refuse redirects.
+//   - Strict workload outcomes: each typed workload method accepts only its
+//     pinned success status and a non-empty JSON result. Contract mismatches
+//     return *ResponseContractError instead of guessing whether issuance ran.
 //
 // The zero dependencies (standard library only) keep the SDK's supply chain
 // minimal — appropriate for a client that handles credential lifecycle.
@@ -40,8 +46,10 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"net/url"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -81,8 +89,9 @@ type Client struct {
 }
 
 // RetryPolicy configures automatic retries. Retries apply to requests the SDK
-// can safely repeat: GETs, and mutations (which always carry a stable
-// Idempotency-Key, so a repeat is exactly-once on the server, AN-5).
+// can safely repeat: GETs, explicitly effect-free previews, and mutations
+// (which always carry a stable Idempotency-Key, so a repeat is exactly-once on
+// the server, AN-5).
 type RetryPolicy struct {
 	// MaxAttempts is the total number of attempts (1 = no retry). Values < 1
 	// fall back to DefaultRetry.MaxAttempts.
@@ -222,6 +231,47 @@ func AsProblem(err error) (*Problem, bool) {
 	return nil, false
 }
 
+// ResponseContractError means the server returned a nominally successful HTTP
+// response that does not match the SDK's pinned OpenAPI contract. It is kept
+// separate from Problem: a Problem is an intentional API refusal, while this
+// error means automation must stop rather than guess whether an operation ran.
+type ResponseContractError struct {
+	Method           string
+	Path             string
+	Status           int
+	ExpectedStatuses []int
+	Detail           string
+}
+
+// Error implements error without copying a response body (which may contain a
+// credential) into logs.
+func (e *ResponseContractError) Error() string {
+	expected := make([]string, 0, len(e.ExpectedStatuses))
+	for _, status := range e.ExpectedStatuses {
+		expected = append(expected, strconv.Itoa(status))
+	}
+	detail := e.Detail
+	if detail == "" {
+		detail = "response did not match the pinned API contract"
+	}
+	if len(expected) == 0 {
+		return fmt.Sprintf("trstctl: %s %s returned HTTP %d: %s", e.Method, e.Path, e.Status, detail)
+	}
+	return fmt.Sprintf("trstctl: %s %s returned HTTP %d, expected %s: %s",
+		e.Method, e.Path, e.Status, strings.Join(expected, " or "), detail)
+}
+
+// AsResponseContractError extracts a response-contract failure. Automation can
+// use it to stop an ambiguous workflow without treating the response as an API
+// policy refusal or retrying under a new idempotency key.
+func AsResponseContractError(err error) (*ResponseContractError, bool) {
+	var contractErr *ResponseContractError
+	if errors.As(err, &contractErr) {
+		return contractErr, true
+	}
+	return nil, false
+}
+
 // httpClient returns the configured client or a sane default.
 func (c *Client) httpClient() *http.Client {
 	if c.HTTPClient != nil {
@@ -255,9 +305,57 @@ func NewIdempotencyKey() string {
 
 // requestOptions carry per-call knobs internal to the SDK.
 type requestOptions struct {
-	query          url.Values
-	body           any
-	idempotencyKey string // explicit key; empty means auto-generate for mutations
+	query            url.Values
+	body             any
+	idempotencyKey   string // explicit key; empty means auto-generate for mutations
+	omitIdempotency  bool   // effect-free POST-shaped reads must not reserve mutation keys
+	effectFree       bool   // safe to retry without an idempotency key
+	expectedStatuses []int  // empty preserves the legacy any-2xx behavior
+	requireBody      bool   // a typed success must contain one JSON value
+	sensitive        bool   // use wipeable SDK-owned request buffers
+	noRedirect       bool   // never replay the request at a Location target
+}
+
+// wipingReadCloser owns one per-attempt request-body copy. Close destroys that
+// copy even when the transport returns early; the caller's []byte fields are
+// never borrowed or modified.
+type wipingReadCloser struct {
+	mu     sync.Mutex
+	data   []byte
+	offset int
+	closed bool
+}
+
+func newWipingReadCloser(data []byte) *wipingReadCloser {
+	return &wipingReadCloser{data: data}
+}
+
+func (r *wipingReadCloser) Read(p []byte) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed || r.offset >= len(r.data) {
+		return 0, io.EOF
+	}
+	n := copy(p, r.data[r.offset:])
+	r.offset += n
+	return n, nil
+}
+
+func (r *wipingReadCloser) Close() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !r.closed {
+		wipeBytes(r.data)
+		r.closed = true
+	}
+	return nil
+}
+
+func wipeBytes(b []byte) {
+	for i := range b {
+		b[i] = 0
+	}
+	runtime.KeepAlive(b)
 }
 
 // isMutation reports whether method changes server state (and so needs an
@@ -275,8 +373,16 @@ func isMutation(method string) bool {
 // retry/backoff, then decodes a 2xx JSON body into out (out may be nil for 204
 // or when the caller ignores the body).
 func (c *Client) do(ctx context.Context, method, path string, opts requestOptions, out any) error {
+	_, err := c.doStatus(ctx, method, path, opts, out)
+	return err
+}
+
+// doStatus is do plus the authoritative HTTP status. Workload issuance uses it
+// to distinguish a completed 201 from an approval-pending 202 without inferring
+// execution from an optional response field.
+func (c *Client) doStatus(ctx context.Context, method, path string, opts requestOptions, out any) (int, error) {
 	if c.BaseURL == "" {
-		return errors.New("trstctl: Client.BaseURL is empty")
+		return 0, errors.New("trstctl: Client.BaseURL is empty")
 	}
 	u := strings.TrimRight(c.BaseURL, "/") + path
 	if len(opts.query) > 0 {
@@ -287,28 +393,38 @@ func (c *Client) do(ctx context.Context, method, path string, opts requestOption
 	if opts.body != nil {
 		b, err := json.Marshal(opts.body)
 		if err != nil {
-			return fmt.Errorf("trstctl: marshal request body: %w", err)
+			return 0, fmt.Errorf("trstctl: marshal request body: %w", err)
 		}
 		rawBody = b
+		if opts.sensitive {
+			defer wipeBytes(rawBody)
+		}
 	}
 
 	// A mutation gets a stable Idempotency-Key for the WHOLE operation (held
 	// constant across retries) so a retried POST is exactly-once on the server.
 	idemKey := opts.idempotencyKey
-	if idemKey == "" && isMutation(method) {
+	if idemKey == "" && isMutation(method) && !opts.omitIdempotency {
 		idemKey = NewIdempotencyKey()
 	}
+	retrySafe := !isMutation(method) || idemKey != "" || opts.effectFree
 
 	policy := c.Retry.withDefaults()
 	var lastErr error
 	for attempt := 1; attempt <= policy.MaxAttempts; attempt++ {
 		var bodyReader io.Reader
+		var ownedBody *wipingReadCloser
 		if rawBody != nil {
-			bodyReader = bytes.NewReader(rawBody)
+			attemptBody := append([]byte(nil), rawBody...)
+			ownedBody = newWipingReadCloser(attemptBody)
+			bodyReader = ownedBody
 		}
 		req, err := http.NewRequestWithContext(ctx, method, u, bodyReader)
 		if err != nil {
-			return fmt.Errorf("trstctl: build request: %w", err)
+			if ownedBody != nil {
+				_ = ownedBody.Close()
+			}
+			return 0, fmt.Errorf("trstctl: build request: %w", err)
 		}
 		req.Header.Set("Accept", "application/json, application/problem+json")
 		req.Header.Set("User-Agent", c.userAgent())
@@ -325,31 +441,54 @@ func (c *Client) do(ctx context.Context, method, path string, opts requestOption
 			req.Header.Set("Idempotency-Key", idemKey)
 		}
 
-		resp, err := c.httpClient().Do(req)
+		httpClient := c.httpClient()
+		if opts.sensitive || opts.noRedirect {
+			clone := *httpClient
+			clone.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
+				return http.ErrUseLastResponse
+			}
+			httpClient = &clone
+		}
+		resp, err := httpClient.Do(req)
+		if ownedBody != nil {
+			_ = ownedBody.Close()
+		}
 		if err != nil {
 			// Transport error: retry if attempts remain and ctx is alive.
 			lastErr = fmt.Errorf("trstctl: %s %s: %w", method, path, err)
-			if attempt < policy.MaxAttempts && ctx.Err() == nil {
+			if retrySafe && attempt < policy.MaxAttempts && ctx.Err() == nil {
 				if waitErr := sleepCtx(ctx, backoff(policy, attempt, 0)); waitErr != nil {
-					return waitErr
+					return 0, waitErr
 				}
 				continue
 			}
-			return lastErr
+			return 0, lastErr
 		}
 
 		status := resp.StatusCode
 		if status >= 200 && status < 300 {
-			defer resp.Body.Close()
+			if !statusAllowed(status, opts.expectedStatuses) {
+				_, _ = io.Copy(io.Discard, resp.Body)
+				_ = resp.Body.Close()
+				return status, responseContractError(method, path, status, opts.expectedStatuses,
+					"unexpected success status; execution outcome is ambiguous")
+			}
 			if out == nil || status == http.StatusNoContent {
 				_, _ = io.Copy(io.Discard, resp.Body)
-				return nil
+				_ = resp.Body.Close()
+				return status, nil
 			}
 			dec := json.NewDecoder(resp.Body)
-			if err := dec.Decode(out); err != nil && !errors.Is(err, io.EOF) {
-				return fmt.Errorf("trstctl: decode %s %s response: %w", method, path, err)
+			decodeErr := dec.Decode(out)
+			_ = resp.Body.Close()
+			if errors.Is(decodeErr, io.EOF) && opts.requireBody {
+				return status, responseContractError(method, path, status, opts.expectedStatuses,
+					"empty success body; execution outcome is ambiguous")
 			}
-			return nil
+			if decodeErr != nil && !errors.Is(decodeErr, io.EOF) {
+				return status, fmt.Errorf("trstctl: decode %s %s response: %w", method, path, decodeErr)
+			}
+			return status, nil
 		}
 
 		// Non-2xx: build a typed Problem from the (problem+json) body.
@@ -357,16 +496,35 @@ func (c *Client) do(ctx context.Context, method, path string, opts requestOption
 		resp.Body.Close()
 		lastErr = prob
 
-		if isRetryableStatus(status) && attempt < policy.MaxAttempts && ctx.Err() == nil {
+		if retrySafe && isRetryableStatus(status) && attempt < policy.MaxAttempts && ctx.Err() == nil {
 			delay := backoff(policy, attempt, prob.RetryAfter)
 			if waitErr := sleepCtx(ctx, delay); waitErr != nil {
-				return waitErr
+				return status, waitErr
 			}
 			continue
 		}
-		return lastErr
+		return status, lastErr
 	}
-	return lastErr
+	return 0, lastErr
+}
+
+func statusAllowed(status int, expected []int) bool {
+	if len(expected) == 0 {
+		return true
+	}
+	for _, candidate := range expected {
+		if status == candidate {
+			return true
+		}
+	}
+	return false
+}
+
+func responseContractError(method, path string, status int, expected []int, detail string) *ResponseContractError {
+	return &ResponseContractError{
+		Method: method, Path: path, Status: status,
+		ExpectedStatuses: append([]int(nil), expected...), Detail: detail,
+	}
 }
 
 // decodeProblem reads a non-2xx response into a *Problem, always returning a

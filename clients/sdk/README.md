@@ -112,7 +112,7 @@ Renumbering the module to `github.com/ctlplne/trstctl/clients/sdk/go` would make
 and it is recorded here so the trade-off is visible rather than implicit.
 
 The supported surface is the hand-written, dependency-free client
-(`client.go`, `resources.go`, `iterator.go`). `oapi-codegen.yaml` is a blessed
+(`client.go`, `resources.go`, `workloads.go`, `iterator.go`). `oapi-codegen.yaml` is a blessed
 config that can emit the full model set for forks that accept the extra
 dependency (opt-in; see the file and `TRSTCTL_SDK_GO_MODELS=1 make sdk`).
 
@@ -167,6 +167,62 @@ retry across process restarts to remain exactly-once:
 owner, err := client.CreateOwnerKeyed(ctx,
     trstctl.OwnerRequest{Kind: "workload", Name: "payments"}, "my-stable-key")
 ```
+
+### Workload and agentic identity
+
+The supported Go client covers the full REST journey for broker-issued agent
+identities, direct attested X.509-SVIDs, and approval-gated ephemeral
+credentials. Pass decoded proof bytes—not a base64 string. The SDK creates the
+exact `payload_base64` wire field, wipes its own encoded request buffers after
+every attempt, and never changes the caller-owned slice.
+
+```go
+proof, err := os.ReadFile("/run/secrets/workload-proof")
+if err != nil {
+    log.Fatal(err)
+}
+
+request := trstctl.BrokerAgentIdentityRequest{
+    AgentID:      "inventory-agent",
+    Method:       "k8s_sat",
+    Payload:      proof,
+    PublicKeyPEM: workloadPublicKeyPEM, // the private key stays with the workload
+    Scopes:       []string{"inventory:read"},
+    TTLSeconds:   600,
+}
+
+preview, err := client.PreviewBrokerAgentIdentity(ctx, request)
+if err != nil {
+    log.Fatal(err)
+}
+if !preview.Ready {
+    log.Fatalf("broker request is blocked: %v", preview.Blockers)
+}
+
+identity, err := client.IssueBrokerAgentIdentityKeyed(ctx, request, "agent-7-issue-1")
+if err != nil {
+    if contractErr, ok := trstctl.AsResponseContractError(err); ok {
+        // A nominal success did not match the pinned contract. Do not guess
+        // whether issuance ran, and do not retry under a different key.
+        log.Fatal(contractErr)
+    }
+    log.Fatal(err)
+}
+if identity.SPIFFEID == nil {
+    log.Fatal("the server could not safely disclose the exact signed SPIFFE ID")
+}
+log.Printf("issued %s", *identity.SPIFFEID)
+```
+
+Equivalent typed pairs are `PreviewAttestedSVID` / `IssueAttestedSVIDKeyed`
+and `PreviewEphemeralCredential` / `IssueEphemeralCredentialKeyed`. Ephemeral
+issuance keeps the two outcomes distinct: `IsPending()` means the server
+returned `202 awaiting_approval`; `IsIssued()` means it returned `201 issued`.
+Approve only the genuine `ApprovalRequestID` with its matching `IntentDigest`
+through `ApproveEphemeralCredentialKeyed`, then retry the unchanged request
+with a fresh logical-operation key. Preview POSTs are effect-free and send no
+`Idempotency-Key`; proof-bearing requests refuse redirects rather than replaying
+evidence at another location.
 
 ### Errors
 

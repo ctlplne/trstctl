@@ -108,10 +108,16 @@ output for `broker agent-identities issue`, `workloads attested-issuance`,
 `ephemeral issue`, and broker history `list`/`get`. The generated TypeScript and
 Python contracts include the same optional field. Java's generic `request` returns
 it unchanged in the response map; Java's generated schema-name index is not a
-field-level model. The supported Go SDK currently exposes a smaller curated
-owner/identity/inventory surface; it does not
-yet provide these workload methods. Do not mistake its build-ignored model
-reference for a callable workload client.
+field-level model. The supported, dependency-free Go SDK now provides typed
+preview/issue methods for broker, direct attested and approval-gated ephemeral
+credentials, approval submission, and filtered broker history list/get. Its
+optional `SPIFFEID` pointers remain nil when the server omits the exact signed URI;
+it never fabricates one from the friendly subject. Proof and task inputs remain
+caller-owned byte slices while SDK-owned encoded request buffers are wiped after
+each attempt. The callable review/execute methods include
+`PreviewBrokerAgentIdentity` / `IssueBrokerAgentIdentityKeyed`,
+`PreviewAttestedSVID` / `IssueAttestedSVIDKeyed`, and
+`PreviewEphemeralCredential` / `IssueEphemeralCredentialKeyed`.
 
 Preview and pending approval do **not** return a signed ID. A saved response from
 an older version can omit the field even if its certificate is recoverable; exact
