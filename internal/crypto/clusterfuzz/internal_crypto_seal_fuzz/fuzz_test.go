@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
-package seal_test
+package clusterfuzz
 
 import (
 	"bytes"
@@ -10,12 +10,6 @@ import (
 	"trstctl.com/trstctl/internal/crypto/seal"
 )
 
-// fakeWrapper is an in-memory KeyWrapper for fuzzing seal.Open without touching a
-// real KEK/HSM. WrapDEK prepends a fixed tag and UnwrapDEK strips it (rejecting any
-// wrapped blob that does not carry the tag), so the harness exercises the container
-// decode path — magic/version dispatch, wrappedLen slicing, nonce/ciphertext
-// slicing — independently of the AEAD math, and a mutated wrappedLen that points
-// past the buffer is what we want Open to reject cleanly (not panic).
 type fakeWrapper struct{}
 
 var fakeTag = []byte("FAKEWRAP")
@@ -31,16 +25,8 @@ func (fakeWrapper) UnwrapDEK(wrapped []byte) ([]byte, error) {
 	return append([]byte{}, wrapped[len(fakeTag):]...), nil
 }
 
-// FuzzOpenSeal drives arbitrary bytes through seal.Open, the binary sealed-blob
-// decoder (FUZZ-001). Open parses an attacker-influenceable container — the format
-// magic, the version byte it DISPATCHES on, the 2-byte big-endian wrappedLen, and
-// the stored-byte slices for the wrapped DEK / nonce / ciphertext — before any
-// AEAD verification. Sealed blobs are read from at-rest storage and backups, so a
-// truncated, version-bumped, or wrappedLen-mutated blob must fail closed
-// (ErrFormat / ErrDecrypt), never panic or read out of bounds. TEST-FUZZASSERT-001.
-//
-// This test lives inside the AN-3 crypto boundary (internal/crypto/seal), so it may
-// use crypto/rand directly to mint a real Seal() seed.
+var magicBytes = []byte{'C', 'S', 'L', '1'}
+
 func FuzzOpenSeal(f *testing.F) {
 	w := fakeWrapper{}
 
@@ -123,7 +109,3 @@ func FuzzOpenSeal(f *testing.F) {
 		}
 	})
 }
-
-// magicBytes mirrors the unexported seal magic ('C','S','L','1') so the harness can
-// build header-shaped seeds without reaching into the package internals.
-var magicBytes = []byte{'C', 'S', 'L', '1'}

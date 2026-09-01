@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
-package acme_test
+package clusterfuzz
 
 import (
 	"context"
@@ -10,8 +10,6 @@ import (
 	"trstctl.com/trstctl/internal/protocols/acme"
 )
 
-// dns01FuzzResolver returns a fixed set of TXT records regardless of the queried
-// name, so the fuzzer controls exactly what the validator sees.
 type dns01FuzzResolver struct{ txt []string }
 
 func (r dns01FuzzResolver) LookupTXT(_ context.Context, _ string) ([]string, error) {

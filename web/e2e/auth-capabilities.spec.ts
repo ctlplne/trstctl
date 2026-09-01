@@ -4,6 +4,7 @@ type AuthMethods = {
   oidc: boolean;
   saml: boolean;
   ldap: boolean;
+  provider_plane: boolean;
 };
 
 const supportedViewports = [
@@ -17,15 +18,20 @@ async function readAuthMethods(request: APIRequestContext): Promise<AuthMethods>
   expect(response.headers()["cache-control"]).toBe("no-store");
 
   const methods = (await response.json()) as AuthMethods;
-  expect(Object.keys(methods).sort()).toEqual(["ldap", "oidc", "saml"]);
+  expect(Object.keys(methods).sort()).toEqual(["ldap", "oidc", "provider_plane", "saml"]);
   expect(typeof methods.oidc).toBe("boolean");
   expect(typeof methods.saml).toBe("boolean");
   expect(typeof methods.ldap).toBe("boolean");
+  expect(typeof methods.provider_plane).toBe("boolean");
   return methods;
 }
 
 async function assertLoginPage(page: Page, methods: AuthMethods, testInfo: TestInfo, viewport: (typeof supportedViewports)[number]) {
   await page.setViewportSize(viewport);
+  // The shared Playwright storage state is authenticated for the route matrix.
+  // This oracle owns the anonymous login surface, so remove that session before
+  // each viewport instead of accidentally asserting login copy on the console.
+  await page.context().clearCookies();
   await page.goto("/");
 
   const sso = page.getByRole("button", {

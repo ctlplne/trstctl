@@ -86,6 +86,10 @@ func TestOperationApprovalRequestRecoversRetainedPrivacyEventAfterFiniteDedupe(t
 	if original.Requester != subject || original.ExpiresAt.Sub(original.CreatedAt) != intent.TTL {
 		t.Fatalf("first retained request = %+v", original)
 	}
+	if !original.CreatedAt.Equal(original.CreatedAt.UTC().Truncate(time.Microsecond)) ||
+		!original.ExpiresAt.Equal(original.ExpiresAt.UTC().Truncate(time.Microsecond)) {
+		t.Fatalf("first retained request timestamps are not PostgreSQL-canonical: %+v", original)
+	}
 	if requestEvent.Actor == nil || requestEvent.Actor.Subject != subject {
 		t.Fatalf("first retained request actor = %+v, want %q", requestEvent.Actor, subject)
 	}

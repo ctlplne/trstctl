@@ -302,7 +302,10 @@ func TestPreparePrivacySubjectErasureSnapshotsAuthorityAndRewritesRecoveryFences
 		t.Fatalf("pre-erasure snapshot fixture lacks raw subject %q", subject)
 	}
 
-	preparedAt := time.Now().UTC().Round(0)
+	// The command crosses PostgreSQL and the event log. Exercise the Linux clock
+	// case explicitly so canonical replay does not depend on host clock precision.
+	preparedAt := time.Date(2026, 9, 1, 5, 23, 1, 586569664, time.UTC)
+	canonicalPreparedAt := preparedAt.Truncate(time.Microsecond)
 	candidate := store.PrivacySubjectErasurePreparation{
 		PrivacySubjectErasure: store.PrivacySubjectErasure{
 			TenantID: tenantA, SubjectRef: privacy.SubjectRef(tenantA, subject),
@@ -324,7 +327,7 @@ func TestPreparePrivacySubjectErasureSnapshotsAuthorityAndRewritesRecoveryFences
 		prepared.RequestBinding != candidate.RequestBinding ||
 		prepared.RewriteOperationID != candidate.RewriteOperationID ||
 		prepared.TargetGeneration != candidate.TargetGeneration ||
-		!prepared.ErasedAt.Equal(preparedAt) {
+		!prepared.ErasedAt.Equal(canonicalPreparedAt) {
 		t.Fatalf("prepared identity/time = %+v, want %+v", prepared, candidate)
 	}
 	if prepared.ErasedAt.Location() != time.UTC || prepared.CreatedAt.Location() != time.UTC {

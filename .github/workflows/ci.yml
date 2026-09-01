@@ -1727,7 +1727,18 @@ jobs:
           fi
 
       - name: PQC census proofs against the shipped artifact
-        run: go test -tags trstctl_dodproof -count=1 -v -run 'TestDODPQCProductionAssembly' ./cmd/trstctl/
+        run: |
+          set -euo pipefail
+          for capability_id in \
+            pqc_end_to_end.pure_mldsa_leaf_stock_clients \
+            pqc_end_to_end.multikey_spiffe_hybrid_svid \
+            pqc_end_to_end.automated_rollout_tls_findings
+          do
+            make \
+              DOD_CAPABILITY="${capability_id}" \
+              DOD_CENSUS_OUT="${RUNNER_TEMP}/${capability_id}.json" \
+              dod-gate
+          done
 
   spire-e2e:
     name: spire container e2e

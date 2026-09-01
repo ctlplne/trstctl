@@ -18,7 +18,10 @@ func TestPrivacySubjectErasureOperationIsTenantScopedAndImmutable(t *testing.T) 
 	ctx := context.Background()
 	st := newStore(t)
 	const subject = "alice@example.com"
-	now := time.Now().UTC().Round(0)
+	// Deliberately keep sub-microsecond precision. Linux clocks commonly expose
+	// it while PostgreSQL timestamps do not; exact replay must canonicalize the
+	// command instead of treating the same event as an idempotency collision.
+	now := time.Date(2026, 9, 1, 5, 24, 17, 123456789, time.UTC)
 
 	operation := func(tenantID, operationID, eventID, binding, reason string, sequence uint64) store.PrivacySubjectErasureOperation {
 		return store.PrivacySubjectErasureOperation{
@@ -54,7 +57,8 @@ func TestPrivacySubjectErasureOperationIsTenantScopedAndImmutable(t *testing.T) 
 		t.Fatalf("load tenant A operation: %v", err)
 	}
 	if gotA.OperationID != opA.OperationID || gotA.RequestBinding != opA.RequestBinding ||
-		gotA.Reason != opA.Reason || gotA.EventSequence != opA.EventSequence {
+		gotA.Reason != opA.Reason || gotA.EventSequence != opA.EventSequence ||
+		!gotA.ErasedAt.Equal(now.Truncate(time.Microsecond)) {
 		t.Fatalf("tenant A operation = %+v, want %+v", gotA, opA)
 	}
 	if _, err := st.GetPrivacySubjectErasureOperationByEventID(ctx, tenantB, opA.EventID); !errors.Is(err, pgx.ErrNoRows) {
@@ -72,6 +76,7 @@ func TestPrivacySubjectErasureOperationIsTenantScopedAndImmutable(t *testing.T) 
 	// order reconstructs the latest aggregate.
 	later := operation(tenantA, "operation-later", "event-later", "sha256:binding-later", "later", 51)
 	later.ErasedAt = now.Add(time.Minute)
+	canonicalLaterErasedAt := later.ErasedAt.Truncate(time.Microsecond)
 	if err := apply(later); err != nil {
 		t.Fatalf("apply later operation: %v", err)
 	}
@@ -83,7 +88,7 @@ func TestPrivacySubjectErasureOperationIsTenantScopedAndImmutable(t *testing.T) 
 		t.Fatalf("list subject aggregate before rebuild: %v", err)
 	}
 	if len(beforeRebuild) != 1 || beforeRebuild[0].Reason != later.Reason ||
-		!beforeRebuild[0].ErasedAt.Equal(later.ErasedAt) {
+		!beforeRebuild[0].ErasedAt.Equal(canonicalLaterErasedAt) {
 		t.Fatalf("older redelivery regressed newer subject aggregate: %+v", beforeRebuild)
 	}
 	if err := st.TruncateReadModel(ctx); err != nil {
@@ -103,7 +108,7 @@ func TestPrivacySubjectErasureOperationIsTenantScopedAndImmutable(t *testing.T) 
 		t.Fatalf("list subject aggregate: %v", err)
 	}
 	if len(erasures) != 1 || erasures[0].Reason != later.Reason ||
-		!erasures[0].ErasedAt.Equal(later.ErasedAt) {
+		!erasures[0].ErasedAt.Equal(canonicalLaterErasedAt) {
 		t.Fatalf("ordered rebuild did not restore latest subject aggregate: %+v", erasures)
 	}
 }

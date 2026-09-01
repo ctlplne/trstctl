@@ -89,7 +89,11 @@ first_logical_count="$(jq -r '.postgres.owner_logical_count' <<<"$first")"
 [[ "$first_owner_count" == "$first_logical_count" ]] ||
   fail "owners contain duplicates before the repeat run: $first_owner_count rows, $first_logical_count logical owners"
 
-docker compose -f "$compose_file" run --rm demo-seed
+# The assembled dependencies are already running and are part of the preserved
+# state under test. Asking Compose to reconcile them here can recreate the
+# control plane on some Compose releases, which legitimately emits restart
+# events and contaminates this seed-only idempotency oracle.
+docker compose -f "$compose_file" run --rm --no-deps demo-seed
 second="$(stable_snapshot)"
 
 if [[ "$first" != "$second" ]]; then

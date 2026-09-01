@@ -314,13 +314,18 @@ func TestPQCDodproofGateIsRequired(t *testing.T) {
 	ci := read(t, "../.github/workflows/ci.yml")
 	for _, want := range []string{
 		"name: pqc e2e (dodproof)",
-		"-tags trstctl_dodproof",
-		"TestDODPQCProductionAssembly",
+		"pqc_end_to_end.pure_mldsa_leaf_stock_clients",
+		"pqc_end_to_end.multikey_spiffe_hybrid_svid",
+		"pqc_end_to_end.automated_rollout_tls_findings",
+		`DOD_CAPABILITY="${capability_id}"`,
 		"ML-DSA-65",
 	} {
 		if !strings.Contains(ci, want) {
 			t.Fatalf("ci.yml must contain %q so the PQC census proofs cannot regress to a documented-but-unrun claim (A0.3f)", want)
 		}
+	}
+	if strings.Contains(ci, "go test -tags trstctl_dodproof") {
+		t.Fatal("ci.yml bypasses the parent DoD gate and runs a proof test without its signed expectation envelope")
 	}
 
 	requiredPolicy := read(t, "../.github/branch-protection.json")

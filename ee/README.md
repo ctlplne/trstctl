@@ -15,6 +15,9 @@ Multi-tenancy, the event spine, the crypto boundary, audit/export rights, and th
 
 ## Packages (`ls ee/`)
 
+- `ee/clusterfuzz`: isolated test-only bridge packages that let the stock
+  ClusterFuzzLite Go helper compile external-package Enterprise fuzz targets
+  without weakening the AN-9 core-to-EE import fence.
 - `ee/incident`: credential-compromise workflow library.
 - `ee/pqcmigration`: PQC migration library — plan preview, staged re-issuance
   runs, rollback, and its own progress projection.

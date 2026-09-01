@@ -109,7 +109,7 @@ func (o *Orchestrator) EnsureOperationApprovalRequest(ctx context.Context, tenan
 			return getErr
 		}
 
-		now := time.Now().UTC()
+		now := canonicalOperationApprovalTime(time.Now())
 		if retainedRequestFound {
 			now = canonicalRequest.CreatedAt
 		}
@@ -321,7 +321,7 @@ func (o *Orchestrator) RecordOperationApprovalDecision(ctx context.Context, tena
 				return lockErr
 			}
 
-			now := time.Now().UTC()
+			now := canonicalOperationApprovalTime(time.Now())
 			if request.ResourceKind == "identity" &&
 				(request.Status == store.ApprovalStatusPending || request.Status == store.ApprovalStatusApproved) {
 				use, useErr := store.OperationApprovalUseFromRequest(request)
@@ -442,6 +442,13 @@ func (o *Orchestrator) RecordOperationApprovalDecision(ctx context.Context, tena
 		return store.OperationApprovalRequest{}, terminalErr
 	}
 	return result, nil
+}
+
+// canonicalOperationApprovalTime removes precision PostgreSQL cannot retain.
+// Request and decision timestamps cross the append-only event log and SQL read
+// model; both sides must compare the same bytes after crash recovery.
+func canonicalOperationApprovalTime(now time.Time) time.Time {
+	return now.UTC().Truncate(time.Microsecond)
 }
 
 func validateOperationApprovalDecisionTarget(request store.OperationApprovalRequest, decision OperationApprovalDecision) error {

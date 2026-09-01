@@ -208,14 +208,6 @@ func TestEnrollmentACLRefusesTrailingBytesAfterTrusteeSID(t *testing.T) {
 	}
 }
 
-func FuzzEnrollmentPrincipalsFromSecurityDescriptor(f *testing.F) {
-	f.Add(securityDescriptor(objectACE(0x05, 0x00000100, enrollmentGUIDBytes(), sidBytes("S-1-5-11"))))
-	f.Add([]byte{1, 2, 3})
-	f.Fuzz(func(t *testing.T, raw []byte) {
-		_, _ = adcs.EnrollmentPrincipalsFromSecurityDescriptor(raw)
-	})
-}
-
 func mustJSON(t *testing.T, value any) []byte {
 	t.Helper()
 	b, err := json.Marshal(value)

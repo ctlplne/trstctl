@@ -109,7 +109,7 @@ func TestAUD66CIProvesTwoPreservedVolumeRuns(t *testing.T) {
 	body := string(bodyBytes)
 	for _, want := range []string{
 		`docker compose -f "$compose_file" wait demo-seed`,
-		`docker compose -f "$compose_file" run --rm demo-seed`,
+		`docker compose -f "$compose_file" run --rm --no-deps demo-seed`,
 		`count(*) FROM owners`,
 		`count(DISTINCT (name, email)) FROM owners`,
 		`count(*) FROM outbox`,
@@ -120,6 +120,9 @@ func TestAUD66CIProvesTwoPreservedVolumeRuns(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Fatalf("AUD-66 convergence proof missing %q", want)
 		}
+	}
+	if strings.Contains(body, `run --rm demo-seed`) {
+		t.Fatal("AUD-66 convergence proof may reconcile/recreate healthy dependencies and count their restart events as seed drift")
 	}
 	workflow := read(t, "..", "..", ".github", "workflows", "ci.yml")
 	if !strings.Contains(workflow, "scripts/ci/demo-seed-convergence.sh") {

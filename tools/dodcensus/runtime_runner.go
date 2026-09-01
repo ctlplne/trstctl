@@ -189,7 +189,8 @@ process_status = {}
 for line in pathlib.Path("/proc/self/status").read_text().splitlines():
     key, separator, value = line.partition(":")
     if separator:
-        process_status[key] = value.strip().split()[0]
+        fields = value.strip().split()
+        process_status[key] = fields[0] if fields else ""
 expected_capability = "` + runtimeRunnerAuditCapabilityHex + `"
 for field in ("CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb"):
     if process_status.get(field) != expected_capability:

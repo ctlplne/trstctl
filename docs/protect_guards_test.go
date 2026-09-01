@@ -4073,6 +4073,26 @@ func TestTestTrackStrengthGuardsStayRequired(t *testing.T) {
 		`grep -rE '^func Fuzz[A-Za-z0-9_]+\(' --include='*_test.go' ./internal`,
 		"compile_native_go_fuzzer_v2",
 		"pkg=\"trstctl.com/trstctl/${dir#./}\"",
+		"external_test_manifest",
+		`if [[ "${package_name}" == *_test ]]`,
+		"trap restore_external_tests EXIT",
+		"ClusterFuzz compile-only placeholder",
+		`webui_fuzz_placeholder="internal/webui/dist/index.html"`,
+		`target="${dir#./}_${fn}"`,
+		`grep -Fqx -- "${target}" "${fuzz_target_manifest}"`,
+		`if [[ ! -x "${OUT}/${target}" ]]`,
+		`echo "built ${target_count} unique ClusterFuzz executables"`,
+	)
+	cflDockerfile := read(t, "../.clusterfuzzlite/Dockerfile")
+	check(".clusterfuzzlite/Dockerfile", cflDockerfile,
+		"golang:1.26.6-bookworm@sha256:116d58cbd88c1297624acc6e967a060012422bacf9930927e23fb719189c6f36",
+		"COPY --from=trstctl-go-toolchain /usr/local/go /usr/local/go",
+		"GOTOOLCHAIN=local",
+		"go version go1.26.6 linux/amd64",
+		"TRSTCTL_GO_FUZZ_BUILD_VERSION=v0.0.0-20250911191804-fc5dc53b9db8",
+		"github.com/AdamKorcz/go-118-fuzz-build@${TRSTCTL_GO_FUZZ_BUILD_VERSION}",
+		"cp /root/go/bin/go-118-fuzz-build /root/go/bin/go-118-fuzz-build_v2",
+		"go version -m /root/go/bin/go-118-fuzz-build_v2",
 	)
 
 	release := read(t, "../.github/workflows/release.yml")
@@ -4145,6 +4165,58 @@ func TestTestTrackStrengthGuardsStayRequired(t *testing.T) {
 		"docker compose -f deploy/docker/docker-compose.yml up -d --build",
 		"run: bash scripts/ci/compose-e2e.sh",
 	)
+}
+
+// The stock OSS-Fuzz v2 helper loads FuzzXxx functions from the package named
+// by the module import path. A fuzz function in an external `package foo_test`
+// is visible to `go test` but not to that build helper. The build script parks
+// ordinary external black-box tests while compiling, but it must not silently
+// park a fuzz entrypoint; those targets belong in isolated clusterfuzz bridge
+// packages where the helper can discover and build them.
+func TestClusterFuzzTargetsStayInBuildablePackages(t *testing.T) {
+	fuzzFunction := regexp.MustCompile(`(?m)^func\s+(Fuzz[A-Za-z0-9_]+)\s*\(`)
+	packageDecl := regexp.MustCompile(`(?m)^package\s+([A-Za-z0-9_]+)\s*$`)
+	outputs := make(map[string]string)
+	for _, root := range []string{"../internal", "../ee"} {
+		err := filepath.Walk(filepath.FromSlash(root), func(path string, info os.FileInfo, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if info.IsDir() || !strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			source, err := os.ReadFile(path) // #nosec G304,G122 -- test walks only repository-owned source roots (CWE-22, CWE-367).
+			if err != nil {
+				return err
+			}
+			functions := fuzzFunction.FindAllSubmatch(source, -1)
+			if len(functions) == 0 {
+				return nil
+			}
+			match := packageDecl.FindSubmatch(source)
+			if len(match) != 2 {
+				t.Errorf("FUZZ-003: %s declares a fuzz target without a parseable package", path)
+				return nil
+			}
+			if strings.HasSuffix(string(match[1]), "_test") {
+				t.Errorf("FUZZ-003: %s uses external package %s; compile_native_go_fuzzer_v2 cannot build that target", path, match[1])
+			}
+			dir := strings.TrimPrefix(filepath.ToSlash(filepath.Dir(path)), "../")
+			for _, function := range functions {
+				name := string(function[1])
+				output := strings.NewReplacer("/", "_", ".", "_", "-", "_").Replace(dir + "_" + name)
+				if earlier, exists := outputs[output]; exists {
+					t.Errorf("FUZZ-003: %s and %s map to the same ClusterFuzz output %s", earlier, path, output)
+					continue
+				}
+				outputs[output] = path
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("walk ClusterFuzz targets under %s: %v", root, err)
+		}
+	}
 }
 
 // TestVerifyAuditCorpusGuardStayRequired locks VERIFY-101..103: the audit corpus

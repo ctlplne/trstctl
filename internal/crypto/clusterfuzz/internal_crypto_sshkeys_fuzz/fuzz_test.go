@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
-package sshkeys_test
+package clusterfuzz
 
 import (
 	"crypto/ed25519"
@@ -12,25 +12,8 @@ import (
 	"trstctl.com/trstctl/internal/crypto/sshkeys"
 )
 
-// seedAuthorizedLine builds one real "ssh-ed25519 AAAA... comment" line so the
-// fuzz corpus reaches the success path. This test is inside the AN-3 boundary
-// (internal/crypto/sshkeys), so it may use the SSH crypto library directly.
-func seedAuthorizedLine(tb testing.TB) []byte {
-	tb.Helper()
-	pub, _, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		tb.Fatal(err)
-	}
-	sshPub, err := ssh.NewPublicKey(pub)
-	if err != nil {
-		tb.Fatal(err)
-	}
-	return ssh.MarshalAuthorizedKey(sshPub) // "ssh-ed25519 AAAA...\n"
-}
+// "ssh-ed25519 AAAA...\n"
 
-// FuzzParseAuthorizedKeys: parsing an authorized_keys file must never panic and
-// must terminate (the fuzz timeout catches a non-advancing loop) on arbitrary
-// bytes. TEST-FUZZASSERT-001.
 func FuzzParseAuthorizedKeys(f *testing.F) {
 	f.Add(seedAuthorizedLine(f))
 	f.Add([]byte(""))
@@ -42,8 +25,6 @@ func FuzzParseAuthorizedKeys(f *testing.F) {
 	})
 }
 
-// FuzzParseKnownHosts: parsing a known_hosts file must never panic and must
-// terminate on arbitrary bytes.
 func FuzzParseKnownHosts(f *testing.F) {
 	f.Add(append([]byte("example.com "), seedAuthorizedLine(f)...))
 	f.Add([]byte(""))
@@ -54,8 +35,6 @@ func FuzzParseKnownHosts(f *testing.F) {
 	})
 }
 
-// FuzzParsePublicKey: parsing a single .pub / host-key file must never panic on
-// arbitrary bytes.
 func FuzzParsePublicKey(f *testing.F) {
 	f.Add(seedAuthorizedLine(f))
 	f.Add([]byte(""))
@@ -64,4 +43,17 @@ func FuzzParsePublicKey(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
 		_, _ = sshkeys.ParsePublicKey(data)
 	})
+}
+
+func seedAuthorizedLine(f *testing.F) []byte {
+	f.Helper()
+	pub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		f.Fatal(err)
+	}
+	sshPub, err := ssh.NewPublicKey(pub)
+	if err != nil {
+		f.Fatal(err)
+	}
+	return ssh.MarshalAuthorizedKey(sshPub)
 }

@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -337,6 +338,47 @@ func TestIssuerControllerSignsRequestsBackedByClusterIssuer(t *testing.T) {
 	}
 	if block, _ := pem.Decode(decoded); block == nil || block.Type != "CERTIFICATE" {
 		t.Fatalf("status.certificate does not contain a PEM certificate")
+	}
+}
+
+// A newly-started Kubernetes API server can reject a safe list request with
+// 429 while its storage layer finishes initializing. The shipped controller
+// must honor that backpressure and retry the read instead of turning a normal
+// cluster startup into a failed certificate journey.
+func TestIssuerControllerRetriesTransientSafeRead(t *testing.T) {
+	api := newFakeIssuerAPI()
+	api.clusterIssuers = []map[string]any{{
+		"apiVersion": "trstctl.com/v1alpha1",
+		"kind":       "ClusterIssuer",
+		"metadata":   map[string]any{"name": "prod"},
+	}}
+	baseHandler := api.handler()
+	var listAttempts atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/apis/trstctl.com/v1alpha1/clusterissuers" && listAttempts.Add(1) == 1 {
+			w.Header().Set("Retry-After", "0")
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write([]byte(`{"kind":"Status","message":"storage is (re)initializing","code":429}`))
+			return
+		}
+		baseHandler.ServeHTTP(w, r)
+	}))
+	t.Cleanup(srv.Close)
+
+	controller := k8s.NewIssuerController(
+		k8s.New(srv.URL, "tok", "apps", srv.Client()),
+		k8s.SignerFunc(func(_ context.Context, _ []byte) ([]byte, error) { return nil, nil }),
+		"trstctl.com",
+	)
+	result, err := controller.Reconcile(context.Background(), "apps")
+	if err != nil {
+		t.Fatalf("reconcile after transient API pressure: %v", err)
+	}
+	if got := listAttempts.Load(); got != 2 {
+		t.Fatalf("cluster issuer list attempts = %d, want exactly 2", got)
+	}
+	if result.ClusterIssuersReady != 1 {
+		t.Fatalf("ready ClusterIssuers = %d, want 1", result.ClusterIssuersReady)
 	}
 }
 

@@ -44,7 +44,7 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1346 annotated sites across 26 rules. Each row is
+1351 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -77,7 +77,7 @@ not this file.
 | `ee/provider/aud60_test.go:16` | deterministic non-deployable test bearer (CWE-798). |
 | `ee/provider/scim_fuzz_test.go:30` | deterministic non-deployable fuzz authenticator (CWE-798). |
 | `internal/agent/discovery/kubernetes.go:89` | metadata key naming the Kubernetes Secret a public certificate was found in; no credential value present (CWE-798) |
-| `internal/agent/k8s/client.go:29` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/agent/k8s/client.go:30` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/agent/relay/mdmsync_test.go:23` | credential reference (secret store pointer), no credential value present (CWE-798) |
 | `internal/agent/relay/relay_appliance_e2e_test.go:70` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
 | `internal/agent/relay/relay_appliance_e2e_test.go:93` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
@@ -372,7 +372,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:329` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (213 sites)
+### G115 — CWE-190 Integer overflow or wraparound (219 sites)
 
 | Location | Reason |
 |---|---|
@@ -393,6 +393,12 @@ not this file.
 | `internal/backup/backup.go:988` | record counts bounded by the event log; fits both int and uint64 (CWE-190) |
 | `internal/ca/hierarchy/hierarchy_test.go:39` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/cli/doctor/doctor_test.go:41` | bounded fixture/corpus value packing inside a test (CWE-190) |
+| `internal/clusterfuzz/internal_discovery_adcs_adcs/fuzz_test.go:26` | test SID inputs have at most 255 sub-authorities (CWE-190). |
+| `internal/clusterfuzz/internal_discovery_adcs_adcs/fuzz_test.go:28` | ParseUint limits authority to 48 bits and this loop emits one byte at a time (CWE-190). |
+| `internal/clusterfuzz/internal_discovery_adcs_adcs/fuzz_test.go:33` | deterministic test SIDs keep the object ACE below MaxUint16 (CWE-190). |
+| `internal/clusterfuzz/internal_discovery_adcs_adcs/fuzz_test.go:53` | test call sites pass a bounded literal ACE set (CWE-190). |
+| `internal/clusterfuzz/internal_discovery_adcs_adcs/fuzz_test.go:69` | ParseUint bounds revision to 8 bits and the test SID grammar caps sub-authorities at 255 (CWE-190). |
+| `internal/clusterfuzz/internal_discovery_adcs_adcs/fuzz_test.go:71` | ParseUint bounds authority to 48 bits and this loop emits one byte at a time (CWE-190). |
 | `internal/crypto/argon2id.go:69` | length of a stored KDF hash, far under the uint32 bound (CWE-190) |
 | `internal/crypto/ctlog/ctlogtest/ctlogtest.go:286` | test-support package compiled only into test binaries (CWE-190) |
 | `internal/crypto/ctlog/ctlogtest/ctlogtest.go:303` | test-support package compiled only into test binaries (CWE-190) |
@@ -412,11 +418,11 @@ not this file.
 | `internal/crypto/tenantwrap/tenantwrap.go:238` | fixed-format buffer: a wrapped domain KEK has a fixed sealed length; an impossible oversize panics the slice bounds rather than truncating (CWE-190) |
 | `internal/discovery/adcs/acl.go:76` | the offset is uint32-derived and bounded against len(raw) above (CWE-190). |
 | `internal/discovery/adcs/adcs_test.go:205` | the fixed malformed fixture is below MaxUint16 (CWE-190). |
-| `internal/discovery/adcs/adcs_test.go:240` | test SID inputs have at most 255 sub-authorities (CWE-190). |
-| `internal/discovery/adcs/adcs_test.go:242` | ParseUint limits authority to 48 bits and this loop emits one byte at a time (CWE-190). |
-| `internal/discovery/adcs/adcs_test.go:255` | deterministic test SIDs keep the ACE below MaxUint16 (CWE-190). |
-| `internal/discovery/adcs/adcs_test.go:264` | deterministic test SIDs keep the object ACE below MaxUint16 (CWE-190). |
-| `internal/discovery/adcs/adcs_test.go:284` | test call sites pass a bounded literal ACE set (CWE-190). |
+| `internal/discovery/adcs/adcs_test.go:232` | test SID inputs have at most 255 sub-authorities (CWE-190). |
+| `internal/discovery/adcs/adcs_test.go:234` | ParseUint limits authority to 48 bits and this loop emits one byte at a time (CWE-190). |
+| `internal/discovery/adcs/adcs_test.go:247` | deterministic test SIDs keep the ACE below MaxUint16 (CWE-190). |
+| `internal/discovery/adcs/adcs_test.go:256` | deterministic test SIDs keep the object ACE below MaxUint16 (CWE-190). |
+| `internal/discovery/adcs/adcs_test.go:276` | test call sites pass a bounded literal ACE set (CWE-190). |
 | `internal/dns/rfc2136/rfc2136.go:246` | DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190) |
 | `internal/dns/rfc2136/rfc2136.go:263` | DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190) |
 | `internal/dns/rfc2136/rfc2136.go:283` | DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190) |
@@ -611,13 +617,13 @@ not this file.
 | `deploy/helm/airgap_bundle_test.go:163` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/ai_surface_placement_test.go:27` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/deferred_wipe_guard_test.go:45` | walking the repo's own tree (CWE-22) |
-| `docs/docs_test.go:2547` | test walks the repo's own checkout; no hostile symlink exposure (CWE-367) |
+| `docs/docs_test.go:2548` | test walks the repo's own checkout; no hostile symlink exposure (CWE-367) |
 | `docs/embedded_postgres_teardown_test.go:43` | walks this repository's own test sources (CWE-22) |
 | `docs/est_differential_test.go:190` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_completeness_test.go:261` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:876` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:939` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:4549` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:4621` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `internal/agent/discovery/filesystem.go:57` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
 | `internal/agent/discovery/privatekey.go:67` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
@@ -814,7 +820,7 @@ not this file.
 | `internal/server/python_sdk_served_test.go:82` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/revocation_openssl_test.go:184` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/signer_token_command.go:61` | operator-configured token-helper command (CWE-78) |
-| `internal/server/vault_compat_served_test.go:95` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/vault_compat_served_test.go:96` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/signing/helpers_test.go:29` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/signing/static_test.go:41` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/signing/supervisor.go:46` | spawns the repo's own signer binary; AN-4 child-process mode (CWE-78) |
@@ -840,7 +846,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1016` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/proof/proof_test.go:1058` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/proof/proof_test.go:1142` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `tools/dodcensus/runtime_runner.go:868` | developer tool running fixed toolchain commands over the repo (CWE-78) |
+| `tools/dodcensus/runtime_runner.go:869` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/dodcensus/substrate_broker.go:222` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/pqclab/main.go:594` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/trstctllint/repo_selftest_test.go:22` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -934,7 +940,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (362 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (361 sites)
 
 | Location | Reason |
 |---|---|
@@ -1008,7 +1014,7 @@ not this file.
 | `docs/protect_guards_completeness_test.go:261` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:876` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:939` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:4549` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:4621` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/provenance/authorship_test.go:38` | fixed sibling path inside the package's own directory (CWE-22) |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `ee/billing/evidence_test.go:140` | test reads repo source files it names itself (CWE-22) |
@@ -1094,8 +1100,7 @@ not this file.
 | `internal/crypto/mtls/signer.go:107` | operator-configured peer CA trust anchor path from the signer's own config (CWE-22) |
 | `internal/crypto/mtls/signer_test.go:47` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/crypto/mtls/syncdir_other.go:10` | parent of a validated internal TLS state path (CWE-22) |
-| `internal/crypto/parserfuzz_audit_test.go:173` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/crypto/parserfuzz_audit_test.go:260` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/crypto/parserfuzz_audit_test.go:252` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/crypto/pfx/pfx_test.go:43` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/crypto/pfx/pfx_test.go:44` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/crypto/secretfile/secretfile.go:34` | operator-configured local secret path; parents and file mode validated above (CWE-22) |
@@ -1282,13 +1287,13 @@ not this file.
 | `tools/dodcensus/runtime.go:1139` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/runtime.go:1472` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/runtime_runner.go:93` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/runtime_runner.go:648` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/runtime_runner.go:765` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/runtime_runner.go:809` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/runtime_runner.go:649` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/runtime_runner.go:766` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/runtime_runner.go:810` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/runtime_runner_test.go:338` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/dodcensus/runtime_runner_test.go:465` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/dodcensus/runtime_runner_test.go:519` | test reads its own fixture/tempdir path (CWE-22) |
+| `tools/dodcensus/runtime_runner_test.go:469` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/runtime_runner_test.go:523` | test reads its own fixture/tempdir path (CWE-22) |
+| `tools/dodcensus/runtime_runner_test.go:527` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/secret_integrations_manifest_test.go:113` | test reads the exact committed substrate source (CWE-22) |
 | `tools/dodcensus/secret_integrations_manifest_test.go:145` | test reads the exact committed runtime proof source (CWE-22) |
 | `tools/featureparityreport/main.go:49` | explicit operator-selected local report output |
@@ -1480,7 +1485,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1016` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/proof/proof_test.go:1058` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/proof/proof_test.go:1142` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `tools/dodcensus/runtime_runner.go:868` | developer tool running fixed toolchain commands over the repo (CWE-78) |
+| `tools/dodcensus/runtime_runner.go:869` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
 ### G703 — CWE-22 Path traversal (taint) (60 sites)
 
@@ -1517,7 +1522,7 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:198` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
 | `internal/server/secrets_scan_served_test.go:203` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
-| `internal/server/vault_compat_served_test.go:78` | test path inside its own tempdir/checkout (CWE-22) |
+| `internal/server/vault_compat_served_test.go:79` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/signing/keystore.go:293` | both absolute paths passed the explicit signer-keystore confinement check above (CWE-22) |
 | `internal/signing/keystore.go:304` | tmpPath passed the explicit signer-keystore confinement check above (CWE-22) |
 | `internal/signing/keystore.go:441` | path passed the explicit signer-keystore confinement check above (CWE-22) |
@@ -1543,9 +1548,9 @@ not this file.
 | `tools/dodcensus/proof/proof.go:89` | developer tool probing repo/toolchain paths, not a served binary (CWE-22) |
 | `tools/dodcensus/proof/proof_test.go:258` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/proof/proof_test.go:1172` | test path inside its own tempdir/checkout (CWE-22) |
-| `tools/dodcensus/runtime_runner.go:853` | developer tool probing repo/toolchain paths, not a served binary (CWE-22) |
+| `tools/dodcensus/runtime_runner.go:854` | developer tool probing repo/toolchain paths, not a served binary (CWE-22) |
 | `tools/dodcensus/runtime_runner_test.go:343` | test path inside its own tempdir/checkout (CWE-22) |
-| `tools/dodcensus/runtime_runner_test.go:473` | test path inside its own tempdir/checkout (CWE-22) |
+| `tools/dodcensus/runtime_runner_test.go:477` | test path inside its own tempdir/checkout (CWE-22) |
 
 ### G704 — CWE-918 Server-side request forgery (taint) (5 sites)
 

@@ -13,9 +13,6 @@ import (
 	"testing"
 )
 
-// fuzzFuncRE matches a Go fuzz target declaration.
-var fuzzFuncRE = regexp.MustCompile(`(?m)^func Fuzz\w+\(`)
-
 // fuzzFuncNameRE matches a Go fuzz target declaration and captures its name, so
 // the guard can require specific decoders to stay fuzzed (not just "some target
 // in this dir").
@@ -161,23 +158,7 @@ func TestEveryUntrustedParserIsFuzzed(t *testing.T) {
 // its harness.
 func requireFuzzFuncByName(t *testing.T, dir string, want map[string]string) {
 	t.Helper()
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatalf("read parser dir %q: %v", dir, err)
-	}
-	found := map[string]bool{}
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), "_test.go") {
-			continue
-		}
-		b, err := os.ReadFile(filepath.Join(dir, e.Name())) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
-		if err != nil {
-			t.Fatalf("read %s: %v", e.Name(), err)
-		}
-		for _, m := range fuzzFuncNameRE.FindAllStringSubmatch(string(b), -1) {
-			found[m[1]] = true
-		}
-	}
+	found := fuzzTargetNamesForPackage(t, dir)
 	for name, what := range want {
 		if !found[name] {
 			t.Errorf("required fuzz target %s (%s) is missing — FUZZ-001/002 require it; do not remove it", name, what)
@@ -249,6 +230,17 @@ func discoverUntrustedParsers(t *testing.T, roots []string) map[string]string {
 
 func dirHasFuzzTarget(t *testing.T, dir string) bool {
 	t.Helper()
+	return len(fuzzTargetNamesForPackage(t, dir)) != 0
+}
+
+// fuzzTargetNamesForPackage includes native targets beside the parser and an
+// isolated ClusterFuzz bridge only when that bridge imports the exact source
+// package. The stock OSS-Fuzz helper cannot compile an external `package x_test`
+// target in a mixed test directory, but moving the entrypoint must not let the
+// parser denominator degrade into a repository-wide "some fuzzer exists" check.
+func fuzzTargetNamesForPackage(t *testing.T, dir string) map[string]bool {
+	t.Helper()
+	found := map[string]bool{}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatalf("read parser dir %q: %v", dir, err)
@@ -261,9 +253,47 @@ func dirHasFuzzTarget(t *testing.T, dir string) bool {
 		if err != nil {
 			t.Fatalf("read %s: %v", e.Name(), err)
 		}
-		if fuzzFuncRE.Match(b) {
-			return true
+		for _, match := range fuzzFuncNameRE.FindAllStringSubmatch(string(b), -1) {
+			found[match[1]] = true
 		}
 	}
-	return false
+
+	repoRoot, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatalf("resolve repository root: %v", err)
+	}
+	parserDir, err := filepath.Abs(dir)
+	if err != nil {
+		t.Fatalf("resolve parser dir %q: %v", dir, err)
+	}
+	rel, err := filepath.Rel(repoRoot, parserDir)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		t.Fatalf("parser dir %q is outside repository root %q", parserDir, repoRoot)
+	}
+	parserImport := `"trstctl.com/trstctl/` + filepath.ToSlash(rel) + `"`
+	for _, bridgeRoot := range []string{"clusterfuzz", "../clusterfuzz", "../../ee/clusterfuzz"} {
+		err := filepath.Walk(bridgeRoot, func(path string, info os.FileInfo, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if info.IsDir() || !strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			body, readErr := os.ReadFile(path) // #nosec G304,G122 -- test walks repository-owned bridge fixtures (CWE-22, CWE-367)
+			if readErr != nil {
+				return readErr
+			}
+			if !strings.Contains(string(body), parserImport) {
+				return nil
+			}
+			for _, match := range fuzzFuncNameRE.FindAllStringSubmatch(string(body), -1) {
+				found[match[1]] = true
+			}
+			return nil
+		})
+		if err != nil && !os.IsNotExist(err) {
+			t.Fatalf("walk ClusterFuzz bridge root %q: %v", bridgeRoot, err)
+		}
+	}
+	return found
 }

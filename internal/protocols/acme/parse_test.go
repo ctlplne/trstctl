@@ -72,47 +72,9 @@ func TestParseFinalizeRequest(t *testing.T) {
 // FuzzParseOrderRequest fuzzes the newOrder payload parser — the parser the
 // server runs on every untrusted order body — for panics and to confirm it
 // always fails closed (never returns a malformed-but-nil-error order). (B9/N3.)
-func FuzzParseOrderRequest(f *testing.F) {
-	f.Add([]byte(`{"identifiers":[{"type":"dns","value":"example.com"}]}`))
-	f.Add([]byte(`{"identifiers":[]}`))
-	f.Add([]byte(`{}`))
-	f.Add([]byte(`{"identifiers":[{"type":"dns","value":"x"}],"replaces":"abc"}`))
-	f.Add([]byte(`not json`))
-	f.Add([]byte(`{"identifiers":[{"type":"dns","value":""}]}`))
-	f.Fuzz(func(t *testing.T, data []byte) {
-		req, err := acmesrv.ParseOrderRequest(data)
-		if err != nil {
-			return
-		}
-		// On success every identifier must be a non-empty dns identifier.
-		if len(req.Identifiers) == 0 {
-			t.Fatalf("accepted an order with no identifiers: %q", data)
-		}
-		for _, id := range req.Identifiers {
-			if id.Type != "dns" || id.Value == "" {
-				t.Fatalf("accepted a bad identifier %+v from %q", id, data)
-			}
-		}
-	})
-}
 
 // FuzzParseFinalizeRequest fuzzes the finalize payload parser for panics and to
 // confirm it never returns an empty CSR with a nil error.
-func FuzzParseFinalizeRequest(f *testing.F) {
-	f.Add([]byte(`{"csr":"MIIBAg"}`))
-	f.Add([]byte(`{"csr":""}`))
-	f.Add([]byte(`{}`))
-	f.Add([]byte(`garbage`))
-	f.Fuzz(func(t *testing.T, data []byte) {
-		der, err := acmesrv.ParseFinalizeRequest(data)
-		if err != nil {
-			return
-		}
-		if len(der) == 0 {
-			t.Fatalf("accepted an empty CSR with nil error from %q", data)
-		}
-	})
-}
 
 func TestParseRevokeRequest(t *testing.T) {
 	der := []byte{0x30, 0x82, 0x01, 0x02}
@@ -169,42 +131,7 @@ func TestParseKeyChangeInner(t *testing.T) {
 
 // FuzzParseRevokeRequest fuzzes the revokeCert payload parser (untrusted input):
 // it must never panic and never return an empty certificate with a nil error.
-func FuzzParseRevokeRequest(f *testing.F) {
-	f.Add([]byte(`{"certificate":"MIIBAg","reason":1}`))
-	f.Add([]byte(`{"certificate":""}`))
-	f.Add([]byte(`{"certificate":"MIIBAg","reason":-5}`))
-	f.Add([]byte(`{}`))
-	f.Add([]byte(`garbage`))
-	f.Fuzz(func(t *testing.T, data []byte) {
-		req, err := acmesrv.ParseRevokeRequest(data)
-		if err != nil {
-			return
-		}
-		if len(req.CertDER) == 0 {
-			t.Fatalf("accepted an empty certificate with nil error from %q", data)
-		}
-		if req.Reason < 0 {
-			t.Fatalf("accepted a negative reason from %q", data)
-		}
-	})
-}
 
 // FuzzParseKeyChangeInner fuzzes the keyChange inner-payload parser (untrusted
 // input): it must never panic and never return a result missing the account or
 // oldKey with a nil error.
-func FuzzParseKeyChangeInner(f *testing.F) {
-	f.Add([]byte(`{"account":"u","oldKey":{"kty":"RSA"}}`))
-	f.Add([]byte(`{"account":""}`))
-	f.Add([]byte(`{"oldKey":{}}`))
-	f.Add([]byte(`{}`))
-	f.Add([]byte(`not json`))
-	f.Fuzz(func(t *testing.T, data []byte) {
-		kc, err := acmesrv.ParseKeyChangeInner(data)
-		if err != nil {
-			return
-		}
-		if kc.Account == "" || len(kc.OldKey) == 0 {
-			t.Fatalf("accepted an incomplete keyChange inner from %q: %+v", data, kc)
-		}
-	})
-}

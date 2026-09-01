@@ -18,6 +18,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,6 +31,8 @@ const (
 	saCAPath        = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
 	saNamespacePath = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 	maxAPIBody      = 4 << 20
+	maxReadAttempts = 5
+	maxRetryDelay   = 5 * time.Second
 )
 
 // Client is a minimal authenticated client for the Kubernetes REST API.
@@ -95,33 +98,83 @@ func (c *Client) ClusterID() string { return c.clusterID }
 // and response body. Non-2xx is not an error here — callers interpret the code
 // (for example 404/409 during create-or-update).
 func (c *Client) request(ctx context.Context, method, path string, body any) (int, []byte, error) {
-	var reader io.Reader
+	var payload []byte
 	if body != nil {
-		buf, err := json.Marshal(body)
+		var err error
+		payload, err = json.Marshal(body)
 		if err != nil {
 			return 0, nil, err
 		}
-		reader = bytes.NewReader(buf)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, c.base+path, reader)
-	if err != nil {
-		return 0, nil, err
+
+	attempts := 1
+	if method == http.MethodGet || method == http.MethodHead {
+		attempts = maxReadAttempts
 	}
-	if c.token != "" {
-		req.Header.Set("Authorization", "Bearer "+c.token)
+	for attempt := 0; attempt < attempts; attempt++ {
+		var reader io.Reader
+		if payload != nil {
+			reader = bytes.NewReader(payload)
+		}
+		req, err := http.NewRequestWithContext(ctx, method, c.base+path, reader)
+		if err != nil {
+			return 0, nil, err
+		}
+		if c.token != "" {
+			req.Header.Set("Authorization", "Bearer "+c.token)
+		}
+		req.Header.Set("Accept", "application/json")
+		if body != nil {
+			req.Header.Set("Content-Type", "application/json")
+		}
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			return 0, nil, err
+		}
+		data, readErr := io.ReadAll(io.LimitReader(resp.Body, maxAPIBody))
+		_ = resp.Body.Close()
+		if readErr != nil {
+			return resp.StatusCode, nil, readErr
+		}
+		if attempt+1 >= attempts || (resp.StatusCode != http.StatusTooManyRequests && resp.StatusCode != http.StatusServiceUnavailable) {
+			return resp.StatusCode, data, nil
+		}
+		if err := waitForAPIRetry(ctx, kubernetesRetryDelay(resp.Header.Get("Retry-After"), data, attempt)); err != nil {
+			return 0, nil, err
+		}
 	}
-	req.Header.Set("Accept", "application/json")
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
+	panic("unreachable")
+}
+
+func kubernetesRetryDelay(header string, body []byte, attempt int) time.Duration {
+	if seconds, err := strconv.Atoi(strings.TrimSpace(header)); err == nil && seconds >= 0 {
+		return min(time.Duration(seconds)*time.Second, maxRetryDelay)
 	}
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return 0, nil, err
+	if when, err := time.Parse(http.TimeFormat, strings.TrimSpace(header)); err == nil {
+		return min(max(time.Until(when), 0), maxRetryDelay)
 	}
-	defer func() { _ = resp.Body.Close() }()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxAPIBody))
-	if err != nil {
-		return resp.StatusCode, nil, err
+	var status struct {
+		Details struct {
+			RetryAfterSeconds int `json:"retryAfterSeconds"`
+		} `json:"details"`
 	}
-	return resp.StatusCode, data, nil
+	if json.Unmarshal(body, &status) == nil && status.Details.RetryAfterSeconds > 0 {
+		return min(time.Duration(status.Details.RetryAfterSeconds)*time.Second, maxRetryDelay)
+	}
+	delay := 100 * time.Millisecond
+	for i := 0; i < attempt && delay < maxRetryDelay; i++ {
+		delay *= 2
+	}
+	return min(delay, maxRetryDelay)
+}
+
+func waitForAPIRetry(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }

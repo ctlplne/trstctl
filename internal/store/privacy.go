@@ -1152,6 +1152,10 @@ func (s *Store) ApplyPrivacySubjectErasureOperationTx(
 		op.SubjectRef == "" || op.ErasedAt.IsZero() {
 		return errors.New("store: privacy subject erasure operation is incomplete")
 	}
+	// PostgreSQL timestamptz stores microseconds. Normalize before the first
+	// write and every replay comparison so a Linux nanosecond clock cannot turn
+	// the exact same immutable event into a false idempotency conflict.
+	op.ErasedAt = op.ErasedAt.UTC().Truncate(time.Microsecond)
 	selectors, err := json.Marshal(op.Selectors)
 	if err != nil {
 		return err

@@ -23,6 +23,17 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
+// testContext is the small test capability this conformance corpus actually
+// needs. Keep it narrower than testing.TB: the OSS-Fuzz Go shim implements the
+// familiar helper/failure/cleanup methods, but it can lag newly added testing.TB
+// methods such as ArtifactDir even when compiled by the current Go toolchain.
+type testContext interface {
+	Helper()
+	Fatal(args ...any)
+	Fatalf(format string, args ...any)
+	Cleanup(func())
+}
+
 func TestConformance_PublishedVectors(t *testing.T) {
 	for _, vector := range readPublishedVectors(t) {
 		t.Run(vector.ID, func(t *testing.T) {
@@ -311,7 +322,7 @@ type vectorPlaneState struct {
 	WitnessKey  *crypto.LockedSigner
 }
 
-func readPublishedVectors(t testing.TB) []publishedVector {
+func readPublishedVectors(t testContext) []publishedVector {
 	t.Helper()
 	vectors := vectorsRoot(t)
 	names := vectorNames(t)
@@ -330,7 +341,7 @@ func readPublishedVectors(t testing.TB) []publishedVector {
 	return out
 }
 
-func vectorsDir(t testing.TB) string {
+func vectorsDir(t testContext) string {
 	t.Helper()
 	return filepath.Join(repoRoot(t), "ee", "reconcile", "conformance", "testdata", "vectors")
 }
@@ -338,7 +349,7 @@ func vectorsDir(t testing.TB) string {
 // vectorsRoot opens the published-vector directory as a directory handle so the
 // fixture reads below are confined to it: a symlink or ".." planted in testdata
 // cannot redirect a conformance read outside the vector corpus.
-func vectorsRoot(t testing.TB) *os.Root {
+func vectorsRoot(t testContext) *os.Root {
 	t.Helper()
 	root, err := os.OpenRoot(vectorsDir(t))
 	if err != nil {
@@ -350,7 +361,7 @@ func vectorsRoot(t testing.TB) *os.Root {
 
 // vectorNames returns the base names of the published vectors, relative to
 // vectorsRoot.
-func vectorNames(t testing.TB) []string {
+func vectorNames(t testContext) []string {
 	t.Helper()
 	matches, err := filepath.Glob(filepath.Join(vectorsDir(t), "*.fixture.json"))
 	if err != nil {
@@ -366,7 +377,7 @@ func vectorNames(t testing.TB) []string {
 	return names
 }
 
-func fixtureFromVector(t testing.TB, vector publishedVector) conformanceFixture {
+func fixtureFromVector(t testContext, vector publishedVector) conformanceFixture {
 	t.Helper()
 	fx, err := decodeVector(vector)
 	if err != nil {
@@ -564,7 +575,7 @@ func cloneEvidence(in witness.Evidence) witness.Evidence {
 	return out
 }
 
-func repoRoot(t testing.TB) string {
+func repoRoot(t testContext) string {
 	t.Helper()
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
@@ -577,7 +588,7 @@ func repoRoot(t testing.TB) string {
 // through it stay inside the checkout and refuse symlink or ".." escape at the
 // syscall layer, which keeps these edition-boundary scans honest even if the
 // tree they walk is hostile.
-func repoRootHandle(t testing.TB) *os.Root {
+func repoRootHandle(t testContext) *os.Root {
 	t.Helper()
 	root, err := os.OpenRoot(repoRoot(t))
 	if err != nil {

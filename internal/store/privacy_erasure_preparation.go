@@ -248,6 +248,9 @@ func (s *Store) PreparePrivacySubjectErasureWithSchedulerResolver(
 		candidate.ErasedAt.IsZero() {
 		return PrivacySubjectErasurePreparation{}, errors.New("store: privacy erasure preparation identity is incomplete")
 	}
+	// This time becomes both PostgreSQL crash-bridge state and canonical event
+	// time. Strip precision PostgreSQL cannot preserve before either copy exists.
+	candidate.ErasedAt = candidate.ErasedAt.UTC().Truncate(time.Microsecond)
 	for _, metadata := range []string{
 		candidate.OperationID, candidate.RequestBinding, candidate.EventID,
 		candidate.RewriteOperationID, candidate.TargetGeneration,

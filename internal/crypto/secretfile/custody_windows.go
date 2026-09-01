@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
@@ -65,31 +66,28 @@ func setWindowsDACL(path string, directory, publicRead bool) error {
 }
 
 func privateWindowsPath(path string) (bool, error) {
-	sd, owner, sddl, err := windowsPathSecurity(path)
-	if err != nil || sd == nil {
+	sd, owner, dacl, err := windowsPathSecurity(path)
+	if err != nil || sd == nil || dacl == nil {
 		return false, err
 	}
 	user, err := windows.GetCurrentProcessToken().GetTokenUser()
 	if err != nil {
 		return false, err
 	}
-	allowed := map[string]struct{}{
-		"SY": {}, "S-1-5-18": {}, "BA": {}, "S-1-5-32-544": {}, "OW": {},
-		strings.ToUpper(user.User.Sid.String()): {},
-	}
-	if owner != nil {
-		allowed[strings.ToUpper(owner.String())] = struct{}{}
-	}
-	aces := daclACEs(sddl)
-	if len(aces) == 0 {
-		return false, nil
+	allowed := windowsTrustedWriters(owner, user.User.Sid)
+	aces, err := windowsAllowedACEs(dacl)
+	if err != nil || len(aces) == 0 {
+		return false, err
 	}
 	for _, ace := range aces {
-		fields := strings.Split(ace, ";")
-		if len(fields) < 6 || !windowsAllowACE(fields[0]) || strings.TrimSpace(fields[2]) == "" {
+		if ace.Mask == 0 {
 			continue
 		}
-		trustee := strings.ToUpper(strings.TrimSpace(fields[len(fields)-1]))
+		sid := windowsACESID(ace)
+		if sid == nil || !sid.IsValid() {
+			return false, nil
+		}
+		trustee := strings.ToUpper(sid.String())
 		if _, ok := allowed[trustee]; !ok {
 			return false, nil
 		}
@@ -97,8 +95,23 @@ func privateWindowsPath(path string) (bool, error) {
 	return true, nil
 }
 
+func windowsTrustedWriters(owner, user *windows.SID) map[string]struct{} {
+	allowed := map[string]struct{}{
+		"S-1-5-18":     {}, // Local System.
+		"S-1-5-32-544": {}, // Built-in Administrators.
+		"S-1-3-4":      {}, // Owner Rights.
+	}
+	if user != nil {
+		allowed[strings.ToUpper(user.String())] = struct{}{}
+	}
+	if owner != nil {
+		allowed[strings.ToUpper(owner.String())] = struct{}{}
+	}
+	return allowed
+}
+
 func publicWindowsPathTamperSafe(path string) (bool, error) {
-	_, owner, sddl, err := windowsPathSecurity(path)
+	_, owner, dacl, err := windowsPathSecurity(path)
 	if err != nil {
 		return false, err
 	}
@@ -106,89 +119,81 @@ func publicWindowsPathTamperSafe(path string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	allowedWriters := map[string]struct{}{
-		"SY": {}, "S-1-5-18": {}, "BA": {}, "S-1-5-32-544": {}, "OW": {},
-		strings.ToUpper(user.User.Sid.String()): {},
-	}
-	if owner != nil {
-		allowedWriters[strings.ToUpper(owner.String())] = struct{}{}
-	}
-	aces := daclACEs(sddl)
-	if len(aces) == 0 {
-		return false, nil
+	allowedWriters := windowsTrustedWriters(owner, user.User.Sid)
+	aces, err := windowsAllowedACEs(dacl)
+	if err != nil || len(aces) == 0 {
+		return false, err
 	}
 	for _, ace := range aces {
-		fields := strings.Split(ace, ";")
-		if len(fields) < 6 || !windowsAllowACE(fields[0]) || strings.TrimSpace(fields[2]) == "" {
+		if ace.Mask == 0 {
 			continue
 		}
-		trustee := strings.ToUpper(strings.TrimSpace(fields[len(fields)-1]))
+		sid := windowsACESID(ace)
+		if sid == nil || !sid.IsValid() {
+			return false, nil
+		}
+		trustee := strings.ToUpper(sid.String())
 		if _, ok := allowedWriters[trustee]; ok {
 			continue
 		}
-		if windowsRightsMayWrite(fields[2]) {
+		if windowsMaskMayWrite(ace.Mask) {
 			return false, nil
 		}
 	}
 	return true, nil
 }
 
-func windowsPathSecurity(path string) (*windows.SECURITY_DESCRIPTOR, *windows.SID, string, error) {
+func windowsPathSecurity(path string) (*windows.SECURITY_DESCRIPTOR, *windows.SID, *windows.ACL, error) {
 	sd, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT,
 		windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
 	if err != nil || sd == nil {
-		return sd, nil, "", err
+		return sd, nil, nil, err
 	}
 	dacl, _, err := sd.DACL()
 	if err != nil || dacl == nil {
-		return sd, nil, "", err
+		return sd, nil, dacl, err
 	}
 	owner, _, err := sd.Owner()
 	if err != nil {
-		return sd, nil, "", err
+		return sd, nil, dacl, err
 	}
-	return sd, owner, sd.String(), nil
+	return sd, owner, dacl, nil
 }
 
-func daclACEs(sddl string) []string {
-	start := strings.Index(sddl, "D:")
-	if start < 0 {
-		return nil
-	}
-	dacl := sddl[start+2:]
-	if stop := strings.Index(dacl, "S:"); stop >= 0 {
-		dacl = dacl[:stop]
-	}
-	var out []string
-	for {
-		open := strings.IndexByte(dacl, '(')
-		if open < 0 {
-			return out
+func windowsAllowedACEs(dacl *windows.ACL) ([]*windows.ACCESS_ALLOWED_ACE, error) {
+	aces := make([]*windows.ACCESS_ALLOWED_ACE, 0, dacl.AceCount)
+	for index := uint16(0); index < dacl.AceCount; index++ {
+		var ace *windows.ACCESS_ALLOWED_ACE
+		if err := windows.GetAce(dacl, uint32(index), &ace); err != nil {
+			return nil, err
 		}
-		closeAt := strings.IndexByte(dacl[open:], ')')
-		if closeAt < 0 {
-			return out
+		if ace == nil {
+			return nil, fmt.Errorf("secretfile: Windows DACL contains a nil ACE")
 		}
-		out = append(out, dacl[open+1:open+closeAt])
-		dacl = dacl[open+closeAt+1:]
+		switch ace.Header.AceType {
+		case windows.ACCESS_ALLOWED_ACE_TYPE:
+			aces = append(aces, ace)
+		case windows.ACCESS_DENIED_ACE_TYPE:
+			// A deny ACE grants no mutation authority and is safe to ignore.
+		default:
+			// Object/callback/conditional allow ACEs have a different SID
+			// layout. Refuse them instead of interpreting the wrong bytes.
+			return nil, fmt.Errorf("secretfile: Windows DACL contains unsupported ACE type %d", ace.Header.AceType)
+		}
 	}
+	return aces, nil
 }
 
-func windowsAllowACE(kind string) bool {
-	switch strings.ToUpper(strings.TrimSpace(kind)) {
-	case "A", "OA", "XA", "ZA":
-		return true
-	default:
-		return false
-	}
+func windowsACESID(ace *windows.ACCESS_ALLOWED_ACE) *windows.SID {
+	return (*windows.SID)(unsafe.Pointer(&ace.SidStart))
 }
 
-func windowsRightsMayWrite(rights string) bool {
-	rights = strings.ToUpper(strings.TrimSpace(rights))
-	if rights == "GR" || rights == "FR" || rights == "GRGX" || rights == "FRFX" || rights == "RC" {
-		return false
-	}
-	// Our writer emits symbolic rights. Treat anything else conservatively: an
-	// unfamiliar allow mask must not silently become a tamper-safe certificate.
-	return true
+func windowsMaskMayWrite(mask windows.ACCESS_MASK) bool {
+	const readOnly = uint32(windows.GENERIC_READ | windows.GENERIC_EXECUTE |
+		windows.FILE_READ_DATA | windows.FILE_READ_EA | windows.FILE_READ_ATTRIBUTES |
+		windows.FILE_EXECUTE | windows.READ_CONTROL | windows.SYNCHRONIZE)
+	// Anything beyond the exact read/execute/control set is conservatively
+	// treated as mutation authority. This includes generic/full write, append,
+	// delete, DACL/owner changes, and any future mask this verifier does not know.
+	return uint32(mask)&^readOnly != 0
 }

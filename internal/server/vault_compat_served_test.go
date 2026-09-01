@@ -21,13 +21,14 @@ import (
 func TestVaultCLICompatibilityAgainstServedHandler(t *testing.T) {
 	vault := vaultCLIBinary(t)
 	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
+	registerServedTenant(t, h, "Vault compatibility stock-client tenant")
 	token := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
 	home := t.TempDir()
 
 	runVault(t, vault, home, h.ts.URL, token, "login", "-no-store", token)
 
 	runVault(t, vault, home, h.ts.URL, token,
-		"kv", "put", "secret/trstctl-vault",
+		"kv", "put", "-header=Idempotency-Key=vault-compat-kv-put-1", "secret/trstctl-vault",
 		"username=app",
 		"password=vault-compat-s3cr3t",
 	)
@@ -47,7 +48,7 @@ func TestVaultCLICompatibilityAgainstServedHandler(t *testing.T) {
 	}
 
 	pkiRaw := runVault(t, vault, home, h.ts.URL, token,
-		"write", "-format=json", "pki/issue/trstctl", "common_name=svc.vault.test", "ttl=1h",
+		"write", "-header=Idempotency-Key=vault-compat-pki-issue-1", "-format=json", "pki/issue/trstctl", "common_name=svc.vault.test", "ttl=1h",
 	)
 	var issued struct {
 		Data struct {

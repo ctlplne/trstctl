@@ -390,6 +390,7 @@ func TestRuntimeRunnerPreflightCoversBothWritesAndAuthenticatedBroker(t *testing
 		`expected_socket_uid == expected_uid or expected_socket_gid == expected_gid`,
 		`os.getgroups() != [expected_socket_gid]`,
 		`expected_capability = "0000010000000040"`,
+		`process_status[key] = fields[0] if fields else ""`,
 		`("CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb")`,
 		`process_status.get("NoNewPrivs") != "1"`,
 		`process_status.get("Seccomp") != "2"`,
@@ -435,6 +436,9 @@ func TestRuntimeRunnerPreflightCoversBothWritesAndAuthenticatedBroker(t *testing
 		if !strings.Contains(runtimeRunnerPreflightScript, required) {
 			t.Errorf("runner preflight omits %q", required)
 		}
+	}
+	if strings.Contains(runtimeRunnerPreflightScript, `value.strip().split()[0]`) {
+		t.Fatal("runner preflight indexes empty /proc status fields before checking whether a value exists")
 	}
 	program := runtimeRunnerPreflightProgram()
 	if strings.ContainsAny(program, "\r\n") {

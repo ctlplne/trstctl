@@ -80,20 +80,3 @@ func TestDeviceAttestTPMParserVerifiesChallengeKeyAlgorithmAndRoot(t *testing.T)
 		t.Fatal("TPM attestation accepted an untrusted attestation root")
 	}
 }
-
-func FuzzParseAndVerifyTPMDeviceAttestation(f *testing.F) {
-	f.Add([]byte(`{}`), []byte("challenge"), []byte("not a certificate"))
-	f.Add([]byte(`{"type":"public-key","response":{}}`), make([]byte, 32), []byte("-----BEGIN CERTIFICATE-----"))
-	f.Fuzz(func(t *testing.T, credentialJSON, challenge, rootPEM []byte) {
-		if len(credentialJSON) > 1<<20 || len(challenge) > 1024 || len(rootPEM) > 1<<20 {
-			t.Skip()
-		}
-		_, _ = deviceattest.ParseAndVerifyTPMDeviceAttestation(
-			credentialJSON,
-			challenge,
-			[][]byte{rootPEM},
-			[]int64{-7, -257},
-			time.Unix(1_785_240_000, 0).UTC(),
-		)
-	})
-}
