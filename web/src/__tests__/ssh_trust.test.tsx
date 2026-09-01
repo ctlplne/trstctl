@@ -474,4 +474,32 @@ describe("SSH trust served workflow surface", () => {
     expect(second[1]).toBe(first[1]);
     expect(await screen.findByRole("heading", { name: "SSH access certificate issued" })).toBeInTheDocument();
   });
+
+  it("keeps review usable when an older node returns null empty arrays", async () => {
+    apiMock.previewAttestedSSHUserCert.mockResolvedValueOnce({
+      capability: "F45",
+      ready: true,
+      effect_free: true,
+      effective_ttl_seconds: 900,
+      required_permission: "certs:issue",
+      public_key_fingerprint: "SHA256:ssh-subject",
+      authority_fingerprint: "SHA256:ssh-authority",
+      approver: "ssh-approver",
+      payload_sha256: "proof-digest",
+      blockers: null,
+      recovery_steps: null,
+    });
+    const user = userEvent.setup();
+    renderSSHTrust();
+
+    const chooser = (await screen.findByRole("heading", { name: "Choose what you want to do" })).closest("section") as HTMLElement;
+    await user.click(within(chooser).getByRole("button", { name: "Request SSH access" }));
+    await user.type(screen.getByLabelText("Attestation payload base64"), "eyJzdWIiOiJzYSJ9");
+    await user.type(screen.getByLabelText("SSH public key"), "ssh-ed25519 AAAATEST user@example.test");
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+
+    expect(await screen.findByRole("heading", { name: "Ready to verify and issue" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Verify proof and issue SSH certificate" })).toBeEnabled();
+    expect(screen.queryByText("This page stopped unexpectedly")).not.toBeInTheDocument();
+  });
 });

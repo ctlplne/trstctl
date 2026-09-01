@@ -109,6 +109,9 @@ func TestServedSSHAtScaleJourneyJOURNEY002EndToEnd(t *testing.T) {
 	if status != http.StatusOK {
 		t.Fatalf("preview attested SSH user cert: status %d body %s", status, body)
 	}
+	if bytes.Contains(body, []byte(`"blockers":null`)) || !bytes.Contains(body, []byte(`"blockers":[]`)) {
+		t.Fatalf("ready preview must serialize blockers as an empty array, never null: %s", body)
+	}
 	var preview struct {
 		Capability              string   `json:"capability"`
 		Ready                   bool     `json:"ready"`

@@ -215,7 +215,15 @@ export function SSHTrust() {
     setIssuedCert(null);
     attestedRetryKey.current = null;
     try {
-      const plan = await api.previewAttestedSSHUserCert(attestedRequest);
+      const response = await api.previewAttestedSSHUserCert(attestedRequest);
+      // Older candidates serialized an empty Go slice as JSON null. Keep the
+      // console usable while those nodes roll forward instead of crashing the
+      // entire page when an operator reviews a ready plan.
+      const plan = {
+        ...response,
+        blockers: response.blockers ?? [],
+        recovery_steps: response.recovery_steps ?? [],
+      };
       setAttestedReview({ requestKey: attestedRequestKey, plan });
     } catch (err) {
       setAttestedReview(null);
@@ -545,57 +553,59 @@ export function SSHTrust() {
                 className="ui-panel grid gap-3 md:grid-cols-3"
                 onSubmit={(event) => void previewAttested(event)}
               >
-                <label className="grid gap-1 text-sm">
-                  {translateNow("source.attestation.method.1f0610be7c")}
-                  <select className="ui-input" value={method} onChange={(event) => setMethod(event.target.value as SSHAttestedUserCertRequest["method"])}>
+                <div className="grid gap-1 text-sm">
+                  <label htmlFor="ssh-attested-method">{translateNow("source.attestation.method.1f0610be7c")}</label>
+                  <select id="ssh-attested-method" className="ui-input" value={method} onChange={(event) => setMethod(event.target.value as SSHAttestedUserCertRequest["method"])}>
                     {attestors.map((value) => (
                       <option key={value} value={value}>
                         {value}
                       </option>
                     ))}
                   </select>
-                </label>
-                <label className="grid gap-1 text-sm">
-                  {translateNow("source.key.id.d54d56ee0a")}
-                  <input className="ui-input" value={keyId} onChange={(event) => setKeyId(event.target.value)} />
-                </label>
-                <label className="grid gap-1 text-sm">
-                  {translateNow("source.ttl.seconds.862d08de5a")}
-                  <input className="ui-input" inputMode="numeric" value={ttlSeconds} onChange={(event) => setTTLSeconds(event.target.value)} />
-                </label>
-                <label className="grid gap-1 text-sm">
-                  {t("sshTrust.attested.approver")}
-                  <input className="ui-input" value={approver} onChange={(event) => setApprover(event.target.value)} required />
-                </label>
-                <label className="grid gap-1 text-sm">
-                  {t("sshTrust.attested.boundPrincipals")}
-                  <textarea className="ui-input min-h-20 font-mono text-xs" value={principals} onChange={(event) => setPrincipals(event.target.value)} />
-                </label>
-                <label className="grid gap-1 text-sm">
-                  {t("sshTrust.attested.sourceAddresses")}
+                </div>
+                <div className="grid gap-1 text-sm">
+                  <label htmlFor="ssh-attested-key-id">{translateNow("source.key.id.d54d56ee0a")}</label>
+                  <input id="ssh-attested-key-id" className="ui-input" value={keyId} onChange={(event) => setKeyId(event.target.value)} />
+                </div>
+                <div className="grid gap-1 text-sm">
+                  <label htmlFor="ssh-attested-ttl">{translateNow("source.ttl.seconds.862d08de5a")}</label>
+                  <input id="ssh-attested-ttl" className="ui-input" inputMode="numeric" value={ttlSeconds} onChange={(event) => setTTLSeconds(event.target.value)} />
+                </div>
+                <div className="grid gap-1 text-sm">
+                  <label htmlFor="ssh-attested-approver">{t("sshTrust.attested.approver")}</label>
+                  <input id="ssh-attested-approver" className="ui-input" value={approver} onChange={(event) => setApprover(event.target.value)} required />
+                </div>
+                <div className="grid gap-1 text-sm">
+                  <label htmlFor="ssh-attested-principals">{t("sshTrust.attested.boundPrincipals")}</label>
+                  <textarea id="ssh-attested-principals" className="ui-input min-h-20 font-mono text-xs" value={principals} onChange={(event) => setPrincipals(event.target.value)} />
+                </div>
+                <div className="grid gap-1 text-sm">
+                  <label htmlFor="ssh-attested-source-addresses">{t("sshTrust.attested.sourceAddresses")}</label>
                   <textarea
+                    id="ssh-attested-source-addresses"
                     className="ui-input min-h-20 font-mono text-xs"
                     value={sourceAddresses}
                     onChange={(event) => setSourceAddresses(event.target.value)}
                   />
-                </label>
-                <label className="grid gap-1 text-sm md:col-span-3">
-                  {t("sshTrust.attested.forceCommand")}
-                  <input className="ui-input font-mono text-xs" value={forceCommand} onChange={(event) => setForceCommand(event.target.value)} />
-                </label>
-                <label className="grid gap-1 text-sm md:col-span-3">
-                  {translateNow("source.attestation.payload.base64.11bfdba122")}
+                </div>
+                <div className="grid gap-1 text-sm md:col-span-3">
+                  <label htmlFor="ssh-attested-force-command">{t("sshTrust.attested.forceCommand")}</label>
+                  <input id="ssh-attested-force-command" className="ui-input font-mono text-xs" value={forceCommand} onChange={(event) => setForceCommand(event.target.value)} />
+                </div>
+                <div className="grid gap-1 text-sm md:col-span-3">
+                  <label htmlFor="ssh-attested-payload">{translateNow("source.attestation.payload.base64.11bfdba122")}</label>
                   <textarea
+                    id="ssh-attested-payload"
                     className="ui-input min-h-24 font-mono text-xs"
                     value={payloadBase64}
                     onChange={(event) => setPayloadBase64(event.target.value)}
                     required
                   />
-                </label>
-                <label className="grid gap-1 text-sm md:col-span-3">
-                  {translateNow("source.ssh.public.key.c9be6a369e")}
-                  <textarea className="ui-input min-h-24 font-mono text-xs" value={publicKey} onChange={(event) => setPublicKey(event.target.value)} required />
-                </label>
+                </div>
+                <div className="grid gap-1 text-sm md:col-span-3">
+                  <label htmlFor="ssh-attested-public-key">{translateNow("source.ssh.public.key.c9be6a369e")}</label>
+                  <textarea id="ssh-attested-public-key" className="ui-input min-h-24 font-mono text-xs" value={publicKey} onChange={(event) => setPublicKey(event.target.value)} required />
+                </div>
                 <Button className="md:col-span-3" type="submit" disabled={!attestedInputValid || attestedPreviewing || attestedIssuing}>
                   {attestedPreviewing ? t("sshTrust.attested.previewing") : t("sshTrust.attested.previewAction")}
                 </Button>

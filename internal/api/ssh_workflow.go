@@ -428,7 +428,11 @@ func (a *API) retireSSHHost(w http.ResponseWriter, r *http.Request) {
 func (a *API) writeSSHWorkflowError(w http.ResponseWriter, err error) bool {
 	switch {
 	case errors.Is(err, ErrSSHWorkflowUnavailable):
-		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "ssh workflow is not enabled"))
+		detail := strings.TrimPrefix(err.Error(), ErrSSHWorkflowUnavailable.Error()+": ")
+		if detail == "" || detail == err.Error() {
+			detail = "ssh workflow is temporarily unavailable"
+		}
+		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, detail))
 	case errors.Is(err, ErrSSHWorkflowInvalid):
 		a.writeProblem(w, problem.New(http.StatusUnprocessableEntity, strings.TrimPrefix(err.Error(), ErrSSHWorkflowInvalid.Error()+": ")))
 	case errors.Is(err, ErrSSHWorkflowRejected):

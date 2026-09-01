@@ -457,7 +457,7 @@ func (s *Server) PreviewAttestedSSHUserCert(ctx context.Context, tenantID string
 		ExecutionSignerCalls: []string{
 			"Ask the isolated signer to sign one short-lived SSH user certificate after proof, approver, principal, and session constraints pass.",
 		},
-		Blockers: append([]string(nil), plan.blockers...),
+		Blockers: append([]string{}, plan.blockers...),
 		RecoverySteps: []string{
 			"If the response is lost or the server returns a temporary error, retry the exact request with the same Idempotency-Key. trstctl returns the original result instead of signing twice.",
 			"If proof verification fails, obtain fresh proof or repair the tenant trust source, then build a new preview. Never disable verification to continue.",
