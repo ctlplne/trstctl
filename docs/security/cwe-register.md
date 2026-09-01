@@ -44,7 +44,7 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1351 annotated sites across 26 rules. Each row is
+1352 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -53,7 +53,7 @@ not this file.
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-agent/bootstrap_token_test.go:96` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `cmd/trstctl/main_test.go:388` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `cmd/trstctl/main_test.go:445` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/demo/demo_test.go:87` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/deploycheck_test.go:1483` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/deploycheck_test.go:1485` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -494,7 +494,7 @@ not this file.
 | `internal/server/secret_integrations_outbox.go:811` | positive int64 is exactly representable as uint64. |
 | `internal/server/secret_integrations_outbox.go:814` | positive int64 is exactly representable as uint64. |
 | `internal/server/secret_integrations_outbox.go:823` | positive int64 is exactly representable as uint64. |
-| `internal/server/secrets_rotation_served_test.go:2454` | bounded fixture/corpus value packing inside a test (CWE-190) |
+| `internal/server/secrets_rotation_served_test.go:2563` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/signing/keystore.go:108` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
 | `internal/signing/keystore.go:110` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
 | `internal/signing/keystore.go:112` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
@@ -758,7 +758,7 @@ not this file.
 | `internal/api/headerauth_guard_test.go:34` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/api/headerauth_guard_test.go:39` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/ca/shellca/shellca.go:120` | the shell-CA backend exists to run the operator's configured signing command (CWE-78) |
-| `internal/cli/cli_test.go:2028` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/cli/cli_test.go:2047` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/connector/localops.go:247` | operator-configured local-ops action command; running it is the feature (CWE-78) |
 | `internal/crypto/kmswrap/external_kms.go:122` | operator-configured external KMS helper command (CWE-78) |
 | `internal/kms/pkcs11/softhsm_container_test.go:116` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
@@ -890,7 +890,7 @@ not this file.
 | `internal/server/protocols_served_stock_clients_test.go:747` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/protocols_served_tsa_test.go:189` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/secret_third_party_scan_served_test.go:154` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/secrets_rotation_served_test.go:2447` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/secrets_rotation_served_test.go:2556` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/server.go:2201` | served CA certificate directory; the PEM is public material (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:24` | the loose mode IS the attack fixture this test defends against (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:56` | the wide mode IS the precondition this test proves gets narrowed (CWE-276) |
@@ -940,7 +940,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (361 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (362 sites)
 
 | Location | Reason |
 |---|---|
@@ -965,6 +965,7 @@ not this file.
 | `cmd/trstctl/backup_cmd_test.go:46` | test reads its own fixture/tempdir path (CWE-22) |
 | `cmd/trstctl/backup_cmd_test.go:64` | test reads its own fixture/tempdir path (CWE-22) |
 | `cmd/trstctl/backup_cmd_test.go:86` | test reads a fixed repository artifact (CWE-22) |
+| `cmd/trstctl/connector.go:207` | the operator explicitly names the public trust-bundle path (CWE-22) |
 | `cmd/trstctl/ee_attach.go:503` | operator-supplied path to their own IdP's JWKS (CWE-22) |
 | `cmd/trstctl/ee_attach.go:531` | operator-pinned local IdP metadata, validated as configuration. |
 | `deploy/demo/aud66_test.go:105` | fixed repository test path (CWE-22) |
@@ -1079,7 +1080,7 @@ not this file.
 | `internal/cli/audit_verify.go:103` | path is the explicit read-only local artifact selected by this CLI command (CWE-22). |
 | `internal/cli/cli.go:162` | the operator explicitly names the public trust-bundle path (CWE-22) |
 | `internal/cli/cli.go:485` | operator-passed local file argument on their own command line (CWE-22) |
-| `internal/cli/cli_test.go:1588` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/cli/cli_test.go:1607` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/cli/doctor/doctor_test.go:98` | test reads its own tempdir receipt (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/config/config.go:2278` | the config loader reading the operator's own config file (CWE-22) |
@@ -1341,7 +1342,7 @@ not this file.
 | `internal/ca/profilelint/profilelint_test.go:241` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/ca/profilelint/profilelint_test.go:254` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/cbom/hostsource/hostsource_test.go:23` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/cli/cli_test.go:2058` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/cli/cli_test.go:2077` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/cli/secret_scan_local.go:137` | a git hook must be executable; 0755 is the working minimum (CWE-276) |
 | `internal/connector/localops_test.go:87` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/crypto/external_kms_test.go:90` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -1376,7 +1377,7 @@ not this file.
 | `internal/server/server.go:2211` | served CA certificate PEM is public material (CWE-276) |
 | `internal/server/signer_authorization_test.go:132` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
-| `internal/server/ssh_journey_served_test.go:204` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/ssh_journey_served_test.go:262` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/signing/keystore_test.go:244` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/signing/signauth_secret_test.go:47` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/testutil/openssltest/openssltest_test.go:14` | fake openssl shim must be executable; 0700 is the minimum that runs (CWE-276) |
@@ -1556,8 +1557,8 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `cmd/trstctl/connector.go:188` | CLI calling the operator-specified connector base URL; their own target (CWE-918) |
-| `cmd/trstctl/connector.go:200` | CLI calling the operator-specified connector base URL; their own target (CWE-918) |
+| `cmd/trstctl/connector.go:250` | CLI calling the operator-specified connector base URL; their own target (CWE-918) |
+| `cmd/trstctl/connector.go:270` | CLI calling the operator-specified connector base URL; their own target (CWE-918) |
 | `internal/agent/enrollproxy/proxy.go:207` | the destination host is the operator-configured upstream, |
 | `internal/discovery/cloudcert/httpfetch.go:42` | fetches the cloud provider endpoint declared by the operator's discovery source (CWE-918) |
 | `tools/dodcensus/proof/launched.go:1603` | developer tool calling the endpoint it was pointed at (CWE-918) |
