@@ -6,9 +6,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"encoding/pem"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -309,6 +312,50 @@ func TestSSHCLIUsesServedJourneyAPI(t *testing.T) {
 	}
 	if seen[7].Payload["host"] != "edge-1" || seen[7].Payload["run_id"] != "run-1" {
 		t.Fatalf("bad retire request: %+v", seen[7])
+	}
+}
+
+func TestSSHCLITrustsExplicitSelfHostedCAWithoutDisablingVerification(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/ssh/status" {
+			t.Fatalf("path = %q, want /api/v1/ssh/status", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"served":true,"authority_key":"ssh-ed25519 AAAA","krl_version":0,"revoked_count":0}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	caPath := filepath.Join(t.TempDir(), "control-plane-ca.pem")
+	caPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: srv.Certificate().Raw})
+	if err := os.WriteFile(caPath, caPEM, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	env := envFunc(map[string]string{
+		"TRSTCTL_URL":     srv.URL,
+		"TRSTCTL_TOKEN":   "tok",
+		"TRSTCTL_TENANT":  "11111111-1111-1111-1111-111111111111",
+		"TRSTCTL_CA_FILE": caPath,
+	})
+	var stdout, stderr bytes.Buffer
+	if err := run(context.Background(), []string{"ssh", "status"}, env, &stdout, &stderr); err != nil {
+		t.Fatalf("ssh status with explicit CA: %v (stderr=%q)", err, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"served":true`) {
+		t.Fatalf("ssh status output = %q", stdout.String())
+	}
+
+	badPath := filepath.Join(t.TempDir(), "not-a-ca.pem")
+	if err := os.WriteFile(badPath, []byte("not a certificate"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	env = envFunc(map[string]string{
+		"TRSTCTL_URL":     srv.URL,
+		"TRSTCTL_TOKEN":   "tok",
+		"TRSTCTL_TENANT":  "11111111-1111-1111-1111-111111111111",
+		"TRSTCTL_CA_FILE": badPath,
+	})
+	if err := run(context.Background(), []string{"ssh", "status"}, env, io.Discard, io.Discard); err == nil || !strings.Contains(err.Error(), "TRSTCTL_CA_FILE") {
+		t.Fatalf("invalid explicit CA error = %v, want TRSTCTL_CA_FILE failure", err)
 	}
 }
 

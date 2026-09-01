@@ -27,7 +27,14 @@ separate program with four admin command families of its own — `token create` 
 the offline `support-bundle`
 — for direct calls against a running control plane, using their own `--flag`
 arguments and `TRSTCTL_URL` rather than the `-f <file>` bodies and
-`TRSTCTL_SERVER` used everywhere else on this page.
+`TRSTCTL_SERVER` used everywhere else on this page. Those direct operational
+commands also honor `TRSTCTL_CA_FILE`; set it to the inspected public CA or
+self-signed public certificate for a private/self-hosted control plane. They do
+not provide an option that disables TLS verification. A private control-plane
+hostname may additionally need a narrow comma-separated
+`TRSTCTL_EGRESS_ALLOW_PRIVATE_CIDRS` value (for example, the one internal subnet
+that owns it); localhost needs no exception, and metadata/link-local ranges stay
+blocked.
 
 The exception is `trstctl support-bundle`: it deliberately does not require a
 running HTTP server. Use

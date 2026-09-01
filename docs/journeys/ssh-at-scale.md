@@ -23,14 +23,20 @@ mutation stays in the operator-confirmed agent path.
 
 - A running control plane and an API token from
   [Getting started](../getting-started.md) (`trstctl token create`).
-- The `trstctl ssh` verbs in this journey read three environment variables —
-  all required:
+- The `trstctl ssh` verbs in this journey read three required environment
+  variables plus an explicit public trust bundle for a private/self-hosted
+  control plane:
 
   ```sh
   export TRSTCTL_URL=https://localhost:8443
   export TRSTCTL_TOKEN=trst_...
   export TRSTCTL_TENANT=11111111-1111-1111-1111-111111111111
+  export TRSTCTL_CA_FILE=./control-plane-public.crt
   ```
+
+  Inspect the public certificate before trusting it. Never copy the combined
+  server state file containing its private key, and never disable certificate
+  verification.
 - An installed agent on the hosts you want to manage, enrolled as in
   [Getting started](../getting-started.md). For what the agent can see and change on a
   host, see [SSH](../features/ssh.md).

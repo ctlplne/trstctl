@@ -13,10 +13,13 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
 	internalcrypto "trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 var connectorHTTPClient = http.DefaultClient
@@ -26,6 +29,7 @@ type connectorCLIConfig struct {
 	token          string
 	tenant         string
 	idempotencyKey string
+	httpClient     *http.Client
 }
 
 func runConnector(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) error {
@@ -163,10 +167,66 @@ func connectorCLIConfigFromEnv(getenv func(string) string) (connectorCLIConfig, 
 	token := strings.TrimSpace(firstEnv(getenv, "TRSTCTL_TOKEN", "TRSTCTL_API_TOKEN"))
 	tenant := strings.TrimSpace(getenv("TRSTCTL_TENANT"))
 	idempotencyKey := strings.TrimSpace(getenv("TRSTCTL_IDEMPOTENCY_KEY"))
+	caFile := strings.TrimSpace(getenv("TRSTCTL_CA_FILE"))
+	privateCIDRs := strings.TrimSpace(getenv("TRSTCTL_EGRESS_ALLOW_PRIVATE_CIDRS"))
 	if baseURL == "" || token == "" || tenant == "" {
 		return connectorCLIConfig{}, errors.New("connector CLI requires TRSTCTL_URL, TRSTCTL_TOKEN, and TRSTCTL_TENANT")
 	}
-	return connectorCLIConfig{baseURL: baseURL, token: token, tenant: tenant, idempotencyKey: idempotencyKey}, nil
+	httpClient, err := connectorCLIHTTPClient(baseURL, caFile, privateCIDRs)
+	if err != nil {
+		return connectorCLIConfig{}, fmt.Errorf("TRSTCTL_CA_FILE: %w", err)
+	}
+	return connectorCLIConfig{
+		baseURL: baseURL, token: token, tenant: tenant,
+		idempotencyKey: idempotencyKey, httpClient: httpClient,
+	}, nil
+}
+
+func connectorCLIHTTPClient(baseURL, caFile, privateCIDRs string) (*http.Client, error) {
+	if caFile == "" {
+		return connectorHTTPClient, nil
+	}
+	u, err := url.Parse(baseURL)
+	if err != nil || u.Hostname() == "" {
+		return nil, errors.New("control-plane URL is not an absolute HTTP(S) URL")
+	}
+	var client *http.Client
+	if netsec.IsLoopbackHost(u.Hostname()) {
+		client = netsec.InsecureLoopbackClient(30 * time.Second)
+	} else {
+		opts := netsec.SafeClientOptions{}
+		for _, raw := range splitCSV(privateCIDRs) {
+			prefix, parseErr := netsec.ParseEgressAllowPrefix(raw)
+			if parseErr != nil {
+				return nil, fmt.Errorf("TRSTCTL_EGRESS_ALLOW_PRIVATE_CIDRS: %w", parseErr)
+			}
+			opts.AllowPrivateCIDRs = append(opts.AllowPrivateCIDRs, prefix)
+		}
+		client = netsec.SafeClientWithOptions(30*time.Second, opts)
+	}
+	caPEM, err := os.ReadFile(caFile) // #nosec G304 -- the operator explicitly names the public trust-bundle path (CWE-22)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", caFile, err)
+	}
+	transport, err := mtls.HTTPTransport(caPEM)
+	if err != nil {
+		return nil, err
+	}
+	guarded, ok := client.Transport.(*http.Transport)
+	if !ok {
+		return nil, errors.New("reviewed network client does not expose its guarded HTTP transport")
+	}
+	transport.DialContext = guarded.DialContext
+	transport.DialTLSContext = nil
+	transport.TLSHandshakeTimeout = guarded.TLSHandshakeTimeout
+	transport.ResponseHeaderTimeout = guarded.ResponseHeaderTimeout
+	transport.DisableKeepAlives = true
+	bound, err := netsec.BindTransportToOrigin(baseURL, transport)
+	if err != nil {
+		return nil, err
+	}
+	client.Transport = bound
+	return client, nil
 }
 
 func firstEnv(getenv func(string) string, keys ...string) string {
@@ -203,7 +263,11 @@ func connectorCLIRequest(ctx context.Context, stdout io.Writer, cfg connectorCLI
 		}
 		req.Header.Set("Idempotency-Key", idempotencyKey)
 	}
-	resp, err := connectorHTTPClient.Do(req) // #nosec G704 -- CLI calling the operator-specified connector base URL; their own target (CWE-918)
+	client := cfg.httpClient
+	if client == nil {
+		client = connectorHTTPClient
+	}
+	resp, err := client.Do(req) // #nosec G704 -- CLI calling the operator-specified connector base URL; their own target (CWE-918)
 	if err != nil {
 		return err
 	}
