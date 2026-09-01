@@ -16,6 +16,7 @@ const bootstrapTokenFile = process.env.TRSTCTL_DEMO_BOOTSTRAP_TOKEN_FILE || "/se
 const seedVersion = "demo-seed-v3";
 const migratableSeedVersions = new Set(["demo-seed-v1", "demo-seed-v2"]);
 const seedCheckpointSubject = "trstctl-demo-seed-checkpoint";
+const seedDiagnosticFile = "/seed-state/last-error.txt";
 const demoDiscoverySegment = {
   name: "demo-control-plane",
   // Segment declarations describe the approved host/address denominator; ports
@@ -270,6 +271,21 @@ function assertNoCommittedSecretMaterial() {
       throw new Error(`seed source contains material matching ${pattern}`);
     }
   }
+}
+
+function redactSeedDiagnostic(error) {
+  let text = error instanceof Error ? error.message : "non-Error seed failure";
+  text = text
+    .replace(/-----BEGIN [^-]+-----[\s\S]*?-----END [^-]+-----/g, "[redacted PEM material]")
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
+    .replace(/("(?:authorization|password|passphrase|private_key|privatekey|secret|token|value)"\s*:\s*")[^"]*(")/gi, "$1[redacted]$2")
+    .replace(/\b((?:password|passphrase|secret|token|authorization)=)[^\s&]+/gi, "$1[redacted]");
+  return text.slice(0, 4096);
+}
+
+function writeSeedDiagnostic(error) {
+  const body = `${new Date().toISOString()}\n${redactSeedDiagnostic(error)}\n`;
+  writeFileSync(seedDiagnosticFile, body, { encoding: "utf8", mode: 0o600 });
 }
 
 function checkSeedPlan() {
@@ -1412,15 +1428,23 @@ export {
   findUniqueLogicalRecord,
   seedInventoryDigest,
   seedCompletionSummary,
+  redactSeedDiagnostic,
   stableDemoValue,
   stableSeedSemantics,
 };
 
 const invokedAsProgram = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (invokedAsProgram) {
-  main().catch(() => {
+  main().catch((error) => {
     // Errors can retain request objects in their stack/cause chain. Keep demo
-    // logs credential-free and direct operators to the protected diagnostics.
+    // logs credential-free. Preserve only a bounded redacted summary in the
+    // seed-owned mode-0600 volume so operators have an actionable route/status.
+    try {
+      writeSeedDiagnostic(error);
+    } catch {
+      // The shared Docker log remains generic even when the protected volume is
+      // unavailable; never fall back to printing the raw error object.
+    }
     console.error("demo seed failed; inspect the protected container diagnostics");
     process.exit(1);
   });

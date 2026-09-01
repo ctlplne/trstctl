@@ -891,6 +891,42 @@ func TestDemoSeedPreparesTruthfulConnectorPitchTargets(t *testing.T) {
 	}
 }
 
+func TestDemoSeedWritesProtectedRedactedFailureDiagnostic(t *testing.T) {
+	body := read(t, "seed.mjs")
+	for _, want := range []string{
+		`const seedDiagnosticFile = "/seed-state/last-error.txt"`,
+		`function redactSeedDiagnostic`,
+		`writeFileSync(seedDiagnosticFile`,
+		`mode: 0o600`,
+		`main().catch((error) =>`,
+		`redactSeedDiagnostic`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("demo seed failure diagnostics are missing %q", want)
+		}
+	}
+	if strings.Contains(body, `console.error(error)`) || strings.Contains(body, `console.error(String(error))`) {
+		t.Fatal("demo seed writes a raw error object to shared Docker logs")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	probe := `
+import { redactSeedDiagnostic } from "./seed.mjs";
+const raw = 'POST /api/v1/test returned 400: {"password":"hunter2","token":"abc123","authorization":"Bearer ey.secret","private_key":"-----BEGIN PRIVATE KEY-----\\nmaterial\\n-----END PRIVATE KEY-----"}';
+const got = redactSeedDiagnostic(new Error(raw));
+for (const secret of ["hunter2", "abc123", "ey.secret", "material"]) {
+  if (got.includes(secret)) throw new Error("diagnostic retained secret: " + secret);
+}
+if (!got.includes("POST /api/v1/test returned 400")) throw new Error("diagnostic removed actionable route/status context");
+`
+	cmd := exec.CommandContext(ctx, "node", "--input-type=module", "--eval", probe)
+	cmd.Dir = "."
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("redacted seed diagnostic probe failed: %v\n%s", err, out)
+	}
+}
+
 func TestDemoSeedExercisesManagedKeyDualControl(t *testing.T) {
 	body := read(t, "seed.mjs")
 	for _, want := range []string{
