@@ -209,6 +209,13 @@ for (const viewport of viewports) {
       page.on("pageerror", (error) => browserErrors.push({ kind: "page", message: error.message }));
 
       await signIn(page);
+      // signIn proves the authenticated shell as soon as Home is interactive,
+      // while Home's live tiles may still be reading. WebKit reports a fetch
+      // cancelled by the following navigation as a page error on the new
+      // route, especially when several route workers share the live stack.
+      // Drain the authenticated entry page before resetting its diagnostics so
+      // a Home teardown cannot be misattributed to the destination receipt.
+      await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => undefined);
       // The sign-in journey has its own browser test. Route receipts begin
       // after authentication so an IdP diagnostic cannot be misattributed to
       // the product page under test.
