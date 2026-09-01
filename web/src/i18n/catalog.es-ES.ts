@@ -1682,7 +1682,7 @@ const esESCatalog = {
     "Revise las escrituras controladas por el servidor, la publicación asíncrona, el radio de impacto y los pasos de verificación antes de autorizar nada.",
   "certificates.revocation.confirmTitle": "Confirmar la revocación irreversible",
   "certificates.revocation.confirmDescription":
-    "Escriba el nombre exacto de la credencial, envíe una vez y siga la auditoría inmutable y la evidencia de propagación.",
+    "Escriba la etiqueta exacta de la credencial que aparece abajo, envíe una vez y siga la auditoría inmutable y la evidencia de propagación.",
   "certificates.revocation.identityLabel": "Certificado administrado",
   "certificates.revocation.identityPlaceholder": "Elija un certificado revocable…",
   "certificates.revocation.reasonLabel": "Motivo RFC 5280",
@@ -1732,7 +1732,7 @@ const esESCatalog = {
   "certificates.revocation.irreversibleTitle": "Esto no se puede deshacer",
   "certificates.revocation.irreversibleBody":
     "Revocar “{identity}” con el motivo “{reason}” cambia su estado de ciclo de vida y pone en cola la publicación de revocación. Los clientes pueden dejar de confiar en él a medida que se propaga la evidencia CRL y OCSP.",
-  "certificates.revocation.confirmName": "Escriba el nombre de la credencial",
+  "certificates.revocation.confirmName": "Escriba la etiqueta exacta de la credencial",
   "certificates.revocation.executeAction": "Revocar la credencial revisada",
   "certificates.revocation.executeFailed": "Falló la revocación",
   "certificates.revocation.verifyFailed": "La respuesta del servidor no verificó el estado revocado del ciclo de vida.",

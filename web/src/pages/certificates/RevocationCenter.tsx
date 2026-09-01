@@ -57,6 +57,10 @@ function certificateTargetKey(id: string): string {
   return `certificate:${id}`;
 }
 
+function certificateTargetName(certificate: Certificate): string {
+  return certificate.subject.trim() || certificate.id;
+}
+
 function reviewKey(targetKey: string, reason: string): string {
   return `${targetKey}\u0000${reason}`;
 }
@@ -148,7 +152,7 @@ export function RevocationCenter({
   const certificateRecords = useMemo(() => {
     const records = new Map(certificates.map((certificate) => [certificate.id, certificate]));
     if (linkedCertificate) records.set(linkedCertificate.id, linkedCertificate);
-    return Array.from(records.values()).sort((left, right) => left.subject.localeCompare(right.subject));
+    return Array.from(records.values()).sort((left, right) => certificateTargetName(left).localeCompare(certificateTargetName(right)));
   }, [certificates, linkedCertificate]);
   const targets = useMemo<RevocationTarget[]>(
     () => [
@@ -157,7 +161,7 @@ export function RevocationCenter({
         certificate,
         key: certificateTargetKey(certificate.id),
         kind: "certificate" as const,
-        name: certificate.subject,
+        name: certificateTargetName(certificate),
       })),
     ],
     [certificateRecords, eligibleIdentities],
@@ -249,7 +253,7 @@ export function RevocationCenter({
   }
 
   async function execute() {
-    if (!selected || !reviewCurrent || !reviewReady || confirmName.trim() !== selected.name) return;
+    if (!selected || selected.name.length === 0 || !reviewCurrent || !reviewReady || confirmName.trim() !== selected.name) return;
     setExecuteLoading(true);
     setExecuteError(null);
     try {
@@ -358,7 +362,7 @@ export function RevocationCenter({
                   <optgroup label={t("certificates.revocation.recordsGroup")}>
                     {certificateRecords.map((certificate) => (
                       <option key={certificate.id} value={certificateTargetKey(certificate.id)}>
-                        {certificate.subject} · {certificate.status} · {t("certificates.revocation.recordOption")}
+                        {certificateTargetName(certificate)} · {certificate.status} · {t("certificates.revocation.recordOption")}
                       </option>
                     ))}
                   </optgroup>
@@ -548,7 +552,7 @@ export function RevocationCenter({
                 type="button"
                 variant="destructive"
                 loading={executeLoading}
-                disabled={confirmName.trim() !== selected.name || executeLoading}
+                disabled={selected.name.length === 0 || confirmName.trim() !== selected.name || executeLoading}
                 onClick={() => void execute()}
               >
                 {t("certificates.revocation.executeAction")}

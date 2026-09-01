@@ -133,7 +133,7 @@ describe("RevocationCenter", () => {
 
     await user.click(screen.getByRole("button", { name: "Continue to confirmation" }));
     const confirmation = screen.getByRole("region", { name: "Confirm irreversible revocation" });
-    await user.type(within(confirmation).getByLabelText("Type the credential name"), "payments.example.test");
+    await user.type(within(confirmation).getByLabelText("Type the exact credential label"), "payments.example.test");
     await user.click(within(confirmation).getByRole("button", { name: "Revoke reviewed credential" }));
 
     await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("identity-payments", "revoked", "keyCompromise", undefined, undefined, 7));
@@ -223,7 +223,7 @@ describe("RevocationCenter", () => {
 
     await user.click(screen.getByRole("button", { name: "Continue to confirmation" }));
     const confirmation = screen.getByRole("region", { name: "Confirm irreversible revocation" });
-    await user.type(within(confirmation).getByLabelText("Type the credential name"), brokerCertificate.subject);
+    await user.type(within(confirmation).getByLabelText("Type the exact credential label"), brokerCertificate.subject);
     await user.click(within(confirmation).getByRole("button", { name: "Revoke reviewed credential" }));
 
     await waitFor(() =>
@@ -237,6 +237,63 @@ describe("RevocationCenter", () => {
       "href",
       `/audit?type=certificate.revocation.batch.applied&q=${brokerCertificate.id}`,
     );
+  });
+
+  it("uses the exact certificate ID when a broker record has no subject and never accepts an empty destructive confirmation", async () => {
+    const subjectless = { ...brokerCertificate, id: "22222222-2222-4222-8222-222222222222", subject: "" };
+    const revoked = {
+      ...subjectless,
+      status: "revoked" as const,
+      revoked_at: "2026-09-01T13:55:00Z",
+      revocation_reason: "cessationOfOperation",
+    };
+    apiMock.getCertificate
+      .mockReset()
+      .mockResolvedValueOnce(subjectless)
+      .mockResolvedValueOnce(subjectless)
+      .mockResolvedValueOnce(subjectless)
+      .mockResolvedValueOnce(revoked);
+    apiMock.graphBlastRadius.mockReset().mockResolvedValue({ node: null, affected: [], by_kind: {}, paths: [] });
+    apiMock.bulkRevokeCertificates.mockReset().mockResolvedValue({
+      items: [{ id: subjectless.id, status: "revoked" }],
+      total_matched: 1,
+      total_revoked: 1,
+      total_skipped: 0,
+      total_failed: 0,
+    });
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <RevocationCenter certificates={[]} targetCertificateID={subjectless.id} identities={[]} health={null} distributions={[]} />
+      </MemoryRouter>,
+    );
+
+    await screen.findByRole("option", { name: `${subjectless.id} · active · exact certificate record` });
+    await user.selectOptions(screen.getByLabelText("RFC 5280 reason"), "cessationOfOperation");
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    await user.click(await screen.findByRole("button", { name: "Continue to confirmation" }));
+
+    const confirmation = screen.getByRole("region", { name: "Confirm irreversible revocation" });
+    expect(confirmation).toHaveTextContent(`Revoking “${subjectless.id}”`);
+    const input = within(confirmation).getByLabelText("Type the exact credential label");
+    expect(input).toHaveAttribute("placeholder", subjectless.id);
+    const execute = within(confirmation).getByRole("button", { name: "Revoke reviewed credential" });
+    expect(execute).toBeDisabled();
+    await user.click(execute);
+    expect(apiMock.bulkRevokeCertificates).not.toHaveBeenCalled();
+
+    await user.type(input, subjectless.id);
+    expect(execute).toBeEnabled();
+    await user.click(execute);
+
+    await waitFor(() =>
+      expect(apiMock.bulkRevokeCertificates).toHaveBeenCalledWith({
+        certificate_ids: [subjectless.id],
+        reason: "cessationOfOperation",
+      }),
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent("Revocation accepted and the exact certificate now reads revoked.");
   });
 
   it("fails closed when a linked certificate is already revoked", async () => {
@@ -293,7 +350,7 @@ describe("RevocationCenter", () => {
     await user.click(screen.getByRole("button", { name: "Review exact plan" }));
     await user.click(await screen.findByRole("button", { name: "Continue to confirmation" }));
     const confirmation = screen.getByRole("region", { name: "Confirm irreversible revocation" });
-    await user.type(within(confirmation).getByLabelText("Type the credential name"), brokerCertificate.subject);
+    await user.type(within(confirmation).getByLabelText("Type the exact credential label"), brokerCertificate.subject);
     await user.click(within(confirmation).getByRole("button", { name: "Revoke reviewed credential" }));
 
     expect(await within(confirmation).findByRole("alert")).toHaveTextContent("The certificate changed after review");

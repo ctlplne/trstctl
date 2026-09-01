@@ -1702,7 +1702,7 @@ const deDECatalog = {
     "Prüfen Sie serverbestimmte Schreibvorgänge, asynchrone Veröffentlichung, Auswirkungsradius und Verifizierungsschritte, bevor Sie etwas autorisieren.",
   "certificates.revocation.confirmTitle": "Unwiderruflichen Widerruf bestätigen",
   "certificates.revocation.confirmDescription":
-    "Geben Sie den exakten Namen der Zugangsdaten ein, senden Sie einmal und verfolgen Sie unveränderliche Audit- und Verbreitungsnachweise.",
+    "Geben Sie die unten angezeigte genaue Zugangsdatenbezeichnung ein, senden Sie einmal und verfolgen Sie unveränderliche Audit- und Verbreitungsnachweise.",
   "certificates.revocation.identityLabel": "Verwaltetes Zertifikat",
   "certificates.revocation.identityPlaceholder": "Widerrufbares Zertifikat auswählen…",
   "certificates.revocation.reasonLabel": "RFC-5280-Grund",
@@ -1754,7 +1754,7 @@ const deDECatalog = {
   "certificates.revocation.irreversibleTitle": "Dies kann nicht rückgängig gemacht werden",
   "certificates.revocation.irreversibleBody":
     "Der Widerruf von „{identity}“ mit dem Grund „{reason}“ ändert den Lebenszykluszustand und reiht die Widerrufsveröffentlichung ein. Clients können das Vertrauen beenden, während sich CRL- und OCSP-Nachweise verbreiten.",
-  "certificates.revocation.confirmName": "Namen der Zugangsdaten eingeben",
+  "certificates.revocation.confirmName": "Genaue Zugangsdatenbezeichnung eingeben",
   "certificates.revocation.executeAction": "Geprüfte Zugangsdaten widerrufen",
   "certificates.revocation.executeFailed": "Widerruf fehlgeschlagen",
   "certificates.revocation.verifyFailed": "Die Serverantwort hat den widerrufenen Lebenszykluszustand nicht bestätigt.",

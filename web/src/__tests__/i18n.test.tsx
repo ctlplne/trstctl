@@ -1388,8 +1388,13 @@ describe("i18n boundary", () => {
       // deep-linked certificate ID, and explains live-state re-checks and
       // durable verification without internal "served" jargon. Machine-authored
       // es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "7db6ed92b26482f562ad8016b47f84683f333e2797b6d8353885d5dbc692ddaf",
-      "de-DE": "d15eaba9f177f7c40cef67161a720a093c0135cf4904db013b94bc9f4d912227",
+      // F61 g125 fail-closed confirmation re-pin: destructive confirmation now
+      // asks for the exact displayed credential label, because subjectless
+      // broker records deliberately fall back to their non-empty certificate
+      // ID. Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW
+      // BEFORE RELEASE.
+      "es-ES": "f0719f98e3eee5e5ff8aa3cbbb3976728b75766d2487b325b2854483eeb58e83",
+      "de-DE": "fc92e1060d18ae1adc268579677d17628c6cb78405f1117d1f701ec3b614a12c",
     });
   });
 

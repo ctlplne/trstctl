@@ -4970,7 +4970,7 @@ export const messages = {
   },
   "certificates.revocation.confirmTitle": { defaultMessage: "Confirm irreversible revocation", description: "Third revocation-center step title." },
   "certificates.revocation.confirmDescription": {
-    defaultMessage: "Type the exact credential name, submit once, then follow the immutable audit and propagation evidence.",
+    defaultMessage: "Type the exact credential label shown below, submit once, then follow the immutable audit and propagation evidence.",
     description: "Third revocation-center step description.",
   },
   "certificates.revocation.identityLabel": { defaultMessage: "Managed certificate", description: "Managed X.509 identity selector label." },
@@ -5105,7 +5105,7 @@ export const messages = {
       "Revoking “{identity}” with reason “{reason}” changes its lifecycle state and queues revocation publication. Clients may stop trusting it as CRL and OCSP evidence propagates.",
     description: "Exact credential and reason warning before revocation execution.",
   },
-  "certificates.revocation.confirmName": { defaultMessage: "Type the credential name", description: "Typed-name revocation confirmation field label." },
+  "certificates.revocation.confirmName": { defaultMessage: "Type the exact credential label", description: "Typed-label revocation confirmation field label." },
   "certificates.revocation.executeAction": {
     defaultMessage: "Revoke reviewed credential",
     description: "Destructive action that executes the reviewed revocation.",
