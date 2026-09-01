@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/netip"
 	"sort"
@@ -12,6 +13,9 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/attest"
@@ -193,7 +197,7 @@ func (s *Server) IssueSSHCertificate(ctx context.Context, tenantID, idempotencyK
 		issued, err = sp.CA().IssueUserCert(ctx, profile, issueRequest)
 	}
 	if err != nil {
-		return api.SSHCertificate{}, fmt.Errorf("%w: %v", api.ErrSSHWorkflowRejected, err)
+		return api.SSHCertificate{}, sshWorkflowIssuanceError(err)
 	}
 	return api.SSHCertificate{
 		Certificate:          string(issued.Certificate),
@@ -616,7 +620,7 @@ func (s *Server) IssueAttestedSSHUserCert(ctx context.Context, tenantID, idempot
 		CriticalOptions:  plan.criticalOptions,
 	})
 	if err != nil {
-		return api.SSHAttestedUserCert{}, fmt.Errorf("%w: %v", api.ErrSSHWorkflowRejected, err)
+		return api.SSHAttestedUserCert{}, sshWorkflowIssuanceError(err)
 	}
 	responsePrincipals := plan.principals
 	if len(responsePrincipals) == 0 {
@@ -634,6 +638,34 @@ func (s *Server) IssueAttestedSSHUserCert(ctx context.Context, tenantID, idempot
 		ForceCommand:    plan.forceCommand,
 		Attestation:     att,
 	}, nil
+}
+
+// sshWorkflowIssuanceError keeps a broken signing road separate from a denied
+// request. ELI5: if the proof or policy is bad, the operator must change the
+// request (403). If the isolated signer is restarting or unreachable, the exact
+// same reviewed request is still valid and should be retried after recovery
+// (503). Internal socket/provider details do not cross the API boundary.
+func sshWorkflowIssuanceError(err error) error {
+	if sshWorkflowInfrastructureRetryable(err) {
+		return fmt.Errorf("%w: SSH signing service is temporarily unavailable; restore it and retry the exact request with the same Idempotency-Key", api.ErrSSHWorkflowUnavailable)
+	}
+	return fmt.Errorf("%w: %v", api.ErrSSHWorkflowRejected, err)
+}
+
+func sshWorkflowInfrastructureRetryable(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	switch status.Code(err) {
+	case codes.Canceled, codes.DeadlineExceeded, codes.ResourceExhausted,
+		codes.Aborted, codes.Internal, codes.Unavailable, codes.DataLoss:
+		return true
+	default:
+		return false
+	}
 }
 
 func validAttestedSSHText(value string, maxLen int) bool {
