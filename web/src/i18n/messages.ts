@@ -11987,7 +11987,7 @@ export const messages = {
   "connectors.design.configuredDestinations": { defaultMessage: "Configured destinations", description: "Heading for saved deployment destinations." },
   "connectors.design.bindHelp": {
     defaultMessage:
-      "Use the owner and DNS form only when one reviewed action must create the identity, destination, issuance intent, and deployment intent together.",
+      "Choose an enabled, independently verified destination. This reviewed action creates the identity and queues issuance and deployment together; it does not create or enable a destination.",
     description: "Safety explanation for the compound endpoint-binding action.",
   },
   "connectors.design.destinationsTable": {
@@ -12016,6 +12016,47 @@ export const messages = {
   "connectors.design.configurationHelp": {
     defaultMessage: "Store credential references, never secret values. The server validates the selected connector's schema before saving.",
     description: "Security guidance for connector configuration JSON.",
+  },
+  "connectors.targetReadiness.state": {
+    defaultMessage: "Execution state",
+    description: "Column heading for whether a deployment destination may run lifecycle actions.",
+  },
+  "connectors.targetReadiness.enabled": {
+    defaultMessage: "Enabled — reviewed actions allowed",
+    description: "Target readiness label after an operator explicitly enables lifecycle actions.",
+  },
+  "connectors.targetReadiness.disabledShort": {
+    defaultMessage: "Disabled — prepared only",
+    description: "Target readiness label while a destination is stored but cannot run lifecycle actions.",
+  },
+  "connectors.targetReadiness.optionQualifier": {
+    defaultMessage: " — {value}",
+    description: "Readable qualifier appended to a destination or identity option.",
+  },
+  "connectors.targetReadiness.disabledHelp": {
+    defaultMessage: "This destination is disabled. Enable it only after its agent or relay and endpoint have been verified. Nothing will be queued.",
+    description: "Technical ELI5 refusal shown when a disabled destination is selected.",
+  },
+  "connectors.targetReadiness.connectorMismatch": {
+    defaultMessage: "This identity is intended for {intended}, but the selected destination uses {connector}. Choose a matching identity.",
+    description: "Fail-closed guidance when an identity's declared connector differs from the selected destination.",
+  },
+  "connectors.targetReadiness.enableNow": {
+    defaultMessage: "Enable lifecycle actions",
+    description: "Explicit checkbox label for arming a connector destination.",
+  },
+  "connectors.targetReadiness.enableNowHelp": {
+    defaultMessage:
+      "Leave this off while the destination is only prepared. Turn it on after the agent or relay, endpoint address, credential reference, and rollback path have been reviewed.",
+    description: "Technical ELI5 readiness boundary beside the destination enabled checkbox.",
+  },
+  "connectors.targetReadiness.enrollmentDestination": {
+    defaultMessage: "Destination for enrollment",
+    description: "Existing enabled destination selected for compound endpoint enrollment.",
+  },
+  "connectors.targetReadiness.enrollmentReason": {
+    defaultMessage: "Enrollment reason",
+    description: "Required operator reason for compound endpoint enrollment.",
   },
   "connectors.deliveryEvidence": {
     defaultMessage: "Connector delivery evidence",

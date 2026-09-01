@@ -107,16 +107,16 @@ test("AUD-66 checkpoint digest is deterministic and binds manifest plus inventor
   const changed = seedInventoryDigest({ version: 1, owners: [{ id: "a" }, { id: "b" }] });
   assert.equal(first, same);
   assert.notEqual(first, changed);
-  assert.equal(checkpointSource(first, changed), `demo-seed-v2:complete:${first}:${changed}`);
+  assert.equal(checkpointSource(first, changed), `demo-seed-v3:complete:${first}:${changed}`);
   assert.deepEqual(
-    checkpointDisposition(`demo-seed-v2:complete:${first}:${changed}`, first),
+    checkpointDisposition(`demo-seed-v3:complete:${first}:${changed}`, first),
     { kind: "current", inventoryDigest: changed },
   );
   assert.deepEqual(
-    checkpointDisposition(`demo-seed-v1:complete:${first}:${changed}`, first),
-    { kind: "migrate", previousVersion: "demo-seed-v1" },
+    checkpointDisposition(`demo-seed-v2:complete:${first}:${changed}`, first),
+    { kind: "migrate", previousVersion: "demo-seed-v2" },
   );
-  assert.deepEqual(checkpointDisposition(`demo-seed-v3:complete:${first}:${changed}`, first), { kind: "conflict" });
+  assert.deepEqual(checkpointDisposition(`demo-seed-v4:complete:${first}:${changed}`, first), { kind: "conflict" });
   assert.deepEqual(checkpointDisposition(`demo-seed-v1:complete:not-a-digest:${changed}`, first), { kind: "conflict" });
 
   const firstObservation = stableSeedSemantics({

@@ -1378,8 +1378,13 @@ describe("i18n boundary", () => {
       // legacy evidence, explicit trust cutover, unknown issuance and clipboard
       // failure copy in both catalogs. Machine-authored es/de — FLAGGED FOR
       // HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "c68045f8515e70b84fcf0ab2efc266d07fcdc557345d72cc5c23ad2c72b15532",
-      "de-DE": "ed5c4a7b042dfafb888fb05f1830c66fc9e94e91807e7192dee75ab173515409",
+      // G122 connector-readiness re-pin: prepared destinations remain disabled,
+      // the console names the explicit enable boundary, enrollment selects a
+      // verified destination, and identity/connector mismatches explain the
+      // refusal without implying any work was queued. Machine-authored es/de —
+      // FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "c48635692955f366d911e313f18118e99bf7781b3a177d84ca07fe0c0cb368d1",
+      "de-DE": "9cc6a854ac1a609377809a3abe11a1314d62ddcc0f7bea4b30da37c1b3387083",
     });
   });
 

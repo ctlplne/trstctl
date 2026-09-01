@@ -197,6 +197,56 @@ func TestReplayOldEventsNewProjector(t *testing.T) {
 	}
 }
 
+// TestDeploymentTargetReadinessReplaysLegacyEnabled proves the readiness field
+// is an additive v1 evolution: old deployment_target.upserted payloads that did
+// not carry it remain executable, while every new explicit false value survives
+// projection. Rebuilds must never silently flip either state.
+func TestDeploymentTargetReadinessReplaysLegacyEnabled(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "Acme"}); err != nil {
+		t.Fatalf("seed tenant: %v", err)
+	}
+	p := projections.New(s)
+	targetID := "77777777-7777-4777-8777-777777777777"
+	legacy := events.Event{
+		ID: "legacy-target-readiness", Type: projections.EventDeploymentTargetUpserted,
+		TenantID: tenantA, Time: time.Now().UTC(), SchemaVersion: 1,
+		Data: []byte(`{"id":"` + targetID + `","name":"legacy/nginx","connector":"nginx","config":{}}`),
+	}
+	if err := p.Apply(ctx, legacy); err != nil {
+		t.Fatalf("project legacy deployment target: %v", err)
+	}
+	got, err := s.GetDeploymentTarget(ctx, tenantA, targetID)
+	if err != nil {
+		t.Fatalf("load legacy deployment target: %v", err)
+	}
+	if !got.Enabled {
+		t.Fatalf("legacy deployment target replayed disabled: %+v", got)
+	}
+
+	disabled := false
+	payload, err := json.Marshal(projections.DeploymentTargetUpserted{
+		ID: targetID, Name: "prepared/nginx", Connector: "nginx", Config: json.RawMessage(`{}`), Enabled: &disabled,
+	})
+	if err != nil {
+		t.Fatalf("marshal explicit disabled target: %v", err)
+	}
+	if err := p.Apply(ctx, events.Event{
+		ID: "explicit-disabled-target-readiness", Type: projections.EventDeploymentTargetUpserted,
+		TenantID: tenantA, Time: legacy.Time.Add(time.Second), SchemaVersion: 1, Data: payload,
+	}); err != nil {
+		t.Fatalf("project explicit disabled deployment target: %v", err)
+	}
+	got, err = s.GetDeploymentTarget(ctx, tenantA, targetID)
+	if err != nil {
+		t.Fatalf("reload disabled deployment target: %v", err)
+	}
+	if got.Enabled {
+		t.Fatalf("explicit disabled deployment target replayed enabled: %+v", got)
+	}
+}
+
 // TestApplyTxRejectsUnknownVersionForKnownType pins the gate at the ApplyTx unit
 // level: a known event type at an unknown version is rejected, while the same
 // type at the known version applies (SCHEMA-001).

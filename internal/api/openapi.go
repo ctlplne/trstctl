@@ -2879,11 +2879,11 @@ func componentSchemas() map[string]*Schema {
 		"secret_data_handling": str(),
 	}, "capability", "ready", "effect_free", "policy_id", "policy_name", "current_version", "next_version", "durable_writes", "outside_calls", "signer_calls", "blockers", "recovery_steps", "secret_data_handling")
 	deploymentTargetReq := object(map[string]*Schema{
-		"name": str(), "connector": str(), "config": {Type: "object"},
+		"name": str(), "connector": str(), "config": {Type: "object"}, "enabled": {Type: "boolean"},
 	}, "name", "connector")
 	deploymentTarget := object(map[string]*Schema{
-		"id": uuid(), "tenant_id": uuid(), "name": str(), "connector": str(), "config": {Type: "object"}, "created_at": timestamp(),
-	}, "id", "tenant_id", "name", "connector", "config", "created_at")
+		"id": uuid(), "tenant_id": uuid(), "name": str(), "connector": str(), "config": {Type: "object"}, "enabled": {Type: "boolean"}, "created_at": timestamp(),
+	}, "id", "tenant_id", "name", "connector", "config", "enabled", "created_at")
 	identityConnectorTargetReq := object(map[string]*Schema{
 		"target_id": uuid(),
 	}, "target_id")

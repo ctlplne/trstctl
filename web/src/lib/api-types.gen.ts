@@ -2393,6 +2393,7 @@ export interface DeploymentTarget {
   config: Record<string, unknown>;
   connector: string;
   created_at: string;
+  enabled: boolean;
   id: string;
   name: string;
   tenant_id: string;
@@ -2406,6 +2407,7 @@ export interface DeploymentTargetList {
 export interface DeploymentTargetRequest {
   config?: Record<string, unknown>;
   connector: string;
+  enabled?: boolean;
   name: string;
 }
 

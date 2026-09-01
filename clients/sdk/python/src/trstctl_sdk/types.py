@@ -3337,6 +3337,7 @@ DeploymentTarget = TypedDict(
         'config': dict[str, Any],
         'connector': str,
         'created_at': str,
+        'enabled': bool,
         'id': str,
         'name': str,
         'tenant_id': str,
@@ -3358,6 +3359,7 @@ DeploymentTargetRequest = TypedDict(
     {
         'config': dict[str, Any],
         'connector': str,
+        'enabled': bool,
         'name': str,
     },
     total=False,

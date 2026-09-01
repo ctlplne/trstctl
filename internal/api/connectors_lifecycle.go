@@ -166,6 +166,7 @@ type deploymentTargetRequest struct {
 	Name      string          `json:"name"`
 	Connector string          `json:"connector"`
 	Config    json.RawMessage `json:"config"`
+	Enabled   *bool           `json:"enabled,omitempty"`
 }
 
 type deploymentTargetResponse struct {
@@ -174,6 +175,7 @@ type deploymentTargetResponse struct {
 	Name      string          `json:"name"`
 	Connector string          `json:"connector"`
 	Config    json.RawMessage `json:"config"`
+	Enabled   bool            `json:"enabled"`
 	CreatedAt time.Time       `json:"created_at"`
 }
 
@@ -276,8 +278,40 @@ func toDeploymentTargetResponse(t store.DeploymentTarget) deploymentTargetRespon
 		cfg = json.RawMessage("{}")
 	}
 	return deploymentTargetResponse{
-		ID: t.ID, TenantID: t.TenantID, Name: t.Name, Connector: t.Type, Config: cfg, CreatedAt: t.CreatedAt,
+		ID: t.ID, TenantID: t.TenantID, Name: t.Name, Connector: t.Type, Config: cfg, Enabled: t.Enabled, CreatedAt: t.CreatedAt,
 	}
+}
+
+func deploymentTargetRequestEnabled(enabled *bool) bool {
+	return enabled == nil || *enabled
+}
+
+func requireDeploymentTargetEnabled(target store.DeploymentTarget) error {
+	if target.Enabled {
+		return nil
+	}
+	return errStatus(http.StatusConflict,
+		"deployment target is disabled; enable it only after its agent or relay and endpoint have been verified; nothing was queued or changed")
+}
+
+func requireIdentityConnectorCompatible(identity store.Identity, target store.DeploymentTarget) error {
+	if len(identity.Attributes) == 0 {
+		return nil
+	}
+	var attributes struct {
+		IntendedConnector string `json:"intended_connector"`
+	}
+	if err := json.Unmarshal(identity.Attributes, &attributes); err != nil {
+		return errStatus(http.StatusConflict,
+			"identity connector intent could not be read; repair its metadata before selecting a destination; nothing was queued or changed")
+	}
+	intended := strings.TrimSpace(attributes.IntendedConnector)
+	connectorName := strings.TrimSpace(target.Type)
+	if intended == "" || strings.EqualFold(intended, connectorName) {
+		return nil
+	}
+	return errStatus(http.StatusConflict,
+		"identity is intended for "+intended+", but the selected destination uses "+connectorName+"; choose a matching destination; nothing was queued or changed")
 }
 
 func toRotationRunResponse(r store.RotationRun) rotationRunResponse {
@@ -385,6 +419,7 @@ func (a *API) createConnectorTarget(w http.ResponseWriter, r *http.Request) {
 		}
 		target, err := a.orch.UpsertDeploymentTarget(ctx, tenantID, store.DeploymentTarget{
 			Name: req.Name, Type: req.Connector, Config: req.Config,
+			Enabled: deploymentTargetRequestEnabled(req.Enabled), EnabledSet: true,
 		})
 		if err != nil {
 			return 0, nil, err
@@ -434,8 +469,17 @@ func (a *API) updateConnectorTarget(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err
 		}
+		current, err := a.store.GetDeploymentTarget(ctx, tenantID, id)
+		if err != nil {
+			return 0, nil, err
+		}
+		enabled := current.Enabled
+		if req.Enabled != nil {
+			enabled = *req.Enabled
+		}
 		target, err := a.orch.UpsertDeploymentTarget(ctx, tenantID, store.DeploymentTarget{
 			ID: id, Name: req.Name, Type: req.Connector, Config: req.Config,
+			Enabled: enabled, EnabledSet: true,
 		})
 		if err != nil {
 			return 0, nil, err
@@ -471,14 +515,21 @@ func (a *API) bindIdentityConnectorTarget(w http.ResponseWriter, r *http.Request
 		if strings.TrimSpace(req.TargetID) == "" {
 			return 0, nil, errStatus(http.StatusBadRequest, "target_id is required")
 		}
-		if _, err := a.store.GetIdentity(ctx, tenantID, identityID); err != nil {
-			return 0, nil, err
-		}
 		target, err := a.store.GetDeploymentTarget(ctx, tenantID, strings.TrimSpace(req.TargetID))
 		if err != nil {
 			return 0, nil, err
 		}
-		identity, err := a.orch.BindIdentityDeploymentTarget(ctx, tenantID, identityID, target)
+		if err := requireDeploymentTargetEnabled(target); err != nil {
+			return 0, nil, err
+		}
+		identity, err := a.store.GetIdentity(ctx, tenantID, identityID)
+		if err != nil {
+			return 0, nil, err
+		}
+		if err := requireIdentityConnectorCompatible(identity, target); err != nil {
+			return 0, nil, err
+		}
+		identity, err = a.orch.BindIdentityDeploymentTarget(ctx, tenantID, identityID, target)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -493,6 +544,9 @@ func (a *API) testConnectorTarget(w http.ResponseWriter, r *http.Request) {
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
 		target, err := a.store.GetDeploymentTarget(ctx, tenantID, targetID)
 		if err != nil {
+			return 0, nil, err
+		}
+		if err := requireDeploymentTargetEnabled(target); err != nil {
 			return 0, nil, err
 		}
 		// D5: when a relay can take the work, this enqueues a real dry-run that
@@ -541,6 +595,16 @@ func (a *API) deployConnectorTarget(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err
 		}
+		if err := requireDeploymentTargetEnabled(target); err != nil {
+			return 0, nil, err
+		}
+		identity, err := a.store.GetIdentity(ctx, tenantID, req.IdentityID)
+		if err != nil {
+			return 0, nil, err
+		}
+		if err := requireIdentityConnectorCompatible(identity, target); err != nil {
+			return 0, nil, err
+		}
 		if _, err := a.orch.BindIdentityDeploymentTarget(ctx, tenantID, req.IdentityID, target); err != nil {
 			return 0, nil, err
 		}
@@ -568,7 +632,7 @@ func (a *API) deployConnectorTarget(w http.ResponseWriter, r *http.Request) {
 				return 0, nil, err
 			}
 		}
-		identity, err := a.store.GetIdentity(ctx, tenantID, req.IdentityID)
+		identity, err = a.store.GetIdentity(ctx, tenantID, req.IdentityID)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -589,12 +653,18 @@ func (a *API) rollbackConnectorTarget(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err
 		}
+		if err := requireDeploymentTargetEnabled(target); err != nil {
+			return 0, nil, err
+		}
 		var identityID *string
 		fingerprint := ""
 		if strings.TrimSpace(req.IdentityID) != "" {
 			identityID = &req.IdentityID
 			identity, err := a.store.GetIdentity(ctx, tenantID, req.IdentityID)
 			if err != nil {
+				return 0, nil, err
+			}
+			if err := requireIdentityConnectorCompatible(identity, target); err != nil {
 				return 0, nil, err
 			}
 			certs, err := a.store.ListActiveIssuedCertificatesForIdentity(ctx, tenantID, identity.OwnerID, identity.Name)
@@ -748,6 +818,10 @@ func (a *API) createEndpointBinding(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err
 		}
+		if req.Target != nil && !deploymentTargetRequestEnabled(req.Target.Enabled) {
+			return 0, nil, errStatus(http.StatusConflict,
+				"deployment target is disabled; enable it only after its agent or relay and endpoint have been verified; nothing was queued or changed")
+		}
 		if _, err := a.store.GetOwner(ctx, tenantID, req.OwnerID); err != nil {
 			return 0, nil, err
 		}
@@ -756,6 +830,9 @@ func (a *API) createEndpointBinding(w http.ResponseWriter, r *http.Request) {
 		}
 		target, err := a.endpointBindingTarget(ctx, tenantID, req)
 		if err != nil {
+			return 0, nil, err
+		}
+		if err := requireDeploymentTargetEnabled(target); err != nil {
 			return 0, nil, err
 		}
 		identity, err := a.orch.CreateIdentity(ctx, tenantID, store.Identity{
@@ -904,6 +981,7 @@ func (a *API) endpointBindingTarget(ctx context.Context, tenantID string, req en
 	}
 	return a.orch.UpsertDeploymentTarget(ctx, tenantID, store.DeploymentTarget{
 		Name: req.Target.Name, Type: req.Target.Connector, Config: req.Target.Config,
+		Enabled: deploymentTargetRequestEnabled(req.Target.Enabled), EnabledSet: true,
 	})
 }
 

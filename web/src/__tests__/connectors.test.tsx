@@ -132,6 +132,7 @@ describe("connector deployment disclosure surface", () => {
           name: "edge/prod/payments",
           connector: "nginx",
           config: { credential_ref: "secret://connectors/nginx" },
+          enabled: true,
           created_at: "2026-06-20T00:00:00Z",
         },
       ],
@@ -154,6 +155,7 @@ describe("connector deployment disclosure surface", () => {
       name: "edge/prod/payments",
       connector: "nginx",
       config: {},
+      enabled: false,
       created_at: "2026-06-20T00:00:00Z",
     });
     apiMock.createEndpointBinding.mockReset().mockResolvedValue({
@@ -215,6 +217,7 @@ describe("connector deployment disclosure surface", () => {
     expect(await screen.findByRole("heading", { name: "Where credentials are installed" })).toBeInTheDocument();
     await user.click(screen.getByText("Destinations and safe actions", { exact: true }));
     expect(await screen.findByRole("heading", { name: "Configured destinations" })).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Target"), "target-1");
     await user.click(screen.getByText("Connector capabilities and plugin evidence", { exact: true }));
     expect(await screen.findByRole("heading", { name: "Connector registry" })).toBeInTheDocument();
     await user.click(screen.getByText("Health, retries, and rollback", { exact: true }));
@@ -376,25 +379,31 @@ describe("connector deployment disclosure surface", () => {
         name: "edge/prod/payments",
         connector: "nginx",
         config: { credential_ref: "connector-credential-ref", host: "edge-1.internal" },
+        enabled: false,
       }),
     );
 
     await user.click(screen.getByText("Destinations and safe actions", { exact: true }));
     await screen.findByRole("heading", { name: "Configured destinations" });
+    await user.selectOptions(screen.getByLabelText("Target"), "target-1");
+    await user.selectOptions(screen.getByLabelText("Identity"), "identity-1");
+    await user.type(screen.getByLabelText("Reason"), "verified design-partner endpoint");
     await user.type(screen.getByLabelText("Owner ID"), "owner-1");
     await user.click(screen.getByRole("button", { name: "Bind and enroll" }));
     await waitFor(() =>
       expect(apiMock.createEndpointBinding).toHaveBeenCalledWith({
         owner_id: "owner-1",
         identity_name: "payments.example.test",
-        reason: "operator requested deployment",
-        target: {
-          name: "edge/prod/payments",
-          connector: "nginx",
-          config: { credential_ref: "connector-credential-ref", host: "edge-1.internal" },
-        },
+        reason: "verified design-partner endpoint",
+        target_id: "target-1",
       }),
     );
+
+    // Refreshes deliberately clear selections whose IDs are not present in the
+    // served collection. Reconfirm the destination and identity before the next
+    // lifecycle action; the product must never guess these safety-critical inputs.
+    await user.selectOptions(screen.getByLabelText("Target"), "target-1");
+    await user.selectOptions(screen.getByLabelText("Identity"), "identity-1");
 
     await user.click(screen.getByRole("button", { name: "Bind" }));
     await waitFor(() => expect(apiMock.bindIdentityConnectorTarget).toHaveBeenCalledWith("identity-1", { target_id: "target-1" }));
@@ -406,11 +415,105 @@ describe("connector deployment disclosure surface", () => {
     await waitFor(() =>
       expect(apiMock.deployConnectorTarget).toHaveBeenCalledWith("target-1", {
         identity_id: "identity-1",
-        reason: "operator requested deployment",
+        reason: "verified design-partner endpoint",
       }),
     );
 
     await user.click(screen.getByRole("button", { name: "Rollback" }));
     await waitFor(() => expect(apiMock.rollbackConnectorTarget).toHaveBeenCalledWith("target-1", expect.objectContaining({ identity_id: "identity-1" })));
+  });
+
+  it("keeps prepared destinations inert until an operator explicitly enables them", async () => {
+    apiMock.connectorTargets.mockResolvedValue({
+      items: [
+        {
+          id: "target-prepared",
+          tenant_id: "tenant-1",
+          name: "Apache payments web tier (prepared, not contacted)",
+          connector: "apache",
+          config: { proof_state: "prepared_not_contacted" },
+          enabled: false,
+          created_at: "2026-06-20T00:00:00Z",
+        },
+      ],
+    });
+    apiMock.identities.mockResolvedValue([
+      {
+        id: "identity-iis",
+        tenant_id: "tenant-1",
+        name: "iis-portal.demo.trstctl.local",
+        kind: "x509_certificate",
+        owner_id: "owner-1",
+        status: "issued",
+        attributes: { intended_connector: "iis" },
+        created_at: "2026-06-20T00:00:00Z",
+      },
+    ]);
+
+    const user = userEvent.setup();
+    renderConnectors();
+    await screen.findByRole("heading", { name: "Where credentials are installed" });
+    await user.click(screen.getByText("Destinations and safe actions", { exact: true }));
+    await screen.findByRole("heading", { name: "Configured destinations" });
+
+    expect(screen.getByText("Disabled — prepared only")).toBeInTheDocument();
+    expect(screen.getByLabelText("Target")).toHaveValue("");
+    expect(screen.getByLabelText("Identity")).toHaveValue("");
+
+    await user.selectOptions(screen.getByLabelText("Target"), "target-prepared");
+    await user.selectOptions(screen.getByLabelText("Identity"), "identity-iis");
+    expect(
+      screen.getByText("This destination is disabled. Enable it only after its agent or relay and endpoint have been verified. Nothing will be queued."),
+    ).toBeInTheDocument();
+    for (const name of ["Bind", "Test", "Deploy", "Rollback"]) {
+      expect(screen.getByRole("button", { name })).toBeDisabled();
+    }
+    expect(apiMock.bindIdentityConnectorTarget).not.toHaveBeenCalled();
+    expect(apiMock.testConnectorTarget).not.toHaveBeenCalled();
+    expect(apiMock.deployConnectorTarget).not.toHaveBeenCalled();
+    expect(apiMock.rollbackConnectorTarget).not.toHaveBeenCalled();
+  });
+
+  it("refuses a connector-mismatched identity while still allowing a safe target test", async () => {
+    apiMock.connectorTargets.mockResolvedValue({
+      items: [
+        {
+          id: "target-apache",
+          tenant_id: "tenant-1",
+          name: "Verified Apache destination",
+          connector: "apache",
+          config: {},
+          enabled: true,
+          created_at: "2026-06-20T00:00:00Z",
+        },
+      ],
+    });
+    apiMock.identities.mockResolvedValue([
+      {
+        id: "identity-iis",
+        tenant_id: "tenant-1",
+        name: "iis-portal.demo.trstctl.local",
+        kind: "x509_certificate",
+        owner_id: "owner-1",
+        status: "issued",
+        attributes: { intended_connector: "iis" },
+        created_at: "2026-06-20T00:00:00Z",
+      },
+    ]);
+
+    const user = userEvent.setup();
+    renderConnectors();
+    await screen.findByRole("heading", { name: "Where credentials are installed" });
+    await user.click(screen.getByText("Destinations and safe actions", { exact: true }));
+    await screen.findByRole("heading", { name: "Configured destinations" });
+    await user.selectOptions(screen.getByLabelText("Target"), "target-apache");
+    await user.selectOptions(screen.getByLabelText("Identity"), "identity-iis");
+    await user.type(screen.getByLabelText("Reason"), "verified endpoint change");
+
+    expect(screen.getByText("This identity is intended for iis, but the selected destination uses apache. Choose a matching identity.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Bind" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Deploy" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Rollback" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Test" })).toBeEnabled();
   });
 });

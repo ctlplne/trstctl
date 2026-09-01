@@ -63,7 +63,8 @@ export function Connectors() {
   const [selectedIdentity, setSelectedIdentity] = useState("");
   const [bindingOwnerID, setBindingOwnerID] = useState("");
   const [bindingIdentityName, setBindingIdentityName] = useState("payments.example.test");
-  const [reason, setReason] = useState("operator requested deployment");
+  const [reason, setReason] = useState("");
+  const [targetEnabled, setTargetEnabled] = useState(false);
   const [circuits, setCircuits] = useState<OutboxCircuit[] | null>(null);
   const [deliveriesCursor, setDeliveriesCursor] = useState<string | undefined>(undefined);
   const [deliveriesLoadingMore, setDeliveriesLoadingMore] = useState(false);
@@ -72,6 +73,7 @@ export function Connectors() {
   const [editName, setEditName] = useState("");
   const [editConnector, setEditConnector] = useState("");
   const [editConfig, setEditConfig] = useState("{}");
+  const [editEnabled, setEditEnabled] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [editBusy, setEditBusy] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DeploymentTarget | null>(null);
@@ -104,7 +106,7 @@ export function Connectors() {
     if (targetResult.status === "fulfilled") {
       const loadedTargets = targetResult.value.items ?? [];
       setTargets(loadedTargets);
-      setSelectedTarget((current) => (loadedTargets.some((target) => target.id === current) ? current : loadedTargets[0]?.id || ""));
+      setSelectedTarget((current) => (loadedTargets.some((target) => target.id === current) ? current : ""));
     }
     if (verificationResult.status === "fulfilled") setEndpointVerifications(verificationResult.value.items ?? []);
     if (catalogResult.status === "rejected" || targetResult.status === "rejected") {
@@ -121,7 +123,7 @@ export function Connectors() {
     try {
       const loadedIdentities = await api.identities();
       setIdentities(loadedIdentities ?? []);
-      setSelectedIdentity((current) => (loadedIdentities?.some((identity) => identity.id === current) ? current : loadedIdentities?.[0]?.id || ""));
+      setSelectedIdentity((current) => (loadedIdentities?.some((identity) => identity.id === current) ? current : ""));
     } catch (err) {
       setDestinationsError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -185,6 +187,22 @@ export function Connectors() {
 
   const connectorOptions = useMemo(() => (catalog ?? []).map((item) => item.name), [catalog]);
   const selectedTargetRecord = useMemo(() => (targets ?? []).find((target) => target.id === selectedTarget), [selectedTarget, targets]);
+  const selectedIdentityRecord = useMemo(() => identities.find((identity) => identity.id === selectedIdentity), [identities, selectedIdentity]);
+  const intendedConnector = useMemo(() => {
+    const value = selectedIdentityRecord?.attributes?.intended_connector;
+    return typeof value === "string" ? value.trim() : "";
+  }, [selectedIdentityRecord]);
+  const connectorMismatch = Boolean(selectedTargetRecord && intendedConnector && intendedConnector !== selectedTargetRecord.connector);
+  const targetActionBlocked = !selectedTargetRecord || !selectedTargetRecord.enabled;
+  const identityActionBlocked = targetActionBlocked || !selectedIdentityRecord || connectorMismatch;
+  const reasonActionBlocked = identityActionBlocked || !reason.trim();
+  const actionSafetyMessage = !selectedTargetRecord
+    ? null
+    : !selectedTargetRecord.enabled
+      ? t("connectors.targetReadiness.disabledHelp")
+      : connectorMismatch
+        ? t("connectors.targetReadiness.connectorMismatch", { intended: intendedConnector, connector: selectedTargetRecord.connector })
+        : null;
   const selectedTargetTimeline = useMemo(() => {
     if (!selectedTargetRecord) return [];
     const receiptRows = (deliveries ?? [])
@@ -214,7 +232,7 @@ export function Connectors() {
     event.preventDefault();
     try {
       const config = JSON.parse(targetConfig) as Record<string, unknown>;
-      const created = await api.createConnectorTarget({ name: targetName.trim(), connector: connectorName.trim(), config });
+      const created = await api.createConnectorTarget({ name: targetName.trim(), connector: connectorName.trim(), config, enabled: targetEnabled });
       setActionResult(`target:${created.id}`);
       setSelectedTarget(created.id);
       await refresh();
@@ -227,12 +245,11 @@ export function Connectors() {
   const createEndpointBinding = async (event: FormEvent) => {
     event.preventDefault();
     try {
-      const config = JSON.parse(targetConfig) as Record<string, unknown>;
       const binding = await api.createEndpointBinding({
         owner_id: bindingOwnerID.trim(),
         identity_name: bindingIdentityName.trim(),
-        reason,
-        target: { name: targetName.trim(), connector: connectorName.trim(), config },
+        reason: reason.trim(),
+        target_id: selectedTarget,
       });
       setActionResult(`endpoint-binding:${binding.identity.status}:${binding.renewal_intent}`);
       setSelectedTarget(binding.target.id);
@@ -244,7 +261,9 @@ export function Connectors() {
   };
 
   const runTargetAction = async (action: "bind" | "test" | "deploy" | "rollback") => {
-    if (!selectedTarget) return;
+    if (!selectedTarget || targetActionBlocked) return;
+    if (action !== "test" && identityActionBlocked) return;
+    if ((action === "deploy" || action === "rollback") && !reason.trim()) return;
     try {
       if (action === "bind") {
         if (!selectedIdentity) return;
@@ -255,10 +274,10 @@ export function Connectors() {
         setActionResult(`${receipt.destination}:${receipt.status}`);
       } else if (action === "deploy") {
         if (!selectedIdentity) return;
-        const identity = await api.deployConnectorTarget(selectedTarget, { identity_id: selectedIdentity, reason });
+        const identity = await api.deployConnectorTarget(selectedTarget, { identity_id: selectedIdentity, reason: reason.trim() });
         setActionResult(`deploy:${identity.status}`);
       } else {
-        const receipt = await api.rollbackConnectorTarget(selectedTarget, { identity_id: selectedIdentity, reason });
+        const receipt = await api.rollbackConnectorTarget(selectedTarget, { identity_id: selectedIdentity, reason: reason.trim() });
         setActionResult(`${receipt.destination}:${receipt.status}`);
       }
       await refresh();
@@ -272,6 +291,7 @@ export function Connectors() {
     setEditName(target.name);
     setEditConnector(target.connector);
     setEditConfig(JSON.stringify(target.config ?? {}, null, 2));
+    setEditEnabled(target.enabled);
     setEditError(null);
   };
 
@@ -292,7 +312,12 @@ export function Connectors() {
     }
     setEditBusy(true);
     try {
-      const updated = await api.updateConnectorTarget(editTarget.id, { name: editName.trim(), connector: editConnector.trim(), config });
+      const updated = await api.updateConnectorTarget(editTarget.id, {
+        name: editName.trim(),
+        connector: editConnector.trim(),
+        config,
+        enabled: editEnabled,
+      });
       setEditTarget(null);
       setEditError(null);
       toast({ kind: "success", title: `Target ${updated.name} updated` });
@@ -424,9 +449,21 @@ export function Connectors() {
               <p className="max-w-3xl text-sm text-muted-foreground">{t("connectors.design.bindHelp")}</p>
               <form
                 aria-label={translateNow("source.create.endpoint.binding.dd5b21a786")}
-                className="ui-panel grid gap-3 md:grid-cols-3 md:items-end"
+                className="ui-panel grid gap-3 md:grid-cols-5 md:items-end"
                 onSubmit={createEndpointBinding}
               >
+                <label className="grid gap-1 text-sm">
+                  {t("connectors.targetReadiness.enrollmentDestination")}
+                  <select className="ui-input" value={selectedTarget} onChange={(event) => setSelectedTarget(event.target.value)} required>
+                    <option value="">{translateNow("source.select.target.adfbe7a33d")}</option>
+                    {targets.map((target) => (
+                      <option key={target.id} value={target.id}>
+                        {target.name}
+                        {target.enabled ? "" : t("connectors.targetReadiness.optionQualifier", { value: t("connectors.targetReadiness.disabledShort") })}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <label className="grid gap-1 text-sm">
                   {translateNow("source.owner.id.1611f5e055")}
                   <input className="ui-input font-mono text-xs" value={bindingOwnerID} onChange={(event) => setBindingOwnerID(event.target.value)} required />
@@ -435,7 +472,13 @@ export function Connectors() {
                   {translateNow("source.identity.dns.name.c79a6b3b97")}
                   <input className="ui-input" value={bindingIdentityName} onChange={(event) => setBindingIdentityName(event.target.value)} required />
                 </label>
-                <Button type="submit">{translateNow("source.bind.and.enroll.5cb885780a")}</Button>
+                <label className="grid gap-1 text-sm">
+                  {t("connectors.targetReadiness.enrollmentReason")}
+                  <input className="ui-input" value={reason} onChange={(event) => setReason(event.target.value)} required />
+                </label>
+                <Button type="submit" disabled={targetActionBlocked || !bindingOwnerID.trim() || !bindingIdentityName.trim() || !reason.trim()}>
+                  {translateNow("source.bind.and.enroll.5cb885780a")}
+                </Button>
               </form>
 
               {targets && targets.length === 0 ? (
@@ -451,6 +494,7 @@ export function Connectors() {
                         <tr>
                           <th scope="col">{translateNow("source.target.978354db0c")}</th>
                           <th scope="col">{translateNow("source.connector.8f0d706fff")}</th>
+                          <th scope="col">{t("connectors.targetReadiness.state")}</th>
                           <th scope="col">{translateNow("source.id.3843971dcf")}</th>
                           <th scope="col">{translateNow("source.created.d70b9e24bc")}</th>
                           <th scope="col">{translateNow("source.actions.ff8059dc67")}</th>
@@ -461,6 +505,13 @@ export function Connectors() {
                           <tr key={target.id} className="align-top">
                             <td>{target.name}</td>
                             <td className="font-mono text-xs">{target.connector}</td>
+                            <td>
+                              {target.enabled ? (
+                                <span className="font-medium text-status-success">{t("connectors.targetReadiness.enabled")}</span>
+                              ) : (
+                                <span className="font-medium text-status-warning">{t("connectors.targetReadiness.disabledShort")}</span>
+                              )}
+                            </td>
                             <td className="break-all font-mono text-xs">{target.id}</td>
                             <td>{formatDateTime(target.created_at)}</td>
                             <td>
@@ -498,6 +549,7 @@ export function Connectors() {
                     {targets.map((target) => (
                       <option key={target.id} value={target.id}>
                         {target.name}
+                        {target.enabled ? "" : t("connectors.targetReadiness.optionQualifier", { value: t("connectors.targetReadiness.disabledShort") })}
                       </option>
                     ))}
                   </select>
@@ -509,6 +561,9 @@ export function Connectors() {
                     {identities.map((identity) => (
                       <option key={identity.id} value={identity.id}>
                         {identity.name}
+                        {typeof identity.attributes?.intended_connector === "string"
+                          ? t("connectors.targetReadiness.optionQualifier", { value: identity.attributes.intended_connector })
+                          : ""}
                       </option>
                     ))}
                   </select>
@@ -517,17 +572,25 @@ export function Connectors() {
                   {translateNow("source.reason.f81ab834de")}
                   <input className="ui-input" value={reason} onChange={(event) => setReason(event.target.value)} />
                 </label>
+                {actionSafetyMessage ? (
+                  <p
+                    role="alert"
+                    className="rounded-control border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm text-foreground md:col-span-3"
+                  >
+                    {actionSafetyMessage}
+                  </p>
+                ) : null}
                 <div className="flex flex-wrap gap-2 md:col-span-3">
-                  <Button type="button" onClick={() => runTargetAction("bind")} disabled={!selectedTarget || !selectedIdentity}>
+                  <Button type="button" onClick={() => runTargetAction("bind")} disabled={identityActionBlocked}>
                     {translateNow("source.bind.56b9b63d28")}
                   </Button>
-                  <Button type="button" onClick={() => runTargetAction("test")} disabled={!selectedTarget}>
+                  <Button type="button" onClick={() => runTargetAction("test")} disabled={targetActionBlocked}>
                     {translateNow("source.test.532eaabd95")}
                   </Button>
-                  <Button type="button" onClick={() => runTargetAction("deploy")} disabled={!selectedTarget || !selectedIdentity}>
+                  <Button type="button" onClick={() => runTargetAction("deploy")} disabled={reasonActionBlocked}>
                     {translateNow("source.deploy.4c236daafb")}
                   </Button>
-                  <Button type="button" onClick={() => runTargetAction("rollback")} disabled={!selectedTarget}>
+                  <Button type="button" onClick={() => runTargetAction("rollback")} disabled={reasonActionBlocked}>
                     {translateNow("source.rollback.c591f55749")}
                   </Button>
                 </div>
@@ -1129,6 +1192,20 @@ export function Connectors() {
               spellCheck={false}
             />
           </label>
+          <label className="flex items-start gap-3 rounded-control border border-border bg-muted/30 p-3 text-sm" htmlFor="connector-target-enabled">
+            <input
+              id="connector-target-enabled"
+              aria-label={t("connectors.targetReadiness.enableNow")}
+              className="mt-1 size-4"
+              type="checkbox"
+              checked={targetEnabled}
+              onChange={(event) => setTargetEnabled(event.target.checked)}
+            />
+            <span>
+              <strong className="block">{t("connectors.targetReadiness.enableNow")}</strong>
+              <span className="mt-1 block text-muted-foreground">{t("connectors.targetReadiness.enableNowHelp")}</span>
+            </span>
+          </label>
           <p className="text-sm text-muted-foreground">{t("connectors.design.configurationHelp")}</p>
           <div className="flex flex-wrap justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setDestinationOpen(false)}>
@@ -1192,6 +1269,20 @@ export function Connectors() {
                 value={editConfig}
                 onChange={(event) => setEditConfig(event.target.value)}
               />
+            </label>
+            <label className="flex items-start gap-3 rounded-control border border-border bg-muted/30 p-3 text-sm" htmlFor="connector-target-edit-enabled">
+              <input
+                id="connector-target-edit-enabled"
+                aria-label={t("connectors.targetReadiness.enableNow")}
+                className="mt-1 size-4"
+                type="checkbox"
+                checked={editEnabled}
+                onChange={(event) => setEditEnabled(event.target.checked)}
+              />
+              <span>
+                <strong className="block">{t("connectors.targetReadiness.enableNow")}</strong>
+                <span className="mt-1 block text-muted-foreground">{t("connectors.targetReadiness.enableNowHelp")}</span>
+              </span>
             </label>
             {editError && (
               <p role="alert" className="text-sm text-destructive">

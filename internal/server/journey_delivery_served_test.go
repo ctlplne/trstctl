@@ -10,7 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/protocols/ari"
 	"trstctl.com/trstctl/internal/servedstatus"
 	"trstctl.com/trstctl/internal/store"
@@ -746,6 +749,224 @@ func TestServedEndpointBindingAutomationCAPLIFE01(t *testing.T) {
 			t.Fatalf("missing %s event", eventType)
 		}
 	}
+}
+
+// TestDisabledConnectorTargetRefusesEveryLifecycleMutation is the fail-closed
+// contract for prepared destinations. A target may be recorded before its
+// agent, relay, endpoint, and rollback path are independently verified, but it
+// must be inert until an operator explicitly enables it. Refusal happens before
+// an identity is bound or created and before any external-call intent exists.
+func TestDisabledConnectorTargetRefusesEveryLifecycleMutation(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, func(*Deps) {})
+	tok := seedScopedToken(t, h.store, h.tenant,
+		"owners:read", "owners:write",
+		"identities:read", "identities:write",
+		"connectors:read", "connectors:write",
+	)
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/owners", tok, map[string]any{
+		"kind": "workload", "name": "prepared-target-owner",
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create owner: status %d body %s", status, body)
+	}
+	var owner struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &owner); err != nil {
+		t.Fatalf("decode owner: %v", err)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/identities", tok, map[string]any{
+		"kind": "x509_certificate", "name": "prepared-target.served.test", "owner_id": owner.ID,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create identity: status %d body %s", status, body)
+	}
+	var identity struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &identity); err != nil {
+		t.Fatalf("decode identity: %v", err)
+	}
+
+	targetRequest := map[string]any{
+		"name":      "prepared/apache/payments",
+		"connector": "apache",
+		"enabled":   false,
+		"config": map[string]any{
+			"credential_ref": "secret://connectors/apache/payments",
+			"proof_state":    "prepared_not_contacted",
+		},
+	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/connectors/targets", tok, targetRequest)
+	if status != http.StatusCreated || !jsonContains(t, body, `"enabled":false`) {
+		t.Fatalf("create disabled target: status %d body %s", status, body)
+	}
+	var target struct {
+		ID      string `json:"id"`
+		Enabled bool   `json:"enabled"`
+	}
+	if err := json.Unmarshal(body, &target); err != nil {
+		t.Fatalf("decode disabled target: %v (%s)", err, body)
+	}
+	if target.ID == "" || target.Enabled {
+		t.Fatalf("disabled target response = %+v", target)
+	}
+
+	// An older client that edits name/config without the new field must not
+	// accidentally arm a target that an operator deliberately disabled.
+	status, body = secretsReq(t, h, http.MethodPut, "/api/v1/connectors/targets/"+target.ID, tok, map[string]any{
+		"name":      "prepared/apache/payments",
+		"connector": "apache",
+		"config": map[string]any{
+			"credential_ref": "secret://connectors/apache/payments",
+			"proof_state":    "prepared_not_contacted",
+			"note":           "edited by a client that predates readiness",
+		},
+	})
+	if status != http.StatusOK || !jsonContains(t, body, `"enabled":false`) {
+		t.Fatalf("legacy-shaped update re-enabled target: status %d body %s", status, body)
+	}
+
+	beforeOutbox := connectorTargetOutboxRows(t, h)
+	blocked := []struct {
+		name string
+		path string
+		body any
+	}{
+		{name: "bind", path: "/api/v1/identities/" + identity.ID + "/connector-target", body: map[string]any{"target_id": target.ID}},
+		{name: "test", path: "/api/v1/connectors/targets/" + target.ID + "/test", body: nil},
+		{name: "deploy", path: "/api/v1/connectors/targets/" + target.ID + "/deploy", body: map[string]any{"identity_id": identity.ID, "reason": "disabled target negative control"}},
+		{name: "rollback", path: "/api/v1/connectors/targets/" + target.ID + "/rollback", body: map[string]any{"identity_id": identity.ID, "reason": "disabled target negative control"}},
+		{name: "existing endpoint binding", path: "/api/v1/lifecycle/endpoint-bindings", body: map[string]any{
+			"owner_id": owner.ID, "identity_name": "must-not-exist.served.test", "target_id": target.ID, "reason": "disabled target negative control",
+		}},
+		{name: "inline endpoint binding", path: "/api/v1/lifecycle/endpoint-bindings", body: map[string]any{
+			"owner_id": owner.ID, "identity_name": "inline-must-not-exist.served.test", "reason": "disabled target negative control",
+			"target": map[string]any{
+				"name": "prepared/iis/portal", "connector": "iis", "enabled": false,
+				"config": map[string]any{"credential_ref": "secret://connectors/iis/portal", "proof_state": "prepared_not_contacted"},
+			},
+		}},
+	}
+	for _, tc := range blocked {
+		t.Run(tc.name, func(t *testing.T) {
+			status, response := secretsReq(t, h, http.MethodPost, tc.path, tok, tc.body)
+			if status != http.StatusConflict || !jsonContains(t, response, "deployment target is disabled") ||
+				!jsonContains(t, response, "nothing was queued") {
+				t.Fatalf("disabled target action was not refused before mutation: status %d body %s", status, response)
+			}
+		})
+	}
+
+	if got := eventCount(t, h.log, h.tenant, projections.EventIdentityConnectorTargetBound); got != 0 {
+		t.Fatalf("disabled target emitted %d identity binding events, want 0", got)
+	}
+	if got := eventCount(t, h.log, h.tenant, projections.EventConnectorDeliveryRecorded); got != 0 {
+		t.Fatalf("disabled target emitted %d delivery events, want 0", got)
+	}
+	if got := eventCount(t, h.log, h.tenant, projections.EventIdentityIssued); got != 0 {
+		t.Fatalf("disabled target emitted %d issuance transitions, want 0", got)
+	}
+	if got := eventCount(t, h.log, h.tenant, projections.EventIdentityCreated); got != 1 {
+		t.Fatalf("disabled endpoint binding created identities: identity.created=%d, want original 1", got)
+	}
+	if got := connectorTargetOutboxRows(t, h); got != beforeOutbox {
+		t.Fatalf("disabled target queued external work: outbox before=%d after=%d", beforeOutbox, got)
+	}
+	storedIdentity, err := h.store.GetIdentity(t.Context(), h.tenant, identity.ID)
+	if err != nil {
+		t.Fatalf("load identity after refusals: %v", err)
+	}
+	if storedIdentity.Status != "requested" || jsonContains(t, storedIdentity.Attributes, target.ID) {
+		t.Fatalf("disabled target changed identity = status %q attributes %s", storedIdentity.Status, storedIdentity.Attributes)
+	}
+	targets, err := h.store.ListDeploymentTargets(t.Context(), h.tenant)
+	if err != nil {
+		t.Fatalf("list targets after inline refusal: %v", err)
+	}
+	if len(targets) != 1 {
+		t.Fatalf("disabled inline endpoint binding created a target: got %d targets, want 1", len(targets))
+	}
+
+	// The readiness transition is deliberate and auditable. Once enabled, the
+	// same server route can bind the identity normally.
+	targetRequest["enabled"] = true
+	status, body = secretsReq(t, h, http.MethodPut, "/api/v1/connectors/targets/"+target.ID, tok, targetRequest)
+	if status != http.StatusOK || !jsonContains(t, body, `"enabled":true`) {
+		t.Fatalf("enable target: status %d body %s", status, body)
+	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/identities/"+identity.ID+"/connector-target", tok, map[string]any{
+		"target_id": target.ID,
+	})
+	if status != http.StatusOK || !jsonContains(t, body, target.ID) {
+		t.Fatalf("bind explicitly enabled target: status %d body %s", status, body)
+	}
+
+	// The browser exposes intended-connector guidance, but API and CLI callers
+	// must receive the same fail-closed contract. A client cannot route an IIS
+	// identity to an Apache destination by bypassing the GUI.
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/identities", tok, map[string]any{
+		"kind": "x509_certificate", "name": "iis-only.served.test", "owner_id": owner.ID,
+		"attributes": map[string]any{"intended_connector": "iis"},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create connector-constrained identity: status %d body %s", status, body)
+	}
+	var constrainedIdentity struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &constrainedIdentity); err != nil {
+		t.Fatalf("decode connector-constrained identity: %v (%s)", err, body)
+	}
+	beforeBound := eventCount(t, h.log, h.tenant, projections.EventIdentityConnectorTargetBound)
+	beforeDeliveries := eventCount(t, h.log, h.tenant, projections.EventConnectorDeliveryRecorded)
+	beforeOutbox = connectorTargetOutboxRows(t, h)
+	for _, tc := range []struct {
+		name string
+		path string
+		body any
+	}{
+		{name: "bind", path: "/api/v1/identities/" + constrainedIdentity.ID + "/connector-target", body: map[string]any{"target_id": target.ID}},
+		{name: "deploy", path: "/api/v1/connectors/targets/" + target.ID + "/deploy", body: map[string]any{"identity_id": constrainedIdentity.ID, "reason": "mismatch negative control"}},
+		{name: "rollback", path: "/api/v1/connectors/targets/" + target.ID + "/rollback", body: map[string]any{"identity_id": constrainedIdentity.ID, "reason": "mismatch negative control"}},
+	} {
+		t.Run("connector mismatch "+tc.name, func(t *testing.T) {
+			status, response := secretsReq(t, h, http.MethodPost, tc.path, tok, tc.body)
+			if status != http.StatusConflict || !jsonContains(t, response, "intended for iis") ||
+				!jsonContains(t, response, "uses apache") || !jsonContains(t, response, "nothing was queued") {
+				t.Fatalf("connector mismatch did not fail closed: status %d body %s", status, response)
+			}
+		})
+	}
+	if got := eventCount(t, h.log, h.tenant, projections.EventIdentityConnectorTargetBound); got != beforeBound {
+		t.Fatalf("connector mismatch emitted binding event: before=%d after=%d", beforeBound, got)
+	}
+	if got := eventCount(t, h.log, h.tenant, projections.EventConnectorDeliveryRecorded); got != beforeDeliveries {
+		t.Fatalf("connector mismatch emitted delivery event: before=%d after=%d", beforeDeliveries, got)
+	}
+	if got := connectorTargetOutboxRows(t, h); got != beforeOutbox {
+		t.Fatalf("connector mismatch queued external work: before=%d after=%d", beforeOutbox, got)
+	}
+	storedConstrained, err := h.store.GetIdentity(t.Context(), h.tenant, constrainedIdentity.ID)
+	if err != nil {
+		t.Fatalf("load connector-constrained identity: %v", err)
+	}
+	if storedConstrained.Status != "requested" || jsonContains(t, storedConstrained.Attributes, target.ID) {
+		t.Fatalf("connector mismatch changed identity = status %q attributes %s", storedConstrained.Status, storedConstrained.Attributes)
+	}
+}
+
+func connectorTargetOutboxRows(t *testing.T, h *servedHarness) int {
+	t.Helper()
+	count := 0
+	if err := h.store.WithTenant(t.Context(), h.tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(t.Context(), `SELECT count(*) FROM outbox WHERE tenant_id = $1`, h.tenant).Scan(&count)
+	}); err != nil {
+		t.Fatalf("count connector target outbox rows: %v", err)
+	}
+	return count
 }
 
 type connectorDeliveryList struct {

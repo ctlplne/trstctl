@@ -1294,8 +1294,12 @@ func (o *Orchestrator) UpsertDeploymentTarget(ctx context.Context, tenantID stri
 	if id == "" {
 		id = uuid.NewString()
 	}
+	enabled := in.Enabled
+	if !in.EnabledSet {
+		enabled = true
+	}
 	payload, err := json.Marshal(projections.DeploymentTargetUpserted{
-		ID: id, Name: strings.TrimSpace(in.Name), Connector: strings.TrimSpace(in.Type), Config: in.Config,
+		ID: id, Name: strings.TrimSpace(in.Name), Connector: strings.TrimSpace(in.Type), Config: in.Config, Enabled: &enabled,
 	})
 	if err != nil {
 		return store.DeploymentTarget{}, err

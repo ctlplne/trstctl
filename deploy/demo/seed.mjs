@@ -93,6 +93,7 @@ function buildDemoHistory() {
       key: "apache-payments",
       name: "Apache payments web tier (prepared, not contacted)",
       connector: "apache",
+      enabled: false,
       config: {
         proof_state: "prepared_not_contacted",
         required_agent_role: "host",
@@ -109,6 +110,7 @@ function buildDemoHistory() {
       key: "iis-portal",
       name: "IIS customer portal (prepared, not contacted)",
       connector: "iis",
+      enabled: false,
       config: {
         proof_state: "prepared_not_contacted",
         required_agent_role: "host",
@@ -125,6 +127,7 @@ function buildDemoHistory() {
       key: "f5-edge",
       name: "F5 edge HA pair (prepared, API-double proof only)",
       connector: "f5",
+      enabled: false,
       config: {
         proof_state: "prepared_not_contacted",
         required_agent_role: "network",
@@ -723,9 +726,25 @@ async function ensureConnectorTarget(target, targetItems) {
   const expected = {
     name: target.name,
     connector: target.connector,
+    enabled: target.enabled,
     config: stableSeedSemantics(target.config),
   };
   if (existing) {
+    if (existing.enabled !== target.enabled) {
+      const updated = await api("PUT", `/api/v1/connectors/targets/${encodeURIComponent(existing.id)}`, {
+        name: target.name,
+        connector: target.connector,
+        enabled: target.enabled,
+        config: { ...target.config, demo_observed_at: daysAgo(target.daysAgo) },
+      }, stableKey(`connector-target-readiness-${target.key}`));
+      const index = targetItems.findIndex((candidate) => candidate.id === existing.id);
+      if (index >= 0) targetItems[index] = updated;
+      return assertFields(
+        { ...updated, config: stableSeedSemantics(updated.config) },
+        expected,
+        `connector target ${target.name}`,
+      );
+    }
     return assertFields(
       { ...existing, config: stableSeedSemantics(existing.config) },
       expected,
@@ -735,6 +754,7 @@ async function ensureConnectorTarget(target, targetItems) {
   const created = await api("POST", "/api/v1/connectors/targets", {
     name: target.name,
     connector: target.connector,
+    enabled: target.enabled,
     config: { ...target.config, demo_observed_at: daysAgo(target.daysAgo) },
   }, stableKey(`connector-target-${target.key}`));
   targetItems.push(created);
@@ -986,10 +1006,10 @@ async function collectSeedInventory(history, resolved) {
       if (!row) throw new Error(`completed seed is missing connector target ${definition.name}`);
       assertFields(
         { ...row, config: stableSeedSemantics(row.config) },
-        { connector: definition.connector, config: stableSeedSemantics(definition.config) },
+        { connector: definition.connector, enabled: definition.enabled, config: stableSeedSemantics(definition.config) },
         `connector target ${definition.name}`,
       );
-      return { key: definition.key, id: row.id, name: row.name, connector: row.connector, config: stableSeedSemantics(row.config) };
+      return { key: definition.key, id: row.id, name: row.name, connector: row.connector, enabled: row.enabled, config: stableSeedSemantics(row.config) };
     }),
     identities: history.managedIdentities.map((definition) => {
       const row = findUniqueLogicalRecord(identities, (candidate) => candidate.name === definition.name, `identity ${definition.name}`);

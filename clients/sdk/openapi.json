@@ -9755,6 +9755,9 @@
             "format": "date-time",
             "type": "string"
           },
+          "enabled": {
+            "type": "boolean"
+          },
           "id": {
             "format": "uuid",
             "type": "string"
@@ -9773,6 +9776,7 @@
           "name",
           "connector",
           "config",
+          "enabled",
           "created_at"
         ],
         "type": "object"
@@ -9801,6 +9805,9 @@
           },
           "connector": {
             "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
           },
           "name": {
             "type": "string"

@@ -8580,6 +8580,7 @@ export interface components {
             connector: string;
             /** Format: date-time */
             created_at: string;
+            enabled: boolean;
             /** Format: uuid */
             id: string;
             name: string;
@@ -8593,6 +8594,7 @@ export interface components {
         DeploymentTargetRequest: {
             config?: Record<string, never>;
             connector: string;
+            enabled?: boolean;
             name: string;
         };
         DeploymentTriState: {

@@ -23,8 +23,19 @@ type DeploymentTarget struct {
 	Config     json.RawMessage // connector configuration; non-secret
 	RevisionID string
 	Enabled    bool
+	// EnabledSet distinguishes an explicit disabled target from legacy callers
+	// that predate execution readiness. Omitted legacy state defaults to enabled;
+	// new API and event paths always set this marker explicitly.
+	EnabledSet bool
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
+}
+
+func deploymentTargetEnabled(d DeploymentTarget) bool {
+	if !d.EnabledSet {
+		return true
+	}
+	return d.Enabled
 }
 
 // ApplyDeploymentTargetUpsertedTx projects a deployment_target.upserted event.
@@ -34,23 +45,24 @@ func (s *Store) ApplyDeploymentTargetUpsertedTx(ctx context.Context, tx pgx.Tx, 
 	if revisionID == "" {
 		return fmt.Errorf("store: deployment target revision id is required")
 	}
+	enabled := deploymentTargetEnabled(d)
 	if _, err := tx.Exec(ctx,
 		`INSERT INTO deployment_target_revisions
 		        (tenant_id, target_id, revision_id, name, type, config, enabled, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6::jsonb, true, $7)
+		 VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)
 		 ON CONFLICT (tenant_id, target_id, revision_id) DO NOTHING`,
-		d.TenantID, d.ID, revisionID, d.Name, d.Type, jsonbOrEmpty(d.Config), createdAt); err != nil {
+		d.TenantID, d.ID, revisionID, d.Name, d.Type, jsonbOrEmpty(d.Config), enabled, createdAt); err != nil {
 		return err
 	}
 	tag, err := tx.Exec(ctx,
 		`INSERT INTO deployment_targets
 		        (id, tenant_id, name, type, config, revision_id, enabled, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5::jsonb, $6, true, $7, $7)
+		 VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $8)
 		 ON CONFLICT (id) DO UPDATE
 		    SET name = EXCLUDED.name, type = EXCLUDED.type, config = EXCLUDED.config,
-		        revision_id = EXCLUDED.revision_id, enabled = true, updated_at = EXCLUDED.updated_at
+		        revision_id = EXCLUDED.revision_id, enabled = EXCLUDED.enabled, updated_at = EXCLUDED.updated_at
 		  WHERE deployment_targets.tenant_id = EXCLUDED.tenant_id`,
-		d.ID, d.TenantID, d.Name, d.Type, jsonbOrEmpty(d.Config), revisionID, createdAt)
+		d.ID, d.TenantID, d.Name, d.Type, jsonbOrEmpty(d.Config), revisionID, enabled, createdAt)
 	if err != nil {
 		return err
 	}
@@ -96,6 +108,7 @@ func (s *Store) GetDeploymentTarget(ctx context.Context, tenantID, id string) (D
 			Scan(&d.ID, &d.TenantID, &d.Name, &d.Type, &cfg, &d.RevisionID, &d.Enabled, &d.CreatedAt, &d.UpdatedAt)
 	})
 	d.Config = cfg
+	d.EnabledSet = err == nil
 	return d, err
 }
 
@@ -119,6 +132,7 @@ func (s *Store) ListDeploymentTargets(ctx context.Context, tenantID string) ([]D
 				return err
 			}
 			d.Config = cfg
+			d.EnabledSet = true
 			out = append(out, d)
 		}
 		return rows.Err()
@@ -143,6 +157,7 @@ func (s *Store) GetDeploymentTargetRevision(ctx context.Context, tenantID, targe
 			Scan(&d.ID, &d.TenantID, &d.Name, &d.Type, &cfg, &d.RevisionID, &d.Enabled, &d.CreatedAt)
 	})
 	d.Config = cfg
+	d.EnabledSet = err == nil
 	d.UpdatedAt = d.CreatedAt
 	return d, err
 }

@@ -3914,7 +3914,7 @@ const deDECatalog = {
   "connectors.design.destinationsError": "Zielaktionen konnten nicht geladen werden",
   "connectors.design.configuredDestinations": "Konfigurierte Ziele",
   "connectors.design.bindHelp":
-    "Verwenden Sie das Owner- und DNS-Formular nur, wenn eine geprüfte Aktion Identität, Ziel, Ausstellungsabsicht und Bereitstellungsabsicht zusammen erstellen muss.",
+    "Wählen Sie ein aktiviertes, unabhängig geprüftes Ziel. Diese geprüfte Aktion erstellt die Identität und stellt Ausstellung und Bereitstellung in die Warteschlange; sie erstellt oder aktiviert kein Ziel.",
   "connectors.design.destinationsTable": "Konfigurierte Bereitstellungsziele",
   "connectors.design.capabilitiesHelp":
     "Dies sind Fähigkeitsnachweise, keine Behauptung, dass jeder Connector hier konfiguriert ist. Ausführungsort, Rollback, Gerätenachweis, Migrationsgrenzen, signierte Herausgeberidentität und wirksame Berechtigungen bleiben exakt.",
@@ -3928,6 +3928,19 @@ const deDECatalog = {
   "connectors.design.configuration": "Konfiguration (JSON)",
   "connectors.design.configurationHelp":
     "Speichern Sie Credential-Referenzen, niemals Geheimwerte. Der Server validiert vor dem Speichern das Schema des ausgewählten Connectors.",
+  "connectors.targetReadiness.state": "Ausführungszustand",
+  "connectors.targetReadiness.enabled": "Aktiviert — geprüfte Aktionen erlaubt",
+  "connectors.targetReadiness.disabledShort": "Deaktiviert — nur vorbereitet",
+  "connectors.targetReadiness.optionQualifier": " — {value}",
+  "connectors.targetReadiness.disabledHelp":
+    "Dieses Ziel ist deaktiviert. Aktivieren Sie es erst, nachdem Agent oder Relay und der Endpunkt verifiziert wurden. Es wird nichts eingereiht.",
+  "connectors.targetReadiness.connectorMismatch":
+    "Diese Identität ist für {intended} vorgesehen, das ausgewählte Ziel verwendet jedoch {connector}. Wählen Sie eine passende Identität.",
+  "connectors.targetReadiness.enableNow": "Lebenszyklusaktionen aktivieren",
+  "connectors.targetReadiness.enableNowHelp":
+    "Lassen Sie dies ausgeschaltet, solange das Ziel nur vorbereitet ist. Aktivieren Sie es erst, nachdem Agent oder Relay, Endpunktadresse, Credential-Referenz und Rollback-Pfad geprüft wurden.",
+  "connectors.targetReadiness.enrollmentDestination": "Ziel für die Registrierung",
+  "connectors.targetReadiness.enrollmentReason": "Grund der Registrierung",
   "connectors.deliveryEvidence": "Connector-Zustellevidenz",
   "platform.editions.useRights": "Nutzungsrechte",
   "platform.editions.managedCustomerBand": "Managed-Kundenband",

@@ -3884,7 +3884,7 @@ const esESCatalog = {
   "connectors.design.destinationsError": "No se pudieron cargar las acciones del destino",
   "connectors.design.configuredDestinations": "Destinos configurados",
   "connectors.design.bindHelp":
-    "Use el formulario de propietario y DNS solo cuando una acción revisada deba crear a la vez la identidad, el destino, la intención de emisión y la intención de despliegue.",
+    "Elija un destino habilitado y verificado de forma independiente. Esta acción revisada crea la identidad y pone en cola la emisión y el despliegue; no crea ni habilita un destino.",
   "connectors.design.destinationsTable": "Destinos de despliegue configurados",
   "connectors.design.capabilitiesHelp":
     "Esto es evidencia de capacidades, no una afirmación de que todos los conectores estén configurados aquí. La ubicación de ejecución, la reversión, la prueba del dispositivo, los límites de migración, la identidad firmada del editor y los permisos efectivos siguen siendo exactos.",
@@ -3898,6 +3898,19 @@ const esESCatalog = {
   "connectors.design.configuration": "Configuración (JSON)",
   "connectors.design.configurationHelp":
     "Guarde referencias de credenciales, nunca valores secretos. El servidor valida el esquema del conector seleccionado antes de guardar.",
+  "connectors.targetReadiness.state": "Estado de ejecución",
+  "connectors.targetReadiness.enabled": "Habilitado — se permiten acciones revisadas",
+  "connectors.targetReadiness.disabledShort": "Deshabilitado — solo preparado",
+  "connectors.targetReadiness.optionQualifier": " — {value}",
+  "connectors.targetReadiness.disabledHelp":
+    "Este destino está deshabilitado. Habilítelo solo después de verificar su agente o relay y el endpoint. No se pondrá nada en cola.",
+  "connectors.targetReadiness.connectorMismatch":
+    "Esta identidad está destinada a {intended}, pero el destino seleccionado usa {connector}. Elija una identidad compatible.",
+  "connectors.targetReadiness.enableNow": "Habilitar acciones del ciclo de vida",
+  "connectors.targetReadiness.enableNowHelp":
+    "Mantenga esta opción desactivada mientras el destino solo esté preparado. Actívela después de revisar el agente o relay, la dirección del endpoint, la referencia de credencial y la ruta de reversión.",
+  "connectors.targetReadiness.enrollmentDestination": "Destino para la inscripción",
+  "connectors.targetReadiness.enrollmentReason": "Motivo de la inscripción",
   "connectors.deliveryEvidence": "Evidencia de entrega del conector",
   "platform.editions.useRights": "Derechos de uso",
   "platform.editions.managedCustomerBand": "Banda de clientes gestionados",

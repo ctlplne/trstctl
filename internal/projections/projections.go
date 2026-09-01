@@ -2415,6 +2415,10 @@ type DeploymentTargetUpserted struct {
 	Name      string          `json:"name"`
 	Connector string          `json:"connector"`
 	Config    json.RawMessage `json:"config"`
+	// Enabled is optional only for replay compatibility with events written
+	// before deployment-target readiness existed. Old events remain enabled;
+	// every newly emitted event carries an explicit value.
+	Enabled *bool `json:"enabled,omitempty"`
 }
 
 // DeploymentTargetDeleted is the payload of deployment_target.deleted.
@@ -5172,8 +5176,13 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		if pl.ID == "" || pl.Name == "" || pl.Connector == "" {
 			return fmt.Errorf("projections: %s requires id, name, and connector", e.Type)
 		}
+		enabled := true
+		if pl.Enabled != nil {
+			enabled = *pl.Enabled
+		}
 		return p.store.ApplyDeploymentTargetUpsertedTx(ctx, tx, store.DeploymentTarget{
 			ID: pl.ID, TenantID: e.TenantID, Name: pl.Name, Type: pl.Connector, Config: pl.Config,
+			Enabled: enabled, EnabledSet: true,
 		}, e.ID, e.Time)
 	case EventDeploymentTargetDeleted:
 		var pl DeploymentTargetDeleted
