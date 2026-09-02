@@ -17146,7 +17146,7 @@
                 },
                 "ui": {
                     "evidence": [
-                        "web/src/pages/secrets/MachineAuthWorkflow.tsx implements Choose method -> Review login -> Verify session at /secrets/access.",
+                        "web/src/pages/secrets/MachineAuthWorkflow.tsx implements Choose method -> Review login -> Verify session at /secrets/access",
                         "The review shows the exact method/type/source, tenant binding, credential shape, TTL, prerequisites, blockers, effects, recovery, verification, CLI, and server fingerprint before accepting a credential.",
                         "The access workspace also projects method issuer/audience/allowlists/scopes, disabled state, active/revoked sessions, method overlay controls, one-time bearer reveal/copy/dismiss, and session revocation."
                     ],

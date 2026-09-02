@@ -8113,7 +8113,7 @@ export const defaultMessageValues = [
   "Verify session",
   "Match the result to the reviewed plan and confirm the session in the durable ledger.",
   "Machine login test progress",
-  "Select a served tenant-scoped method. Disabled methods can be reviewed but cannot execute.",
+  "Select a ready tenant-scoped method. Disabled methods can be reviewed but cannot execute.",
   "{name} · {type} · {source}",
   "{name} · {type} · {source} · disabled",
   "No machine login method is available to review.",

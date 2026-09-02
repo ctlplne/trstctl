@@ -1889,7 +1889,7 @@ export const messages = {
   },
   "secrets.login.progress": { defaultMessage: "Machine login test progress", description: "Accessible label for F58 workflow progress." },
   "secrets.login.methodHelp": {
-    defaultMessage: "Select a served tenant-scoped method. Disabled methods can be reviewed but cannot execute.",
+    defaultMessage: "Select a ready tenant-scoped method. Disabled methods can be reviewed but cannot execute.",
     description: "F58 method selector help.",
   },
   "secrets.login.methodOption": {

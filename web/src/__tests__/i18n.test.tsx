@@ -1415,8 +1415,13 @@ describe("i18n boundary", () => {
       // usable authorized actions instead of saying zero are ready because a
       // separately named operation is unavailable. Machine-authored es/de —
       // FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "0928ff41784a24145835ab15ad060149543ba36931e2673768881976d231d01c",
-      "de-DE": "8fd08dc6e872951eae8f9ea8ef63ab7e92bcacff0232477df3c871684862a940",
+      // F60 re-pin: the share workflow now explains effect-free review,
+      // ambiguous-response recovery, bearer custody, expiry, and redemption
+      // failure in each production locale. The F58 method helper also replaces
+      // internal "served" language with operator-facing "ready" language.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "8700f00714a2684b47f827a91dcbcafa179e409ca6cd3a73fff38e168d86d0f4",
+      "de-DE": "217b5232f0603669f54086f6b1bc5f254050d48d82483ae78297ecfd5b6526ae",
     });
   });
 

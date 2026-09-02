@@ -1281,7 +1281,7 @@ const esESCatalog = {
   "secrets.login.verifyStep": "Verificar sesión",
   "secrets.login.verifyStepHelp": "Compare el resultado con el plan revisado y confirme la sesión en el registro duradero.",
   "secrets.login.progress": "Progreso de la prueba de acceso de máquina",
-  "secrets.login.methodHelp": "Seleccione un método servido y limitado al inquilino. Los métodos deshabilitados se pueden revisar, pero no ejecutar.",
+  "secrets.login.methodHelp": "Seleccione un método listo y limitado al inquilino. Los métodos deshabilitados se pueden revisar, pero no ejecutar.",
   "secrets.login.methodOption": "{name} · {type} · {source}",
   "secrets.login.methodOptionDisabled": "{name} · {type} · {source} · deshabilitado",
   "secrets.login.noMethods": "No hay ningún método de acceso de máquina disponible para revisar.",

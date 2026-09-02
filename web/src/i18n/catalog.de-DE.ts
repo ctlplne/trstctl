@@ -1302,7 +1302,7 @@ const deDECatalog = {
   "secrets.login.verifyStep": "Sitzung prüfen",
   "secrets.login.verifyStepHelp": "Gleichen Sie das Ergebnis mit dem geprüften Plan ab und bestätigen Sie die Sitzung im dauerhaften Register.",
   "secrets.login.progress": "Fortschritt des Maschinenanmeldungstests",
-  "secrets.login.methodHelp": "Wählen Sie eine bereitgestellte mandantengebundene Methode. Deaktivierte Methoden können geprüft, aber nicht ausgeführt werden.",
+  "secrets.login.methodHelp": "Wählen Sie eine einsatzbereite mandantengebundene Methode. Deaktivierte Methoden können geprüft, aber nicht ausgeführt werden.",
   "secrets.login.methodOption": "{name} · {type} · {source}",
   "secrets.login.methodOptionDisabled": "{name} · {type} · {source} · deaktiviert",
   "secrets.login.noMethods": "Keine Maschinenanmeldemethode steht zur Prüfung bereit.",
