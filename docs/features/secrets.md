@@ -224,6 +224,30 @@ and its idempotent replay returns the original sealed response without generatin
 second key. The console defaults to CSR mode; Vault/OpenBao uses `pki/sign` for the
 same custody model and retains `pki/issue` only as the legacy equivalent.
 
+The console does not jump from those inputs straight to signing. Its three-step
+journey is **Configure certificate → Review exact plan → Verify result**. The review
+calls `POST /api/v1/secrets/pki/preview`, which uses the same profile validator as
+execution but does not sign, append events, write audit, create an idempotency row,
+enqueue work, or contact anything. It explains, in plain language:
+
+- whether the secrets API, issuing CA, selected custody input, revocation tracking,
+  and—only for the deprecated mode—durable deprecation evidence are ready;
+- the effective lifetime after the `secrets-api` profile cap, public-key algorithm
+  and size, issuing-CA and CSR SHA-256 fingerprints, and matching Vault/OpenBao path;
+- exactly what issuance writes and calls, how to revoke/recover, how to verify, and
+  the equivalent `trstctl-cli secrets pki` invocation.
+
+The response includes a server-keyed `request_fingerprint` bound to the tenant,
+authenticated principal, CA, custody input, profile, and requested/effective TTL.
+The console supplies it as `preview_fingerprint` when issuing; changed input or CA
+state therefore fails closed with `409` and requires a fresh review. API clients may
+omit it for backward compatibility, but automation can use
+`trstctl-cli secrets pki preview -f REQUEST.json` before the idempotent mutation.
+Neither preview nor its evidence contains CSR bytes, certificate bytes, or a private
+key. Richer live OCSP/CRL state and revoke diagnostics remain a documented roadmap
+residual; the existing serial/revocation pipeline is not represented as richer UI
+than it is.
+
 ### Secret rotation (F37)
 
 The repository contains a four-phase static-provider engine (stage, cutover, verify,

@@ -5342,9 +5342,46 @@ export interface PKISecret {
   serial: string;
 }
 
+export interface PKISecretPrerequisite {
+  detail: string;
+  id: string;
+  ready: boolean;
+  remediation?: string;
+}
+
+export interface PKISecretPreview {
+  blockers: string[];
+  ca_certificate_sha256?: string;
+  capability: string;
+  cli_argv: string[];
+  common_name: string;
+  csr_sha256?: string;
+  custody_mode: string;
+  effect_free: boolean;
+  effective_ttl_seconds: number;
+  execute_external_effects: string[];
+  execute_writes: string[];
+  operation: string;
+  prerequisites: PKISecretPrerequisite[];
+  preview_external_effects: string[];
+  preview_writes: string[];
+  profile: string;
+  ready: boolean;
+  recovery_steps: string[];
+  request_fingerprint: string;
+  requested_ttl_seconds: number;
+  required_permission: string;
+  secret_data_handling: string;
+  subject_key_algorithm: string;
+  subject_key_bits: number;
+  vault_path: string;
+  verification_steps: string[];
+}
+
 export interface PKISecretRequest {
   common_name?: string;
   csr_pem?: string;
+  preview_fingerprint?: string;
   ttl_seconds?: number;
 }
 

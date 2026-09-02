@@ -614,6 +614,9 @@ describe("exported API surface census", () => {
       "/api/v1/ca/ceremonies/preview",
       "/api/v1/ca/authorities/item%2Fid/rotate/preview",
       "/api/v1/managed-keys/preview",
+      // F67: validates the exact PKI custody/profile/CA plan but performs no
+      // signing, event append, audit write, idempotency record, or egress.
+      "/api/v1/secrets/pki/preview",
       // F55: this POST reads assembled in-memory CMP posture. It carries no
       // body and performs no enrollment, write, signer call, or network call.
       "/api/v1/protocols/cmp/qualification",
@@ -1677,13 +1680,22 @@ describe("secrets contract", () => {
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/store");
     expect(sentHeaders()["Idempotency-Key"]).toMatch(/^(?:idem-.+|[0-9a-f-]{36})$/);
 
+    const pkiInput = { csr_pem: "-----BEGIN CERTIFICATE REQUEST-----\nCSR\n-----END CERTIFICATE REQUEST-----", ttl_seconds: 600 };
+    mockFetch(200, JSON.stringify({ capability: "F67", ready: true, effect_free: true, request_fingerprint: "sha256:reviewed" }));
+    await api.previewPKISecret(pkiInput);
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/pki/preview");
+    expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe("POST");
+    expect(sentHeaders()["Idempotency-Key"]).toBeUndefined();
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toEqual(pkiInput);
+
     mockFetch(201, JSON.stringify({ serial: "01", common_name: "svc.internal", certificate: "CERT" }));
-    await api.issuePKISecret({ csr_pem: "-----BEGIN CERTIFICATE REQUEST-----\nCSR\n-----END CERTIFICATE REQUEST-----", ttl_seconds: 600 });
+    await api.issuePKISecret({ ...pkiInput, preview_fingerprint: "sha256:reviewed" });
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/pki");
     expect(sentHeaders()["Idempotency-Key"]).toMatch(/^(?:idem-.+|[0-9a-f-]{36})$/);
     expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toEqual({
       csr_pem: "-----BEGIN CERTIFICATE REQUEST-----\nCSR\n-----END CERTIFICATE REQUEST-----",
       ttl_seconds: 600,
+      preview_fingerprint: "sha256:reviewed",
     });
 
     mockFetch(200, JSON.stringify({ session_id: "sess-1", principal: "svc", method: "token", scopes: ["secrets:read"], expires_at: "2026-06-19T13:00:00Z" }));

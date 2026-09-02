@@ -25,6 +25,7 @@ const { apiMock } = vi.hoisted(() => ({
     deleteSecret: vi.fn(),
     approvalRequests: vi.fn(),
     approveSecretChange: vi.fn(),
+    previewPKISecret: vi.fn(),
     issuePKISecret: vi.fn(),
     machineLogin: vi.fn(),
     createShare: vi.fn(),
@@ -321,6 +322,37 @@ function primeSecretsMocks() {
     action: "rotate",
     approver: "bob",
     approvals: 2,
+  });
+  apiMock.previewPKISecret.mockResolvedValue({
+    capability: "F67",
+    operation: "issue_certificate",
+    ready: true,
+    effect_free: true,
+    custody_mode: "requester_csr",
+    common_name: "svc.internal",
+    requested_ttl_seconds: 900,
+    effective_ttl_seconds: 900,
+    profile: "secrets-api",
+    ca_certificate_sha256: "sha256:ca",
+    csr_sha256: "sha256:csr",
+    subject_key_algorithm: "ECDSA",
+    subject_key_bits: 256,
+    required_permission: "secrets:write",
+    request_fingerprint: "sha256:reviewed-default",
+    vault_path: "/v1/pki/sign/default",
+    prerequisites: [
+      { id: "issuing_ca", ready: true, detail: "Issuing CA connected." },
+      { id: "revocation_tracking", ready: true, detail: "Revocation tracking connected." },
+    ],
+    blockers: [],
+    preview_writes: [],
+    preview_external_effects: [],
+    execute_writes: ["record the issued serial"],
+    execute_external_effects: ["ask the signer to sign one certificate"],
+    recovery_steps: ["revoke the exact issued serial"],
+    verification_steps: ["verify the returned certificate"],
+    cli_argv: ["trstctl", "secrets", "pki", "-f", "pki-request.json"],
+    secret_data_handling: "The private key stays with the requester.",
   });
   apiMock.issuePKISecret.mockResolvedValue({
     serial: "pki-01",
@@ -1663,6 +1695,34 @@ describe("secrets surface", () => {
 
   it("issues PKI secrets, tests machine login, and creates/redeems one-time shares once", async () => {
     const storageSpy = vi.spyOn(Storage.prototype, "setItem");
+    apiMock.previewPKISecret.mockResolvedValueOnce({
+      capability: "F67",
+      operation: "issue_certificate",
+      ready: true,
+      effect_free: true,
+      custody_mode: "requester_csr",
+      common_name: "svc.internal",
+      requested_ttl_seconds: 600,
+      effective_ttl_seconds: 600,
+      profile: "secrets-api",
+      ca_certificate_sha256: "sha256:ca",
+      csr_sha256: "sha256:csr",
+      subject_key_algorithm: "ECDSA",
+      subject_key_bits: 256,
+      required_permission: "secrets:write",
+      request_fingerprint: "sha256:reviewed-csr",
+      vault_path: "/v1/pki/sign/default",
+      prerequisites: [{ id: "issuing_ca", ready: true, detail: "Issuing CA connected." }],
+      blockers: [],
+      preview_writes: [],
+      preview_external_effects: [],
+      execute_writes: ["record the issued serial"],
+      execute_external_effects: ["ask the signer to sign one certificate"],
+      recovery_steps: ["revoke the exact issued serial"],
+      verification_steps: ["verify the returned certificate"],
+      cli_argv: ["trstctl", "secrets", "pki", "-f", "pki-request.json"],
+      secret_data_handling: "The private key stays with the requester.",
+    });
     apiMock.issuePKISecret.mockResolvedValueOnce({
       serial: "pki-csr-01",
       common_name: "svc.internal",
@@ -1683,12 +1743,24 @@ describe("secrets surface", () => {
     );
     await user.clear(pkiForm.getByLabelText("TTL seconds"));
     await user.type(pkiForm.getByLabelText("TTL seconds"), "600");
-    await user.click(pkiForm.getByRole("button", { name: /issue pki secret/i }));
+    await user.click(pkiForm.getByRole("button", { name: /review without issuing/i }));
+
+    await waitFor(() =>
+      expect(apiMock.previewPKISecret).toHaveBeenCalledWith({
+        csr_pem: "-----BEGIN CERTIFICATE REQUEST-----\nCSR\n-----END CERTIFICATE REQUEST-----",
+        ttl_seconds: 600,
+      }),
+    );
+    expect(await pkiForm.findByText("Ready to issue")).toBeInTheDocument();
+    expect(pkiForm.getByText("Issuing CA connected.")).toBeInTheDocument();
+    expect(apiMock.issuePKISecret).not.toHaveBeenCalled();
+    await user.click(pkiForm.getByRole("button", { name: /issue reviewed certificate/i }));
 
     await waitFor(() =>
       expect(apiMock.issuePKISecret).toHaveBeenCalledWith({
         csr_pem: "-----BEGIN CERTIFICATE REQUEST-----\nCSR\n-----END CERTIFICATE REQUEST-----",
         ttl_seconds: 600,
+        preview_fingerprint: "sha256:reviewed-csr",
       }),
     );
     expect(await screen.findByText(/PKI bundle pki-csr-01/i)).toBeInTheDocument();
@@ -1699,13 +1771,51 @@ describe("secrets surface", () => {
     renderSecrets("/secrets/engines");
     await user.click(await screen.findByRole("button", { name: "Open certificate request" }));
     const legacyForm = within(await screen.findByRole("form", { name: "Issue PKI secret" }));
+    apiMock.previewPKISecret.mockResolvedValueOnce({
+      capability: "F67",
+      operation: "issue_certificate",
+      ready: true,
+      effect_free: true,
+      custody_mode: "deprecated_server_keygen",
+      common_name: "legacy.internal",
+      requested_ttl_seconds: 900,
+      effective_ttl_seconds: 900,
+      profile: "secrets-api",
+      ca_certificate_sha256: "sha256:ca",
+      subject_key_algorithm: "ECDSA",
+      subject_key_bits: 256,
+      required_permission: "secrets:write",
+      request_fingerprint: "sha256:reviewed-legacy",
+      vault_path: "/v1/pki/issue/default",
+      prerequisites: [{ id: "durable_deprecation_evidence", ready: true, detail: "Audit evidence is available." }],
+      blockers: [],
+      preview_writes: [],
+      preview_external_effects: [],
+      execute_writes: ["record durable deprecation evidence"],
+      execute_external_effects: ["ask the signer to sign one certificate"],
+      recovery_steps: ["revoke the exact issued serial"],
+      verification_steps: ["verify the returned certificate"],
+      cli_argv: ["trstctl", "secrets", "pki", "-f", "pki-request.json"],
+      secret_data_handling: "The control plane returns the private key once.",
+    });
     await user.selectOptions(legacyForm.getByLabelText("Key custody"), "legacy");
     await user.type(legacyForm.getByLabelText("Common name"), "legacy.internal");
-    await user.click(legacyForm.getByRole("button", { name: /issue pki secret/i }));
-    await waitFor(() => expect(apiMock.issuePKISecret).toHaveBeenCalledWith({ common_name: "legacy.internal", ttl_seconds: 900 }));
+    expect(legacyForm.getByRole("link", { name: /Review every legacy use in Audit/i })).toHaveAttribute(
+      "href",
+      "/audit?type=issuance.server_side_keygen",
+    );
+    await user.click(legacyForm.getByRole("button", { name: /review without issuing/i }));
+    expect(await legacyForm.findByText("Audit evidence is available.")).toBeInTheDocument();
+    await user.click(legacyForm.getByRole("button", { name: /issue reviewed certificate/i }));
+    await waitFor(() =>
+      expect(apiMock.issuePKISecret).toHaveBeenCalledWith({
+        common_name: "legacy.internal",
+        ttl_seconds: 900,
+        preview_fingerprint: "sha256:reviewed-legacy",
+      }),
+    );
     expect(await screen.findByText(/PKI bundle pki-01/i)).toBeInTheDocument();
     expect(screen.getByText(/BEGIN PRIVATE KEY/)).toBeInTheDocument();
-    expect(legacyForm.getByRole("link", { name: /Review every legacy use in Audit/i })).toHaveAttribute("href", "/audit?type=issuance.server_side_keygen");
 
     cleanup();
     renderSecrets("/secrets/access");

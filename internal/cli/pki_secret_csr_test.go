@@ -36,3 +36,21 @@ func TestPKISecretCommandCarriesCSRFirstBody(t *testing.T) {
 		t.Fatalf("CSR-first CLI body changed custody mode: %#v", decoded)
 	}
 }
+
+func TestPKISecretPreviewCommandUsesTheEffectFreeRoute(t *testing.T) {
+	cmd, args, ok := matchCommand([]string{"secrets", "pki", "preview"})
+	if !ok {
+		t.Fatal("secrets pki preview did not resolve to a concrete command")
+	}
+	if cmd.Method != "POST" || cmd.Path != "/api/v1/secrets/pki/preview" || !strings.Contains(strings.ToLower(cmd.Summary), "effect-free") {
+		t.Fatalf("secrets pki preview command = %+v", cmd)
+	}
+	const request = `{"common_name":"legacy.example.test","ttl_seconds":900}`
+	path, _, body, _, err := buildRequest(cmd, append(args, "-f", "-"), strings.NewReader(request))
+	if err != nil {
+		t.Fatalf("build preview request: %v", err)
+	}
+	if path != "/api/v1/secrets/pki/preview" || string(body) != request {
+		t.Fatalf("preview request path=%q body=%q", path, body)
+	}
+}

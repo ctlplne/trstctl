@@ -16452,15 +16452,17 @@
             "phase": "P1",
             "priority": 35,
             "served_state": "conditional",
-            "backend_status": "conditional: served /api/v1/secrets/pki issues a short-lived certificate through mutually exclusive requester-CSR and deprecated server-keygen modes in internal/pkisecret and the out-of-process signer; CSR mode returns certificate-only material, while every legacy key-returning use records durable issuance.server_side_keygen evidence before key generation; both record pkisecret.issued metadata and revocation state without logging private keys",
-            "current_frontend_mapping": "operate: Secrets at /secrets/engines defaults PKI issuance to a requester CSR, returns certificate-only material, exposes an explicit deprecated common-name keypair mode, and links that mode to filtered issuance.server_side_keygen Audit evidence.",
+            "backend_status": "conditional: served effect-free POST /api/v1/secrets/pki/preview and mutating POST /api/v1/secrets/pki share one internal/pkisecret validator for subject, SAN, key-strength, profile, and overflow-safe TTL rules; preview reports CA, custody, revocation, audit, exact effects, recovery, verification, CLI/Vault parity, and a server-keyed plan fingerprint without signing or writing; issuance fails closed on a stale supplied fingerprint and then uses the isolated signer, returning certificate-only requester-CSR material or an explicitly deprecated server-generated private key after durable issuance.server_side_keygen evidence",
+            "current_frontend_mapping": "operate: Secrets at /secrets/engines uses a three-step Configure, Review exact plan, and Verify result workflow. It defaults to requester CSR custody, invalidates reviews on every input change, renders server-owned prerequisite/effect/recovery/verification evidence, binds execution to the reviewed fingerprint, returns certificate-only material for CSR mode, and isolates the deprecated keypair response in reveal-once UI linked to filtered Audit evidence.",
             "target_gui_mapping": "Roadmap residual: richer OCSP/CRL revocation-state UI beyond the served PKI issue controls, including live OCSP/CRL validation detail and revoke action diagnostics.",
-            "acceptance_test": "Served GA acceptance is TestServedPKISecretCSRFirstAndLegacyEvidence plus TestServedPKISecretIssuesUsableKeypair, Vault/OpenBao pki/sign and pki/issue parity, OpenAPI/CLI parity, and both Secrets UI custody modes; roadmap residual is richer OCSP/CRL revocation-state UI beyond served issue and revocation metadata.",
+            "acceptance_test": "Served GA acceptance is TestServedPKISecretPreviewIsExactEffectFreeAndBindsExecution plus TestServedPKISecretCSRFirstAndLegacyEvidence and TestServedPKISecretIssuesUsableKeypair, Vault/OpenBao pki/sign and pki/issue parity, effect-free preview plus mutating OpenAPI/CLI parity, and both preview-bound Secrets UI custody modes; roadmap residual is richer OCSP/CRL revocation-state UI beyond served issue and revocation metadata.",
             "source_docs": [
                 "docs/features/secrets.md"
             ],
             "source_backend": [
+                "/api/v1/secrets/pki/preview",
                 "/api/v1/secrets/pki",
+                "internal/api/pki_secret_preview.go",
                 "internal/api/secrets_identity.go",
                 "internal/api/vault_compat.go",
                 "internal/api/secrets.go",
@@ -16468,21 +16470,25 @@
                 "internal/pkisecret"
             ],
             "source_frontend": [
-                "web/src/pages/Secrets.tsx"
+                "web/src/pages/Secrets.tsx",
+                "web/src/pages/secrets/PKISecretWorkflow.tsx"
             ],
             "status": "closed",
-            "notes": "TRACE-033 promoted the served dynamic PKI secret workflow into the GA denominator. AUD-24 adds requester-key custody: internal/server/pki_secret_csr_served_test.go proves native and Vault/OpenBao CSR signing returns no key and matches the requester key, while deprecated native/Vault issue modes durably record issuance.server_side_keygen before key creation and replay idempotently. TestServedPKISecretIssuesUsableKeypair retains compatibility proof for the explicit legacy mode. OpenAPI/generated SDKs, the generic secrets pki CLI body path, and the Secrets console expose both choices. The richer OCSP/CRL revocation-state UI remains a roadmap residual.",
+            "notes": "TRACE-033 promoted the served dynamic PKI secret workflow into the GA denominator. AUD-24 adds requester-key custody. F67 convergence adds one server-owned effect-free preview shared by API, secrets pki preview CLI, and a dedicated StepShell console workflow; execution can bind to its server-keyed fingerprint and rejects stale review. Preview and execution share internal/pkisecret profile validation and safe TTL normalization. Served tests prove zero preview events/effects, both custody modes, stale-plan refusal, and exact execution. Existing native/Vault tests continue to prove requester-key matching, certificate-only responses, durable legacy evidence, idempotent replay, usable keypairs, and revocation tracking. Richer OCSP/CRL revocation-state UI remains a roadmap residual.",
             "api_surface": [
+                "previewPKISecret",
                 "issuePKISecret"
             ],
             "api_na": "",
             "cli_surface": [
+                "secrets pki preview",
                 "secrets pki"
             ],
             "cli_na": "",
             "facet_evidence": {
                 "served": {
                     "evidence": [
+                        "POST /api/v1/secrets/pki/preview applies the exact issuance validator and returns structured CA, custody, profile, revocation, audit, effect, recovery, verification, Vault path, and server-keyed fingerprint evidence with zero signing or writes.",
                         "POST /api/v1/secrets/pki signs a requester CSR and returns only its certificate, or explicitly runs the deprecated key-returning common_name mode after durable deprecation evidence.",
                         "Vault/OpenBao pki/sign and tenant-authored PKI sign mounts use the same requester-key custody path; pki/issue remains the deprecated key-returning compatibility path.",
                         "TestServedPKISecretIssuesUsableKeypair verifies the returned certificate/private-key pair as a usable TLS identity signed by the served CA and checks pkisecret.issued event evidence.",
@@ -16490,11 +16496,13 @@
                         "backend_status=conditional: served /api/v1/secrets/pki issues a short-lived certificate through CSR-first certificate-only issuance or explicit deprecated server-keygen with durable issuance.server_side_keygen evidence"
                     ],
                     "refs": [
+                        "internal/api/pki_secret_preview.go",
                         "internal/api/secrets_identity.go",
                         "internal/api/vault_compat.go",
                         "internal/api/vault_compat_complete.go",
                         "internal/api/secrets.go",
                         "internal/server/secrets.go",
+                        "internal/server/pki_secret_preview_served_test.go",
                         "internal/server/pki_secret_csr_served_test.go",
                         "internal/server/secrets_served_test.go",
                         "internal/pkisecret/pkisecret.go"
@@ -16505,17 +16513,22 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: operate: Secrets at /secrets/engines defaults to CSR-first certificate-only issuance, exposes the deprecated keypair mode, and links its durable Audit evidence.",
+                        "current_frontend_mapping: operate: Secrets at /secrets/engines presents Configure, Review exact plan, and Verify result in a dedicated StepShell workflow; it invalidates changed reviews and supplies the preview fingerprint to execution.",
+                        "The review renders each server-owned prerequisite, exact effective TTL/profile/key/CA/Vault facts, zero preview effects, execution effects, recovery, verification, CLI parity, and secret-data handling before enabling issuance.",
+                        "CSR-first execution reveals only the certificate; deprecated server-keygen is an explicit alternative whose private key remains inside reveal-once UI and links to durable Audit evidence.",
                         "target_gui_mapping: enrich the served custody-aware PKI secret UI with live OCSP/CRL validation detail and revoke diagnostics."
                     ],
                     "refs": [
                         "web/src/pages/Secrets.tsx",
+                        "web/src/pages/secrets/PKISecretWorkflow.tsx",
                         "web/src/lib/navigation.ts",
                         "web/src/App.tsx"
                     ]
                 },
                 "cli": {
                     "evidence": [
+                        "CLI command: secrets pki preview",
+                        "trstctl-cli secrets pki preview posts the same JSON body to the effect-free preview route without mutation idempotency.",
                         "CLI command: secrets pki",
                         "trstctl-cli secrets pki accepts a JSON request file or stdin, preserves either csr_pem or the explicit deprecated common_name mode, and posts it to /api/v1/secrets/pki as an Idempotency-Key-protected mutation."
                     ],
@@ -16528,8 +16541,10 @@
                 },
                 "api": {
                     "evidence": [
+                        "OpenAPI operationId: previewPKISecret",
                         "OpenAPI operationId: issuePKISecret",
-                        "PKISecretRequest requires exactly one of csr_pem or common_name, PKISecret makes private_key optional, and the Vault/OpenBao contract exposes distinct pki/sign and pki/issue operations.",
+                        "PKISecretRequest requires exactly one of csr_pem or common_name and accepts an optional reviewed preview_fingerprint; PKISecretPreview carries structured prerequisites/effects and PKISecret makes private_key optional; Vault/OpenBao exposes distinct pki/sign and pki/issue operations.",
+                        "POST /api/v1/secrets/pki/preview is read-only, requires secrets:write, and makes no idempotency record; POST /api/v1/secrets/pki remains a sensitive mutation.",
                         "POST /api/v1/secrets/pki is marked as a sensitive mutating response and guarded by secrets:write."
                     ],
                     "refs": [
@@ -16541,15 +16556,17 @@
                 },
                 "test": {
                     "evidence": [
+                        "F67 convergence: TestServedPKISecretPreviewIsExactEffectFreeAndBindsExecution proves stable server-keyed previews, zero tenant event changes, exact CA/CSR/profile/TTL/key facts, structured prerequisites, both custody modes, changed-input fingerprint invalidation, and stale execution refusal before signing.",
                         "AUD-24: TestServedPKISecretCSRFirstAndLegacyEvidence and TestServedVaultPKISignKeepsRequesterKeyAndIssueRecordsLegacyChoice prove requester-key certificate matching, certificate-only responses, durable issuance.server_side_keygen evidence, tenant isolation, idempotency binding, cold restart replay, mounted PKI signing, and fail-closed evidence loss.",
                         "TRACE-033: TestServedPKISecretIssuesUsableKeypair proves /api/v1/secrets/pki returns a certificate and private key that verify as a usable TLS identity signed by the served CA, emits pkisecret.issued, and keeps private key material out of logs.",
                         "internal/api/feature_parity_test.go and internal/cli/feature_parity_test.go keep F67 issuePKISecret and secrets pki wired to served catalog feature parity.",
-                        "web/src/lib/api.test.ts and web/src/__tests__/secrets.test.tsx prove the typed client and Secrets UI default to CSR-first certificate-only issuance while keeping legacy private-key material inside its explicit reveal-once result.",
-                        "acceptance_test: Served GA acceptance is TestServedPKISecretCSRFirstAndLegacyEvidence plus TestServedPKISecretIssuesUsableKeypair, Vault/OpenBao pki/sign and pki/issue parity, OpenAPI/CLI parity, and both Secrets UI custody modes; roadmap residual is richer OCSP/CRL revocation-state UI beyond served issue and revocation metadata.",
+                        "web/src/lib/api.test.ts and web/src/__tests__/secrets.test.tsx prove no-effect preview transport, reviewed-fingerprint execution, the three-step CSR and legacy console journeys, and legacy private-key confinement to explicit reveal-once output.",
+                        "acceptance_test: Served GA acceptance includes TestServedPKISecretPreviewIsExactEffectFreeAndBindsExecution, existing CSR/legacy/Vault issuance proof, preview plus mutation OpenAPI/CLI parity, and both preview-bound Secrets UI custody modes; roadmap residual is richer OCSP/CRL revocation-state UI beyond served issue and revocation metadata.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
                         "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
                     ],
                     "refs": [
+                        "internal/server/pki_secret_preview_served_test.go",
                         "internal/server/pki_secret_csr_served_test.go",
                         "internal/server/secrets_served_test.go",
                         "internal/api/pki_secret_contract_test.go",
@@ -16558,6 +16575,7 @@
                         "internal/cli/feature_parity_test.go",
                         "web/src/lib/api.test.ts",
                         "web/src/__tests__/secrets.test.tsx",
+                        "internal/featureparity/f67_contract_test.go",
                         "internal/featureparity/feature_served_ga_coverage_test.go",
                         "internal/featureparity/feature_facet_coverage_test.go",
                         "web/src/__tests__/route_parity.test.ts",
@@ -16577,7 +16595,7 @@
                 },
                 "rbac": {
                     "evidence": [
-                        "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: issuePKISecret",
+                        "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: previewPKISecret and issuePKISecret",
                         "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
                     ],
                     "refs": [
@@ -16617,6 +16635,7 @@
                         "web/src/__tests__/feature_a11y_receipts.test.tsx",
                         "web/src/lib/navigation.ts",
                         "web/src/pages/Secrets.tsx",
+                        "web/src/pages/secrets/PKISecretWorkflow.tsx",
                         "web/src/App.tsx"
                     ]
                 },
@@ -16637,7 +16656,7 @@
                 "purpose": "Lets an operator understand and safely use pki as a secrets engine while tenant, policy, and security authority remain on the server.",
                 "tool": "secrets",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/secrets/engines",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -16651,58 +16670,77 @@
                 ],
                 "side_effects": "mixed",
                 "secret_data_handling": "The parity contract contains metadata only. Product workflows may reveal a value once, but reports and evidence never contain the value.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/pages/Secrets.tsx"
+                            "web/src/pages/Secrets.tsx",
+                            "web/src/pages/secrets/PKISecretWorkflow.tsx"
                         ]
                     },
                     "understand": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/pages/Secrets.tsx"
+                            "web/src/pages/secrets/PKISecretWorkflow.tsx",
+                            "internal/api/pki_secret_preview.go"
                         ]
                     },
                     "configure": {
-                        "status": "missing",
-                        "reason": "No structured evidence proves an operator can configure every required prerequisite from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/secrets/PKISecretWorkflow.tsx",
+                            "internal/api/pki_secret_preview.go",
+                            "internal/server/pki_secret_preview_served_test.go",
+                            "web/src/__tests__/secrets.test.tsx"
+                        ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/api/pki_secret_preview.go",
+                            "internal/server/pki_secret_preview_served_test.go",
+                            "web/src/pages/secrets/PKISecretWorkflow.tsx",
+                            "web/src/__tests__/secrets.test.tsx"
+                        ]
                     },
                     "execute": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/pages/Secrets.tsx",
+                            "web/src/pages/secrets/PKISecretWorkflow.tsx",
+                            "internal/server/pki_secret_preview_served_test.go",
                             "internal/server/pki_secret_csr_served_test.go"
                         ]
                     },
                     "observe": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/pages/Secrets.tsx"
+                            "web/src/pages/secrets/PKISecretWorkflow.tsx",
+                            "internal/server/pki_secret_preview_served_test.go"
                         ]
                     },
                     "recover": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/pages/Secrets.tsx",
+                            "web/src/pages/secrets/PKISecretWorkflow.tsx",
+                            "internal/server/pki_secret_preview_served_test.go",
                             "internal/server/pki_secret_csr_served_test.go"
                         ]
                     },
                     "verify": {
                         "status": "complete",
                         "evidence": [
+                            "web/src/pages/secrets/PKISecretWorkflow.tsx",
+                            "internal/server/pki_secret_preview_served_test.go",
                             "internal/server/pki_secret_csr_served_test.go"
                         ]
                     },
                     "automate": {
                         "status": "complete",
                         "evidence": [
+                            "OpenAPI operationId: previewPKISecret",
                             "OpenAPI operationId: issuePKISecret",
+                            "CLI command: secrets pki preview",
                             "CLI command: secrets pki"
                         ]
                     }

@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/pem"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -35,6 +36,18 @@ type Profile struct {
 	Name               string
 	MaxTTL             time.Duration
 	AllowedCommonNames map[string]bool // empty = any
+}
+
+// IssuancePlan is the secret-free result of applying the exact PKI-secret
+// profile rules that execution uses. It is safe to return from an effect-free
+// preview: it contains only subject/public-key metadata, never CSR bytes or key
+// material.
+type IssuancePlan struct {
+	Profile      string
+	CommonName   string
+	EffectiveTTL time.Duration
+	KeyAlgorithm string
+	KeyBits      int
 }
 
 // RevocationSink is the event-sourced revocation pipeline a PKIProvider records
@@ -106,21 +119,20 @@ func (p *PKIProvider) TenantID() string { return p.tenantID }
 // Generate issues a short-lived certificate. The requested common name is carried
 // in the lease Role (the "secret name"); the profile and policy gate it.
 func (p *PKIProvider) Generate(ctx context.Context, req dynsecret.GenerateRequest) (dynsecret.Credential, error) {
-	cn := req.Role
-	if err := p.validateCommonName(cn); err != nil {
+	plan, err := p.PlanGenerated(req.Role, req.TTL)
+	if err != nil {
 		return dynsecret.Credential{}, err
 	}
-	ttl := p.constrainTTL(req.TTL)
 	leafKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	if err != nil {
 		return dynsecret.Credential{}, err
 	}
 	defer leafKey.Destroy()
-	csr, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{CommonName: cn}, leafKey)
+	csr, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{CommonName: plan.CommonName}, leafKey)
 	if err != nil {
 		return dynsecret.Credential{}, err
 	}
-	cred, err := p.signAndRecord(ctx, cn, csr, ttl)
+	cred, err := p.signAndRecord(ctx, plan.CommonName, csr, plan.EffectiveTTL)
 	if err != nil {
 		return dynsecret.Credential{}, err
 	}
@@ -146,16 +158,58 @@ func (p *PKIProvider) Generate(ctx context.Context, req dynsecret.GenerateReques
 // this is the custody-safe PKI-as-a-secret mode used by the native and
 // Vault/OpenBao signing routes (AUD-24/B1).
 func (p *PKIProvider) GenerateFromCSR(ctx context.Context, csrDER []byte, ttl time.Duration) (dynsecret.Credential, error) {
+	plan, err := p.PlanFromCSR(csrDER, ttl)
+	if err != nil {
+		return dynsecret.Credential{}, err
+	}
+	return p.signAndRecord(ctx, plan.CommonName, csrDER, plan.EffectiveTTL)
+}
+
+// PlanGenerated applies the exact legacy server-keygen profile rules without
+// generating a key, signing a certificate, recording issuance, or mutating
+// provider state.
+func (p *PKIProvider) PlanGenerated(commonName string, ttl time.Duration) (IssuancePlan, error) {
+	if ttl < 0 {
+		return IssuancePlan{}, fmt.Errorf("pkisecret: TTL cannot be negative")
+	}
+	if err := p.validateCommonName(commonName); err != nil {
+		return IssuancePlan{}, err
+	}
+	return IssuancePlan{
+		Profile: p.profile.Name, CommonName: commonName, EffectiveTTL: p.constrainTTL(ttl),
+		KeyAlgorithm: "ECDSA", KeyBits: 256,
+	}, nil
+}
+
+// PlanGeneratedSeconds is the overflow-safe API form of PlanGenerated. It
+// compares whole seconds with the profile limit before converting to
+// time.Duration, so an attacker cannot wrap a huge JSON integer into a small or
+// negative duration.
+func (p *PKIProvider) PlanGeneratedSeconds(commonName string, seconds int64) (IssuancePlan, error) {
+	ttl, err := p.durationFromSeconds(seconds)
+	if err != nil {
+		return IssuancePlan{}, err
+	}
+	return p.PlanGenerated(commonName, ttl)
+}
+
+// PlanFromCSR validates proof-of-possession, names, SAN kinds, subject-key
+// strength, and TTL without signing or recording anything. GenerateFromCSR calls
+// this same function immediately before execution.
+func (p *PKIProvider) PlanFromCSR(csrDER []byte, ttl time.Duration) (IssuancePlan, error) {
+	if ttl < 0 {
+		return IssuancePlan{}, fmt.Errorf("pkisecret: TTL cannot be negative")
+	}
 	info, err := crypto.InspectCSR(csrDER)
 	if err != nil {
-		return dynsecret.Credential{}, fmt.Errorf("pkisecret: invalid certificate request: %w", err)
+		return IssuancePlan{}, fmt.Errorf("pkisecret: invalid certificate request: %w", err)
 	}
 	if err := p.validateCommonName(info.CommonName); err != nil {
-		return dynsecret.Credential{}, err
+		return IssuancePlan{}, err
 	}
 	for _, dnsName := range info.DNSNames {
 		if err := p.validateCommonName(dnsName); err != nil {
-			return dynsecret.Credential{}, fmt.Errorf("pkisecret: DNS SAN: %w", err)
+			return IssuancePlan{}, fmt.Errorf("pkisecret: DNS SAN: %w", err)
 		}
 	}
 	// The legacy PKI-secret profile described only DNS common names. Accepting
@@ -163,22 +217,50 @@ func (p *PKIProvider) GenerateFromCSR(ctx context.Context, csrDER []byte, ttl ti
 	// that profile broader than the route it replaces, so these types stay closed
 	// until Profile grows explicit allow-lists for them.
 	if len(info.IPAddresses) > 0 || len(info.EmailAddresses) > 0 || len(info.URIs) > 0 {
-		return dynsecret.Credential{}, fmt.Errorf("pkisecret: CSR requests SAN types this profile does not permit")
+		return IssuancePlan{}, fmt.Errorf("pkisecret: CSR requests SAN types this profile does not permit")
 	}
 	switch info.KeyAlgorithm {
 	case "RSA":
 		if info.KeyBits < 2048 {
-			return dynsecret.Credential{}, fmt.Errorf("pkisecret: RSA subject key is %d bits, want at least 2048", info.KeyBits)
+			return IssuancePlan{}, fmt.Errorf("pkisecret: RSA subject key is %d bits, want at least 2048", info.KeyBits)
 		}
 	case "ECDSA":
 		if info.KeyBits < 256 {
-			return dynsecret.Credential{}, fmt.Errorf("pkisecret: ECDSA subject key is %d bits, want at least 256", info.KeyBits)
+			return IssuancePlan{}, fmt.Errorf("pkisecret: ECDSA subject key is %d bits, want at least 256", info.KeyBits)
 		}
 	case "Ed25519":
 	default:
-		return dynsecret.Credential{}, fmt.Errorf("pkisecret: subject key algorithm %q is not supported", info.KeyAlgorithm)
+		return IssuancePlan{}, fmt.Errorf("pkisecret: subject key algorithm %q is not supported", info.KeyAlgorithm)
 	}
-	return p.signAndRecord(ctx, info.CommonName, csrDER, p.constrainTTL(ttl))
+	return IssuancePlan{
+		Profile: p.profile.Name, CommonName: info.CommonName, EffectiveTTL: p.constrainTTL(ttl),
+		KeyAlgorithm: info.KeyAlgorithm, KeyBits: info.KeyBits,
+	}, nil
+}
+
+// PlanFromCSRSeconds is the overflow-safe API form of PlanFromCSR.
+func (p *PKIProvider) PlanFromCSRSeconds(csrDER []byte, seconds int64) (IssuancePlan, error) {
+	ttl, err := p.durationFromSeconds(seconds)
+	if err != nil {
+		return IssuancePlan{}, err
+	}
+	return p.PlanFromCSR(csrDER, ttl)
+}
+
+func (p *PKIProvider) durationFromSeconds(seconds int64) (time.Duration, error) {
+	if seconds < 0 {
+		return 0, fmt.Errorf("pkisecret: TTL cannot be negative")
+	}
+	if p.profile.MaxTTL > 0 {
+		maxSeconds := int64(p.profile.MaxTTL / time.Second)
+		if seconds == 0 || seconds > maxSeconds {
+			return p.profile.MaxTTL, nil
+		}
+	}
+	if seconds > int64(math.MaxInt64)/int64(time.Second) {
+		return 0, fmt.Errorf("pkisecret: TTL is too large")
+	}
+	return time.Duration(seconds) * time.Second, nil
 }
 
 func (p *PKIProvider) validateCommonName(cn string) error {

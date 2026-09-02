@@ -5855,7 +5855,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use pki as a secrets engine while tenant, policy, and security authority remain on the server.",
       "tool": "secrets",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/secrets/engines",
       "navigationEntrypoints": [
         "tool navigation",
@@ -5869,58 +5869,77 @@ export const canonicalCapabilities = [
       ],
       "sideEffects": "mixed",
       "secretDataHandling": "The parity contract contains metadata only. Product workflows may reveal a value once, but reports and evidence never contain the value.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
           "evidence": [
-            "web/src/pages/Secrets.tsx"
+            "web/src/pages/Secrets.tsx",
+            "web/src/pages/secrets/PKISecretWorkflow.tsx"
           ]
         },
         "understand": {
           "status": "complete",
           "evidence": [
-            "web/src/pages/Secrets.tsx"
+            "web/src/pages/secrets/PKISecretWorkflow.tsx",
+            "internal/api/pki_secret_preview.go"
           ]
         },
         "configure": {
-          "status": "missing",
-          "reason": "No structured evidence proves an operator can configure every required prerequisite from this console journey."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/secrets/PKISecretWorkflow.tsx",
+            "internal/api/pki_secret_preview.go",
+            "internal/server/pki_secret_preview_served_test.go",
+            "web/src/__tests__/secrets.test.tsx"
+          ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "internal/api/pki_secret_preview.go",
+            "internal/server/pki_secret_preview_served_test.go",
+            "web/src/pages/secrets/PKISecretWorkflow.tsx",
+            "web/src/__tests__/secrets.test.tsx"
+          ]
         },
         "execute": {
           "status": "complete",
           "evidence": [
-            "web/src/pages/Secrets.tsx",
+            "web/src/pages/secrets/PKISecretWorkflow.tsx",
+            "internal/server/pki_secret_preview_served_test.go",
             "internal/server/pki_secret_csr_served_test.go"
           ]
         },
         "observe": {
           "status": "complete",
           "evidence": [
-            "web/src/pages/Secrets.tsx"
+            "web/src/pages/secrets/PKISecretWorkflow.tsx",
+            "internal/server/pki_secret_preview_served_test.go"
           ]
         },
         "recover": {
           "status": "complete",
           "evidence": [
-            "web/src/pages/Secrets.tsx",
+            "web/src/pages/secrets/PKISecretWorkflow.tsx",
+            "internal/server/pki_secret_preview_served_test.go",
             "internal/server/pki_secret_csr_served_test.go"
           ]
         },
         "verify": {
           "status": "complete",
           "evidence": [
+            "web/src/pages/secrets/PKISecretWorkflow.tsx",
+            "internal/server/pki_secret_preview_served_test.go",
             "internal/server/pki_secret_csr_served_test.go"
           ]
         },
         "automate": {
           "status": "complete",
           "evidence": [
+            "OpenAPI operationId: previewPKISecret",
             "OpenAPI operationId: issuePKISecret",
+            "CLI command: secrets pki preview",
             "CLI command: secrets pki"
           ]
         }

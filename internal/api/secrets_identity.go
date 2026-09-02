@@ -225,6 +225,10 @@ type pkiSecretRequest struct {
 	// private key never enters the control plane (AUD-24/B1).
 	CSRPEM     string `json:"csr_pem,omitempty"`
 	TTLSeconds int    `json:"ttl_seconds"`
+	// PreviewFingerprint optionally binds execution to the exact server-owned,
+	// effect-free plan the caller reviewed. API/CLI callers may omit it for
+	// backward compatibility; the console always supplies it.
+	PreviewFingerprint string `json:"preview_fingerprint,omitempty"`
 }
 
 // pkiSecretResponse returns a certificate and, only for the deprecated legacy
@@ -259,6 +263,11 @@ func (a *API) issuePKISecret(w http.ResponseWriter, r *http.Request) {
 	}
 	req.CommonName = strings.TrimSpace(req.CommonName)
 	req.CSRPEM = strings.TrimSpace(req.CSRPEM)
+	req.PreviewFingerprint = strings.TrimSpace(req.PreviewFingerprint)
+	if req.TTLSeconds < 0 {
+		a.writeError(w, errStatus(http.StatusBadRequest, "ttl_seconds cannot be negative"))
+		return
+	}
 	if (req.CommonName == "") == (req.CSRPEM == "") {
 		a.writeError(w, errStatus(http.StatusBadRequest, "exactly one of common_name or csr_pem is required"))
 		return
@@ -285,20 +294,32 @@ func (a *API) issuePKISecret(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	a.mutateWithRecorder(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
 		provider := a.secrets.pkiProvider(tenantID, caCertDER, caSigner)
-		ttl := time.Duration(req.TTLSeconds) * time.Second
+		plan, planErr := pkiSecretIssuancePlan(provider, req, csrDER)
+		if planErr != nil {
+			return 0, nil, errStatus(http.StatusUnprocessableEntity, planErr.Error())
+		}
+		if req.PreviewFingerprint != "" {
+			want, fingerprintErr := a.pkiSecretPreviewFingerprint(tenantID, principal, req, plan, caCertDER, csrDER)
+			if fingerprintErr != nil {
+				return 0, nil, fingerprintErr
+			}
+			if !crypto.ConstantTimeEqual([]byte(req.PreviewFingerprint), []byte(want)) {
+				return 0, nil, errStatus(http.StatusConflict, "reviewed PKI issuance plan is stale; preview the current request again")
+			}
+		}
 		var (
 			cred dynsecret.Credential
 			err  error
 		)
 		if req.CSRPEM != "" {
-			cred, err = provider.GenerateFromCSR(ctx, csrDER, ttl)
+			cred, err = provider.GenerateFromCSR(ctx, csrDER, plan.EffectiveTTL)
 		} else {
 			// Fail closed before creating the key: a legacy custody choice is allowed
 			// only when its immutable deprecation receipt is already durable.
 			if evidenceErr := a.recordPKIServerSideKeygen(ctx, tenantID, req.CommonName, "native_pki_secret"); evidenceErr != nil {
 				return 0, nil, errStatus(http.StatusServiceUnavailable, evidenceErr.Error())
 			}
-			cred, err = provider.Generate(ctx, dynsecret.GenerateRequest{Role: req.CommonName, TTL: ttl})
+			cred, err = provider.Generate(ctx, dynsecret.GenerateRequest{Role: req.CommonName, TTL: plan.EffectiveTTL})
 		}
 		if err != nil {
 			return 0, nil, errStatus(http.StatusUnprocessableEntity, err.Error())

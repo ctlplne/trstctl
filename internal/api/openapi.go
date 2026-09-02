@@ -5611,8 +5611,31 @@ func componentSchemas() map[string]*Schema {
 			Description: "Recommended requester-key mode: one self-signed PKCS#10 PEM request. trstctl signs it and never receives or returns the matching private key.",
 		},
 		"ttl_seconds": {Type: "integer"},
+		"preview_fingerprint": {
+			Type:        "string",
+			Description: "Optional server-keyed fingerprint returned by preview. When supplied, execution fails closed if the reviewed tenant, principal, CA, custody input, profile, or TTL changed.",
+		},
 	})
 	pkiSecretReq.OneOf = []*Schema{{Required: []string{"common_name"}}, {Required: []string{"csr_pem"}}}
+	pkiSecretPrerequisite := object(map[string]*Schema{
+		"id": str(), "ready": {Type: "boolean"}, "detail": str(), "remediation": str(),
+	}, "id", "ready", "detail")
+	pkiSecretPreview := object(map[string]*Schema{
+		"capability": str(), "operation": str(), "ready": {Type: "boolean"}, "effect_free": {Type: "boolean"},
+		"custody_mode": str(), "common_name": str(), "requested_ttl_seconds": {Type: "integer"},
+		"effective_ttl_seconds": {Type: "integer"}, "profile": str(), "ca_certificate_sha256": str(),
+		"csr_sha256": str(), "subject_key_algorithm": str(), "subject_key_bits": {Type: "integer"},
+		"required_permission": str(), "request_fingerprint": str(), "vault_path": str(),
+		"prerequisites": {Type: "array", Items: &Schema{Ref: "#/components/schemas/PKISecretPrerequisite"}},
+		"blockers":      {Type: "array", Items: str()}, "preview_writes": {Type: "array", Items: str()},
+		"preview_external_effects": {Type: "array", Items: str()}, "execute_writes": {Type: "array", Items: str()},
+		"execute_external_effects": {Type: "array", Items: str()}, "recovery_steps": {Type: "array", Items: str()},
+		"verification_steps": {Type: "array", Items: str()}, "cli_argv": {Type: "array", Items: str()},
+		"secret_data_handling": str(),
+	}, "capability", "operation", "ready", "effect_free", "custody_mode", "common_name", "requested_ttl_seconds",
+		"effective_ttl_seconds", "profile", "subject_key_algorithm", "subject_key_bits", "required_permission",
+		"request_fingerprint", "vault_path", "prerequisites", "blockers", "preview_writes", "preview_external_effects",
+		"execute_writes", "execute_external_effects", "recovery_steps", "verification_steps", "cli_argv", "secret_data_handling")
 	pkiSecret := object(map[string]*Schema{
 		"serial": str(), "common_name": str(), "certificate": str(), "private_key": str(),
 	}, "serial", "common_name", "certificate")
@@ -6412,6 +6435,8 @@ func componentSchemas() map[string]*Schema {
 		"ShareRedeemRequest":                 shareRedeemReq,
 		"ShareValue":                         shareValue,
 		"PKISecretRequest":                   pkiSecretReq,
+		"PKISecretPrerequisite":              pkiSecretPrerequisite,
+		"PKISecretPreview":                   pkiSecretPreview,
 		"PKISecret":                          pkiSecret,
 		"MachineLoginRequest":                machineLoginReq,
 		"MachineLoginResponse":               machineLoginResp,

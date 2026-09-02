@@ -21696,6 +21696,164 @@
         ],
         "type": "object"
       },
+      "PKISecretPrerequisite": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "remediation": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "ready",
+          "detail"
+        ],
+        "type": "object"
+      },
+      "PKISecretPreview": {
+        "properties": {
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ca_certificate_sha256": {
+            "type": "string"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "cli_argv": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "common_name": {
+            "type": "string"
+          },
+          "csr_sha256": {
+            "type": "string"
+          },
+          "custody_mode": {
+            "type": "string"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "effective_ttl_seconds": {
+            "type": "integer"
+          },
+          "execute_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "execute_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "prerequisites": {
+            "items": {
+              "$ref": "#/components/schemas/PKISecretPrerequisite"
+            },
+            "type": "array"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "profile": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "recovery_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "request_fingerprint": {
+            "type": "string"
+          },
+          "requested_ttl_seconds": {
+            "type": "integer"
+          },
+          "required_permission": {
+            "type": "string"
+          },
+          "secret_data_handling": {
+            "type": "string"
+          },
+          "subject_key_algorithm": {
+            "type": "string"
+          },
+          "subject_key_bits": {
+            "type": "integer"
+          },
+          "vault_path": {
+            "type": "string"
+          },
+          "verification_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "operation",
+          "ready",
+          "effect_free",
+          "custody_mode",
+          "common_name",
+          "requested_ttl_seconds",
+          "effective_ttl_seconds",
+          "profile",
+          "subject_key_algorithm",
+          "subject_key_bits",
+          "required_permission",
+          "request_fingerprint",
+          "vault_path",
+          "prerequisites",
+          "blockers",
+          "preview_writes",
+          "preview_external_effects",
+          "execute_writes",
+          "execute_external_effects",
+          "recovery_steps",
+          "verification_steps",
+          "cli_argv",
+          "secret_data_handling"
+        ],
+        "type": "object"
+      },
       "PKISecretRequest": {
         "oneOf": [
           {
@@ -21716,6 +21874,10 @@
           },
           "csr_pem": {
             "description": "Recommended requester-key mode: one self-signed PKCS#10 PEM request. trstctl signs it and never receives or returns the matching private key.",
+            "type": "string"
+          },
+          "preview_fingerprint": {
+            "description": "Optional server-keyed fingerprint returned by preview. When supplied, execution fails closed if the reviewed tenant, principal, CA, custody input, profile, or TTL changed.",
             "type": "string"
           },
           "ttl_seconds": {
@@ -51821,6 +51983,63 @@
         "summary": "Sign a requester CSR or issue a deprecated server-generated PKI keypair",
         "x-trstctl-permission": "secrets:write",
         "x-trstctl-sensitive-response": true
+      }
+    },
+    "/api/v1/secrets/pki/preview": {
+      "post": {
+        "operationId": "previewPKISecret",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PKISecretRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PKISecretPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Preview exact PKI issuance prerequisites, custody, effects, recovery, and verification without signing",
+        "x-trstctl-permission": "secrets:write"
       }
     },
     "/api/v1/secrets/rotation-schedules": {

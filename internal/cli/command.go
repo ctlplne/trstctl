@@ -526,6 +526,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"secrets", "scans", "run"}, Method: "POST", Path: "/api/v1/secrets/scans", Body: bodyFile, Summary: "Run Gitleaks and record redacted scan findings"},
 	{Name: []string{"secrets", "shares", "create"}, Method: "POST", Path: "/api/v1/secrets/shares", Body: bodyFile, Summary: "Create a secret share"},
 	{Name: []string{"secrets", "shares", "redeem"}, Method: "POST", Path: "/api/v1/secrets/shares/redeem", Body: bodyFile, Summary: "Redeem a secret share"},
+	{Name: []string{"secrets", "pki", "preview"}, Method: "POST", Path: "/api/v1/secrets/pki/preview", Body: bodyFile, ReadOnly: true, Summary: "Review exact PKI issuance prerequisites and effects in an effect-free plan"},
 	{Name: []string{"secrets", "pki"}, Method: "POST", Path: "/api/v1/secrets/pki", Body: bodyFile, Summary: "Sign a requester CSR or explicitly request a deprecated server-generated PKI keypair"},
 
 	// Transit/EaaS served key operations (KMS-01/F66). These commands call fixed

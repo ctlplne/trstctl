@@ -230,7 +230,7 @@ exhaustive subcommand list:
 | `secrets scans`                   | Gitleaks scanning: CI runs, repository/third-party webhooks, local pre-commit and staged-diff (`run` · `repositories` · `repositories webhook` · `third-party` · `third-party ingest` · `staged-diff` · `pre-commit install`)                                                                                       |
 | `secrets shares`                  | Create and redeem a secret share (`create` · `redeem`)                                                                                                                                                                                                                                                              |
 | `secrets approvals`               | Approve a pending secret-store change (`approve`)                                                                                                                                                                                                                                                                   |
-| `secrets`                         | Machine-auth login methods, machine-login sessions, credential exchange, dynamic PKI secrets, cloud/Kubernetes/workload integration status (`auth-methods` · `sessions` · `login` · `pki` · `cloud-secret-managers` · `kubernetes-operator` · `workload-injection` · `unvaulted`)                                   |
+| `secrets`                         | Machine-auth login methods, machine-login sessions, credential exchange, preview-bound dynamic PKI secrets, cloud/Kubernetes/workload integration status (`auth-methods` · `sessions` · `login` · `pki preview` · `pki` · `cloud-secret-managers` · `kubernetes-operator` · `workload-injection` · `unvaulted`)                 |
 | `setup`                           | Tenant-bound eval protocol profile status and activation (`protocols status` · `protocols activate`)                                                                                                                                                                                                                |
 | `ssh`                             | SSH CA/KRL/attestation workflow status, trust rollout, exact effect-free previews, direct and attested issuance, safe unchanged-request recovery, revoke, host retirement (`fleet` · `status` · `trust-rollout` · `preview` · `issue` · `preview-attested-user` · `issue-attested-user` · `revoke` · `retire-host`) |
 | `support`                         | Show enterprise support, SLA, and services posture (`enterprise`)                                                                                                                                                                                                                                                   |
@@ -281,6 +281,26 @@ of a runnable command.
 `GET /api/v1/secrets/store/{name}` path as `secrets store get`, then starts a child
 process with those values added to its environment. It is a wrapper, not a JSON API
 command: stdout, stderr, stdin, and the child's exit code are passed through.
+
+## Preview and issue a PKI certificate
+
+Keep the private key beside the workload and put only its public CSR in the request:
+
+```bash
+chmod 600 pki-request.json
+# {"csr_pem":"-----BEGIN CERTIFICATE REQUEST-----\n...","ttl_seconds":900}
+trstctl-cli secrets pki preview -f pki-request.json
+trstctl-cli --idempotency-key payments-pki-1 secrets pki -f pki-request.json
+```
+
+`secrets pki preview` uses the same subject, SAN, public-key strength, certificate
+rule, and TTL validator as issuance. It reports the issuing CA, custody boundary,
+revocation/audit prerequisites, exact effects, recovery, verification, Vault/OpenBao
+path, and a server-keyed fingerprint. It does not sign, write, enqueue, audit, or
+contact another service, so it intentionally sends no `Idempotency-Key`. Add that
+returned fingerprint as `preview_fingerprint` to bind automated execution to the
+reviewed tenant, principal, CA, CSR/name, profile, and TTL. The server returns `409`
+if that reviewed plan is stale.
 
 ```bash
 trstctl-cli run --secret DB_PASSWORD=db/password -- env

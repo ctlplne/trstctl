@@ -3216,7 +3216,14 @@ when off, requiring a KEK when on):
   retained, and a newer command exists; the newest lineage fence and all claimed
   or ambiguous rows remain.
 - PKI-as-a-secret / dynamic certificate leasing (F67) backs
-  `POST /api/v1/secrets/pki`. Its recommended `csr_pem` mode signs a
+  effect-free `POST /api/v1/secrets/pki/preview` and mutating
+  `POST /api/v1/secrets/pki`. Preview and execution share the same subject, SAN,
+  public-key, profile, and overflow-safe TTL validator. Preview signs nothing,
+  writes nothing, makes no external call, returns no credential material, and
+  reports structured CA/custody/revocation/audit prerequisites plus exact effects,
+  recovery, verification, CLI/Vault parity, and a server-keyed request fingerprint.
+  Supplying that fingerprint on execution makes a changed plan fail closed. The
+  recommended `csr_pem` mode signs a
   requester-generated PKCS#10 request and returns only the certificate. The
   mutually exclusive `common_name` mode still returns a usable certificate and
   private key for compatibility, but is deprecated and fails before key generation
@@ -3228,8 +3235,9 @@ when off, requiring a KEK when on):
   token is never written to the audit/event log.
 
 Every served route is auth-gated (API token or session, `secrets:read` /
-`secrets:write`), tenant-scoped, idempotent (deduplicated by
-`Idempotency-Key`), and recorded as immutable events; secret values are held
+`secrets:write`) and tenant-scoped. Every mutation is idempotent (deduplicated by
+`Idempotency-Key`) and recorded as immutable events; effect-free previews
+intentionally create neither. Secret values are held
 in wipeable, zeroed memory (never as a string), never logged, and never
 returned beyond their design. Proven end-to-end by acceptance tests.
 

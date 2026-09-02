@@ -325,19 +325,27 @@ today (see [Current limitations](../limitations.md) and
    to the separate signing service. The issued serial is recorded on the revocation
    pipeline so a revoked certificate stops validating. See [Secrets](../features/secrets.md).
 
+   In the console, open **Secrets → Engines → Certificate request**. The three-step
+   journey first configures custody/name/lifetime, then asks the server to review the
+   exact CA, profile, key, revocation, audit, effects, recovery, and verification plan
+   without signing or writing. Only a ready, unchanged plan enables **Issue reviewed
+   certificate**. The last step isolates certificate/private-key output in a
+   reveal-once panel and keeps the verification checklist beside it.
+
    ```sh
    openssl ecparam -name prime256v1 -genkey -noout -out payments.key
    openssl req -new -key payments.key -subj '/CN=payments.internal' -out payments.csr
-   curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST https://localhost:8443/api/v1/secrets/pki \
-     -H "Authorization: Bearer $TRSTCTL_TOKEN" \
-     -H "Idempotency-Key: $(uuidgen)" \
-     -H 'Content-Type: application/json' \
-     --data-binary "$(jq -n --rawfile csr payments.csr '{csr_pem:$csr,ttl_seconds:900}')"
+   jq -n --rawfile csr payments.csr '{csr_pem:$csr,ttl_seconds:900}' > pki-request.json
+   trstctl-cli secrets pki preview -f pki-request.json
+   trstctl-cli --idempotency-key payments-pki-1 secrets pki -f pki-request.json
    ```
 
    -> you get back a short-lived certificate and no private key; `payments.key` never
    left the workload environment. Supplying `common_name` instead is the deprecated
    key-returning mode and creates an `issuance.server_side_keygen` Audit receipt first.
+   The preview returns `request_fingerprint`; automation may copy it into
+   `preview_fingerprint` in the issue request so any changed CA, custody input,
+   profile, principal, tenant, or TTL fails closed and requires a new review.
 
 10. Share a one-off secret that destroys itself after a single read.
 

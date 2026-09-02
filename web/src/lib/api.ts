@@ -325,6 +325,7 @@ import type {
   PAMSessionList,
   PAMSessionRequest,
   PKISecret,
+  PKISecretPreview,
   PKISecretRequest,
   PlatformDistributionStatus,
   PolicyDryRun,
@@ -952,6 +953,7 @@ export type {
   PAMSessionList,
   PAMSessionRequest,
   PKISecret,
+  PKISecretPreview,
   PKISecretRequest,
   PlatformDistributionStatus,
   PolicyDryRun,
@@ -2352,6 +2354,7 @@ export interface Api {
   renewDynamicLease(leaseId: string, input: DynamicLeaseRenewRequest): Promise<DynamicLease>;
   revokeDynamicLease(leaseId: string): Promise<DynamicLease>;
   issueEphemeralAPIKey(input: EphemeralAPIKeyRequest): Promise<EphemeralAPIKey>;
+  previewPKISecret(input: PKISecretRequest): Promise<PKISecretPreview>;
   issuePKISecret(input: PKISecretRequest): Promise<PKISecret>;
   machineLogin(input: MachineLoginRequest): Promise<MachineLoginResponse>;
   /** C-S2 (DA-02): secret-free projection of the configured machine-auth methods. */
@@ -2921,6 +2924,12 @@ const liveApi: Api = {
   renewDynamicLease: (leaseId, input) => mutate<DynamicLease>("POST", `/api/v1/secrets/leases/${encodeURIComponent(leaseId)}/renew`, input),
   revokeDynamicLease: (leaseId) => mutate<DynamicLease>("POST", `/api/v1/secrets/leases/${encodeURIComponent(leaseId)}/revoke`),
   issueEphemeralAPIKey: (input) => mutate<EphemeralAPIKey>("POST", "/api/v1/ephemeral/api-keys", input),
+  previewPKISecret: (input) =>
+    req<PKISecretPreview>("/api/v1/secrets/pki/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    }),
   issuePKISecret: (input) => mutate<PKISecret>("POST", "/api/v1/secrets/pki", input),
   machineLogin: (input) => mutate<MachineLoginResponse>("POST", "/api/v1/secrets/login", input),
   machineAuthMethods: () => req<MachineAuthMethodList>("/api/v1/secrets/auth-methods"),

@@ -11,6 +11,15 @@ import (
 
 func TestPKISecretContractsExposeMutuallyExclusiveCustodyModes(t *testing.T) {
 	doc := fetchSpec(t)
+	paths := doc["paths"].(map[string]any)
+	previewPath, ok := paths["/api/v1/secrets/pki/preview"].(map[string]any)
+	if !ok {
+		t.Fatal("native PKI contract does not expose an effect-free preview route")
+	}
+	previewOperation := previewPath["post"].(map[string]any)
+	if previewOperation["operationId"] != "previewPKISecret" || previewOperation["x-trstctl-permission"] != "secrets:write" {
+		t.Fatalf("native PKI preview route contract is incomplete: %#v", previewOperation)
+	}
 	components := doc["components"].(map[string]any)
 	schemas := components["schemas"].(map[string]any)
 	request := schemas["PKISecretRequest"].(map[string]any)
@@ -25,6 +34,13 @@ func TestPKISecretContractsExposeMutuallyExclusiveCustodyModes(t *testing.T) {
 	response := schemas["PKISecret"].(map[string]any)
 	if pkiContractContains(response["required"], "private_key") {
 		t.Fatalf("CSR-first PKI response still requires private_key: %#v", response["required"])
+	}
+	preview := schemas["PKISecretPreview"].(map[string]any)
+	previewRequired := preview["required"]
+	for _, field := range []string{"capability", "operation", "ready", "effect_free", "custody_mode", "prerequisites", "request_fingerprint", "preview_writes", "preview_external_effects"} {
+		if !pkiContractContains(previewRequired, field) {
+			t.Fatalf("PKI preview schema does not require %s: %#v", field, previewRequired)
+		}
 	}
 
 	raw, err := json.Marshal(api.VaultCompatContract())

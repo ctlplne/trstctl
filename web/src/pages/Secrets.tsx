@@ -29,8 +29,6 @@ import { useCan } from "@/components/rbac";
 import { ErrorState, UnavailableState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { SecretTree, ReferenceResolver, EnvDiffPanel, VersionHistory, SecretImport } from "@/components/secrets";
 import { formatDateTime as formatDate } from "@/i18n/format";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
@@ -48,7 +46,6 @@ import {
   type MachineLoginResponse,
   type MachineSession as MachineSessionRecord,
   type Owner,
-  type PKISecret,
   type SecretApprovalAction,
   type SecretAccessPreview,
   type SecretMeta,
@@ -98,6 +95,7 @@ import { apiProblemMessage } from "@/lib/apiProblem";
 import { useCapabilityExecution } from "@/lib/capabilities";
 import { SecretSyncWorkloadIdentityPanel } from "./secrets/SecretSyncWorkloadIdentityPanel";
 import { TransitOperations } from "./secrets/TransitOperations";
+import { PKISecretWorkflow } from "./secrets/PKISecretWorkflow";
 
 /** The store (tree + table + lifecycle) renders at /secrets; every other
  * workflow is its own route in the Secrets space sidebar (S-C2) instead of
@@ -256,14 +254,6 @@ export function Secrets() {
   const [accessResult, setAccessResult] = useState<{ name: string; version?: number; fingerprint: string } | null>(null);
   const [accessBusy, setAccessBusy] = useState(false);
   const [accessError, setAccessError] = useState<string | null>(null);
-
-  const [pkiName, setPkiName] = useState("");
-  const [pkiMode, setPkiMode] = useState<"csr" | "legacy">("csr");
-  const [pkiCSR, setPkiCSR] = useState("");
-  const [pkiTTL, setPkiTTL] = useState("900");
-  const [pkiBusy, setPkiBusy] = useState(false);
-  const [pkiError, setPkiError] = useState<string | null>(null);
-  const [pkiBundle, setPkiBundle] = useState<PKISecret | null>(null);
 
   const [loginMethod, setLoginMethod] = useState("token");
   const [loginCredential, setLoginCredential] = useState("");
@@ -1012,28 +1002,6 @@ export function Secrets() {
       setAccessError(apiProblemMessage(err, t("secrets.developer.testFailed")));
     } finally {
       setAccessBusy(false);
-    }
-  }
-
-  async function submitPKI(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setPkiError(null);
-    setPkiBundle(null);
-    setPkiBusy(true);
-    try {
-      const ttl = Number(pkiTTL);
-      const ttlSeconds = Number.isFinite(ttl) ? ttl : undefined;
-      if (pkiMode === "csr") {
-        setPkiBundle(await api.issuePKISecret({ csr_pem: pkiCSR, ttl_seconds: ttlSeconds }));
-        setPkiCSR("");
-      } else {
-        setPkiBundle(await api.issuePKISecret({ common_name: pkiName, ttl_seconds: ttlSeconds }));
-        setPkiName("");
-      }
-    } catch (err) {
-      setPkiError(apiProblemMessage(err, "Could not issue PKI secret"));
-    } finally {
-      setPkiBusy(false);
     }
   }
 
@@ -3399,80 +3367,7 @@ export function Secrets() {
                 </h2>
                 <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.issue.a.short.lived.certificate.bundle.and.68b22cee4d")}</p>
               </div>
-              <form
-                aria-label={translateNow("source.issue.pki.secret.692ee4b6e2")}
-                onSubmit={(event) => void submitPKI(event)}
-                className="grid gap-3 md:grid-cols-2"
-              >
-                <label className="grid gap-1 text-sm">
-                  <span className="font-medium">{t("secrets.pki.custodyLabel")}</span>
-                  <Select
-                    className="rounded-md border border-border bg-background px-3 py-2"
-                    value={pkiMode}
-                    onChange={(event) => setPkiMode(event.target.value as "csr" | "legacy")}
-                  >
-                    <option value="csr">{t("secrets.pki.csrMode")}</option>
-                    <option value="legacy">{t("secrets.pki.legacyMode")}</option>
-                  </Select>
-                </label>
-                {pkiMode === "csr" ? (
-                  <label className="grid gap-1 text-sm md:col-span-2">
-                    <span className="font-medium">{t("request.csr.label")}</span>
-                    <Textarea
-                      className="min-h-36 rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-                      aria-label={t("request.csr.label")}
-                      value={pkiCSR}
-                      onChange={(event) => setPkiCSR(event.target.value)}
-                      placeholder={t("secrets.pki.csrPlaceholder")}
-                      required
-                    />
-                    <span className="text-xs text-muted-foreground">{t("secrets.pki.csrHelp")}</span>
-                  </label>
-                ) : (
-                  <label className="grid gap-1 text-sm">
-                    <span className="font-medium">{translateNow("source.common.name.2d129020eb")}</span>
-                    <input
-                      className="rounded-md border border-border bg-background px-3 py-2"
-                      value={pkiName}
-                      onChange={(event) => setPkiName(event.target.value)}
-                      placeholder={translateNow("source.svc.internal.e50a91019d")}
-                      required
-                    />
-                  </label>
-                )}
-                <label className="grid gap-1 text-sm">
-                  <span className="font-medium">{translateNow("source.ttl.seconds.862d08de5a")}</span>
-                  <input
-                    className="rounded-md border border-border bg-background px-3 py-2"
-                    type="number"
-                    min="60"
-                    value={pkiTTL}
-                    onChange={(event) => setPkiTTL(event.target.value)}
-                  />
-                </label>
-                <Button type="submit" className="self-end md:justify-self-start" disabled={pkiBusy || Boolean(loadError)}>
-                  {pkiBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
-                  {translateNow("source.issue.pki.secret.692ee4b6e2")}
-                </Button>
-                {pkiMode === "legacy" && (
-                  <p className="text-xs text-status-warning md:col-span-2">
-                    {t("secrets.pki.legacyWarning")}{" "}
-                    <Link className="underline" to="/audit?type=issuance.server_side_keygen">
-                      {t("secrets.pki.auditLink")}
-                    </Link>
-                  </p>
-                )}
-              </form>
-              {pkiError && <ErrorState title={translateNow("source.pki.issue.failed.cb50a25278")}>{pkiError}</ErrorState>}
-              {pkiBundle && (
-                <RevealPanel
-                  title={translateNow("source.pki.bundle.value1.18184942ea", { value1: pkiBundle.serial })}
-                  onDismiss={() => setPkiBundle(null)}
-                  value={pkiBundle.private_key ? `${pkiBundle.certificate}\n${pkiBundle.private_key}` : pkiBundle.certificate}
-                >
-                  {pkiBundle.private_key ? t("secrets.pki.legacyResult") : t("secrets.pki.csrResult")}
-                </RevealPanel>
-              )}
+              <PKISecretWorkflow loadBlocked={Boolean(loadError)} />
             </section>
           )}
         </div>
