@@ -599,6 +599,168 @@ describe("posture collector disclosures", () => {
     expect(screen.queryByText("Non-interactive CBOM preview")).not.toBeInTheDocument();
   });
 
+  it("reads the saved CBOM inventory back and shows an explicit verification receipt", async () => {
+    apiMock.previewCBOMScan.mockResolvedValue({
+      capability: "F52",
+      ready: true,
+      effect_free: true,
+      normalized_request: { tls_endpoints: ["edge.example.com:443"] },
+      source_count: 1,
+      tls_connection_limit: 1,
+      host_read_selector_count: 0,
+      host_file_read_limit: 0,
+      host_file_byte_limit: 1_048_576,
+      finding_write_limit: 1_024,
+      worker_limit: 4,
+      queue_depth: 64,
+      per_endpoint_timeout_seconds: 5,
+      outside_calls: ["TLS handshake with edge.example.com:443"],
+      host_reads: [],
+      durable_writes: ["Append and project tenant-scoped cbom.asset.observed records"],
+      signer_calls: 0,
+      outbox_calls: 0,
+      blockers: [],
+      recovery_steps: ["Correct an unreachable target, review a new plan, and retry only that target."],
+      safety_notes: ["No application data is sent."],
+    });
+    apiMock.startCBOMScan.mockResolvedValue({
+      report: { sources: 1, findings: 1, weak: 0, quantum_vulnerable: 1, out_of_policy: 0, failed: 0 },
+      migration_progress: {
+        total_assets: 1,
+        out_of_policy_assets: 0,
+        quantum_vulnerable_assets: 1,
+        post_quantum_ready_assets: 0,
+        percent_migrated: 0,
+      },
+    });
+    apiMock.listCBOMAssets
+      .mockResolvedValueOnce({
+        items: [],
+        migration_progress: {
+          total_assets: 0,
+          out_of_policy_assets: 0,
+          quantum_vulnerable_assets: 0,
+          post_quantum_ready_assets: 0,
+          percent_migrated: 0,
+        },
+      })
+      .mockResolvedValueOnce({
+        items: [
+          {
+            id: "asset-edge-1",
+            kind: "tls_endpoint",
+            location: "edge.example.com:443",
+            algorithm: "RSA",
+            key_bits: 2048,
+            protocol: "TLS 1.3",
+            cipher: "AES-GCM",
+            strength: "strong",
+            quantum_vulnerable: true,
+            out_of_policy: false,
+            reasons: ["classical public-key algorithm"],
+            migration_target: "licensed-signature-transition",
+            migration_standard: "licensed",
+            migration_generation: "wave-1",
+          },
+        ],
+        migration_progress: {
+          total_assets: 1,
+          out_of_policy_assets: 0,
+          quantum_vulnerable_assets: 1,
+          post_quantum_ready_assets: 0,
+          percent_migrated: 0,
+        },
+      });
+
+    const user = userEvent.setup();
+    await renderPosture();
+    await user.click(screen.getByText("Algorithm inventory and scan evidence", { exact: true }));
+    await user.type(screen.getByLabelText("TLS services"), "edge.example.com:443");
+    await user.click(screen.getByRole("button", { name: "Review scan plan" }));
+    await user.click(await screen.findByRole("button", { name: "Run this reviewed plan" }));
+
+    await waitFor(() => expect(apiMock.startCBOMScan).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(apiMock.listCBOMAssets).toHaveBeenCalledTimes(2));
+    const receipt = await screen.findByRole("region", { name: "Saved inventory verification" });
+    expect(receipt).toHaveTextContent("Saved evidence verified");
+    expect(receipt).toHaveTextContent("A separate server read found the saved tenant records");
+    expect(within(receipt).getAllByText("1", { exact: true })).toHaveLength(2);
+    expect(receipt).toHaveTextContent("asset-edge-1");
+    expect(receipt).toHaveTextContent("licensed-signature-transition");
+    expect(apiMock.listCBOMAssets).toHaveBeenCalledTimes(2);
+  });
+
+  it("fails closed when the post-scan inventory readback cannot prove the saved observations", async () => {
+    apiMock.previewCBOMScan.mockResolvedValue({
+      capability: "F52",
+      ready: true,
+      effect_free: true,
+      normalized_request: { tls_endpoints: ["edge.example.com:443"] },
+      source_count: 1,
+      tls_connection_limit: 1,
+      host_read_selector_count: 0,
+      host_file_read_limit: 0,
+      host_file_byte_limit: 1_048_576,
+      finding_write_limit: 1_024,
+      worker_limit: 4,
+      queue_depth: 64,
+      per_endpoint_timeout_seconds: 5,
+      outside_calls: ["TLS handshake with edge.example.com:443"],
+      host_reads: [],
+      durable_writes: ["Append and project tenant-scoped cbom.asset.observed records"],
+      signer_calls: 0,
+      outbox_calls: 0,
+      blockers: [],
+      recovery_steps: ["Reload the inventory, review a new plan, and retry only this target."],
+      safety_notes: ["No application data is sent."],
+    });
+    apiMock.startCBOMScan.mockResolvedValue({
+      report: { sources: 1, findings: 1, weak: 0, quantum_vulnerable: 1, out_of_policy: 0, failed: 0 },
+      migration_progress: {
+        total_assets: 1,
+        out_of_policy_assets: 0,
+        quantum_vulnerable_assets: 1,
+        post_quantum_ready_assets: 0,
+        percent_migrated: 0,
+      },
+    });
+    apiMock.listCBOMAssets
+      .mockResolvedValueOnce({
+        items: [],
+        migration_progress: {
+          total_assets: 0,
+          out_of_policy_assets: 0,
+          quantum_vulnerable_assets: 0,
+          post_quantum_ready_assets: 0,
+          percent_migrated: 0,
+        },
+      })
+      .mockResolvedValueOnce({
+        items: [],
+        migration_progress: {
+          total_assets: 0,
+          out_of_policy_assets: 0,
+          quantum_vulnerable_assets: 0,
+          post_quantum_ready_assets: 0,
+          percent_migrated: 0,
+        },
+      });
+
+    const user = userEvent.setup();
+    await renderPosture();
+    await user.click(screen.getByText("Algorithm inventory and scan evidence", { exact: true }));
+    await user.type(screen.getByLabelText("TLS services"), "edge.example.com:443");
+    await user.click(screen.getByRole("button", { name: "Review scan plan" }));
+    await user.click(await screen.findByRole("button", { name: "Run this reviewed plan" }));
+
+    const failure = await screen.findByRole("alert");
+    expect(failure).toHaveTextContent("The scan did not finish");
+    expect(failure).toHaveTextContent(/could not verify the saved inventory/i);
+    expect(failure).toHaveTextContent(/No success claim was made/i);
+    expect(screen.queryByRole("region", { name: "Saved inventory verification" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry this exact plan" })).toBeInTheDocument();
+  });
+
   it("renders crypto-agility readiness from CBOM inventory", async () => {
     const user = userEvent.setup();
     await renderPosture();

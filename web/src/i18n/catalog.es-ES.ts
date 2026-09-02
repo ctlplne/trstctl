@@ -2818,6 +2818,17 @@ const esESCatalog = {
   "posture.cbom.workflow.completeTitle": "El análisis terminó y el inventario se actualizó",
   "posture.cbom.workflow.completeBody":
     "Las observaciones criptográficas públicas correctas ya son evidencia duradera del inquilino. Un número de fallos distinto de cero significa que algunos destinos aún requieren atención; no borra las observaciones correctas.",
+  "posture.cbom.workflow.verifyRegionLabel": "Verificación del inventario guardado",
+  "posture.cbom.workflow.verifyTitle": "Evidencia guardada verificada",
+  "posture.cbom.workflow.verifyBody":
+    "Una lectura independiente del servidor encontró los registros guardados del inquilino y su guía de migración. Esta prueba viene del inventario; no confía solamente en la respuesta del análisis.",
+  "posture.cbom.workflow.verifyAssets": "Registros guardados en el inventario",
+  "posture.cbom.workflow.verifyTargets": "Registros con un destino de migración",
+  "posture.cbom.workflow.verifyRecords": "ID del registro guardado y próximo paso",
+  "posture.cbom.workflow.verifyMore": "+{count} registros guardados más están en el inventario.",
+  "posture.cbom.workflow.verifyEmpty": "La lectura es coherente y no contiene observaciones guardadas para este alcance.",
+  "posture.cbom.workflow.verifyFailed":
+    "El análisis terminó, pero trstctl no pudo verificar el inventario guardado. No se afirmó que tuviera éxito. Vuelva a cargar el inventario y después revise y reintente este alcance exacto.",
   "posture.cbom.workflow.findings": "Observaciones guardadas",
   "posture.cbom.workflow.failed": "Entradas que requieren atención",
   "posture.cbom.workflow.outOfPolicy": "Fuera de política",

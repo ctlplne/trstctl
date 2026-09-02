@@ -1397,8 +1397,13 @@ describe("i18n boundary", () => {
       // broker records deliberately fall back to their non-empty certificate
       // ID. Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW
       // BEFORE RELEASE.
-      "es-ES": "aa733c54f4c737b2f9b58c038a2bfa218ae8b39f6a8706f7ba9ef68d55f14915",
-      "de-DE": "ab9423a687e4fc4c947fcead723e6634fe0ba92cfe2bf64073ac2e72f30ce91c",
+      // F16 g138 durable-readback re-pin: the scan result now explains that a
+      // separate inventory read, rather than the mutation response, proves the
+      // saved tenant records and migration guidance. The error copy must retain
+      // the explicit no-success-claim boundary. Machine-authored es/de —
+      // FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "707acf62ce8955d97779a12d2548bf1d2dbb9320ec077a614534cd07507944e6",
+      "de-DE": "3dd8c2acf0d71131870837d11d5c3d994523506c801758ab71da5232ffc46707",
     });
   });
 

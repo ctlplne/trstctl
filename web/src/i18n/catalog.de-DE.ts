@@ -2841,6 +2841,17 @@ const deDECatalog = {
   "posture.cbom.workflow.completeTitle": "Der Scan ist abgeschlossen und das Inventar wurde aktualisiert",
   "posture.cbom.workflow.completeBody":
     "Erfolgreiche öffentliche Kryptografie-Beobachtungen sind jetzt dauerhafte Mandantennachweise. Eine Fehlerzahl größer null bedeutet, dass einige Ziele noch geprüft werden müssen; erfolgreiche Beobachtungen bleiben erhalten.",
+  "posture.cbom.workflow.verifyRegionLabel": "Prüfung des gespeicherten Inventars",
+  "posture.cbom.workflow.verifyTitle": "Gespeicherter Nachweis bestätigt",
+  "posture.cbom.workflow.verifyBody":
+    "Ein getrennter Serverabruf hat die gespeicherten Mandanteneinträge und ihre Migrationshinweise gefunden. Dieser Nachweis stammt aus dem Inventar und vertraut nicht nur der Scan-Antwort.",
+  "posture.cbom.workflow.verifyAssets": "Gespeicherte Inventareinträge",
+  "posture.cbom.workflow.verifyTargets": "Einträge mit Migrationsziel",
+  "posture.cbom.workflow.verifyRecords": "Gespeicherte Eintrags-IDs und nächster Schritt",
+  "posture.cbom.workflow.verifyMore": "+{count} weitere gespeicherte Einträge befinden sich im Inventar.",
+  "posture.cbom.workflow.verifyEmpty": "Der Abruf ist konsistent und enthält keine gespeicherten Beobachtungen für diesen Umfang.",
+  "posture.cbom.workflow.verifyFailed":
+    "Der Scan wurde beendet, aber trstctl konnte das gespeicherte Inventar nicht bestätigen. Es wurde kein Erfolg behauptet. Laden Sie das Inventar neu, prüfen Sie dann denselben Umfang und versuchen Sie ihn erneut.",
   "posture.cbom.workflow.findings": "Gespeicherte Beobachtungen",
   "posture.cbom.workflow.failed": "Eingaben mit Handlungsbedarf",
   "posture.cbom.workflow.outOfPolicy": "Außerhalb der Richtlinie",

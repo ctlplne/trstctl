@@ -21711,6 +21711,38 @@ export const messages = {
       "Successful public crypto observations are now durable tenant evidence. A non-zero failure count means some targets still need attention; it does not erase successful observations.",
     description: "CBOM completion explanation.",
   },
+  "posture.cbom.workflow.verifyRegionLabel": {
+    defaultMessage: "Saved inventory verification",
+    description: "Accessible label for the post-scan durable readback receipt.",
+  },
+  "posture.cbom.workflow.verifyTitle": { defaultMessage: "Saved evidence verified", description: "CBOM durable readback success title." },
+  "posture.cbom.workflow.verifyBody": {
+    defaultMessage:
+      "A separate server read found the saved tenant records and their migration guidance. This proof comes from the inventory, not from trusting the scan response.",
+    description: "ELI5 explanation of the independent CBOM inventory readback.",
+  },
+  "posture.cbom.workflow.verifyAssets": { defaultMessage: "Saved inventory records", description: "Durable CBOM asset count label." },
+  "posture.cbom.workflow.verifyTargets": {
+    defaultMessage: "Records with a migration target",
+    description: "Count of saved CBOM records with migration guidance.",
+  },
+  "posture.cbom.workflow.verifyRecords": {
+    defaultMessage: "Saved record IDs and next step",
+    description: "Heading for a bounded sample of verified CBOM rows.",
+  },
+  "posture.cbom.workflow.verifyMore": {
+    defaultMessage: "+{count} more saved records are in the inventory.",
+    description: "Count of verified CBOM rows omitted from the short receipt.",
+  },
+  "posture.cbom.workflow.verifyEmpty": {
+    defaultMessage: "The readback is consistent and contains no saved observations for this scope.",
+    description: "Honest CBOM verification text when a scan produces no observations.",
+  },
+  "posture.cbom.workflow.verifyFailed": {
+    defaultMessage:
+      "The scan finished, but trstctl could not verify the saved inventory. No success claim was made. Reload the inventory, then review and retry this exact scope.",
+    description: "Fail-closed CBOM durable readback error.",
+  },
   "posture.cbom.workflow.findings": { defaultMessage: "Observations saved", description: "CBOM result finding count." },
   "posture.cbom.workflow.failed": { defaultMessage: "Inputs needing attention", description: "CBOM result failure count." },
   "posture.cbom.workflow.outOfPolicy": { defaultMessage: "Out of policy", description: "CBOM result policy count." },

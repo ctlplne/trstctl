@@ -10,6 +10,10 @@ import { api, type CBOMInventory, type CBOMScan, type CBOMScanPreview, type CBOM
 import { apiProblemMessage } from "@/lib/apiProblem";
 
 type ReviewedPlan = { key: string; value: CBOMScanPreview };
+type VerifiedInventory = {
+  assets: CBOMInventory["items"];
+  migrationTargets: number;
+};
 
 export function CBOMScanWorkflow({ onCompleted }: { onCompleted: (scan: CBOMScan, inventory: CBOMInventory) => void }) {
   const { t } = useTranslation();
@@ -18,6 +22,7 @@ export function CBOMScanWorkflow({ onCompleted }: { onCompleted: (scan: CBOMScan
   const [hostText, setHostText] = useState("");
   const [reviewed, setReviewed] = useState<ReviewedPlan | null>(null);
   const [result, setResult] = useState<CBOMScan | null>(null);
+  const [verifiedInventory, setVerifiedInventory] = useState<VerifiedInventory | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -55,6 +60,7 @@ export function CBOMScanWorkflow({ onCompleted }: { onCompleted: (scan: CBOMScan
   function invalidatePlan() {
     setReviewed(null);
     setResult(null);
+    setVerifiedInventory(null);
     setPreviewError(null);
     setScanError(null);
   }
@@ -84,7 +90,9 @@ export function CBOMScanWorkflow({ onCompleted }: { onCompleted: (scan: CBOMScan
       // server rebuilds the same plan before it performs any read.
       const completed = await api.startCBOMScan(exactPlan.normalized_request);
       const inventory = await api.listCBOMAssets();
+      const verification = verifyInventoryReadback(completed, inventory, t("posture.cbom.workflow.verifyFailed"));
       setResult(completed);
+      setVerifiedInventory(verification);
       onCompleted(completed, inventory);
       setStep(2);
     } catch (error) {
@@ -100,6 +108,7 @@ export function CBOMScanWorkflow({ onCompleted }: { onCompleted: (scan: CBOMScan
     setHostText("");
     setReviewed(null);
     setResult(null);
+    setVerifiedInventory(null);
     setPreviewError(null);
     setScanError(null);
   }
@@ -191,6 +200,7 @@ export function CBOMScanWorkflow({ onCompleted }: { onCompleted: (scan: CBOMScan
               <PlanFact label={t("posture.cbom.workflow.outOfPolicy")} value={String(result.report.out_of_policy)} />
             </dl>
           </section>
+          {verifiedInventory ? <SavedInventoryVerification verification={verifiedInventory} /> : null}
           {result.report.failed > 0 && exactPlan?.recovery_steps?.length ? (
             <PlanList title={t("posture.cbom.workflow.partialRecovery")} items={exactPlan.recovery_steps} warning />
           ) : null}
@@ -202,6 +212,60 @@ export function CBOMScanWorkflow({ onCompleted }: { onCompleted: (scan: CBOMScan
         </div>
       ) : null}
     </StepShell>
+  );
+}
+
+function verifyInventoryReadback(scan: CBOMScan, inventory: CBOMInventory, errorMessage: string): VerifiedInventory {
+  const assets = inventory.items ?? [];
+  const progress = inventory.migration_progress;
+  const completeMetadata = assets.every((asset) => asset.id && asset.migration_target && asset.migration_standard && asset.migration_generation);
+  const readbackContainsScan =
+    progress.total_assets === assets.length &&
+    progress.total_assets >= scan.migration_progress.total_assets &&
+    (scan.report.findings === 0 || assets.length > 0);
+  if (!completeMetadata || !readbackContainsScan) throw new Error(errorMessage);
+  return {
+    assets,
+    migrationTargets: assets.filter((asset) => asset.migration_target.length > 0).length,
+  };
+}
+
+function SavedInventoryVerification({ verification }: { verification: VerifiedInventory }) {
+  const { t } = useTranslation();
+  const visibleAssets = verification.assets.slice(0, 3);
+  const hiddenAssets = verification.assets.length - visibleAssets.length;
+  return (
+    <section
+      aria-label={t("posture.cbom.workflow.verifyRegionLabel")}
+      className="grid gap-3 rounded-panel border border-status-success/35 bg-card p-comfortable"
+    >
+      <div className="flex items-start gap-3">
+        <Database className="mt-0.5 h-5 w-5 text-status-success" aria-hidden="true" />
+        <div>
+          <h3 className="font-semibold">{t("posture.cbom.workflow.verifyTitle")}</h3>
+          <p className="mt-1 text-sm text-muted-foreground">{t("posture.cbom.workflow.verifyBody")}</p>
+        </div>
+      </div>
+      <dl className="grid gap-3 sm:grid-cols-2">
+        <PlanFact label={t("posture.cbom.workflow.verifyAssets")} value={String(verification.assets.length)} />
+        <PlanFact label={t("posture.cbom.workflow.verifyTargets")} value={String(verification.migrationTargets)} />
+      </dl>
+      {visibleAssets.length > 0 ? (
+        <section className="border-s-2 border-border ps-3">
+          <h4 className="text-sm font-semibold">{t("posture.cbom.workflow.verifyRecords")}</h4>
+          <ul className="mt-1 space-y-1 text-xs text-muted-foreground">
+            {visibleAssets.map((asset) => (
+              <li className="break-all" key={asset.id}>
+                <code>{asset.id}</code> · {asset.migration_target}
+              </li>
+            ))}
+          </ul>
+          {hiddenAssets > 0 ? <p className="mt-2 text-xs text-muted-foreground">{t("posture.cbom.workflow.verifyMore", { count: hiddenAssets })}</p> : null}
+        </section>
+      ) : (
+        <p className="text-sm text-muted-foreground">{t("posture.cbom.workflow.verifyEmpty")}</p>
+      )}
+    </section>
   );
 }
 
