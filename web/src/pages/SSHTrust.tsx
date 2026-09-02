@@ -555,7 +555,12 @@ export function SSHTrust() {
               >
                 <div className="grid gap-1 text-sm">
                   <label htmlFor="ssh-attested-method">{translateNow("source.attestation.method.1f0610be7c")}</label>
-                  <select id="ssh-attested-method" className="ui-input" value={method} onChange={(event) => setMethod(event.target.value as SSHAttestedUserCertRequest["method"])}>
+                  <select
+                    id="ssh-attested-method"
+                    className="ui-input"
+                    value={method}
+                    onChange={(event) => setMethod(event.target.value as SSHAttestedUserCertRequest["method"])}
+                  >
                     {attestors.map((value) => (
                       <option key={value} value={value}>
                         {value}
@@ -569,7 +574,13 @@ export function SSHTrust() {
                 </div>
                 <div className="grid gap-1 text-sm">
                   <label htmlFor="ssh-attested-ttl">{translateNow("source.ttl.seconds.862d08de5a")}</label>
-                  <input id="ssh-attested-ttl" className="ui-input" inputMode="numeric" value={ttlSeconds} onChange={(event) => setTTLSeconds(event.target.value)} />
+                  <input
+                    id="ssh-attested-ttl"
+                    className="ui-input"
+                    inputMode="numeric"
+                    value={ttlSeconds}
+                    onChange={(event) => setTTLSeconds(event.target.value)}
+                  />
                 </div>
                 <div className="grid gap-1 text-sm">
                   <label htmlFor="ssh-attested-approver">{t("sshTrust.attested.approver")}</label>
@@ -577,7 +588,12 @@ export function SSHTrust() {
                 </div>
                 <div className="grid gap-1 text-sm">
                   <label htmlFor="ssh-attested-principals">{t("sshTrust.attested.boundPrincipals")}</label>
-                  <textarea id="ssh-attested-principals" className="ui-input min-h-20 font-mono text-xs" value={principals} onChange={(event) => setPrincipals(event.target.value)} />
+                  <textarea
+                    id="ssh-attested-principals"
+                    className="ui-input min-h-20 font-mono text-xs"
+                    value={principals}
+                    onChange={(event) => setPrincipals(event.target.value)}
+                  />
                 </div>
                 <div className="grid gap-1 text-sm">
                   <label htmlFor="ssh-attested-source-addresses">{t("sshTrust.attested.sourceAddresses")}</label>
@@ -590,7 +606,12 @@ export function SSHTrust() {
                 </div>
                 <div className="grid gap-1 text-sm md:col-span-3">
                   <label htmlFor="ssh-attested-force-command">{t("sshTrust.attested.forceCommand")}</label>
-                  <input id="ssh-attested-force-command" className="ui-input font-mono text-xs" value={forceCommand} onChange={(event) => setForceCommand(event.target.value)} />
+                  <input
+                    id="ssh-attested-force-command"
+                    className="ui-input font-mono text-xs"
+                    value={forceCommand}
+                    onChange={(event) => setForceCommand(event.target.value)}
+                  />
                 </div>
                 <div className="grid gap-1 text-sm md:col-span-3">
                   <label htmlFor="ssh-attested-payload">{translateNow("source.attestation.payload.base64.11bfdba122")}</label>
@@ -604,7 +625,13 @@ export function SSHTrust() {
                 </div>
                 <div className="grid gap-1 text-sm md:col-span-3">
                   <label htmlFor="ssh-attested-public-key">{translateNow("source.ssh.public.key.c9be6a369e")}</label>
-                  <textarea id="ssh-attested-public-key" className="ui-input min-h-24 font-mono text-xs" value={publicKey} onChange={(event) => setPublicKey(event.target.value)} required />
+                  <textarea
+                    id="ssh-attested-public-key"
+                    className="ui-input min-h-24 font-mono text-xs"
+                    value={publicKey}
+                    onChange={(event) => setPublicKey(event.target.value)}
+                    required
+                  />
                 </div>
                 <Button className="md:col-span-3" type="submit" disabled={!attestedInputValid || attestedPreviewing || attestedIssuing}>
                   {attestedPreviewing ? t("sshTrust.attested.previewing") : t("sshTrust.attested.previewAction")}
