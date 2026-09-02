@@ -621,6 +621,9 @@ describe("exported API surface census", () => {
       // login plan without receiving a credential, calling a verifier, or
       // creating a session, event, idempotency record, or outside request.
       "/api/v1/secrets/login/preview",
+      // F60: validates only the requested share lifetime and returns a
+      // value-free plan; it creates no share, event, audit, idempotency, or egress.
+      "/api/v1/secrets/shares/preview",
       // F55: this POST reads assembled in-memory CMP posture. It carries no
       // body and performs no enrollment, write, signer call, or network call.
       "/api/v1/protocols/cmp/qualification",
@@ -1719,10 +1722,21 @@ describe("secrets contract", () => {
       preview_fingerprint: "sha256:machine-plan",
     });
 
+    mockFetch(200, JSON.stringify({ capability: "F60", ready: true, effect_free: true, request_fingerprint: "sha256:share-plan" }));
+    await api.previewShare({ ttl_seconds: 300 });
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/shares/preview");
+    expect(sentHeaders()["Idempotency-Key"]).toBeUndefined();
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toEqual({ ttl_seconds: 300 });
+
     mockFetch(201, JSON.stringify({ token: "share-token", expires_at: "2026-06-19T13:00:00Z" }));
-    await api.createShare({ value: "secret", ttl_seconds: 300 });
+    await api.createShare({ value: "secret", ttl_seconds: 300, preview_fingerprint: "sha256:share-plan" }, "share-recovery-1");
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/shares");
-    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^(?:idem-.+|[0-9a-f-]{36})$/);
+    expect(sentHeaders()["Idempotency-Key"]).toBe("share-recovery-1");
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toEqual({
+      value: "secret",
+      ttl_seconds: 300,
+      preview_fingerprint: "sha256:share-plan",
+    });
 
     mockFetch(200, JSON.stringify({ value: "redeemed-once" }));
     await api.redeemShare({ token: "share-token" });

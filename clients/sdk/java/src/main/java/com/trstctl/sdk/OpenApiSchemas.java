@@ -680,6 +680,8 @@ public final class OpenApiSchemas {
       "SecretWorkloadInjectionCRD",
       "SecretWorkloadInjectionMode",
       "ServiceNowTicketRequest",
+      "SharePreview",
+      "SharePreviewRequest",
       "ShareRedeemRequest",
       "ShareRequest",
       "ShareToken",

@@ -264,8 +264,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// F64 adds the read-only, effect-free developer secret-access preview command.
 	// F58 adds the read-only machine-login plan command so headless operators
 	// use the same review oracle as the console before presenting a credential.
-	if len(out) != 430 {
-		t.Fatalf("CLI commands = %d, want 430", len(out))
+	// F60 adds the value-free one-time-share preview command.
+	if len(out) != 431 {
+		t.Fatalf("CLI commands = %d, want 431", len(out))
 	}
 	return out
 }

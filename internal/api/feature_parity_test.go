@@ -219,8 +219,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// exact, effect-free, value-free developer secret access plan.
 	// F58 adds the exact, effect-free machine-login method plan; credential
 	// verification remains the separate idempotent login mutation.
-	if len(out) != 418 {
-		t.Fatalf("OpenAPI operationIds = %d, want 418", len(out))
+	// F60 adds the value-free, effect-free one-time-share plan.
+	if len(out) != 419 {
+		t.Fatalf("OpenAPI operationIds = %d, want 419", len(out))
 	}
 	return out
 }

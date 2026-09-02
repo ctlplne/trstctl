@@ -9684,6 +9684,39 @@ ServiceNowTicketRequest = TypedDict(
     total=False,
 )
 
+SharePreview = TypedDict(
+    'SharePreview',
+    {
+        'blockers': list[str],
+        'capability': str,
+        'cli_argv': list[str],
+        'effect_free': bool,
+        'effective_ttl_seconds': int,
+        'execute_external_effects': list[str],
+        'execute_writes': list[str],
+        'operation': str,
+        'preview_external_effects': list[str],
+        'preview_writes': list[str],
+        'ready': bool,
+        'recovery_steps': list[str],
+        'request_fingerprint': str,
+        'requested_ttl_seconds': int,
+        'required_permission': str,
+        'secret_data_handling': str,
+        'sensitive_change_approval_configured': bool,
+        'verification_steps': list[str],
+    },
+    total=False,
+)
+
+SharePreviewRequest = TypedDict(
+    'SharePreviewRequest',
+    {
+        'ttl_seconds': int,
+    },
+    total=False,
+)
+
 ShareRedeemRequest = TypedDict(
     'ShareRedeemRequest',
     {
@@ -9695,6 +9728,7 @@ ShareRedeemRequest = TypedDict(
 ShareRequest = TypedDict(
     'ShareRequest',
     {
+        'preview_fingerprint': str,
         'ttl_seconds': int,
         'value': str,
     },

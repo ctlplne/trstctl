@@ -17416,12 +17416,14 @@
             "status": "closed",
             "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
             "api_surface": [
+                "previewShare",
                 "createShare",
                 "redeemShare",
                 "approveSecretChange"
             ],
             "api_na": "",
             "cli_surface": [
+                "secrets shares preview",
                 "secrets shares create",
                 "secrets shares redeem",
                 "secrets approvals approve"
@@ -17449,6 +17451,7 @@
                 },
                 "cli": {
                     "evidence": [
+                        "CLI command: secrets shares preview",
                         "CLI command: secrets shares create",
                         "CLI command: secrets shares redeem",
                         "CLI command: secrets approvals approve"
@@ -17460,6 +17463,7 @@
                 },
                 "api": {
                     "evidence": [
+                        "OpenAPI operationId: previewShare",
                         "OpenAPI operationId: createShare",
                         "OpenAPI operationId: redeemShare",
                         "OpenAPI operationId: approveSecretChange"
@@ -17611,9 +17615,11 @@
                     "automate": {
                         "status": "complete",
                         "evidence": [
+                            "OpenAPI operationId: previewShare",
                             "OpenAPI operationId: createShare",
                             "OpenAPI operationId: redeemShare",
                             "OpenAPI operationId: approveSecretChange",
+                            "CLI command: secrets shares preview",
                             "CLI command: secrets shares create",
                             "CLI command: secrets shares redeem",
                             "CLI command: secrets approvals approve"

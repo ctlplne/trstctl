@@ -14972,6 +14972,83 @@ export const messages = {
     defaultMessage: "Retry",
     description: "Button label for retrying an approved secret-change request.",
   },
+  "secrets.share.review": {
+    defaultMessage: "Review without creating",
+    description: "Button label for the effect-free one-time-share review.",
+  },
+  "secrets.share.previewFailedTitle": {
+    defaultMessage: "Share review failed",
+    description: "Heading for an error returned by one-time-share preview.",
+  },
+  "secrets.share.previewFailed": {
+    defaultMessage: "Could not review the one-time share",
+    description: "Fallback error when the one-time-share preview cannot run.",
+  },
+  "secrets.share.previewNotEffectFree": {
+    defaultMessage: "The server did not prove that this review is effect-free.",
+    description: "Fail-closed text when a share preview does not assert its zero-effect contract.",
+  },
+  "secrets.share.previewBlocked": {
+    defaultMessage: "The server says this one-time share is not ready to create.",
+    description: "Fallback when a share preview has blockers but no blocker copy.",
+  },
+  "secrets.share.reviewRequired": {
+    defaultMessage: "Review the current lifetime before creating this share.",
+    description: "Error when share execution has no current reviewed plan.",
+  },
+  "secrets.share.reviewStale": {
+    defaultMessage: "The value or lifetime changed. Review the current plan again before creating.",
+    description: "Message shown when a one-time-share review was invalidated by input changes.",
+  },
+  "secrets.share.reviewedPlanLabel": {
+    defaultMessage: "Reviewed one-time share plan",
+    description: "Accessible label for the one-time-share review card.",
+  },
+  "secrets.share.reviewedPlan": {
+    defaultMessage: "Reviewed plan",
+    description: "Heading for a reviewed one-time-share plan.",
+  },
+  "secrets.share.nothingStored": {
+    defaultMessage: "Nothing has been stored or sent yet.",
+    description: "Zero-effect assurance shown after one-time-share preview.",
+  },
+  "secrets.share.lifetime": {
+    defaultMessage: "Share lifetime",
+    description: "Label for the effective lifetime in a share preview.",
+  },
+  "secrets.share.lifetimeValue": {
+    defaultMessage: "{seconds} seconds",
+    description: "Effective one-time-share lifetime in seconds.",
+  },
+  "secrets.share.permission": {
+    defaultMessage: "Required permission",
+    description: "Label for the permission in a share preview.",
+  },
+  "secrets.share.approvalConfigured": {
+    defaultMessage: "Sensitive secret changes use the configured dual-control approval queue.",
+    description: "Explains that sensitive secret mutations are protected by configured dual control.",
+  },
+  "secrets.share.approvalUnavailable": {
+    defaultMessage: "This deployment has no dual-control approval store configured; one-time sharing remains permission-gated and audited.",
+    description: "Explains approval posture when dual control is unavailable.",
+  },
+  "secrets.share.createReviewed": {
+    defaultMessage: "Create reviewed share",
+    description: "Button label that executes the currently reviewed one-time-share plan.",
+  },
+  "secrets.share.retrySame": {
+    defaultMessage: "Retry same reviewed share",
+    description: "Button label that reuses the same idempotency key after an ambiguous response.",
+  },
+  "secrets.share.createFailed": {
+    defaultMessage: "Could not create the one-time share",
+    description: "Fallback for a definitive one-time-share creation error.",
+  },
+  "secrets.share.ambiguousFailure": {
+    defaultMessage:
+      "The server may have created the share, but the response was interrupted. Retry the same reviewed share to recover the original token without creating a duplicate.",
+    description: "Recovery guidance after an ambiguous one-time-share creation failure.",
+  },
   "secrets.approvals.approveAction": {
     defaultMessage: "Approve {action} for {name}",
     description: "Accessible label for approving a secret-change request.",
@@ -19850,10 +19927,6 @@ export const messages = {
   },
   "source.create.secret.b72a982613": {
     defaultMessage: "Create secret",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
-  "source.create.share.bb7a8c7b6e": {
-    defaultMessage: "Create share",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
   "source.create.source.020457fb23": {

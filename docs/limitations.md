@@ -3230,9 +3230,12 @@ when off, requiring a KEK when on):
   unless its `issuance.server_side_keygen` receipt is durable. Both modes use the
   issuing CA in the out-of-process signer and record the serial on the served
   revocation pipeline so a revoked dynamic-secret cert stops validating.
-- Secret sharing (F60) backs `POST /api/v1/secrets/shares` + `.../redeem` —
-  a one-time self-destructing share that redeems exactly once; the bearer
-  token is never written to the audit/event log.
+- Secret sharing (F60) backs effect-free, value-free `POST
+  /api/v1/secrets/shares/preview`, reviewed idempotent creation at
+  `POST /api/v1/secrets/shares`, and atomic `.../redeem`. The server-keyed review
+  fingerprint rejects a changed lifetime; an exact same-key retry returns the
+  original one-time bearer rather than creating a duplicate. Redemption succeeds
+  exactly once, and neither value nor bearer token enters the audit/event log.
 
 Every served route is auth-gated (API token or session, `secrets:read` /
 `secrets:write`) and tenant-scoped. Every mutation is idempotent (deduplicated by

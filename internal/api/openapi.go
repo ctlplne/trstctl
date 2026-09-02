@@ -5588,7 +5588,23 @@ func componentSchemas() map[string]*Schema {
 	}, "name", "value")
 	shareReq := object(map[string]*Schema{
 		"value": str(), "ttl_seconds": {Type: "integer"},
+		"preview_fingerprint": {Type: "string", Description: "Optional server-keyed fingerprint returned by SharePreview. When supplied, creation fails closed if the reviewed lifetime changed."},
 	}, "value")
+	sharePreviewReq := object(map[string]*Schema{
+		"ttl_seconds": {Type: "integer", Description: "Requested lifetime in seconds. Zero selects the 24-hour default; explicit values must be between 60 seconds and 7 days."},
+	})
+	sharePreview := object(map[string]*Schema{
+		"capability": str(), "operation": str(), "ready": {Type: "boolean"}, "effect_free": {Type: "boolean"},
+		"requested_ttl_seconds": {Type: "integer"}, "effective_ttl_seconds": {Type: "integer"},
+		"required_permission": str(), "request_fingerprint": str(), "sensitive_change_approval_configured": {Type: "boolean"},
+		"blockers": {Type: "array", Items: str()}, "preview_writes": {Type: "array", Items: str()},
+		"preview_external_effects": {Type: "array", Items: str()}, "execute_writes": {Type: "array", Items: str()},
+		"execute_external_effects": {Type: "array", Items: str()}, "recovery_steps": {Type: "array", Items: str()},
+		"verification_steps": {Type: "array", Items: str()}, "cli_argv": {Type: "array", Items: str()},
+		"secret_data_handling": str(),
+	}, "capability", "operation", "ready", "effect_free", "requested_ttl_seconds", "effective_ttl_seconds",
+		"required_permission", "request_fingerprint", "sensitive_change_approval_configured", "blockers", "preview_writes",
+		"preview_external_effects", "execute_writes", "execute_external_effects", "recovery_steps", "verification_steps", "cli_argv", "secret_data_handling")
 	shareToken := object(map[string]*Schema{
 		"token": str(), "expires_at": timestamp(),
 	}, "token")
@@ -6456,6 +6472,8 @@ func componentSchemas() map[string]*Schema {
 		"ManagedKeyApproval":                 managedKeyApproval,
 		"ManagedKey":                         managedKey,
 		"ShareRequest":                       shareReq,
+		"SharePreviewRequest":                sharePreviewReq,
+		"SharePreview":                       sharePreview,
 		"ShareToken":                         shareToken,
 		"ShareRedeemRequest":                 shareRedeemReq,
 		"ShareValue":                         shareValue,

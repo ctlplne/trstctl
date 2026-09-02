@@ -35,8 +35,9 @@ import (
 // ---- one-time secret share + redeem (F60) ----------------------------------
 
 type shareCreateRequest struct {
-	Value      secretJSONBytes `json:"value"`
-	TTLSeconds int             `json:"ttl_seconds"`
+	Value              secretJSONBytes `json:"value"`
+	TTLSeconds         int             `json:"ttl_seconds"`
+	PreviewFingerprint string          `json:"preview_fingerprint,omitempty"`
 }
 
 // shareCreateResponse returns the one-time bearer token (the share capability). The
@@ -81,18 +82,34 @@ func (a *API) createShare(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, secretsDisabledProblem())
 		return
 	}
+	principal, err := requestPrincipalSubject(r.Context())
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
 		var req shareCreateRequest
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
+		defer req.Value.wipe()
 		if len(req.Value) == 0 {
 			return 0, nil, errStatus(http.StatusBadRequest, "value is required")
 		}
-		ttl := time.Duration(req.TTLSeconds) * time.Second
-		if ttl <= 0 {
-			ttl = 24 * time.Hour
+		ttl, err := normalizeSecretShareTTL(req.TTLSeconds)
+		if err != nil {
+			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+		}
+		req.PreviewFingerprint = strings.TrimSpace(req.PreviewFingerprint)
+		if req.PreviewFingerprint != "" {
+			want, fingerprintErr := a.secretSharePreviewFingerprint(tenantID, principal, ttl)
+			if fingerprintErr != nil {
+				return 0, nil, fingerprintErr
+			}
+			if !crypto.ConstantTimeEqual([]byte(req.PreviewFingerprint), []byte(want)) {
+				return 0, nil, errStatus(http.StatusConflict, "reviewed one-time share plan is stale; preview the current request again")
+			}
 		}
 		tokenRaw, err := crypto.RandomBytes(32)
 		if err != nil {
@@ -103,13 +120,11 @@ func (a *API) createShare(w http.ResponseWriter, r *http.Request) {
 		tokenHash := crypto.SHA256Hex(token)
 		shareRaw, err := crypto.RandomBytes(16)
 		if err != nil {
-			req.Value.wipe()
 			return 0, nil, err
 		}
 		shareID := hex.EncodeToString(shareRaw)
 		secret.Wipe(shareRaw)
 		sealed, err := a.secrets.seal(ctx, tenantID, []byte(req.Value), secretShareAAD(tenantID, shareID, tokenHash))
-		req.Value.wipe()
 		if err != nil {
 			return 0, nil, err
 		}

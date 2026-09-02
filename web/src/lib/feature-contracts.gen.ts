@@ -6252,9 +6252,11 @@ export const canonicalCapabilities = [
         "automate": {
           "status": "complete",
           "evidence": [
+            "OpenAPI operationId: previewShare",
             "OpenAPI operationId: createShare",
             "OpenAPI operationId: redeemShare",
             "OpenAPI operationId: approveSecretChange",
+            "CLI command: secrets shares preview",
             "CLI command: secrets shares create",
             "CLI command: secrets shares redeem",
             "CLI command: secrets approvals approve"

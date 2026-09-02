@@ -5452,8 +5452,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create a one-time secret share (returns a bearer token) */
+        /** Create a reviewed one-time secret share (returns a bearer token once) */
         post: operations["createShare"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/shares/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview a one-time share lifetime, effects, recovery, and verification without receiving the value */
+        post: operations["previewShare"];
         delete?: never;
         options?: never;
         head?: never;
@@ -13543,10 +13560,36 @@ export interface components {
             token_ref: string;
             urgency?: string;
         };
+        SharePreview: {
+            blockers: string[];
+            capability: string;
+            cli_argv: string[];
+            effect_free: boolean;
+            effective_ttl_seconds: number;
+            execute_external_effects: string[];
+            execute_writes: string[];
+            operation: string;
+            preview_external_effects: string[];
+            preview_writes: string[];
+            ready: boolean;
+            recovery_steps: string[];
+            request_fingerprint: string;
+            requested_ttl_seconds: number;
+            required_permission: string;
+            secret_data_handling: string;
+            sensitive_change_approval_configured: boolean;
+            verification_steps: string[];
+        };
+        SharePreviewRequest: {
+            /** @description Requested lifetime in seconds. Zero selects the 24-hour default; explicit values must be between 60 seconds and 7 days. */
+            ttl_seconds?: number;
+        };
         ShareRedeemRequest: {
             token: string;
         };
         ShareRequest: {
+            /** @description Optional server-keyed fingerprint returned by SharePreview. When supplied, creation fails closed if the reviewed lifetime changed. */
+            preview_fingerprint?: string;
             ttl_seconds?: number;
             value: string;
         };
@@ -29705,6 +29748,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ShareToken"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewShare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SharePreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharePreview"];
                 };
             };
             /** @description client error */

@@ -7014,11 +7014,37 @@ export interface ServiceNowTicketRequest {
   urgency?: string;
 }
 
+export interface SharePreview {
+  blockers: string[];
+  capability: string;
+  cli_argv: string[];
+  effect_free: boolean;
+  effective_ttl_seconds: number;
+  execute_external_effects: string[];
+  execute_writes: string[];
+  operation: string;
+  preview_external_effects: string[];
+  preview_writes: string[];
+  ready: boolean;
+  recovery_steps: string[];
+  request_fingerprint: string;
+  requested_ttl_seconds: number;
+  required_permission: string;
+  secret_data_handling: string;
+  sensitive_change_approval_configured: boolean;
+  verification_steps: string[];
+}
+
+export interface SharePreviewRequest {
+  ttl_seconds?: number;
+}
+
 export interface ShareRedeemRequest {
   token: string;
 }
 
 export interface ShareRequest {
+  preview_fingerprint?: string;
   ttl_seconds?: number;
   value: string;
 }

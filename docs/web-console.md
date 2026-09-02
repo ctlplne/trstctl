@@ -349,7 +349,12 @@ and encrypt/decrypt/rewrap/HMAC/sign operations (`/api/v1/transit/*`). Key mater
 never enters the browser; a decrypted value appears only in the dismissible reveal
 panel.
 **One-time secret links** (`/secrets/sharing`) covers self-destructing shares and
-separate ephemeral API keys. **Find leaked secrets in code** (`/secrets/scanning`)
+separate ephemeral API keys. A share is configured, reviewed without sending its
+value, created from the server-keyed plan, revealed once, and then redeemed/verified.
+If creation has an ambiguous network result, the page retains one in-memory recovery
+key and offers **Retry same reviewed share**; it does not create a new request. The
+same workspace shows the secret-change dual-control queue and keeps values/tokens out
+of browser storage. **Find leaked secrets in code** (`/secrets/scanning`)
 covers repository and pipeline checks; **Send secrets to systems** (`/secrets/sync`)
 shows configured destinations and refuses a delivery when none is configured.
 The store's scheduled-rotation panel renders one tick's exact run and deferred-row

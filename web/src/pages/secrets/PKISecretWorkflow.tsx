@@ -228,9 +228,7 @@ export function PKISecretWorkflow({ loadBlocked }: { loadBlocked: boolean }) {
               </div>
               <div>
                 <dt className="text-muted-foreground">{t("secrets.pki.dnsNames")}</dt>
-                <dd className="break-all font-medium">
-                  {reviewedPlan.dns_names.length > 0 ? reviewedPlan.dns_names.join(", ") : t("secrets.pki.none")}
-                </dd>
+                <dd className="break-all font-medium">{reviewedPlan.dns_names.length > 0 ? reviewedPlan.dns_names.join(", ") : t("secrets.pki.none")}</dd>
               </div>
               <div>
                 <dt className="text-muted-foreground">{t("secrets.pki.lifetime")}</dt>

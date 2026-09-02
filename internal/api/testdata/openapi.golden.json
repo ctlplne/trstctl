@@ -28486,6 +28486,118 @@
         ],
         "type": "object"
       },
+      "SharePreview": {
+        "properties": {
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "cli_argv": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "effective_ttl_seconds": {
+            "type": "integer"
+          },
+          "execute_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "execute_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "recovery_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "request_fingerprint": {
+            "type": "string"
+          },
+          "requested_ttl_seconds": {
+            "type": "integer"
+          },
+          "required_permission": {
+            "type": "string"
+          },
+          "secret_data_handling": {
+            "type": "string"
+          },
+          "sensitive_change_approval_configured": {
+            "type": "boolean"
+          },
+          "verification_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "operation",
+          "ready",
+          "effect_free",
+          "requested_ttl_seconds",
+          "effective_ttl_seconds",
+          "required_permission",
+          "request_fingerprint",
+          "sensitive_change_approval_configured",
+          "blockers",
+          "preview_writes",
+          "preview_external_effects",
+          "execute_writes",
+          "execute_external_effects",
+          "recovery_steps",
+          "verification_steps",
+          "cli_argv",
+          "secret_data_handling"
+        ],
+        "type": "object"
+      },
+      "SharePreviewRequest": {
+        "properties": {
+          "ttl_seconds": {
+            "description": "Requested lifetime in seconds. Zero selects the 24-hour default; explicit values must be between 60 seconds and 7 days.",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "ShareRedeemRequest": {
         "properties": {
           "token": {
@@ -28499,6 +28611,10 @@
       },
       "ShareRequest": {
         "properties": {
+          "preview_fingerprint": {
+            "description": "Optional server-keyed fingerprint returned by SharePreview. When supplied, creation fails closed if the reviewed lifetime changed.",
+            "type": "string"
+          },
           "ttl_seconds": {
             "type": "integer"
           },
@@ -53121,9 +53237,66 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Create a one-time secret share (returns a bearer token)",
+        "summary": "Create a reviewed one-time secret share (returns a bearer token once)",
         "x-trstctl-permission": "secrets:write",
         "x-trstctl-sensitive-response": true
+      }
+    },
+    "/api/v1/secrets/shares/preview": {
+      "post": {
+        "operationId": "previewShare",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SharePreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharePreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Preview a one-time share lifetime, effects, recovery, and verification without receiving the value",
+        "x-trstctl-permission": "secrets:write"
       }
     },
     "/api/v1/secrets/shares/redeem": {

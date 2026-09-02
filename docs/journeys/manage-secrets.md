@@ -358,17 +358,42 @@ today (see [Current limitations](../limitations.md) and
 
 10. Share a one-off secret that destroys itself after a single read.
 
+   First review the lifetime. This request deliberately contains no secret value and
+   has no side effects:
+
    ```sh
+   cat > share-preview.json <<'JSON'
+   {"ttl_seconds":300}
+   JSON
+   trstctl-cli secrets shares preview -f share-preview.json
+   ```
+
+   -> confirm `ready:true`, `effect_free:true`, empty `preview_writes` and
+   `preview_external_effects`, the effective lifetime, recovery/verification steps,
+   and `request_fingerprint`. Put that fingerprint into the create request:
+
+   ```sh
+   cat > share-create.json <<'JSON'
+   {"value":"one-time-token","ttl_seconds":300,"preview_fingerprint":"<request_fingerprint>"}
+   JSON
    curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST https://localhost:8443/api/v1/secrets/shares \
      -H "Authorization: Bearer $TRSTCTL_TOKEN" \
-     -H "Idempotency-Key: $(uuidgen)" \
+     -H "Idempotency-Key: share-one-off-1" \
      -H 'Content-Type: application/json' \
-     -d '{"value":"one-time-token"}'
+     --data-binary @share-create.json
    ```
 
    -> the API returns the bearer token once. The server stores only the token hash and
    the sealed value, so the share survives an API restart but a database reader still
-   cannot redeem it.
+   cannot redeem it. If the response is interrupted, repeat the exact create request
+   with `share-one-off-1`; the idempotency ledger returns the same original response.
+   Never switch to a new key until the old request has a definite outcome.
+
+   In the console, open **Secrets → One-time secret links**, enter the value and
+   lifetime, and choose **Review without creating**. The review says what will happen
+   and explicitly confirms nothing has been stored or sent. **Create reviewed share**
+   sends the value for the first time. If the connection breaks, **Retry same reviewed
+   share** keeps the same recovery key and cannot mint a duplicate.
 
    ```sh
    curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST https://localhost:8443/api/v1/secrets/shares/redeem \
@@ -378,8 +403,10 @@ today (see [Current limitations](../limitations.md) and
      -d '{"token":"<returned-token>"}'
    ```
 
-   -> the share redeems exactly once; a second redeem fails, and the bearer token is
-   never written to the audit log.
+   -> the share redeems exactly once; a second redeem fails, and the bearer token and
+   value are never written to the audit/event log. The nearby **Secret-change
+   approvals** panel shows the separate dual-control queue for rotate, recover, and
+   delete actions.
 
 11. Push a stored secret to a configured external target when a platform needs a copy.
    The served sync path writes a sealed outbox row first, then delivers through the

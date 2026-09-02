@@ -29,6 +29,7 @@ const { apiMock } = vi.hoisted(() => ({
     issuePKISecret: vi.fn(),
     previewMachineLogin: vi.fn(),
     machineLogin: vi.fn(),
+    previewShare: vi.fn(),
     createShare: vi.fn(),
     redeemShare: vi.fn(),
     issueEphemeralAPIKey: vi.fn(),
@@ -469,6 +470,26 @@ function primeSecretsMocks() {
     token: "trst_MACHINE_SESSION_REVEAL_ONCE",
   });
   apiMock.createShare.mockResolvedValue({ token: "SHARE-TOKEN-1", expires_at: "2026-06-19T13:30:00Z" });
+  apiMock.previewShare.mockResolvedValue({
+    capability: "F60",
+    operation: "create_one_time_share",
+    ready: true,
+    effect_free: true,
+    requested_ttl_seconds: 300,
+    effective_ttl_seconds: 300,
+    required_permission: "secrets:write",
+    request_fingerprint: "sha256:reviewed-share",
+    sensitive_change_approval_configured: true,
+    blockers: [],
+    preview_writes: [],
+    preview_external_effects: [],
+    execute_writes: ["store one sealed share and its token hash", "append plaintext-free audit evidence"],
+    execute_external_effects: [],
+    recovery_steps: ["Retry with the same recovery key after an ambiguous response."],
+    verification_steps: ["Redeem once; confirm a second redeem fails closed."],
+    cli_argv: ["trstctl", "secrets", "shares", "create", "-f", "share-request.json"],
+    secret_data_handling: "Preview never receives the value. Execution seals it and returns the bearer token once.",
+  });
   apiMock.redeemShare.mockResolvedValue({ value: "redeemed-secret" });
   apiMock.issueEphemeralAPIKey.mockResolvedValue({
     id: "33333333-3333-3333-3333-333333333333",
@@ -994,7 +1015,7 @@ describe("secrets surface", () => {
     cleanup();
     renderSecrets("/secrets/sharing");
     await user.click(within(await screen.findByRole("group", { name: "Do next" })).getByRole("button", { name: "Create one-time link" }));
-    expect(screen.getByLabelText("Value to share")).toHaveFocus();
+    expect(await screen.findByLabelText("Value to share")).toHaveFocus();
   });
 
   it("keeps advanced access closed and opens one secret-engine task at a time", async () => {
@@ -1875,8 +1896,15 @@ describe("secrets surface", () => {
     await user.click(await screen.findByRole("button", { name: "Open one-time sharing" }));
     const shareForm = within(await screen.findByRole("form", { name: "Create one-time share" }));
     await user.type(shareForm.getByLabelText("Value to share"), "share-this-once");
-    await user.click(shareForm.getByRole("button", { name: /create share/i }));
-    await waitFor(() => expect(apiMock.createShare).toHaveBeenCalledWith({ value: "share-this-once", ttl_seconds: 300 }));
+    await user.click(shareForm.getByRole("button", { name: /review without creating/i }));
+    await waitFor(() => expect(apiMock.previewShare).toHaveBeenCalledWith({ ttl_seconds: 300 }));
+    await user.click(shareForm.getByRole("button", { name: /create reviewed share/i }));
+    await waitFor(() =>
+      expect(apiMock.createShare).toHaveBeenCalledWith(
+        { value: "share-this-once", ttl_seconds: 300, preview_fingerprint: "sha256:reviewed-share" },
+        expect.any(String),
+      ),
+    );
     expect(await screen.findByText("SHARE-TOKEN-1")).toBeInTheDocument();
     expect(screen.queryByText("share-this-once")).not.toBeInTheDocument();
 
@@ -1890,6 +1918,43 @@ describe("secrets surface", () => {
     expect(await screen.findByText("share already redeemed")).toBeInTheDocument();
 
     expect(storageSpy).not.toHaveBeenCalled();
+    expect(localStorage.length).toBe(0);
+    expect(sessionStorage.length).toBe(0);
+  });
+
+  it("reviews sharing without sending the value and reuses one recovery key after an ambiguous create", async () => {
+    const user = userEvent.setup();
+    apiMock.createShare
+      .mockRejectedValueOnce(new TypeError("network connection interrupted"))
+      .mockResolvedValueOnce({ token: "SHARE-TOKEN-RECOVERED", expires_at: "2026-06-19T13:30:00Z" });
+    renderSecrets("/secrets/sharing");
+    await user.click(await screen.findByRole("button", { name: "Open one-time sharing" }));
+    const form = within(await screen.findByRole("form", { name: "Create one-time share" }));
+    await user.type(form.getByLabelText("Value to share"), "recover-this-without-leaking");
+
+    await user.click(form.getByRole("button", { name: "Review without creating" }));
+    await waitFor(() => expect(apiMock.previewShare).toHaveBeenCalledWith({ ttl_seconds: 300 }));
+    expect(apiMock.createShare).not.toHaveBeenCalled();
+    expect(await form.findByText("Nothing has been stored or sent yet.")).toBeInTheDocument();
+    expect(form.getByText("Sensitive secret changes use the configured dual-control approval queue.")).toBeInTheDocument();
+
+    await user.click(form.getByRole("button", { name: "Create reviewed share" }));
+    expect(await form.findByText(/The server may have created the share/)).toBeInTheDocument();
+    expect(apiMock.createShare).toHaveBeenCalledTimes(1);
+    const firstRecoveryKey = apiMock.createShare.mock.calls[0]?.[1];
+    expect(firstRecoveryKey).toEqual(expect.any(String));
+
+    await user.click(form.getByRole("button", { name: "Retry same reviewed share" }));
+    await waitFor(() => expect(apiMock.createShare).toHaveBeenCalledTimes(2));
+    expect(apiMock.createShare.mock.calls[1]?.[1]).toBe(firstRecoveryKey);
+    expect(apiMock.createShare.mock.calls[1]?.[0]).toEqual({
+      value: "recover-this-without-leaking",
+      ttl_seconds: 300,
+      preview_fingerprint: "sha256:reviewed-share",
+    });
+    expect(await screen.findByText("SHARE-TOKEN-RECOVERED")).toBeInTheDocument();
+    expect(screen.queryByText("recover-this-without-leaking")).not.toBeInTheDocument();
+    expect(screen.getByText("Secret-change approvals")).toBeInTheDocument();
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
   });

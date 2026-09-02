@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Eyebrow } from "@/components/typography";
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { AlertTriangle, Clock3, Copy, Eye, KeyRound, Loader2, MoreHorizontal, RefreshCw, RotateCw, Send, Share2, Trash2, UserRoundX } from "lucide-react";
@@ -48,8 +48,6 @@ import {
   type ThirdPartySecretScanReceipt,
   type UnvaultedSecretPosture,
   type SecretValue,
-  type ShareToken,
-  type ShareValue,
 } from "@/lib/api";
 import {
   DynamicLeaseMetadata,
@@ -80,6 +78,8 @@ import { SecretSyncWorkloadIdentityPanel } from "./secrets/SecretSyncWorkloadIde
 import { TransitOperations } from "./secrets/TransitOperations";
 import { PKISecretWorkflow } from "./secrets/PKISecretWorkflow";
 import { MachineAuthWorkflow } from "./secrets/MachineAuthWorkflow";
+
+const SecretSharingWorkflow = lazy(() => import("./secrets/SecretSharingWorkflow"));
 
 /** The store (tree + table + lifecycle) renders at /secrets; every other
  * workflow is its own route in the Secrets space sidebar (S-C2) instead of
@@ -266,15 +266,6 @@ export function Secrets() {
   const [sessionBusy, setSessionBusy] = useState<string | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
 
-  const [shareValueInput, setShareValueInput] = useState("");
-  const [shareTTL, setShareTTL] = useState("300");
-  const [shareBusy, setShareBusy] = useState(false);
-  const [shareError, setShareError] = useState<string | null>(null);
-  const [shareToken, setShareToken] = useState<ShareToken | null>(null);
-  const [redeemToken, setRedeemToken] = useState("");
-  const [redeemBusy, setRedeemBusy] = useState(false);
-  const [redeemError, setRedeemError] = useState<string | null>(null);
-  const [redeemed, setRedeemed] = useState<ShareValue | null>(null);
   const [sharingTask, setSharingTask] = useState<"share" | "machine" | null>(null);
   const [engineTask, setEngineTask] = useState<"dynamic" | "transit" | "pki" | null>(null);
 
@@ -1153,36 +1144,6 @@ export function Secrets() {
       setGrantError(apiProblemMessage(err, t("secrets.grant.failedTitle")));
     } finally {
       setRevokingTokenId(null);
-    }
-  }
-
-  async function submitShare(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setShareError(null);
-    setShareToken(null);
-    setShareBusy(true);
-    try {
-      const ttl = Number(shareTTL);
-      setShareToken(await api.createShare({ value: shareValueInput, ttl_seconds: Number.isFinite(ttl) ? ttl : undefined }));
-      setShareValueInput("");
-    } catch (err) {
-      setShareError(apiProblemMessage(err, "Could not create one-time share"));
-    } finally {
-      setShareBusy(false);
-    }
-  }
-
-  async function submitRedeem(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setRedeemError(null);
-    setRedeemed(null);
-    setRedeemBusy(true);
-    try {
-      setRedeemed(await api.redeemShare({ token: redeemToken }));
-    } catch (err) {
-      setRedeemError(apiProblemMessage(err, "Could not redeem one-time share"));
-    } finally {
-      setRedeemBusy(false);
     }
   }
 
@@ -2681,80 +2642,16 @@ export function Secrets() {
           />
 
           {sharingTask === "share" && (
-            <section id="task-panel-share" aria-labelledby="share-heading" className="grid gap-4 border-y border-border py-4">
-              <div>
-                <h2 id="share-heading" className="text-title font-semibold">
-                  {translateNow("source.one.time.sharing.9db928cd78")}
-                </h2>
-                <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-                  Create returns a bearer token once. Redeem returns the value once; a later redeem is expected to fail closed.
-                </p>
-              </div>
-              <div className="grid gap-4 xl:grid-cols-2">
-                <form
-                  aria-label={translateNow("source.create.one.time.share.fd95a197d6")}
-                  onSubmit={(event) => void submitShare(event)}
-                  className="grid content-start gap-3"
-                >
-                  <label className="grid gap-1 text-sm">
-                    <span className="font-medium">{translateNow("source.value.to.share.fa56b0a913")}</span>
-                    <input
-                      id="share-value"
-                      className="rounded-md border border-border bg-background px-3 py-2"
-                      type="password"
-                      value={shareValueInput}
-                      onChange={(event) => setShareValueInput(event.target.value)}
-                      required
-                    />
-                  </label>
-                  <label className="grid gap-1 text-sm">
-                    <span className="font-medium">{translateNow("source.ttl.seconds.862d08de5a")}</span>
-                    <input
-                      className="rounded-md border border-border bg-background px-3 py-2"
-                      type="number"
-                      min="60"
-                      value={shareTTL}
-                      onChange={(event) => setShareTTL(event.target.value)}
-                    />
-                  </label>
-                  <Button type="submit" disabled={shareBusy || Boolean(loadError)}>
-                    {shareBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Share2 className="h-4 w-4" aria-hidden="true" />}
-                    {translateNow("source.create.share.bb7a8c7b6e")}
-                  </Button>
-                  {shareError && <ErrorState title={translateNow("source.share.create.failed.9078694d49")}>{shareError}</ErrorState>}
-                </form>
-                <form
-                  aria-label={translateNow("source.redeem.one.time.share.2294329e1f")}
-                  onSubmit={(event) => void submitRedeem(event)}
-                  className="grid content-start gap-3"
-                >
-                  <label className="grid gap-1 text-sm">
-                    <span className="font-medium">{translateNow("source.share.token.f3310a3b89")}</span>
-                    <input
-                      className="rounded-md border border-border bg-background px-3 py-2"
-                      value={redeemToken}
-                      onChange={(event) => setRedeemToken(event.target.value)}
-                      required
-                    />
-                  </label>
-                  <Button type="submit" variant="outline" disabled={redeemBusy || Boolean(loadError)}>
-                    {redeemBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
-                    {translateNow("source.redeem.share.1b54732322")}
-                  </Button>
-                  {redeemError && <ErrorState title={translateNow("source.share.redeem.failed.674fa95c57")}>{redeemError}</ErrorState>}
-                </form>
-              </div>
-              {shareToken && (
-                <RevealPanel title={translateNow("source.one.time.share.token.20234cd9a0")} onDismiss={() => setShareToken(null)} value={shareToken.token}>
-                  {translateNow("source.expires.f6725f3af0")} {formatDate(shareToken.expires_at)}. The token is bearer material; copy it now, then dismiss.
-                </RevealPanel>
-              )}
-              {redeemed && (
-                <RevealPanel title={translateNow("source.redeemed.share.value.1455d94a16")} onDismiss={() => setRedeemed(null)} value={redeemed.value}>
-                  {translateNow("source.this.value.is.the.exact.once.redeem.result.ed19b63953")}
-                </RevealPanel>
-              )}
-            </section>
+            <Suspense fallback={<div className="min-h-24 animate-pulse rounded-md bg-muted" aria-hidden="true" />}>
+              <SecretSharingWorkflow
+                approvalItems={approvalQueue}
+                approvalBusyKey={approvalBusy}
+                canRetryApproval={canRetryApproval}
+                onApprove={(item) => void approveSecretApproval(item)}
+                onRetryApproval={(item) => void retrySecretApproval(item)}
+                blocked={Boolean(loadError)}
+              />
+            </Suspense>
           )}
 
           {sharingTask === "machine" && (

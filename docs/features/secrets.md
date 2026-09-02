@@ -778,14 +778,32 @@ trstctl-cli --idempotency-key third-party-scan-1 \
   secrets scans third-party ingest slack -f third-party-scan.json
 ```
 
-**Secret sharing** creates one-time, self-destructing shares with durable server-side
-state: `POST /api/v1/secrets/shares` returns the bearer token once, while PostgreSQL
-stores only `SHA-256(token)` plus the envelope-encrypted value in `secret_shares` — a
-valid share survives a restart, and a stolen backup holds neither token nor plaintext.
-`POST /api/v1/secrets/shares/redeem` deletes the row and returns the value exactly
-once; a second redeem, expired token, or wrong tenant gets a normal `404`.
+**Secret sharing** is a review-first, one-time delivery journey. `POST
+/api/v1/secrets/shares/preview` accepts only `ttl_seconds`: the value never enters the
+preview request. It returns the normalized lifetime, permission, exact execution
+writes, recovery and verification steps, empty preview/external-effect lists, and a
+tenant-and-principal-bound fingerprint. The preview creates no share, event, audit
+row, idempotency record, signer request, outbox work, or external call. Zero selects
+the 24-hour default; explicit lifetimes must be between 60 seconds and 7 days.
 
-**Change approvals** reuse the same dual-control [approval](incident-and-jit.md) store
+`POST /api/v1/secrets/shares` accepts the value only at execution and may bind it to
+the reviewed lifetime with `preview_fingerprint`. A changed lifetime then fails with
+`409` before any state change. PostgreSQL stores only `SHA-256(token)` plus the
+envelope-encrypted value in `secret_shares`; the raw bearer token is returned once. A
+valid share survives a restart, while a stolen database or backup holds neither the
+token nor plaintext. If the response is interrupted, retry the identical request with
+the same `Idempotency-Key`: trstctl returns the exact original token instead of
+creating a duplicate. Reusing that key for changed input fails closed.
+
+`POST /api/v1/secrets/shares/redeem` atomically deletes the row and returns the value
+exactly once; a second redeem, expired token, or wrong tenant gets a normal `404`.
+The `/secrets/sharing` console exposes the same configure → review → create → reveal →
+redeem/verify path, keeps the value out of the preview, and preserves its recovery key
+only in memory while an ambiguous request is retried. Neither value nor token is
+written to browser storage or product evidence.
+
+**Change approvals** appear beside sharing and reuse the same dual-control
+[approval](incident-and-jit.md) store
 as privileged issuance: with `ca.policy.require_approval` enabled, `rotate`/`recover`/
 `delete` mutations open a tenant-scoped approval request and fail with `403` until
 enough distinct approvers approve it, and a requester can't approve their own change.
