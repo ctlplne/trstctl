@@ -4102,7 +4102,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use crypto-agility and pqc readiness while tenant, policy, and security authority remain on the server.",
       "tool": "software_trust",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/posture",
       "navigationEntrypoints": [
         "tool navigation",
@@ -4111,12 +4111,10 @@ export const canonicalCapabilities = [
       ],
       "permissionAuthority": "internal/api route registry and feature authorization manifest",
       "edition": "core_with_licensed_extensions",
-      "dependencies": [
-        "One or more lifecycle or console stages remain incomplete and are shown in the stage ledger."
-      ],
+      "dependencies": [],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -4164,8 +4162,21 @@ export const canonicalCapabilities = [
           ]
         },
         "verify": {
-          "status": "missing",
-          "reason": "Durable or external-effect verification is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/posture/CBOMScanWorkflow.tsx",
+            "The served workflow performs a separate CBOM inventory read after the reviewed scan and fails closed unless totals, stable IDs, migration targets, standards, and generations are coherent.",
+            "web/src/__tests__/posture.test.tsx",
+            "The focused UI test proves the saved-evidence receipt and deliberately inconsistent readback that must suppress success and retain exact-plan retry.",
+            "internal/server/cbom_served_test.go",
+            "The served CBOM test proves cbom.asset.observed append-and-project behavior plus customer-readable migration guidance.",
+            "internal/server/crypto_agility_served_test.go",
+            "The served crypto-agility test proves unsupported profile algorithms are rejected and classical labels are accepted through the internal crypto boundary.",
+            "ee/pqcmigration",
+            "Licensed migration tests prove re-issuance and rollback behind the editions boundary.",
+            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g138-f16-live-r2.json proves exact g138 API and native CLI agreement, independent saved-row readback, stable IDs, idempotent replay, controlled restart, and post-restart persistence.",
+            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g138-f16-browser.receipt.json proves the live served verification copy, exact saved IDs and migration targets, desktop/mobile rendering, zero console errors, and strict HTTPS persistence after browser cleanup."
+          ]
         },
         "automate": {
           "status": "complete",
@@ -4189,8 +4200,8 @@ export const canonicalCapabilities = [
       },
       "owner": "software-trust",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "90921be12671fee121c9bd57810355307ba3d302",
+      "freshness": "2026-09-01"
     }
   },
   {

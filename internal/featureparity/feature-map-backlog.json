@@ -11441,7 +11441,7 @@
             "priority": 67,
             "served_state": "partial",
             "backend_status": "partial: served profile-selection for classical labels through internal/crypto validation plus CBOM migration inventory; proprietary Enterprise/PQC algorithms and migration orchestration attach from ee/",
-            "current_frontend_mapping": "serve: Profiles guided builder exposes classical signature labels; Posture at /posture shows CBOM algorithm inventory and remediation handoff, with proprietary PQC controls supplied by ee/ when licensed",
+            "current_frontend_mapping": "serve: Profiles guided builder exposes classical signature labels; Posture at /posture provides a choose, effect-free review, bounded scan, separate saved-inventory verification, migration guidance, and recovery journey, with proprietary PQC controls supplied by ee/ when licensed",
             "target_gui_mapping": "Crypto posture UI showing algorithm inventory, allowed/disallowed algorithms, PQC readiness, hybrid policy, and migration blockers.",
             "acceptance_test": "Served tests prove profile creation rejects unsupported algorithm labels, accepts classical signature labels through internal/crypto, CBOM exposes migration targets, and proprietary EE tests cover PQC migration re-issuance with rollback.",
             "source_docs": [
@@ -11457,10 +11457,11 @@
             ],
             "source_frontend": [
                 "web/src/pages/Profiles.tsx",
-                "web/src/pages/Posture.tsx"
+                "web/src/pages/Posture.tsx",
+                "web/src/pages/posture/CBOMScanWorkflow.tsx"
             ],
             "status": "closed",
-            "notes": "PACKAGING-007 keeps MPL-core profile selection classical and moves PQC algorithms, APIs, UI, and tests under ee/. Test evidence: internal/server/crypto_agility_served_test.go proves unsupported labels fail before profile policy is emitted and classical signature labels round-trip through /api/v1/profiles; internal/server/cbom_served_test.go proves CBOM migration targets; ee/pqcmigration tests cover licensed ACME hybrid re-issuance with rollback. B-3 adds the licensed planner: POST /api/v1/pqc/migrations/plan previews the SAME BuildPlan the start path executes — reissues, TLS rollouts, and the residuals it will NOT touch — without queueing a run, so a fleet-wide re-issuance can be reviewed for blast radius before it is authorized.",
+            "notes": "Complete vertical slice closed on exact g138 candidate 90921be12671fee121c9bd57810355307ba3d302. PACKAGING-007 keeps MPL-core profile selection classical and moves PQC algorithms, APIs, UI, and tests under ee/. internal/server/crypto_agility_served_test.go proves unsupported labels fail before profile policy is emitted and classical signature labels round-trip through /api/v1/profiles; internal/server/cbom_served_test.go proves CBOM migration targets; ee/pqcmigration tests cover licensed ACME hybrid re-issuance with rollback. The exact-candidate live receipt qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g138-f16-live-r2.json proves effect-free API/real-CLI parity, bounded loopback TLS discovery, independent inventory readback, stable migration IDs, byte-identical idempotent replay, controlled process restart, and post-restart API/CLI agreement. The browser receipt qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g138-f16-browser.receipt.json proves the served choose, review, execute, observe, recover, and saved-evidence journey at desktop and mobile widths, zero console errors or page overflow, strict HTTPS restoration, and durable saved IDs after restart. The preserved first live receipt records a QA-oracle object-order defect instead of hiding the failed control.",
             "api_surface": [
                 "createProfile",
                 "listProfiles",
@@ -11637,7 +11638,7 @@
                 "purpose": "Lets an operator understand and safely use crypto-agility and pqc readiness while tenant, policy, and security authority remain on the server.",
                 "tool": "software_trust",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/posture",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -11646,12 +11647,10 @@
                 ],
                 "permission_authority": "internal/api route registry and feature authorization manifest",
                 "edition": "core_with_licensed_extensions",
-                "dependencies": [
-                    "One or more lifecycle or console stages remain incomplete and are shown in the stage ledger."
-                ],
+                "dependencies": [],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -11699,8 +11698,21 @@
                         ]
                     },
                     "verify": {
-                        "status": "missing",
-                        "reason": "Durable or external-effect verification is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/posture/CBOMScanWorkflow.tsx",
+                            "The served workflow performs a separate CBOM inventory read after the reviewed scan and fails closed unless totals, stable IDs, migration targets, standards, and generations are coherent.",
+                            "web/src/__tests__/posture.test.tsx",
+                            "The focused UI test proves the saved-evidence receipt and deliberately inconsistent readback that must suppress success and retain exact-plan retry.",
+                            "internal/server/cbom_served_test.go",
+                            "The served CBOM test proves cbom.asset.observed append-and-project behavior plus customer-readable migration guidance.",
+                            "internal/server/crypto_agility_served_test.go",
+                            "The served crypto-agility test proves unsupported profile algorithms are rejected and classical labels are accepted through the internal crypto boundary.",
+                            "ee/pqcmigration",
+                            "Licensed migration tests prove re-issuance and rollback behind the editions boundary.",
+                            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g138-f16-live-r2.json proves exact g138 API and native CLI agreement, independent saved-row readback, stable IDs, idempotent replay, controlled restart, and post-restart persistence.",
+                            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g138-f16-browser.receipt.json proves the live served verification copy, exact saved IDs and migration targets, desktop/mobile rendering, zero console errors, and strict HTTPS persistence after browser cleanup."
+                        ]
                     },
                     "automate": {
                         "status": "complete",
@@ -11724,8 +11736,8 @@
                 },
                 "owner": "software-trust",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "90921be12671fee121c9bd57810355307ba3d302",
+                "freshness": "2026-09-01"
             }
         },
         {
