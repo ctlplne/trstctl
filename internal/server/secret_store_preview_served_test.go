@@ -46,14 +46,14 @@ func TestServedSecretStoreCreatePreviewIsExactAndEffectFree(t *testing.T) {
 		t.Fatalf("create owner: %v", err)
 	}
 	token := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
-	const secretValue = "f63-preview-must-never-escape"
-	input := map[string]any{"name": "app/payments/api", "owner_id": owner.ID, "value": secretValue}
+	const fixtureValue = "f63-preview-must-never-escape"
+	input := map[string]any{"name": "app/payments/api", "owner_id": owner.ID, "value": fixtureValue}
 
 	status, body := secretStorePreviewRequest(t, h, token, input)
 	if status != http.StatusOK {
 		t.Fatalf("preview status = %d body %s", status, body)
 	}
-	if strings.Contains(string(body), secretValue) {
+	if strings.Contains(string(body), fixtureValue) {
 		t.Fatalf("preview echoed the secret value: %s", body)
 	}
 	var plan struct {
@@ -88,7 +88,7 @@ func TestServedSecretStoreCreatePreviewIsExactAndEffectFree(t *testing.T) {
 	if _, err := h.store.GetSecret(t.Context(), h.tenant, "app/payments/api"); !errors.Is(err, store.ErrSecretNotFound) {
 		t.Fatalf("preview changed the native store: %v", err)
 	}
-	if h.hasEvent(t, "secret.created") || h.logContains(t, secretValue) {
+	if h.hasEvent(t, "secret.created") || h.logContains(t, fixtureValue) {
 		t.Fatal("preview appended an event or leaked plaintext")
 	}
 	const otherTenant = "22222222-2222-4222-8222-222222222263"
@@ -99,7 +99,7 @@ func TestServedSecretStoreCreatePreviewIsExactAndEffectFree(t *testing.T) {
 		t.Fatalf("create cross-tenant owner: %v", err)
 	}
 	status, crossTenantBody := secretStorePreviewRequest(t, h, token, map[string]any{
-		"name": "app/payments/cross-tenant", "owner_id": otherOwner.ID, "value": secretValue,
+		"name": "app/payments/cross-tenant", "owner_id": otherOwner.ID, "value": fixtureValue,
 	})
 	if status != http.StatusOK || !strings.Contains(string(crossTenantBody), `"ready":false`) ||
 		!strings.Contains(string(crossTenantBody), "does not exist in this tenant") || strings.Contains(string(crossTenantBody), otherOwner.Name) {
@@ -119,7 +119,7 @@ func TestServedSecretStoreCreatePreviewIsExactAndEffectFree(t *testing.T) {
 	if err := json.Unmarshal(replayBody, &replay); err != nil || replay.RequestFingerprint != plan.RequestFingerprint {
 		t.Fatalf("same preview did not return the same keyed fingerprint: %q != %q (%v)", replay.RequestFingerprint, plan.RequestFingerprint, err)
 	}
-	changed := map[string]any{"name": "app/payments/api", "owner_id": owner.ID, "value": secretValue + "-changed"}
+	changed := map[string]any{"name": "app/payments/api", "owner_id": owner.ID, "value": fixtureValue + "-changed"}
 	status, changedBody := secretStorePreviewRequest(t, h, token, changed)
 	if status != http.StatusOK {
 		t.Fatalf("changed preview status = %d body %s", status, changedBody)
