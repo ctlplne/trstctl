@@ -5221,6 +5221,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/pki/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview exact PKI issuance prerequisites, custody, effects, recovery, and verification without signing */
+        post: operations["previewPKISecret"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/rotation-schedules": {
         parameters: {
             query?: never;
@@ -11745,11 +11762,47 @@ export interface components {
             private_key?: string;
             serial: string;
         };
+        PKISecretPrerequisite: {
+            detail: string;
+            id: string;
+            ready: boolean;
+            remediation?: string;
+        };
+        PKISecretPreview: {
+            blockers: string[];
+            ca_certificate_sha256?: string;
+            capability: string;
+            cli_argv: string[];
+            common_name: string;
+            csr_sha256?: string;
+            custody_mode: string;
+            effect_free: boolean;
+            effective_ttl_seconds: number;
+            execute_external_effects: string[];
+            execute_writes: string[];
+            operation: string;
+            prerequisites: components["schemas"]["PKISecretPrerequisite"][];
+            preview_external_effects: string[];
+            preview_writes: string[];
+            profile: string;
+            ready: boolean;
+            recovery_steps: string[];
+            request_fingerprint: string;
+            requested_ttl_seconds: number;
+            required_permission: string;
+            secret_data_handling: string;
+            subject_key_algorithm: string;
+            subject_key_bits: number;
+            vault_path: string;
+            verification_steps: string[];
+        };
         PKISecretRequest: {
             /** @description Deprecated server-side-keygen mode: trstctl generates and returns the subject key, and records issuance.server_side_keygen before doing so. */
             common_name?: string;
             /** @description Recommended requester-key mode: one self-signed PKCS#10 PEM request. trstctl signs it and never receives or returns the matching private key. */
             csr_pem?: string;
+            /** @description Optional server-keyed fingerprint returned by preview. When supplied, execution fails closed if the reviewed tenant, principal, CA, custody input, profile, or TTL changed. */
+            preview_fingerprint?: string;
             ttl_seconds?: number;
         } & (unknown | unknown);
         PQCMigrationCampaign: {
@@ -28928,6 +28981,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PKISecret"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewPKISecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PKISecretRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PKISecretPreview"];
                 };
             };
             /** @description client error */

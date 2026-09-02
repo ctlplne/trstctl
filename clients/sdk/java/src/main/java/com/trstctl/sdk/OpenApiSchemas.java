@@ -527,6 +527,8 @@ public final class OpenApiSchemas {
       "PAMSessionList",
       "PAMSessionRequest",
       "PKISecret",
+      "PKISecretPrerequisite",
+      "PKISecretPreview",
       "PKISecretRequest",
       "PQCMigrationCampaign",
       "PQCMigrationCampaignCloseRequest",

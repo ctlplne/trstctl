@@ -7400,11 +7400,56 @@ PKISecret = TypedDict(
     total=False,
 )
 
+PKISecretPrerequisite = TypedDict(
+    'PKISecretPrerequisite',
+    {
+        'detail': str,
+        'id': str,
+        'ready': bool,
+        'remediation': str,
+    },
+    total=False,
+)
+
+PKISecretPreview = TypedDict(
+    'PKISecretPreview',
+    {
+        'blockers': list[str],
+        'ca_certificate_sha256': str,
+        'capability': str,
+        'cli_argv': list[str],
+        'common_name': str,
+        'csr_sha256': str,
+        'custody_mode': str,
+        'effect_free': bool,
+        'effective_ttl_seconds': int,
+        'execute_external_effects': list[str],
+        'execute_writes': list[str],
+        'operation': str,
+        'prerequisites': list[dict[str, Any]],
+        'preview_external_effects': list[str],
+        'preview_writes': list[str],
+        'profile': str,
+        'ready': bool,
+        'recovery_steps': list[str],
+        'request_fingerprint': str,
+        'requested_ttl_seconds': int,
+        'required_permission': str,
+        'secret_data_handling': str,
+        'subject_key_algorithm': str,
+        'subject_key_bits': int,
+        'vault_path': str,
+        'verification_steps': list[str],
+    },
+    total=False,
+)
+
 PKISecretRequest = TypedDict(
     'PKISecretRequest',
     {
         'common_name': str,
         'csr_pem': str,
+        'preview_fingerprint': str,
         'ttl_seconds': int,
     },
     total=False,
