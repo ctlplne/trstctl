@@ -15284,23 +15284,26 @@
             "phase": "P1",
             "priority": 33,
             "served_state": "conditional",
-            "backend_status": "conditional: served native secret store: /api/v1/secrets/store create/list/reveal/rotate/delete plus /api/v1/secrets/store/history/{name} version reads and /api/v1/secrets/store/recover/{name} point-in-time recovery, CLI secrets store commands, and Secrets UI controls with tenant-scoped sealed history and plaintext-free metadata/event evidence",
-            "current_frontend_mapping": "operate: Secrets at /secrets serves native secret store create/list/reveal-once/rotate/delete controls, version metadata, access checks, history/recovery panels, owner policy, and value clear-on-dismiss guard.",
-            "target_gui_mapping": "Secrets store UI for create/list/read-with-confirmation/rotate/delete, version history, point-in-time recovery, version metadata, owner, access policy, and value reveal guard.",
-            "acceptance_test": "Server/API/CLI/UI tests prove the native secret store create/list/reveal/rotate/delete plus version-history and point-in-time recovery workflow is served end-to-end, with no plaintext in metadata, browser storage, audit, or event logs.",
+            "backend_status": "conditional: served native secret store: exact effect-free /api/v1/secrets/store/preview plus /api/v1/secrets/store create/list/reveal/rotate/delete, /api/v1/secrets/store/history/{name} version reads, and /api/v1/secrets/store/recover/{name} point-in-time recovery; API, CLI, and Secrets UI preserve tenant-scoped sealed history and plaintext-free preview/metadata/event evidence",
+            "current_frontend_mapping": "operate: Secrets at /secrets serves a two-step exact create preview with stale-plan invalidation, reviewed create, list, explicit reveal/dismiss, rotate/delete, version metadata, history, point-in-time recovery, owner policy, and reveal clearing on dismissal or every recovery attempt.",
+            "target_gui_mapping": "Complete Secrets store journey for discover, understand, configure, exact effect-free preview, reviewed create, observe, explicit reveal/dismiss, rotate/delete, version history, point-in-time recovery, verification, and automation through the public API and native CLI.",
+            "acceptance_test": "Server/API/CLI/UI and exact-candidate live tests prove zero-effect preview without an Idempotency-Key, stale-plan invalidation, reviewed create, list, explicit reveal/dismiss, rotate/delete, version history, point-in-time recovery, restart persistence, tenant isolation, audit evidence, and no plaintext in preview, metadata, browser storage, audit, event, or control logs.",
             "source_docs": [
                 "docs/features/secrets.md"
             ],
             "source_backend": [
+                "/api/v1/secrets/store/preview",
                 "/api/v1/secrets/store",
                 "/api/v1/secrets/store/history/{name}",
                 "/api/v1/secrets/store/recover/{name}"
             ],
             "source_frontend": [
-                "web/src/pages/Secrets.tsx"
+                "web/src/pages/Secrets.tsx",
+                "web/src/pages/secrets/SecretsPageParts.tsx",
+                "web/src/components/secrets/index.tsx"
             ],
             "status": "closed",
-            "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+            "notes": "Complete vertical slice closed on exact g144 candidate bfd587aacb01690f69b79fb366e652ab9ebb0da8. The server-owned F63 preview returns a tenant-bound keyed fingerprint, resolved owner/name/next version/permission, empty non-null preview writes/effects, explicit execution effects, recovery steps, blockers, and secret-handling boundaries without an Idempotency-Key. qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g144-f63-live-r2.json proves strict pinned-CA API and exact native CLI parity, zero preview store/event/audit/idempotency mutation, changed-input fingerprint invalidation, idempotent create/rotate, history, recovery, restart persistence, audit projection, and cleanup on real PostgreSQL and NATS with a separate nonroot signer. qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g144-f63-browser.json proves two-step review, stale-plan invalidation, create/rotate/history/recovery, explicit historical-value dismissal, reveal clearing on failed-closed and successful recovery, zero browser warnings/errors, mobile rendering without horizontal overflow, independent audit verification, and fixture cleanup. The preserved g143 browser finding records the missing historical-value dismissal control that g144 repaired instead of hiding the QA-oracle failure.",
             "api_surface": [
                 "previewSecretCreate",
                 "createSecret",
@@ -15326,10 +15329,11 @@
             "facet_evidence": {
                 "served": {
                     "evidence": [
+                        "TestServedSecretStoreCreatePreviewIsExactAndEffectFree proves /api/v1/secrets/store/preview returns the exact F63 create plan, never echoes plaintext, produces a stable tenant-keyed fingerprint, changes the fingerprint when input changes, rejects a cross-tenant owner without disclosing neighbor metadata, and leaves the sealed store and event log unchanged.",
                         "TestServedSecretStoreCreateReadRotate drives create, authorized reveal, rotate, and idempotent rotate through the assembled /api/v1/secrets/store routes while keeping metadata and event logs plaintext-free.",
                         "TestServedSecretStoreVersionHistoryAndPITR drives historical version reads, point-in-time recovery, secret.version.written and secret.recovered events, plaintext-free event/audit evidence, and cross-tenant denial.",
                         "served_state=conditional",
-                        "backend_status=conditional: served native secret store: /api/v1/secrets/store create/list/reveal/rotate/delete plus /api/v1/secrets/store/history/{name} version reads and /api/v1/secrets/store/recover/{name} point-in-time recovery, CLI secrets store commands, and Secrets UI controls with tenant-scoped sealed history and plaintext-free metadata/event evidence"
+                        "backend_status=conditional: served native secret store: exact effect-free /api/v1/secrets/store/preview plus /api/v1/secrets/store create/list/reveal/rotate/delete, /api/v1/secrets/store/history/{name} version reads, and /api/v1/secrets/store/recover/{name} point-in-time recovery; API, CLI, and Secrets UI preserve tenant-scoped sealed history and plaintext-free preview/metadata/event evidence"
                     ],
                     "commands": [
                         "make test"
@@ -15337,17 +15341,23 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: operate: Secrets at /secrets serves native secret store create/list/reveal-once/rotate/delete controls, version metadata, access checks, history/recovery panels, owner policy, and value clear-on-dismiss guard.",
-                        "target_gui_mapping: Secrets store UI for create/list/read-with-confirmation/rotate/delete, version history, point-in-time recovery, version metadata, owner, access policy, and value reveal guard."
+                        "current_frontend_mapping: operate: Secrets at /secrets serves a two-step exact create preview with stale-plan invalidation, reviewed create, list, explicit reveal/dismiss, rotate/delete, version metadata, history, point-in-time recovery, owner policy, and reveal clearing on dismissal or every recovery attempt.",
+                        "Ready and blocked create plans render before execution; changed name, owner, or value invalidates the stale review and removes the execution action.",
+                        "The metadata drawer requires explicit reveal for every version, provides an explicit Dismiss control, and clears revealed history before both failed-closed and successful recovery attempts.",
+                        "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g144-f63-browser.json is the sanitized exact-candidate desktop/mobile browser receipt.",
+                        "target_gui_mapping: Complete Secrets store journey for discover, understand, configure, exact effect-free preview, reviewed create, observe, explicit reveal/dismiss, rotate/delete, version history, point-in-time recovery, verification, and automation through the public API and native CLI."
                     ],
                     "refs": [
                         "web/src/pages/Secrets.tsx",
+                        "web/src/pages/secrets/SecretsPageParts.tsx",
+                        "web/src/components/secrets/index.tsx",
                         "web/src/lib/navigation.ts",
                         "web/src/App.tsx"
                     ]
                 },
                 "cli": {
                     "evidence": [
+                        "CLI command: secrets store preview",
                         "CLI command: secrets store put",
                         "CLI command: secrets store list",
                         "CLI command: secrets store get",
@@ -15363,6 +15373,7 @@
                 },
                 "api": {
                     "evidence": [
+                        "OpenAPI operationId: previewSecretCreate",
                         "OpenAPI operationId: createSecret",
                         "OpenAPI operationId: listSecrets",
                         "OpenAPI operationId: getSecret",
@@ -15378,15 +15389,17 @@
                 },
                 "test": {
                     "evidence": [
-                        "TRACE-031: TestServedSecretStoreCreateReadRotate and TestServedSecretStoreVersionHistoryAndPITR prove the assembled native secret store serves create/read/rotate, version history, point-in-time recovery, idempotency, tenant isolation, and plaintext-free events.",
+                        "TRACE-031: TestServedSecretStoreCreatePreviewIsExactAndEffectFree, TestServedSecretStoreCreateReadRotate, and TestServedSecretStoreVersionHistoryAndPITR prove exact zero-effect preview, create/read/rotate, version history, point-in-time recovery, idempotency, tenant isolation, and plaintext-free events.",
                         "web/src/__tests__/secrets.test.tsx proves the Secrets UI lists metadata, creates, reveals only on explicit action, rotates, deletes, and clears values without browser storage writes.",
-                        "web/src/__tests__/accept/U2-4.test.tsx proves the version-history UI lists versions, reveals a selected version, and recovers to a point in time.",
+                        "web/src/__tests__/accept/U2-4.test.tsx proves the version-history UI lists versions, explicitly reveals and dismisses a selected value, clears it before recovery, and reports point-in-time recovery.",
+                        "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g144-f63-live-r2.json and artifacts/g144-f63-browser.json prove the exact g144 API/CLI/browser lifecycle on the installed image, including zero preview effects, restart persistence, dismissal/recovery custody, audit, and cleanup.",
                         "internal/api/feature_parity_test.go and internal/cli/feature_parity_test.go keep F63 OpenAPI operationIds and secrets store CLI commands wired to the served catalog feature parity contract.",
                         "acceptance_test: Server/API/CLI/UI tests prove the native secret store create/list/reveal/rotate/delete plus version-history and point-in-time recovery workflow is served end-to-end, with no plaintext in metadata, browser storage, audit, or event logs.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
                         "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
                     ],
                     "refs": [
+                        "internal/server/secret_store_preview_served_test.go",
                         "internal/server/secrets_served_test.go",
                         "internal/api/feature_parity_test.go",
                         "internal/cli/feature_parity_test.go",
@@ -15408,7 +15421,7 @@
                 },
                 "rbac": {
                     "evidence": [
-                        "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: createSecret, listSecrets, getSecret, getSecretVersion, recoverSecretAt, rotateSecret, deleteSecret",
+                        "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: previewSecretCreate, createSecret, listSecrets, getSecret, getSecretVersion, recoverSecretAt, rotateSecret, deleteSecret; previewSecretCreate requires secrets:write but is registered as read-only POST and carries no Idempotency-Key",
                         "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
                     ],
                     "refs": [
@@ -15421,7 +15434,7 @@
                 },
                 "audit": {
                     "evidence": [
-                        "mutating served surface requires audit/event evidence: createSecret, listSecrets, getSecret, getSecretVersion, recoverSecretAt, rotateSecret, deleteSecret",
+                        "previewSecretCreate is effect-free and exact-candidate evidence proves it appends no event, audit, sealed-store, or idempotency row; mutating served operations createSecret, recoverSecretAt, rotateSecret, and deleteSecret require lifecycle/audit evidence.",
                         "served mutations route through handlers/orchestrator paths that emit event/audit evidence or expose signed audit search/export."
                     ],
                     "refs": [
@@ -15467,7 +15480,7 @@
                 "purpose": "Lets an operator understand and safely use native secret store while tenant, policy, and security authority remain on the server.",
                 "tool": "secrets",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/secrets",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -15481,7 +15494,7 @@
                 ],
                 "side_effects": "mixed",
                 "secret_data_handling": "The parity contract contains metadata only. Product workflows may reveal a value once, but reports and evidence never contain the value.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -15502,8 +15515,20 @@
                         ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "POST /api/v1/secrets/store/preview returns the exact effect-free server plan without an Idempotency-Key.",
+                            "OpenAPI operationId: previewSecretCreate",
+                            "CLI command: secrets store preview",
+                            "web/src/pages/secrets/SecretsPageParts.tsx",
+                            "The Secrets create journey renders the server plan in a separate review step and removes execution when name, owner, or value changes.",
+                            "web/src/components/secrets/index.tsx",
+                            "The version-history journey explicitly dismisses historical reveals and clears them before every recovery attempt.",
+                            "internal/server/secret_store_preview_served_test.go",
+                            "TestServedSecretStoreCreatePreviewIsExactAndEffectFree proves ready/blocked plans, tenant isolation, stable keyed fingerprints, changed-input invalidation, zero writes/events, and no value echo.",
+                            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g144-f63-live-r2.json proves strict pinned-CA API/CLI parity and unchanged store, audit, event, and idempotency projections after preview.",
+                            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g144-f63-browser.json proves review-first execution, stale-plan invalidation, create/rotate/history/recovery, explicit reveal dismissal, automatic reveal clearing, mobile fit, and zero browser errors/warnings."
+                        ]
                     },
                     "execute": {
                         "status": "complete",
@@ -15534,6 +15559,7 @@
                     "automate": {
                         "status": "complete",
                         "evidence": [
+                            "OpenAPI operationId: previewSecretCreate",
                             "OpenAPI operationId: createSecret",
                             "OpenAPI operationId: listSecrets",
                             "OpenAPI operationId: getSecret",
@@ -15541,6 +15567,7 @@
                             "OpenAPI operationId: recoverSecretAt",
                             "OpenAPI operationId: rotateSecret",
                             "OpenAPI operationId: deleteSecret",
+                            "CLI command: secrets store preview",
                             "CLI command: secrets store put",
                             "CLI command: secrets store list",
                             "CLI command: secrets store get",
@@ -15553,8 +15580,8 @@
                 },
                 "owner": "secrets",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "bfd587aacb01690f69b79fb366e652ab9ebb0da8",
+                "freshness": "2026-09-02"
             }
         },
         {

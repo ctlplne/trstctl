@@ -5457,7 +5457,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use native secret store while tenant, policy, and security authority remain on the server.",
       "tool": "secrets",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/secrets",
       "navigationEntrypoints": [
         "tool navigation",
@@ -5471,7 +5471,7 @@ export const canonicalCapabilities = [
       ],
       "sideEffects": "mixed",
       "secretDataHandling": "The parity contract contains metadata only. Product workflows may reveal a value once, but reports and evidence never contain the value.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -5492,8 +5492,20 @@ export const canonicalCapabilities = [
           ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "POST /api/v1/secrets/store/preview returns the exact effect-free server plan without an Idempotency-Key.",
+            "OpenAPI operationId: previewSecretCreate",
+            "CLI command: secrets store preview",
+            "web/src/pages/secrets/SecretsPageParts.tsx",
+            "The Secrets create journey renders the server plan in a separate review step and removes execution when name, owner, or value changes.",
+            "web/src/components/secrets/index.tsx",
+            "The version-history journey explicitly dismisses historical reveals and clears them before every recovery attempt.",
+            "internal/server/secret_store_preview_served_test.go",
+            "TestServedSecretStoreCreatePreviewIsExactAndEffectFree proves ready/blocked plans, tenant isolation, stable keyed fingerprints, changed-input invalidation, zero writes/events, and no value echo.",
+            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g144-f63-live-r2.json proves strict pinned-CA API/CLI parity and unchanged store, audit, event, and idempotency projections after preview.",
+            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g144-f63-browser.json proves review-first execution, stale-plan invalidation, create/rotate/history/recovery, explicit reveal dismissal, automatic reveal clearing, mobile fit, and zero browser errors/warnings."
+          ]
         },
         "execute": {
           "status": "complete",
@@ -5524,6 +5536,7 @@ export const canonicalCapabilities = [
         "automate": {
           "status": "complete",
           "evidence": [
+            "OpenAPI operationId: previewSecretCreate",
             "OpenAPI operationId: createSecret",
             "OpenAPI operationId: listSecrets",
             "OpenAPI operationId: getSecret",
@@ -5531,6 +5544,7 @@ export const canonicalCapabilities = [
             "OpenAPI operationId: recoverSecretAt",
             "OpenAPI operationId: rotateSecret",
             "OpenAPI operationId: deleteSecret",
+            "CLI command: secrets store preview",
             "CLI command: secrets store put",
             "CLI command: secrets store list",
             "CLI command: secrets store get",
@@ -5543,8 +5557,8 @@ export const canonicalCapabilities = [
       },
       "owner": "secrets",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "bfd587aacb01690f69b79fb366e652ab9ebb0da8",
+      "freshness": "2026-09-02"
     }
   },
   {

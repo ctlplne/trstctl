@@ -856,11 +856,11 @@ func TestTRACE030TSARowRemainsConditionalUntilEnabled(t *testing.T) {
 	}
 }
 
-// TestTRACE031NativeSecretStoreRemainsConditionalUntilEnabled locks the remediation for
-// TRACE-031. The native store belongs in the GA denominator once the complete
-// create/list/reveal/rotate/delete plus history and point-in-time recovery
-// workflow is served through API, CLI, and the Secrets UI.
-func TestTRACE031NativeSecretStoreRemainsConditionalUntilEnabled(t *testing.T) {
+// TestTRACE031NativeSecretStoreCompleteSliceRemainsRuntimeConditional locks the
+// complete F63 vertical slice while preserving its honest optional-runtime
+// condition. Preview is part of the product contract: API, CLI, and GUI must use
+// the same exact effect-free server plan before reviewed creation.
+func TestTRACE031NativeSecretStoreCompleteSliceRemainsRuntimeConditional(t *testing.T) {
 	catalog, err := Load()
 	if err != nil {
 		t.Fatalf("load feature parity catalog: %v", err)
@@ -879,6 +879,7 @@ func TestTRACE031NativeSecretStoreRemainsConditionalUntilEnabled(t *testing.T) {
 		strings.Join(f63.FacetEvidence.Served.Evidence, "\n"),
 	}, "\n"))
 	for _, want := range []string{
+		"/api/v1/secrets/store/preview",
 		"/api/v1/secrets/store",
 		"/api/v1/secrets/store/history",
 		"/api/v1/secrets/store/recover",
@@ -890,6 +891,8 @@ func TestTRACE031NativeSecretStoreRemainsConditionalUntilEnabled(t *testing.T) {
 		"secret.recovered",
 		"tenant",
 		"plaintext",
+		"effect-free",
+		"fingerprint",
 	} {
 		if !strings.Contains(servedEvidence, want) {
 			t.Errorf("TRACE-031: F63 served evidence must name %q, got %q", want, servedEvidence)
@@ -898,6 +901,7 @@ func TestTRACE031NativeSecretStoreRemainsConditionalUntilEnabled(t *testing.T) {
 
 	cliEvidence := strings.ToLower(strings.Join(append(append([]string{}, f63.CLISurface...), f63.FacetEvidence.CLI.Evidence...), "\n"))
 	for _, want := range []string{
+		"secrets store preview",
 		"secrets store put",
 		"secrets store list",
 		"secrets store get",
@@ -916,6 +920,7 @@ func TestTRACE031NativeSecretStoreRemainsConditionalUntilEnabled(t *testing.T) {
 		testRefs[ref] = true
 	}
 	for _, wantRef := range []string{
+		"internal/server/secret_store_preview_served_test.go",
 		"internal/server/secrets_served_test.go",
 		"internal/api/feature_parity_test.go",
 		"internal/cli/feature_parity_test.go",
@@ -929,7 +934,16 @@ func TestTRACE031NativeSecretStoreRemainsConditionalUntilEnabled(t *testing.T) {
 	}
 
 	testEvidence := strings.ToLower(strings.Join(f63.FacetEvidence.Test.Evidence, "\n"))
-	for _, want := range []string{"trace-031", "testservedsecretstorecreatereadrotate", "testservedsecretstoreversionhistoryandpitr", "u2-4", "feature parity"} {
+	for _, want := range []string{
+		"trace-031",
+		"testservedsecretstorecreatepreviewisexactandeffectfree",
+		"testservedsecretstorecreatereadrotate",
+		"testservedsecretstoreversionhistoryandpitr",
+		"g144-f63-live-r2.json",
+		"g144-f63-browser.json",
+		"u2-4",
+		"feature parity",
+	} {
 		if !strings.Contains(testEvidence, want) {
 			t.Errorf("TRACE-031: F63 test evidence must mention %q, got %q", want, testEvidence)
 		}
