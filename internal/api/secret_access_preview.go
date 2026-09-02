@@ -187,20 +187,26 @@ func (a *API) previewSecretAccess(w http.ResponseWriter, r *http.Request) {
 	}
 
 	version := 0
+	directSecretFound := false
 	blockers := make([]string, 0, 1)
 	rec, readErr := a.secrets.be.Store.GetSecret(r.Context(), tenantID, req.Name)
 	if readErr == nil {
+		directSecretFound = true
 		version = rec.Version
 		var value []byte
 		if req.Resolve {
-			value, version, readErr = a.resolveSecretValue(r.Context(), tenantID, req.Name, nil)
+			var resolvedVersion int
+			value, resolvedVersion, readErr = a.resolveSecretValue(r.Context(), tenantID, req.Name, nil)
+			if readErr == nil {
+				version = resolvedVersion
+			}
 		} else {
 			value, readErr = a.secrets.open(r.Context(), tenantID, rec.Sealed, sealAAD(tenantID, req.Name))
 		}
 		secret.Wipe(value)
 	}
 	if readErr != nil {
-		if blocker, expected := secretAccessPreviewBlocker(readErr, version == 0); expected {
+		if blocker, expected := secretAccessPreviewBlocker(readErr, !directSecretFound); expected {
 			blockers = append(blockers, blocker)
 		} else {
 			a.writeError(w, readErr)

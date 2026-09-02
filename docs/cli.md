@@ -259,6 +259,24 @@ server authority and state.
 
 ## Run with secrets
 
+Review the exact access plan before wiring a secret into an application:
+
+```bash
+cat > secret-access.json <<'JSON'
+{"name":"app/db/dsn","env_var":"DATABASE_URL","resolve":true}
+JSON
+trstctl-cli secrets access preview -f secret-access.json
+```
+
+`secrets access preview` calls the read-only
+`POST /api/v1/secrets/access/preview` operation. It returns the current version,
+least-privilege permission, exact `run` argument vector, HTTP path, TypeScript
+example, recovery and verification instructions, and a server-keyed request
+fingerprint. It returns no secret value, writes no state, makes no external call,
+and requires no `Idempotency-Key`. A missing secret or reference, reference cycle,
+or invalid environment variable returns a blocked plan or validation error instead
+of a runnable command.
+
 `trstctl-cli run` fetches one or more stored secrets through the same served
 `GET /api/v1/secrets/store/{name}` path as `secrets store get`, then starts a child
 process with those values added to its environment. It is a wrapper, not a JSON API
@@ -277,6 +295,9 @@ trstctl-cli run --resolve --secret DATABASE_URL=app/db/dsn -- ./payments-api
   the child exits. The operating-system environment is still a string boundary, so
   use this with trusted commands and avoid debug commands that print all env vars
   outside a test.
+- The web console’s `/secrets/developer` workspace requests this same server plan,
+  invalidates it when an input or secret version changes, and shows only a
+  name/version/fingerprint receipt after its real access test.
 
 Secret-store approvals use the same m-of-n dual-control store as privileged
 issuance. A distinct approver records a pending secret change like this:

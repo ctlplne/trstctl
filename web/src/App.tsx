@@ -124,6 +124,7 @@ export function AppRoutes() {
               sidebar; the page derives its workspace from the pathname, and
               historical /secrets?tab= deep links redirect permanently. */}
             <Route path="secrets/access" element={<Secrets />} />
+            <Route path="secrets/developer" element={<Secrets />} />
             <Route path="secrets/sharing" element={<Secrets />} />
             <Route path="secrets/engines" element={<Secrets />} />
             <Route path="secrets/scanning" element={<Secrets />} />

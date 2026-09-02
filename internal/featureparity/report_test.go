@@ -41,8 +41,8 @@ func TestRenderControlPanelUsesCanonicalCatalogOnly(t *testing.T) {
 		"trstctl frontend parity control panel",
 		// F25, F43, F69, F70, F71, F72, F6, F73, F74, F51, F33, F30, F61, F45, F37, F16, and F63 now join
 		// the complete vertical slices with exact live evidence, dedicated console workflows, and recovery.
-		"17 release blockers",
-		"52 complete vertical slices",
+		"16 release blockers",
+		"53 complete vertical slices",
 		"Filter capabilities",
 		"data-tool=\"secrets\"",
 		"F66",

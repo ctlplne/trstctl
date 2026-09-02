@@ -232,20 +232,38 @@ today (see [Current limitations](../limitations.md) and
    -> the recovered value becomes the latest version; metadata and audit records do not
    contain plaintext secret material.
 
-6. Run a developer process with secrets injected at start. `trstctl-cli run` reads each
-   mapped secret through the served store, places it in the child process environment,
-   streams the child stdout/stderr/stdin, and returns the child's exit code. trstctl
-   audits the variable names and store paths, not the values, and wipes the fetched
-   byte buffers after the child exits.
+6. Review and test developer access without exposing the value. Open **Secrets → Use
+   secrets in apps** (`/secrets/developer`), choose one secret, name its environment
+   variable, and explicitly decide whether `${secret.path}` references should
+   resolve. **Review access plan** makes an effect-free served request and returns
+   the exact CLI, API, and TypeScript instructions plus the current version,
+   `secrets:read` boundary, recovery steps, and a keyed fingerprint. Only a ready,
+   unchanged plan enables the separate test. The test performs the real secret read,
+   verifies the exact name and version, and displays only that metadata receipt.
+
+   To perform the same review in automation:
+
+   ```sh
+   printf '%s\n' '{"name":"app/db/dsn","env_var":"DATABASE_URL","resolve":true}' > access-plan.json
+   trstctl-cli secrets access preview -f access-plan.json
+   ```
+
+   Then run a developer process with secrets injected at start. `trstctl-cli run`
+   reads each mapped secret through the served store, places it in the child process
+   environment, streams the child stdout/stderr/stdin, and returns the child's exit
+   code. trstctl never prints the injected value and wipes the fetched byte buffers
+   after the child exits.
 
    ```sh
    trstctl-cli run --secret DB_PASSWORD=db/password -- env
    trstctl-cli run --resolve --secret DATABASE_URL=app/db/dsn -- ./payments-api
    ```
 
-   -> `env` is useful as a smoke test because it proves the child can see
-   `DB_PASSWORD`. In production, point `run` at the application process itself and
-   avoid commands that dump the whole environment into CI logs.
+   -> `env` is useful only in an isolated lab because it prints the child
+   environment. In production, point `run` at the application process itself and
+   never use a debug command that dumps environment variables into logs. If access
+   fails, correct the named secret, reference, tenant, or permission and retry the
+   reviewed plan. If the secret version changed, review again before execution.
 
 7. Hand an application a short-lived backend credential it cannot hoard. Dynamic leases
    return the credential once, then later reads show only metadata. When the TTL expires,

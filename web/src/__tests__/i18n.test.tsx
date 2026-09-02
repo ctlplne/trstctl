@@ -1406,8 +1406,13 @@ describe("i18n boundary", () => {
       // review, stale-plan warning, separate execution action, and progress
       // labels preserve their safety meaning and placeholders in both locales.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "f812d70440cfc8b3908bba7452fe90d0e12535dde3c144b54ab15b90f5e6faea",
-      "de-DE": "0b58126a65a39e7c8fcd7b6fb08b605bc6d3a22a074d60a3e35df00cf824c82b",
+      // F64 developer-access re-pin: a separate workspace now explains review,
+      // exact plan inputs, no-effect preview, least privilege, execution, retry,
+      // stale-version refusal, value-free verification, and snippet copy recovery.
+      // Nine obsolete strings from the invalid old snippet panel were removed.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "16d621c74518116c41e5732ca123ca1e640c43dc04a35740cf0de87897b38cbb",
+      "de-DE": "4e2d51b370c9cdcbe2024f93896c563880990a2db7cae1eabddcded21a78117a",
     });
   });
 

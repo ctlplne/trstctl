@@ -37,7 +37,9 @@ describe("U8-6 navigation & IA refresh", () => {
     // S-C2 spent five rows to give each Secrets workspace a route. Ceiling: 38.
     // H2 spent one row for the migration workspace. The product carve adds the
     // real Trust Operations overview and no duplicate destination. Ceiling: 40.
-    expect(sidebarRoutes.length + taskNavItems.length).toBeLessThanOrEqual(40);
+    // F64 adds one explicit application-secret workspace instead of mixing its
+    // review/run contract into machine-login administration. Ceiling: 41.
+    expect(sidebarRoutes.length + taskNavItems.length).toBeLessThanOrEqual(41);
 
     // S-A1 promoted the formerly-hidden surfaces into the rail; they are no
     // longer contextual-only.

@@ -127,6 +127,41 @@ func TestServedDeveloperSecretAccessPreviewIsExactEffectFreeAndValueFree(t *test
 		t.Fatalf("missing/cross-tenant preview did not fail closed: status %d body %s", status, missingBody)
 	}
 
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", token,
+		map[string]any{"name": "app/missing-reference", "value": "${secret.other-tenant/only}"})
+	if status != http.StatusCreated {
+		t.Fatalf("create missing-reference source: status %d body %s", status, body)
+	}
+	status, missingReferenceBody := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/access/preview", token, map[string]any{
+		"name": "app/missing-reference", "env_var": "DATABASE_URL", "resolve": true,
+	})
+	if status != http.StatusOK || !strings.Contains(string(missingReferenceBody), `"ready":false`) ||
+		!strings.Contains(string(missingReferenceBody), "referenced secret does not exist") ||
+		strings.Contains(string(missingReferenceBody), "named secret does not exist") {
+		t.Fatalf("missing referenced secret was not distinguished from the source: status %d body %s", status, missingReferenceBody)
+	}
+
+	for _, seed := range []struct {
+		name  string
+		value string
+	}{
+		{name: "app/cycle-a", value: "${secret.app/cycle-b}"},
+		{name: "app/cycle-b", value: "${secret.app/cycle-a}"},
+	} {
+		status, body = secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", token,
+			map[string]any{"name": seed.name, "value": seed.value})
+		if status != http.StatusCreated {
+			t.Fatalf("create %s: status %d body %s", seed.name, status, body)
+		}
+	}
+	status, cycleBody := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/access/preview", token, map[string]any{
+		"name": "app/cycle-a", "env_var": "DATABASE_URL", "resolve": true,
+	})
+	if status != http.StatusOK || !strings.Contains(string(cycleBody), `"ready":false`) ||
+		!strings.Contains(string(cycleBody), "found a cycle") {
+		t.Fatalf("reference cycle did not fail closed with recovery guidance: status %d body %s", status, cycleBody)
+	}
+
 	status, invalidBody := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/access/preview", token, map[string]any{
 		"name": "app/db/dsn", "env_var": "BAD-NAME", "resolve": true,
 	})

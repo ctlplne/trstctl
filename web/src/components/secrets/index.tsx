@@ -289,10 +289,12 @@ export function VersionHistory({ name, latestVersion }: { name: string; latestVe
   );
 }
 
-export function SecretImport() {
+export function SecretImport({ reason, safePath }: { reason?: string; safePath?: string } = {}) {
   return (
     <SectionCard title={translateNow("secrets.import.unavailableTitle")} description={translateNow("secrets.import.unavailableDescription")}>
       <p className="text-body text-muted-foreground">{translateNow("secrets.import.unavailableBody")}</p>
+      {reason ? <p className="mt-2 text-body text-muted-foreground">{reason}</p> : null}
+      {safePath ? <p className="mt-2 text-body text-muted-foreground">{safePath}</p> : null}
       <Button type="button" variant="outline" disabled className="mt-3">
         {translateNow("secrets.import.unavailableAction")}
       </Button>

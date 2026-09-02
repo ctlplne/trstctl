@@ -5571,8 +5571,8 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use developer secrets experience while tenant, policy, and security authority remain on the server.",
       "tool": "secrets",
       "classification": "primary",
-      "releaseBlocking": true,
-      "consoleRoute": "/secrets/access",
+      "releaseBlocking": false,
+      "consoleRoute": "/secrets/developer",
       "navigationEntrypoints": [
         "tool navigation",
         "task search",
@@ -5580,12 +5580,10 @@ export const canonicalCapabilities = [
       ],
       "permissionAuthority": "internal/api route registry and feature authorization manifest",
       "edition": "core",
-      "dependencies": [
-        "One or more lifecycle or console stages remain incomplete and are shown in the stage ledger."
-      ],
+      "dependencies": [],
       "sideEffects": "mixed",
-      "secretDataHandling": "The parity contract contains metadata only. Product workflows may reveal a value once, but reports and evidence never contain the value.",
-      "maturity": "observe_only",
+      "secretDataHandling": "The plan, UI receipt, logs, and retained evidence contain metadata only. Preview opens and wipes bytes server-side; execute returns the value only through the authorized read path and the UI neither renders nor stores it.",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -5600,16 +5598,28 @@ export const canonicalCapabilities = [
           ]
         },
         "configure": {
-          "status": "missing",
-          "reason": "The route registry alone does not prove the configure workflow, and this capability row cites no concrete console implementation evidence."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/Secrets.tsx",
+            "web/src/__tests__/secrets.test.tsx"
+          ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "internal/api/secret_access_preview.go",
+            "internal/server/secret_access_preview_served_test.go",
+            "OpenAPI operationId: previewSecretAccess",
+            "CLI command: secrets access preview"
+          ]
         },
         "execute": {
-          "status": "missing",
-          "reason": "No complete console execution path is proved for this capability."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/Secrets.tsx",
+            "web/src/__tests__/secrets.test.tsx",
+            "internal/secretscli/secretscli.go"
+          ]
         },
         "observe": {
           "status": "complete",
@@ -5618,12 +5628,20 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/Secrets.tsx",
+            "web/src/__tests__/secrets.test.tsx",
+            "internal/server/secret_access_preview_served_test.go"
+          ]
         },
         "verify": {
-          "status": "missing",
-          "reason": "Durable or external-effect verification is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/Secrets.tsx",
+            "web/src/__tests__/secrets.test.tsx",
+            "internal/server/secret_access_preview_served_test.go"
+          ]
         },
         "automate": {
           "status": "complete",
@@ -5647,8 +5665,8 @@ export const canonicalCapabilities = [
       },
       "owner": "secrets",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "8e09c6061a8b9fb2db2d0d48d605f76b5c365ad2",
+      "freshness": "2026-09-02"
     }
   },
   {

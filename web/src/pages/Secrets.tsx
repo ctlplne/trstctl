@@ -50,6 +50,7 @@ import {
   type Owner,
   type PKISecret,
   type SecretApprovalAction,
+  type SecretAccessPreview,
   type SecretMeta,
   type SecretStoreCreatePreview,
   type SecretRepositoryScanPosture,
@@ -71,6 +72,7 @@ import {
 } from "@/lib/api";
 import {
   DynamicLeaseMetadata,
+  formatCommandArgv,
   MachineSession,
   parseSecretRotationPartialReceipt,
   RepositoryScanPosture,
@@ -102,8 +104,8 @@ import { TransitOperations } from "./secrets/TransitOperations";
  * stacking into a ~6,800px scroll (audit P0: mega-page pattern) or hiding
  * behind an in-page tab strip. The historical `?tab=` deep links redirect
  * permanently to the routes, mirroring the C-A1 /platform precedent. */
-type SecretsTab = "store" | "access" | "sharing" | "engines" | "scanning" | "sync";
-const secretsTabIds: readonly SecretsTab[] = ["store", "access", "sharing", "engines", "scanning", "sync"];
+type SecretsTab = "store" | "access" | "developer" | "sharing" | "engines" | "scanning" | "sync";
+const secretsTabIds: readonly SecretsTab[] = ["store", "access", "developer", "sharing", "engines", "scanning", "sync"];
 
 function secretsTabFromSearchParam(value: string | null): SecretsTab {
   return secretsTabIds.includes(value as SecretsTab) ? (value as SecretsTab) : "store";
@@ -132,6 +134,13 @@ const secretsRouteUX = {
     detailKey: "secrets.route.accessDetails",
     actionKey: "secrets.route.accessAction",
     focusID: "grant-subject",
+  },
+  developer: {
+    titleKey: "secrets.route.developer",
+    answerKey: "secrets.route.developerAnswer",
+    detailKey: "secrets.route.developerDetails",
+    actionKey: "secrets.route.developerAction",
+    focusID: "developer-secret-name",
   },
   sharing: {
     titleKey: "secrets.route.sharing",
@@ -238,7 +247,13 @@ export function Secrets() {
   const [approvalBusy, setApprovalBusy] = useState<string | null>(null);
 
   const [accessName, setAccessName] = useState("");
-  const [accessResult, setAccessResult] = useState<{ name: string; version?: number } | null>(null);
+  const [accessEnvVar, setAccessEnvVar] = useState("DB_PASSWORD");
+  const [accessResolve, setAccessResolve] = useState(false);
+  const [accessReview, setAccessReview] = useState<{ requestKey: string; plan: SecretAccessPreview } | null>(null);
+  const [accessReviewBusy, setAccessReviewBusy] = useState(false);
+  const [accessReviewError, setAccessReviewError] = useState<string | null>(null);
+  const [accessReviewStale, setAccessReviewStale] = useState(false);
+  const [accessResult, setAccessResult] = useState<{ name: string; version?: number; fingerprint: string } | null>(null);
   const [accessBusy, setAccessBusy] = useState(false);
   const [accessError, setAccessError] = useState<string | null>(null);
 
@@ -501,6 +516,12 @@ export function Secrets() {
   }, [rotationScheduleList.checking, rotationScheduleList.runnable]);
 
   const selectedMeta = useMemo(() => items.find((item) => item.name === accessName) ?? items[0] ?? null, [items, accessName]);
+  const accessRequest = useMemo(
+    () => ({ name: accessName.trim() || selectedMeta?.name || "", env_var: accessEnvVar.trim(), resolve: accessResolve }),
+    [accessEnvVar, accessName, accessResolve, selectedMeta?.name],
+  );
+  const accessRequestKey = JSON.stringify(accessRequest);
+  const reviewedAccess = accessReview?.requestKey === accessRequestKey ? accessReview : null;
   const ownerByID = useMemo(() => new Map(owners.map((owner) => [owner.id, owner])), [owners]);
   const filteredItems = useMemo(() => {
     const needle = secretSearch.trim().toLowerCase();
@@ -933,16 +954,62 @@ export function Secrets() {
     }
   }
 
-  async function runAccessTest(event: FormEvent<HTMLFormElement>) {
+  function invalidateAccessReview() {
+    if (accessReview) setAccessReviewStale(true);
+    setAccessReview(null);
+    setAccessReviewError(null);
+    setAccessError(null);
+    setAccessResult(null);
+  }
+
+  async function reviewAccess(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setAccessReviewError(null);
+    setAccessError(null);
+    setAccessResult(null);
+    setAccessReviewBusy(true);
+    try {
+      const plan = await api.previewSecretAccess(accessRequest);
+      if (
+        plan.capability !== "F64" ||
+        plan.operation !== "read_for_process" ||
+        !plan.effect_free ||
+        plan.name !== accessRequest.name ||
+        plan.env_var !== accessRequest.env_var ||
+        plan.resolve_references !== accessRequest.resolve
+      ) {
+        throw new Error(t("secrets.developer.contractMismatch"));
+      }
+      setAccessReview({ requestKey: accessRequestKey, plan });
+      setAccessReviewStale(false);
+    } catch (err) {
+      setAccessReview(null);
+      setAccessReviewError(apiProblemMessage(err, t("secrets.developer.reviewFailed")));
+    } finally {
+      setAccessReviewBusy(false);
+    }
+  }
+
+  async function runAccessTest() {
+    if (!reviewedAccess?.plan.ready) {
+      setAccessError(t("secrets.developer.reviewRequired"));
+      return;
+    }
+    const plan = reviewedAccess.plan;
     setAccessError(null);
     setAccessResult(null);
     setAccessBusy(true);
     try {
-      const value = await api.getSecret(accessName);
-      setAccessResult({ name: value.name, version: value.version });
+      const value = await api.getSecret(plan.name, { resolve: plan.resolve_references });
+      if (value.name !== plan.name || (plan.version != null && value.version !== plan.version)) {
+        setAccessReview(null);
+        setAccessReviewStale(true);
+        setAccessError(t("secrets.developer.versionChanged"));
+        return;
+      }
+      setAccessResult({ name: value.name, version: value.version, fingerprint: plan.request_fingerprint });
     } catch (err) {
-      setAccessError(apiProblemMessage(err, "Access test failed"));
+      setAccessError(apiProblemMessage(err, t("secrets.developer.testFailed")));
     } finally {
       setAccessBusy(false);
     }
@@ -2109,9 +2176,10 @@ export function Secrets() {
                 onSubmit={(event) => void submitRotate(event)}
                 className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
               >
-                <label className="grid gap-1 text-sm">
+                <label className="grid gap-1 text-sm" htmlFor="developer-secret-env-var">
                   <span className="font-medium">{translateNow("source.secret.to.rotate.4e6aab975e")}</span>
                   <input
+                    id="developer-secret-env-var"
                     className="rounded-md border border-border bg-background px-3 py-2"
                     value={rotateName}
                     onChange={(event) => setRotateName(event.target.value)}
@@ -2504,57 +2572,185 @@ export function Secrets() {
         </div>
       )}
 
-      {tab === "access" && (
+      {tab === "developer" && (
         <div className="grid gap-6">
-          <details className="group border-y border-border py-4">
-            <summary className="cursor-pointer text-title font-semibold text-foreground">{t("secrets.access.developerTools")}</summary>
-            <section aria-labelledby="developer-heading" className="grid gap-4 pt-4">
-              <div>
-                <h2 id="developer-heading" className="text-title font-semibold">
-                  {translateNow("source.developer.access.e62e23a3a2")}
-                </h2>
-                <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.sdk.and.cli.examples.contain.only.names.te.f056ba97a8")}</p>
-              </div>
-              <div className="grid gap-3 lg:grid-cols-2">
-                <Snippet
-                  title={translateNow("source.cli.injector.1f36b02aea")}
-                  text={`trstctl secrets get ${selectedMeta?.name ?? "app/db/password"} --tenant current --format env --exec ./service`}
-                />
-                <Snippet
-                  title={translateNow("source.typescript.sdk.40e0532135")}
-                  text={`const secret = await client.secrets.get("${selectedMeta?.name ?? "app/db/password"}");\nprocess.env.DB_PASSWORD = secret.value; // keep in process memory only`}
-                />
-              </div>
-              <form
-                aria-label={translateNow("source.secret.access.test.e467205dc5")}
-                onSubmit={(event) => void runAccessTest(event)}
-                className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]"
-              >
-                <label className="grid gap-1 text-sm">
-                  <span className="font-medium">{translateNow("source.secret.name.5cdf573b89")}</span>
+          <section aria-labelledby="developer-heading" className="grid gap-5 border-y border-border py-4">
+            <div>
+              <h2 id="developer-heading" className="text-title font-semibold">
+                {t("secrets.developer.heading")}
+              </h2>
+              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("secrets.developer.description")}</p>
+            </div>
+
+            <form aria-label={t("secrets.developer.reviewForm")} onSubmit={(event) => void reviewAccess(event)} className="ui-panel grid gap-4 p-comfortable">
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="grid gap-1 text-sm" htmlFor="developer-secret-name">
+                  <span className="font-medium">{t("secrets.developer.secretName")}</span>
                   <input
-                    className="rounded-md border border-border bg-background px-3 py-2"
+                    id="developer-secret-name"
+                    className="min-h-10 rounded-control border border-border bg-background px-3 py-2"
                     value={accessName}
-                    onChange={(event) => setAccessName(event.target.value)}
+                    onChange={(event) => {
+                      invalidateAccessReview();
+                      setAccessName(event.target.value);
+                    }}
                     placeholder={translateNow("source.app.db.password.917cb98f9d")}
+                    list="developer-secret-options"
                     required
                   />
                 </label>
-                <Button type="submit" className="self-end" variant="outline" disabled={accessBusy || Boolean(loadError)}>
-                  {accessBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
-                  {translateNow("source.run.access.test.0a1ca1e976")}
+                <label className="grid gap-1 text-sm">
+                  <span className="font-medium">{t("secrets.developer.envVar")}</span>
+                  <input
+                    className="min-h-10 rounded-control border border-border bg-background px-3 py-2 font-mono"
+                    value={accessEnvVar}
+                    onChange={(event) => {
+                      invalidateAccessReview();
+                      setAccessEnvVar(event.target.value);
+                    }}
+                    placeholder={t("secrets.developer.envVarPlaceholder")}
+                    required
+                  />
+                </label>
+              </div>
+              <datalist id="developer-secret-options">
+                {items.map((item) => (
+                  <option key={item.name} value={item.name} />
+                ))}
+              </datalist>
+              <div className="flex items-start gap-2 text-sm">
+                <input
+                  id="developer-secret-resolve"
+                  type="checkbox"
+                  aria-labelledby="developer-secret-resolve-label"
+                  aria-describedby="developer-secret-resolve-help"
+                  checked={accessResolve}
+                  onChange={(event) => {
+                    invalidateAccessReview();
+                    setAccessResolve(event.target.checked);
+                  }}
+                />
+                <span>
+                  <strong id="developer-secret-resolve-label" className="block">
+                    {t("secrets.developer.resolve")}
+                  </strong>
+                  <span id="developer-secret-resolve-help" className="text-muted-foreground">
+                    {t("secrets.developer.resolveHelp")}
+                  </span>
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button type="submit" disabled={accessReviewBusy || accessBusy || Boolean(loadError) || !accessRequest.name || !accessRequest.env_var}>
+                  {accessReviewBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
+                  {t("secrets.developer.reviewAction")}
                 </Button>
-              </form>
-              {accessError && <ErrorState title={translateNow("source.access.test.failed.e280577658")}>{accessError}</ErrorState>}
-              {accessResult && (
-                <p role="status" className="rounded-control border border-status-success/30 bg-status-success/10 px-3 py-2 text-sm text-status-success">
-                  {translateNow("source.access.test.passed.for.e4a15ad68a")} {accessResult.name}; version{" "}
-                  {accessResult.version ?? translateNow("source.latest.5e1e2bcac3")}{" "}
-                  {translateNow("source.was.reachable.and.the.value.was.not.render.830c77edbc")}
-                </p>
-              )}
-            </section>
-          </details>
+                <p className="text-sm text-muted-foreground">{t("secrets.developer.reviewHelp")}</p>
+              </div>
+            </form>
+
+            {accessReviewStale && !reviewedAccess && (
+              <p role="status" className="rounded-control border border-status-warning/30 bg-status-warning/10 px-3 py-2 text-sm text-status-warning">
+                {t("secrets.developer.stale")}
+              </p>
+            )}
+            {accessReviewError && <ErrorState title={t("secrets.developer.reviewFailed")}>{accessReviewError}</ErrorState>}
+
+            {reviewedAccess && (
+              <section aria-label={t("secrets.developer.reviewedPlan")} className="ui-panel grid gap-5 p-comfortable">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-title font-semibold">{t(reviewedAccess.plan.ready ? "secrets.developer.ready" : "secrets.developer.blocked")}</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">{t("secrets.developer.noEffects")}</p>
+                  </div>
+                  <StatusBadge
+                    value={reviewedAccess.plan.ready ? "ready" : "blocked"}
+                    label={t(reviewedAccess.plan.ready ? "secrets.developer.readyBadge" : "secrets.developer.blockedBadge")}
+                    tone={reviewedAccess.plan.ready ? "success" : "warning"}
+                  />
+                </div>
+                <dl className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
+                  <div>
+                    <dt className="text-muted-foreground">{t("secrets.developer.secretName")}</dt>
+                    <dd className="break-all font-medium">{reviewedAccess.plan.name}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">{t("secrets.developer.version")}</dt>
+                    <dd>{reviewedAccess.plan.version ?? t("secrets.developer.notAvailable")}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">{t("secrets.developer.permission")}</dt>
+                    <dd className="font-mono text-xs">{reviewedAccess.plan.required_permission}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">{t("secrets.developer.references")}</dt>
+                    <dd>{t(reviewedAccess.plan.resolve_references ? "secrets.developer.enabled" : "secrets.developer.disabled")}</dd>
+                  </div>
+                </dl>
+                {reviewedAccess.plan.blockers.length > 0 && (
+                  <ul aria-label={t("secrets.developer.blockers")} className="list-disc space-y-1 pl-5 text-sm text-destructive">
+                    {reviewedAccess.plan.blockers.map((blocker) => (
+                      <li key={blocker}>{blocker}</li>
+                    ))}
+                  </ul>
+                )}
+                <div className="grid gap-3 xl:grid-cols-3">
+                  <Snippet title={t("secrets.developer.cli")} text={formatCommandArgv(reviewedAccess.plan.cli_argv)} />
+                  <Snippet title={t("secrets.developer.typescript")} text={reviewedAccess.plan.typescript} />
+                  <Snippet title={t("secrets.developer.http")} text={`${reviewedAccess.plan.api_request.method} ${reviewedAccess.plan.api_request.path}`} />
+                </div>
+                <p className="text-sm text-muted-foreground">{reviewedAccess.plan.secret_data_handling}</p>
+                <details className="rounded-control border border-border px-3 py-2">
+                  <summary className="cursor-pointer text-sm font-medium">{t("secrets.developer.technicalDetails")}</summary>
+                  <div className="mt-3 grid gap-3 text-sm md:grid-cols-3">
+                    <div>
+                      <h4 className="font-medium">{t("secrets.developer.executeReads")}</h4>
+                      <ul className="mt-1 list-disc space-y-1 pl-5 text-muted-foreground">
+                        {reviewedAccess.plan.execute_reads.map((step) => (
+                          <li key={step}>{step}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <h4 className="font-medium">{t("secrets.developer.recovery")}</h4>
+                      <ul className="mt-1 list-disc space-y-1 pl-5 text-muted-foreground">
+                        {reviewedAccess.plan.recovery_steps.map((step) => (
+                          <li key={step}>{step}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <h4 className="font-medium">{t("secrets.developer.verification")}</h4>
+                      <ul className="mt-1 list-disc space-y-1 pl-5 text-muted-foreground">
+                        {reviewedAccess.plan.verification_steps.map((step) => (
+                          <li key={step}>{step}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </details>
+                {accessError && <ErrorState title={t("secrets.developer.testFailed")}>{accessError}</ErrorState>}
+                {reviewedAccess.plan.ready && (
+                  <Button type="button" className="w-fit" onClick={() => void runAccessTest()} disabled={accessBusy}>
+                    {accessBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
+                    {t(accessError ? "secrets.developer.retryAction" : "secrets.developer.runAction")}
+                  </Button>
+                )}
+              </section>
+            )}
+
+            {accessResult && (
+              <div
+                role="status"
+                className="grid gap-1 rounded-control border border-status-success/30 bg-status-success/10 px-3 py-2 text-sm text-status-success"
+              >
+                <strong>{t("secrets.developer.verified", { name: accessResult.name, version: String(accessResult.version ?? "latest") })}</strong>
+                <span>{t("secrets.developer.verifiedHelp")}</span>
+                <code className="break-all text-xs">{accessResult.fingerprint}</code>
+              </div>
+            )}
+
+            <SecretImport reason={reviewedAccess?.plan.bulk_import.reason} safePath={reviewedAccess?.plan.bulk_import.safe_path} />
+          </section>
         </div>
       )}
 

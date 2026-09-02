@@ -586,12 +586,53 @@ export function RevealPanel({ title, value, children, onDismiss }: { title: stri
 }
 
 export function Snippet({ title, text }: { title: string; text: string }) {
+  const { t } = useTranslation();
+  const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
+
+  async function copySnippet() {
+    setCopied(false);
+    setCopyFailed(false);
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("clipboard unavailable");
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+    } catch {
+      setCopyFailed(true);
+    }
+  }
+
   return (
     <div className="ui-panel grid gap-2 p-3 text-sm">
-      <p className="font-medium">{title}</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="font-medium">{title}</p>
+        <Button type="button" size="sm" variant="outline" onClick={() => void copySnippet()} aria-label={t("secrets.developer.copySnippet", { title })}>
+          <Copy className="h-4 w-4" aria-hidden="true" />
+          {t("secrets.developer.copy")}
+        </Button>
+      </div>
       <pre className="overflow-x-auto whitespace-pre-wrap rounded bg-muted px-3 py-2 font-mono text-xs">{text}</pre>
+      {copied && (
+        <p role="status" className="text-xs text-status-success">
+          {t("secrets.developer.copied")}
+        </p>
+      )}
+      {copyFailed && (
+        <p role="alert" className="text-xs text-destructive">
+          {t("secrets.developer.copyFailed")}
+        </p>
+      )}
     </div>
   );
+}
+
+function shellQuoteArgument(value: string): string {
+  if (/^[A-Za-z0-9_./:=?&%+,@-]+$/.test(value)) return value;
+  return `'${value.replaceAll("'", `'\\''`)}'`;
+}
+
+export function formatCommandArgv(argv: string[]): string {
+  return argv.map(shellQuoteArgument).join(" ");
 }
 
 export function MachineSession({ session }: { session: MachineLoginResponse }) {

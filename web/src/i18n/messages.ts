@@ -1773,9 +1773,91 @@ export const messages = {
     defaultMessage: "Machine login administration",
     description: "Closed disclosure summary for advanced machine-login methods and issued sessions.",
   },
-  "secrets.access.developerTools": {
-    defaultMessage: "Developer tools",
-    description: "Closed disclosure summary for CLI and SDK secret-access tools.",
+  "secrets.developer.heading": { defaultMessage: "Developer access", description: "Developer secret-access workflow heading." },
+  "secrets.developer.description": {
+    defaultMessage:
+      "Build a value-free access plan first. The server proves the secret can be opened, returns exact CLI, API, and SDK instructions, and keeps the value out of this page.",
+    description: "Technical ELI5 explanation of the review-first developer secret journey.",
+  },
+  "secrets.developer.reviewForm": { defaultMessage: "Review developer secret access", description: "Accessible name for the access-plan form." },
+  "secrets.developer.secretName": { defaultMessage: "Secret name", description: "Developer access secret-name field." },
+  "secrets.developer.envVar": { defaultMessage: "Environment variable", description: "Developer access child-process environment variable field." },
+  "secrets.developer.envVarPlaceholder": {
+    defaultMessage: "DB_PASSWORD",
+    description: "Example child-process environment variable name.",
+  },
+  "secrets.developer.resolve": { defaultMessage: "Resolve references", description: "Developer access reference-expansion checkbox." },
+  "secrets.developer.resolveHelp": {
+    defaultMessage:
+      "Replace ${secret.path} markers in memory before the value reaches the child process. The plan fails closed on missing or circular references.",
+    description: "Technical ELI5 explanation of opt-in secret reference resolution.",
+  },
+  "secrets.developer.reviewAction": { defaultMessage: "Review access plan", description: "Request the effect-free server access plan." },
+  "secrets.developer.reviewHelp": {
+    defaultMessage: "Review opens and immediately wipes the value on the server. It makes no writes and starts no process.",
+    description: "Developer access preview zero-effect boundary.",
+  },
+  "secrets.developer.contractMismatch": {
+    defaultMessage: "The server returned a plan for different inputs. Nothing ran; refresh and review again.",
+    description: "Fail-closed response to a mismatched developer access plan.",
+  },
+  "secrets.developer.reviewFailed": { defaultMessage: "Could not review access", description: "Developer access preview error title." },
+  "secrets.developer.reviewRequired": {
+    defaultMessage: "Review a ready access plan before testing the secret.",
+    description: "Developer access execution gate error.",
+  },
+  "secrets.developer.versionChanged": {
+    defaultMessage: "The secret changed after review. The value was not shown or retained; review the current version before testing again.",
+    description: "Fail-closed developer access stale-version response.",
+  },
+  "secrets.developer.testFailed": { defaultMessage: "Access test failed", description: "Developer access test error title." },
+  "secrets.developer.stale": {
+    defaultMessage: "Configuration changed after review. The old plan cannot run; review these exact inputs again.",
+    description: "Developer access stale-plan warning.",
+  },
+  "secrets.developer.reviewedPlan": { defaultMessage: "Reviewed developer secret access plan", description: "Accessible name for the reviewed plan." },
+  "secrets.developer.ready": { defaultMessage: "Ready to test", description: "Developer access plan ready heading." },
+  "secrets.developer.blocked": { defaultMessage: "Fix these blockers first", description: "Developer access plan blocked heading." },
+  "secrets.developer.noEffects": {
+    defaultMessage: "Preview made no writes and no external calls. Running the test performs one authorized read and keeps the value out of the UI.",
+    description: "Developer access preview and execute boundary.",
+  },
+  "secrets.developer.readyBadge": { defaultMessage: "Ready", description: "Developer access ready status badge." },
+  "secrets.developer.blockedBadge": { defaultMessage: "Blocked", description: "Developer access blocked status badge." },
+  "secrets.developer.version": { defaultMessage: "Reviewed version", description: "Developer access reviewed secret version." },
+  "secrets.developer.notAvailable": { defaultMessage: "Not available", description: "Developer access unavailable metadata fallback." },
+  "secrets.developer.permission": { defaultMessage: "Least privilege", description: "Developer access required permission label." },
+  "secrets.developer.references": { defaultMessage: "Reference expansion", description: "Developer access reference expansion state label." },
+  "secrets.developer.enabled": { defaultMessage: "Enabled", description: "Enabled state." },
+  "secrets.developer.disabled": { defaultMessage: "Disabled", description: "Disabled state." },
+  "secrets.developer.blockers": { defaultMessage: "Access plan blockers", description: "Accessible label for developer access blockers." },
+  "secrets.developer.cli": { defaultMessage: "CLI — inject into one process", description: "Developer access CLI snippet title." },
+  "secrets.developer.typescript": { defaultMessage: "TypeScript SDK", description: "Developer access TypeScript SDK snippet title." },
+  "secrets.developer.http": { defaultMessage: "HTTP API", description: "Developer access HTTP snippet title." },
+  "secrets.developer.technicalDetails": {
+    defaultMessage: "What the test reads, how to recover, and how to verify",
+    description: "Developer access technical details disclosure.",
+  },
+  "secrets.developer.executeReads": { defaultMessage: "Reads", description: "Developer access execute read list heading." },
+  "secrets.developer.recovery": { defaultMessage: "If it fails", description: "Developer access recovery list heading." },
+  "secrets.developer.verification": { defaultMessage: "Proof of success", description: "Developer access verification list heading." },
+  "secrets.developer.runAction": { defaultMessage: "Run reviewed access test", description: "Developer access execute action." },
+  "secrets.developer.retryAction": { defaultMessage: "Retry reviewed access test", description: "Developer access recovery action." },
+  "secrets.developer.verified": {
+    defaultMessage: "Verified {name} version {version}",
+    description: "Developer access exact-version verification heading.",
+  },
+  "secrets.developer.verifiedHelp": {
+    defaultMessage:
+      "The response name and version matched the reviewed plan. The value was used only for this authorized test and was not rendered or stored by the page.",
+    description: "Developer access value-free verification explanation.",
+  },
+  "secrets.developer.copySnippet": { defaultMessage: "Copy {title}", description: "Accessible copy action for one developer snippet." },
+  "secrets.developer.copy": { defaultMessage: "Copy", description: "Developer snippet copy button." },
+  "secrets.developer.copied": { defaultMessage: "Copied to clipboard", description: "Developer snippet copy success." },
+  "secrets.developer.copyFailed": {
+    defaultMessage: "Clipboard access failed. Select the visible text and copy it manually.",
+    description: "Developer snippet copy recovery guidance.",
   },
   "secrets.methods.heading": {
     defaultMessage: "Auth methods",
@@ -2000,6 +2082,10 @@ export const messages = {
   "secrets.route.access": {
     defaultMessage: "Machine access",
     description: "Secrets space route (S-C2): the machine-auth console — workload credentials, auth methods, issued sessions. Nav label, H1, and title.",
+  },
+  "secrets.route.developer": {
+    defaultMessage: "Use secrets in apps",
+    description: "Secrets space route: review and test one value-free application secret access plan. Nav label, H1, and title.",
   },
   "secrets.route.sharing": {
     defaultMessage: "One-time secret links",
@@ -2254,6 +2340,16 @@ export const messages = {
     description: "Machine access technical-details summary.",
   },
   "secrets.route.accessAction": { defaultMessage: "Grant access", description: "Machine access primary action." },
+  "secrets.route.developerAnswer": {
+    defaultMessage: "Choose one secret, review exactly how an app will read it, then test access without showing the value.",
+    description: "Developer secret access opening answer.",
+  },
+  "secrets.route.developerDetails": {
+    defaultMessage:
+      "The server checks the tenant, permission, current version, optional references, CLI arguments, API path, recovery steps, and value-handling boundary before the test runs.",
+    description: "Developer secret access technical-details summary.",
+  },
+  "secrets.route.developerAction": { defaultMessage: "Plan access", description: "Developer secret access primary action." },
   "secrets.route.sharingAnswer": {
     defaultMessage: "What can be viewed once, by whom, and until when.",
     description: "One-time secret links opening answer.",
@@ -18768,14 +18864,6 @@ export const messages = {
     defaultMessage: "AAD",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
-  "source.access.test.failed.e280577658": {
-    defaultMessage: "Access test failed",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
-  "source.access.test.passed.for.e4a15ad68a": {
-    defaultMessage: "Access test passed for",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
   "source.acknowledge.wildcard.blast.radius.868520eb71": {
     defaultMessage: "Acknowledge wildcard blast radius",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Identities.tsx, src/pages/Wizard.tsx.",
@@ -19379,10 +19467,6 @@ export const messages = {
     defaultMessage: "Clear filters",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
   },
-  "source.cli.injector.1f36b02aea": {
-    defaultMessage: "CLI injector",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
   "source.client.setup.4ba2b51d20": {
     defaultMessage: "Client setup",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Protocols.tsx.",
@@ -19802,10 +19886,6 @@ export const messages = {
   "source.detail.fields.6c69673d46": {
     defaultMessage: "Detail fields",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Identities.tsx.",
-  },
-  "source.developer.access.e62e23a3a2": {
-    defaultMessage: "Developer access",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
   "source.diff.version.b5aedae8c4": {
     defaultMessage: "Diff version",
@@ -22645,10 +22725,6 @@ export const messages = {
     defaultMessage: "Run a scan against TLS endpoints or host config paths. The inventory table stays empty until trstctl returns tenant-scoped assets.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Posture.tsx.",
   },
-  "source.run.access.test.0a1ca1e976": {
-    defaultMessage: "Run access test",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
   "source.run.due.now.06b5403e4c": {
     defaultMessage: "Run due now",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
@@ -22722,10 +22798,6 @@ export const messages = {
     defaultMessage: ". Scopes:",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
-  "source.sdk.and.cli.examples.contain.only.names.te.f056ba97a8": {
-    defaultMessage: "SDK and CLI examples contain only names, tenants, and versions. The access test performs a read without rendering the value.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
   "source.search.49c266baaa": {
     defaultMessage: "Search",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
@@ -22736,10 +22808,6 @@ export const messages = {
   },
   "source.secret.7e32a729b1": {
     defaultMessage: "Secret",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
-  "source.secret.access.test.e467205dc5": {
-    defaultMessage: "Secret access test",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
   "source.secret.create.failed.885c3ecf7c": {
@@ -23696,10 +23764,6 @@ export const messages = {
     defaultMessage: "Type the exact secret name",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
-  "source.typescript.sdk.40e0532135": {
-    defaultMessage: "TypeScript SDK",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
   "source.unknown.b764cdc0ea": {
     defaultMessage: "Unknown",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
@@ -23763,10 +23827,6 @@ export const messages = {
   "source.was.issued.fe1574675b": {
     defaultMessage: "was issued.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Wizard.tsx.",
-  },
-  "source.was.reachable.and.the.value.was.not.render.830c77edbc": {
-    defaultMessage: "was reachable, and the value was not rendered.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
   "source.web.server.e4d165cf07": {
     defaultMessage: "web-server",

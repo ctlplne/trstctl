@@ -15591,11 +15591,11 @@
             "domain": "Secrets",
             "phase": "P1",
             "priority": 34,
-            "served_state": "partial",
-            "backend_status": "partial: served SDK path plus trstctl-cli run injection and reference resolution; bulk import is explicitly unavailable and its compatibility route returns 501 without writing",
-            "current_frontend_mapping": "observe: Secrets at /secrets - developer snippets plus access test against served store, typed client helpers for resolved reads, and a disabled bulk-import disclosure",
+            "served_state": "served",
+            "backend_status": "served: an effect-free access-plan route, generated CLI/API/SDK contract, exact-version read test, trstctl-cli run injection, and reference resolution; bulk import is explicitly unavailable and its compatibility route returns 501 without writing",
+            "current_frontend_mapping": "operate: Use secrets in apps at /secrets/developer reviews one exact value-free server plan, copies generated CLI/API/SDK examples, performs a real version-bound access test, retries failures, invalidates stale plans, and visibly fails closed on bulk import",
             "target_gui_mapping": "Developer portal UI with copyable SDK/CLI examples, environment targeting, access-test button, import snippets, reference resolution, and least-privilege policy explanation.",
-            "acceptance_test": "UI examples match CLI/API contract, bulk import is visibly unavailable across OpenAPI/CLI/UI, resolved reads are explicit, and generated snippets never include real secret values.",
+            "acceptance_test": "TestServedDeveloperSecretAccessPreviewIsExactEffectFreeAndValueFree plus the focused web secrets suite prove UI examples match the CLI/API contract, bulk import is visibly unavailable across OpenAPI/CLI/UI, resolved reads are explicit, and generated snippets never include real secret values.",
             "source_docs": [
                 "docs/features/secrets.md",
                 "docs/cli.md",
@@ -15605,12 +15605,21 @@
                 "internal/secretsdk",
                 "internal/secretscli",
                 "internal/cli",
+                "internal/api/secret_access_preview.go",
+                "internal/server/secret_access_preview_served_test.go",
                 "/api/v1/secrets/store/import",
                 "/api/v1/secrets/store/{name}?resolve=true"
             ],
-            "source_frontend": [],
+            "source_frontend": [
+                "web/src/pages/Secrets.tsx",
+                "web/src/pages/secrets/SecretsPageParts.tsx",
+                "web/src/components/secrets/index.tsx",
+                "web/src/__tests__/secrets.test.tsx",
+                "web/src/lib/navigation.ts",
+                "web/src/App.tsx"
+            ],
             "status": "closed",
-            "notes": "Closed by route-level feature-map evidence and tightened by SEC-09 run-style injection. AUD-105 keeps bulk import fail-closed until an atomic event-sourced batch command exists: OpenAPI marks the compatibility operation unavailable with only a 501 response, the CLI omits the command, and the web console renders a disabled disclosure. Test evidence: internal/cli/cli_test.go proves trstctl-cli run fetches served secrets, injects child env, and does not log values; web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage.",
+            "notes": "F64 is a first-class review-first workflow at /secrets/developer. POST /api/v1/secrets/access/preview transiently proves a tenant-scoped value and optional reference graph can be opened, wipes bytes, and returns an exact value-free plan with current version, least privilege, generated CLI/API/TypeScript instructions, recovery, verification, and a keyed fingerprint. The UI refuses execution until that plan is ready and unchanged, performs the real served read, verifies exact name/version, renders only a metadata receipt, keeps retry after ordinary failure, and invalidates stale input or version. CLI preview and trstctl-cli run cover automation. Bulk import remains visibly fail-closed until an atomic event-sourced batch command exists.",
             "api_surface": [
                 "previewSecretAccess",
                 "createSecret",
@@ -15634,8 +15643,15 @@
             "facet_evidence": {
                 "served": {
                     "evidence": [
-                        "served_state=partial",
-                        "backend_status=partial: served SDK path plus trstctl-cli run injection and reference resolution; bulk import is explicitly unavailable and its compatibility route returns 501 without writing"
+                        "POST /api/v1/secrets/access/preview returns a server-keyed, value-free, effect-free plan only after opening and wiping the selected value and optional references.",
+                        "The served test distinguishes missing source vs referenced secrets, rejects cycles, proves stable plan identity, and detects any secret value in the response or event log.",
+                        "served_state=served",
+                        "backend_status=served: effect-free access plan plus exact-version execution, CLI run injection, and explicit unavailable bulk import"
+                    ],
+                    "refs": [
+                        "internal/api/secret_access_preview.go",
+                        "internal/server/secret_access_preview_served_test.go",
+                        "internal/secretscli/secretscli.go"
                     ],
                     "commands": [
                         "make test"
@@ -15643,10 +15659,14 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: observe: Secrets at /secrets - developer snippets plus access test against served store, typed client helpers for resolved reads, and a disabled bulk-import disclosure",
+                        "current_frontend_mapping: operate: /secrets/developer provides review, generated snippets, execute, retry, stale-plan invalidation, exact-version verification, and explicit bulk-import disclosure without rendering secret values.",
                         "target_gui_mapping: Developer portal UI with copyable SDK/CLI examples, environment targeting, access-test button, import snippets, reference resolution, and least-privilege policy explanation."
                     ],
                     "refs": [
+                        "web/src/pages/Secrets.tsx",
+                        "web/src/pages/secrets/SecretsPageParts.tsx",
+                        "web/src/components/secrets/index.tsx",
+                        "web/src/__tests__/secrets.test.tsx",
                         "web/src/lib/navigation.ts",
                         "web/src/App.tsx"
                     ]
@@ -15685,12 +15705,15 @@
                 },
                 "test": {
                     "evidence": [
-                        "acceptance_test: UI examples match CLI/API contract, bulk import is visibly unavailable across OpenAPI/CLI/UI, resolved reads are explicit, and generated snippets never include real secret values.",
-                        "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
-                        "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
+                        "TestServedDeveloperSecretAccessPreviewIsExactEffectFreeAndValueFree proves the served value-free plan, and the focused web secrets suite proves UI examples match CLI/API contract, retry, invalidation, and verification behavior.",
+                        "internal/server/secret_access_preview_served_test.go proves exact effect-free planning, missing/cyclic reference recovery, stable identity, and zero value leakage.",
+                        "web/src/__tests__/secrets.test.tsx proves review-before-run, generated snippets, failure/retry, exact-version verification, stale-plan invalidation, and zero value rendering or browser persistence.",
+                        "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row."
                     ],
                     "refs": [
+                        "internal/server/secret_access_preview_served_test.go",
                         "internal/featureparity/feature_facet_coverage_test.go",
+                        "web/src/__tests__/secrets.test.tsx",
                         "web/src/__tests__/route_parity.test.ts",
                         "web/src/__tests__/feature_coverage.test.tsx"
                     ]
@@ -15707,7 +15730,7 @@
                 },
                 "rbac": {
                     "evidence": [
-                        "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: createSecret, listSecrets, importSecrets, getSecret, rotateSecret, deleteSecret",
+                        "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: previewSecretAccess, createSecret, listSecrets, importSecrets, getSecret, rotateSecret, deleteSecret",
                         "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
                     ],
                     "refs": [
@@ -15759,8 +15782,8 @@
                     ]
                 }
             },
-            "ga_served_scope": "out_of_ga",
-            "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator.",
+            "ga_served_scope": "in_ga",
+            "ga_scope_reason": "",
             "dod_capabilities": [
                 "secrets_residuals"
             ],
@@ -15769,8 +15792,8 @@
                 "purpose": "Lets an operator understand and safely use developer secrets experience while tenant, policy, and security authority remain on the server.",
                 "tool": "secrets",
                 "classification": "primary",
-                "release_blocking": true,
-                "console_route": "/secrets/access",
+                "release_blocking": false,
+                "console_route": "/secrets/developer",
                 "navigation_entrypoints": [
                     "tool navigation",
                     "task search",
@@ -15778,12 +15801,10 @@
                 ],
                 "permission_authority": "internal/api route registry and feature authorization manifest",
                 "edition": "core",
-                "dependencies": [
-                    "One or more lifecycle or console stages remain incomplete and are shown in the stage ledger."
-                ],
+                "dependencies": [],
                 "side_effects": "mixed",
-                "secret_data_handling": "The parity contract contains metadata only. Product workflows may reveal a value once, but reports and evidence never contain the value.",
-                "maturity": "observe_only",
+                "secret_data_handling": "The plan, UI receipt, logs, and retained evidence contain metadata only. Preview opens and wipes bytes server-side; execute returns the value only through the authorized read path and the UI neither renders nor stores it.",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -15798,16 +15819,28 @@
                         ]
                     },
                     "configure": {
-                        "status": "missing",
-                        "reason": "The route registry alone does not prove the configure workflow, and this capability row cites no concrete console implementation evidence."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/Secrets.tsx",
+                            "web/src/__tests__/secrets.test.tsx"
+                        ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/api/secret_access_preview.go",
+                            "internal/server/secret_access_preview_served_test.go",
+                            "OpenAPI operationId: previewSecretAccess",
+                            "CLI command: secrets access preview"
+                        ]
                     },
                     "execute": {
-                        "status": "missing",
-                        "reason": "No complete console execution path is proved for this capability."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/Secrets.tsx",
+                            "web/src/__tests__/secrets.test.tsx",
+                            "internal/secretscli/secretscli.go"
+                        ]
                     },
                     "observe": {
                         "status": "complete",
@@ -15816,12 +15849,20 @@
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/Secrets.tsx",
+                            "web/src/__tests__/secrets.test.tsx",
+                            "internal/server/secret_access_preview_served_test.go"
+                        ]
                     },
                     "verify": {
-                        "status": "missing",
-                        "reason": "Durable or external-effect verification is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/Secrets.tsx",
+                            "web/src/__tests__/secrets.test.tsx",
+                            "internal/server/secret_access_preview_served_test.go"
+                        ]
                     },
                     "automate": {
                         "status": "complete",
@@ -15845,8 +15886,8 @@
                 },
                 "owner": "secrets",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "8e09c6061a8b9fb2db2d0d48d605f76b5c365ad2",
+                "freshness": "2026-09-02"
             }
         },
         {

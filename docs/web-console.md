@@ -370,6 +370,20 @@ issued-session ledger (`GET /api/v1/secrets/sessions`), an idempotent,
 event-sourced revocation record. The login test exchange completes the
 create-grant-verify loop in-console.
 
+**Use secrets in apps** (`/secrets/developer`) is the separate developer workflow.
+Its opening form selects one stored secret, a child-process environment variable,
+and optional reference resolution. **Review access plan** calls the effect-free
+`POST /api/v1/secrets/access/preview` route, which transiently proves the current
+tenant-scoped value can be opened, wipes it, and returns only the current version,
+`secrets:read` boundary, server-keyed fingerprint, recovery and verification steps,
+and exact CLI, HTTP, and TypeScript examples. The examples are copyable only after
+that server review and never contain a real value. The separate access test executes
+the served read, compares its name and version with the plan, and renders only a
+value-free receipt. Changed inputs or a changed version invalidate the review;
+ordinary access failures keep an explicit retry path. Bulk import remains visibly
+disabled because its compatibility API safely returns `501` until an atomic
+event-sourced batch command exists.
+
 ### What could be affected (`/graph`)
 
 This screen first answers one question: **Which systems depend on a selected
@@ -758,6 +772,7 @@ remain fail-closed when the surface is disabled. The route is backed by
 | `/secrets`          | Secret store                    |
 | `/secrets/engines`  | Automatic secret sources        |
 | `/secrets/access`   | Machine access                  |
+| `/secrets/developer`| Use secrets in apps             |
 | `/secrets/sharing`  | One-time secret links           |
 | `/secrets/scanning` | Find leaked secrets in code     |
 | `/secrets/sync`     | Send secrets to systems         |

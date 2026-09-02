@@ -11,6 +11,7 @@ import { Secrets } from "@/pages/Secrets";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     secretPage: vi.fn(),
+    previewSecretAccess: vi.fn(),
     previewSecretCreate: vi.fn(),
     createSecret: vi.fn(),
     getSecret: vi.fn(),
@@ -204,6 +205,36 @@ function primeSecretsMocks() {
     execute_external_effects: [],
     recovery_steps: ["Cancel before execution", "Delete the created secret if it is no longer required"],
     secret_data_handling: "The value is validated in transient memory and is never echoed, logged, or stored by preview.",
+  });
+  apiMock.previewSecretAccess.mockResolvedValue({
+    capability: "F64",
+    operation: "read_for_process",
+    ready: true,
+    effect_free: true,
+    name: "app/db/password",
+    version: 3,
+    env_var: "DB_PASSWORD",
+    resolve_references: false,
+    required_permission: "secrets:read",
+    request_fingerprint: "sha256:f64-access-preview-fixture",
+    blockers: [],
+    preview_reads: ["read one tenant-scoped secret metadata row", "open the selected value in transient memory and wipe it after validation"],
+    preview_writes: [],
+    preview_external_effects: [],
+    execute_reads: ["GET the selected tenant-scoped secret through the served SDK path"],
+    execute_data_flow: ["return the value only to this authorized caller"],
+    recovery_steps: ["Keep this reviewed plan and retry after restoring the dependency."],
+    verification_steps: ["Confirm the response name and version match this plan."],
+    cli_argv: ["trstctl", "run", "--secret", "DB_PASSWORD=app/db/password", "--", "./service"],
+    api_request: { method: "GET", path: "/api/v1/secrets/store/app/db/password" },
+    typescript:
+      'const secret = await client.secrets.get("app/db/password", { resolve: false });\nprocess.env["DB_PASSWORD"] = secret.value; // memory only; never log or persist',
+    bulk_import: {
+      available: false,
+      reason: "Atomic event-sourced bulk import is not implemented, so the compatibility route fails closed with 501.",
+      safe_path: "Create each secret with its own idempotency key.",
+    },
+    secret_data_handling: "The plan contains metadata only and never returns the secret value.",
   });
   apiMock.owners.mockResolvedValue([
     {
@@ -822,6 +853,12 @@ describe("secrets surface", () => {
         "Add secret",
       ],
       ["/secrets/access", "Machine access", "Which machine can use which secret, and why.", "Grant access"],
+      [
+        "/secrets/developer",
+        "Use secrets in apps",
+        "Choose one secret, review exactly how an app will read it, then test access without showing the value.",
+        "Plan access",
+      ],
       ["/secrets/sharing", "One-time secret links", "What can be viewed once, by whom, and until when.", "Create one-time link"],
       ["/secrets/engines", "Automatic secret sources", "Which systems can create short-lived credentials on demand.", "Add source"],
       ["/secrets/scanning", "Find leaked secrets in code", "Which repositories were checked and what needs removal.", "Connect repository"],
@@ -885,6 +922,11 @@ describe("secrets surface", () => {
     expect(screen.getByLabelText("Workload / subject")).toHaveFocus();
 
     cleanup();
+    renderSecrets("/secrets/developer");
+    await user.click(within(await screen.findByRole("group", { name: "Do next" })).getByRole("button", { name: "Plan access" }));
+    expect(screen.getByLabelText("Secret name")).toHaveFocus();
+
+    cleanup();
     renderSecrets("/secrets/sharing");
     await user.click(within(await screen.findByRole("group", { name: "Do next" })).getByRole("button", { name: "Create one-time link" }));
     expect(screen.getByLabelText("Value to share")).toHaveFocus();
@@ -893,11 +935,14 @@ describe("secrets surface", () => {
   it("keeps advanced access closed and opens one secret-engine task at a time", async () => {
     const user = userEvent.setup();
     renderSecrets("/secrets/access");
-    const grant = await screen.findByRole("heading", { name: "Grant workload access" });
-    const developer = screen.getByRole("heading", { name: "Developer access" });
-    expect(grant.compareDocumentPosition(developer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Grant workload access" })).toBeInTheDocument();
     expect(screen.getByText("Machine login administration").closest("details")).not.toHaveAttribute("open");
-    expect(screen.getByText("Developer tools").closest("details")).not.toHaveAttribute("open");
+    expect(screen.queryByRole("heading", { name: "Developer access" })).not.toBeInTheDocument();
+
+    cleanup();
+    renderSecrets("/secrets/developer");
+    expect(await screen.findByRole("heading", { name: "Developer access" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Grant workload access" })).not.toBeInTheDocument();
 
     cleanup();
     renderSecrets("/secrets/engines");
@@ -1381,20 +1426,47 @@ describe("secrets surface", () => {
     expect(await screen.findByText(/deleted after approval/i)).toBeInTheDocument();
   });
 
-  it("shows developer snippets and runs an access test without rendering the value", async () => {
+  it("reviews, executes, retries, and verifies the exact developer access plan without rendering the value", async () => {
+    const storageSpy = vi.spyOn(Storage.prototype, "setItem");
     const user = userEvent.setup();
-    renderSecrets("/secrets/access");
+    renderSecrets("/secrets/developer");
 
-    expect(await screen.findByText(/trstctl secrets get app\/db\/password/)).toBeInTheDocument();
-    expect(screen.getByText(/client\.secrets\.get/)).toBeInTheDocument();
+    const reviewForm = within(await screen.findByRole("form", { name: "Review developer secret access" }));
+    expect(screen.queryByText(/trstctl run --secret/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Import unavailable" })).toBeDisabled();
     expect(screen.queryByText("SUPER-SECRET")).not.toBeInTheDocument();
 
-    const accessForm = within(screen.getByRole("form", { name: "Secret access test" }));
-    await user.click(accessForm.getByRole("button", { name: /run access test/i }));
+    await user.click(reviewForm.getByRole("button", { name: "Review access plan" }));
+    await waitFor(() =>
+      expect(apiMock.previewSecretAccess).toHaveBeenCalledWith({
+        name: "app/db/password",
+        env_var: "DB_PASSWORD",
+        resolve: false,
+      }),
+    );
+    expect(await screen.findByText("Ready to test")).toBeInTheDocument();
+    expect(screen.getByText("trstctl run --secret DB_PASSWORD=app/db/password -- ./service")).toBeInTheDocument();
+    expect(screen.getByText(/client\.secrets\.get\("app\/db\/password", \{ resolve: false \}\)/)).toBeInTheDocument();
+    expect(screen.getByText("secrets:read")).toBeInTheDocument();
+    expect(screen.getByText(/preview made no writes and no external calls/i)).toBeInTheDocument();
 
-    await waitFor(() => expect(apiMock.getSecret).toHaveBeenCalledWith("app/db/password"));
-    expect(await screen.findByText(/Access test passed for app\/db\/password/i)).toBeInTheDocument();
+    apiMock.getSecret.mockRejectedValueOnce(new Error("tenant key domain is temporarily sealed"));
+    await user.click(screen.getByRole("button", { name: "Run reviewed access test" }));
+    expect(await screen.findByText(/tenant key domain is temporarily sealed/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry reviewed access test" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Retry reviewed access test" }));
+
+    await waitFor(() => expect(apiMock.getSecret).toHaveBeenLastCalledWith("app/db/password", { resolve: false }));
+    expect(await screen.findByText(/Verified app\/db\/password version 3/i)).toBeInTheDocument();
+    expect(screen.getByText(/matched the reviewed plan/i)).toBeInTheDocument();
     expect(screen.queryByText("SUPER-SECRET")).not.toBeInTheDocument();
+    expect(storageSpy.mock.calls.some((call) => JSON.stringify(call).includes("SUPER-SECRET"))).toBe(false);
+
+    await user.clear(reviewForm.getByLabelText("Environment variable"));
+    await user.type(reviewForm.getByLabelText("Environment variable"), "DATABASE_PASSWORD");
+    expect(screen.getByText(/configuration changed after review/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Run reviewed access test" })).not.toBeInTheDocument();
   });
 
   it("issues ephemeral API keys, runs secret scans, and drives leases", async () => {
@@ -1803,7 +1875,7 @@ describe("secrets access grant console (C-S1 / DA-02 interim)", () => {
   async function openAccessTab() {
     const user = userEvent.setup();
     renderSecrets("/secrets/access");
-    await screen.findByText(/trstctl secrets get app\/db\/password/);
+    await screen.findByRole("heading", { name: "Grant workload access" });
     return user;
   }
 
@@ -1904,7 +1976,7 @@ describe("secrets auth-method console (C-S4 / DA-02)", () => {
   async function openAccessTab() {
     const user = userEvent.setup();
     renderSecrets("/secrets/access");
-    await screen.findByText(/trstctl secrets get app\/db\/password/);
+    await screen.findByRole("heading", { name: "Grant workload access" });
     return user;
   }
 

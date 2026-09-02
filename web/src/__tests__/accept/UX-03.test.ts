@@ -22,7 +22,9 @@ describe("UX-03 task-based navigation", () => {
     // in-page tab strip (each row is one served workspace). New ceiling: 38.
     // H2 added one migration workspace row. The product carve adds one real
     // Trust Operations overview; moving existing routes adds no rows. Ceiling: 40.
-    expect(allSidebarItems.length).toBeLessThanOrEqual(40);
+    // F64 spends one deliberate row to separate application secret use from
+    // machine-login administration. The seven Secrets rows remain task-specific.
+    expect(allSidebarItems.length).toBeLessThanOrEqual(41);
     expect(navGroups.map((group) => messages[group.labelKey].defaultMessage)).toEqual([
       "Overview",
       "Inventory",

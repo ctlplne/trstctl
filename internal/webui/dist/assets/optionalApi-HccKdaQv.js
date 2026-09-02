@@ -1,0 +1,1 @@
+import{_t as e}from"./index-Dm6FutGe.js";function t(t,n,...r){let i=e[t];return typeof i==`function`?i(...r):Promise.resolve(n)}export{t};

@@ -140,12 +140,34 @@ different `Idempotency-Key`, or use the native `/api/v1/secrets/pki` route.
 
 ### The developer secrets experience (F64)
 
-Two pieces make secrets pleasant _and_ safe for developers. `trstctl-cli run` fetches
-named secrets from the served store and runs your program with them in the child
-environment, never written to disk, via the normal `GET /api/v1/secrets/store/{name}`
-RBAC path — only names and paths are audited, never values. An SDK caches secrets,
-auto-refreshes before expiry, and on revocation evicts the cache and fails safe instead
-of serving a stale one.
+The **Use secrets in apps** workspace at `/secrets/developer` turns one secret name
+into an exact, value-free access plan. Choose the secret, environment variable, and
+whether references should resolve; then select **Review access plan**. The served
+`POST /api/v1/secrets/access/preview` route proves the caller can open the current
+tenant-scoped version, immediately wipes those bytes, and returns only metadata:
+the required `secrets:read` permission, current version, CLI arguments, HTTP path,
+TypeScript example, recovery steps, verification steps, and a server-keyed plan
+fingerprint. It writes no event or audit row and makes no external call.
+
+Only a ready, unchanged plan enables **Run reviewed access test**. That test performs
+the real served read, checks that the returned name and version still match the
+review, and renders a value-free receipt. A denied read can be retried with the same
+review. Changed inputs or a changed secret version invalidate the plan and require a
+new review. Missing references, cycles, wrong-tenant names, and invalid environment
+variables fail closed with a specific recovery step. Copyable CLI, HTTP, and
+TypeScript examples come from the server response, so the portal cannot drift from
+the API contract or invent a secret value.
+
+The CLI exposes the same plan before the process boundary:
+
+```sh
+printf '%s\n' '{"name":"db/password","env_var":"DB_PASSWORD","resolve":false}' > access-plan.json
+trstctl-cli secrets access preview -f access-plan.json
+```
+
+After review, `trstctl-cli run` fetches named secrets from the served store and runs
+your program with them in the child environment, never writing the value to disk,
+via the normal `GET /api/v1/secrets/store/{name}` RBAC path:
 
 ```sh
 trstctl-cli run --secret DB_PASSWORD=db/password -- env
@@ -160,8 +182,10 @@ debug commands printing the full environment.
 
 Developers can read with `trstctl-cli secrets store get NAME --resolve=true` for the
 same opt-in resolve/cycle-detect behavior, scoped to the caller's tenant and RBAC.
-There is no bulk-import CLI command while the server route is unavailable; scripts
-must create one secret per idempotent request.
+There is no bulk-import CLI command while the compatibility route is safely
+unavailable: OpenAPI exposes only its `501` response and the portal shows a disabled
+**Import unavailable** control with the safe alternative. Scripts must create each
+secret as its own event-sourced request and use a separate idempotency key.
 
 ### Dynamic secrets (F65) and PKI-as-a-secrets-engine (F67)
 

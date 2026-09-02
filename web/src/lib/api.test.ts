@@ -583,6 +583,9 @@ describe("exported API surface census", () => {
       // F63: validates a native-store create and returns a keyed, secret-free
       // plan without an idempotency row, event, projection, audit, or external call.
       "/api/v1/secrets/store/preview",
+      // F64: opens and wipes one authorized value only to prove readiness, then
+      // returns a metadata-only plan. It writes no state and starts no process.
+      "/api/v1/secrets/access/preview",
       // F61 preview reads public trust and digests, with no verification or signing.
       "/api/v1/broker/agent-identities/preview",
       // F43: validates and normalizes one SSH public-key certificate request
