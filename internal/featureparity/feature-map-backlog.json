@@ -15612,6 +15612,7 @@
             "status": "closed",
             "notes": "Closed by route-level feature-map evidence and tightened by SEC-09 run-style injection. AUD-105 keeps bulk import fail-closed until an atomic event-sourced batch command exists: OpenAPI marks the compatibility operation unavailable with only a 501 response, the CLI omits the command, and the web console renders a disabled disclosure. Test evidence: internal/cli/cli_test.go proves trstctl-cli run fetches served secrets, injects child env, and does not log values; web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage.",
             "api_surface": [
+                "previewSecretAccess",
                 "createSecret",
                 "listSecrets",
                 "importSecrets",
@@ -15621,6 +15622,7 @@
             ],
             "api_na": "",
             "cli_surface": [
+                "secrets access preview",
                 "secrets store put",
                 "secrets store list",
                 "secrets store get",
@@ -15651,6 +15653,7 @@
                 },
                 "cli": {
                     "evidence": [
+                        "CLI command: secrets access preview",
                         "CLI command: secrets store put",
                         "CLI command: secrets store list",
                         "CLI command: secrets store get",
@@ -15668,6 +15671,7 @@
                 "api": {
                     "evidence": [
                         "OpenAPI operationId: createSecret",
+                        "OpenAPI operationId: previewSecretAccess",
                         "OpenAPI operationId: listSecrets",
                         "OpenAPI operationId importSecrets is deprecated, marked x-trstctl-availability=unavailable, and publishes 501 with no success response.",
                         "OpenAPI operationId: getSecret",
@@ -15822,12 +15826,14 @@
                     "automate": {
                         "status": "complete",
                         "evidence": [
+                            "OpenAPI operationId: previewSecretAccess",
                             "OpenAPI operationId: createSecret",
                             "OpenAPI operationId: listSecrets",
                             "OpenAPI operationId: importSecrets",
                             "OpenAPI operationId: getSecret",
                             "OpenAPI operationId: rotateSecret",
                             "OpenAPI operationId: deleteSecret",
+                            "CLI command: secrets access preview",
                             "CLI command: secrets store put",
                             "CLI command: secrets store list",
                             "CLI command: secrets store get",

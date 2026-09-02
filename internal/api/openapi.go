@@ -5019,6 +5019,35 @@ func componentSchemas() map[string]*Schema {
 		"recovery_steps":           {Type: "array", Items: str()},
 		"secret_data_handling":     str(),
 	}, "capability", "operation", "ready", "effect_free", "name", "next_version", "required_permission", "request_fingerprint", "blockers", "preview_writes", "preview_external_effects", "execute_writes", "execute_external_effects", "recovery_steps", "secret_data_handling")
+	secretAccessPreviewReq := object(map[string]*Schema{
+		"name": str(), "env_var": str(), "resolve": {Type: "boolean"},
+	}, "name", "env_var", "resolve")
+	secretAccessAPIRequest := object(map[string]*Schema{
+		"method": {Type: "string", Enum: []string{"GET"}}, "path": str(),
+	}, "method", "path")
+	secretAccessBulkImport := object(map[string]*Schema{
+		"available": {Type: "boolean"}, "reason": str(), "safe_path": str(),
+	}, "available", "reason", "safe_path")
+	secretAccessPreview := object(map[string]*Schema{
+		"capability": {Type: "string", Enum: []string{"F64"}},
+		"operation":  {Type: "string", Enum: []string{"read_for_process"}},
+		"ready":      {Type: "boolean"}, "effect_free": {Type: "boolean"},
+		"name": str(), "version": {Type: "integer"}, "env_var": str(), "resolve_references": {Type: "boolean"},
+		"required_permission": str(), "request_fingerprint": str(),
+		"blockers":                 {Type: "array", Items: str()},
+		"preview_reads":            {Type: "array", Items: str()},
+		"preview_writes":           {Type: "array", Items: str()},
+		"preview_external_effects": {Type: "array", Items: str()},
+		"execute_reads":            {Type: "array", Items: str()},
+		"execute_data_flow":        {Type: "array", Items: str()},
+		"recovery_steps":           {Type: "array", Items: str()},
+		"verification_steps":       {Type: "array", Items: str()},
+		"cli_argv":                 {Type: "array", Items: str()},
+		"api_request":              secretAccessAPIRequest,
+		"typescript":               str(),
+		"bulk_import":              secretAccessBulkImport,
+		"secret_data_handling":     str(),
+	}, "capability", "operation", "ready", "effect_free", "name", "env_var", "resolve_references", "required_permission", "request_fingerprint", "blockers", "preview_reads", "preview_writes", "preview_external_effects", "execute_reads", "execute_data_flow", "recovery_steps", "verification_steps", "cli_argv", "api_request", "typescript", "bulk_import", "secret_data_handling")
 	secretRotateReq := object(map[string]*Schema{
 		"value": str(),
 	}, "value")
@@ -6264,6 +6293,8 @@ func componentSchemas() map[string]*Schema {
 		"BreakglassReconcileResponse":              breakglassReconcileResp,
 		"SecretCreateRequest":                      secretCreateReq,
 		"SecretStoreCreatePreview":                 secretStoreCreatePreview,
+		"SecretAccessPreviewRequest":               secretAccessPreviewReq,
+		"SecretAccessPreview":                      secretAccessPreview,
 		"SecretRotateRequest":                      secretRotateReq,
 		"SecretImportRequest":                      secretImportReq,
 		"SecretRecoverRequest":                     secretRecoverReq,

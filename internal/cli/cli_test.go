@@ -1399,6 +1399,25 @@ func TestConnectorRotationPreviewCommandSendsBodyWithoutIdempotencyKey(t *testin
 	}
 }
 
+func TestDeveloperSecretAccessPreviewCommandSendsBodyWithoutIdempotencyKey(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, http.StatusOK, `{"capability":"F64","operation":"read_for_process","ready":true,"effect_free":true,"name":"app/db/dsn","version":1,"env_var":"DATABASE_URL","resolve_references":true,"required_permission":"secrets:read","request_fingerprint":"sha256:plan","blockers":[],"preview_reads":["metadata"],"preview_writes":[],"preview_external_effects":[],"execute_reads":["secret"],"execute_data_flow":["authorized caller"],"recovery_steps":["retry"],"verification_steps":["match version"],"cli_argv":["trstctl","run"],"api_request":{"method":"GET","path":"/api/v1/secrets/store/app/db/dsn?resolve=true"},"typescript":"const secret = await client.secrets.get();","bulk_import":{"available":false,"reason":"not implemented","safe_path":"one at a time"},"secret_data_handling":"metadata only"}`, &cap)
+	body := `{"name":"app/db/dsn","env_var":"DATABASE_URL","resolve":true}`
+	code, _, _ := run(t, []string{"secrets", "access", "preview", "-f", "-"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, body)
+	if code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+	if cap.Method != http.MethodPost || cap.Path != "/api/v1/secrets/access/preview" {
+		t.Errorf("request = %s %s", cap.Method, cap.Path)
+	}
+	if strings.TrimSpace(string(cap.Body)) != body {
+		t.Errorf("body = %q, want %q", cap.Body, body)
+	}
+	if cap.Header.Get("Idempotency-Key") != "" {
+		t.Error("effect-free developer access preview must not send an Idempotency-Key")
+	}
+}
+
 func TestSecretRotationScheduleCommandsSendPathsAndIdempotencyKeys(t *testing.T) {
 	var createCap capture
 	srv := mockServer(t, 201, `{"id":"11111111-1111-1111-1111-111111111111","name":"reporting-hourly","provider":"connector:ci","key":"db/reporting","old_ref":"version:1","interval_seconds":3600,"enabled":true,"next_run_at":"2026-07-01T00:00:00Z","last_run_status":"","created_at":"2026-07-01T00:00:00Z","updated_at":"2026-07-01T00:00:00Z"}`, &createCap)

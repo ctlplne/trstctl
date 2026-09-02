@@ -374,6 +374,8 @@ import type {
   RotationRun,
   RotationRunList,
   ScaleOrchestrationPlan,
+  SecretAccessPreview,
+  SecretAccessPreviewRequest,
   SecretApproval as GenSecretApproval,
   SecretApprovalRequest as GenSecretApprovalRequest,
   SecretMeta,
@@ -986,6 +988,8 @@ export type {
   RotationRun,
   RotationRunList,
   ScaleOrchestrationPlan,
+  SecretAccessPreview,
+  SecretAccessPreviewRequest,
   SecretMeta,
   SecretMetaList,
   SecretStoreCreatePreview,
@@ -2314,6 +2318,7 @@ export interface Api {
   mdmSCEPStatus(): Promise<MDMSCEPStatus>;
   mdmSCEPPolicies(): Promise<MDMSCEPPolicyList>;
   secretPage(options?: { limit?: number; cursor?: string }): Promise<SecretMetaList>;
+  previewSecretAccess(input: SecretAccessPreviewRequest): Promise<SecretAccessPreview>;
   previewSecretCreate(input: SecretCreateRequest): Promise<SecretStoreCreatePreview>;
   createSecret(input: SecretCreateRequest): Promise<SecretMeta>;
   getSecret(name: string, options?: { resolve?: boolean }): Promise<SecretValue>;
@@ -2871,6 +2876,7 @@ const liveApi: Api = {
     const suffix = qs.toString();
     return req<SecretMetaList>(`/api/v1/secrets/store${suffix ? `?${suffix}` : ""}`);
   },
+  previewSecretAccess: (input) => postRead<SecretAccessPreview>("/api/v1/secrets/access/preview", input),
   previewSecretCreate: (input) => postRead<SecretStoreCreatePreview>("/api/v1/secrets/store/preview", input),
   createSecret: (input) => mutate<SecretMeta>("POST", "/api/v1/secrets/store", input),
   getSecret: (name, options) => {

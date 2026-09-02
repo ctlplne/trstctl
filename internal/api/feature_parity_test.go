@@ -215,9 +215,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// F61 adds independent durable history list/detail reads, not new mutations.
 	// F45 adds an exact, effect-free attested SSH user-certificate preview.
 	// F37 adds an exact, effect-free connector secret-rotation preview.
-	// F63 adds the exact, effect-free native secret-create preview.
-	if len(out) != 415 {
-		t.Fatalf("OpenAPI operationIds = %d, want 415", len(out))
+	// F63 adds the exact, effect-free native secret-create preview. F64 adds the
+	// exact, effect-free, value-free developer secret access plan.
+	if len(out) != 416 {
+		t.Fatalf("OpenAPI operationIds = %d, want 416", len(out))
 	}
 	return out
 }

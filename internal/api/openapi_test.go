@@ -282,6 +282,34 @@ func TestApplicationSecretImportContractIsExplicitlyUnavailable(t *testing.T) {
 	}
 }
 
+func TestDeveloperSecretAccessPreviewContractIsValueFreeAndReadOnly(t *testing.T) {
+	doc := fetchSpec(t)
+	op := doc["paths"].(map[string]any)["/api/v1/secrets/access/preview"].(map[string]any)["post"].(map[string]any)
+	if op["operationId"] != "previewSecretAccess" || op["x-trstctl-permission"] != "secrets:read" {
+		t.Fatalf("developer secret access preview operation = id:%v permission:%v", op["operationId"], op["x-trstctl-permission"])
+	}
+	if hasRequiredHeaderParam(op, "Idempotency-Key") {
+		t.Fatal("effect-free developer secret access preview declares a mutation idempotency key")
+	}
+	schemas := doc["components"].(map[string]any)["schemas"].(map[string]any)
+	response := schemas["SecretAccessPreview"].(map[string]any)
+	properties := response["properties"].(map[string]any)
+	for _, forbidden := range []string{"value", "secret", "token", "credential"} {
+		if properties[forbidden] != nil {
+			t.Fatalf("developer access plan exposes forbidden property %q", forbidden)
+		}
+	}
+	for _, required := range []string{"effect_free", "request_fingerprint", "cli_argv", "api_request", "typescript", "bulk_import", "secret_data_handling"} {
+		found := false
+		for _, field := range response["required"].([]any) {
+			found = found || field == required
+		}
+		if !found {
+			t.Errorf("developer access plan does not require %q", required)
+		}
+	}
+}
+
 func TestOpenAPIMutationsDeclareRequiredIdempotencyKeyHeader(t *testing.T) {
 	doc := fetchSpec(t)
 	paths := doc["paths"].(map[string]any)

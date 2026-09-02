@@ -6504,6 +6504,38 @@ export interface ScaleUnitEconomics {
   postgres_gib_30_day: number;
 }
 
+export interface SecretAccessPreview {
+  api_request: { method: "GET"; path: string };
+  blockers: string[];
+  bulk_import: { available: boolean; reason: string; safe_path: string };
+  capability: "F64";
+  cli_argv: string[];
+  effect_free: boolean;
+  env_var: string;
+  execute_data_flow: string[];
+  execute_reads: string[];
+  name: string;
+  operation: "read_for_process";
+  preview_external_effects: string[];
+  preview_reads: string[];
+  preview_writes: string[];
+  ready: boolean;
+  recovery_steps: string[];
+  request_fingerprint: string;
+  required_permission: string;
+  resolve_references: boolean;
+  secret_data_handling: string;
+  typescript: string;
+  verification_steps: string[];
+  version?: number;
+}
+
+export interface SecretAccessPreviewRequest {
+  env_var: string;
+  name: string;
+  resolve: boolean;
+}
+
 export interface SecretApproval {
   action: "rotate" | "recover" | "delete";
   approval_count: number;

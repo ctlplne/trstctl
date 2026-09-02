@@ -5628,12 +5628,14 @@ export const canonicalCapabilities = [
         "automate": {
           "status": "complete",
           "evidence": [
+            "OpenAPI operationId: previewSecretAccess",
             "OpenAPI operationId: createSecret",
             "OpenAPI operationId: listSecrets",
             "OpenAPI operationId: importSecrets",
             "OpenAPI operationId: getSecret",
             "OpenAPI operationId: rotateSecret",
             "OpenAPI operationId: deleteSecret",
+            "CLI command: secrets access preview",
             "CLI command: secrets store put",
             "CLI command: secrets store list",
             "CLI command: secrets store get",

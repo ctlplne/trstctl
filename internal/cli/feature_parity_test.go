@@ -261,8 +261,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// F45 adds the read-only attested SSH user-certificate preview command.
 	// F37 adds the read-only, effect-free secret-rotation preview command.
 	// F63 adds the read-only, effect-free native secret-create preview command.
-	if len(out) != 427 {
-		t.Fatalf("CLI commands = %d, want 427", len(out))
+	// F64 adds the read-only, effect-free developer secret-access preview command.
+	if len(out) != 428 {
+		t.Fatalf("CLI commands = %d, want 428", len(out))
 	}
 	return out
 }
