@@ -24,9 +24,15 @@ describe("U2-4 version history", () => {
 
     await userEvent.click(screen.getAllByRole("button", { name: "Reveal" })[0]);
     expect(await screen.findByText(/v3: v3val/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(screen.queryByText(/v3: v3val/)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getAllByRole("button", { name: "Reveal" })[0]);
+    expect(await screen.findByText(/v3: v3val/)).toBeInTheDocument();
 
     await userEvent.type(screen.getByPlaceholderText("2026-01-01T00:00:00Z"), "2026-01-01T00:00:00Z");
     await userEvent.click(screen.getByRole("button", { name: "Recover" }));
     expect(await screen.findByText(/Recovered to version 2/)).toBeInTheDocument();
+    expect(screen.queryByText(/v3: v3val/)).not.toBeInTheDocument();
   });
 });

@@ -224,6 +224,7 @@ export function VersionHistory({ name, latestVersion }: { name: string; latestVe
   async function recover() {
     setError(null);
     setNote(null);
+    setRevealed(null);
     try {
       const meta = await api.recoverSecret(name, { at: at.trim() });
       setNote(`Recovered to version ${meta.version}.`);
@@ -250,9 +251,14 @@ export function VersionHistory({ name, latestVersion }: { name: string; latestVe
         ))}
       </AttentionList>
       {revealed ? (
-        <p className="mt-2 break-all font-mono text-caption">
-          v{revealed.version}: {revealed.value}
-        </p>
+        <div className="mt-2 grid gap-2 rounded-control border border-border bg-muted p-3">
+          <p className="break-all font-mono text-caption">
+            v{revealed.version}: {revealed.value}
+          </p>
+          <Button type="button" size="sm" variant="outline" className="w-fit" onClick={() => setRevealed(null)}>
+            {translateNow("source.dismiss.48845bff33")}
+          </Button>
+        </div>
       ) : null}
       <div className="mt-3 flex flex-wrap items-end gap-2">
         <label className="grid gap-1 text-body">
