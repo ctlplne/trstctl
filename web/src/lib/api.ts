@@ -252,6 +252,8 @@ import type {
   MachineAuthMethod,
   MachineAuthMethodList,
   MachineAuthMethodOverride,
+  MachineLoginPreview,
+  MachineLoginPreviewRequest,
   MachineLoginRequest,
   MachineLoginResponse,
   MachineSession,
@@ -893,6 +895,8 @@ export type {
   MachineAuthMethod,
   MachineAuthMethodList,
   MachineAuthMethodOverride,
+  MachineLoginPreview,
+  MachineLoginPreviewRequest,
   MachineLoginRequest,
   MachineLoginResponse,
   MachineSession,
@@ -2356,6 +2360,7 @@ export interface Api {
   issueEphemeralAPIKey(input: EphemeralAPIKeyRequest): Promise<EphemeralAPIKey>;
   previewPKISecret(input: PKISecretRequest): Promise<PKISecretPreview>;
   issuePKISecret(input: PKISecretRequest): Promise<PKISecret>;
+  previewMachineLogin(input: MachineLoginPreviewRequest): Promise<MachineLoginPreview>;
   machineLogin(input: MachineLoginRequest): Promise<MachineLoginResponse>;
   /** C-S2 (DA-02): secret-free projection of the configured machine-auth methods. */
   machineAuthMethods(): Promise<MachineAuthMethodList>;
@@ -2931,6 +2936,7 @@ const liveApi: Api = {
       body: JSON.stringify(input),
     }),
   issuePKISecret: (input) => mutate<PKISecret>("POST", "/api/v1/secrets/pki", input),
+  previewMachineLogin: (input) => postRead<MachineLoginPreview>("/api/v1/secrets/login/preview", input),
   machineLogin: (input) => mutate<MachineLoginResponse>("POST", "/api/v1/secrets/login", input),
   machineAuthMethods: () => req<MachineAuthMethodList>("/api/v1/secrets/auth-methods"),
   machineSessions: (options) => req<MachineSessionList>(`/api/v1/secrets/sessions${options?.limit ? `?limit=${options.limit}` : ""}`),

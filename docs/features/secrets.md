@@ -621,8 +621,9 @@ Before reading a secret, a workload must authenticate _to_ trstctl via the auth-
 framework: it presents a credential (a token, an OIDC JWT, a Kubernetes SA token, cloud
 IAM, etc.), trstctl verifies it through the single isolated cryptography path
 (timing-safe), and issues a scoped, time-bounded **session**. Credential bytes are
-never logged (wipeable memory, never a copyable string); every attempt is an immutable
-event in the tamper-evident log.
+never logged (wipeable memory, never a copyable string). Successful sessions and
+operator revocations become tenant-scoped event/projection evidence in the durable
+session ledger; authentication failures return only a generic denial.
 
 `POST /api/v1/secrets/login` serves six machine methods — `token`, `kubernetes`,
 `aws-iam`, `gcp`, `azure`, `oidc`, `jwt`. JWT-family methods verify against an
@@ -647,6 +648,50 @@ secrets:
       allowed_accounts: ["123456789012"]
       scopes: ["secrets:read"]
 ```
+
+The `/secrets/access` console turns that backend framework into one complete,
+review-first journey:
+
+1. **Choose method.** Select one method from the server's secret-free method
+   inventory. The console shows its real type, source, issuer/audience rules, tenant
+   restrictions, and enabled/disabled overlay. Method definitions remain
+   deployment-owned configuration; the browser cannot invent or silently edit an
+   authentication authority.
+2. **Review login.** `POST /api/v1/secrets/login/preview` receives only the method
+   name. It reads configuration and returns the exact tenant binding, credential
+   shape, session lifetime, prerequisites, blockers, writes, outside calls, recovery
+   steps, verification steps, and CLI command. It does not receive a credential,
+   call the verifier, create a session/event/idempotency row, or contact AWS STS.
+3. **Test reviewed login.** Only a ready plan reveals the password-style credential
+   field. `POST /api/v1/secrets/login` consumes the credential once and requires an
+   `Idempotency-Key`; the request is bound with a server-keyed digest of the tenant,
+   method, credential, and review fingerprint. An exact retry returns the original
+   response instead of issuing a second session. Reusing the key for different input
+   returns `409`. No credential or replay digest is displayed or logged.
+4. **Verify and recover.** The result shows only session id, principal, method,
+   scopes, and expiry, then refreshes **Issued sessions** so the durable row can be
+   checked and revoked. The browser clears the credential after both success and
+   failure. A normal authentication failure keeps the reviewed plan for a corrected
+   retry; a `409` configuration/fingerprint change discards it and requires a fresh
+   review. A disabled method shows blockers and never accepts a credential.
+
+Headless users get the same contract. Keep credential JSON in a permission-restricted
+file or provide it through a protected pipe; do not put credentials in shell history:
+
+```bash
+trstctl-cli secrets login preview -f machine-login.json
+trstctl-cli --idempotency-key workload-login-20260902 secrets login -f machine-login.json
+trstctl-cli secrets sessions list
+trstctl-cli --idempotency-key revoke-synthetic-session-1 secrets sessions revoke SESSION_ID
+```
+
+Preview requires `secrets:read` because method configuration is operator metadata.
+The login exchange itself is intentionally public: the presented machine credential
+authenticates the workload, while `X-Tenant-ID` remains only a lookup hint and never
+grants access. The session list/revoke and method enable/disable operations remain
+RBAC-protected. This preserves CA/provider agnosticism: the framework validates the
+credential against the configured authority but does not require trstctl to have
+issued it.
 
 ### Secret scanning bridge (F39) and sharing & approvals (F60)
 

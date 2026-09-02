@@ -4103,9 +4103,45 @@ export interface MachineAuthMethodOverride {
   name: string;
 }
 
+export interface MachineLoginPrerequisite {
+  detail: string;
+  id: string;
+  ready: boolean;
+  remediation?: string;
+}
+
+export interface MachineLoginPreview {
+  blockers: string[];
+  capability: string;
+  cli_argv: string[];
+  credential_format: string;
+  effect_free: boolean;
+  execute_external_effects: string[];
+  execute_writes: string[];
+  method: MachineAuthMethod;
+  operation: string;
+  prerequisites: MachineLoginPrerequisite[];
+  preview_external_effects: string[];
+  preview_reads: string[];
+  preview_writes: string[];
+  ready: boolean;
+  recovery_steps: string[];
+  request_fingerprint: string;
+  required_permission: string;
+  secret_data_handling: string;
+  session_ttl_seconds: number;
+  tenant_binding: string;
+  verification_steps: string[];
+}
+
+export interface MachineLoginPreviewRequest {
+  method?: string;
+}
+
 export interface MachineLoginRequest {
   credential: string;
   method?: string;
+  preview_fingerprint?: string;
 }
 
 export interface MachineLoginResponse {

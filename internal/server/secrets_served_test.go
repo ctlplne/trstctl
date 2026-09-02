@@ -2298,6 +2298,7 @@ func TestServedMachineLogin(t *testing.T) {
 	req, _ := http.NewRequest(http.MethodPost, h.ts.URL+"/api/v1/secrets/login", bytes.NewReader(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Tenant-ID", h.tenant)
+	req.Header.Set("Idempotency-Key", "served-machine-login-good")
 	resp, err := h.ts.Client().Do(req)
 	if err != nil {
 		t.Fatalf("login request: %v", err)
@@ -2328,6 +2329,7 @@ func TestServedMachineLogin(t *testing.T) {
 	req2, _ := http.NewRequest(http.MethodPost, h.ts.URL+"/api/v1/secrets/login", bytes.NewReader(badBody))
 	req2.Header.Set("Content-Type", "application/json")
 	req2.Header.Set("X-Tenant-ID", h.tenant)
+	req2.Header.Set("Idempotency-Key", "served-machine-login-forged")
 	resp2, _ := h.ts.Client().Do(req2)
 	_ = resp2.Body.Close()
 	if resp2.StatusCode == http.StatusOK {
@@ -2350,6 +2352,7 @@ func TestServedMachineLoginRejectsCrossTenantHeader(t *testing.T) {
 	req, _ := http.NewRequest(http.MethodPost, h.ts.URL+"/api/v1/secrets/login", bytes.NewReader(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Tenant-ID", tenantB)
+	req.Header.Set("Idempotency-Key", "served-machine-login-cross-tenant")
 	resp, err := h.ts.Client().Do(req)
 	if err != nil {
 		t.Fatalf("cross-tenant login request: %v", err)
@@ -2523,6 +2526,7 @@ func servedMachineLogin(t *testing.T, h *servedHarness, tenantID, method, creden
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Tenant-ID", tenantID)
+	req.Header.Set("Idempotency-Key", "served-machine-login-"+method)
 	resp, err := h.ts.Client().Do(req)
 	if err != nil {
 		t.Fatalf("machine login request: %v", err)

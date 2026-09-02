@@ -6068,7 +6068,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use platform auth-method framework while tenant, policy, and security authority remain on the server.",
       "tool": "secrets",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/secrets/access",
       "navigationEntrypoints": [
         "tool navigation",
@@ -6078,59 +6078,93 @@ export const canonicalCapabilities = [
       "permissionAuthority": "internal/api route registry and feature authorization manifest",
       "edition": "core",
       "dependencies": [
-        "Configuration, deployment, or edition prerequisite is named by the served capability evidence."
+        "secrets.enable_api is true and the secrets KEK/server-keyed command digest is available.",
+        "At least one tenant-scoped machine auth method has its required verifier configured; JWT-family methods require trusted JWKS, and AWS IAM requires an account or ARN allowlist."
       ],
       "sideEffects": "mixed",
-      "secretDataHandling": "The parity contract contains metadata only. Product workflows may reveal a value once, but reports and evidence never contain the value.",
-      "maturity": "observe_only",
+      "secretDataHandling": "Preview never receives a credential. Execution holds the credential in wipeable bytes, binds idempotency with a server-keyed digest, never echoes or logs it, and the browser clears its field after success or failure. Reports contain metadata and fingerprints only.",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
           "evidence": [
-            "web/src/lib/navigation.ts"
+            "web/src/lib/navigation.ts",
+            "web/src/pages/Secrets.tsx"
           ]
         },
         "understand": {
           "status": "complete",
           "evidence": [
-            "web/src/lib/navigation.ts"
+            "web/src/pages/secrets/MachineAuthWorkflow.tsx",
+            "internal/api/machine_login_preview.go",
+            "docs/features/secrets.md"
           ]
         },
         "configure": {
-          "status": "missing",
-          "reason": "The route registry alone does not prove the configure workflow, and this capability row cites no concrete console implementation evidence."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/secrets/MachineAuthWorkflow.tsx",
+            "web/src/pages/Secrets.tsx",
+            "web/src/__tests__/secrets.test.tsx"
+          ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "internal/api/machine_login_preview.go",
+            "internal/api/machine_sessions_served_test.go",
+            "web/src/pages/secrets/MachineAuthWorkflow.tsx",
+            "web/src/__tests__/secrets.test.tsx"
+          ]
         },
         "execute": {
-          "status": "missing",
-          "reason": "No complete console execution path is proved for this capability."
+          "status": "complete",
+          "evidence": [
+            "internal/api/secrets_identity.go",
+            "internal/api/mutation.go",
+            "internal/api/machine_sessions_served_test.go",
+            "internal/server/secrets_served_test.go",
+            "web/src/pages/secrets/MachineAuthWorkflow.tsx",
+            "web/src/__tests__/secrets.test.tsx"
+          ]
         },
         "observe": {
           "status": "complete",
           "evidence": [
-            "web/src/lib/navigation.ts"
+            "web/src/pages/Secrets.tsx",
+            "internal/api/machine_sessions_served_test.go",
+            "web/src/__tests__/secrets.test.tsx"
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "internal/api/machine_login_preview.go",
+            "internal/api/machine_sessions_served_test.go",
+            "web/src/pages/secrets/MachineAuthWorkflow.tsx",
+            "web/src/__tests__/secrets.test.tsx"
+          ]
         },
         "verify": {
-          "status": "missing",
-          "reason": "Durable or external-effect verification is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "internal/api/machine_sessions_served_test.go",
+            "internal/server/secrets_served_test.go",
+            "web/src/pages/secrets/MachineAuthWorkflow.tsx",
+            "web/src/__tests__/secrets.test.tsx"
+          ]
         },
         "automate": {
           "status": "complete",
           "evidence": [
+            "OpenAPI operationId: previewMachineLogin",
             "OpenAPI operationId: machineLogin",
             "OpenAPI operationId: listMachineAuthMethods",
             "OpenAPI operationId: listMachineSessions",
             "OpenAPI operationId: revokeMachineSession",
             "OpenAPI operationId: disableMachineAuthMethod",
             "OpenAPI operationId: enableMachineAuthMethod",
+            "CLI command: secrets login preview",
             "CLI command: secrets login",
             "CLI command: secrets auth-methods list",
             "CLI command: secrets auth-methods disable",
@@ -6143,7 +6177,7 @@ export const canonicalCapabilities = [
       "owner": "secrets",
       "targetCheckpoint": "frontend-convergence",
       "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "freshness": "2026-09-02"
     }
   },
   {

@@ -1,1 +1,0 @@
-import{_t as e}from"./index-DZ_iD2x-.js";function t(t,n,...r){let i=e[t];return typeof i==`function`?i(...r):Promise.resolve(n)}export{t};

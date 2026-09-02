@@ -217,8 +217,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// F37 adds an exact, effect-free connector secret-rotation preview.
 	// F63 adds the exact, effect-free native secret-create preview. F64 adds the
 	// exact, effect-free, value-free developer secret access plan.
-	if len(out) != 417 {
-		t.Fatalf("OpenAPI operationIds = %d, want 417", len(out))
+	// F58 adds the exact, effect-free machine-login method plan; credential
+	// verification remains the separate idempotent login mutation.
+	if len(out) != 418 {
+		t.Fatalf("OpenAPI operationIds = %d, want 418", len(out))
 	}
 	return out
 }

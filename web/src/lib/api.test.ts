@@ -617,6 +617,10 @@ describe("exported API surface census", () => {
       // F67: validates the exact PKI custody/profile/CA plan but performs no
       // signing, event append, audit write, idempotency record, or egress.
       "/api/v1/secrets/pki/preview",
+      // F58: reads one secret-free auth-method projection and returns its exact
+      // login plan without receiving a credential, calling a verifier, or
+      // creating a session, event, idempotency record, or outside request.
+      "/api/v1/secrets/login/preview",
       // F55: this POST reads assembled in-memory CMP posture. It carries no
       // body and performs no enrollment, write, signer call, or network call.
       "/api/v1/protocols/cmp/qualification",
@@ -1698,10 +1702,22 @@ describe("secrets contract", () => {
       preview_fingerprint: "sha256:reviewed",
     });
 
+    mockFetch(200, JSON.stringify({ capability: "F58", ready: true, effect_free: true, request_fingerprint: "sha256:machine-plan" }));
+    await api.previewMachineLogin({ method: "token" });
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/login/preview");
+    expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe("POST");
+    expect(sentHeaders()["Idempotency-Key"]).toBeUndefined();
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toEqual({ method: "token" });
+
     mockFetch(200, JSON.stringify({ session_id: "sess-1", principal: "svc", method: "token", scopes: ["secrets:read"], expires_at: "2026-06-19T13:00:00Z" }));
-    await api.machineLogin({ method: "token", credential: "machine-token" });
+    await api.machineLogin({ method: "token", credential: "machine-token", preview_fingerprint: "sha256:machine-plan" });
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/login");
     expect(sentHeaders()["Idempotency-Key"]).toMatch(/^(?:idem-.+|[0-9a-f-]{36})$/);
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toEqual({
+      method: "token",
+      credential: "machine-token",
+      preview_fingerprint: "sha256:machine-plan",
+    });
 
     mockFetch(201, JSON.stringify({ token: "share-token", expires_at: "2026-06-19T13:00:00Z" }));
     await api.createShare({ value: "secret", ttl_seconds: 300 });

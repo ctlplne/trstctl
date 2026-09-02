@@ -5641,7 +5641,28 @@ func componentSchemas() map[string]*Schema {
 	}, "serial", "common_name", "certificate")
 	machineLoginReq := object(map[string]*Schema{
 		"method": str(), "credential": str(),
+		"preview_fingerprint": {Type: "string", Description: "Optional tenant- and method-bound fingerprint from the authenticated preview route. When supplied, login fails closed if method configuration, enabled state, or session lifetime changed."},
 	}, "credential")
+	machineLoginPreviewReq := object(map[string]*Schema{
+		"method": {Type: "string", Description: "Exact configured machine-auth method name. Empty selects the builtin token method for compatibility."},
+	})
+	machineLoginPrerequisite := object(map[string]*Schema{
+		"id": str(), "ready": {Type: "boolean"}, "detail": str(), "remediation": str(),
+	}, "id", "ready", "detail")
+	machineLoginPreview := object(map[string]*Schema{
+		"capability": str(), "operation": str(), "ready": {Type: "boolean"}, "effect_free": {Type: "boolean"},
+		"method": {Ref: "#/components/schemas/MachineAuthMethod"}, "tenant_binding": str(), "credential_format": str(),
+		"session_ttl_seconds": {Type: "integer"}, "required_permission": str(), "request_fingerprint": str(),
+		"prerequisites": {Type: "array", Items: &Schema{Ref: "#/components/schemas/MachineLoginPrerequisite"}},
+		"blockers":      {Type: "array", Items: str()}, "preview_reads": {Type: "array", Items: str()},
+		"preview_writes": {Type: "array", Items: str()}, "preview_external_effects": {Type: "array", Items: str()},
+		"execute_writes": {Type: "array", Items: str()}, "execute_external_effects": {Type: "array", Items: str()},
+		"recovery_steps": {Type: "array", Items: str()}, "verification_steps": {Type: "array", Items: str()},
+		"cli_argv": {Type: "array", Items: str()}, "secret_data_handling": str(),
+	}, "capability", "operation", "ready", "effect_free", "method", "tenant_binding", "credential_format",
+		"session_ttl_seconds", "required_permission", "request_fingerprint", "prerequisites", "blockers", "preview_reads",
+		"preview_writes", "preview_external_effects", "execute_writes", "execute_external_effects", "recovery_steps",
+		"verification_steps", "cli_argv", "secret_data_handling")
 	machineLoginResp := object(map[string]*Schema{
 		"session_id": str(),
 		"principal":  str(),
@@ -6354,6 +6375,9 @@ func componentSchemas() map[string]*Schema {
 			"name":     str(),
 			"disabled": {Type: "boolean"},
 		}, "name", "disabled"),
+		"MachineLoginPreviewRequest":         machineLoginPreviewReq,
+		"MachineLoginPrerequisite":           machineLoginPrerequisite,
+		"MachineLoginPreview":                machineLoginPreview,
 		"SecretMetaList":                     list("SecretMeta"),
 		"SecretValue":                        secretValue,
 		"SecretRotationRequest":              secretRotationReq,

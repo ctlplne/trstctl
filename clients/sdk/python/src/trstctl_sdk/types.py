@@ -5689,11 +5689,59 @@ MachineAuthMethodOverride = TypedDict(
     total=False,
 )
 
+MachineLoginPrerequisite = TypedDict(
+    'MachineLoginPrerequisite',
+    {
+        'detail': str,
+        'id': str,
+        'ready': bool,
+        'remediation': str,
+    },
+    total=False,
+)
+
+MachineLoginPreview = TypedDict(
+    'MachineLoginPreview',
+    {
+        'blockers': list[str],
+        'capability': str,
+        'cli_argv': list[str],
+        'credential_format': str,
+        'effect_free': bool,
+        'execute_external_effects': list[str],
+        'execute_writes': list[str],
+        'method': dict[str, Any],
+        'operation': str,
+        'prerequisites': list[dict[str, Any]],
+        'preview_external_effects': list[str],
+        'preview_reads': list[str],
+        'preview_writes': list[str],
+        'ready': bool,
+        'recovery_steps': list[str],
+        'request_fingerprint': str,
+        'required_permission': str,
+        'secret_data_handling': str,
+        'session_ttl_seconds': int,
+        'tenant_binding': str,
+        'verification_steps': list[str],
+    },
+    total=False,
+)
+
+MachineLoginPreviewRequest = TypedDict(
+    'MachineLoginPreviewRequest',
+    {
+        'method': str,
+    },
+    total=False,
+)
+
 MachineLoginRequest = TypedDict(
     'MachineLoginRequest',
     {
         'credential': str,
         'method': str,
+        'preview_fingerprint': str,
     },
     total=False,
 )

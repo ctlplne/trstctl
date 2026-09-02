@@ -27,6 +27,7 @@ const { apiMock } = vi.hoisted(() => ({
     approveSecretChange: vi.fn(),
     previewPKISecret: vi.fn(),
     issuePKISecret: vi.fn(),
+    previewMachineLogin: vi.fn(),
     machineLogin: vi.fn(),
     createShare: vi.fn(),
     redeemShare: vi.fn(),
@@ -429,6 +430,36 @@ function primeSecretsMocks() {
   });
   apiMock.disableMachineAuthMethod.mockResolvedValue({ name: "token", disabled: true });
   apiMock.enableMachineAuthMethod.mockResolvedValue({ name: "ci-jwt", disabled: false });
+  apiMock.previewMachineLogin.mockResolvedValue({
+    capability: "F58",
+    operation: "test_machine_login",
+    ready: true,
+    effect_free: true,
+    method: { name: "token", type: "token", source: "builtin", jwks_configured: false, disabled: false },
+    tenant_binding: "The credential and issued session are bound to this tenant.",
+    credential_format: "A tenant-, audience-, and expiry-bound machine token.",
+    session_ttl_seconds: 3600,
+    required_permission: "secrets:read",
+    request_fingerprint: "sha256:reviewed-machine-login",
+    prerequisites: [
+      { id: "method_configured", ready: true, detail: "The token method is configured." },
+      { id: "method_enabled", ready: true, detail: "The token method accepts new logins." },
+      { id: "session_ledger", ready: true, detail: "Issued sessions are recorded durably." },
+    ],
+    blockers: [],
+    preview_reads: ["read the tenant-scoped method projection"],
+    preview_writes: [],
+    preview_external_effects: [],
+    execute_writes: ["append one session-issued event", "project one tenant-scoped session ledger row"],
+    execute_external_effects: [],
+    recovery_steps: ["Correct the tenant, audience, expiry, or method input, then try again."],
+    verification_steps: [
+      "Confirm the returned method, principal, scopes, and expiry match the reviewed plan.",
+      "Confirm the session appears in Issued sessions.",
+    ],
+    cli_argv: ["trstctl", "secrets", "login", "-f", "machine-login.json"],
+    secret_data_handling: "Preview never receives a credential. Execution consumes it once, never echoes it, and clears the browser field after every attempt.",
+  });
   apiMock.machineLogin.mockResolvedValue({
     session_id: "sess-1",
     principal: "svc-api",
@@ -1804,10 +1835,7 @@ describe("secrets surface", () => {
     });
     await user.selectOptions(legacyForm.getByLabelText("Key custody"), "legacy");
     await user.type(legacyForm.getByLabelText("Common name"), "legacy.internal");
-    expect(legacyForm.getByRole("link", { name: /Review every legacy use in Audit/i })).toHaveAttribute(
-      "href",
-      "/audit?type=issuance.server_side_keygen",
-    );
+    expect(legacyForm.getByRole("link", { name: /Review every legacy use in Audit/i })).toHaveAttribute("href", "/audit?type=issuance.server_side_keygen");
     await user.click(legacyForm.getByRole("button", { name: /review without issuing/i }));
     expect(await legacyForm.findByText("Audit evidence is available.")).toBeInTheDocument();
     await user.click(legacyForm.getByRole("button", { name: /issue reviewed certificate/i }));
@@ -1824,13 +1852,21 @@ describe("secrets surface", () => {
     cleanup();
     renderSecrets("/secrets/access");
     const loginForm = within(await screen.findByRole("form", { name: "Machine login test" }));
+    await user.click(loginForm.getByRole("button", { name: "Review login test" }));
+    await loginForm.findByText("sha256:reviewed-machine-login");
     await user.type(loginForm.getByLabelText("Credential"), "tenant-bound-machine-token");
-    await user.click(loginForm.getByRole("button", { name: /test login/i }));
+    await user.click(loginForm.getByRole("button", { name: "Test reviewed login" }));
 
-    await waitFor(() => expect(apiMock.machineLogin).toHaveBeenCalledWith({ method: "token", credential: "tenant-bound-machine-token" }));
+    await waitFor(() =>
+      expect(apiMock.machineLogin).toHaveBeenCalledWith({
+        method: "token",
+        credential: "tenant-bound-machine-token",
+        preview_fingerprint: "sha256:reviewed-machine-login",
+      }),
+    );
     expect(screen.getByText("sess-1")).toBeInTheDocument();
     expect(screen.getByText("svc-api")).toBeInTheDocument();
-    expect(loginForm.getByLabelText("Credential")).toHaveValue("");
+    expect(loginForm.queryByLabelText("Credential")).not.toBeInTheDocument();
     expect(screen.queryByText("tenant-bound-machine-token")).not.toBeInTheDocument();
 
     cleanup();
@@ -2071,10 +2107,17 @@ describe("secrets access grant console (C-S1 / DA-02 interim)", () => {
   it("keeps the login verify step working beside the grant flow", async () => {
     const user = await openAccessTab();
     const loginForm = within(screen.getByRole("form", { name: "Machine login test" }));
-    await user.type(loginForm.getByLabelText("Method"), "{selectall}token");
+    await user.click(loginForm.getByRole("button", { name: "Review login test" }));
+    await loginForm.findByText("sha256:reviewed-machine-login");
     await user.type(loginForm.getByLabelText("Credential"), "cred-1");
-    await user.click(loginForm.getByRole("button", { name: /test login/i }));
-    await waitFor(() => expect(apiMock.machineLogin).toHaveBeenCalled());
+    await user.click(loginForm.getByRole("button", { name: "Test reviewed login" }));
+    await waitFor(() =>
+      expect(apiMock.machineLogin).toHaveBeenCalledWith({
+        method: "token",
+        credential: "cred-1",
+        preview_fingerprint: "sha256:reviewed-machine-login",
+      }),
+    );
     expect(await screen.findByText("sess-1")).toBeInTheDocument();
   });
 });
@@ -2104,6 +2147,116 @@ describe("secrets auth-method console (C-S4 / DA-02)", () => {
     expect(within(jwtRow).getByText("disabled")).toBeInTheDocument();
     const tokenRow = screen.getAllByText("token")[0].closest("tr") as HTMLTableRowElement;
     expect(within(tokenRow).getByText("enabled")).toBeInTheDocument();
+  });
+
+  it("reviews one exact method before accepting a credential, executes it once, and verifies the durable session", async () => {
+    const user = await openAccessTab();
+    const loginForm = within(screen.getByRole("form", { name: "Machine login test" }));
+
+    expect(loginForm.getByLabelText("Method")).toHaveValue("token");
+    expect(loginForm.queryByLabelText("Credential")).not.toBeInTheDocument();
+    await user.click(loginForm.getByRole("button", { name: "Review login test" }));
+
+    await waitFor(() => expect(apiMock.previewMachineLogin).toHaveBeenCalledWith({ method: "token" }));
+    expect(await loginForm.findByText("The credential and issued session are bound to this tenant.")).toBeInTheDocument();
+    expect(loginForm.getByText("The token method accepts new logins.")).toBeInTheDocument();
+    expect(loginForm.getByText(/Preview never receives a credential/)).toBeInTheDocument();
+    expect(loginForm.getByText("sha256:reviewed-machine-login")).toBeInTheDocument();
+
+    const credential = loginForm.getByLabelText("Credential");
+    await user.type(credential, "tenant-bound-machine-token");
+    await user.click(loginForm.getByRole("button", { name: "Test reviewed login" }));
+    await waitFor(() =>
+      expect(apiMock.machineLogin).toHaveBeenCalledWith({
+        method: "token",
+        credential: "tenant-bound-machine-token",
+        preview_fingerprint: "sha256:reviewed-machine-login",
+      }),
+    );
+    expect(await loginForm.findByText("sess-1")).toBeInTheDocument();
+    expect(loginForm.getByText("svc-api")).toBeInTheDocument();
+    expect(screen.queryByText("tenant-bound-machine-token")).not.toBeInTheDocument();
+    expect(apiMock.machineSessions.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  it("shows a disabled method's exact blockers without accepting or sending a credential", async () => {
+    apiMock.previewMachineLogin.mockResolvedValueOnce({
+      capability: "F58",
+      operation: "test_machine_login",
+      ready: false,
+      effect_free: true,
+      method: { name: "ci-jwt", type: "jwt", source: "config", jwks_configured: true, disabled: true },
+      tenant_binding: "The credential and issued session are bound to this tenant.",
+      credential_format: "A signed JWT with the configured issuer, audience, expiry, and tenant claim.",
+      session_ttl_seconds: 3600,
+      required_permission: "secrets:read",
+      request_fingerprint: "sha256:blocked-machine-login",
+      prerequisites: [
+        { id: "method_configured", ready: true, detail: "The ci-jwt method is configured." },
+        {
+          id: "method_enabled",
+          ready: false,
+          detail: "The ci-jwt method is disabled and refuses new sessions.",
+          remediation: "Enable ci-jwt, then preview again.",
+        },
+      ],
+      blockers: ["Method ci-jwt is disabled. Enable it before testing a credential."],
+      preview_reads: ["read the tenant-scoped method projection"],
+      preview_writes: [],
+      preview_external_effects: [],
+      execute_writes: [],
+      execute_external_effects: [],
+      recovery_steps: ["Enable ci-jwt, then build a new review."],
+      verification_steps: ["Confirm no session was issued while the method was disabled."],
+      cli_argv: ["trstctl", "secrets", "login", "preview", "-f", "machine-login.json"],
+      secret_data_handling: "Preview never receives a credential.",
+    });
+    const user = await openAccessTab();
+    const loginForm = within(screen.getByRole("form", { name: "Machine login test" }));
+    await user.selectOptions(loginForm.getByLabelText("Method"), "ci-jwt");
+    await user.click(loginForm.getByRole("button", { name: "Review login test" }));
+
+    expect(await loginForm.findByText("This method is blocked")).toBeInTheDocument();
+    expect(loginForm.getByText("Method ci-jwt is disabled. Enable it before testing a credential.")).toBeInTheDocument();
+    expect(loginForm.queryByLabelText("Credential")).not.toBeInTheDocument();
+    expect(loginForm.queryByRole("button", { name: "Test reviewed login" })).not.toBeInTheDocument();
+    expect(apiMock.machineLogin).not.toHaveBeenCalled();
+  });
+
+  it("clears a rejected credential, preserves a usable review, and succeeds after correction", async () => {
+    apiMock.machineLogin.mockRejectedValueOnce(new ApiError(401, JSON.stringify({ detail: "machine login failed" })));
+    const user = await openAccessTab();
+    const loginForm = within(screen.getByRole("form", { name: "Machine login test" }));
+    await user.click(loginForm.getByRole("button", { name: "Review login test" }));
+    const credential = await loginForm.findByLabelText("Credential");
+    await user.type(credential, "rejected-credential");
+    await user.click(loginForm.getByRole("button", { name: "Test reviewed login" }));
+
+    await waitFor(() => expect(apiMock.machineLogin).toHaveBeenCalledTimes(1));
+    expect(loginForm.getByLabelText("Credential")).toHaveValue("");
+    expect(loginForm.getByText("sha256:reviewed-machine-login")).toBeInTheDocument();
+    expect(screen.queryByText("rejected-credential")).not.toBeInTheDocument();
+
+    await user.type(loginForm.getByLabelText("Credential"), "corrected-credential");
+    await user.click(loginForm.getByRole("button", { name: "Test reviewed login" }));
+    await waitFor(() => expect(apiMock.machineLogin).toHaveBeenCalledTimes(2));
+    expect(await loginForm.findByText("sess-1")).toBeInTheDocument();
+  });
+
+  it("invalidates a server-rejected stale review before another credential can be entered", async () => {
+    apiMock.machineLogin.mockRejectedValueOnce(
+      new ApiError(409, JSON.stringify({ detail: "the reviewed machine-login plan changed; review the method again" })),
+    );
+    const user = await openAccessTab();
+    const loginForm = within(screen.getByRole("form", { name: "Machine login test" }));
+    await user.click(loginForm.getByRole("button", { name: "Review login test" }));
+    await user.type(await loginForm.findByLabelText("Credential"), "stale-plan-credential");
+    await user.click(loginForm.getByRole("button", { name: "Test reviewed login" }));
+
+    expect(await loginForm.findByText("The method changed. Review the new method before entering a credential.")).toBeInTheDocument();
+    expect(loginForm.queryByLabelText("Credential")).not.toBeInTheDocument();
+    expect(loginForm.getByRole("button", { name: "Review login test" })).toBeInTheDocument();
+    expect(screen.queryByText("stale-plan-credential")).not.toBeInTheDocument();
   });
 
   it("disables and re-enables a method through the overlay endpoints", async () => {

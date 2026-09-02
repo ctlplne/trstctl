@@ -404,6 +404,7 @@ func servedTenantMachineLogin(t *testing.T, srv *Server, tenantID, credential st
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/secrets/login", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Tenant-ID", tenantID)
+	req.Header.Set("Idempotency-Key", "tenant-key-domain-machine-login")
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	return rec

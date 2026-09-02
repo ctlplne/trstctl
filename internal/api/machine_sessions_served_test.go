@@ -20,6 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/authmethod"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
@@ -73,6 +74,7 @@ func startMachineSessionPostgres(t *testing.T) (string, func()) {
 type machineSessionHarness struct {
 	handler http.Handler
 	token   authmethod.TokenMethod
+	loginID int
 }
 
 func newMachineSessionHarness(t *testing.T) *machineSessionHarness {
@@ -104,11 +106,153 @@ func newMachineSessionHarness(t *testing.T) *machineSessionHarness {
 			Store:      st,
 			AuthSecret: authSecret,
 			SessionTTL: time.Hour,
+			CommandMAC: func(domain, material []byte) ([]byte, error) {
+				message := make([]byte, 0, len(domain)+1+len(material))
+				message = append(message, domain...)
+				message = append(message, 0)
+				message = append(message, material...)
+				return crypto.HMACSHA256(authSecret, message), nil
+			},
 		}),
 	)
 	return &machineSessionHarness{
 		handler: handler,
 		token:   authmethod.TokenMethod{Secret: authSecret, TenantID: msTenantA},
+	}
+}
+
+func TestMachineLoginPreviewIsEffectFreeTenantBoundAndRecoveryAware(t *testing.T) {
+	if testing.Short() {
+		t.Skip("served machine-login preview test needs embedded postgres")
+	}
+	h := newMachineSessionHarness(t)
+
+	preview := func(tenantID string) (int, map[string]any, []byte) {
+		t.Helper()
+		status, body := h.do(t, http.MethodPost, "/api/v1/secrets/login/preview", tenantID, "", map[string]any{"method": "token"})
+		var result map[string]any
+		if status == http.StatusOK {
+			if err := json.Unmarshal(body, &result); err != nil {
+				t.Fatalf("decode machine-login preview: %v; body=%s", err, body)
+			}
+		}
+		return status, result, body
+	}
+
+	status, plan, body := preview(msTenantA)
+	if status != http.StatusOK {
+		t.Fatalf("preview = %d; body=%s", status, body)
+	}
+	if plan["capability"] != "F58" || plan["operation"] != "test_machine_login" || plan["ready"] != true || plan["effect_free"] != true {
+		t.Fatalf("preview identity/readiness = %v", plan)
+	}
+	method, ok := plan["method"].(map[string]any)
+	if !ok || method["name"] != "token" || method["type"] != "token" || method["source"] != "builtin" || method["disabled"] == true {
+		t.Fatalf("preview method = %v", plan["method"])
+	}
+	if plan["session_ttl_seconds"] != float64(3600) || plan["required_permission"] != "secrets:read" {
+		t.Fatalf("preview lifetime/permission = %v/%v", plan["session_ttl_seconds"], plan["required_permission"])
+	}
+	if plan["tenant_binding"] == "" || plan["credential_format"] == "" || plan["request_fingerprint"] == "" {
+		t.Fatalf("preview omitted tenant/credential/fingerprint detail: %v", plan)
+	}
+	for _, key := range []string{"prerequisites", "execute_writes", "recovery_steps", "verification_steps", "cli_argv"} {
+		values, exists := plan[key].([]any)
+		if !exists || len(values) == 0 {
+			t.Fatalf("preview %s = %T/%v, want a non-empty plan", key, plan[key], plan[key])
+		}
+	}
+	for _, key := range []string{"blockers", "preview_writes", "preview_external_effects"} {
+		values, exists := plan[key].([]any)
+		if !exists || len(values) != 0 {
+			t.Fatalf("ready preview %s = %T/%v, want empty", key, plan[key], plan[key])
+		}
+	}
+	if strings.Contains(string(body), "served-machine-auth-secret") || strings.Contains(string(body), "credential") && strings.Contains(string(body), "served-machine") {
+		t.Fatalf("preview leaked secret material: %s", body)
+	}
+	if sessions := listSessions(t, h, msTenantA); len(sessions) != 0 {
+		t.Fatalf("preview created machine sessions: %v", sessions)
+	}
+
+	_, repeated, _ := preview(msTenantA)
+	if repeated["request_fingerprint"] != plan["request_fingerprint"] {
+		t.Fatalf("identical preview fingerprint changed: %v != %v", repeated["request_fingerprint"], plan["request_fingerprint"])
+	}
+	_, tenantBPlan, _ := preview(msTenantB)
+	if tenantBPlan["request_fingerprint"] == plan["request_fingerprint"] {
+		t.Fatal("machine-login preview fingerprint is not tenant-bound")
+	}
+	credential, err := h.token.Issue("preview-workload", time.Now().Add(10*time.Minute))
+	if err != nil {
+		t.Fatalf("issue preview-bound credential: %v", err)
+	}
+
+	if status, body = h.do(t, http.MethodPost, "/api/v1/secrets/auth-methods/token/disable", msTenantA, "preview-disable-1", nil); status != http.StatusOK {
+		t.Fatalf("disable method = %d; body=%s", status, body)
+	}
+	status, blocked, body := preview(msTenantA)
+	if status != http.StatusOK || blocked["ready"] != false {
+		t.Fatalf("disabled-method preview = %d/%v; body=%s", status, blocked, body)
+	}
+	blockers, ok := blocked["blockers"].([]any)
+	if !ok || len(blockers) == 0 || !strings.Contains(strings.ToLower(fmt.Sprint(blockers)), "disabled") {
+		t.Fatalf("disabled-method blockers = %v", blocked["blockers"])
+	}
+	if sessions := listSessions(t, h, msTenantA); len(sessions) != 0 {
+		t.Fatalf("blocked preview created machine sessions: %v", sessions)
+	}
+	status, body = h.do(t, http.MethodPost, "/api/v1/secrets/login", msTenantA, "stale-reviewed-login", map[string]any{
+		"method": "token", "credential": credential, "preview_fingerprint": plan["request_fingerprint"],
+	})
+	if status != http.StatusConflict || strings.Contains(string(body), credential) {
+		t.Fatalf("stale reviewed login = %d; body=%s", status, body)
+	}
+	if sessions := listSessions(t, h, msTenantA); len(sessions) != 0 {
+		t.Fatalf("stale reviewed login created machine sessions: %v", sessions)
+	}
+}
+
+func TestMachineLoginRequiresRequestBoundIdempotency(t *testing.T) {
+	if testing.Short() {
+		t.Skip("served machine-login idempotency test needs embedded postgres")
+	}
+	h := newMachineSessionHarness(t)
+	credential, err := h.token.Issue("idempotent-workload", time.Now().Add(10*time.Minute))
+	if err != nil {
+		t.Fatalf("issue machine credential: %v", err)
+	}
+	body := map[string]any{"method": "token", "credential": credential}
+
+	status, response := h.do(t, http.MethodPost, "/api/v1/secrets/login", msTenantA, "", body)
+	if status != http.StatusBadRequest || !strings.Contains(string(response), "Idempotency-Key") {
+		t.Fatalf("login without idempotency key = %d; body=%s", status, response)
+	}
+
+	status, first := h.do(t, http.MethodPost, "/api/v1/secrets/login", msTenantA, "machine-login-idem-1", body)
+	if status != http.StatusOK {
+		t.Fatalf("first login = %d; body=%s", status, first)
+	}
+	replayStatus, replay := h.do(t, http.MethodPost, "/api/v1/secrets/login", msTenantA, "machine-login-idem-1", body)
+	if replayStatus != status || string(replay) != string(first) {
+		t.Fatalf("login replay mismatch: %d/%s vs %d/%s", replayStatus, replay, status, first)
+	}
+	if sessions := listSessions(t, h, msTenantA); len(sessions) != 1 {
+		t.Fatalf("idempotent replay created %d session rows, want 1: %v", len(sessions), sessions)
+	}
+
+	otherCredential, err := h.token.Issue("different-workload", time.Now().Add(10*time.Minute))
+	if err != nil {
+		t.Fatalf("issue changed machine credential: %v", err)
+	}
+	conflictStatus, conflict := h.do(t, http.MethodPost, "/api/v1/secrets/login", msTenantA, "machine-login-idem-1", map[string]any{
+		"method": "token", "credential": otherCredential,
+	})
+	if conflictStatus != http.StatusConflict || strings.Contains(string(conflict), credential) || strings.Contains(string(conflict), otherCredential) {
+		t.Fatalf("changed login replay = %d; body=%s", conflictStatus, conflict)
+	}
+	if sessions := listSessions(t, h, msTenantA); len(sessions) != 1 {
+		t.Fatalf("conflicting replay created %d session rows, want 1: %v", len(sessions), sessions)
 	}
 }
 
@@ -143,7 +287,8 @@ func (h *machineSessionHarness) login(t *testing.T, principal string) (int, map[
 	if err != nil {
 		t.Fatalf("issue token credential: %v", err)
 	}
-	status, body := h.do(t, http.MethodPost, "/api/v1/secrets/login", msTenantA, "", map[string]any{
+	h.loginID++
+	status, body := h.do(t, http.MethodPost, "/api/v1/secrets/login", msTenantA, fmt.Sprintf("machine-session-login-%d", h.loginID), map[string]any{
 		"method": "token", "credential": credential,
 	})
 	var out map[string]any

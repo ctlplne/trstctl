@@ -1,22 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Eyebrow } from "@/components/typography";
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import {
-  AlertTriangle,
-  Clock3,
-  Copy,
-  Eye,
-  KeyRound,
-  Loader2,
-  LogIn,
-  MoreHorizontal,
-  RefreshCw,
-  RotateCw,
-  Send,
-  Share2,
-  Trash2,
-  UserRoundX,
-} from "lucide-react";
+import { AlertTriangle, Clock3, Copy, Eye, KeyRound, Loader2, MoreHorizontal, RefreshCw, RotateCw, Send, Share2, Trash2, UserRoundX } from "lucide-react";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DataGridToolbar } from "@/components/DataGridToolbar";
 import { DetailDrawer } from "@/components/DetailDrawer";
@@ -43,7 +28,6 @@ import {
   type Identity,
   type KubernetesSecretOperator,
   type MachineAuthMethod,
-  type MachineLoginResponse,
   type MachineSession as MachineSessionRecord,
   type Owner,
   type SecretApprovalAction,
@@ -70,7 +54,6 @@ import {
 import {
   DynamicLeaseMetadata,
   formatCommandArgv,
-  MachineSession,
   parseSecretRotationPartialReceipt,
   RepositoryScanPosture,
   RevealPanel,
@@ -96,6 +79,7 @@ import { useCapabilityExecution } from "@/lib/capabilities";
 import { SecretSyncWorkloadIdentityPanel } from "./secrets/SecretSyncWorkloadIdentityPanel";
 import { TransitOperations } from "./secrets/TransitOperations";
 import { PKISecretWorkflow } from "./secrets/PKISecretWorkflow";
+import { MachineAuthWorkflow } from "./secrets/MachineAuthWorkflow";
 
 /** The store (tree + table + lifecycle) renders at /secrets; every other
  * workflow is its own route in the Secrets space sidebar (S-C2) instead of
@@ -255,11 +239,6 @@ export function Secrets() {
   const [accessBusy, setAccessBusy] = useState(false);
   const [accessError, setAccessError] = useState<string | null>(null);
 
-  const [loginMethod, setLoginMethod] = useState("token");
-  const [loginCredential, setLoginCredential] = useState("");
-  const [loginBusy, setLoginBusy] = useState(false);
-  const [loginError, setLoginError] = useState<string | null>(null);
-  const [session, setSession] = useState<MachineLoginResponse | null>(null);
   // C-S1 (DA-02 interim): grant console state — Job 2's grant step over the
   // existing idempotent /access and /ephemeral endpoints.
   const canGrant = useCan("access:write");
@@ -1002,21 +981,6 @@ export function Secrets() {
       setAccessError(apiProblemMessage(err, t("secrets.developer.testFailed")));
     } finally {
       setAccessBusy(false);
-    }
-  }
-
-  async function submitLogin(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setLoginError(null);
-    setSession(null);
-    setLoginBusy(true);
-    try {
-      setSession(await api.machineLogin({ method: loginMethod, credential: loginCredential }));
-      setLoginCredential("");
-    } catch (err) {
-      setLoginError(apiProblemMessage(err, "Machine login failed"));
-    } finally {
-      setLoginBusy(false);
     }
   }
 
@@ -2362,37 +2326,7 @@ export function Secrets() {
                   </h2>
                   <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.exchange.a.machine.credential.for.a.scoped.db8919fe53")}</p>
                 </div>
-                <form
-                  aria-label={translateNow("source.machine.login.test.7f62ed2b92")}
-                  onSubmit={(event) => void submitLogin(event)}
-                  className="grid gap-3 md:grid-cols-[12rem_minmax(0,1fr)_auto]"
-                >
-                  <label className="grid gap-1 text-sm">
-                    <span className="font-medium">{translateNow("source.method.52a0f9b65b")}</span>
-                    <input
-                      className="rounded-md border border-border bg-background px-3 py-2"
-                      value={loginMethod}
-                      onChange={(event) => setLoginMethod(event.target.value)}
-                      required
-                    />
-                  </label>
-                  <label className="grid gap-1 text-sm">
-                    <span className="font-medium">{translateNow("source.credential.b1c42b3ce1")}</span>
-                    <input
-                      className="rounded-md border border-border bg-background px-3 py-2"
-                      type="password"
-                      value={loginCredential}
-                      onChange={(event) => setLoginCredential(event.target.value)}
-                      required
-                    />
-                  </label>
-                  <Button type="submit" className="self-end" disabled={loginBusy || Boolean(loadError)}>
-                    {loginBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <LogIn className="h-4 w-4" aria-hidden="true" />}
-                    {translateNow("source.test.login.c5e0ad20c3")}
-                  </Button>
-                </form>
-                {loginError && <ErrorState title={translateNow("source.machine.login.failed.01826fdfc8")}>{loginError}</ErrorState>}
-                {session && <MachineSession session={session} />}
+                <MachineAuthWorkflow methods={authMethods} loadBlocked={Boolean(loadError)} onSessionIssued={refreshMachineSessions} />
               </section>
 
               {/* C-S4 (DA-02 faithful): the auth-method console over the C-S2/C-S3

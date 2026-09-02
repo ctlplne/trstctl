@@ -1358,6 +1358,25 @@ func TestMachineLoginCommandSendsCredentialBody(t *testing.T) {
 	}
 }
 
+func TestMachineLoginPreviewCommandSendsNoIdempotencyKey(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, 200, `{"capability":"F58","operation":"test_machine_login","ready":true,"effect_free":true}`, &cap)
+	body := `{"method":"token"}`
+	code, _, stderr := run(t, []string{"secrets", "login", "preview", "-f", "-"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, body)
+	if code != 0 {
+		t.Fatalf("exit = %d stderr=%s", code, stderr)
+	}
+	if cap.Method != http.MethodPost || cap.Path != "/api/v1/secrets/login/preview" {
+		t.Errorf("request = %s %s", cap.Method, cap.Path)
+	}
+	if strings.TrimSpace(string(cap.Body)) != body {
+		t.Errorf("body = %q, want %q", cap.Body, body)
+	}
+	if cap.Header.Get("Idempotency-Key") != "" {
+		t.Error("effect-free machine-login preview must not send an Idempotency-Key")
+	}
+}
+
 func TestConnectorRotationCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 200, `{"key":"db/reporting","old_ref":"version:1","new_ref":"version:2","completed":false,"queued":true}`, &cap)

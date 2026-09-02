@@ -1391,7 +1391,8 @@ func (a *API) routes() []route {
 
 		{method: "POST", path: "/api/v1/secrets/pki/preview", opID: "previewPKISecret", summary: "Preview exact PKI issuance prerequisites, custody, effects, recovery, and verification without signing", handler: a.previewPKISecret, reqSchema: "PKISecretRequest", resSchema: "PKISecretPreview", successCode: "200", perm: authz.SecretsWrite},
 		{method: "POST", path: "/api/v1/secrets/pki", opID: "issuePKISecret", summary: "Sign a requester CSR or issue a deprecated server-generated PKI keypair", handler: a.issuePKISecret, reqSchema: "PKISecretRequest", resSchema: "PKISecret", successCode: "201", mutation: true, sensitiveResponse: true, perm: authz.SecretsWrite},
-		{method: "POST", path: "/api/v1/secrets/login", opID: "machineLogin", summary: "Exchange a machine credential for a scoped workload session", handler: a.machineLogin, reqSchema: "MachineLoginRequest", resSchema: "MachineLoginResponse", successCode: "200", sensitiveResponse: true},
+		{method: "POST", path: "/api/v1/secrets/login/preview", opID: "previewMachineLogin", summary: "Preview one exact machine-login method, lifetime, effects, recovery, and verification without receiving a credential", handler: a.previewMachineLogin, reqSchema: "MachineLoginPreviewRequest", resSchema: "MachineLoginPreview", successCode: "200", perm: authz.SecretsRead},
+		{method: "POST", path: "/api/v1/secrets/login", opID: "machineLogin", summary: "Exchange a machine credential for a scoped workload session", handler: a.machineLogin, reqSchema: "MachineLoginRequest", resSchema: "MachineLoginResponse", successCode: "200", mutation: true, sensitiveResponse: true},
 		// C-S2 (DA-02): read-only projection of the configured machine-auth
 		// methods — exactly the set machineLogin accepts. Methods stay declared
 		// in server config; the console projects, it does not edit.

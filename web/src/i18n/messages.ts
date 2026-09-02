@@ -1872,6 +1872,70 @@ export const messages = {
     defaultMessage: "Auth methods",
     description: "Secrets Access tab: heading of the configured machine-auth methods console (C-S4/DA-02).",
   },
+  "secrets.login.configureStep": { defaultMessage: "Choose method", description: "F58 machine-login workflow configuration step." },
+  "secrets.login.configureStepHelp": {
+    defaultMessage: "Choose one method already configured for this tenant. No credential is entered yet.",
+    description: "F58 machine-login workflow configuration help.",
+  },
+  "secrets.login.reviewStep": { defaultMessage: "Review login", description: "F58 machine-login workflow review step." },
+  "secrets.login.reviewStepHelp": {
+    defaultMessage: "Check tenant binding, credential shape, lifetime, scopes, effects, and recovery before testing.",
+    description: "F58 machine-login workflow review help.",
+  },
+  "secrets.login.verifyStep": { defaultMessage: "Verify session", description: "F58 machine-login workflow verification step." },
+  "secrets.login.verifyStepHelp": {
+    defaultMessage: "Match the result to the reviewed plan and confirm the session in the durable ledger.",
+    description: "F58 machine-login workflow verification help.",
+  },
+  "secrets.login.progress": { defaultMessage: "Machine login test progress", description: "Accessible label for F58 workflow progress." },
+  "secrets.login.methodHelp": {
+    defaultMessage: "Select a served tenant-scoped method. Disabled methods can be reviewed but cannot execute.",
+    description: "F58 method selector help.",
+  },
+  "secrets.login.methodOption": {
+    defaultMessage: "{name} · {type} · {source}",
+    description: "F58 enabled method option with method name, type, and configuration source.",
+  },
+  "secrets.login.methodOptionDisabled": {
+    defaultMessage: "{name} · {type} · {source} · disabled",
+    description: "F58 disabled method option with method name, type, and configuration source.",
+  },
+  "secrets.login.noMethods": { defaultMessage: "No machine login method is available to review.", description: "F58 empty method state." },
+  "secrets.login.reviewAction": { defaultMessage: "Review login test", description: "F58 effect-free preview action." },
+  "secrets.login.reviewing": { defaultMessage: "Reviewing…", description: "F58 preview busy state." },
+  "secrets.login.reviewStale": {
+    defaultMessage: "The method changed. Review the new method before entering a credential.",
+    description: "F58 stale-review warning.",
+  },
+  "secrets.login.reviewFailed": { defaultMessage: "Login review failed", description: "F58 preview error title." },
+  "secrets.login.reviewLabel": { defaultMessage: "Reviewed machine login plan", description: "Accessible label for the F58 review." },
+  "secrets.login.reviewReady": { defaultMessage: "This method is ready to test", description: "F58 ready plan heading." },
+  "secrets.login.reviewBlocked": { defaultMessage: "This method is blocked", description: "F58 blocked plan heading." },
+  "secrets.login.noPreviewEffects": {
+    defaultMessage: "Review reads configuration only. It does not receive a credential, call a verifier, or create a session.",
+    description: "F58 effect-free preview explanation.",
+  },
+  "secrets.login.sessionTTL": { defaultMessage: "Session lifetime", description: "F58 reviewed session TTL label." },
+  "secrets.login.tenantBinding": { defaultMessage: "Tenant boundary", description: "F58 tenant-binding label." },
+  "secrets.login.credentialFormat": { defaultMessage: "Credential expected", description: "F58 credential format label." },
+  "secrets.login.automation": { defaultMessage: "Use the same contract from the native CLI", description: "F58 automation heading." },
+  "secrets.login.credentialHelp": {
+    defaultMessage: "Used once for this test, never displayed or stored, and cleared after success or failure.",
+    description: "F58 credential field handling statement.",
+  },
+  "secrets.login.reviewRequired": {
+    defaultMessage: "Review a ready method and enter its credential before testing.",
+    description: "F58 missing-review error.",
+  },
+  "secrets.login.executeReviewed": { defaultMessage: "Test reviewed login", description: "F58 deliberate execution action." },
+  "secrets.login.executionFailed": { defaultMessage: "Machine login failed", description: "F58 execution error title." },
+  "secrets.login.verifyLabel": { defaultMessage: "Machine login verification", description: "Accessible label for F58 result." },
+  "secrets.login.verified": { defaultMessage: "Session issued and recorded", description: "F58 successful result heading." },
+  "secrets.login.verifiedHelp": {
+    defaultMessage: "The result is secret-free. Match it to the reviewed method, then revoke the synthetic session from Issued sessions.",
+    description: "F58 result verification help.",
+  },
+  "secrets.login.startAgain": { defaultMessage: "Test another login", description: "F58 restart action." },
   "secrets.methods.description": {
     defaultMessage: "The login methods this tenant accepts — declared in server config, projected here. Disabling a method refuses new logins immediately.",
     description: "Secrets Access tab: auth-methods console description.",
@@ -20887,10 +20951,6 @@ export const messages = {
     defaultMessage: "Machine login",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
-  "source.machine.login.failed.01826fdfc8": {
-    defaultMessage: "Machine login failed",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
   "source.machine.login.test.7f62ed2b92": {
     defaultMessage: "Machine login test",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
@@ -23627,10 +23687,6 @@ export const messages = {
   "source.test.532eaabd95": {
     defaultMessage: "Test",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx, src/pages/Connectors.tsx.",
-  },
-  "source.test.login.c5e0ad20c3": {
-    defaultMessage: "Test login",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
   "source.the.agent.row.remains.as.an.offboarded.tom.42a25faa10": {
     defaultMessage: "The agent row remains as an offboarded tombstone, and future mTLS RPCs from this agent are rejected.",

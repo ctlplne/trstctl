@@ -17086,21 +17086,29 @@
             "phase": "P1",
             "priority": 36,
             "served_state": "conditional",
-            "backend_status": "conditional: served machine login for token, Kubernetes SAT, AWS IAM, GCP, Azure, OIDC, and generic JWT",
-            "current_frontend_mapping": "operate: Secrets at /secrets - machine login exchange through served secrets login",
-            "target_gui_mapping": "Machine auth-method UI for token, Kubernetes SAT, AWS IAM, GCP, Azure, OIDC, JWT, tenant binding, audience, expiry, issued sessions, revoked methods, and login test.",
-            "acceptance_test": "UI never displays credential secret after creation and tests tenant mismatch/fail-closed errors.",
+            "backend_status": "conditional: served, review-first, request-bound and idempotent machine login for token, Kubernetes SAT, AWS IAM, GCP, Azure, OIDC, and generic JWT, with a durable session ledger and revocation overlay",
+            "current_frontend_mapping": "operate: Secrets > Access at /secrets/access - choose one configured method, review an effect-free server plan, execute one credential test, verify the durable session, then revoke it",
+            "target_gui_mapping": "Complete: machine auth-method UI projects token, Kubernetes SAT, AWS IAM, GCP, Azure, OIDC, and JWT configuration, tenant/audience/expiry rules, enablement state, a review-first login test, issued sessions, and revocation.",
+            "acceptance_test": "The console accepts no credential before a ready server review, never displays or persists credential bytes, refuses disabled/stale plans, clears failed input, safely retries, and verifies the exact session in the tenant-scoped ledger; API tests prove request-bound idempotency and tenant mismatch denial.",
             "source_docs": [
                 "docs/features/secrets.md"
             ],
             "source_backend": [
+                "/api/v1/secrets/login/preview",
                 "/api/v1/secrets/login",
-                "internal/authmethod"
+                "internal/authmethod",
+                "internal/api/machine_login_preview.go",
+                "internal/api/secrets_identity.go"
             ],
-            "source_frontend": [],
-            "status": "closed",
-            "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+            "source_frontend": [
+                "web/src/pages/Secrets.tsx",
+                "web/src/pages/secrets/MachineAuthWorkflow.tsx",
+                "web/src/__tests__/secrets.test.tsx"
+            ],
+            "status": "verified-closed",
+            "notes": "Closed as a complete review-first vertical slice. The server exposes a secret-free effect-free preview and a server-keyed request fingerprint; execution requires request-bound idempotency, records one durable tenant session, and returns an identical response on exact replay. The console withholds credentials until review, shows exact blockers/effects/recovery/verification/CLI, clears credentials after every attempt, invalidates stale plans, refreshes the ledger, and supports method/session revocation. Focused evidence lives in internal/api/machine_sessions_served_test.go, internal/server/secrets_served_test.go, internal/cli/cli_test.go, web/src/lib/api.test.ts, and web/src/__tests__/secrets.test.tsx.",
             "api_surface": [
+                "previewMachineLogin",
                 "machineLogin",
                 "listMachineAuthMethods",
                 "listMachineSessions",
@@ -17110,6 +17118,7 @@
             ],
             "api_na": "",
             "cli_surface": [
+                "secrets login preview",
                 "secrets login",
                 "secrets auth-methods list",
                 "secrets auth-methods disable",
@@ -17122,36 +17131,50 @@
                 "served": {
                     "evidence": [
                         "served_state=conditional",
-                        "backend_status=conditional: served machine login for token, Kubernetes SAT, AWS IAM, GCP, Azure, OIDC, and generic JWT"
+                        "backend_status=conditional: the secrets API must be enabled and each desired machine method must have its tenant-scoped verification authority configured",
+                        "TestMachineLoginPreviewIsEffectFreeTenantBoundAndRecoveryAware proves the exact server plan and disabled-method fence against real PostgreSQL and embedded JetStream.",
+                        "TestMachineLoginRequiresRequestBoundIdempotency proves missing-key denial, exact replay, one ledger row, changed-body conflict, and no credential echo."
                     ],
                     "commands": [
-                        "make test"
+                        "go test ./internal/api -run 'TestMachineLoginPreviewIsEffectFreeTenantBoundAndRecoveryAware|TestMachineLoginRequiresRequestBoundIdempotency|TestMachineSessionLedgerServed' -count=1",
+                        "go test ./internal/server -run 'TestServedMachineLogin|TestServedMachineLoginRejectsCrossTenantHeader|TestServedMachineLoginTopMethodsKubernetesSATAndAWSIAM' -count=1"
                     ]
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: operate: Secrets at /secrets - machine login exchange through served secrets login",
-                        "target_gui_mapping: Machine auth-method UI for token, Kubernetes SAT, AWS IAM, GCP, Azure, OIDC, JWT, tenant binding, audience, expiry, issued sessions, revoked methods, and login test."
+                        "web/src/pages/secrets/MachineAuthWorkflow.tsx implements Choose method -> Review login -> Verify session at /secrets/access.",
+                        "The review shows the exact method/type/source, tenant binding, credential shape, TTL, prerequisites, blockers, effects, recovery, verification, CLI, and server fingerprint before accepting a credential.",
+                        "The access workspace also projects method issuer/audience/allowlists, disabled state, active/revoked sessions, method overlay controls, and session revocation."
                     ],
                     "refs": [
                         "web/src/lib/navigation.ts",
-                        "web/src/App.tsx"
+                        "web/src/App.tsx",
+                        "web/src/pages/Secrets.tsx",
+                        "web/src/pages/secrets/MachineAuthWorkflow.tsx",
+                        "web/src/__tests__/secrets.test.tsx"
                     ]
                 },
                 "cli": {
                     "evidence": [
-                        "CLI command: secrets login"
+                        "CLI command: secrets login preview",
+                        "CLI command: secrets login",
+                        "CLI commands: secrets auth-methods list/disable/enable and secrets sessions list/revoke"
                     ],
                     "refs": [
                         "internal/cli/command.go",
+                        "internal/cli/cli_test.go",
                         "internal/cli/feature_parity_test.go"
                     ]
                 },
                 "api": {
                     "evidence": [
-                        "OpenAPI operationId: machineLogin"
+                        "OpenAPI operationId: previewMachineLogin",
+                        "OpenAPI operationId: machineLogin",
+                        "OpenAPI operations: listMachineAuthMethods, listMachineSessions, revokeMachineSession, disableMachineAuthMethod, enableMachineAuthMethod"
                     ],
                     "refs": [
+                        "internal/api/api.go",
+                        "internal/api/machine_login_preview.go",
                         "internal/api/testdata/openapi.golden.json",
                         "internal/api/feature_parity_test.go"
                     ]
@@ -17159,13 +17182,19 @@
                 "test": {
                     "evidence": [
                         "acceptance_test: UI never displays credential secret after creation and tests tenant mismatch/fail-closed errors.",
-                        "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
-                        "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
+                        "web/src/__tests__/secrets.test.tsx proves ready, blocked, rejected-credential retry, stale-review recovery, session verification, overlay, and session-revocation journeys.",
+                        "web/src/lib/api.test.ts proves preview uses the read-only POST transport while execution receives mutation idempotency and CSRF protections.",
+                        "internal/api/machine_sessions_served_test.go proves effect-free preview, tenant-bound fingerprinting, request-bound idempotency, event projection, isolation, and revocation against the real storage/event spine."
                     ],
                     "refs": [
+                        "internal/api/machine_sessions_served_test.go",
+                        "internal/server/secrets_served_test.go",
+                        "internal/cli/cli_test.go",
                         "internal/featureparity/feature_facet_coverage_test.go",
+                        "web/src/lib/api.test.ts",
                         "web/src/__tests__/route_parity.test.ts",
-                        "web/src/__tests__/feature_coverage.test.tsx"
+                        "web/src/__tests__/feature_coverage.test.tsx",
+                        "web/src/__tests__/secrets.test.tsx"
                     ]
                 },
                 "docs": {
@@ -17178,9 +17207,9 @@
                 },
                 "rbac": {
                     "evidence": [
-                        "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: machineLogin",
+                        "feature authz manifest maps every F58 api_surface operation to route permissions or the explicit public credential-exchange rationale.",
                         "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale.",
-                        "machineLogin is a public credential exchange, not an RBAC-guarded route; the presented machine credential authenticates the workload and yields a tenant-scoped session."
+                        "previewMachineLogin and read/admin projections require secrets:read/write authority; machineLogin is intentionally public because the presented machine credential authenticates the workload and yields a tenant-scoped session."
                     ],
                     "refs": [
                         "internal/featureparity/authz_manifest.go",
@@ -17192,13 +17221,14 @@
                 },
                 "audit": {
                     "evidence": [
-                        "mutating served surface requires audit/event evidence: machineLogin",
-                        "served mutations route through handlers/orchestrator paths that emit event/audit evidence or expose signed audit search/export."
+                        "previewMachineLogin writes no event, idempotency row, or external call; machineLogin records exactly one secrets.session.started event/projection on first execution.",
+                        "Method disable/enable and session revocation are idempotent event-sourced mutations with tenant-scoped projection evidence."
                     ],
                     "refs": [
                         "internal/api/api.go",
-                        "internal/api/audit.go",
-                        "internal/server/issuance.go"
+                        "internal/api/machine_login_preview.go",
+                        "internal/api/secrets_identity.go",
+                        "internal/api/machine_sessions_served_test.go"
                     ]
                 },
                 "telemetry": {
@@ -17217,6 +17247,8 @@
                     "refs": [
                         "web/src/__tests__/feature_a11y_receipts.test.tsx",
                         "web/src/lib/navigation.ts",
+                        "web/src/pages/Secrets.tsx",
+                        "web/src/pages/secrets/MachineAuthWorkflow.tsx",
                         "web/src/App.tsx"
                     ]
                 },
@@ -17225,6 +17257,9 @@
                         "visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
                     ],
                     "refs": [
+                        "web/src/i18n/messages.ts",
+                        "web/src/i18n/catalog.es-ES.ts",
+                        "web/src/i18n/catalog.de-DE.ts",
                         "web/scripts/extract-i18n-messages.mjs",
                         "web/src/i18n/extractedMessages.gen.ts",
                         "web/src/__tests__/i18n.test.tsx"
@@ -17237,7 +17272,7 @@
                 "purpose": "Lets an operator understand and safely use platform auth-method framework while tenant, policy, and security authority remain on the server.",
                 "tool": "secrets",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/secrets/access",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -17247,59 +17282,93 @@
                 "permission_authority": "internal/api route registry and feature authorization manifest",
                 "edition": "core",
                 "dependencies": [
-                    "Configuration, deployment, or edition prerequisite is named by the served capability evidence."
+                    "secrets.enable_api is true and the secrets KEK/server-keyed command digest is available.",
+                    "At least one tenant-scoped machine auth method has its required verifier configured; JWT-family methods require trusted JWKS, and AWS IAM requires an account or ARN allowlist."
                 ],
                 "side_effects": "mixed",
-                "secret_data_handling": "The parity contract contains metadata only. Product workflows may reveal a value once, but reports and evidence never contain the value.",
-                "maturity": "observe_only",
+                "secret_data_handling": "Preview never receives a credential. Execution holds the credential in wipeable bytes, binds idempotency with a server-keyed digest, never echoes or logs it, and the browser clears its field after success or failure. Reports contain metadata and fingerprints only.",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/lib/navigation.ts"
+                            "web/src/lib/navigation.ts",
+                            "web/src/pages/Secrets.tsx"
                         ]
                     },
                     "understand": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/lib/navigation.ts"
+                            "web/src/pages/secrets/MachineAuthWorkflow.tsx",
+                            "internal/api/machine_login_preview.go",
+                            "docs/features/secrets.md"
                         ]
                     },
                     "configure": {
-                        "status": "missing",
-                        "reason": "The route registry alone does not prove the configure workflow, and this capability row cites no concrete console implementation evidence."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/secrets/MachineAuthWorkflow.tsx",
+                            "web/src/pages/Secrets.tsx",
+                            "web/src/__tests__/secrets.test.tsx"
+                        ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/api/machine_login_preview.go",
+                            "internal/api/machine_sessions_served_test.go",
+                            "web/src/pages/secrets/MachineAuthWorkflow.tsx",
+                            "web/src/__tests__/secrets.test.tsx"
+                        ]
                     },
                     "execute": {
-                        "status": "missing",
-                        "reason": "No complete console execution path is proved for this capability."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/api/secrets_identity.go",
+                            "internal/api/mutation.go",
+                            "internal/api/machine_sessions_served_test.go",
+                            "internal/server/secrets_served_test.go",
+                            "web/src/pages/secrets/MachineAuthWorkflow.tsx",
+                            "web/src/__tests__/secrets.test.tsx"
+                        ]
                     },
                     "observe": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/lib/navigation.ts"
+                            "web/src/pages/Secrets.tsx",
+                            "internal/api/machine_sessions_served_test.go",
+                            "web/src/__tests__/secrets.test.tsx"
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/api/machine_login_preview.go",
+                            "internal/api/machine_sessions_served_test.go",
+                            "web/src/pages/secrets/MachineAuthWorkflow.tsx",
+                            "web/src/__tests__/secrets.test.tsx"
+                        ]
                     },
                     "verify": {
-                        "status": "missing",
-                        "reason": "Durable or external-effect verification is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/api/machine_sessions_served_test.go",
+                            "internal/server/secrets_served_test.go",
+                            "web/src/pages/secrets/MachineAuthWorkflow.tsx",
+                            "web/src/__tests__/secrets.test.tsx"
+                        ]
                     },
                     "automate": {
                         "status": "complete",
                         "evidence": [
+                            "OpenAPI operationId: previewMachineLogin",
                             "OpenAPI operationId: machineLogin",
                             "OpenAPI operationId: listMachineAuthMethods",
                             "OpenAPI operationId: listMachineSessions",
                             "OpenAPI operationId: revokeMachineSession",
                             "OpenAPI operationId: disableMachineAuthMethod",
                             "OpenAPI operationId: enableMachineAuthMethod",
+                            "CLI command: secrets login preview",
                             "CLI command: secrets login",
                             "CLI command: secrets auth-methods list",
                             "CLI command: secrets auth-methods disable",
@@ -17312,7 +17381,7 @@
                 "owner": "secrets",
                 "target_checkpoint": "frontend-convergence",
                 "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "freshness": "2026-09-02"
             }
         },
         {

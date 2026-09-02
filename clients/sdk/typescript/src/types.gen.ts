@@ -5204,6 +5204,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/login/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview one exact machine-login method, lifetime, effects, recovery, and verification without receiving a credential */
+        post: operations["previewMachineLogin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/pki": {
         parameters: {
             query?: never;
@@ -10454,9 +10471,44 @@ export interface components {
             disabled: boolean;
             name: string;
         };
+        MachineLoginPrerequisite: {
+            detail: string;
+            id: string;
+            ready: boolean;
+            remediation?: string;
+        };
+        MachineLoginPreview: {
+            blockers: string[];
+            capability: string;
+            cli_argv: string[];
+            credential_format: string;
+            effect_free: boolean;
+            execute_external_effects: string[];
+            execute_writes: string[];
+            method: components["schemas"]["MachineAuthMethod"];
+            operation: string;
+            prerequisites: components["schemas"]["MachineLoginPrerequisite"][];
+            preview_external_effects: string[];
+            preview_reads: string[];
+            preview_writes: string[];
+            ready: boolean;
+            recovery_steps: string[];
+            request_fingerprint: string;
+            required_permission: string;
+            secret_data_handling: string;
+            session_ttl_seconds: number;
+            tenant_binding: string;
+            verification_steps: string[];
+        };
+        MachineLoginPreviewRequest: {
+            /** @description Exact configured machine-auth method name. Empty selects the builtin token method for compatibility. */
+            method?: string;
+        };
         MachineLoginRequest: {
             credential: string;
             method?: string;
+            /** @description Optional tenant- and method-bound fingerprint from the authenticated preview route. When supplied, login fails closed if method configuration, enabled state, or session lifetime changed. */
+            preview_fingerprint?: string;
         };
         MachineLoginResponse: {
             /** Format: date-time */
@@ -28920,7 +28972,10 @@ export interface operations {
     machineLogin: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -28937,6 +28992,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MachineLoginResponse"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewMachineLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MachineLoginPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MachineLoginPreview"];
                 };
             };
             /** @description client error */

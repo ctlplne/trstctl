@@ -16748,12 +16748,168 @@
         ],
         "type": "object"
       },
+      "MachineLoginPrerequisite": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "remediation": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "ready",
+          "detail"
+        ],
+        "type": "object"
+      },
+      "MachineLoginPreview": {
+        "properties": {
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "cli_argv": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "credential_format": {
+            "type": "string"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "execute_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "execute_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "method": {
+            "$ref": "#/components/schemas/MachineAuthMethod"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "prerequisites": {
+            "items": {
+              "$ref": "#/components/schemas/MachineLoginPrerequisite"
+            },
+            "type": "array"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_reads": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "recovery_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "request_fingerprint": {
+            "type": "string"
+          },
+          "required_permission": {
+            "type": "string"
+          },
+          "secret_data_handling": {
+            "type": "string"
+          },
+          "session_ttl_seconds": {
+            "type": "integer"
+          },
+          "tenant_binding": {
+            "type": "string"
+          },
+          "verification_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "operation",
+          "ready",
+          "effect_free",
+          "method",
+          "tenant_binding",
+          "credential_format",
+          "session_ttl_seconds",
+          "required_permission",
+          "request_fingerprint",
+          "prerequisites",
+          "blockers",
+          "preview_reads",
+          "preview_writes",
+          "preview_external_effects",
+          "execute_writes",
+          "execute_external_effects",
+          "recovery_steps",
+          "verification_steps",
+          "cli_argv",
+          "secret_data_handling"
+        ],
+        "type": "object"
+      },
+      "MachineLoginPreviewRequest": {
+        "properties": {
+          "method": {
+            "description": "Exact configured machine-auth method name. Empty selects the builtin token method for compatibility.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "MachineLoginRequest": {
         "properties": {
           "credential": {
             "type": "string"
           },
           "method": {
+            "type": "string"
+          },
+          "preview_fingerprint": {
+            "description": "Optional tenant- and method-bound fingerprint from the authenticated preview route. When supplied, login fails closed if method configuration, enabled state, or session lifetime changed.",
             "type": "string"
           }
         },
@@ -51876,6 +52032,17 @@
     "/api/v1/secrets/login": {
       "post": {
         "operationId": "machineLogin",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -51921,6 +52088,63 @@
         "summary": "Exchange a machine credential for a scoped workload session",
         "x-trstctl-public-rationale": "public credential exchange: the presented machine credential authenticates the workload and yields a tenant-scoped session.",
         "x-trstctl-sensitive-response": true
+      }
+    },
+    "/api/v1/secrets/login/preview": {
+      "post": {
+        "operationId": "previewMachineLogin",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MachineLoginPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MachineLoginPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Preview one exact machine-login method, lifetime, effects, recovery, and verification without receiving a credential",
+        "x-trstctl-permission": "secrets:read"
       }
     },
     "/api/v1/secrets/pki": {

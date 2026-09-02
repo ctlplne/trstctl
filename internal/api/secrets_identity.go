@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
@@ -408,8 +409,9 @@ func (a *API) recordPKIServerSideKeygen(ctx context.Context, tenantID, commonNam
 // ---- machine login (authmethod, F58) ---------------------------------------
 
 type machineLoginRequest struct {
-	Method     string          `json:"method"`
-	Credential secretJSONBytes `json:"credential"`
+	Method             string          `json:"method"`
+	Credential         secretJSONBytes `json:"credential"`
+	PreviewFingerprint string          `json:"preview_fingerprint,omitempty"`
 }
 
 // machineLoginResponse is the scoped session the framework yields. It carries no
@@ -422,6 +424,41 @@ type machineLoginResponse struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
+const machineLoginIdempotencyDomain = "trstctl.api.machine-login-idempotency.f58.v1"
+
+// machineLoginIdempotencyBinding binds a public Idempotency-Key to the exact
+// tenant, method, credential, and reviewed plan using the server's secret-keyed
+// digest. Only the digest reaches the recorder; the presented credential is
+// wiped by machineLoginForTenant and never enters durable evidence (AN-5/AN-8).
+func (a *API) machineLoginIdempotencyBinding(tenantID, method string, credential []byte, previewFingerprint string) (string, error) {
+	if a.secrets == nil || a.secrets.be.CommandMAC == nil {
+		return "", errors.New("api: server-keyed machine-login idempotency is unavailable")
+	}
+	material := make([]byte, 0, len(tenantID)+len(method)+len(credential)+len(previewFingerprint)+32)
+	appendPart := func(part []byte) {
+		var length [8]byte
+		binary.BigEndian.PutUint64(length[:], uint64(len(part)))
+		material = append(material, length[:]...)
+		material = append(material, part...)
+	}
+	appendPart([]byte(tenantID))
+	appendPart([]byte(method))
+	appendPart(credential)
+	appendPart([]byte(previewFingerprint))
+	defer secret.Wipe(material)
+
+	mac, err := a.secrets.be.CommandMAC([]byte(machineLoginIdempotencyDomain), material)
+	if err != nil {
+		return "", err
+	}
+	if len(mac) != 32 {
+		secret.Wipe(mac)
+		return "", errors.New("api: machine-login idempotency MAC has invalid length")
+	}
+	defer secret.Wipe(mac)
+	return "sha256:" + hex.EncodeToString(mac), nil
+}
+
 // machineLogin authenticates a workload credential via the authmethod framework (F58)
 // and returns a scoped, audited, tenant-scoped session. This route is PUBLIC (it is
 // the entry point for an unauthenticated workload), so it carries no RBAC permission;
@@ -429,6 +466,7 @@ type machineLoginResponse struct {
 // tenant-scoped method; token credentials MAC-bind the tenant and this handler
 // rejects any header/credential mismatch (WIRE-002, AN-1).
 func (a *API) machineLogin(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
 	// This is an unauthenticated credential-verification endpoint, which makes it
 	// a brute-force surface: a caller can guess workload credentials as fast as
 	// the network allows. Every other public/special route in the API runs this
@@ -453,7 +491,7 @@ func (a *API) machineLogin(w http.ResponseWriter, r *http.Request) {
 	if a.tenantCrypto != nil {
 		err := a.tenantCrypto.WithTenant(r.Context(), tenantID, func(cipher tenantseal.Cipher) error {
 			ctx := context.WithValue(r.Context(), tenantCipherCtxKey, cipher)
-			a.machineLoginForTenant(w, r.WithContext(ctx), tenantID)
+			a.machineLoginForTenant(w, r.WithContext(ctx), tenantID, idempotencyKey)
 			return nil
 		})
 		if err != nil {
@@ -461,53 +499,76 @@ func (a *API) machineLogin(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	a.machineLoginForTenant(w, r, tenantID)
+	a.machineLoginForTenant(w, r, tenantID, idempotencyKey)
 }
 
 // machineLoginForTenant runs only after the public route's tenant hint has
 // acquired the same shared custody fence used by authenticated routes. The
 // presented credential still MAC-binds and authenticates the tenant; the hint
 // never grants access by itself.
-func (a *API) machineLoginForTenant(w http.ResponseWriter, r *http.Request, tenantID string) {
+func (a *API) machineLoginForTenant(w http.ResponseWriter, r *http.Request, tenantID, idempotencyKey string) {
 	var req machineLoginRequest
+	defer func() { req.Credential.wipe() }()
 	if err := decodeJSON(r, &req); err != nil {
 		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
 		return
 	}
-	method := req.Method
+	method := strings.TrimSpace(req.Method)
 	if method == "" {
 		method = "token"
 	}
-	mgr, err := a.secrets.authManager(r.Context(), tenantID)
+	binding, err := a.machineLoginIdempotencyBinding(tenantID, method, req.Credential, req.PreviewFingerprint)
 	if err != nil {
-		if errors.Is(err, errMachineLoginNotConfigured) {
-			a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "machine login is not configured"))
-			return
+		a.writeError(w, err)
+		return
+	}
+	a.mutatePublicTenantBound(w, r, tenantID, idempotencyKey, binding, func(ctx context.Context, resolvedTenantID string) (int, any, error) {
+		if req.PreviewFingerprint != "" {
+			methods, inventoryErr := a.machineAuthMethodInventory(ctx, resolvedTenantID)
+			if inventoryErr != nil {
+				return 0, nil, inventoryErr
+			}
+			var selected *machineAuthMethodInfo
+			for index := range methods {
+				if methods[index].Name == method {
+					selected = &methods[index]
+					break
+				}
+			}
+			if selected == nil {
+				return 0, nil, errStatus(http.StatusConflict, "the reviewed machine-login plan changed; review the method again")
+			}
+			expected, fingerprintErr := a.machineLoginPreviewFingerprint(resolvedTenantID, *selected, a.secrets.machineSessionTTL())
+			if fingerprintErr != nil {
+				return 0, nil, fingerprintErr
+			}
+			if req.PreviewFingerprint != expected {
+				return 0, nil, errStatus(http.StatusConflict, "the reviewed machine-login plan changed; review the method again")
+			}
 		}
-		a.writeError(w, err)
-		return
-	}
-	sess, err := mgr.Login(r.Context(), method, []byte(req.Credential))
-	req.Credential.wipe() // the credential is consumed; wipe our copy (AN-8)
-	if err != nil {
-		// Do not echo the credential or the reason beyond "unauthorized".
-		a.writeProblem(w, problem.New(http.StatusUnauthorized, "machine login failed"))
-		return
-	}
-	if sess.TenantID != tenantID {
-		a.writeProblem(w, problem.New(http.StatusUnauthorized, "machine login failed"))
-		return
-	}
-	// C-S3 (DA-02): the issued session becomes ledger state. When the ledger
-	// subsystem is configured, a session that cannot be recorded is not
-	// issued — evidence-first, matching the PAM precedent (AN-2).
-	if err := a.recordMachineSession(r.Context(), tenantID, sess); err != nil {
-		a.writeError(w, err)
-		return
-	}
-	a.writeJSON(w, http.StatusOK, machineLoginResponse{
-		SessionID: sess.ID, Principal: sess.Principal, Method: sess.Method,
-		Scopes: sess.Scopes, ExpiresAt: sess.ExpiresAt,
+
+		mgr, managerErr := a.secrets.authManager(ctx, resolvedTenantID)
+		if managerErr != nil {
+			if errors.Is(managerErr, errMachineLoginNotConfigured) {
+				return 0, nil, errStatus(http.StatusServiceUnavailable, "machine login is not configured")
+			}
+			return 0, nil, managerErr
+		}
+		sess, loginErr := mgr.Login(ctx, method, []byte(req.Credential))
+		if loginErr != nil || sess.TenantID != resolvedTenantID {
+			// Never echo the credential or the verifier's failure detail.
+			return 0, nil, errStatus(http.StatusUnauthorized, "machine login failed")
+		}
+		// C-S3 (DA-02): the issued session becomes ledger state. When the ledger
+		// subsystem is configured, a session that cannot be recorded is not
+		// issued — evidence-first, matching the PAM precedent (AN-2).
+		if recordErr := a.recordMachineSession(ctx, resolvedTenantID, sess); recordErr != nil {
+			return 0, nil, recordErr
+		}
+		return http.StatusOK, machineLoginResponse{
+			SessionID: sess.ID, Principal: sess.Principal, Method: sess.Method,
+			Scopes: sess.Scopes, ExpiresAt: sess.ExpiresAt,
+		}, nil
 	})
 }
 
@@ -660,31 +721,10 @@ func (a *API) listMachineAuthMethods(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
-	disabled := map[string]bool{}
-	if a.secrets.be.Store != nil {
-		overlay, err := a.secrets.be.Store.DisabledMachineAuthMethods(r.Context(), tenantID)
-		if err != nil {
-			a.writeError(w, err)
-			return
-		}
-		disabled = overlay
-	}
-	items := make([]machineAuthMethodInfo, 0, 4)
-	if len(a.secrets.be.AuthSecret) > 0 {
-		// The builtin exchange is projected without constructing a TokenMethod:
-		// its only interesting fields here are name/type, and its Secret must
-		// never travel toward a response writer.
-		items = append(items, machineAuthMethodInfo{Name: "token", Type: "token", Source: "builtin", Disabled: disabled["token"]})
-	}
-	if a.secrets.be.MachineAuthMethods != nil {
-		for _, m := range a.secrets.be.MachineAuthMethods(tenantID) {
-			if m == nil {
-				continue
-			}
-			info := machineAuthMethodProjection(m, "config")
-			info.Disabled = disabled[info.Name]
-			items = append(items, info)
-		}
+	items, err := a.machineAuthMethodInventory(r.Context(), tenantID)
+	if err != nil {
+		a.writeError(w, err)
+		return
 	}
 	a.writeJSON(w, http.StatusOK, listResponse{Items: items})
 }
@@ -957,10 +997,7 @@ func (s *secretsService) pkiProvider(tenantID string, caCertDER []byte, caSigner
 // login methods (F58). Each method is tenant-scoped at construction so a session is
 // bound to this tenant (AN-1).
 func (s *secretsService) authManager(ctx context.Context, tenantID string) (*authmethod.Manager, error) {
-	ttl := s.be.SessionTTL
-	if ttl <= 0 {
-		ttl = time.Hour
-	}
+	ttl := s.machineSessionTTL()
 	methods := make([]authmethod.Method, 0, 1)
 	if len(s.be.AuthSecret) > 0 {
 		methods = append(methods, authmethod.TokenMethod{Secret: s.be.AuthSecret, TenantID: tenantID})

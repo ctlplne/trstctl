@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/api/problem"
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -73,6 +74,23 @@ func (a *API) mutateDurable(w http.ResponseWriter, r *http.Request, idempotencyK
 // cached success for a different command or caller.
 func (a *API) mutateDurableBound(w http.ResponseWriter, r *http.Request, idempotencyKey, binding string, fn func(ctx context.Context, tenantID string) (int, any, error)) {
 	a.mutateWithRecorder(w, r, idempotencyKey, binding, fn, true)
+}
+
+// mutatePublicTenantBound applies AN-5 to a deliberately public credential
+// exchange after the handler has resolved its tenant lookup hint. The synthetic
+// principal carries only that already-resolved tenant into the common recorder;
+// it is not authentication or authorization, and a mandatory caller-supplied
+// binding prevents the recorder from deriving authority from it.
+func (a *API) mutatePublicTenantBound(w http.ResponseWriter, r *http.Request, tenantID, idempotencyKey, binding string, fn func(ctx context.Context, tenantID string) (int, any, error)) {
+	if tenantID == "" || binding == "" {
+		a.writeError(w, errors.New("api: public mutation is missing exact tenant or request binding"))
+		return
+	}
+	ctx := context.WithValue(r.Context(), principalCtxKey, authz.Principal{
+		TenantID: tenantID,
+		Subject:  "public-credential-exchange",
+	})
+	a.mutateWithRecorder(w, r.WithContext(ctx), idempotencyKey, binding, fn, false)
 }
 
 // mutatePreparedDurableBound is the scheduler-style durable path where the

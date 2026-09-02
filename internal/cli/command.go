@@ -488,6 +488,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"secrets", "auth-methods", "enable"}, Method: "POST", Path: "/api/v1/secrets/auth-methods/{name}/enable", Summary: "Re-enable a machine-auth method for this tenant"},
 	{Name: []string{"secrets", "sessions", "list"}, Method: "GET", Path: "/api/v1/secrets/sessions", Query: []string{"limit"}, Summary: "List issued machine-login sessions (event-sourced ledger)"},
 	{Name: []string{"secrets", "sessions", "revoke"}, Method: "POST", Path: "/api/v1/secrets/sessions/{id}/revoke", Summary: "Mark an issued machine session revoked in the ledger"},
+	{Name: []string{"secrets", "login", "preview"}, Method: "POST", Path: "/api/v1/secrets/login/preview", Body: bodyFile, ReadOnly: true, Summary: "Review one exact machine-login method without sending a credential or creating a session"},
 	{Name: []string{"secrets", "login"}, Method: "POST", Path: "/api/v1/secrets/login", Body: bodyFile, Summary: "Exchange a machine credential for a workload session"},
 	{Name: []string{"secrets", "store", "preview"}, Method: "POST", Path: "/api/v1/secrets/store/preview", Body: bodyFile, ReadOnly: true, Summary: "Review an exact effect-free native secret create plan"},
 	{Name: []string{"secrets", "access", "preview"}, Method: "POST", Path: "/api/v1/secrets/access/preview", Body: bodyFile, ReadOnly: true, Summary: "Review an exact effect-free developer secret access plan"},
