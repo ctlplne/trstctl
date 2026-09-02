@@ -4711,6 +4711,8 @@ const esESCatalog = {
   "secrets.approvals.approve": "Aprobar",
   "secrets.approvals.retry": "Reintentar",
   "secrets.share.review": "Revisar sin crear",
+  "secrets.share.description":
+    "Crear devuelve un token al portador una sola vez. Canjear devuelve el valor una sola vez; un canje posterior se bloquea de forma segura.",
   "secrets.share.previewFailedTitle": "Falló la revisión del recurso compartido",
   "secrets.share.previewFailed": "No se pudo revisar el recurso compartido de un solo uso",
   "secrets.share.previewNotEffectFree": "El servidor no demostró que esta revisión no produce efectos.",
@@ -4729,6 +4731,9 @@ const esESCatalog = {
   "secrets.share.createReviewed": "Crear recurso compartido revisado",
   "secrets.share.retrySame": "Reintentar el mismo recurso compartido revisado",
   "secrets.share.createFailed": "No se pudo crear el recurso compartido de un solo uso",
+  "secrets.share.redeemFailed": "No se pudo canjear el recurso compartido de un solo uso",
+  "secrets.share.tokenGuidance":
+    "Caduca el {expiresAt}. El token es material al portador: quien lo tenga puede canjear el valor. Cópialo ahora y luego descártalo.",
   "secrets.share.ambiguousFailure":
     "Es posible que el servidor haya creado el recurso compartido, pero la respuesta se interrumpió. Reintenta el mismo recurso compartido revisado para recuperar el token original sin crear un duplicado.",
   "secrets.approvals.approveAction": "Aprobar {action} para {name}",

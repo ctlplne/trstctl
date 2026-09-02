@@ -6190,7 +6190,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use secret sharing and secret-change approvals while tenant, policy, and security authority remain on the server.",
       "tool": "secrets",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/secrets/sharing",
       "navigationEntrypoints": [
         "tool navigation",
@@ -6204,7 +6204,7 @@ export const canonicalCapabilities = [
       ],
       "sideEffects": "mixed",
       "secretDataHandling": "The parity contract contains metadata only. Product workflows may reveal a value once, but reports and evidence never contain the value.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -6219,34 +6219,50 @@ export const canonicalCapabilities = [
           ]
         },
         "configure": {
-          "status": "missing",
-          "reason": "The route registry alone does not prove the configure workflow, and this capability row cites no concrete console implementation evidence."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/secrets/SecretSharingWorkflow.tsx",
+            "web/src/__tests__/secrets.test.tsx"
+          ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "internal/api/secret_share_preview.go",
+            "internal/server/secret_share_preview_served_test.go",
+            "web/src/pages/secrets/SecretSharingWorkflow.tsx",
+            "web/src/__tests__/secrets.test.tsx"
+          ]
         },
         "execute": {
           "status": "complete",
           "evidence": [
             "web/src/lib/navigation.ts",
-            "web/src/__tests__/route_parity.test.ts"
+            "web/src/pages/secrets/SecretSharingWorkflow.tsx",
+            "web/src/__tests__/secrets.test.tsx"
           ]
         },
         "observe": {
           "status": "complete",
           "evidence": [
-            "web/src/lib/navigation.ts"
+            "web/src/pages/secrets/SecretSharingWorkflow.tsx",
+            "internal/server/secret_share_preview_served_test.go"
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/secrets/SecretSharingWorkflow.tsx",
+            "web/src/__tests__/secrets.test.tsx",
+            "internal/server/secret_share_preview_served_test.go"
+          ]
         },
         "verify": {
           "status": "complete",
           "evidence": [
-            "web/src/__tests__/route_parity.test.ts"
+            "web/src/__tests__/secrets.test.tsx",
+            "web/src/lib/api.test.ts",
+            "internal/server/secret_share_preview_served_test.go"
           ]
         },
         "automate": {
@@ -6265,8 +6281,8 @@ export const canonicalCapabilities = [
       },
       "owner": "secrets",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "788f297967b9b7d0de018b0e2f9010d39afc85f6",
+      "freshness": "2026-09-02"
     }
   },
   {

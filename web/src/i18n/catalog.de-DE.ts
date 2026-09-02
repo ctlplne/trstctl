@@ -4752,6 +4752,8 @@ const deDECatalog = {
   "secrets.approvals.approve": "Freigeben",
   "secrets.approvals.retry": "Erneut versuchen",
   "secrets.share.review": "Prüfen, ohne zu erstellen",
+  "secrets.share.description":
+    "Beim Erstellen wird das Bearer-Token genau einmal zurückgegeben. Beim Einlösen wird der Wert genau einmal zurückgegeben; ein weiterer Versuch schlägt sicher fehl.",
   "secrets.share.previewFailedTitle": "Freigabeprüfung fehlgeschlagen",
   "secrets.share.previewFailed": "Die einmalige Freigabe konnte nicht geprüft werden",
   "secrets.share.previewNotEffectFree": "Der Server hat nicht nachgewiesen, dass diese Prüfung keine Auswirkungen hat.",
@@ -4770,6 +4772,9 @@ const deDECatalog = {
   "secrets.share.createReviewed": "Geprüfte Freigabe erstellen",
   "secrets.share.retrySame": "Dieselbe geprüfte Freigabe erneut versuchen",
   "secrets.share.createFailed": "Die einmalige Freigabe konnte nicht erstellt werden",
+  "secrets.share.redeemFailed": "Die einmalige Freigabe konnte nicht eingelöst werden",
+  "secrets.share.tokenGuidance":
+    "Läuft am {expiresAt} ab. Das Token ist Bearer-Material: Wer es besitzt, kann den Wert einlösen. Kopieren Sie es jetzt und verwerfen Sie es danach.",
   "secrets.share.ambiguousFailure":
     "Der Server hat die Freigabe möglicherweise erstellt, aber die Antwort wurde unterbrochen. Versuchen Sie dieselbe geprüfte Freigabe erneut, um das ursprüngliche Token abzurufen, ohne ein Duplikat zu erstellen.",
   "secrets.approvals.approveAction": "{action} für {name} freigeben",

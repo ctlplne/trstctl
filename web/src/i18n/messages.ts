@@ -14976,6 +14976,10 @@ export const messages = {
     defaultMessage: "Review without creating",
     description: "Button label for the effect-free one-time-share review.",
   },
+  "secrets.share.description": {
+    defaultMessage: "Create returns a bearer token once. Redeem returns the value once; a later redeem fails closed.",
+    description: "Plain-language explanation of the one-time-share security boundary.",
+  },
   "secrets.share.previewFailedTitle": {
     defaultMessage: "Share review failed",
     description: "Heading for an error returned by one-time-share preview.",
@@ -15043,6 +15047,14 @@ export const messages = {
   "secrets.share.createFailed": {
     defaultMessage: "Could not create the one-time share",
     description: "Fallback for a definitive one-time-share creation error.",
+  },
+  "secrets.share.redeemFailed": {
+    defaultMessage: "Could not redeem the one-time share",
+    description: "Fallback for a definitive one-time-share redemption error.",
+  },
+  "secrets.share.tokenGuidance": {
+    defaultMessage: "Expires {expiresAt}. The token is bearer material: whoever has it can redeem the value. Copy it now, then dismiss it.",
+    description: "Expiry and custody guidance shown beside a newly created one-time-share token.",
   },
   "secrets.share.ambiguousFailure": {
     defaultMessage:

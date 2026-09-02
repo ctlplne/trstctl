@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Eye, Loader2, Share2 } from "lucide-react";
 import { ErrorState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
@@ -44,6 +44,11 @@ export default function SecretSharingWorkflow({
   const [redeemBusy, setRedeemBusy] = useState(false);
   const [redeemError, setRedeemError] = useState<string | null>(null);
   const [redeemed, setRedeemed] = useState<ShareValue | null>(null);
+  const shareValueRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    shareValueRef.current?.focus();
+  }, []);
 
   function invalidateSharePreview() {
     setSharePreview((current) => {
@@ -131,7 +136,7 @@ export default function SecretSharingWorkflow({
     try {
       setRedeemed(await api.redeemShare({ token: redeemToken }));
     } catch (err) {
-      setRedeemError(apiProblemMessage(err, "Could not redeem one-time share"));
+      setRedeemError(apiProblemMessage(err, t("secrets.share.redeemFailed")));
     } finally {
       setRedeemBusy(false);
     }
@@ -143,9 +148,7 @@ export default function SecretSharingWorkflow({
         <h2 id="share-heading" className="text-title font-semibold">
           {translateNow("source.one.time.sharing.9db928cd78")}
         </h2>
-        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-          Create returns a bearer token once. Redeem returns the value once; a later redeem is expected to fail closed.
-        </p>
+        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("secrets.share.description")}</p>
       </div>
       <div className="grid gap-4 xl:grid-cols-2">
         <form
@@ -157,6 +160,7 @@ export default function SecretSharingWorkflow({
             <span className="font-medium">{translateNow("source.value.to.share.fa56b0a913")}</span>
             <input
               id="share-value"
+              ref={shareValueRef}
               className="rounded-md border border-border bg-background px-3 py-2"
               type="password"
               value={shareValueInput}
@@ -164,7 +168,6 @@ export default function SecretSharingWorkflow({
                 setShareValueInput(event.target.value);
                 invalidateSharePreview();
               }}
-              autoFocus
               autoComplete="off"
               required
             />
@@ -240,7 +243,7 @@ export default function SecretSharingWorkflow({
       </div>
       {shareToken && (
         <RevealPanel title={translateNow("source.one.time.share.token.20234cd9a0")} onDismiss={() => setShareToken(null)} value={shareToken.token}>
-          {translateNow("source.expires.f6725f3af0")} {formatDate(shareToken.expires_at)}. The token is bearer material; copy it now, then dismiss.
+          {t("secrets.share.tokenGuidance", { expiresAt: formatDate(shareToken.expires_at) })}
         </RevealPanel>
       )}
       {redeemed && (
