@@ -321,7 +321,7 @@ not this file.
 | `internal/server/secret_third_party_scan_served_test.go:22` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secrets_scan_served_test.go:139` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secrets_served_test.go:577` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/secrets_served_test.go:2472` | fabricated STS exchange fixture; no real credential (CWE-798) |
+| `internal/server/secrets_served_test.go:2475` | fabricated STS exchange fixture; no real credential (CWE-798) |
 | `internal/server/secrets_sync_served_test.go:400` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secrets_sync_served_test.go:412` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secrets_sync_served_test.go:423` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -382,7 +382,7 @@ not this file.
 | `internal/agent/relay/adcsscan_wire_test.go:217` | this fixed fixture is 40 bytes, below MaxUint16 (CWE-190). |
 | `internal/agent/relay/adcsscan_wire_test.go:229` | this fixed fixture is below MaxUint16 (CWE-190). |
 | `internal/api/application_secret_approval.go:412` | ApplicationSecretApprovalBinding just proved the version is positive (CWE-190). |
-| `internal/api/machine_sessions_served_test.go:61` | bounded fixture/corpus value packing inside a test (CWE-190) |
+| `internal/api/machine_sessions_served_test.go:62` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/api/notifications_helpers_test.go:187` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/api/secretjson.go:173` | rune already range-checked below 0x20 before hex packing (CWE-190) |
 | `internal/api/vault_compat_complete.go:714` | DER length of a public key, far under the uint32 bound (CWE-190) |
@@ -758,7 +758,7 @@ not this file.
 | `internal/api/headerauth_guard_test.go:34` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/api/headerauth_guard_test.go:39` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/ca/shellca/shellca.go:120` | the shell-CA backend exists to run the operator's configured signing command (CWE-78) |
-| `internal/cli/cli_test.go:2066` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/cli/cli_test.go:2085` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/connector/localops.go:247` | operator-configured local-ops action command; running it is the feature (CWE-78) |
 | `internal/crypto/kmswrap/external_kms.go:122` | operator-configured external KMS helper command (CWE-78) |
 | `internal/kms/pkcs11/softhsm_container_test.go:116` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
@@ -865,7 +865,7 @@ not this file.
 | `internal/agent/discovery/discovery_test.go:270` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/discovery/privatekey_test.go:28` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/sshdiscovery/sshdiscovery_test.go:26` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/api/machine_sessions_served_test.go:54` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/api/machine_sessions_served_test.go:55` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/api/openapi_golden_test.go:59` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/api/vault_compat_contract_test.go:246` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/ca/profilelint/profilelint_test.go:173` | non-secret fixture directory in t.TempDir (CWE-22, CWE-276) |
@@ -1080,7 +1080,7 @@ not this file.
 | `internal/cli/audit_verify.go:103` | path is the explicit read-only local artifact selected by this CLI command (CWE-22). |
 | `internal/cli/cli.go:162` | the operator explicitly names the public trust-bundle path (CWE-22) |
 | `internal/cli/cli.go:485` | operator-passed local file argument on their own command line (CWE-22) |
-| `internal/cli/cli_test.go:1626` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/cli/cli_test.go:1645` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/cli/doctor/doctor_test.go:98` | test reads its own tempdir receipt (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/config/config.go:2278` | the config loader reading the operator's own config file (CWE-22) |
@@ -1342,7 +1342,7 @@ not this file.
 | `internal/ca/profilelint/profilelint_test.go:241` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/ca/profilelint/profilelint_test.go:254` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/cbom/hostsource/hostsource_test.go:23` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/cli/cli_test.go:2096` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/cli/cli_test.go:2115` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/cli/secret_scan_local.go:137` | a git hook must be executable; 0755 is the working minimum (CWE-276) |
 | `internal/connector/localops_test.go:87` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/crypto/external_kms_test.go:90` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
