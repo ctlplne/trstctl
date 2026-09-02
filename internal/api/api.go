@@ -1349,6 +1349,7 @@ func (a *API) routes() []route {
 		// returned beyond their design (AN-8). The machine-login route (authmethod/F58)
 		// is public because the presented credential authenticates the workload; it is
 		// still in the registry so OpenAPI/generated clients see the served contract.
+		{method: "POST", path: "/api/v1/secrets/store/preview", opID: "previewSecretCreate", summary: "Preview an exact effect-free native secret create plan", handler: a.previewSecretCreate, reqSchema: "SecretCreateRequest", resSchema: "SecretStoreCreatePreview", successCode: "200", perm: authz.SecretsWrite},
 		{method: "POST", path: "/api/v1/secrets/store", opID: "createSecret", summary: "Create an application secret (sealed at rest)", handler: a.createSecret, reqSchema: "SecretCreateRequest", resSchema: "SecretMeta", successCode: "201", mutation: true, perm: authz.SecretsWrite},
 		{method: "GET", path: "/api/v1/secrets/store", opID: "listSecrets", summary: "List application secret names (no values)", handler: a.listSecrets, query: page, resSchema: "SecretMetaList", successCode: "200", perm: authz.SecretsRead},
 		{method: "POST", path: "/api/v1/secrets/store/import", opID: "importSecrets", summary: "Bulk application-secret import is unavailable (fails closed without writing)", handler: a.importSecrets, reqSchema: "SecretImportRequest", unavailableReason: "Event-sourced atomic batch import is not implemented; use one idempotent create request per secret.", mutation: true, perm: authz.SecretsWrite},

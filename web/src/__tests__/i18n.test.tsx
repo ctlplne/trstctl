@@ -1402,8 +1402,12 @@ describe("i18n boundary", () => {
       // saved tenant records and migration guidance. The error copy must retain
       // the explicit no-success-claim boundary. Machine-authored es/de —
       // FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "707acf62ce8955d97779a12d2548bf1d2dbb9320ec077a614534cd07507944e6",
-      "de-DE": "3dd8c2acf0d71131870837d11d5c3d994523506c801758ab71da5232ffc46707",
+      // F63 create-preview re-pin: the two-step create journey, zero-effect
+      // review, stale-plan warning, separate execution action, and progress
+      // labels preserve their safety meaning and placeholders in both locales.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "f812d70440cfc8b3908bba7452fe90d0e12535dde3c144b54ab15b90f5e6faea",
+      "de-DE": "0b58126a65a39e7c8fcd7b6fb08b605bc6d3a22a074d60a3e35df00cf824c82b",
     });
   });
 

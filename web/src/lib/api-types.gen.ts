@@ -6748,6 +6748,25 @@ export interface SecretScanRequest {
   path: string;
 }
 
+export interface SecretStoreCreatePreview {
+  blockers: string[];
+  capability: "F63";
+  effect_free: boolean;
+  execute_external_effects: string[];
+  execute_writes: string[];
+  name: string;
+  next_version: number;
+  operation: "create";
+  owner_id?: string;
+  preview_external_effects: string[];
+  preview_writes: string[];
+  ready: boolean;
+  recovery_steps: string[];
+  request_fingerprint: string;
+  required_permission: string;
+  secret_data_handling: string;
+}
+
 export interface SecretSync {
   delivered: boolean;
   enqueued: boolean;

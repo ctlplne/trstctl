@@ -27312,6 +27312,101 @@
         ],
         "type": "object"
       },
+      "SecretStoreCreatePreview": {
+        "properties": {
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "enum": [
+              "F63"
+            ],
+            "type": "string"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "execute_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "execute_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "next_version": {
+            "type": "integer"
+          },
+          "operation": {
+            "enum": [
+              "create"
+            ],
+            "type": "string"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "recovery_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "request_fingerprint": {
+            "type": "string"
+          },
+          "required_permission": {
+            "type": "string"
+          },
+          "secret_data_handling": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "capability",
+          "operation",
+          "ready",
+          "effect_free",
+          "name",
+          "next_version",
+          "required_permission",
+          "request_fingerprint",
+          "blockers",
+          "preview_writes",
+          "preview_external_effects",
+          "execute_writes",
+          "execute_external_effects",
+          "recovery_steps",
+          "secret_data_handling"
+        ],
+        "type": "object"
+      },
       "SecretSync": {
         "properties": {
           "delivered": {
@@ -52751,6 +52846,63 @@
         "x-trstctl-availability": "unavailable",
         "x-trstctl-permission": "secrets:write",
         "x-trstctl-unavailable-reason": "Event-sourced atomic batch import is not implemented; use one idempotent create request per secret."
+      }
+    },
+    "/api/v1/secrets/store/preview": {
+      "post": {
+        "operationId": "previewSecretCreate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretStoreCreatePreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Preview an exact effect-free native secret create plan",
+        "x-trstctl-permission": "secrets:write"
       }
     },
     "/api/v1/secrets/store/recover/{name}": {

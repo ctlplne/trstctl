@@ -378,6 +378,7 @@ import type {
   SecretApprovalRequest as GenSecretApprovalRequest,
   SecretMeta,
   SecretMetaList,
+  SecretStoreCreatePreview,
   SecretRecoverRequest,
   SecretRepositoryScanPosture,
   SecretRepositoryWebhookReceipt,
@@ -987,6 +988,7 @@ export type {
   ScaleOrchestrationPlan,
   SecretMeta,
   SecretMetaList,
+  SecretStoreCreatePreview,
   SecretRecoverRequest,
   SecretRepositoryScanPosture,
   SecretRepositoryWebhookReceipt,
@@ -2312,6 +2314,7 @@ export interface Api {
   mdmSCEPStatus(): Promise<MDMSCEPStatus>;
   mdmSCEPPolicies(): Promise<MDMSCEPPolicyList>;
   secretPage(options?: { limit?: number; cursor?: string }): Promise<SecretMetaList>;
+  previewSecretCreate(input: SecretCreateRequest): Promise<SecretStoreCreatePreview>;
   createSecret(input: SecretCreateRequest): Promise<SecretMeta>;
   getSecret(name: string, options?: { resolve?: boolean }): Promise<SecretValue>;
   /** Read one secret as the granted workload credential, without falling back
@@ -2868,6 +2871,7 @@ const liveApi: Api = {
     const suffix = qs.toString();
     return req<SecretMetaList>(`/api/v1/secrets/store${suffix ? `?${suffix}` : ""}`);
   },
+  previewSecretCreate: (input) => postRead<SecretStoreCreatePreview>("/api/v1/secrets/store/preview", input),
   createSecret: (input) => mutate<SecretMeta>("POST", "/api/v1/secrets/store", input),
   getSecret: (name, options) => {
     const qs = new URLSearchParams();

@@ -9338,6 +9338,29 @@ SecretScanRequest = TypedDict(
     total=False,
 )
 
+SecretStoreCreatePreview = TypedDict(
+    'SecretStoreCreatePreview',
+    {
+        'blockers': list[str],
+        'capability': str,
+        'effect_free': bool,
+        'execute_external_effects': list[str],
+        'execute_writes': list[str],
+        'name': str,
+        'next_version': int,
+        'operation': str,
+        'owner_id': str,
+        'preview_external_effects': list[str],
+        'preview_writes': list[str],
+        'ready': bool,
+        'recovery_steps': list[str],
+        'request_fingerprint': str,
+        'required_permission': str,
+        'secret_data_handling': str,
+    },
+    total=False,
+)
+
 SecretSync = TypedDict(
     'SecretSync',
     {

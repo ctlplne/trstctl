@@ -15302,6 +15302,7 @@
             "status": "closed",
             "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
             "api_surface": [
+                "previewSecretCreate",
                 "createSecret",
                 "listSecrets",
                 "getSecret",
@@ -15312,6 +15313,7 @@
             ],
             "api_na": "",
             "cli_surface": [
+                "secrets store preview",
                 "secrets store put",
                 "secrets store list",
                 "secrets store get",

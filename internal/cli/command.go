@@ -489,6 +489,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"secrets", "sessions", "list"}, Method: "GET", Path: "/api/v1/secrets/sessions", Query: []string{"limit"}, Summary: "List issued machine-login sessions (event-sourced ledger)"},
 	{Name: []string{"secrets", "sessions", "revoke"}, Method: "POST", Path: "/api/v1/secrets/sessions/{id}/revoke", Summary: "Mark an issued machine session revoked in the ledger"},
 	{Name: []string{"secrets", "login"}, Method: "POST", Path: "/api/v1/secrets/login", Body: bodyFile, Summary: "Exchange a machine credential for a workload session"},
+	{Name: []string{"secrets", "store", "preview"}, Method: "POST", Path: "/api/v1/secrets/store/preview", Body: bodyFile, ReadOnly: true, Summary: "Review an exact effect-free native secret create plan"},
 	{Name: []string{"secrets", "store", "put"}, Method: "POST", Path: "/api/v1/secrets/store", Body: bodyFile, Summary: "Store a secret"},
 	{Name: []string{"secrets", "store", "list"}, Method: "GET", Path: "/api/v1/secrets/store", Query: []string{"limit", "cursor"}, Summary: "List stored secrets"},
 	{Name: []string{"secrets", "store", "get"}, Method: "GET", Path: "/api/v1/secrets/store/{name}", Query: []string{"resolve"}, Summary: "Get a stored secret"},

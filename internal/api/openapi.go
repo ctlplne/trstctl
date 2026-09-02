@@ -5005,6 +5005,20 @@ func componentSchemas() map[string]*Schema {
 	secretCreateReq := object(map[string]*Schema{
 		"name": str(), "owner_id": uuid(), "value": str(),
 	}, "name", "value")
+	secretStoreCreatePreview := object(map[string]*Schema{
+		"capability": {Type: "string", Enum: []string{"F63"}},
+		"operation":  {Type: "string", Enum: []string{"create"}},
+		"ready":      {Type: "boolean"}, "effect_free": {Type: "boolean"},
+		"name": str(), "owner_id": uuid(), "next_version": {Type: "integer"},
+		"required_permission": str(), "request_fingerprint": str(),
+		"blockers":                 {Type: "array", Items: str()},
+		"preview_writes":           {Type: "array", Items: str()},
+		"preview_external_effects": {Type: "array", Items: str()},
+		"execute_writes":           {Type: "array", Items: str()},
+		"execute_external_effects": {Type: "array", Items: str()},
+		"recovery_steps":           {Type: "array", Items: str()},
+		"secret_data_handling":     str(),
+	}, "capability", "operation", "ready", "effect_free", "name", "next_version", "required_permission", "request_fingerprint", "blockers", "preview_writes", "preview_external_effects", "execute_writes", "execute_external_effects", "recovery_steps", "secret_data_handling")
 	secretRotateReq := object(map[string]*Schema{
 		"value": str(),
 	}, "value")
@@ -6249,6 +6263,7 @@ func componentSchemas() map[string]*Schema {
 		"BreakglassReconcileRequest":               breakglassReconcileReq,
 		"BreakglassReconcileResponse":              breakglassReconcileResp,
 		"SecretCreateRequest":                      secretCreateReq,
+		"SecretStoreCreatePreview":                 secretStoreCreatePreview,
 		"SecretRotateRequest":                      secretRotateReq,
 		"SecretImportRequest":                      secretImportReq,
 		"SecretRecoverRequest":                     secretRecoverReq,

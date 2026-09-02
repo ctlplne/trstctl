@@ -580,6 +580,9 @@ describe("exported API surface census", () => {
       // F37: reads tenant-scoped secret version and connector configuration
       // only; it generates no successor, writes no state, and contacts no target.
       "/api/v1/secrets/rotations/preview",
+      // F63: validates a native-store create and returns a keyed, secret-free
+      // plan without an idempotency row, event, projection, audit, or external call.
+      "/api/v1/secrets/store/preview",
       // F61 preview reads public trust and digests, with no verification or signing.
       "/api/v1/broker/agent-identities/preview",
       // F43: validates and normalizes one SSH public-key certificate request
@@ -1694,6 +1697,41 @@ describe("secrets contract", () => {
     await api.redeemShare({ token: "share-token" });
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/shares/redeem");
     expect(sentHeaders()["Idempotency-Key"]).toMatch(/^(?:idem-.+|[0-9a-f-]{36})$/);
+  });
+
+  it("previews native secret creation without mutation headers or value echo", async () => {
+    document.cookie = "trstctl_csrf=csrf-secret-preview; path=/";
+    mockFetch(
+      200,
+      JSON.stringify({
+        capability: "F63",
+        operation: "create",
+        ready: true,
+        effect_free: true,
+        name: "app/api",
+        next_version: 1,
+        required_permission: "secrets:write",
+        request_fingerprint: "sha256:keyed-plan",
+        blockers: [],
+        preview_writes: [],
+        preview_external_effects: [],
+        execute_writes: ["append secret.created"],
+        execute_external_effects: [],
+        recovery_steps: ["Cancel before execution"],
+        secret_data_handling: "never echoed",
+      }),
+    );
+
+    const plan = await api.previewSecretCreate({ name: "app/api", value: "stored" });
+
+    expect(plan.ready).toBe(true);
+    expect(JSON.stringify(plan)).not.toContain("stored");
+    const call = vi.mocked(fetch).mock.calls[0];
+    expect(call[0]).toBe("/api/v1/secrets/store/preview");
+    expect(call[1]?.method).toBe("POST");
+    const headers = call[1]?.headers as Record<string, string>;
+    expect(headers["Idempotency-Key"]).toBeUndefined();
+    expect(headers["X-CSRF-Token"]).toBe("csrf-secret-preview");
   });
 });
 

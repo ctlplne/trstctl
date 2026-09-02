@@ -5498,6 +5498,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/store/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview an exact effect-free native secret create plan */
+        post: operations["previewSecretCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/store/recover/{name}": {
         parameters: {
             query?: never;
@@ -13194,6 +13211,27 @@ export interface components {
             custom_rules_path?: string;
             mode?: string;
             path: string;
+        };
+        SecretStoreCreatePreview: {
+            blockers: string[];
+            /** @enum {string} */
+            capability: "F63";
+            effect_free: boolean;
+            execute_external_effects: string[];
+            execute_writes: string[];
+            name: string;
+            next_version: number;
+            /** @enum {string} */
+            operation: "create";
+            /** Format: uuid */
+            owner_id?: string;
+            preview_external_effects: string[];
+            preview_writes: string[];
+            ready: boolean;
+            recovery_steps: string[];
+            request_fingerprint: string;
+            required_permission: string;
+            secret_data_handling: string;
         };
         SecretSync: {
             delivered: boolean;
@@ -29643,6 +29681,48 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewSecretCreate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretStoreCreatePreview"];
                 };
             };
             /** @description client error */

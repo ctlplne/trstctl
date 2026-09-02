@@ -1,21 +1,220 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode, type RefObject } from "react";
 import { Copy, Loader2, PlayCircle, ShieldCheck, X } from "lucide-react";
 import { ErrorState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { StepShell } from "@/components/wizard/StepShell";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import {
   ApiError,
   type DynamicLease,
   type MachineLoginResponse,
+  type Owner,
   type SecretApprovalAction,
   type SecretMeta,
+  type SecretStoreCreatePreview,
   type SecretRepositoryScanPosture,
   type SecretRotationDueRun,
   type SecretRotationSchedule,
   type ThirdPartySecretScanPosture,
 } from "@/lib/api";
 import { StatusBadge } from "@/components/StatusBadge";
+
+export function NativeSecretCreateForm({
+  name,
+  value,
+  ownerID,
+  owners,
+  busy,
+  previewBusy,
+  loadBlocked,
+  preview,
+  previewError,
+  previewStale,
+  nameRef,
+  onNameChange,
+  onValueChange,
+  onOwnerChange,
+  onReview,
+  onCancel,
+  onSubmit,
+}: {
+  name: string;
+  value: string;
+  ownerID: string;
+  owners: Owner[];
+  busy: boolean;
+  previewBusy: boolean;
+  loadBlocked: boolean;
+  preview: SecretStoreCreatePreview | null;
+  previewError: string | null;
+  previewStale: boolean;
+  nameRef: RefObject<HTMLInputElement>;
+  onNameChange: (value: string) => void;
+  onValueChange: (value: string) => void;
+  onOwnerChange: (value: string) => void;
+  onReview: () => Promise<void>;
+  onCancel: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const { t } = useTranslation();
+  const [step, setStep] = useState(0);
+
+  useEffect(() => {
+    if (preview) setStep(1);
+  }, [preview]);
+
+  const resetReview = (change: (next: string) => void, next: string) => {
+    setStep(0);
+    change(next);
+  };
+  const reviewDisabled = busy || previewBusy || loadBlocked || !name.trim() || !value || (owners.length > 0 && !ownerID);
+  const steps = [
+    {
+      id: "details",
+      label: t("secrets.store.detailsStep"),
+      description: t("secrets.store.detailsStepHelp"),
+      progressState: !reviewDisabled ? ("done" as const) : ("pending" as const),
+    },
+    {
+      id: "review",
+      label: t("secrets.store.reviewStep"),
+      description: t("secrets.store.reviewStepHelp"),
+      progressState: preview?.ready ? ("done" as const) : preview ? ("blocked" as const) : ("pending" as const),
+    },
+  ];
+
+  return (
+    <form aria-label={translateNow("source.create.secret.b72a982613")} onSubmit={onSubmit} className="grid gap-3">
+      <StepShell
+        steps={steps}
+        currentIndex={step}
+        nextDisabled={reviewDisabled}
+        nextLabel={previewBusy ? t("secrets.store.previewBusy") : t("secrets.store.previewAction")}
+        onNext={step === 0 ? () => void onReview() : undefined}
+        onPrevious={step === 1 ? () => setStep(0) : undefined}
+        progressLabel={t("secrets.store.createProgress")}
+      >
+        {step === 0 ? (
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field controlId="secret-create-name" label={translateNow("source.secret.name.5cdf573b89")} required>
+              {(control) => (
+                <Input
+                  {...control}
+                  ref={nameRef}
+                  value={name}
+                  onChange={(event) => resetReview(onNameChange, event.target.value)}
+                  placeholder={translateNow("source.app.db.password.917cb98f9d")}
+                  required
+                />
+              )}
+            </Field>
+            <Field
+              label={translateNow("source.owner.4b1b8aa360")}
+              description={owners.length > 0 ? t("secrets.store.ownerHelp") : t("secrets.store.noOwnersHelp")}
+              required={owners.length > 0}
+            >
+              {(control) => (
+                <Select {...control} value={ownerID} onChange={(event) => resetReview(onOwnerChange, event.target.value)} required={owners.length > 0}>
+                  <option value="">{owners.length > 0 ? t("secrets.store.chooseOwner") : t("secrets.store.unassignedOwner")}</option>
+                  {owners.map((owner) => (
+                    <option key={owner.id} value={owner.id}>
+                      {owner.environment ? t("secrets.store.ownerOption", { name: owner.name, environment: owner.environment }) : owner.name}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+            <Field className="md:col-span-2" label={translateNow("source.secret.value.6ef47d9880")} description={t("secrets.store.valueHelp")} required>
+              {(control) => <Input {...control} type="password" value={value} onChange={(event) => resetReview(onValueChange, event.target.value)} required />}
+            </Field>
+            {previewStale && <p className="text-sm text-warning md:col-span-2">{t("secrets.store.previewStale")}</p>}
+            {previewError && (
+              <div className="md:col-span-2">
+                <ErrorState title={t("secrets.store.previewFailed")}>{previewError}</ErrorState>
+              </div>
+            )}
+          </div>
+        ) : preview ? (
+          <section aria-label={t("secrets.store.previewLabel")} className="grid gap-4 rounded-control border border-border bg-background p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="font-semibold">{preview.ready ? t("secrets.store.previewReady") : t("secrets.store.previewBlocked")}</h3>
+                <p className="mt-1 text-sm text-muted-foreground">{t("secrets.store.previewNoEffects")}</p>
+              </div>
+              <StatusBadge
+                value={preview.ready ? "ready" : "blocked"}
+                label={preview.ready ? t("secrets.store.ready") : t("secrets.store.blocked")}
+                tone={preview.ready ? "success" : "warning"}
+              />
+            </div>
+            <dl className="grid gap-3 text-sm md:grid-cols-3">
+              <div>
+                <dt className="text-muted-foreground">{t("secrets.store.previewName")}</dt>
+                <dd className="break-all font-medium">{preview.name}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">{t("secrets.store.previewVersion")}</dt>
+                <dd className="font-medium">{t("secrets.store.previewVersionValue", { version: preview.next_version })}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">{t("secrets.store.previewPermission")}</dt>
+                <dd className="font-mono text-xs">{preview.required_permission}</dd>
+              </div>
+            </dl>
+            {preview.blockers.length > 0 && (
+              <div>
+                <h4 className="font-medium">{t("secrets.store.previewBlockers")}</h4>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-destructive">
+                  {preview.blockers.map((blocker) => (
+                    <li key={blocker}>{blocker}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <div className="grid gap-3 md:grid-cols-2">
+              <div>
+                <h4 className="font-medium">{t("secrets.store.previewChanges")}</h4>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                  {preview.execute_writes.map((change) => (
+                    <li key={change}>{change}</li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <h4 className="font-medium">{t("secrets.store.previewRecovery")}</h4>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                  {preview.recovery_steps.map((recoveryStep) => (
+                    <li key={recoveryStep}>{recoveryStep}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground">{preview.secret_data_handling}</p>
+            <p className="break-all font-mono text-xs text-muted-foreground">
+              {t("secrets.store.previewFingerprint")}: {preview.request_fingerprint}
+            </p>
+          </section>
+        ) : (
+          <ErrorState title={t("secrets.store.previewFailed")}>{t("secrets.store.reviewRequired")}</ErrorState>
+        )}
+      </StepShell>
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button type="button" variant="ghost" onClick={onCancel} disabled={busy || previewBusy}>
+          {translateNow("source.cancel.19766ed6cc")}
+        </Button>
+        {step === 1 && (
+          <Button type="submit" disabled={busy || previewBusy || !preview?.ready} loading={busy}>
+            {t("secrets.store.createReviewed")}
+          </Button>
+        )}
+      </div>
+    </form>
+  );
+}
 
 export type SecretApprovalQueueItem = {
   id: string;

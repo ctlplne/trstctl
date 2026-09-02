@@ -11,6 +11,7 @@ import { Secrets } from "@/pages/Secrets";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     secretPage: vi.fn(),
+    previewSecretCreate: vi.fn(),
     createSecret: vi.fn(),
     getSecret: vi.fn(),
     getSecretWithToken: vi.fn(),
@@ -185,6 +186,24 @@ function primeSecretsMocks() {
     name: "app/cache/token",
     owner_id: "11111111-1111-4111-8111-111111111111",
     version: 1,
+  });
+  apiMock.previewSecretCreate.mockResolvedValue({
+    capability: "F63",
+    operation: "create",
+    ready: true,
+    effect_free: true,
+    name: "app/cache/token",
+    owner_id: "11111111-1111-4111-8111-111111111111",
+    next_version: 1,
+    required_permission: "secrets:write",
+    request_fingerprint: "sha256:f63-create-preview-fixture",
+    blockers: [],
+    preview_writes: [],
+    preview_external_effects: [],
+    execute_writes: ["append secret.created", "project sealed version 1"],
+    execute_external_effects: [],
+    recovery_steps: ["Cancel before execution", "Delete the created secret if it is no longer required"],
+    secret_data_handling: "The value is validated in transient memory and is never echoed, logged, or stored by preview.",
   });
   apiMock.owners.mockResolvedValue([
     {
@@ -994,17 +1013,43 @@ describe("secrets surface", () => {
     await user.type(createForm.getByLabelText("Secret name"), "app/cache/token");
     await user.type(createForm.getByLabelText("Secret value"), "new-secret-value");
     await user.selectOptions(createForm.getByLabelText("Owner"), "11111111-1111-4111-8111-111111111111");
-    await user.click(createForm.getByRole("button", { name: /create secret/i }));
+    expect(createForm.queryByRole("button", { name: /create reviewed secret/i })).not.toBeInTheDocument();
+    await user.click(createForm.getByRole("button", { name: /review exact plan/i }));
 
     await waitFor(() =>
-      expect(apiMock.createSecret).toHaveBeenCalledWith({
+      expect(apiMock.previewSecretCreate).toHaveBeenCalledWith({
         name: "app/cache/token",
         owner_id: "11111111-1111-4111-8111-111111111111",
         value: "new-secret-value",
       }),
     );
+    const preview = await screen.findByRole("region", { name: "Native secret create review" });
+    expect(within(preview).getByText("Exact create plan")).toBeInTheDocument();
+    expect(within(preview).getByText(/preview made no writes/i)).toBeInTheDocument();
+    expect(within(preview).getByText("Version 1", { selector: "dd" })).toBeInTheDocument();
+    expect(within(preview).queryByText("new-secret-value")).not.toBeInTheDocument();
+    expect(apiMock.createSecret).not.toHaveBeenCalled();
+
+    await user.click(createForm.getByRole("button", { name: /previous/i }));
+    await user.clear(createForm.getByLabelText("Secret value"));
+    await user.type(createForm.getByLabelText("Secret value"), "changed-after-review");
+    expect(createForm.getByText(/inputs changed after review/i)).toBeInTheDocument();
+    expect(createForm.queryByRole("button", { name: /create reviewed secret/i })).not.toBeInTheDocument();
+    await user.click(createForm.getByRole("button", { name: /review exact plan/i }));
+    await waitFor(() => expect(apiMock.previewSecretCreate).toHaveBeenCalledTimes(2));
+
+    await user.click(createForm.getByRole("button", { name: /create reviewed secret/i }));
+
+    await waitFor(() =>
+      expect(apiMock.createSecret).toHaveBeenCalledWith({
+        name: "app/cache/token",
+        owner_id: "11111111-1111-4111-8111-111111111111",
+        value: "changed-after-review",
+      }),
+    );
     expect(await screen.findByText(/stored as version 1/i)).toBeInTheDocument();
     expect(screen.queryByText("new-secret-value")).not.toBeInTheDocument();
+    expect(screen.queryByText("changed-after-review")).not.toBeInTheDocument();
 
     const row = screen.getAllByRole("row", { name: /app\/db\/password/i })[0];
     await user.click(within(row).getByRole("button", { name: /reveal value/i }));

@@ -28,6 +28,7 @@ export function Field({
   error,
   required,
   className,
+  controlId,
   children,
 }: {
   label: ReactNode;
@@ -35,9 +36,12 @@ export function Field({
   error?: ReactNode;
   required?: boolean;
   className?: string;
+  /** Stable id for deep-link/focus targets; generated when omitted. */
+  controlId?: string;
   children: (control: FieldControlProps) => ReactNode;
 }) {
-  const id = useId();
+  const generatedId = useId();
+  const id = controlId ?? generatedId;
   const descriptionId = description ? `${id}-description` : undefined;
   const errorId = error ? `${id}-error` : undefined;
   const describedBy = [descriptionId, errorId].filter(Boolean).join(" ") || undefined;

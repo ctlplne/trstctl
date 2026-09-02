@@ -53,10 +53,25 @@ protection means re-wrapping small DEKs, not all your data.
 ### The native secret store (F63)
 
 A served, tenant-isolated key-value store for application secrets: `POST
-/api/v1/secrets/store` creates version 1, `PUT /api/v1/secrets/store/{name}` writes the
-next version, `GET /api/v1/secrets/store/{name}` reveals only the latest value to a
-`secrets:read` caller, and metadata responses list names, versions, and timestamps
-only, never values.
+/api/v1/secrets/store/preview` checks an exact create request without changing
+anything, `POST /api/v1/secrets/store` creates version 1, `PUT
+/api/v1/secrets/store/{name}` writes the next version, and `GET
+/api/v1/secrets/store/{name}` reveals only the latest value to a `secrets:read`
+caller. Metadata responses list names, versions, and timestamps only, never values.
+
+The console's create flow has two clear steps: enter the name, owner, and value;
+then review the server's plan. Preview applies the same tenant-owner and duplicate
+name checks as create, but writes no row, event, audit record, idempotency record,
+outbox intent, or external effect. It never returns the value. Instead it returns a
+server-keyed fingerprint that changes if the tenant, caller, name, owner, or value
+changes. Editing any input throws away the reviewed plan. Only a current, ready plan
+reveals **Create reviewed secret**; creation remains a separate idempotent mutation.
+
+Headless operators use the same oracle with `trstctl-cli secrets store preview -f
+secret-create.json`, then pass that exact JSON body to `secrets store put`. Keep the
+body in a permission-restricted file or pipe it with `-f -`; do not place plaintext
+on a shared command line or in QA evidence. A ready preview is evidence about the
+request, not a reservation: the create call rechecks authority and current state.
 
 Every create, rotation, and recovery stores a row in `secret_store_versions` under
 PostgreSQL RLS and emits `secret.version.written` without plaintext.
@@ -77,7 +92,8 @@ Bulk application-secret import is deliberately unavailable. The compatibility ro
 its OpenAPI operation is deprecated and marked `x-trstctl-availability: unavailable`.
 An atomic batch command must fence, append, project, and receipt every name together
 before this can be enabled without bypassing the immutable event log. Until then,
-create each secret through `POST /api/v1/secrets/store` with a distinct idempotency key.
+preview and then create each secret through the two native-store routes, using a
+distinct idempotency key for each create mutation.
 
 The served store seals through a versioned binary container, its KEK loaded into
 locked, zeroizable memory at startup, never a raw byte slice on the heap. An older
@@ -105,13 +121,13 @@ vault write -format=json pki/sign/default csr=@payments.csr ttl=1h
 Supported paths are intentionally small:
 
 | Vault path                                 | trstctl behavior                                                                       |
-| ------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `GET /v1/auth/token/lookup-self`           | Validates the `trst_...` token; returns Vault-shaped metadata, never the token.         |
-| KV mount-discovery preflight for `secret/` | Lets `vault kv` discover `secret/` is KV v2.                                            |
-| `POST`/`PUT /v1/secret/data/{path}`        | Upserts a KV v2 object into `/api/v1/secrets/store/{path}` as the next sealed version.  |
-| `GET /v1/secret/data/{path}`               | Reads the latest value as Vault KV v2 `data.data` plus version metadata.                |
-| `POST`/`PUT /v1/pki/issue/{role}`          | Issues a short-lived certificate and key via the signer-backed dynamic PKI secret.      |
-| `POST`/`PUT /v1/pki/sign/{role}`           | Signs a requester-generated CSR and returns no private key.                             |
+| ------------------------------------------ | -------------------------------------------------------------------------------------- |
+| `GET /v1/auth/token/lookup-self`           | Validates the `trst_...` token; returns Vault-shaped metadata, never the token.        |
+| KV mount-discovery preflight for `secret/` | Lets `vault kv` discover `secret/` is KV v2.                                           |
+| `POST`/`PUT /v1/secret/data/{path}`        | Upserts a KV v2 object into `/api/v1/secrets/store/{path}` as the next sealed version. |
+| `GET /v1/secret/data/{path}`               | Reads the latest value as Vault KV v2 `data.data` plus version metadata.               |
+| `POST`/`PUT /v1/pki/issue/{role}`          | Issues a short-lived certificate and key via the signer-backed dynamic PKI secret.     |
+| `POST`/`PUT /v1/pki/sign/{role}`           | Signs a requester-generated CSR and returns no private key.                            |
 
 It skips Vault mount management, ACL policies, cubbyhole, response wrapping, transit
 paths, and every dynamic secret engine — the native trstctl API remains the full

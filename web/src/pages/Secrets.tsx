@@ -51,6 +51,7 @@ import {
   type PKISecret,
   type SecretApprovalAction,
   type SecretMeta,
+  type SecretStoreCreatePreview,
   type SecretRepositoryScanPosture,
   type SecretRotation,
   type SecretRotationPreview,
@@ -81,6 +82,7 @@ import {
   defaultThirdPartyProviders,
   leaseMetadataOnly,
   mergeMeta,
+  NativeSecretCreateForm,
   parseScopeList,
   secretApprovalActionLabel,
   secretApprovalQueueID,
@@ -210,6 +212,10 @@ export function Secrets() {
   const [ownersAvailable, setOwnersAvailable] = useState<boolean | null>(null);
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [createPreview, setCreatePreview] = useState<SecretStoreCreatePreview | null>(null);
+  const [createPreviewBusy, setCreatePreviewBusy] = useState(false);
+  const [createPreviewError, setCreatePreviewError] = useState<string | null>(null);
+  const [createPreviewStale, setCreatePreviewStale] = useState(false);
 
   useEffect(() => {
     if (createOpen) createNameRef.current?.focus();
@@ -805,10 +811,37 @@ export function Secrets() {
     }
   }
 
+  function invalidateCreatePreview() {
+    if (createPreview) setCreatePreviewStale(true);
+    setCreatePreview(null);
+    setCreatePreviewError(null);
+  }
+
+  async function reviewCreate() {
+    setCreateError(null);
+    setCreatePreviewError(null);
+    setNotice(null);
+    setCreatePreviewBusy(true);
+    try {
+      const plan = await api.previewSecretCreate({ name: createName, owner_id: createOwnerID || undefined, value: createValue });
+      setCreatePreview(plan);
+      setCreatePreviewStale(false);
+    } catch (err) {
+      setCreatePreview(null);
+      setCreatePreviewError(apiProblemMessage(err, t("secrets.store.previewFailed")));
+    } finally {
+      setCreatePreviewBusy(false);
+    }
+  }
+
   async function submitCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setCreateError(null);
     setNotice(null);
+    if (!createPreview?.ready) {
+      setCreateError(t("secrets.store.reviewRequired"));
+      return;
+    }
     setCreateBusy(true);
     try {
       const meta = await api.createSecret({ name: createName, owner_id: createOwnerID || undefined, value: createValue });
@@ -816,6 +849,8 @@ export function Secrets() {
       setCreateName("");
       setCreateValue("");
       setCreateOwnerID("");
+      setCreatePreview(null);
+      setCreatePreviewStale(false);
       setCreateOpen(false);
       setNotice(`Secret ${meta.name} stored as version ${meta.version}. The value was sealed and is not shown after submit.`);
     } catch (err) {
@@ -833,6 +868,9 @@ export function Secrets() {
     setCreateValue("");
     setCreateOwnerID("");
     setCreateError(null);
+    setCreatePreview(null);
+    setCreatePreviewError(null);
+    setCreatePreviewStale(false);
     setCreateOpen(false);
   }
 
@@ -1642,71 +1680,34 @@ export function Secrets() {
             </div>
 
             {createOpen && (
-              <form
-                aria-label={translateNow("source.create.secret.b72a982613")}
+              <NativeSecretCreateForm
+                name={createName}
+                value={createValue}
+                ownerID={createOwnerID}
+                owners={owners}
+                busy={createBusy}
+                previewBusy={createPreviewBusy}
+                loadBlocked={Boolean(loadError)}
+                preview={createPreview}
+                previewError={createPreviewError}
+                previewStale={createPreviewStale}
+                nameRef={createNameRef}
+                onNameChange={(next) => {
+                  invalidateCreatePreview();
+                  setCreateName(next);
+                }}
+                onValueChange={(next) => {
+                  invalidateCreatePreview();
+                  setCreateValue(next);
+                }}
+                onOwnerChange={(next) => {
+                  invalidateCreatePreview();
+                  setCreateOwnerID(next);
+                }}
+                onReview={reviewCreate}
+                onCancel={closeCreateForm}
                 onSubmit={(event) => void submitCreate(event)}
-                className="grid gap-3 rounded-panel border border-border bg-card p-comfortable md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"
-              >
-                <label className="grid gap-1 text-sm">
-                  <span className="font-medium">{translateNow("source.secret.name.5cdf573b89")}</span>
-                  <input
-                    ref={createNameRef}
-                    id="secret-create-name"
-                    className="rounded-md border border-border bg-background px-3 py-2"
-                    value={createName}
-                    onChange={(event) => setCreateName(event.target.value)}
-                    placeholder={translateNow("source.app.db.password.917cb98f9d")}
-                    required
-                  />
-                </label>
-                <div className="grid gap-1 text-sm">
-                  <label className="font-medium" htmlFor="secret-create-owner">
-                    {translateNow("source.owner.4b1b8aa360")}
-                  </label>
-                  <Select
-                    id="secret-create-owner"
-                    aria-describedby="secret-create-owner-help"
-                    value={createOwnerID}
-                    onChange={(event) => setCreateOwnerID(event.target.value)}
-                    required={owners.length > 0}
-                  >
-                    <option value="">{owners.length > 0 ? t("secrets.store.chooseOwner") : t("secrets.store.unassignedOwner")}</option>
-                    {owners.map((owner) => (
-                      <option key={owner.id} value={owner.id}>
-                        {owner.environment ? t("secrets.store.ownerOption", { name: owner.name, environment: owner.environment }) : owner.name}
-                      </option>
-                    ))}
-                  </Select>
-                  <span id="secret-create-owner-help" className="text-xs text-muted-foreground">
-                    {owners.length > 0 ? t("secrets.store.ownerHelp") : t("secrets.store.noOwnersHelp")}
-                  </span>
-                </div>
-                <label className="grid gap-1 text-sm">
-                  <span className="font-medium">{translateNow("source.secret.value.6ef47d9880")}</span>
-                  <input
-                    id="secret-create-value"
-                    aria-label={translateNow("source.secret.value.6ef47d9880")}
-                    aria-describedby="secret-create-value-help"
-                    className="rounded-md border border-border bg-background px-3 py-2"
-                    type="password"
-                    value={createValue}
-                    onChange={(event) => setCreateValue(event.target.value)}
-                    required
-                  />
-                  <span id="secret-create-value-help" className="text-xs text-muted-foreground">
-                    {t("secrets.store.valueHelp")}
-                  </span>
-                </label>
-                <div className="flex flex-wrap items-center gap-2 self-end">
-                  <Button type="button" variant="ghost" onClick={closeCreateForm} disabled={createBusy}>
-                    {translateNow("source.cancel.19766ed6cc")}
-                  </Button>
-                  <Button type="submit" disabled={createBusy || Boolean(loadError) || (owners.length > 0 && !createOwnerID)}>
-                    {createBusy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-                    {translateNow("source.create.secret.b72a982613")}
-                  </Button>
-                </div>
-              </form>
+              />
             )}
             {createError && <ErrorState title={translateNow("source.secret.create.failed.885c3ecf7c")}>{createError}</ErrorState>}
 
@@ -1934,7 +1935,9 @@ export function Secrets() {
                       <div>
                         <h5 className="text-sm font-semibold text-risk-critical">{t("secrets.rotation.blockersHeading")}</h5>
                         <ul className="mt-1 list-disc space-y-1 ps-5 text-sm text-risk-critical">
-                          {reviewedRotation.plan.blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}
+                          {reviewedRotation.plan.blockers.map((blocker) => (
+                            <li key={blocker}>{blocker}</li>
+                          ))}
                         </ul>
                       </div>
                     )}
@@ -1942,20 +1945,28 @@ export function Secrets() {
                       <div>
                         <h5 className="text-sm font-semibold text-foreground">{t("secrets.rotation.executionChanges")}</h5>
                         <ul className="mt-1 list-disc space-y-1 ps-5 text-sm text-muted-foreground">
-                          {[...reviewedRotation.plan.execute_writes, ...reviewedRotation.plan.execute_external_effects].map((effect) => <li key={effect}>{effect}</li>)}
+                          {[...reviewedRotation.plan.execute_writes, ...reviewedRotation.plan.execute_external_effects].map((effect) => (
+                            <li key={effect}>{effect}</li>
+                          ))}
                         </ul>
                       </div>
                       <div>
                         <h5 className="text-sm font-semibold text-foreground">{t("secrets.rotation.recoveryHeading")}</h5>
                         <ol className="mt-1 list-decimal space-y-1 ps-5 text-sm text-muted-foreground">
-                          {reviewedRotation.plan.recovery_steps.map((step) => <li key={step}>{step}</li>)}
+                          {reviewedRotation.plan.recovery_steps.map((step) => (
+                            <li key={step}>{step}</li>
+                          ))}
                         </ol>
                       </div>
                     </div>
                     {reviewedRotation.plan.ready && (
                       <div>
                         <Button type="button" onClick={() => void runReviewedRollbackRotation()} disabled={rotationRunBusy}>
-                          {rotationRunBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RotateCw className="h-4 w-4" aria-hidden="true" />}
+                          {rotationRunBusy ? (
+                            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                          ) : (
+                            <RotateCw className="h-4 w-4" aria-hidden="true" />
+                          )}
                           {t("secrets.rotation.executeReviewed")}
                         </Button>
                       </div>

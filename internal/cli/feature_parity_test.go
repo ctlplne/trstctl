@@ -260,8 +260,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// F61 adds read-only durable history list and certificate detail commands.
 	// F45 adds the read-only attested SSH user-certificate preview command.
 	// F37 adds the read-only, effect-free secret-rotation preview command.
-	if len(out) != 426 {
-		t.Fatalf("CLI commands = %d, want 426", len(out))
+	// F63 adds the read-only, effect-free native secret-create preview command.
+	if len(out) != 427 {
+		t.Fatalf("CLI commands = %d, want 427", len(out))
 	}
 	return out
 }

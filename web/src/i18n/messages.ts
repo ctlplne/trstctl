@@ -2138,6 +2138,76 @@ export const messages = {
     defaultMessage: "Unassigned",
     description: "Visible state for a secret whose historical create event did not name an owner.",
   },
+  "secrets.store.previewAction": {
+    defaultMessage: "Review exact plan",
+    description: "F63 effect-free native secret create preview action.",
+  },
+  "secrets.store.previewBusy": {
+    defaultMessage: "Reviewing exact plan…",
+    description: "F63 progress label while the server validates an effect-free native secret create preview.",
+  },
+  "secrets.store.detailsStep": {
+    defaultMessage: "Name and protect",
+    description: "F63 first secret-create wizard step label.",
+  },
+  "secrets.store.detailsStepHelp": {
+    defaultMessage: "Name the secret, assign responsibility, and enter the value once.",
+    description: "F63 first secret-create wizard step explanation.",
+  },
+  "secrets.store.reviewStep": {
+    defaultMessage: "Review and create",
+    description: "F63 final secret-create wizard step label.",
+  },
+  "secrets.store.reviewStepHelp": {
+    defaultMessage: "Check the server's zero-effect plan, then choose the separate create action.",
+    description: "F63 final secret-create wizard step explanation.",
+  },
+  "secrets.store.createProgress": {
+    defaultMessage: "Secret create progress",
+    description: "F63 accessible progress label for the native secret-create wizard.",
+  },
+  "secrets.store.previewLabel": {
+    defaultMessage: "Native secret create review",
+    description: "F63 accessible label for the exact native secret create preview.",
+  },
+  "secrets.store.previewReady": {
+    defaultMessage: "Exact create plan",
+    description: "F63 ready native secret create preview heading.",
+  },
+  "secrets.store.previewBlocked": {
+    defaultMessage: "Secret cannot be created yet",
+    description: "F63 blocked native secret create preview heading.",
+  },
+  "secrets.store.previewNoEffects": {
+    defaultMessage: "Preview made no writes and contacted no external systems. The value was not stored, logged, or echoed.",
+    description: "F63 effect-free and secret-handling boundary explanation.",
+  },
+  "secrets.store.previewStale": {
+    defaultMessage: "Inputs changed after review. Review the exact plan again before creating the secret.",
+    description: "F63 stale preview safety notice.",
+  },
+  "secrets.store.previewFailed": {
+    defaultMessage: "Could not review the secret create plan",
+    description: "F63 preview failure heading and fallback.",
+  },
+  "secrets.store.reviewRequired": {
+    defaultMessage: "Review a ready exact plan before creating the secret.",
+    description: "F63 fail-closed execution guard when no current plan exists.",
+  },
+  "secrets.store.createReviewed": {
+    defaultMessage: "Create reviewed secret",
+    description: "F63 explicit native secret execution action after review.",
+  },
+  "secrets.store.ready": { defaultMessage: "Ready", description: "F63 preview ready badge." },
+  "secrets.store.blocked": { defaultMessage: "Blocked", description: "F63 preview blocked badge." },
+  "secrets.store.previewName": { defaultMessage: "Secret name", description: "F63 reviewed secret name label." },
+  "secrets.store.previewVersion": { defaultMessage: "New version", description: "F63 reviewed version label." },
+  "secrets.store.previewVersionValue": { defaultMessage: "Version {version}", description: "F63 reviewed version value." },
+  "secrets.store.previewPermission": { defaultMessage: "Permission required", description: "F63 reviewed permission label." },
+  "secrets.store.previewBlockers": { defaultMessage: "Why creation is blocked", description: "F63 blocked-plan reasons heading." },
+  "secrets.store.previewChanges": { defaultMessage: "What creation will change", description: "F63 execution writes heading." },
+  "secrets.store.previewRecovery": { defaultMessage: "How to stop or recover", description: "F63 recovery guidance heading." },
+  "secrets.store.previewFingerprint": { defaultMessage: "Keyed plan fingerprint", description: "F63 server-keyed request fingerprint label." },
   "secrets.store.viewMetadataFor": {
     defaultMessage: "View metadata for {name}",
     description: "Accessible action name on a secret name that opens its metadata-only drawer.",
