@@ -700,6 +700,8 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		IdempotencyResultFleetReady: cfg.Secrets.IdempotencyResultFleetReady,
 		TenantKeyDomains:            tenantKeyDomains,
 		SecretsAuthSecret:           sec.authSecret,
+		SecretsAuthTokenTenantID:    cfg.Secrets.AuthTokenTenantID,
+		SecretsAuthTokenScopes:      append([]string(nil), cfg.Secrets.AuthTokenScopes...),
 		MachineAuthMethods:          machineAuthMethods,
 		SecretScanGitleaksBin:       cfg.Secrets.GitleaksBin,
 		SecretScanRoots:             append([]string(nil), cfg.Secrets.ScanRoots...),

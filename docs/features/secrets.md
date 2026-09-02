@@ -620,20 +620,30 @@ metadata-only.
 Before reading a secret, a workload must authenticate _to_ trstctl via the auth-method
 framework: it presents a credential (a token, an OIDC JWT, a Kubernetes SA token, cloud
 IAM, etc.), trstctl verifies it through the single isolated cryptography path
-(timing-safe), and issues a scoped, time-bounded **session**. Credential bytes are
-never logged (wipeable memory, never a copyable string). Successful sessions and
-operator revocations become tenant-scoped event/projection evidence in the durable
-session ledger; authentication failures return only a generic denial.
+(timing-safe), and issues a scoped, time-bounded **session bearer**. Credential bytes
+are never logged (wipeable memory, never a copyable string). The raw bearer is shown
+once; only its one-way hash enters the event-sourced API-token projection. Successful
+sessions and operator revocations become tenant-scoped evidence in the durable
+session ledger, and revocation atomically disables the linked bearer. Authentication
+failures return only a generic denial.
 
-`POST /api/v1/secrets/login` serves six machine methods — `token`, `kubernetes`,
+`POST /api/v1/secrets/login` serves seven machine methods — `token`, `kubernetes`,
 `aws-iam`, `gcp`, `azure`, `oidc`, `jwt`. JWT-family methods verify against an
 operator-supplied JWKS, check issuer/audience/expiry, and bind a tenant claim or pin the
-method to one tenant. AWS IAM uses the Vault-style signed `sts:GetCallerIdentity`
+method to one tenant. Each configured method must grant non-empty static `scopes`,
+or OIDC/generic JWT may name one signed `scopes_claim`; setting both or neither
+fails startup. A token's ordinary `scope`/`scopes` claim never overrides static
+operator policy. AWS IAM uses the Vault-style signed `sts:GetCallerIdentity`
 request, verifying the caller via STS without ever receiving the AWS secret access key.
 
 ```yaml
 secrets:
   enable_api: true
+  # Optional builtin HMAC token method. Its deployment-wide verifier is usable
+  # only for this tenant and grants exactly these scopes.
+  auth_secret_file: /etc/trstctl/machine-auth.bin
+  auth_token_tenant_id: 11111111-1111-1111-1111-111111111111
+  auth_token_scopes: ["secrets:read"]
   machine_auth:
     - name: kubernetes
       tenant_claim: trstctl.io/tenant
@@ -666,14 +676,18 @@ review-first journey:
    field. `POST /api/v1/secrets/login` consumes the credential once and requires an
    `Idempotency-Key`; the request is bound with a server-keyed digest of the tenant,
    method, credential, and review fingerprint. An exact retry returns the original
-   response instead of issuing a second session. Reusing the key for different input
-   returns `409`. No credential or replay digest is displayed or logged.
-4. **Verify and recover.** The result shows only session id, principal, method,
-   scopes, and expiry, then refreshes **Issued sessions** so the durable row can be
-   checked and revoked. The browser clears the credential after both success and
-   failure. A normal authentication failure keeps the reviewed plan for a corrected
-   retry; a `409` configuration/fingerprint change discards it and requires a fresh
-   review. A disabled method shows blockers and never accepts a credential.
+   response—including the same one-time bearer—instead of issuing a second session.
+   Reusing the key for different input returns `409`. The presented credential and
+   raw session bearer never enter an event or read model.
+4. **Verify and recover.** The result shows session id, principal, method, scopes,
+   expiry, and a one-time reveal panel for the `trst_…` bearer. Copy it directly into
+   the workload, then dismiss it; trstctl cannot recover it from the stored hash. The
+   page refreshes **Issued sessions** so the durable row can be checked and revoked.
+   Revocation immediately makes the linked bearer fail authentication. The browser
+   clears the presented credential after both success and failure. A normal
+   authentication failure keeps the reviewed plan for a corrected retry; a `409`
+   configuration/fingerprint change discards it and requires a fresh review. A
+   disabled method shows blockers and never accepts a credential.
 
 Headless users get the same contract. Keep credential JSON in a permission-restricted
 file or provide it through a protected pipe; do not put credentials in shell history:
@@ -822,6 +836,9 @@ curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
 - **Machine login tenant binding:** token credentials MAC-bind the tenant, the
   `machine-login` audience, principal, and expiry. `X-Tenant-ID` is a lookup hint on
   the public login route; a token for tenant A is rejected if presented with tenant B.
+  The builtin HMAC verifier itself must also name exactly one
+  `auth_token_tenant_id` and one or more `auth_token_scopes`; startup rejects an
+  unpinned or unscoped authority.
 - **Protect the KEK.** Everything at rest is only as safe as `TRSTCTL_SECRETS_KEK_FILE`;
   in production back it with an [HSM/KMS](issuance-and-cas.md).
 - **Dynamic beats static.** Prefer dynamic/ephemeral secrets over long-lived ones; if

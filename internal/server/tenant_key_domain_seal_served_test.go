@@ -181,6 +181,8 @@ func TestServedTenantKeyDomainSealFailsSecretReadsClosedAndKeepsNeighborAvailabl
 	cfg.RateLimit.Enabled = false
 	cfg.Secrets.EnableAPI = true
 	cfg.Secrets.AuthSecretFile = filepath.Join(t.TempDir(), "machine-auth-secret")
+	cfg.Secrets.AuthTokenTenantID = sealedTenant
+	cfg.Secrets.AuthTokenScopes = []string{"secrets:read"}
 	cfg.Audit.SigningKeyFile = filepath.Join(t.TempDir(), "audit-signing-key.pem")
 	cfg.Secrets.KEKFile = filepath.Join(t.TempDir(), "deployment-kek")
 	wrapperPath := filepath.Join(t.TempDir(), "tenant-wrapper.key")
@@ -350,8 +352,8 @@ func TestServedTenantKeyDomainSealFailsSecretReadsClosedAndKeepsNeighborAvailabl
 		t.Fatal(err)
 	}
 	availableLogin := servedTenantMachineLogin(t, srv, neighborTenant, credentialB)
-	if availableLogin.Code != http.StatusOK || !strings.Contains(availableLogin.Body.String(), `"principal":"neighbor-workload"`) || strings.Contains(availableLogin.Body.String(), credentialB) {
-		t.Fatalf("neighbor tenant B machine login = %d body=%s", availableLogin.Code, availableLogin.Body.String())
+	if availableLogin.Code != http.StatusUnauthorized || strings.Contains(availableLogin.Body.String(), credentialB) {
+		t.Fatalf("tenant-A-pinned machine authority used by neighbor tenant B = %d body=%s, want generic 401", availableLogin.Code, availableLogin.Body.String())
 	}
 
 	unseal := servedTenantSealRequest(t, srv, tokenA, http.MethodPost, "/api/v1/platform/tenant-key-domain/unseal", "tenant-unseal-secret-path", nil)

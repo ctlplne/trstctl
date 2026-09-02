@@ -16938,6 +16938,10 @@
           },
           "session_id": {
             "type": "string"
+          },
+          "token": {
+            "description": "One-time opaque bearer for this scoped machine session. The server stores only its hash; copy it before dismissing the response.",
+            "type": "string"
           }
         },
         "required": [
@@ -16945,7 +16949,8 @@
           "principal",
           "method",
           "scopes",
-          "expires_at"
+          "expires_at",
+          "token"
         ],
         "type": "object"
       },

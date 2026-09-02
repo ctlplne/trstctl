@@ -5669,7 +5669,8 @@ func componentSchemas() map[string]*Schema {
 		"method":     str(),
 		"scopes":     {Type: "array", Items: str()},
 		"expires_at": timestamp(),
-	}, "session_id", "principal", "method", "scopes", "expires_at")
+		"token":      {Type: "string", Description: "One-time opaque bearer for this scoped machine session. The server stores only its hash; copy it before dismissing the response."},
+	}, "session_id", "principal", "method", "scopes", "expires_at", "token")
 
 	// Served AI / RCA / NL-query / MCP surface (SURFACE-003). Every request is
 	// allow-listed and typed (no raw SQL/Cypher); every answer is grounded in cited

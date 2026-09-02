@@ -17086,10 +17086,10 @@
             "phase": "P1",
             "priority": 36,
             "served_state": "conditional",
-            "backend_status": "conditional: served, review-first, request-bound and idempotent machine login for token, Kubernetes SAT, AWS IAM, GCP, Azure, OIDC, and generic JWT, with a durable session ledger and revocation overlay",
-            "current_frontend_mapping": "operate: Secrets > Access at /secrets/access - choose one configured method, review an effect-free server plan, execute one credential test, verify the durable session, then revoke it",
-            "target_gui_mapping": "Complete: machine auth-method UI projects token, Kubernetes SAT, AWS IAM, GCP, Azure, OIDC, and JWT configuration, tenant/audience/expiry rules, enablement state, a review-first login test, issued sessions, and revocation.",
-            "acceptance_test": "The console accepts no credential before a ready server review, never displays or persists credential bytes, refuses disabled/stale plans, clears failed input, safely retries, and verifies the exact session in the tenant-scoped ledger; API tests prove request-bound idempotency and tenant mismatch denial.",
+            "backend_status": "conditional: served, review-first, request-bound and idempotent machine login for token, Kubernetes SAT, AWS IAM, GCP, Azure, OIDC, and generic JWT; every method needs one explicit permission authority, and a successful exchange returns a usable short-lived scoped API bearer whose hash and ledger row are projected atomically and revoked together",
+            "current_frontend_mapping": "operate: Secrets > Access at /secrets/access - choose one configured method, review an effect-free server plan, execute one credential test, copy the one-time bearer, verify it against an allowed API, then revoke it",
+            "target_gui_mapping": "Complete: machine auth-method UI projects token, Kubernetes SAT, AWS IAM, GCP, Azure, OIDC, and JWT configuration, tenant/audience/expiry rules, enablement state, a review-first login test, one-time bearer reveal, issued sessions, and enforced revocation.",
+            "acceptance_test": "The console accepts no credential before a ready server review, never displays or persists the presented credential, reveals the new bearer once, refuses disabled/stale/unscoped plans, clears failed input, safely retries, and verifies the exact session in the tenant-scoped ledger; served tests prove the bearer authorizes only known explicit scopes, a JWT cannot self-widen a static grant, exact idempotent replay returns the same bearer, tenant mismatch is denied, and session or generic token revocation disables it.",
             "source_docs": [
                 "docs/features/secrets.md"
             ],
@@ -17106,7 +17106,7 @@
                 "web/src/__tests__/secrets.test.tsx"
             ],
             "status": "verified-closed",
-            "notes": "Closed as a complete review-first vertical slice. The server exposes a secret-free effect-free preview and a server-keyed request fingerprint; execution requires request-bound idempotency, records one durable tenant session, and returns an identical response on exact replay. The console withholds credentials until review, shows exact blockers/effects/recovery/verification/CLI, clears credentials after every attempt, invalidates stale plans, refreshes the ledger, and supports method/session revocation. Focused evidence lives in internal/api/machine_sessions_served_test.go, internal/server/secrets_served_test.go, internal/cli/cli_test.go, web/src/lib/api.test.ts, and web/src/__tests__/secrets.test.tsx.",
+            "notes": "Closed as a complete review-first vertical slice only after live qualification caught and repaired an inert-session defect. The server exposes a secret-free effect-free preview and a server-keyed request fingerprint; execution requires request-bound idempotency and atomically projects one durable tenant session plus only the hash of a usable scoped API bearer. The raw bearer is returned once, exact replay returns the same protected response without a second session, and session/generic token revocation disables the bearer. The builtin HMAC verifier is explicitly pinned to one tenant and least-privilege scopes. Every configured method chooses static scopes or one explicit OIDC/JWT scope claim; unknown/empty permissions are preview blockers and cannot mint a bearer, and generic token claims cannot widen static policy. The console withholds credentials until review, shows exact blockers/effects/recovery/verification/CLI, clears the presented credential after every attempt, reveals the new bearer once, invalidates stale plans, refreshes the ledger, and supports method/session revocation.",
             "api_surface": [
                 "previewMachineLogin",
                 "machineLogin",
@@ -17131,12 +17131,16 @@
                 "served": {
                     "evidence": [
                         "served_state=conditional",
-                        "backend_status=conditional: the secrets API must be enabled and each desired machine method must have its tenant-scoped verification authority configured",
+                        "backend_status=conditional: the secrets API, event log, and datastore must be enabled; each desired method needs tenant-scoped verification authority and exactly one explicit, non-empty permission source; the builtin token authority additionally requires one explicit tenant pin",
                         "TestMachineLoginPreviewIsEffectFreeTenantBoundAndRecoveryAware proves the exact server plan and disabled-method fence against real PostgreSQL and embedded JetStream.",
-                        "TestMachineLoginRequiresRequestBoundIdempotency proves missing-key denial, exact replay, one ledger row, changed-body conflict, and no credential echo."
+                        "TestMachineLoginRequiresRequestBoundIdempotency proves missing-key denial, exact replay of the same one-time bearer, one ledger/token projection, changed-body conflict, and no credential echo.",
+                        "TestMachineSessionLedgerServed proves the returned bearer authorizes a real secrets:read request and that both session-ledger and generic API-token revocation disable it.",
+                        "TestMachineLoginRejectsUnknownPermissionFromAuthenticator proves preview blocks an unknown static permission and execution mints neither a bearer nor a session.",
+                        "TestOIDCScopesAreExplicitAndCannotBeSelfGranted proves an arbitrary signed scopes claim cannot widen static operator policy; dynamic claims work only when explicitly named."
                     ],
                     "commands": [
-                        "go test ./internal/api -run 'TestMachineLoginPreviewIsEffectFreeTenantBoundAndRecoveryAware|TestMachineLoginRequiresRequestBoundIdempotency|TestMachineSessionLedgerServed' -count=1",
+                        "go test ./internal/api -run 'TestMachineLoginPreviewIsEffectFreeTenantBoundAndRecoveryAware|TestMachineLoginRequiresRequestBoundIdempotency|TestMachineSessionLedgerServed|TestMachineLoginRejectsUnknownPermissionFromAuthenticator' -count=1",
+                        "go test ./internal/authmethod -run 'TestOIDCScopesAreExplicitAndCannotBeSelfGranted' -count=1",
                         "go test ./internal/server -run 'TestServedMachineLogin|TestServedMachineLoginRejectsCrossTenantHeader|TestServedMachineLoginTopMethodsKubernetesSATAndAWSIAM' -count=1"
                     ]
                 },
@@ -17144,7 +17148,7 @@
                     "evidence": [
                         "web/src/pages/secrets/MachineAuthWorkflow.tsx implements Choose method -> Review login -> Verify session at /secrets/access.",
                         "The review shows the exact method/type/source, tenant binding, credential shape, TTL, prerequisites, blockers, effects, recovery, verification, CLI, and server fingerprint before accepting a credential.",
-                        "The access workspace also projects method issuer/audience/allowlists, disabled state, active/revoked sessions, method overlay controls, and session revocation."
+                        "The access workspace also projects method issuer/audience/allowlists/scopes, disabled state, active/revoked sessions, method overlay controls, one-time bearer reveal/copy/dismiss, and session revocation."
                     ],
                     "refs": [
                         "web/src/lib/navigation.ts",
@@ -17182,9 +17186,10 @@
                 "test": {
                     "evidence": [
                         "acceptance_test: UI never displays credential secret after creation and tests tenant mismatch/fail-closed errors.",
-                        "web/src/__tests__/secrets.test.tsx proves ready, blocked, rejected-credential retry, stale-review recovery, session verification, overlay, and session-revocation journeys.",
+                        "web/src/__tests__/secrets.test.tsx proves ready, blocked, rejected-credential retry, stale-review recovery, one-time bearer reveal/dismiss, session verification, overlay, and session-revocation journeys.",
                         "web/src/lib/api.test.ts proves preview uses the read-only POST transport while execution receives mutation idempotency and CSRF protections.",
-                        "internal/api/machine_sessions_served_test.go proves effect-free preview, tenant-bound fingerprinting, request-bound idempotency, event projection, isolation, and revocation against the real storage/event spine."
+                        "internal/api/machine_sessions_served_test.go proves effect-free preview, tenant-bound fingerprinting, explicit known-scope blocking, request-bound idempotency, atomic bearer-hash/session projection, real bearer authorization, isolation, and enforced revocation against the real storage/event spine.",
+                        "internal/authmethod/authmethod_test.go proves signed JWT content cannot self-widen a static scope grant and only an explicitly configured scope claim can become authority."
                     ],
                     "refs": [
                         "internal/api/machine_sessions_served_test.go",
@@ -17209,7 +17214,7 @@
                     "evidence": [
                         "feature authz manifest maps every F58 api_surface operation to route permissions or the explicit public credential-exchange rationale.",
                         "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale.",
-                        "previewMachineLogin and read/admin projections require secrets:read/write authority; machineLogin is intentionally public because the presented machine credential authenticates the workload and yields a tenant-scoped session."
+                        "previewMachineLogin and read/admin projections require secrets:read/write authority; machineLogin is intentionally public because the presented machine credential authenticates the workload and yields an explicitly scoped, tenant-bound API bearer."
                     ],
                     "refs": [
                         "internal/featureparity/authz_manifest.go",
@@ -17221,8 +17226,8 @@
                 },
                 "audit": {
                     "evidence": [
-                        "previewMachineLogin writes no event, idempotency row, or external call; machineLogin records exactly one secrets.session.started event/projection on first execution.",
-                        "Method disable/enable and session revocation are idempotent event-sourced mutations with tenant-scoped projection evidence."
+                        "previewMachineLogin writes no event, idempotency row, or external call; machineLogin records exactly one secrets.session.started event containing metadata and only the random bearer's one-way hash on first execution.",
+                        "One event transaction projects both the machine-session row and API-token verifier; method disable/enable and session revocation remain idempotent, and session or generic token revocation updates both views."
                     ],
                     "refs": [
                         "internal/api/api.go",
@@ -17283,10 +17288,10 @@
                 "edition": "core",
                 "dependencies": [
                     "secrets.enable_api is true and the secrets KEK/server-keyed command digest is available.",
-                    "At least one tenant-scoped machine auth method has its required verifier configured; JWT-family methods require trusted JWKS, and AWS IAM requires an account or ARN allowlist."
+                    "At least one tenant-scoped machine auth method has its required verifier and non-empty scopes configured; JWT-family methods require trusted JWKS, AWS IAM requires an account or ARN allowlist, and the builtin HMAC method requires an explicit tenant UUID and least-privilege scopes."
                 ],
                 "side_effects": "mixed",
-                "secret_data_handling": "Preview never receives a credential. Execution holds the credential in wipeable bytes, binds idempotency with a server-keyed digest, never echoes or logs it, and the browser clears its field after success or failure. Reports contain metadata and fingerprints only.",
+                "secret_data_handling": "Preview never receives a credential. Execution holds the presented credential and new bearer in wipeable bytes, binds idempotency with a server-keyed digest, never echoes or logs the presented credential, and stores only the new bearer's one-way hash plus a protected idempotency result. The browser clears the presented credential after every attempt and forgets the bearer when its one-time reveal is dismissed. Reports contain metadata and fingerprints only.",
                 "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {

@@ -1304,7 +1304,10 @@ const esESCatalog = {
   "secrets.login.verifyLabel": "Verificación del acceso de máquina",
   "secrets.login.verified": "Sesión emitida y registrada",
   "secrets.login.verifiedHelp":
-    "El resultado no contiene secretos. Compárelo con el método revisado y revoque después la sesión sintética en Sesiones emitidas.",
+    "Compare el resultado con el método revisado. El portador solo funciona para estos permisos y deja de funcionar cuando la sesión caduca o se revoca.",
+  "secrets.login.tokenTitle": "Portador de sesión de máquina de un solo uso",
+  "secrets.login.tokenHelp":
+    "Copie ahora este portador en la carga de trabajo. trstctl solo guarda su hash, por lo que no puede volver a mostrarlo después de descartarlo o salir de este resultado.",
   "secrets.login.startAgain": "Probar otro acceso",
   "secrets.pki.custodyLabel": "Custodia de claves",
   "secrets.pki.csrMode": "Firmar mi CSR (recomendado)",

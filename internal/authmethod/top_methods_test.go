@@ -23,10 +23,12 @@ func TestTopMachineAuthMethodsAuthenticate(t *testing.T) {
 		"oidc": OIDCMethod{
 			JWKS: f.jwks, Issuer: "https://issuer.example", Audience: "trstctl",
 			TenantID: "tenant-a", TenantClaim: "tenant_id", Now: func() time.Time { return f.now },
+			ScopesClaim: "scopes",
 		},
 		"jwt": JWTMethod{
 			JWKS: f.jwks, Issuer: "https://issuer.example", Audience: "trstctl",
 			TenantID: "tenant-a", TenantClaim: "tenant_id", Now: func() time.Time { return f.now },
+			ScopesClaim: "scopes",
 		},
 	} {
 		principal, scopes, err := method.Authenticate(context.Background(), f.sign(t, baseClaims))

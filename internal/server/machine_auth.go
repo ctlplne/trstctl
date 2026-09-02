@@ -100,6 +100,8 @@ func (cm configuredMachineAuthMethod) methodForTenant(tenantID string) authmetho
 			Audience:        c.Audience,
 			TenantID:        tenantID,
 			TenantClaim:     c.TenantClaim,
+			Scopes:          append([]string(nil), c.Scopes...),
+			ScopesClaim:     c.ScopesClaim,
 			PrincipalPrefix: c.PrincipalPrefix,
 		}
 	case "jwt":

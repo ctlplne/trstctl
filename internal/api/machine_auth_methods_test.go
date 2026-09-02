@@ -26,7 +26,9 @@ const (
 func authMethodsHandler(t *testing.T) http.Handler {
 	t.Helper()
 	return api.New(nil, nil, nil, api.WithInsecureHeaderResolver(), api.WithSecrets(api.SecretsBackend{
-		AuthSecret: []byte("supersecret-hmac-material"),
+		AuthSecret:        []byte("supersecret-hmac-material"),
+		AuthTokenTenantID: authMethodsTenantA,
+		AuthTokenScopes:   []string{"secrets:read"},
 		MachineAuthMethods: func(tenantID string) []authmethod.Method {
 			if tenantID != authMethodsTenantA {
 				return nil
@@ -103,6 +105,9 @@ func TestListMachineAuthMethodsProjectsConfiguredMethods(t *testing.T) {
 	if got.Items[0].Type != "token" || got.Items[0].Source != "builtin" {
 		t.Fatalf("first item = %+v, want builtin token method", got.Items[0])
 	}
+	if len(got.Items[0].Scopes) != 1 || got.Items[0].Scopes[0] != "secrets:read" {
+		t.Fatalf("builtin token scopes = %v, want [secrets:read]", got.Items[0].Scopes)
+	}
 	byName := map[string]int{}
 	for i, item := range got.Items {
 		byName[item.Name] = i
@@ -143,9 +148,10 @@ func TestListMachineAuthMethodsIsTenantScoped(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("list auth methods = %d, want 200", rec.Code)
 	}
-	// Tenant B has no configured methods — only the builtin token exchange.
-	if len(got.Items) != 1 || got.Items[0].Type != "token" {
-		t.Fatalf("tenant-b items = %+v, want builtin token only", got.Items)
+	// The deployment-wide HMAC verifier is pinned to tenant A. Tenant B cannot
+	// borrow that authority merely by changing X-Tenant-ID.
+	if len(got.Items) != 0 {
+		t.Fatalf("tenant-b items = %+v, want no methods", got.Items)
 	}
 	if strings.Contains(rec.Body.String(), "ci-jwt") {
 		t.Fatalf("tenant-b response leaks tenant-a method config: %s", rec.Body.String())

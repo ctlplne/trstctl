@@ -4150,6 +4150,7 @@ export interface MachineLoginResponse {
   principal: string;
   scopes: string[];
   session_id: string;
+  token: string;
 }
 
 export interface MachineSession {

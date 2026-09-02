@@ -56,6 +56,8 @@ func TestTransitKeyringSurvivesServerRebuild(t *testing.T) {
 	cfg.Audit.SigningKeyFile = filepath.Join(persistentRoot, "audit-signing-key.pem")
 	cfg.Secrets.KEKFile = filepath.Join(persistentRoot, "secrets-kek")
 	cfg.Secrets.AuthSecretFile = filepath.Join(persistentRoot, "machine-auth.bin")
+	cfg.Secrets.AuthTokenTenantID = "11111111-1111-1111-1111-111111111111"
+	cfg.Secrets.AuthTokenScopes = []string{"secrets:read"}
 	cfg.Signer.AuthSecretFile = filepath.Join(persistentRoot, "sign-auth.bin")
 	cfg.Signer.KeyStoreDir = filepath.Join(persistentRoot, "signer-keys")
 	cfg.CA.CertFile = filepath.Join(persistentRoot, "issuing-ca.crt")

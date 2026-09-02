@@ -480,6 +480,8 @@ func configSummary(cfg *config.Config) string {
 	fmt.Fprintf(&b, "secrets.enable_api: %t\n", cfg.Secrets.EnableAPI)
 	if cfg.Secrets.EnableAPI && cfg.Secrets.AuthSecretFile != "" {
 		fmt.Fprintf(&b, "secrets.auth_secret_file: %s\n", cfg.Secrets.AuthSecretFile)
+		fmt.Fprintf(&b, "secrets.auth_token_tenant_id: %s\n", cfg.Secrets.AuthTokenTenantID)
+		fmt.Fprintf(&b, "secrets.auth_token_scopes: %s\n", strings.Join(cfg.Secrets.AuthTokenScopes, ","))
 	}
 	fmt.Fprintf(&b, "signer.mode: %s\n", cfg.Signer.Mode)
 	fmt.Fprintf(&b, "signer.allow_insecure_dev_nonlinux: %t\n", cfg.Signer.AllowInsecureDevNonLinux)

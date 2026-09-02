@@ -497,6 +497,10 @@ type Deps struct {
 	// configured (the secret store / share / pki sub-features still work). Run derives
 	// it from a configured key file.
 	SecretsAuthSecret []byte
+	// SecretsAuthTokenTenantID and SecretsAuthTokenScopes make the builtin token
+	// verifier an explicit, least-privilege tenant authority.
+	SecretsAuthTokenTenantID string
+	SecretsAuthTokenScopes   []string
 	// MachineAuthMethods returns tenant-scoped workload login methods such as
 	// Kubernetes SAT, AWS IAM, GCP, Azure, OIDC, and JWT. Empty keeps those methods
 	// off while preserving the HMAC token method when SecretsAuthSecret is configured.

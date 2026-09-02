@@ -240,6 +240,8 @@ func (s *Server) buildSecretsBackend(d Deps) api.SecretsBackend {
 		EventLog:           d.Log,
 		Audit:              audit.NewAuditor(s.log),
 		AuthSecret:         d.SecretsAuthSecret,
+		AuthTokenTenantID:  d.SecretsAuthTokenTenantID,
+		AuthTokenScopes:    append([]string(nil), d.SecretsAuthTokenScopes...),
 		MachineAuthMethods: d.MachineAuthMethods,
 		CAID:               IssuingCAID(),
 		// Resolve the issuing CA lazily (the control plane provisions it AFTER the API

@@ -949,7 +949,9 @@ cryptography lives behind the platform's single crypto boundary.
 | `TRSTCTL_IDEMPOTENCY_RESULT_FLEET_READY` | `false` | Operator assertion that **every** process writing this PostgreSQL database understands `sealed-row-v1` and durable indeterminate claims. After the legacy drain, startup installs a sealed-only PostgreSQL default/constraint. Never enable it while an older writer is running; the ratchet is deliberately incompatible and is not inferred from one node seeing zero rows. |
 | `TRSTCTL_SECRET_ROTATION_HISTORY_FLEET_READY` | `false` | Operator assertion that every older process able to read, export, or write schema-v1 `secret.rotation_schedule.ran` events is stopped. When retained unsafe error details exist, startup stays unready until this is true; it then performs the signed, deterministic live-generation sanitation and installs the v1 write floor. This is a one-way fleet compatibility decision, not a per-pod readiness guess. |
 | `TRSTCTL_SECRETS_ENABLE_API` | `false` | Enables the served `/api/v1/secrets/*` surface, including store, dynamic leases, sharing, CSR-first PKI secret signing, deprecated auditable PKI keypair generation, machine login, sync, and Gitleaks scans. It also enables the Vault/OpenBao-compatible common aliases under `/v1/auth/token/lookup-self`, `/v1/secret/data/*`, `/v1/pki/sign/*`, and `/v1/pki/issue/*`. |
-| `TRSTCTL_SECRETS_AUTH_SECRET_FILE` | unset | Optional HMAC key file for machine-login token credentials. When unset, the login method fails closed while other secrets routes continue to work. |
+| `TRSTCTL_SECRETS_AUTH_SECRET_FILE` | unset | Optional HMAC key file for the builtin machine-login token verifier. Setting it also requires the tenant pin and explicit scopes below. The login method otherwise fails closed while other secrets routes continue to work. |
+| `TRSTCTL_SECRETS_AUTH_TOKEN_TENANT_ID` | unset | Exact tenant UUID allowed to use the builtin HMAC token authority. One deployment-wide verifier is never implicitly trusted across tenants. Required with `TRSTCTL_SECRETS_AUTH_SECRET_FILE`. |
+| `TRSTCTL_SECRETS_AUTH_TOKEN_SCOPES` | unset | Comma-separated least-privilege API permissions returned by the builtin token exchange, for example `secrets:read`. Required and non-empty with `TRSTCTL_SECRETS_AUTH_SECRET_FILE`; there is no implicit wildcard or inert empty grant. |
 | `TRSTCTL_SECRETS_GITLEAKS_BIN` | auto-detect | Path to the pinned Gitleaks `v8.27.2` binary used by `POST /api/v1/secrets/scans`. Empty resolves `TRSTCTL_GITLEAKS_BIN`, `tools/bin/gitleaks`, then `PATH`. Run `tools/gitleaks/install.sh` during image build or host provisioning to install the supported checksum-verified release tarball. A missing binary makes scan requests fail closed with `503`. |
 
 Every default-binary idempotency result is outer-sealed through the same
@@ -1097,7 +1099,11 @@ file under `secrets.machine_auth`. Each entry names one method: `kubernetes`,
 `audience` plus `jwks_file` or `jwks_json`, and must set either `tenant_claim`
 (credential-bound tenancy) or `tenant_id` (tenant-pinned config). AWS IAM must set
 `tenant_id` and `allowed_accounts` or `allowed_arns` because STS does not carry a
-trstctl tenant claim.
+trstctl tenant claim. Every method must also choose exactly one permission source:
+non-empty static `scopes`, or—for OIDC/generic JWT only—one signed
+`scopes_claim`. Static scopes cannot be widened by a credential's generic `scope`
+or `scopes` claim. Empty, duplicate, missing, or ambiguous scope configuration
+fails startup instead of producing an inert or over-privileged session.
 
 Treat the credential-store KEK as the root that also protects the signer's sealed
 audit-evidence handle: **protect it and back it up** (a lost KEK means sealed

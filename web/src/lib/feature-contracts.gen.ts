@@ -6079,10 +6079,10 @@ export const canonicalCapabilities = [
       "edition": "core",
       "dependencies": [
         "secrets.enable_api is true and the secrets KEK/server-keyed command digest is available.",
-        "At least one tenant-scoped machine auth method has its required verifier configured; JWT-family methods require trusted JWKS, and AWS IAM requires an account or ARN allowlist."
+        "At least one tenant-scoped machine auth method has its required verifier and non-empty scopes configured; JWT-family methods require trusted JWKS, AWS IAM requires an account or ARN allowlist, and the builtin HMAC method requires an explicit tenant UUID and least-privilege scopes."
       ],
       "sideEffects": "mixed",
-      "secretDataHandling": "Preview never receives a credential. Execution holds the credential in wipeable bytes, binds idempotency with a server-keyed digest, never echoes or logs it, and the browser clears its field after success or failure. Reports contain metadata and fingerprints only.",
+      "secretDataHandling": "Preview never receives a credential. Execution holds the presented credential and new bearer in wipeable bytes, binds idempotency with a server-keyed digest, never echoes or logs the presented credential, and stores only the new bearer's one-way hash plus a protected idempotency result. The browser clears the presented credential after every attempt and forgets the bearer when its one-time reveal is dismissed. Reports contain metadata and fingerprints only.",
       "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {

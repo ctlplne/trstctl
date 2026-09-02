@@ -466,6 +466,7 @@ function primeSecretsMocks() {
     method: "token",
     scopes: ["secrets:read", "secrets:write"],
     expires_at: "2026-06-19T13:00:00Z",
+    token: "trst_MACHINE_SESSION_REVEAL_ONCE",
   });
   apiMock.createShare.mockResolvedValue({ token: "SHARE-TOKEN-1", expires_at: "2026-06-19T13:30:00Z" });
   apiMock.redeemShare.mockResolvedValue({ value: "redeemed-secret" });
@@ -2175,6 +2176,12 @@ describe("secrets auth-method console (C-S4 / DA-02)", () => {
     );
     expect(await loginForm.findByText("sess-1")).toBeInTheDocument();
     expect(loginForm.getByText("svc-api")).toBeInTheDocument();
+    const bearer = await loginForm.findByText("trst_MACHINE_SESSION_REVEAL_ONCE");
+    const reveal = bearer.closest(".ui-panel") as HTMLElement;
+    expect(within(reveal).getByText("One-time machine session bearer")).toBeInTheDocument();
+    await user.click(within(reveal).getByRole("button", { name: "Dismiss" }));
+    expect(loginForm.queryByText("trst_MACHINE_SESSION_REVEAL_ONCE")).not.toBeInTheDocument();
+    expect(loginForm.getByText("sess-1")).toBeInTheDocument();
     expect(screen.queryByText("tenant-bound-machine-token")).not.toBeInTheDocument();
     expect(apiMock.machineSessions.mock.calls.length).toBeGreaterThan(1);
   });

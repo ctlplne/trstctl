@@ -113,8 +113,10 @@ func (m *Manager) Login(ctx context.Context, method string, credential []byte) (
 		return Session{}, fmt.Errorf("authmethod: generate session id: %w", err)
 	}
 	now := m.cfg.Clock()
+	idHex := hex.EncodeToString(idb)
 	sess := Session{
-		ID: hex.EncodeToString(idb), TenantID: m.cfg.TenantID, Principal: principal,
+		ID:       idHex[:8] + "-" + idHex[8:12] + "-" + idHex[12:16] + "-" + idHex[16:20] + "-" + idHex[20:],
+		TenantID: m.cfg.TenantID, Principal: principal,
 		Method: method, Scopes: scopes, IssuedAt: now, ExpiresAt: now.Add(m.cfg.TTL),
 	}
 	_ = auditsink.Emit(ctx, m.cfg.Audit, nil, "auth.session.issued", m.cfg.TenantID,
@@ -150,6 +152,11 @@ type TokenMethod struct {
 	// login audience so tokens cannot be replayed into future TokenMethod consumers.
 	Audience string
 	Scopes   map[string][]string
+	// DefaultScopes are granted when Scopes has no explicit entry for the
+	// authenticated principal. Served deployments use this only for an explicitly
+	// tenant-pinned builtin token authority; an empty result remains fail-closed at
+	// the session exchange.
+	DefaultScopes []string
 	// AllowUnexpiring, when true, accepts the legacy two-field form with no expiry.
 	// Leave it false (the default) so every accepted token is expiry-bound.
 	AllowUnexpiring bool
@@ -215,7 +222,7 @@ func (t TokenMethod) Authenticate(_ context.Context, credential []byte) (string,
 			return "", nil, fmt.Errorf("token expired")
 		}
 		principal := string(principalBytes)
-		return principal, t.Scopes[principal], nil
+		return principal, t.scopesFor(principal), nil
 	case 3:
 		// Canonical expiry-bound form: principal.expUnix.hexHMAC.
 		if t.TenantID != "" {
@@ -248,7 +255,7 @@ func (t TokenMethod) Authenticate(_ context.Context, credential []byte) (string,
 			return "", nil, fmt.Errorf("token expired")
 		}
 		principal := string(principalBytes)
-		return principal, t.Scopes[principal], nil
+		return principal, t.scopesFor(principal), nil
 	case 2:
 		// Legacy unbounded form: principal.hexHMAC (MAC over the principal only). It
 		// never expires, so accept it only when the operator has opted in.
@@ -271,10 +278,17 @@ func (t TokenMethod) Authenticate(_ context.Context, credential []byte) (string,
 			return "", nil, fmt.Errorf("invalid token")
 		}
 		principal := string(principalBytes)
-		return principal, t.Scopes[principal], nil
+		return principal, t.scopesFor(principal), nil
 	default:
 		return "", nil, fmt.Errorf("malformed token")
 	}
+}
+
+func (t TokenMethod) scopesFor(principal string) []string {
+	if scopes, ok := t.Scopes[principal]; ok {
+		return append([]string(nil), scopes...)
+	}
+	return append([]string(nil), t.DefaultScopes...)
 }
 
 func (t TokenMethod) audience() string {
@@ -334,11 +348,17 @@ func parseUnixBytes(b []byte) (int64, error) {
 // cannot be re-presented). The cache is bounded (AN-7): it self-evicts expired
 // entries and never grows without limit.
 type OIDCMethod struct {
-	JWKS            crypto.JWKS
-	Issuer          string
-	Audience        string
-	TenantID        string
-	TenantClaim     string
+	JWKS        crypto.JWKS
+	Issuer      string
+	Audience    string
+	TenantID    string
+	TenantClaim string
+	// Scopes are the exact permissions the operator grants to every session
+	// authenticated by this method. ScopesClaim selects a signed claim instead.
+	// Configure one source explicitly; an arbitrary token claim is never authority
+	// by default.
+	Scopes          []string
+	ScopesClaim     string
 	RequiredClaims  map[string]string
 	PrincipalPrefix string
 	Now             func() time.Time
@@ -374,6 +394,8 @@ func (o OIDCMethod) Authenticate(_ context.Context, credential []byte) (string, 
 		audience:        o.Audience,
 		tenantID:        o.TenantID,
 		tenantClaim:     o.TenantClaim,
+		scopes:          o.Scopes,
+		scopesClaim:     o.ScopesClaim,
 		requiredClaims:  o.RequiredClaims,
 		principalPrefix: o.PrincipalPrefix,
 		now:             o.Now,
@@ -383,6 +405,7 @@ func (o OIDCMethod) Authenticate(_ context.Context, credential []byte) (string, 
 	if err != nil {
 		return "", nil, err
 	}
+	defer v.destroy()
 	return v.principal, v.scopes, nil
 }
 

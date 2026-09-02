@@ -67,6 +67,19 @@ func (s *Store) ApplyMachineSessionRevokedTx(ctx context.Context, tx pgx.Tx, ten
 	return err
 }
 
+// ApplyMachineSessionsRevokedForSubjectTx keeps the machine-session ledger in
+// sync when member offboarding revokes every API bearer owned by that principal.
+func (s *Store) ApplyMachineSessionsRevokedForSubjectTx(ctx context.Context, tx pgx.Tx, tenantID, subject, revokedBy string, revokedAt time.Time) error {
+	_, err := tx.Exec(ctx,
+		`UPDATE machine_sessions
+		    SET status = $3,
+		        revoked_at = coalesce(revoked_at, $4),
+		        revoked_by = CASE WHEN revoked_by = '' THEN $5 ELSE revoked_by END
+		  WHERE tenant_id = $1 AND principal = $2 AND status = $6`,
+		tenantID, subject, MachineSessionStatusRevoked, revokedAt, revokedBy, MachineSessionStatusActive)
+	return err
+}
+
 // GetMachineSession returns one tenant-scoped machine-session ledger row.
 func (s *Store) GetMachineSession(ctx context.Context, tenantID, id string) (MachineSession, error) {
 	var out MachineSession

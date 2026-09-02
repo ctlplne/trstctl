@@ -18,6 +18,7 @@ import (
 	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
 
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/authmethod"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
@@ -78,6 +79,10 @@ type machineSessionHarness struct {
 }
 
 func newMachineSessionHarness(t *testing.T) *machineSessionHarness {
+	return newMachineSessionHarnessWithScopes(t, []string{"secrets:read"})
+}
+
+func newMachineSessionHarnessWithScopes(t *testing.T, grantedScopes []string) *machineSessionHarness {
 	t.Helper()
 	ctx := context.Background()
 
@@ -99,13 +104,16 @@ func newMachineSessionHarness(t *testing.T) *machineSessionHarness {
 	t.Cleanup(func() { _ = log.Close() })
 
 	authSecret := []byte("served-machine-auth-secret")
-	handler := api.New(st, orchestrator.NewMemoryIdempotency(), nil,
+	orch := orchestrator.NewOrchestrator(log, st, nil)
+	handler := api.New(st, orchestrator.NewMemoryIdempotency(), orch,
 		api.WithInsecureHeaderResolver(),
 		api.WithEventLog(log),
 		api.WithSecrets(api.SecretsBackend{
-			Store:      st,
-			AuthSecret: authSecret,
-			SessionTTL: time.Hour,
+			Store:             st,
+			AuthSecret:        authSecret,
+			AuthTokenTenantID: msTenantA,
+			AuthTokenScopes:   append([]string(nil), grantedScopes...),
+			SessionTTL:        time.Hour,
 			CommandMAC: func(domain, material []byte) ([]byte, error) {
 				message := make([]byte, 0, len(domain)+1+len(material))
 				message = append(message, domain...)
@@ -117,7 +125,27 @@ func newMachineSessionHarness(t *testing.T) *machineSessionHarness {
 	)
 	return &machineSessionHarness{
 		handler: handler,
-		token:   authmethod.TokenMethod{Secret: authSecret, TenantID: msTenantA},
+		token: authmethod.TokenMethod{
+			Secret: authSecret, TenantID: msTenantA, DefaultScopes: append([]string(nil), grantedScopes...),
+		},
+	}
+}
+
+func TestMachineLoginRejectsUnknownPermissionFromAuthenticator(t *testing.T) {
+	if testing.Short() {
+		t.Skip("served machine-login authorization test needs embedded postgres")
+	}
+	h := newMachineSessionHarnessWithScopes(t, []string{"made-up:permission"})
+	previewStatus, previewBody := h.do(t, http.MethodPost, "/api/v1/secrets/login/preview", msTenantA, "", map[string]any{"method": "token"})
+	if previewStatus != http.StatusOK || !strings.Contains(string(previewBody), `"ready":false`) || !strings.Contains(string(previewBody), `"scope_grant"`) {
+		t.Fatalf("unknown-scope preview = %d/%s, want an explicit scope blocker", previewStatus, previewBody)
+	}
+	status, result := h.login(t, "misconfigured-workload")
+	if status != http.StatusUnauthorized {
+		t.Fatalf("machine login with unknown API scope = %d/%v, want generic 401", status, result)
+	}
+	if sessions := listSessions(t, h, msTenantA); len(sessions) != 0 {
+		t.Fatalf("invalid permission source created a bearer/session: %v", sessions)
 	}
 }
 
@@ -281,6 +309,15 @@ func (h *machineSessionHarness) do(t *testing.T, method, path, tenantID, idemKey
 	return rec.Code, rec.Body.Bytes()
 }
 
+func (h *machineSessionHarness) doBearer(t *testing.T, method, path, bearer string) (int, []byte) {
+	t.Helper()
+	req := httptest.NewRequest(method, path, nil)
+	req.Header.Set("Authorization", "Bearer "+bearer)
+	rec := httptest.NewRecorder()
+	h.handler.ServeHTTP(rec, req)
+	return rec.Code, rec.Body.Bytes()
+}
+
 func (h *machineSessionHarness) login(t *testing.T, principal string) (int, map[string]any) {
 	t.Helper()
 	credential, err := h.token.Issue(principal, time.Now().Add(10*time.Minute))
@@ -330,6 +367,18 @@ func TestMachineSessionLedgerServed(t *testing.T) {
 	if sessionID == "" {
 		t.Fatalf("login response missing session_id: %v", login)
 	}
+	bearer, _ := login["token"].(string)
+	if !strings.HasPrefix(bearer, auth.TokenPrefix) {
+		t.Fatalf("login response missing one-time API bearer: %v", login)
+	}
+	if scopes, ok := login["scopes"].([]any); !ok || len(scopes) != 1 || scopes[0] != "secrets:read" {
+		t.Fatalf("login response scopes = %v, want [secrets:read]", login["scopes"])
+	}
+	// The returned bearer is not a receipt: it authorizes the exact reviewed
+	// scope through the production token resolver, with no trusted identity headers.
+	if useStatus, useBody := h.doBearer(t, http.MethodGet, "/api/v1/secrets/auth-methods", bearer); useStatus != http.StatusOK {
+		t.Fatalf("machine session bearer use = %d; body=%s", useStatus, useBody)
+	}
 	items := listSessions(t, h, msTenantA)
 	if len(items) != 1 || items[0]["id"] != sessionID || items[0]["principal"] != "payments-bot" || items[0]["status"] != "active" {
 		t.Fatalf("ledger after login = %v", items)
@@ -360,6 +409,11 @@ func TestMachineSessionLedgerServed(t *testing.T) {
 	if len(items) != 1 || items[0]["status"] != "revoked" || items[0]["revoked_by"] != "operator-1" {
 		t.Fatalf("ledger after revoke = %v", items)
 	}
+	// Revoking the session atomically revokes the linked bearer, not merely the
+	// human-readable ledger row.
+	if useStatus, useBody := h.doBearer(t, http.MethodGet, "/api/v1/secrets/auth-methods", bearer); useStatus != http.StatusUnauthorized {
+		t.Fatalf("revoked machine session bearer = %d, want 401; body=%s", useStatus, useBody)
+	}
 
 	// 4. Missing Idempotency-Key is refused (AN-5).
 	if noKeyStatus, _ := h.do(t, http.MethodPost, revokePath, msTenantA, "", nil); noKeyStatus != http.StatusBadRequest {
@@ -384,8 +438,21 @@ func TestMachineSessionLedgerServed(t *testing.T) {
 	if status, body = h.do(t, http.MethodPost, "/api/v1/secrets/auth-methods/token/enable", msTenantA, "enable-key-1", nil); status != http.StatusOK {
 		t.Fatalf("enable method = %d; body=%s", status, body)
 	}
-	if loginStatus, _ := h.login(t, "payments-bot"); loginStatus != http.StatusOK {
+	loginStatus, genericRevocation := h.login(t, "payments-bot")
+	if loginStatus != http.StatusOK {
 		t.Fatalf("login after re-enable = %d, want 200", loginStatus)
+	}
+	secondID, _ := genericRevocation["session_id"].(string)
+	secondBearer, _ := genericRevocation["token"].(string)
+	if status, body = h.do(t, http.MethodDelete, "/api/v1/access/api-tokens/"+secondID, msTenantA, "generic-token-revoke-1", nil); status != http.StatusNoContent {
+		t.Fatalf("generic API-token revoke of machine session = %d; body=%s", status, body)
+	}
+	if useStatus, useBody := h.doBearer(t, http.MethodGet, "/api/v1/secrets/auth-methods", secondBearer); useStatus != http.StatusUnauthorized {
+		t.Fatalf("generically revoked machine bearer = %d, want 401; body=%s", useStatus, useBody)
+	}
+	items = listSessions(t, h, msTenantA)
+	if len(items) < 2 || items[0]["id"] != secondID || items[0]["status"] != "revoked" {
+		t.Fatalf("machine ledger did not follow generic bearer revocation: %v", items)
 	}
 
 	// 7. Unknown method names are refused, not silently recorded.

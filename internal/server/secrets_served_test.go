@@ -85,6 +85,10 @@ func withSecretsEnabled(t *testing.T, authSecret []byte) func(*Deps) {
 		d.EnableSecretsAPI = true
 		d.KEK = kekW
 		d.SecretsAuthSecret = authSecret
+		if len(authSecret) > 0 {
+			d.SecretsAuthTokenTenantID = servedTestTenant
+			d.SecretsAuthTokenScopes = []string{"secrets:read"}
+		}
 	}
 }
 
@@ -2437,7 +2441,8 @@ func TestServedMachineLoginTopMethodsKubernetesSATAndAWSIAM(t *testing.T) {
 					AllowedServiceAccounts: map[string]bool{
 						"payments/api": true,
 					},
-					Now: func() time.Time { return now },
+					Scopes: []string{"secrets:read"},
+					Now:    func() time.Time { return now },
 				},
 				authmethod.AWSIAMMethod{
 					TenantID:        tenantID,

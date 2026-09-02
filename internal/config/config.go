@@ -19,6 +19,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -1797,6 +1799,13 @@ type Secrets struct {
 	// sub-features still work. Like the KEK, it is created (random, 0600) on first boot
 	// if absent. The key is held as []byte and never logged (AN-8).
 	AuthSecretFile string `json:"auth_secret_file,omitempty"`
+	// AuthTokenTenantID pins the builtin HMAC machine-token authority to exactly
+	// one tenant. The verifier secret is deployment-wide, so serving it without a
+	// tenant pin would let a holder mint credentials for neighboring tenants.
+	AuthTokenTenantID string `json:"auth_token_tenant_id,omitempty"`
+	// AuthTokenScopes are the exact API permissions a successful builtin-token
+	// exchange receives. They must be explicit; an empty grant fails closed.
+	AuthTokenScopes []string `json:"auth_token_scopes,omitempty"`
 	// GitleaksBin points at the pinned Gitleaks v8.27.2 binary used by the served
 	// code/CI secret scan route. Empty resolves TRSTCTL_GITLEAKS_BIN, then
 	// tools/bin/gitleaks, then PATH at request time.
@@ -2347,6 +2356,8 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_SECRETS_KEK_FILE", &c.Secrets.KEKFile)
 	setBool(getenv, "TRSTCTL_SECRETS_ENABLE_API", &c.Secrets.EnableAPI)
 	setString(getenv, "TRSTCTL_SECRETS_AUTH_SECRET_FILE", &c.Secrets.AuthSecretFile)
+	setString(getenv, "TRSTCTL_SECRETS_AUTH_TOKEN_TENANT_ID", &c.Secrets.AuthTokenTenantID)
+	setCSV(getenv, "TRSTCTL_SECRETS_AUTH_TOKEN_SCOPES", &c.Secrets.AuthTokenScopes)
 	setString(getenv, "TRSTCTL_SECRETS_GITLEAKS_BIN", &c.Secrets.GitleaksBin)
 	setCSV(getenv, "TRSTCTL_SECRETS_SCAN_ROOTS", &c.Secrets.ScanRoots)
 	setString(getenv, "TRSTCTL_TRANSIT_KEYRING_DIR", &c.Transit.KeyringDir)
@@ -3584,6 +3595,29 @@ func validateServedSurfaces(c *Config) []error {
 	if c.Breakglass.Enabled || c.Breakglass.OnlineEnabled {
 		errs = append(errs, c.Breakglass.validate()...)
 	}
+	if c.Secrets.AuthSecretFile != "" {
+		if err := uuid.Validate(c.Secrets.AuthTokenTenantID); err != nil {
+			errs = append(errs, errors.New("secrets.auth_token_tenant_id must be a UUID when secrets.auth_secret_file is configured"))
+		}
+		if len(c.Secrets.AuthTokenScopes) == 0 {
+			errs = append(errs, errors.New("secrets.auth_token_scopes must grant at least one explicit permission when secrets.auth_secret_file is configured"))
+		}
+		seen := map[string]bool{}
+		for i, rawScope := range c.Secrets.AuthTokenScopes {
+			scope := strings.TrimSpace(rawScope)
+			if scope == "" {
+				errs = append(errs, fmt.Errorf("secrets.auth_token_scopes[%d] must be a non-empty permission", i))
+				continue
+			}
+			if scope != rawScope {
+				errs = append(errs, fmt.Errorf("secrets.auth_token_scopes[%d] must not contain leading or trailing whitespace", i))
+			}
+			if seen[scope] {
+				errs = append(errs, fmt.Errorf("secrets.auth_token_scopes contains duplicate %q", scope))
+			}
+			seen[scope] = true
+		}
+	}
 	errs = append(errs, validateSecretsMachineAuth(c.Secrets.MachineAuth)...)
 	errs = append(errs, validateTenantSealLocalWrappers(c.Secrets.TenantSealLocalWrappers)...)
 	errs = append(errs, validateManagedKeys(c.ManagedKeys)...)
@@ -3743,6 +3777,33 @@ func validateSecretsMachineAuth(methods []MachineAuthMethod) []error {
 		default:
 			errs = append(errs, fmt.Errorf("secrets.machine_auth[%d].name %q is invalid (want kubernetes, aws-iam, gcp, azure, oidc, or jwt)", i, name))
 			continue
+		}
+		hasScopes := false
+		seenScopes := map[string]bool{}
+		for j, rawScope := range m.Scopes {
+			scope := strings.TrimSpace(rawScope)
+			if scope == "" {
+				errs = append(errs, fmt.Errorf("secrets.machine_auth[%d].scopes[%d] must not be empty", i, j))
+				continue
+			}
+			hasScopes = true
+			if scope != rawScope {
+				errs = append(errs, fmt.Errorf("secrets.machine_auth[%d].scopes[%d] must not contain leading or trailing whitespace", i, j))
+			}
+			if seenScopes[scope] {
+				errs = append(errs, fmt.Errorf("secrets.machine_auth[%d].scopes contains duplicate %q", i, scope))
+			}
+			seenScopes[scope] = true
+		}
+		hasScopesClaim := strings.TrimSpace(m.ScopesClaim) != ""
+		if !hasScopes && !hasScopesClaim {
+			errs = append(errs, fmt.Errorf("secrets.machine_auth[%d] must set scopes or scopes_claim so a successful login has explicit least-privilege authority", i))
+		}
+		if hasScopes && hasScopesClaim {
+			errs = append(errs, fmt.Errorf("secrets.machine_auth[%d] must not set both scopes and scopes_claim; choose one permission authority", i))
+		}
+		if hasScopesClaim && name != "oidc" && name != "jwt" {
+			errs = append(errs, fmt.Errorf("secrets.machine_auth[%d].scopes_claim is supported only for oidc or jwt", i))
 		}
 		if name == "aws-iam" {
 			if strings.TrimSpace(m.TenantID) == "" {

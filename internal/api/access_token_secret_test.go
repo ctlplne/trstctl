@@ -35,3 +35,18 @@ func TestAPITokenCreateResponseTokenUsesSecretJSONBytes(t *testing.T) {
 		t.Fatalf("wipeSecrets left token bytes in response: %q", []byte(resp.Token))
 	}
 }
+
+func TestMachineLoginResponseTokenUsesSecretJSONBytes(t *testing.T) {
+	field, ok := reflect.TypeOf(machineLoginResponse{}).FieldByName("Token")
+	if !ok {
+		t.Fatal("machineLoginResponse.Token field is missing")
+	}
+	if want := reflect.TypeOf(secretJSONBytes{}); field.Type != want {
+		t.Fatalf("machineLoginResponse.Token type = %s, want wipeable %s", field.Type, want)
+	}
+	resp := &machineLoginResponse{Token: secretJSONBytes([]byte("trst_machine_session"))}
+	resp.wipeSecrets()
+	if bytes.Contains([]byte(resp.Token), []byte("trst_machine_session")) {
+		t.Fatalf("wipeSecrets left machine-session bearer bytes in response: %q", []byte(resp.Token))
+	}
+}

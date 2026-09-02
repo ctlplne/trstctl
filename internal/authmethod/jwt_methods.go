@@ -409,13 +409,18 @@ func authenticateJWT(credential []byte, opts jwtMethodOptions) (verifiedJWT, err
 		principal = opts.principalPrefix + principal
 	}
 	scopes := append([]string(nil), opts.scopes...)
-	if fromToken, ok, err := claims.strings(firstNonEmpty(opts.scopesClaim, "scopes")); err != nil {
-		return verifiedJWT{}, fmt.Errorf("%s: parse scopes claim: %w", methodName, err)
-	} else if ok {
-		scopes = fromToken
-	} else if fromToken, ok, err := claims.strings("scope"); err != nil {
-		return verifiedJWT{}, fmt.Errorf("%s: parse scope claim: %w", methodName, err)
-	} else if ok {
+	// A JWT claim is identity-provider data, not permission authority unless the
+	// operator explicitly names that claim as the method's scope source. This
+	// prevents a workload-controlled `scope`/`scopes` claim from widening a
+	// statically configured least-privilege grant.
+	if opts.scopesClaim != "" {
+		fromToken, ok, claimErr := claims.strings(opts.scopesClaim)
+		if claimErr != nil {
+			return verifiedJWT{}, fmt.Errorf("%s: parse scopes claim: %w", methodName, claimErr)
+		}
+		if !ok || len(fromToken) == 0 {
+			return verifiedJWT{}, fmt.Errorf("%s: token has no non-empty %s scopes claim", methodName, opts.scopesClaim)
+		}
 		scopes = fromToken
 	}
 	retainRaw = true

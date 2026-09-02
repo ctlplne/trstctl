@@ -10,7 +10,7 @@ import { StepShell } from "@/components/wizard/StepShell";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { api, ApiError, type MachineAuthMethod, type MachineLoginPreview, type MachineLoginResponse } from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
-import { MachineSession, formatCommandArgv } from "./SecretsPageParts";
+import { MachineSession, RevealPanel, formatCommandArgv } from "./SecretsPageParts";
 
 function methodKey(method: MachineAuthMethod | undefined): string {
   return method ? JSON.stringify(method) : "";
@@ -50,6 +50,7 @@ export function MachineAuthWorkflow({
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [session, setSession] = useState<MachineLoginResponse | null>(null);
+  const [sessionToken, setSessionToken] = useState("");
 
   const selectedMethod = useMemo(() => methods?.find((method) => method.name === methodName), [methodName, methods]);
   const currentRequestKey = methodKey(selectedMethod);
@@ -67,6 +68,7 @@ export function MachineAuthWorkflow({
     setReview(null);
     setCredential("");
     setSession(null);
+    setSessionToken("");
     setLoginError(null);
     setReviewError(null);
     setStep(0);
@@ -78,6 +80,7 @@ export function MachineAuthWorkflow({
     setReviewError(null);
     setLoginError(null);
     setSession(null);
+    setSessionToken("");
     try {
       const plan = await api.previewMachineLogin({ method: selectedMethod.name });
       setReview({ requestKey: methodKey(selectedMethod), plan });
@@ -106,6 +109,7 @@ export function MachineAuthWorkflow({
         preview_fingerprint: reviewedPlan.request_fingerprint,
       });
       setSession(result);
+      setSessionToken(result.token);
       setStep(2);
       await onSessionIssued();
     } catch (error) {
@@ -125,6 +129,7 @@ export function MachineAuthWorkflow({
     setReview(null);
     setCredential("");
     setSession(null);
+    setSessionToken("");
     setLoginError(null);
     setReviewError(null);
     setReviewStale(false);
@@ -291,6 +296,11 @@ export function MachineAuthWorkflow({
               <StatusBadge value="active" label={t("secrets.methods.enabled")} tone="success" />
             </div>
             <MachineSession session={session} />
+            {sessionToken && (
+              <RevealPanel title={t("secrets.login.tokenTitle")} value={sessionToken} onDismiss={() => setSessionToken("")}>
+                {t("secrets.login.tokenHelp")}
+              </RevealPanel>
+            )}
             <PlanList title={t("secrets.pki.verification")} items={reviewedPlan?.verification_steps ?? []} />
           </section>
         )}

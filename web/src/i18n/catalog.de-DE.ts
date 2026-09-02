@@ -1325,7 +1325,10 @@ const deDECatalog = {
   "secrets.login.verifyLabel": "Prüfung der Maschinenanmeldung",
   "secrets.login.verified": "Sitzung ausgestellt und erfasst",
   "secrets.login.verifiedHelp":
-    "Das Ergebnis enthält kein Geheimnis. Gleichen Sie es mit der geprüften Methode ab und widerrufen Sie die synthetische Sitzung danach unter Ausgestellte Sitzungen.",
+    "Gleichen Sie das Ergebnis mit der geprüften Methode ab. Das Bearer-Token gilt nur für diese Rechte und funktioniert nach Ablauf oder Widerruf der Sitzung nicht mehr.",
+  "secrets.login.tokenTitle": "Einmaliges Bearer-Token für die Maschinensitzung",
+  "secrets.login.tokenHelp":
+    "Kopieren Sie dieses Bearer-Token jetzt in den Workload. trstctl speichert nur seinen Hash und kann es nach dem Schließen oder Verlassen dieses Ergebnisses nicht erneut anzeigen.",
   "secrets.login.startAgain": "Weitere Anmeldung testen",
   "secrets.pki.custodyLabel": "Schlüsselverwahrung",
   "secrets.pki.csrMode": "Meine CSR signieren (empfohlen)",

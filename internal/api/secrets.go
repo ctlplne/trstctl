@@ -103,6 +103,15 @@ type SecretsBackend struct {
 	// is not configured unless MachineAuthMethods contributes another method. It is
 	// []byte and never logged (AN-8).
 	AuthSecret []byte
+	// AuthTokenTenantID pins the builtin shared-secret token authority to one
+	// tenant. A deployment-wide verifier without this pin would let an authority
+	// holder mint a credential for a neighboring tenant. Empty disables the
+	// builtin token method.
+	AuthTokenTenantID string
+	// AuthTokenScopes are the exact permissions granted by the tenant-pinned
+	// builtin token method. Empty disables that method rather than minting an inert
+	// or accidentally over-privileged session.
+	AuthTokenScopes []string
 	// MachineAuthMethods returns tenant-scoped workload login methods such as
 	// Kubernetes SAT, AWS IAM, GCP, Azure, generic OIDC, and generic JWT. The factory
 	// is called per request with the X-Tenant-ID lookup hint, and each returned method

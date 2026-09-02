@@ -5754,6 +5754,7 @@ MachineLoginResponse = TypedDict(
         'principal': str,
         'scopes': list[str],
         'session_id': str,
+        'token': str,
     },
     total=False,
 )

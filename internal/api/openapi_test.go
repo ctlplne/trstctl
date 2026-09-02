@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -353,6 +354,12 @@ func TestOpenAPISpecCoversMachineLogin(t *testing.T) {
 	respRef := op["responses"].(map[string]any)["200"].(map[string]any)["content"].(map[string]any)["application/json"].(map[string]any)["schema"].(map[string]any)["$ref"]
 	if respRef != "#/components/schemas/MachineLoginResponse" {
 		t.Fatalf("machine-login response schema = %v", respRef)
+	}
+	schemas := doc["components"].(map[string]any)["schemas"].(map[string]any)
+	responseSchema := schemas["MachineLoginResponse"].(map[string]any)
+	required := responseSchema["required"].([]any)
+	if !slices.Contains(required, any("token")) {
+		t.Fatalf("machine-login response does not require its one-time bearer: %v", required)
 	}
 }
 

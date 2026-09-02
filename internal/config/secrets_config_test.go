@@ -3,6 +3,7 @@
 package config_test
 
 import (
+	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/config"
@@ -57,6 +58,30 @@ func TestSecretsGitleaksEnvOverride(t *testing.T) {
 	}
 	if len(cfg.Secrets.ScanRoots) != 2 || cfg.Secrets.ScanRoots[0] != "/workspace/repos" || cfg.Secrets.ScanRoots[1] != "/workspace/rules" {
 		t.Errorf("secrets.scan_roots = %#v, want the two configured roots", cfg.Secrets.ScanRoots)
+	}
+}
+
+func TestBuiltinMachineTokenEnvOverride(t *testing.T) {
+	env := map[string]string{ // #nosec G101 -- fabricated fixture path/identifiers; no credential value is present (CWE-798)
+		"TRSTCTL_POSTGRES_MODE":                       "external",
+		"TRSTCTL_POSTGRES_DSN":                        "postgres://u:p@h:5432/db?sslmode=require",
+		"TRSTCTL_NATS_MODE":                           "external",
+		"TRSTCTL_NATS_URL":                            "nats://h:4222",
+		"TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND":           "/usr/local/bin/trstctl-sign-approve",
+		"TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER": "false",
+		"TRSTCTL_SECRETS_AUTH_SECRET_FILE":            "/run/secrets/machine-auth.bin",
+		"TRSTCTL_SECRETS_AUTH_TOKEN_TENANT_ID":        "11111111-1111-1111-1111-111111111111",
+		"TRSTCTL_SECRETS_AUTH_TOKEN_SCOPES":           "secrets:read,certs:read",
+	}
+	cfg, err := config.Load(func(k string) string { return env[k] })
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Secrets.AuthTokenTenantID != env["TRSTCTL_SECRETS_AUTH_TOKEN_TENANT_ID"] {
+		t.Fatalf("auth token tenant = %q", cfg.Secrets.AuthTokenTenantID)
+	}
+	if got := strings.Join(cfg.Secrets.AuthTokenScopes, ","); got != "secrets:read,certs:read" {
+		t.Fatalf("auth token scopes = %q", got)
 	}
 }
 

@@ -72,9 +72,10 @@ func (a *API) machineAuthMethodInventory(ctx context.Context, tenantID string) (
 		disabled = overlay
 	}
 	items := make([]machineAuthMethodInfo, 0, 4)
-	if len(a.secrets.be.AuthSecret) > 0 {
+	if len(a.secrets.be.AuthSecret) > 0 && a.secrets.be.AuthTokenTenantID == tenantID && len(a.secrets.be.AuthTokenScopes) > 0 {
 		items = append(items, machineAuthMethodInfo{
-			Name: "token", Type: "token", Source: "builtin", Audience: "machine-login", Disabled: disabled["token"],
+			Name: "token", Type: "token", Source: "builtin", Audience: "machine-login",
+			Scopes: append([]string(nil), a.secrets.be.AuthTokenScopes...), Disabled: disabled["token"],
 		})
 	}
 	if a.secrets.be.MachineAuthMethods != nil {
@@ -129,6 +130,38 @@ func machineLoginVerificationReady(method machineAuthMethodInfo) (bool, string, 
 	default:
 		return true, "The method's local verification authority is configured.", "Restore the method verification authority, then preview again."
 	}
+}
+
+func (a *API) machineLoginScopeReady(method machineAuthMethodInfo) (bool, string, string) {
+	hasStatic := len(method.Scopes) > 0 || len(method.ScopesByPrincipal) > 0
+	hasClaim := strings.TrimSpace(method.ScopesClaim) != ""
+	if hasStatic && hasClaim {
+		return false,
+			"The method has two competing permission sources, so trstctl cannot prove which authority wins.",
+			"Configure either static scopes or one trusted scopes_claim, not both; then restart or reload and preview again."
+	}
+	if len(method.Scopes) > 0 {
+		if err := a.validatePermissionScopes(method.Scopes); err != nil {
+			return false,
+				"The method's static scope list contains a blank or unknown API permission.",
+				"Replace it with served trstctl API permissions, then restart or reload and preview again."
+		}
+	}
+	for _, scopes := range method.ScopesByPrincipal {
+		if len(scopes) == 0 || a.validatePermissionScopes(scopes) != nil {
+			return false,
+				"At least one principal mapping has no usable served API permission.",
+				"Give every principal mapping non-empty served trstctl API permissions, then preview again."
+		}
+	}
+	if !hasStatic && !hasClaim {
+		return false,
+			"The method has no explicit permission source, so its session would be unusable.",
+			"Configure non-empty static scopes or, for OIDC/JWT, one trusted scopes_claim; then restart or reload and preview again."
+	}
+	return true,
+		"A successful login receives permissions from one explicit, reviewable scope source.",
+		"Configure non-empty static scopes or, for OIDC/JWT, one trusted scopes_claim; then restart or reload and preview again."
 }
 
 func (a *API) machineLoginPreviewFingerprint(tenantID string, method machineAuthMethodInfo, ttl time.Duration) (string, error) {
@@ -205,6 +238,7 @@ func (a *API) previewMachineLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	ttl := a.secrets.machineSessionTTL()
 	verificationReady, verificationDetail, verificationRemediation := machineLoginVerificationReady(*selected)
+	scopeReady, scopeDetail, scopeRemediation := a.machineLoginScopeReady(*selected)
 	methodEnabledDetail := "The selected method accepts new logins."
 	if selected.Disabled {
 		methodEnabledDetail = "The selected method is disabled for this tenant."
@@ -213,6 +247,7 @@ func (a *API) previewMachineLogin(w http.ResponseWriter, r *http.Request) {
 		{ID: "method_configured", Ready: true, Detail: "The selected method exists in this tenant's served configuration."},
 		{ID: "method_enabled", Ready: !selected.Disabled, Detail: methodEnabledDetail, Remediation: "Re-enable this method for the tenant, then preview again."},
 		{ID: "verification_authority", Ready: verificationReady, Detail: verificationDetail, Remediation: verificationRemediation},
+		{ID: "scope_grant", Ready: scopeReady, Detail: scopeDetail, Remediation: scopeRemediation},
 		{ID: "session_ledger", Ready: a.machineSessionLedgerReady(), Detail: "Successful logins are appended and projected into the tenant-scoped issued-session ledger.", Remediation: "Restore PostgreSQL and the event log before testing a login."},
 	}
 	blockers := make([]string, 0, len(prerequisites))
@@ -239,7 +274,8 @@ func (a *API) previewMachineLogin(w http.ResponseWriter, r *http.Request) {
 		PreviewWrites: []string{}, PreviewExternalEffects: []string{},
 		ExecuteWrites: []string{
 			"append one plaintext-free auth.session.issued audit event",
-			"append and project one tenant-scoped secrets.session.started ledger event",
+			"append one tenant-scoped secrets.session.started event containing metadata and only the bearer hash",
+			"atomically project the session ledger row and scoped API-token verifier from that event",
 		},
 		ExecuteExternalEffects: externalEffects,
 		RecoverySteps: []string{
@@ -249,9 +285,10 @@ func (a *API) previewMachineLogin(w http.ResponseWriter, r *http.Request) {
 		},
 		VerificationSteps: []string{
 			"Confirm the response method, principal, scopes, and expiry match the reviewed method and session lifetime.",
-			"Confirm the new session ID appears in the tenant-scoped Issued sessions ledger, then revoke the synthetic session.",
+			"Use the one-time bearer against an endpoint allowed by its exact scopes; an ungranted endpoint must remain forbidden.",
+			"Confirm the session appears in the tenant-scoped Issued sessions ledger, revoke it, then confirm the bearer is rejected.",
 		},
 		CLIArgv:      []string{"trstctl", "secrets", "login", "-f", "machine-login.json"},
-		DataHandling: "Preview never receives a credential. Execution consumes credential bytes once, never echoes or logs them, and the console clears its password field after every attempt.",
+		DataHandling: "Preview never receives a credential. Execution consumes the presented credential once and never echoes or logs it. The new session bearer is returned once, retained only in the protected idempotency result, stored as a one-way hash, and cleared from the console when dismissed.",
 	})
 }

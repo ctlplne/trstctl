@@ -1932,8 +1932,18 @@ export const messages = {
   "secrets.login.verifyLabel": { defaultMessage: "Machine login verification", description: "Accessible label for F58 result." },
   "secrets.login.verified": { defaultMessage: "Session issued and recorded", description: "F58 successful result heading." },
   "secrets.login.verifiedHelp": {
-    defaultMessage: "The result is secret-free. Match it to the reviewed method, then revoke the synthetic session from Issued sessions.",
+    defaultMessage:
+      "Match the result to the reviewed method. The bearer below works only for these scopes and stops working when this session expires or is revoked.",
     description: "F58 result verification help.",
+  },
+  "secrets.login.tokenTitle": {
+    defaultMessage: "One-time machine session bearer",
+    description: "F58 one-time bearer reveal title.",
+  },
+  "secrets.login.tokenHelp": {
+    defaultMessage:
+      "Copy this bearer into the workload now. trstctl stores only its hash, so it cannot show the bearer again after you dismiss or leave this result.",
+    description: "F58 one-time bearer handling guidance.",
   },
   "secrets.login.startAgain": { defaultMessage: "Test another login", description: "F58 restart action." },
   "secrets.methods.description": {

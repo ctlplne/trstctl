@@ -132,7 +132,10 @@ func TestOIDCMethodLoginAndReject(t *testing.T) {
 		"iss": "https://idp", "aud": "trstctl", "sub": "svc-1",
 		"exp": time.Now().Add(time.Hour).Unix(), "scopes": []string{"read"},
 	})
-	m, _ := New(Config{TenantID: "t1", Methods: []Method{OIDCMethod{JWKS: jwks, Issuer: "https://idp", Audience: "trstctl"}}})
+	m, _ := New(Config{TenantID: "t1", Methods: []Method{OIDCMethod{
+		JWKS: jwks, Issuer: "https://idp", Audience: "trstctl",
+		Scopes: []string{"secrets:read"},
+	}}})
 	sess, err := m.Login(context.Background(), "oidc", []byte(tok))
 	if err != nil {
 		t.Fatalf("OIDC login: %v", err)
@@ -140,11 +143,51 @@ func TestOIDCMethodLoginAndReject(t *testing.T) {
 	if sess.Principal != "svc-1" {
 		t.Errorf("principal = %q", sess.Principal)
 	}
+	if len(sess.Scopes) != 1 || sess.Scopes[0] != "secrets:read" {
+		t.Fatalf("scopes = %v, want the configured least-privilege scope", sess.Scopes)
+	}
 	attacker, _ := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	defer attacker.Destroy()
 	forged, _ := crypto.SignJWT(attacker, "k1", map[string]any{"iss": "https://idp", "aud": "trstctl", "sub": "evil", "exp": time.Now().Add(time.Hour).Unix()})
 	if _, err := m.Login(context.Background(), "oidc", []byte(forged)); err == nil {
 		t.Error("forged OIDC token accepted")
+	}
+}
+
+func TestOIDCScopesAreExplicitAndCannotBeSelfGranted(t *testing.T) {
+	signer, _ := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	defer signer.Destroy()
+	jwk, _ := crypto.PublicJWK(signer.Public(), "k1")
+	jwks := crypto.JWKS{Keys: []crypto.JWK{jwk}}
+	tok, _ := crypto.SignJWT(signer, "k1", map[string]any{
+		"iss": "https://idp", "aud": "trstctl", "sub": "svc-1",
+		"exp": time.Now().Add(time.Hour).Unix(),
+		// This signed claim is still not authority unless the operator explicitly
+		// configures it as the scope source.
+		"scopes": []string{"*"}, "trstctl_permissions": []string{"secrets:read"},
+	})
+
+	static := OIDCMethod{
+		JWKS: jwks, Issuer: "https://idp", Audience: "trstctl",
+		Scopes: []string{"secrets:read"},
+	}
+	_, scopes, err := static.Authenticate(context.Background(), []byte(tok))
+	if err != nil {
+		t.Fatalf("static-scope OIDC login: %v", err)
+	}
+	if len(scopes) != 1 || scopes[0] != "secrets:read" {
+		t.Fatalf("static scopes = %v, want [secrets:read]; token claim must not widen authority", scopes)
+	}
+
+	dynamic := static
+	dynamic.Scopes = nil
+	dynamic.ScopesClaim = "trstctl_permissions"
+	_, scopes, err = dynamic.Authenticate(context.Background(), []byte(tok))
+	if err != nil {
+		t.Fatalf("claim-scoped OIDC login: %v", err)
+	}
+	if len(scopes) != 1 || scopes[0] != "secrets:read" {
+		t.Fatalf("claim scopes = %v, want explicitly configured trstctl_permissions", scopes)
 	}
 }
 

@@ -10517,6 +10517,8 @@ export interface components {
             principal: string;
             scopes: string[];
             session_id: string;
+            /** @description One-time opaque bearer for this scoped machine session. The server stores only its hash; copy it before dismissing the response. */
+            token: string;
         };
         MachineSession: {
             /** Format: date-time */

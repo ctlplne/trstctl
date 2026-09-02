@@ -71,9 +71,11 @@ today (see [Current limitations](../limitations.md) and
          issuer: https://kubernetes.default.svc
          audience: trstctl
          jwks_file: /etc/trstctl/k8s-sa-jwks.json
+         scopes: ["secrets:read"]
        - name: aws-iam
          tenant_id: 11111111-1111-1111-1111-111111111111
          allowed_accounts: ["123456789012"]
+         scopes: ["secrets:read"]
    ```
 
    ```sh
@@ -86,11 +88,18 @@ today (see [Current limitations](../limitations.md) and
    -> the `/api/v1/secrets/*` routes answer for your tenant; with the key file absent
    they fail closed.
 
+   Every machine-login method needs one explicit least-privilege permission source.
+   Use static `scopes` for provider-specific methods. OIDC and generic JWT may use
+   either static `scopes` or one trusted `scopes_claim`, but never both. trstctl
+   refuses to start with an empty or ambiguous grant.
+
    The console's Secrets → **Access** tab covers the same grant flow in the
    browser — token minting, auth-method administration, and the machine-login
    session ledger; the CLI equivalents are `trstctl-cli access tokens create`,
    `secrets auth-methods list|disable|enable`, `secrets sessions list|revoke`,
-   and `secrets login`.
+   and `secrets login`. A successful machine login returns a scoped `trst_…`
+   bearer once. Store it directly in the workload; the ledger retains only its
+   hash, and revoking that session makes the bearer stop working immediately.
 
 2. Store a secret. Each value is sealed under envelope encryption (a fresh per-secret
    data key wrapped by the master key), bound to your tenant and path, and held only in

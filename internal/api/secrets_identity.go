@@ -18,6 +18,7 @@ import (
 
 	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/auditsink"
+	apiauth "trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/authmethod"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
@@ -414,15 +415,19 @@ type machineLoginRequest struct {
 	PreviewFingerprint string          `json:"preview_fingerprint,omitempty"`
 }
 
-// machineLoginResponse is the scoped session the framework yields. It carries no
-// secret — the credential is never echoed.
+// machineLoginResponse is the usable scoped session the framework yields. Token
+// is returned exactly once, cached only by the protected idempotency result, and
+// never written to the event log or read model.
 type machineLoginResponse struct {
-	SessionID string    `json:"session_id"`
-	Principal string    `json:"principal"`
-	Method    string    `json:"method"`
-	Scopes    []string  `json:"scopes"`
-	ExpiresAt time.Time `json:"expires_at"`
+	SessionID string          `json:"session_id"`
+	Principal string          `json:"principal"`
+	Method    string          `json:"method"`
+	Scopes    []string        `json:"scopes"`
+	ExpiresAt time.Time       `json:"expires_at"`
+	Token     secretJSONBytes `json:"token"`
 }
+
+func (r *machineLoginResponse) wipeSecrets() { r.Token.wipe() }
 
 const machineLoginIdempotencyDomain = "trstctl.api.machine-login-idempotency.f58.v1"
 
@@ -555,19 +560,30 @@ func (a *API) machineLoginForTenant(w http.ResponseWriter, r *http.Request, tena
 			return 0, nil, managerErr
 		}
 		sess, loginErr := mgr.Login(ctx, method, []byte(req.Credential))
-		if loginErr != nil || sess.TenantID != resolvedTenantID {
+		if loginErr != nil || sess.TenantID != resolvedTenantID || len(sess.Scopes) == 0 {
 			// Never echo the credential or the verifier's failure detail.
 			return 0, nil, errStatus(http.StatusUnauthorized, "machine login failed")
 		}
-		// C-S3 (DA-02): the issued session becomes ledger state. When the ledger
-		// subsystem is configured, a session that cannot be recorded is not
-		// issued — evidence-first, matching the PAM precedent (AN-2).
-		if recordErr := a.recordMachineSession(ctx, resolvedTenantID, sess); recordErr != nil {
+		if scopeErr := a.validatePermissionScopes(sess.Scopes); scopeErr != nil {
+			// Configuration and signed claims are still untrusted input at this
+			// boundary. Unknown/blank permissions must not mint an inert or
+			// accidentally future-valid bearer, and the public response stays generic.
+			return 0, nil, errStatus(http.StatusUnauthorized, "machine login failed")
+		}
+		rawToken, tokenHash, tokenErr := apiauth.GenerateAPIToken()
+		if tokenErr != nil {
+			return 0, nil, tokenErr
+		}
+		// C-S3 (DA-02): one event atomically projects both the human-readable
+		// session ledger and the hashed API-token verifier. If either cannot be
+		// recorded, no bearer is returned.
+		if recordErr := a.recordMachineSession(ctx, resolvedTenantID, sess, tokenHash); recordErr != nil {
+			secret.Wipe(rawToken)
 			return 0, nil, recordErr
 		}
-		return http.StatusOK, machineLoginResponse{
+		return http.StatusOK, &machineLoginResponse{
 			SessionID: sess.ID, Principal: sess.Principal, Method: sess.Method,
-			Scopes: sess.Scopes, ExpiresAt: sess.ExpiresAt,
+			Scopes: sess.Scopes, ExpiresAt: sess.ExpiresAt, Token: secretJSONBytes(rawToken),
 		}, nil
 	})
 }
@@ -651,12 +667,15 @@ func machineAuthMethodProjection(m authmethod.Method, source string) machineAuth
 		info.Type = "token"
 		info.Audience = v.Audience
 		info.AllowUnexpiring = v.AllowUnexpiring
+		info.Scopes = append([]string(nil), v.DefaultScopes...)
 		info.ScopesByPrincipal = copyScopesByPrincipal(v.Scopes)
 	case authmethod.OIDCMethod:
 		info.Type = "oidc"
 		info.Issuer = v.Issuer
 		info.Audience = v.Audience
 		info.TenantClaim = v.TenantClaim
+		info.Scopes = append([]string(nil), v.Scopes...)
+		info.ScopesClaim = v.ScopesClaim
 		info.PrincipalPrefix = v.PrincipalPrefix
 		info.RequiredClaims = copyRequiredClaims(v.RequiredClaims)
 		info.JWKSConfigured = len(v.JWKS.Keys) > 0
@@ -765,20 +784,22 @@ func machineSessionLedgerDisabledProblem() *problem.Problem {
 // machineSessionLedgerReady reports whether the event-sourced ledger can be
 // served: it needs both the event log (append) and the store (projection).
 func (a *API) machineSessionLedgerReady() bool {
-	return a.secrets != nil && a.secrets.be.Store != nil && a.log != nil
+	return a.secrets != nil && a.store != nil && a.secrets.be.Store == a.store && a.log != nil
 }
 
-// recordMachineSession appends secrets.session.started and projects it (AN-2).
-// When the ledger subsystem is not configured (no event log or store), the
-// exchange behaves as before C-S3: the session is a scope receipt only, and
-// GET /secrets/sessions says so honestly instead of serving an empty ledger.
-func (a *API) recordMachineSession(ctx context.Context, tenantID string, sess authmethod.Session) error {
+// recordMachineSession appends secrets.session.started and atomically projects
+// the ledger plus the hash of its usable API bearer (AN-2/AN-8).
+func (a *API) recordMachineSession(ctx context.Context, tenantID string, sess authmethod.Session, tokenHash string) error {
 	if !a.machineSessionLedgerReady() {
-		return nil
+		return errors.New("api: machine session ledger and token verifier are unavailable")
+	}
+	if strings.TrimSpace(tokenHash) == "" {
+		return errors.New("api: machine session bearer hash is required")
 	}
 	payload, err := json.Marshal(projections.MachineSessionStarted{
 		ID: sess.ID, Principal: sess.Principal, Method: sess.Method,
 		Scopes: sess.Scopes, IssuedAt: sess.IssuedAt, ExpiresAt: sess.ExpiresAt,
+		TokenHash: tokenHash,
 	})
 	if err != nil {
 		return err
@@ -791,8 +812,7 @@ func (a *API) recordMachineSession(ctx context.Context, tenantID string, sess au
 }
 
 // listMachineSessions serves GET /api/v1/secrets/sessions (C-S3, DA-02): the
-// issued-session ledger, newest first. Sessions are advisory scope receipts —
-// the response never carries credential material.
+// issued-session ledger, newest first. It never returns bearer material.
 func (a *API) listMachineSessions(w http.ResponseWriter, r *http.Request) {
 	if a.secrets == nil {
 		a.writeProblem(w, secretsDisabledProblem())
@@ -830,10 +850,8 @@ func (a *API) listMachineSessions(w http.ResponseWriter, r *http.Request) {
 }
 
 // revokeMachineSession serves POST /api/v1/secrets/sessions/{id}/revoke
-// (C-S3): an idempotent, event-sourced ledger revocation. Machine sessions
-// are not consumed by later API calls, so this marks evidence state — the
-// enforcement half of revocation is the auth-method overlay (refuse new
-// logins) and API-token revocation.
+// (C-S3): an idempotent, event-sourced revocation of both the ledger row and
+// the linked API bearer verifier.
 //
 //trstctl:mutation
 func (a *API) revokeMachineSession(w http.ResponseWriter, r *http.Request) {
@@ -900,7 +918,7 @@ func (a *API) setMachineAuthMethodOverride(w http.ResponseWriter, r *http.Reques
 			return 0, nil, errStatus(http.StatusBadRequest, "method name is required")
 		}
 		known := map[string]bool{}
-		if len(a.secrets.be.AuthSecret) > 0 {
+		if len(a.secrets.be.AuthSecret) > 0 && a.secrets.be.AuthTokenTenantID == tenantID && len(a.secrets.be.AuthTokenScopes) > 0 {
 			known["token"] = true
 		}
 		if a.secrets.be.MachineAuthMethods != nil {
@@ -999,8 +1017,12 @@ func (s *secretsService) pkiProvider(tenantID string, caCertDER []byte, caSigner
 func (s *secretsService) authManager(ctx context.Context, tenantID string) (*authmethod.Manager, error) {
 	ttl := s.machineSessionTTL()
 	methods := make([]authmethod.Method, 0, 1)
-	if len(s.be.AuthSecret) > 0 {
-		methods = append(methods, authmethod.TokenMethod{Secret: s.be.AuthSecret, TenantID: tenantID})
+	configuredSomewhere := len(s.be.AuthSecret) > 0 || s.be.MachineAuthMethods != nil
+	if len(s.be.AuthSecret) > 0 && s.be.AuthTokenTenantID == tenantID && len(s.be.AuthTokenScopes) > 0 {
+		methods = append(methods, authmethod.TokenMethod{
+			Secret: s.be.AuthSecret, TenantID: tenantID,
+			DefaultScopes: append([]string(nil), s.be.AuthTokenScopes...),
+		})
 	}
 	if s.be.MachineAuthMethods != nil {
 		methods = append(methods, s.be.MachineAuthMethods(tenantID)...)
@@ -1024,7 +1046,12 @@ func (s *secretsService) authManager(ctx context.Context, tenantID string) (*aut
 		}
 	}
 	if len(methods) == 0 {
-		return nil, errMachineLoginNotConfigured
+		if !configuredSomewhere {
+			return nil, errMachineLoginNotConfigured
+		}
+		// A public login route must not reveal whether another tenant owns the
+		// configured method or whether this tenant disabled it. An empty manager
+		// turns either case into the same generic 401 as a bad credential.
 	}
 	return authmethod.New(authmethod.Config{
 		TenantID: tenantID,

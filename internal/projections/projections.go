@@ -2936,8 +2936,8 @@ type PAMSessionExpired struct {
 }
 
 // MachineSessionStarted is the payload of secrets.session.started (C-S3,
-// DA-02). It carries session metadata only — never the exchanged credential
-// or any token material (AN-8).
+// DA-02). It carries session metadata plus only the one-way hash of the issued
+// API bearer. The raw credential never enters the event log (AN-8).
 type MachineSessionStarted struct {
 	ID        string    `json:"id"`
 	Principal string    `json:"principal"`
@@ -2945,6 +2945,7 @@ type MachineSessionStarted struct {
 	Scopes    []string  `json:"scopes,omitempty"`
 	IssuedAt  time.Time `json:"issued_at"`
 	ExpiresAt time.Time `json:"expires_at"`
+	TokenHash string    `json:"token_hash,omitempty"`
 }
 
 // MachineSessionRevoked is the payload of secrets.session.revoked.
@@ -5524,7 +5525,10 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		}); err != nil {
 			return err
 		}
-		return p.store.ApplyAPITokensRevokedForSubjectTx(ctx, tx, e.TenantID, pl.Subject, pl.OffboardedBy, "member offboarded: "+pl.Reason, e.Time)
+		if err := p.store.ApplyAPITokensRevokedForSubjectTx(ctx, tx, e.TenantID, pl.Subject, pl.OffboardedBy, "member offboarded: "+pl.Reason, e.Time); err != nil {
+			return err
+		}
+		return p.store.ApplyMachineSessionsRevokedForSubjectTx(ctx, tx, e.TenantID, pl.Subject, pl.OffboardedBy, e.Time)
 	case EventAPITokenCreated:
 		var pl APITokenCreated
 		if err := decode(e, &pl); err != nil {
@@ -5545,7 +5549,12 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		if pl.ID == "" {
 			return fmt.Errorf("projections: %s requires id", e.Type)
 		}
-		return p.store.ApplyAPITokenRevokedTx(ctx, tx, e.TenantID, pl.ID, pl.RevokedBy, pl.Reason, e.Time)
+		if err := p.store.ApplyAPITokenRevokedTx(ctx, tx, e.TenantID, pl.ID, pl.RevokedBy, pl.Reason, e.Time); err != nil {
+			return err
+		}
+		// Machine-session bearers reuse the session UUID as their API-token ID.
+		// For ordinary API tokens this tenant-scoped update is simply a no-op.
+		return p.store.ApplyMachineSessionRevokedTx(ctx, tx, e.TenantID, pl.ID, pl.RevokedBy, e.Time)
 	case EventPAMSessionStarted:
 		var pl PAMSessionStarted
 		if err := decode(e, &pl); err != nil {
@@ -5590,10 +5599,23 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		if issuedAt.IsZero() {
 			issuedAt = e.Time
 		}
-		return p.store.ApplyMachineSessionStartedTx(ctx, tx, store.MachineSession{
+		if err := p.store.ApplyMachineSessionStartedTx(ctx, tx, store.MachineSession{
 			TenantID: e.TenantID, ID: pl.ID, Principal: pl.Principal, Method: pl.Method,
 			Scopes: pl.Scopes, Status: store.MachineSessionStatusActive,
 			IssuedAt: issuedAt, ExpiresAt: pl.ExpiresAt,
+		}); err != nil {
+			return err
+		}
+		// Legacy v1 events have no token_hash and remain replayable as ledger-only
+		// history. Every newly served login includes it and gets a usable bearer.
+		if pl.TokenHash == "" {
+			return nil
+		}
+		expiresAt := pl.ExpiresAt
+		return p.store.ApplyAPITokenCreatedTx(ctx, tx, store.APITokenRecord{
+			ID: pl.ID, TenantID: e.TenantID, TokenHash: pl.TokenHash,
+			Subject: pl.Principal, Scopes: pl.Scopes, ExpiresAt: &expiresAt,
+			CreatedAt: issuedAt,
 		})
 	case EventMachineSessionRevoked:
 		var pl MachineSessionRevoked
@@ -5607,7 +5629,10 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		if revokedAt.IsZero() {
 			revokedAt = e.Time
 		}
-		return p.store.ApplyMachineSessionRevokedTx(ctx, tx, e.TenantID, pl.ID, pl.RevokedBy, revokedAt)
+		if err := p.store.ApplyMachineSessionRevokedTx(ctx, tx, e.TenantID, pl.ID, pl.RevokedBy, revokedAt); err != nil {
+			return err
+		}
+		return p.store.ApplyAPITokenRevokedTx(ctx, tx, e.TenantID, pl.ID, pl.RevokedBy, "machine session revoked", revokedAt)
 	case EventMachineAuthMethodDisabled, EventMachineAuthMethodEnabled:
 		var pl MachineAuthMethodOverride
 		if err := decode(e, &pl); err != nil {
