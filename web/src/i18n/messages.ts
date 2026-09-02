@@ -253,6 +253,15 @@ export const messages = {
       "You can still use the ready parts. Open the details for the exact missing permission, dependency, or build attachment. The server re-checks every change before it happens.",
     description: "Plain-language route-level remedy and authority boundary.",
   },
+  "capabilities.route.usableTitle": {
+    defaultMessage: "{usable} of {total} capabilities on this page have ready actions",
+    description: "Route-level summary when limited capability rows still provide one or more authorized actions.",
+  },
+  "capabilities.route.usableBody": {
+    defaultMessage:
+      "Use the ready actions now. Open the limitation to see the exact operation that is unavailable or needs permission. The server re-checks every action.",
+    description: "Plain-language explanation that a limited capability remains useful while named actions stay blocked.",
+  },
   "capabilities.route.details": {
     defaultMessage: "Review {count} limitation(s)",
     description: "Disclosure label for exact limited capability rows.",

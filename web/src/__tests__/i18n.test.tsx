@@ -1411,8 +1411,12 @@ describe("i18n boundary", () => {
       // stale-version refusal, value-free verification, and snippet copy recovery.
       // Nine obsolete strings from the invalid old snippet panel were removed.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "16d621c74518116c41e5732ca123ca1e640c43dc04a35740cf0de87897b38cbb",
-      "de-DE": "4e2d51b370c9cdcbe2024f93896c563880990a2db7cae1eabddcded21a78117a",
+      // F64 live-UX re-pin: the route summary now counts capabilities with
+      // usable authorized actions instead of saying zero are ready because a
+      // separately named operation is unavailable. Machine-authored es/de —
+      // FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "0928ff41784a24145835ab15ad060149543ba36931e2673768881976d231d01c",
+      "de-DE": "8fd08dc6e872951eae8f9ea8ef63ab7e92bcacff0232477df3c871684862a940",
     });
   });
 

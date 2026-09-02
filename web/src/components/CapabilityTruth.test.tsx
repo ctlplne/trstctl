@@ -67,11 +67,11 @@ const runtime: CapabilityView = {
   ],
 };
 
-function renderNotice(view: CapabilityView | null, options?: { error?: boolean; loading?: boolean }) {
+function renderNotice(view: CapabilityView | null, options?: { error?: boolean; loading?: boolean; path?: string }) {
   return render(
     <IntlProvider initialLocale="en-US" initialTimeZone="UTC">
       <CapabilityFixtureProvider view={view} error={options?.error} loading={options?.loading}>
-        <MemoryRouter initialEntries={["/incidents"]}>
+        <MemoryRouter initialEntries={[options?.path ?? "/incidents"]}>
           <CapabilityRouteNotice />
         </MemoryRouter>
       </CapabilityFixtureProvider>
@@ -83,10 +83,40 @@ describe("capability truth UI", () => {
   it("shows exact runtime limits without blocking the ready part of a route", async () => {
     const user = userEvent.setup();
     renderNotice(runtime);
-    expect(screen.getByRole("heading", { name: "1 of 3 capabilities on this page are fully ready" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "2 of 3 capabilities on this page have ready actions" })).toBeInTheDocument();
     await user.click(screen.getByText("Review 2 limitation(s)"));
     expect(screen.getByText("No response connector is configured.")).toBeInTheDocument();
     expect(screen.getByText("Fleet orchestration is not configured.")).toBeInTheDocument();
+  });
+
+  it("describes a partly available capability by its usable actions instead of calling it zero ready", async () => {
+    const user = userEvent.setup();
+    const developerAccess: CapabilityView = {
+      ...runtime,
+      items: [
+        item({
+          capability_id: "F64",
+          name: "Developer secret access",
+          console_route: "/secrets/developer",
+          runtime_state: "partially_available",
+          authorization_state: "full",
+          stages: [{ name: "execute", completion: "complete" }],
+          actions: {
+            allowed: ["previewSecretAccess"],
+            scoped: [],
+            denied: [],
+            unavailable: [{ operation_id: "importSecrets", code: "not_implemented", detail: "Atomic bulk import is not implemented." }],
+          },
+        }),
+      ],
+    };
+
+    renderNotice(developerAccess, { path: "/secrets/developer" });
+    expect(screen.getByRole("heading", { name: "1 of 1 capabilities on this page have ready actions" })).toBeInTheDocument();
+    expect(screen.getByText(/Use the ready actions now/i)).toBeInTheDocument();
+    expect(screen.queryByText(/0 of 1 capabilities/i)).not.toBeInTheDocument();
+    await user.click(screen.getByText("Review 1 limitation(s)"));
+    expect(screen.getByText("Atomic bulk import is not implemented.")).toBeInTheDocument();
   });
 
   it("does not expose a raw read error while explaining the fail-closed boundary", () => {

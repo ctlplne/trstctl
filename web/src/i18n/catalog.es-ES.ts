@@ -7827,6 +7827,9 @@ const esESCatalog = {
   "capabilities.route.title": "{ready} de {total} capacidades de esta página están totalmente listas",
   "capabilities.route.body":
     "Puede seguir usando las partes listas. Abra los detalles para ver el permiso, la dependencia o la conexión de compilación que falta. El servidor vuelve a comprobar cada cambio antes de aplicarlo.",
+  "capabilities.route.usableTitle": "{usable} de {total} capacidades de esta página tienen acciones listas",
+  "capabilities.route.usableBody":
+    "Use ahora las acciones listas. Abra la limitación para ver la operación exacta que no está disponible o que necesita permiso. El servidor vuelve a comprobar cada acción.",
   "capabilities.route.details": "Revisar {count} limitación(es)",
   "capabilities.route.detailsLabel": "Limitaciones de capacidades en esta página",
   "capabilities.tool.ready": "Este servidor indica que las {count} capacidades de esta herramienta están listas.",

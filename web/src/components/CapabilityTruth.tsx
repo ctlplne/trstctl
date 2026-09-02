@@ -131,6 +131,8 @@ export function CapabilityRouteNotice() {
   const summary = summarizeCapabilities(view, featureIds);
   if (summary.state === "ready") return null;
   const affected = summary.items.filter((item) => capabilitySurfaceState(item) !== "ready");
+  const usable = summary.items.filter((item) => item.actions.allowed.length + item.actions.scoped.length > 0).length;
+  const hasUsableActions = summary.state === "limited" && usable > 0;
   const Icon = summary.state === "permission_blocked" ? CircleSlash2 : AlertTriangle;
   return (
     <section
@@ -145,9 +147,13 @@ export function CapabilityRouteNotice() {
         <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
           <h2 id="route-capability-heading" className="text-sm font-semibold">
-            {t("capabilities.route.title", { ready: summary.counts.ready, total: summary.total })}
+            {hasUsableActions
+              ? t("capabilities.route.usableTitle", { usable, total: summary.total })
+              : t("capabilities.route.title", { ready: summary.counts.ready, total: summary.total })}
           </h2>
-          <p className="mt-0.5 max-w-4xl text-caption text-muted-foreground">{t("capabilities.route.body")}</p>
+          <p className="mt-0.5 max-w-4xl text-caption text-muted-foreground">
+            {hasUsableActions ? t("capabilities.route.usableBody") : t("capabilities.route.body")}
+          </p>
           <details className="mt-2 text-caption">
             <summary className="cursor-pointer font-medium text-foreground">
               {t("capabilities.route.details", { count: affected.length + summary.missingIds.length })}

@@ -7888,6 +7888,9 @@ const deDECatalog = {
   "capabilities.route.title": "{ready} von {total} Funktionen auf dieser Seite sind vollständig bereit",
   "capabilities.route.body":
     "Die bereiten Teile können Sie weiter verwenden. Öffnen Sie die Details für die genau fehlende Berechtigung, Abhängigkeit oder Build-Einbindung. Der Server prüft jede Änderung erneut, bevor sie ausgeführt wird.",
+  "capabilities.route.usableTitle": "{usable} von {total} Funktionen auf dieser Seite haben einsatzbereite Aktionen",
+  "capabilities.route.usableBody":
+    "Verwenden Sie die einsatzbereiten Aktionen jetzt. Öffnen Sie die Einschränkung, um genau zu sehen, welche Aktion nicht verfügbar ist oder eine Berechtigung benötigt. Der Server prüft jede Aktion erneut.",
   "capabilities.route.details": "{count} Einschränkung(en) prüfen",
   "capabilities.route.detailsLabel": "Funktionseinschränkungen auf dieser Seite",
   "capabilities.tool.ready": "Dieser Server meldet alle {count} Funktionen dieses Werkzeugs als bereit.",
