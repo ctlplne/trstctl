@@ -211,7 +211,7 @@ func TestCapabilitiesViewIsAuthenticatedSanitizedAndAuthorizationAware(t *testin
 	if f63.RuntimeState != "unavailable" || len(f63.Actions.Allowed) != 0 {
 		t.Fatalf("operator F63 runtime=%q allowed=%v, want unavailable/none without the native secret store", f63.RuntimeState, f63.Actions.Allowed)
 	}
-	for _, operationID := range []string{"createSecret", "listSecrets", "getSecret", "getSecretVersion", "recoverSecretAt", "rotateSecret", "deleteSecret"} {
+	for _, operationID := range []string{"previewSecretCreate", "createSecret", "listSecrets", "getSecret", "getSecretVersion", "recoverSecretAt", "rotateSecret", "deleteSecret"} {
 		action := findUnavailableCapabilityAction(t, f63, operationID)
 		if action.Code != "dependency_not_configured" || !strings.Contains(action.Detail, "native secret store is turned off") {
 			t.Fatalf("F63 %s unavailable=%+v, want exact native-store dependency reason", operationID, action)
@@ -298,7 +298,7 @@ func TestCapabilitiesViewPromotesNativeSecretStoreOnlyWhenConfigured(t *testing.
 	if f63.RuntimeState != "available" || len(f63.Actions.Unavailable) != 0 {
 		t.Fatalf("configured F63 runtime=%q unavailable=%+v, want available/none", f63.RuntimeState, f63.Actions.Unavailable)
 	}
-	for _, operationID := range []string{"createSecret", "listSecrets", "getSecret", "getSecretVersion", "recoverSecretAt", "rotateSecret", "deleteSecret"} {
+	for _, operationID := range []string{"previewSecretCreate", "createSecret", "listSecrets", "getSecret", "getSecretVersion", "recoverSecretAt", "rotateSecret", "deleteSecret"} {
 		if !containsCapabilityString(f63.Actions.Allowed, operationID) {
 			t.Errorf("configured F63 allowed=%v, want %s", f63.Actions.Allowed, operationID)
 		}

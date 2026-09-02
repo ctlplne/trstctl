@@ -82,7 +82,7 @@ func (a *API) runtimeRouteAvailability(r route) (bool, string) {
 		return runtimeDependency(a.ctSubmission != nil,
 			"Certificate Transparency submission is not configured in this deployment.")
 
-	case "createSecret", "listSecrets", "getSecret", "getSecretVersion", "recoverSecretAt", "rotateSecret", "deleteSecret",
+	case "previewSecretCreate", "createSecret", "listSecrets", "getSecret", "getSecretVersion", "recoverSecretAt", "rotateSecret", "deleteSecret",
 		"rotateStaticSecret", "createSecretRotationSchedule", "listSecretRotationSchedules", "runDueSecretRotationSchedules",
 		"syncSecret", "receiveSecretRepositoryWebhook", "ingestThirdPartySecretScan", "scanSecrets", "approveSecretChange",
 		"issueDynamicSecretLease", "getDynamicSecretLease", "renewDynamicSecretLease", "revokeDynamicSecretLease",
