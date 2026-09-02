@@ -21747,6 +21747,12 @@
           "custody_mode": {
             "type": "string"
           },
+          "dns_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "effect_free": {
             "type": "boolean"
           },
@@ -21833,6 +21839,7 @@
           "effect_free",
           "custody_mode",
           "common_name",
+          "dns_names",
           "requested_ttl_seconds",
           "effective_ttl_seconds",
           "profile",

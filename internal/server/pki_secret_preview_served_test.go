@@ -73,6 +73,7 @@ func TestServedPKISecretPreviewIsExactEffectFreeAndBindsExecution(t *testing.T) 
 		EffectFree             bool     `json:"effect_free"`
 		CustodyMode            string   `json:"custody_mode"`
 		CommonName             string   `json:"common_name"`
+		DNSNames               []string `json:"dns_names"`
 		RequestedTTLSeconds    int      `json:"requested_ttl_seconds"`
 		EffectiveTTLSeconds    int      `json:"effective_ttl_seconds"`
 		Profile                string   `json:"profile"`
@@ -104,6 +105,7 @@ func TestServedPKISecretPreviewIsExactEffectFreeAndBindsExecution(t *testing.T) 
 	}
 	if plan.Capability != "F67" || plan.Operation != "issue_certificate" || !plan.Ready || !plan.EffectFree ||
 		plan.CustodyMode != "requester_csr" || plan.CommonName != "preview-pki.example.test" ||
+		strings.Join(plan.DNSNames, ",") != "preview-pki.example.test" ||
 		plan.RequestedTTLSeconds != 900 || plan.EffectiveTTLSeconds != 900 || plan.Profile != "secrets-api" ||
 		!strings.HasPrefix(plan.CACertificateSHA256, "sha256:") || !strings.HasPrefix(plan.CSRSHA256, "sha256:") ||
 		plan.SubjectKeyAlgorithm != "ECDSA" || plan.SubjectKeyBits != 256 || plan.RequiredPermission != "secrets:write" ||

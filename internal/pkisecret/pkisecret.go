@@ -45,6 +45,7 @@ type Profile struct {
 type IssuancePlan struct {
 	Profile      string
 	CommonName   string
+	DNSNames     []string
 	EffectiveTTL time.Duration
 	KeyAlgorithm string
 	KeyBits      int
@@ -176,7 +177,7 @@ func (p *PKIProvider) PlanGenerated(commonName string, ttl time.Duration) (Issua
 		return IssuancePlan{}, err
 	}
 	return IssuancePlan{
-		Profile: p.profile.Name, CommonName: commonName, EffectiveTTL: p.constrainTTL(ttl),
+		Profile: p.profile.Name, CommonName: commonName, DNSNames: []string{}, EffectiveTTL: p.constrainTTL(ttl),
 		KeyAlgorithm: "ECDSA", KeyBits: 256,
 	}, nil
 }
@@ -233,7 +234,7 @@ func (p *PKIProvider) PlanFromCSR(csrDER []byte, ttl time.Duration) (IssuancePla
 		return IssuancePlan{}, fmt.Errorf("pkisecret: subject key algorithm %q is not supported", info.KeyAlgorithm)
 	}
 	return IssuancePlan{
-		Profile: p.profile.Name, CommonName: info.CommonName, EffectiveTTL: p.constrainTTL(ttl),
+		Profile: p.profile.Name, CommonName: info.CommonName, DNSNames: append([]string(nil), info.DNSNames...), EffectiveTTL: p.constrainTTL(ttl),
 		KeyAlgorithm: info.KeyAlgorithm, KeyBits: info.KeyBits,
 	}, nil
 }

@@ -7421,6 +7421,7 @@ PKISecretPreview = TypedDict(
         'common_name': str,
         'csr_sha256': str,
         'custody_mode': str,
+        'dns_names': list[str],
         'effect_free': bool,
         'effective_ttl_seconds': int,
         'execute_external_effects': list[str],

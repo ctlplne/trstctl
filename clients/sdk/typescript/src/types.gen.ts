@@ -11776,6 +11776,7 @@ export interface components {
             common_name: string;
             csr_sha256?: string;
             custody_mode: string;
+            dns_names: string[];
             effect_free: boolean;
             effective_ttl_seconds: number;
             execute_external_effects: string[];

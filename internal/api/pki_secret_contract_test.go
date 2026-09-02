@@ -37,7 +37,7 @@ func TestPKISecretContractsExposeMutuallyExclusiveCustodyModes(t *testing.T) {
 	}
 	preview := schemas["PKISecretPreview"].(map[string]any)
 	previewRequired := preview["required"]
-	for _, field := range []string{"capability", "operation", "ready", "effect_free", "custody_mode", "prerequisites", "request_fingerprint", "preview_writes", "preview_external_effects"} {
+	for _, field := range []string{"capability", "operation", "ready", "effect_free", "custody_mode", "common_name", "dns_names", "prerequisites", "request_fingerprint", "preview_writes", "preview_external_effects"} {
 		if !pkiContractContains(previewRequired, field) {
 			t.Fatalf("PKI preview schema does not require %s: %#v", field, previewRequired)
 		}

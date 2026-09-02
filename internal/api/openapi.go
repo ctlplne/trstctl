@@ -5622,7 +5622,7 @@ func componentSchemas() map[string]*Schema {
 	}, "id", "ready", "detail")
 	pkiSecretPreview := object(map[string]*Schema{
 		"capability": str(), "operation": str(), "ready": {Type: "boolean"}, "effect_free": {Type: "boolean"},
-		"custody_mode": str(), "common_name": str(), "requested_ttl_seconds": {Type: "integer"},
+		"custody_mode": str(), "common_name": str(), "dns_names": {Type: "array", Items: str()}, "requested_ttl_seconds": {Type: "integer"},
 		"effective_ttl_seconds": {Type: "integer"}, "profile": str(), "ca_certificate_sha256": str(),
 		"csr_sha256": str(), "subject_key_algorithm": str(), "subject_key_bits": {Type: "integer"},
 		"required_permission": str(), "request_fingerprint": str(), "vault_path": str(),
@@ -5632,7 +5632,7 @@ func componentSchemas() map[string]*Schema {
 		"execute_external_effects": {Type: "array", Items: str()}, "recovery_steps": {Type: "array", Items: str()},
 		"verification_steps": {Type: "array", Items: str()}, "cli_argv": {Type: "array", Items: str()},
 		"secret_data_handling": str(),
-	}, "capability", "operation", "ready", "effect_free", "custody_mode", "common_name", "requested_ttl_seconds",
+	}, "capability", "operation", "ready", "effect_free", "custody_mode", "common_name", "dns_names", "requested_ttl_seconds",
 		"effective_ttl_seconds", "profile", "subject_key_algorithm", "subject_key_bits", "required_permission",
 		"request_fingerprint", "vault_path", "prerequisites", "blockers", "preview_writes", "preview_external_effects",
 		"execute_writes", "execute_external_effects", "recovery_steps", "verification_steps", "cli_argv", "secret_data_handling")

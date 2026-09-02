@@ -3426,6 +3426,8 @@ export const messages = {
   "secrets.pki.ready": { defaultMessage: "Ready", description: "F67 ready status." },
   "secrets.pki.blocked": { defaultMessage: "Blocked", description: "F67 blocked status." },
   "secrets.pki.subject": { defaultMessage: "Certificate name", description: "F67 preview subject label." },
+  "secrets.pki.dnsNames": { defaultMessage: "DNS names on the certificate", description: "F67 preview DNS SAN list label." },
+  "secrets.pki.none": { defaultMessage: "None", description: "F67 preview empty-list value." },
   "secrets.pki.lifetime": { defaultMessage: "Effective lifetime", description: "F67 preview lifetime label." },
   "secrets.pki.key": { defaultMessage: "Public key", description: "F67 preview public-key label." },
   "secrets.pki.profile": { defaultMessage: "Certificate rule", description: "F67 preview profile label." },

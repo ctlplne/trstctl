@@ -1330,6 +1330,8 @@ const deDECatalog = {
   "secrets.pki.ready": "Bereit",
   "secrets.pki.blocked": "Blockiert",
   "secrets.pki.subject": "Zertifikatsname",
+  "secrets.pki.dnsNames": "DNS-Namen im Zertifikat",
+  "secrets.pki.none": "Keine",
   "secrets.pki.lifetime": "Wirksame Laufzeit",
   "secrets.pki.key": "Öffentlicher Schlüssel",
   "secrets.pki.profile": "Zertifikatsregel",

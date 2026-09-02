@@ -330,6 +330,7 @@ function primeSecretsMocks() {
     effect_free: true,
     custody_mode: "requester_csr",
     common_name: "svc.internal",
+    dns_names: ["svc.internal"],
     requested_ttl_seconds: 900,
     effective_ttl_seconds: 900,
     profile: "secrets-api",
@@ -1702,6 +1703,7 @@ describe("secrets surface", () => {
       effect_free: true,
       custody_mode: "requester_csr",
       common_name: "svc.internal",
+      dns_names: ["svc.internal", "api.svc.internal"],
       requested_ttl_seconds: 600,
       effective_ttl_seconds: 600,
       profile: "secrets-api",
@@ -1753,6 +1755,7 @@ describe("secrets surface", () => {
     );
     expect(await pkiForm.findByText("Ready to issue")).toBeInTheDocument();
     expect(pkiForm.getByText("Issuing CA connected.")).toBeInTheDocument();
+    expect(pkiForm.getByText("svc.internal, api.svc.internal")).toBeInTheDocument();
     expect(apiMock.issuePKISecret).not.toHaveBeenCalled();
     await user.click(pkiForm.getByRole("button", { name: /issue reviewed certificate/i }));
 
@@ -1778,6 +1781,7 @@ describe("secrets surface", () => {
       effect_free: true,
       custody_mode: "deprecated_server_keygen",
       common_name: "legacy.internal",
+      dns_names: [],
       requested_ttl_seconds: 900,
       effective_ttl_seconds: 900,
       profile: "secrets-api",

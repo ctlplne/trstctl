@@ -28,6 +28,7 @@ type pkiSecretPreviewResponse struct {
 	EffectFree             bool                    `json:"effect_free"`
 	CustodyMode            string                  `json:"custody_mode"`
 	CommonName             string                  `json:"common_name"`
+	DNSNames               []string                `json:"dns_names"`
 	RequestedTTLSeconds    int                     `json:"requested_ttl_seconds"`
 	EffectiveTTLSeconds    int64                   `json:"effective_ttl_seconds"`
 	Profile                string                  `json:"profile"`
@@ -81,22 +82,24 @@ func (a *API) pkiSecretPreviewFingerprint(
 		return "", errors.New("api: server-keyed PKI-secret preview evidence is unavailable")
 	}
 	material, err := json.Marshal(struct {
-		Domain              string `json:"domain"`
-		TenantID            string `json:"tenant_id"`
-		Principal           string `json:"principal"`
-		Operation           string `json:"operation"`
-		CustodyMode         string `json:"custody_mode"`
-		CommonName          string `json:"common_name"`
-		RequestedTTLSeconds int    `json:"requested_ttl_seconds"`
-		EffectiveTTLSeconds int64  `json:"effective_ttl_seconds"`
-		Profile             string `json:"profile"`
-		CACertificateSHA256 string `json:"ca_certificate_sha256"`
-		CSRSHA256           string `json:"csr_sha256,omitempty"`
-		SubjectKeyAlgorithm string `json:"subject_key_algorithm"`
-		SubjectKeyBits      int    `json:"subject_key_bits"`
+		Domain              string   `json:"domain"`
+		TenantID            string   `json:"tenant_id"`
+		Principal           string   `json:"principal"`
+		Operation           string   `json:"operation"`
+		CustodyMode         string   `json:"custody_mode"`
+		CommonName          string   `json:"common_name"`
+		DNSNames            []string `json:"dns_names"`
+		RequestedTTLSeconds int      `json:"requested_ttl_seconds"`
+		EffectiveTTLSeconds int64    `json:"effective_ttl_seconds"`
+		Profile             string   `json:"profile"`
+		CACertificateSHA256 string   `json:"ca_certificate_sha256"`
+		CSRSHA256           string   `json:"csr_sha256,omitempty"`
+		SubjectKeyAlgorithm string   `json:"subject_key_algorithm"`
+		SubjectKeyBits      int      `json:"subject_key_bits"`
 	}{
 		Domain: "trstctl.api.pki-secret-preview.f67.v1", TenantID: tenantID, Principal: principal,
 		Operation: "issue_certificate", CustodyMode: pkiSecretCustodyMode(req), CommonName: plan.CommonName,
+		DNSNames:            plan.DNSNames,
 		RequestedTTLSeconds: req.TTLSeconds, EffectiveTTLSeconds: int64(plan.EffectiveTTL.Seconds()), Profile: plan.Profile,
 		CACertificateSHA256: crypto.SHA256Hex(caCertDER), CSRSHA256: crypto.SHA256Hex(csrDER),
 		SubjectKeyAlgorithm: plan.KeyAlgorithm, SubjectKeyBits: plan.KeyBits,
@@ -202,7 +205,7 @@ func (a *API) previewPKISecret(w http.ResponseWriter, r *http.Request) {
 	requestFile := "pki-request.json"
 	a.writeJSON(w, http.StatusOK, pkiSecretPreviewResponse{
 		Capability: "F67", Operation: "issue_certificate", Ready: len(blockers) == 0, EffectFree: true,
-		CustodyMode: pkiSecretCustodyMode(req), CommonName: plan.CommonName,
+		CustodyMode: pkiSecretCustodyMode(req), CommonName: plan.CommonName, DNSNames: plan.DNSNames,
 		RequestedTTLSeconds: req.TTLSeconds, EffectiveTTLSeconds: int64(plan.EffectiveTTL.Seconds()), Profile: plan.Profile,
 		CACertificateSHA256: caDigest, CSRSHA256: csrDigest, SubjectKeyAlgorithm: plan.KeyAlgorithm, SubjectKeyBits: plan.KeyBits,
 		RequiredPermission: "secrets:write", RequestFingerprint: fingerprint, VaultPath: pkiSecretVaultPath(req),

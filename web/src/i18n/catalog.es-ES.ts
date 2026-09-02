@@ -1307,6 +1307,8 @@ const esESCatalog = {
   "secrets.pki.ready": "Listo",
   "secrets.pki.blocked": "Bloqueado",
   "secrets.pki.subject": "Nombre del certificado",
+  "secrets.pki.dnsNames": "Nombres DNS del certificado",
+  "secrets.pki.none": "Ninguno",
   "secrets.pki.lifetime": "Vigencia efectiva",
   "secrets.pki.key": "Clave pública",
   "secrets.pki.profile": "Regla del certificado",

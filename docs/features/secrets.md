@@ -232,8 +232,9 @@ enqueue work, or contact anything. It explains, in plain language:
 
 - whether the secrets API, issuing CA, selected custody input, revocation tracking,
   and—only for the deprecated mode—durable deprecation evidence are ready;
-- the effective lifetime after the `secrets-api` profile cap, public-key algorithm
-  and size, issuing-CA and CSR SHA-256 fingerprints, and matching Vault/OpenBao path;
+- the exact common name and every DNS SAN, the effective lifetime after the
+  `secrets-api` profile cap, public-key algorithm and size, issuing-CA and CSR
+  SHA-256 fingerprints, and matching Vault/OpenBao path;
 - exactly what issuance writes and calls, how to revoke/recover, how to verify, and
   the equivalent `trstctl-cli secrets pki` invocation.
 
