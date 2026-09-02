@@ -635,6 +635,8 @@ public final class OpenApiSchemas {
       "ScaleSignerPosture",
       "ScaleTenantIsolation",
       "ScaleUnitEconomics",
+      "SecretAccessPreview",
+      "SecretAccessPreviewRequest",
       "SecretApproval",
       "SecretApprovalRequest",
       "SecretCreateRequest",

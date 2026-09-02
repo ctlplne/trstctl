@@ -26341,6 +26341,187 @@
         ],
         "type": "object"
       },
+      "SecretAccessPreview": {
+        "properties": {
+          "api_request": {
+            "properties": {
+              "method": {
+                "enum": [
+                  "GET"
+                ],
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "method",
+              "path"
+            ],
+            "type": "object"
+          },
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "bulk_import": {
+            "properties": {
+              "available": {
+                "type": "boolean"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "safe_path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "available",
+              "reason",
+              "safe_path"
+            ],
+            "type": "object"
+          },
+          "capability": {
+            "enum": [
+              "F64"
+            ],
+            "type": "string"
+          },
+          "cli_argv": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "env_var": {
+            "type": "string"
+          },
+          "execute_data_flow": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "execute_reads": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "operation": {
+            "enum": [
+              "read_for_process"
+            ],
+            "type": "string"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_reads": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "recovery_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "request_fingerprint": {
+            "type": "string"
+          },
+          "required_permission": {
+            "type": "string"
+          },
+          "resolve_references": {
+            "type": "boolean"
+          },
+          "secret_data_handling": {
+            "type": "string"
+          },
+          "typescript": {
+            "type": "string"
+          },
+          "verification_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "capability",
+          "operation",
+          "ready",
+          "effect_free",
+          "name",
+          "env_var",
+          "resolve_references",
+          "required_permission",
+          "request_fingerprint",
+          "blockers",
+          "preview_reads",
+          "preview_writes",
+          "preview_external_effects",
+          "execute_reads",
+          "execute_data_flow",
+          "recovery_steps",
+          "verification_steps",
+          "cli_argv",
+          "api_request",
+          "typescript",
+          "bulk_import",
+          "secret_data_handling"
+        ],
+        "type": "object"
+      },
+      "SecretAccessPreviewRequest": {
+        "properties": {
+          "env_var": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "resolve": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "env_var",
+          "resolve"
+        ],
+        "type": "object"
+      },
       "SecretApproval": {
         "properties": {
           "action": {
@@ -50918,6 +51099,63 @@
         ],
         "summary": "High-volume orchestration posture for 100k-1M+ credentials",
         "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/secrets/access/preview": {
+      "post": {
+        "operationId": "previewSecretAccess",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretAccessPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretAccessPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Preview an exact effect-free developer secret access plan",
+        "x-trstctl-permission": "secrets:read"
       }
     },
     "/api/v1/secrets/auth-methods": {

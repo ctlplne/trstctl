@@ -8994,6 +8994,46 @@ ScaleUnitEconomics = TypedDict(
     total=False,
 )
 
+SecretAccessPreview = TypedDict(
+    'SecretAccessPreview',
+    {
+        'api_request': dict[str, Any],
+        'blockers': list[str],
+        'bulk_import': dict[str, Any],
+        'capability': str,
+        'cli_argv': list[str],
+        'effect_free': bool,
+        'env_var': str,
+        'execute_data_flow': list[str],
+        'execute_reads': list[str],
+        'name': str,
+        'operation': str,
+        'preview_external_effects': list[str],
+        'preview_reads': list[str],
+        'preview_writes': list[str],
+        'ready': bool,
+        'recovery_steps': list[str],
+        'request_fingerprint': str,
+        'required_permission': str,
+        'resolve_references': bool,
+        'secret_data_handling': str,
+        'typescript': str,
+        'verification_steps': list[str],
+        'version': int,
+    },
+    total=False,
+)
+
+SecretAccessPreviewRequest = TypedDict(
+    'SecretAccessPreviewRequest',
+    {
+        'env_var': str,
+        'name': str,
+        'resolve': bool,
+    },
+    total=False,
+)
+
 SecretApproval = TypedDict(
     'SecretApproval',
     {

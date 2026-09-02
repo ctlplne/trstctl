@@ -815,17 +815,17 @@
       "requirement_text": "trstctl shall provide Developer secrets experience (CLI, portal, SDKs).",
       "owner": "Secrets",
       "priority": "P1",
-      "acceptance_criteria": "UI examples match CLI/API contract, bulk import is visibly unavailable across OpenAPI/CLI/UI, resolved reads are explicit, and generated snippets never include real secret values.",
+      "acceptance_criteria": "Server/API/CLI/UI tests prove the supported single-secret workflow reviews an exact value-free plan, executes an exact-version access test, retries safely, invalidates stale plans, exposes generated automation examples, and visibly fails closed for unavailable bulk import.",
       "status": "partial",
       "served_state": "partial",
-      "backend_status": "partial: served SDK path plus trstctl-cli run injection and reference resolution; bulk import is explicitly unavailable and its compatibility route returns 501 without writing",
+      "backend_status": "partial: the supported single-secret workflow has an effect-free access-plan route, generated CLI/API/SDK contract, exact-version read test, trstctl-cli run injection, and reference resolution; atomic bulk import and broader Vault/Terraform developer integrations remain explicit residuals",
       "source_docs": [
         "docs/features/secrets.md",
         "docs/cli.md",
         "docs/journeys/manage-secrets.md"
       ],
       "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
+      "ga_scope_reason": "Residual atomic bulk import plus broader Vault and Terraform developer integration remains outside the fully served GA denominator."
     },
     {
       "requirement_id": "F65",

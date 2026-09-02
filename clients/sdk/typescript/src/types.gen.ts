@@ -5017,6 +5017,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/access/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview an exact effect-free developer secret access plan */
+        post: operations["previewSecretAccess"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/auth-methods": {
         parameters: {
             query?: never;
@@ -12936,6 +12953,46 @@ export interface components {
             events_per_day: number;
             jetstream_gib_30_day: number;
             postgres_gib_30_day: number;
+        };
+        SecretAccessPreview: {
+            api_request: {
+                /** @enum {string} */
+                method: "GET";
+                path: string;
+            };
+            blockers: string[];
+            bulk_import: {
+                available: boolean;
+                reason: string;
+                safe_path: string;
+            };
+            /** @enum {string} */
+            capability: "F64";
+            cli_argv: string[];
+            effect_free: boolean;
+            env_var: string;
+            execute_data_flow: string[];
+            execute_reads: string[];
+            name: string;
+            /** @enum {string} */
+            operation: "read_for_process";
+            preview_external_effects: string[];
+            preview_reads: string[];
+            preview_writes: string[];
+            ready: boolean;
+            recovery_steps: string[];
+            request_fingerprint: string;
+            required_permission: string;
+            resolve_references: boolean;
+            secret_data_handling: string;
+            typescript: string;
+            verification_steps: string[];
+            version?: number;
+        };
+        SecretAccessPreviewRequest: {
+            env_var: string;
+            name: string;
+            resolve: boolean;
         };
         SecretApproval: {
             /** @enum {string} */
@@ -28362,6 +28419,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScaleOrchestrationPlan"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewSecretAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretAccessPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretAccessPreview"];
                 };
             };
             /** @description client error */

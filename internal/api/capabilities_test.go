@@ -198,6 +198,10 @@ func TestCapabilitiesViewIsAuthenticatedSanitizedAndAuthorizationAware(t *testin
 	if f64.RuntimeState != "unavailable" {
 		t.Fatalf("operator F64 runtime=%q, want unavailable without the native secret store", f64.RuntimeState)
 	}
+	previewUnavailable := findUnavailableCapabilityAction(t, f64, "previewSecretAccess")
+	if previewUnavailable.Code != "dependency_not_configured" || !strings.Contains(previewUnavailable.Detail, "native secret store is turned off") {
+		t.Fatalf("F64 previewSecretAccess unavailable=%+v, want exact native-store dependency reason", previewUnavailable)
+	}
 	foundUnavailable := false
 	for _, action := range f64.Actions.Unavailable {
 		if action.OperationID == "importSecrets" && action.Code == "not_implemented" && action.Detail != "" {

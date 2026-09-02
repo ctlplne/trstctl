@@ -15591,8 +15591,8 @@
             "domain": "Secrets",
             "phase": "P1",
             "priority": 34,
-            "served_state": "served",
-            "backend_status": "served: an effect-free access-plan route, generated CLI/API/SDK contract, exact-version read test, trstctl-cli run injection, and reference resolution; bulk import is explicitly unavailable and its compatibility route returns 501 without writing",
+            "served_state": "partial",
+            "backend_status": "partial: the supported single-secret workflow has an effect-free access-plan route, generated CLI/API/SDK contract, exact-version read test, trstctl-cli run injection, and reference resolution; atomic bulk import and broader Vault/Terraform developer integrations remain explicit residuals",
             "current_frontend_mapping": "operate: Use secrets in apps at /secrets/developer reviews one exact value-free server plan, copies generated CLI/API/SDK examples, performs a real version-bound access test, retries failures, invalidates stale plans, and visibly fails closed on bulk import",
             "target_gui_mapping": "Developer portal UI with copyable SDK/CLI examples, environment targeting, access-test button, import snippets, reference resolution, and least-privilege policy explanation.",
             "acceptance_test": "TestServedDeveloperSecretAccessPreviewIsExactEffectFreeAndValueFree plus the focused web secrets suite prove UI examples match the CLI/API contract, bulk import is visibly unavailable across OpenAPI/CLI/UI, resolved reads are explicit, and generated snippets never include real secret values.",
@@ -15645,8 +15645,8 @@
                     "evidence": [
                         "POST /api/v1/secrets/access/preview returns a server-keyed, value-free, effect-free plan only after opening and wiping the selected value and optional references.",
                         "The served test distinguishes missing source vs referenced secrets, rejects cycles, proves stable plan identity, and detects any secret value in the response or event log.",
-                        "served_state=served",
-                        "backend_status=served: effect-free access plan plus exact-version execution, CLI run injection, and explicit unavailable bulk import"
+                        "served_state=partial",
+                        "backend_status=partial: the supported single-secret workflow has an effect-free access plan, exact-version execution, and CLI run injection; atomic bulk import and broader Vault/Terraform integrations remain explicit residuals"
                     ],
                     "refs": [
                         "internal/api/secret_access_preview.go",
@@ -15782,8 +15782,8 @@
                     ]
                 }
             },
-            "ga_served_scope": "in_ga",
-            "ga_scope_reason": "",
+            "ga_served_scope": "out_of_ga",
+            "ga_scope_reason": "Residual atomic bulk import plus broader Vault and Terraform developer integration remains outside the fully served GA denominator.",
             "dod_capabilities": [
                 "secrets_residuals"
             ],

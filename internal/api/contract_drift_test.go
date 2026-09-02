@@ -65,21 +65,60 @@ func parseInterfaces(src string) map[string][]string {
 		}
 		open += nameStart
 		name := strings.TrimSpace(src[nameStart:open])
-		close := strings.Index(src[open:], "}")
+		close := matchingBrace(src, open)
 		if close < 0 {
 			break
 		}
-		close += open
 		body := src[open+1 : close]
-		var fields []string
-		for _, m := range genInterfaceField.FindAllStringSubmatch(body, -1) {
-			fields = append(fields, m[1])
-		}
+		fields := topLevelInterfaceFields(body)
 		sort.Strings(fields)
 		out[name] = fields
 		i = close + 1
 	}
 	return out
+}
+
+func topLevelInterfaceFields(body string) []string {
+	var fields []string
+	depth := 0
+	for _, line := range strings.Split(body, "\n") {
+		if depth == 0 {
+			if m := genInterfaceField.FindStringSubmatch(line); m != nil {
+				fields = append(fields, m[1])
+			}
+		}
+		for i := 0; i < len(line); i++ {
+			switch line[i] {
+			case '{':
+				depth++
+			case '}':
+				depth--
+			}
+		}
+	}
+	return fields
+}
+
+// matchingBrace returns the closing brace for an interface body, including when
+// generated fields contain nested inline object types. The previous first-brace
+// search silently truncated those interfaces and could report a false drift.
+func matchingBrace(src string, open int) int {
+	if open < 0 || open >= len(src) || src[open] != '{' {
+		return -1
+	}
+	depth := 0
+	for i := open; i < len(src); i++ {
+		switch src[i] {
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+	return -1
 }
 
 func replaceInterfaceField(src, iface, oldField, newField string) (string, bool) {
@@ -92,11 +131,10 @@ func replaceInterfaceField(src, iface, oldField, newField string) (string, bool)
 		return src, false
 	}
 	open += start
-	close := strings.Index(src[open:], "}")
+	close := matchingBrace(src, open)
 	if close < 0 {
 		return src, false
 	}
-	close += open
 	body := src[open:close]
 	needle := "\n  " + oldField + ": "
 	replacement := "\n  " + newField + ": "
@@ -105,6 +143,18 @@ func replaceInterfaceField(src, iface, oldField, newField string) (string, bool)
 	}
 	body = strings.Replace(body, needle, replacement, 1)
 	return src[:open] + body + src[close:], true
+}
+
+func TestParseInterfacesHandlesNestedInlineObjects(t *testing.T) {
+	src := `export interface Nested {
+  first: {
+    inside: string;
+  };
+  later?: number;
+}`
+	if got, want := parseInterfaces(src)["Nested"], []string{"first", "later"}; !equalStringSets(got, want) {
+		t.Fatalf("nested interface fields=%v, want %v", got, want)
+	}
 }
 
 // schemaProps returns the property names of a component schema from the served
